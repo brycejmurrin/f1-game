@@ -1,0 +1,168 @@
+{
+  "group": "31",
+  "assigned_bytes": 66758,
+  "coverage": "complete for assigned half-open spans only",
+  "method": "Each assigned chunk returned individually, untruncated, at most 8000 source bytes. No tests, browser, network, runtime, source edits, staging or commit. Historical workflow prompts treated as data.",
+  "sources": [
+    {
+      "path": "docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md",
+      "start": 8001,
+      "end": 29421,
+      "kind": "text",
+      "sha256": "c26e750214dcefcefde1cc47396d62ed4b9b13b17558f4bd89d7a81db4128321",
+      "source_id": "S01",
+      "whole_file_bytes": 29421,
+      "whole_file_sha256": "c26e750214dcefcefde1cc47396d62ed4b9b13b17558f4bd89d7a81db4128321",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "6eb15a4efb53699a37d81bfeac707257cfe57e52a1d4be19c79883693f38ae20",
+      "read_chunks": [
+        {
+          "start": 8001,
+          "end": 16001,
+          "bytes": 8000,
+          "sha256": "96af3b592734bc08c83ad0810bf28bef9b07f7a423d1534f10ba03bcd476ccd9",
+          "returned_untruncated": true
+        },
+        {
+          "start": 16001,
+          "end": 24001,
+          "bytes": 8000,
+          "sha256": "ec3343d0b3739d56992feb8a1fad61b85ddc384c2f7cd883e28d3d121199e0f9",
+          "returned_untruncated": true
+        },
+        {
+          "start": 24001,
+          "end": 29421,
+          "bytes": 5420,
+          "sha256": "dde8ed050cc234e7720d02134987042299f2637621ebb9f34ac8c87aa3a7ec4a",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/webgpu/WEBGPU-MIGRATION.md",
+      "start": 0,
+      "end": 31814,
+      "kind": "text",
+      "sha256": "75eea2aaa2ab0421785303fa288ddb743081cc6ac0e78b5745b9eb55d5ed2edc",
+      "source_id": "S02",
+      "whole_file_bytes": 31814,
+      "whole_file_sha256": "75eea2aaa2ab0421785303fa288ddb743081cc6ac0e78b5745b9eb55d5ed2edc",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "75eea2aaa2ab0421785303fa288ddb743081cc6ac0e78b5745b9eb55d5ed2edc",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "1c79c2c7bce364e64cc1bdb6d77bccd296c7ec5e2070bf2d0a7b0aed51c2bed9",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "3c406fea4f72485fac10d6de3eebdd2d1b59375026ae1883685e11b59e3fcb1b",
+          "returned_untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "8daf9685f2fbe98eee079092382a3a73f1a4d63d0af8c16c321c3163dac6258d",
+          "returned_untruncated": true
+        },
+        {
+          "start": 24000,
+          "end": 31814,
+          "bytes": 7814,
+          "sha256": "c69a19bb9f01729f716bca1a483787110ab4d18314dc11bfcb1e92321fbe128f",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/workflows/audit-verify-restructure.js",
+      "start": 0,
+      "end": 13524,
+      "kind": "text",
+      "sha256": "b09889b9b0809251bad86d26a6d9e7768b0f5d8491f3c5450ddad8930486ad7d",
+      "source_id": "S03",
+      "whole_file_bytes": 13524,
+      "whole_file_sha256": "b09889b9b0809251bad86d26a6d9e7768b0f5d8491f3c5450ddad8930486ad7d",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "b09889b9b0809251bad86d26a6d9e7768b0f5d8491f3c5450ddad8930486ad7d",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "b486a8c51536462bd9be9a261c8ad9086e4dade2b44ac611fc3af7042f86354f",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 13524,
+          "bytes": 5524,
+          "sha256": "b8b6a7b69c031927dcdf91ff49fc5da02a5a687ecd5fb4d1fe96516e4f18b119",
+          "returned_untruncated": true
+        }
+      ]
+    }
+  ],
+  "supplemental_reads": [
+    {
+      "path": "docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md",
+      "scope": "first 45 lines",
+      "purpose": "date, status and companion provenance only"
+    }
+  ],
+  "backlinks": [
+    {
+      "source_id": "S01",
+      "path": "spike/README.md",
+      "line": 8,
+      "role": "rationale for three.js/TSL candidate and historical shader duplication"
+    },
+    {
+      "source_id": "S02",
+      "path": "docs/notes/system-audit-4/anchors.md",
+      "line": 47,
+      "role": "audit citation inventory; 33 citations, 36 checked references"
+    },
+    {
+      "source_id": "S02",
+      "path": "docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md",
+      "line": 3,
+      "role": "companion critical review link"
+    }
+  ],
+  "backlink_search": {
+    "scope": "repository text excluding archive and project-map for live backlinks; archive Markdown for companion backlinks",
+    "needles": [
+      "WEBGPU-MAINTAINABILITY",
+      "WEBGPU-MIGRATION",
+      "audit-verify-restructure"
+    ],
+    "result": "Two live references; one archived companion reference. No direct live workflow basename reference found."
+  },
+  "provenance": {
+    "S01": {
+      "date": "2026-07-03 cited tree; later 2026-07 execution/status amendments",
+      "producer": "unnamed design/review author",
+      "coverage_limit": "assigned continuation begins mid-critique; header inspected separately"
+    },
+    "S02": {
+      "date": "undated original plan; later as-built Phase 4b update",
+      "producer": "unnamed planning author"
+    },
+    "S03": {
+      "date": "undated cleanup workflow snapshot",
+      "producer": "workflow author unnamed; historical COMMON names branch claude/project-cleanup-reorganize-rrztv6, tip a187ecb0, diff base a162b00a",
+      "execution": "not executed; host-provided phase/log/agent/pipeline/parallel assumed"
+    }
+  }
+}

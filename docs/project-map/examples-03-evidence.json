@@ -1,0 +1,4820 @@
+{
+  "group": "03",
+  "plan": {
+    "path": "docs/project-map/examples-batches.json",
+    "sha256": "fac144f347bfceaf58fd9c999fa7cfb711b82ba439aa034e5fc69b935d3bb2bd",
+    "assigned_text_bytes": 159674
+  },
+  "files": [
+    {
+      "path": "examples/visor-lab/settled-weather.json",
+      "start": 114007,
+      "end": 120909,
+      "kind": "text",
+      "sha256": "974cde498af28023bac3a1a04ed62dc5fd2d8f4c8761abdf93627e2add058951",
+      "whole_source_sha256": "974cde498af28023bac3a1a04ed62dc5fd2d8f4c8761abdf93627e2add058951",
+      "whole_source_bytes": 120909,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "81db58eef9e8be386f061969a0e6235493b842a63e7524b10f3b7746aed2f354",
+      "range_convention": "half-open UTF-8 bytes",
+      "method": "individual bounded byte-slice command returns, <=8900 bytes each",
+      "chunks": [
+        {
+          "start": 114007,
+          "end": 120909,
+          "bytes": 6902,
+          "sha256": "81db58eef9e8be386f061969a0e6235493b842a63e7524b10f3b7746aed2f354",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "assigned suffix only",
+      "parse": {
+        "method": "raw_decode complete capture objects beginning inside assigned suffix; tail checks parsed as array; prefix not parsed",
+        "boundary": "starts inside final Monza rose-light identity.info, then complete rose-medium/rose-strong captures and top-level tail",
+        "complete_capture_records": 2
+      }
+    },
+    {
+      "path": "examples/visor-lab/shots.json",
+      "start": 0,
+      "end": 143068,
+      "kind": "text",
+      "sha256": "d01b1f9a3807dc93b54f20e0956d8f1e79942b612973cd0c7b62d8119773cf7f",
+      "whole_source_sha256": "d01b1f9a3807dc93b54f20e0956d8f1e79942b612973cd0c7b62d8119773cf7f",
+      "whole_source_bytes": 143068,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "d01b1f9a3807dc93b54f20e0956d8f1e79942b612973cd0c7b62d8119773cf7f",
+      "range_convention": "half-open UTF-8 bytes",
+      "method": "individual bounded byte-slice command returns, <=8900 bytes each",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8900,
+          "bytes": 8900,
+          "sha256": "19b4079d914d8d2cde55977da4c4858cfaabebb97d9b0975376c8ed0c4c30b93",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8900,
+          "end": 17800,
+          "bytes": 8900,
+          "sha256": "6e9e41eeb752886de37bb572de07d76d629fd6347e5fa631f9a66218dab45161",
+          "returned_untruncated": true
+        },
+        {
+          "start": 17800,
+          "end": 26700,
+          "bytes": 8900,
+          "sha256": "909073c4b0ac1b7346e08f4dde6a44ce289b7d5699c8b8e34fe923acdbda94a6",
+          "returned_untruncated": true
+        },
+        {
+          "start": 26700,
+          "end": 35600,
+          "bytes": 8900,
+          "sha256": "46f158ca6474c8fca0cb4b7dbe231dcf7259147bbf8f0e85fb88e8df42e53ed0",
+          "returned_untruncated": true
+        },
+        {
+          "start": 35600,
+          "end": 44500,
+          "bytes": 8900,
+          "sha256": "059b70d0db1ae0a1bd1bb5701d2ce94cbae97c56a05c2260282fa0b7b2798675",
+          "returned_untruncated": true
+        },
+        {
+          "start": 44500,
+          "end": 53400,
+          "bytes": 8900,
+          "sha256": "e311b136cf0ee443c577ecd2233fd5c0aedf1b5f9ea573585e0e09d92e08f4a4",
+          "returned_untruncated": true
+        },
+        {
+          "start": 53400,
+          "end": 62300,
+          "bytes": 8900,
+          "sha256": "fafc40912fc77b2dc6854d1c2e95d49154698bbcded2a2591793a63f89aa9384",
+          "returned_untruncated": true
+        },
+        {
+          "start": 62300,
+          "end": 71200,
+          "bytes": 8900,
+          "sha256": "d2f97c39a2f84445766f7d12876db36eb84b0bbd45042c7ff973d25bc30c23c2",
+          "returned_untruncated": true
+        },
+        {
+          "start": 71200,
+          "end": 80100,
+          "bytes": 8900,
+          "sha256": "9ea8ec88b39ca3ed8c598d4f1ba36237f684d4e53d0b03228fa5333750c47206",
+          "returned_untruncated": true
+        },
+        {
+          "start": 80100,
+          "end": 89000,
+          "bytes": 8900,
+          "sha256": "2e6839a58d6b3630a2b1f6d4ed956104a04d5a57b9bc6e942e8123d0f3635e9e",
+          "returned_untruncated": true
+        },
+        {
+          "start": 89000,
+          "end": 97900,
+          "bytes": 8900,
+          "sha256": "b558c89ccce069d3489e9a13fcaf28ee5f7072d0402e4866ec6e78a82478ce9d",
+          "returned_untruncated": true
+        },
+        {
+          "start": 97900,
+          "end": 106800,
+          "bytes": 8900,
+          "sha256": "dad0806dee712190a42b9b6b7a5deeb9580ce52a7a03b88dd3a6af9c37fc9065",
+          "returned_untruncated": true
+        },
+        {
+          "start": 106800,
+          "end": 115700,
+          "bytes": 8900,
+          "sha256": "a38b728eb391dee57f62d8507f83dcba1466b274ad0065ba40e4404a4f7ddee3",
+          "returned_untruncated": true
+        },
+        {
+          "start": 115700,
+          "end": 124600,
+          "bytes": 8900,
+          "sha256": "67b3a8546d1e7c8917ce90888a0f60c511c2afd47bbcee198f7e3184a7ff5f78",
+          "returned_untruncated": true
+        },
+        {
+          "start": 124600,
+          "end": 133500,
+          "bytes": 8900,
+          "sha256": "737bec9a7ae844d54c8f431d29980d41c1a672aeae687fbeff202f86f95db513",
+          "returned_untruncated": true
+        },
+        {
+          "start": 133500,
+          "end": 142400,
+          "bytes": 8900,
+          "sha256": "be41f53e5b85a8d2833ac790c19e02c8e8e4be146a095b3aa699ec5dcdce2700",
+          "returned_untruncated": true
+        },
+        {
+          "start": 142400,
+          "end": 143068,
+          "bytes": 668,
+          "sha256": "438b3aee4fa7f83ae9075c256a142b39025d39a190e646a0669d5c1f0399c7b5",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "entire file",
+      "parse": {
+        "method": "Python json.loads on complete whole-file bytes after textual reads",
+        "success": true
+      }
+    },
+    {
+      "path": "examples/visor-lab/style.css",
+      "start": 0,
+      "end": 9704,
+      "kind": "text",
+      "sha256": "944cdf46f905150b407d6c70c428ef55e0d863fc423e0fc31922e3fe76e958d9",
+      "whole_source_sha256": "944cdf46f905150b407d6c70c428ef55e0d863fc423e0fc31922e3fe76e958d9",
+      "whole_source_bytes": 9704,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "944cdf46f905150b407d6c70c428ef55e0d863fc423e0fc31922e3fe76e958d9",
+      "range_convention": "half-open UTF-8 bytes",
+      "method": "individual bounded byte-slice command returns, <=8900 bytes each",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "730e692228dc091eb2b3a947cd3e5a494fedeb9cb2c27d89fcea5b597c7d466b",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 9704,
+          "bytes": 1704,
+          "sha256": "94bb74c4e34d647d98789b87b0953209fff7808265c9415c2d4d380a70522f61",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "entire file"
+    }
+  ],
+  "supplemental_reads": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+      "bytes": 22722,
+      "method": "full text support read (AGENTS initial read plus tail); outside assigned byte total"
+    },
+    {
+      "path": "examples/visor-lab/app.js",
+      "sha256": "a59aa2f78d0ed0be0659aa98aceb44bd6d2b8f73610d7f3994ddaf6fedf4b427",
+      "bytes": 6302,
+      "method": "full text support read (AGENTS initial read plus tail); outside assigned byte total"
+    },
+    {
+      "path": "examples/visor-lab/index.html",
+      "sha256": "4c7172734f5519b890df8d72506d7e73d7238c0a403af6a48d1f959fa6c14986",
+      "bytes": 5367,
+      "method": "full text support read (AGENTS initial read plus tail); outside assigned byte total"
+    },
+    {
+      "path": "examples/visor-lab/README.md",
+      "sha256": "694611edc3c4c3474cbb5ec474ba2aa48ca7bf71a4dda04c047e5c626bac074c",
+      "bytes": 5444,
+      "method": "full text support read (AGENTS initial read plus tail); outside assigned byte total"
+    },
+    {
+      "path": "tools/shot/visor-lab-export.mjs",
+      "sha256": "5225794dfb3a818e82e8f0def0df6eb8ebd87026bb583dff11319a8d033a806b",
+      "bytes": 2154,
+      "method": "full text support read (AGENTS initial read plus tail); outside assigned byte total"
+    }
+  ],
+  "reference_search": {
+    "method": "rg literal demo filenames and URLs, not runtime symbol navigation",
+    "commands": [
+      "rg --files examples -g AGENTS.md",
+      "rg -n -l settled-weather.json|examples/visor-lab|visor-lab/shots.json excluding map and catalog JSON",
+      "rg -n shots.json|settled-weather|fetch(|.file|images/ in optics.html and comparisons.js"
+    ],
+    "findings": [
+      {
+        "path": "examples/visor-lab/index.html",
+        "lines": [
+          3,
+          23
+        ],
+        "role": "links assigned CSS and deferred app.js"
+      },
+      {
+        "path": "examples/visor-lab/app.js",
+        "lines": [
+          10,
+          13,
+          20,
+          26,
+          33,
+          34,
+          42,
+          43
+        ],
+        "role": "fetches capture index, maps scene/variant, decodes paired files, sets download/thumbnail/provenance"
+      },
+      {
+        "path": "tools/shot/visor-lab-export.mjs",
+        "lines": [
+          11,
+          12,
+          13,
+          20
+        ],
+        "role": "copies assigned catalog/CSS and supporting authoring assets; refreshes aliases from runtime"
+      },
+      {
+        "path": "examples/visor-lab/README.md",
+        "lines": [
+          15,
+          27
+        ],
+        "role": "documents preserved static gallery and wet-weather patch provenance"
+      }
+    ]
+  },
+  "semantic_map": {
+    "shots": {
+      "keys": [
+        "verdict",
+        "source",
+        "viewport",
+        "reducedMotion",
+        "requestedBackend",
+        "quality",
+        "scale",
+        "scenes",
+        "variants",
+        "captures",
+        "checks",
+        "patches"
+      ],
+      "source": {
+        "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+        "dirty": true,
+        "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+      },
+      "settings": {
+        "verdict": "PASS",
+        "viewport": {
+          "width": 1920,
+          "height": 1080
+        },
+        "reducedMotion": true,
+        "requestedBackend": "webgl2",
+        "quality": "ultra",
+        "scale": 1
+      },
+      "scenes": [
+        {
+          "id": "bahrain-day-dry",
+          "track": "bahrain",
+          "tod": "day",
+          "weather": "dry",
+          "label": "Bright desert day",
+          "note": "Dry track \u00b7 direct daylight"
+        },
+        {
+          "id": "bahrain-dawn-fog",
+          "track": "bahrain",
+          "tod": "dawn",
+          "weather": "fog",
+          "label": "Morning mist",
+          "note": "Dawn \u00b7 reduced visibility"
+        },
+        {
+          "id": "bahrain-dusk-overcast",
+          "track": "bahrain",
+          "tod": "dusk",
+          "weather": "overcast",
+          "label": "Overcast dusk",
+          "note": "Dusk \u00b7 flat cloud light"
+        },
+        {
+          "id": "bahrain-day-wet",
+          "track": "bahrain",
+          "tod": "day",
+          "weather": "wet",
+          "label": "Wet daylight",
+          "note": "Day \u00b7 wet surface"
+        },
+        {
+          "id": "bahrain-night-rain",
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "rain",
+          "label": "Rain under floodlights",
+          "note": "Night \u00b7 rain and reflections"
+        },
+        {
+          "id": "bahrain-day-storm",
+          "track": "bahrain",
+          "tod": "day",
+          "weather": "storm",
+          "label": "Storm front",
+          "note": "Day \u00b7 heavy cloud and rain"
+        },
+        {
+          "id": "bahrain-night-dry",
+          "track": "bahrain",
+          "tod": "night",
+          "weather": "dry",
+          "label": "Clear floodlit night",
+          "note": "Night \u00b7 dry track"
+        },
+        {
+          "id": "monza-night-rain",
+          "track": "monza",
+          "tod": "night",
+          "weather": "rain",
+          "label": "Dark woodland rain",
+          "note": "Monza \u00b7 night visibility check"
+        }
+      ],
+      "variants": [
+        {
+          "id": "off",
+          "mode": "off",
+          "color": "neutral",
+          "intensity": "light",
+          "label": "Original"
+        },
+        {
+          "id": "clear",
+          "mode": "clear",
+          "color": "neutral",
+          "intensity": "light",
+          "label": "Clear"
+        },
+        {
+          "id": "neutral-light",
+          "mode": "smoke",
+          "color": "neutral",
+          "intensity": "light",
+          "label": "neutral \u00b7 light"
+        },
+        {
+          "id": "neutral-medium",
+          "mode": "smoke",
+          "color": "neutral",
+          "intensity": "medium",
+          "label": "neutral \u00b7 medium"
+        },
+        {
+          "id": "neutral-strong",
+          "mode": "smoke",
+          "color": "neutral",
+          "intensity": "strong",
+          "label": "neutral \u00b7 strong"
+        },
+        {
+          "id": "amber-light",
+          "mode": "smoke",
+          "color": "amber",
+          "intensity": "light",
+          "label": "amber \u00b7 light"
+        },
+        {
+          "id": "amber-medium",
+          "mode": "smoke",
+          "color": "amber",
+          "intensity": "medium",
+          "label": "amber \u00b7 medium"
+        },
+        {
+          "id": "amber-strong",
+          "mode": "smoke",
+          "color": "amber",
+          "intensity": "strong",
+          "label": "amber \u00b7 strong"
+        },
+        {
+          "id": "ice-light",
+          "mode": "smoke",
+          "color": "ice",
+          "intensity": "light",
+          "label": "ice \u00b7 light"
+        },
+        {
+          "id": "ice-medium",
+          "mode": "smoke",
+          "color": "ice",
+          "intensity": "medium",
+          "label": "ice \u00b7 medium"
+        },
+        {
+          "id": "ice-strong",
+          "mode": "smoke",
+          "color": "ice",
+          "intensity": "strong",
+          "label": "ice \u00b7 strong"
+        },
+        {
+          "id": "rose-light",
+          "mode": "smoke",
+          "color": "rose",
+          "intensity": "light",
+          "label": "rose \u00b7 light"
+        },
+        {
+          "id": "rose-medium",
+          "mode": "smoke",
+          "color": "rose",
+          "intensity": "medium",
+          "label": "rose \u00b7 medium"
+        },
+        {
+          "id": "rose-strong",
+          "mode": "smoke",
+          "color": "rose",
+          "intensity": "strong",
+          "label": "rose \u00b7 strong"
+        }
+      ],
+      "counts": {
+        "scenes": 8,
+        "variants": 14,
+        "captures": 112,
+        "checks": 9,
+        "patches": 1
+      },
+      "cartesian_completeness": true,
+      "capture_shapes": [
+        {
+          "keys": [
+            "bytes",
+            "file",
+            "height",
+            "pngSha256",
+            "scene",
+            "thumb",
+            "variant",
+            "webpSha256",
+            "width"
+          ],
+          "count": 56
+        },
+        {
+          "keys": [
+            "file",
+            "height",
+            "identity",
+            "scene",
+            "sha256",
+            "state",
+            "thumb",
+            "variant",
+            "width"
+          ],
+          "count": 56
+        }
+      ],
+      "capture_inventory": [
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "off",
+          "file": "images/bahrain-day-dry--off.webp",
+          "thumb": "images/bahrain-day-dry--off-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "dd017cadfd0135698652745364a9b0cd0b88213da7dd525602a0d43be3010daf",
+          "webpSha256": "cbdb686aa22a23512f0b846f7924a99c46edd87e086e6136bcb17332ba83ef0c",
+          "bytes": 199160,
+          "schema": "encoded_original",
+          "file_exists": true,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "clear",
+          "file": "images/bahrain-day-dry--clear.webp",
+          "thumb": "images/bahrain-day-dry--clear-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "b57c3db7ee79c9860f2175d82ec9032c29597c19bb51019f66bcdb45eab7d112",
+          "webpSha256": "f82e42356b898cde9bbd973aa130c77062eca6c6c1e07dcd98bd986cd43a8b1c",
+          "bytes": 233288,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "neutral-light",
+          "file": "images/bahrain-day-dry--neutral-light.webp",
+          "thumb": "images/bahrain-day-dry--neutral-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "b710b3a87df0084010c71f1446521466707e69fd32f796e970db9a0dd56d37e7",
+          "webpSha256": "e3ef483a9b5c77e0c6e69bfa50ba95ba9c923daf752dfbc4aaf6a13ad0fb8e3b",
+          "bytes": 215554,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "neutral-medium",
+          "file": "images/bahrain-day-dry--neutral-medium.webp",
+          "thumb": "images/bahrain-day-dry--neutral-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "c7a6c2d542be3d3db74d15afecd20ad97ce2dd096b93752df1c66522a754f7dd",
+          "webpSha256": "c89093174f346274233b4d5f798a0d90874d329ceecab1e2b137ee32a77444a1",
+          "bytes": 206874,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "neutral-strong",
+          "file": "images/bahrain-day-dry--neutral-strong.webp",
+          "thumb": "images/bahrain-day-dry--neutral-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "407ca22c8001915d6f4a7e2d8b39a58d798a941065680646cc093100abdd8640",
+          "webpSha256": "148523e66382f455ae73b724f27d81b99ea85b795257e3a0a0fa0ec04dc83c3a",
+          "bytes": 196768,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "amber-light",
+          "file": "images/bahrain-day-dry--amber-light.webp",
+          "thumb": "images/bahrain-day-dry--amber-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "f15d5c1246048324d7d6de80a4449f2ed9df285a676e4df879524921892c3d66",
+          "webpSha256": "ad5df5e3b8bd791f1eab18ab56ff6a5e0b1c6c1b287a5fc6e080de3be3a5f3c2",
+          "bytes": 215544,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "amber-medium",
+          "file": "images/bahrain-day-dry--amber-medium.webp",
+          "thumb": "images/bahrain-day-dry--amber-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "148370e04678a4bc3cd30084d2cc09813b138341a718e2a5b840c88ad67c2e33",
+          "webpSha256": "6b111e7162fb57e00b8f22981821f4506ab4127afb611dd29e8e051bfbf881f4",
+          "bytes": 206332,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "amber-strong",
+          "file": "images/bahrain-day-dry--amber-strong.webp",
+          "thumb": "images/bahrain-day-dry--amber-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "1d0802cc5b3efea4c89f8cbfbe90feaf91440db0370fee8a679f07d58a1ba721",
+          "webpSha256": "9649a30415239bedb107b848be7b154ddc4371072e2fc362cd4b59907699ef23",
+          "bytes": 198896,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "ice-light",
+          "file": "images/bahrain-day-dry--ice-light.webp",
+          "thumb": "images/bahrain-day-dry--ice-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "718c41c2287c4104918153b003a1f3e57fa4143f5cb53fbb46f26b2b209b771d",
+          "webpSha256": "2df5c056ba93f383bfdf59576afc1a0389f0dfc6c914ca7d9e7f736949bba438",
+          "bytes": 216792,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "ice-medium",
+          "file": "images/bahrain-day-dry--ice-medium.webp",
+          "thumb": "images/bahrain-day-dry--ice-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "49f7a67b0e4d053dd633f16fcab4b8feed7e2dbab7e17def993a6580482d36f0",
+          "webpSha256": "6c68efee8a1fda81f48c436d73a7469c00c067cbca986beb7982315fdf527ea5",
+          "bytes": 204896,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "ice-strong",
+          "file": "images/bahrain-day-dry--ice-strong.webp",
+          "thumb": "images/bahrain-day-dry--ice-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "c226910b6831777ba4cf2f7f05f72f73c2643fff79313fdb87761a21ca789665",
+          "webpSha256": "3b15193239cf7a377cfff0defdb09416b882a6fd6b088771b76416f133089cd6",
+          "bytes": 196382,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "rose-light",
+          "file": "images/bahrain-day-dry--rose-light.webp",
+          "thumb": "images/bahrain-day-dry--rose-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "892c047a2f2e92de700876e87c829ab5bb430d606bf980a08458817a148f8558",
+          "webpSha256": "05d2adfba9925ab70072d965d6afb4fe9d87587bef9eb6569b47d5b544a086a0",
+          "bytes": 214592,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "rose-medium",
+          "file": "images/bahrain-day-dry--rose-medium.webp",
+          "thumb": "images/bahrain-day-dry--rose-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "c1fc1cbecaeadd33965b79e2029f4e8b404c7c9210f18dce41dbb5ad49c8104e",
+          "webpSha256": "59bdbdb227451baf68bab27bfd303999af4cd09827cc431b4bffdfbaacf650a1",
+          "bytes": 207200,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-dry",
+          "variant": "rose-strong",
+          "file": "images/bahrain-day-dry--rose-strong.webp",
+          "thumb": "images/bahrain-day-dry--rose-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "5b9fa88d68e15bc22e6d24f1cd33b63b1b67953cc5a75a056adad52fdc061589",
+          "webpSha256": "4bc39e88f9486aa5deb21221b675c7b3c085462d636ded668045023381ee34fb",
+          "bytes": 196542,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "off",
+          "file": "images/bahrain-dawn-fog--off.webp",
+          "thumb": "images/bahrain-dawn-fog--off-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "27b173783ce06beb570727a522420d99e372b6bbd39ebfe49f2e614a866253ce",
+          "webpSha256": "6e13b385ab571da23d7d0363e6dfaddf9bae1631e5a80cea2cc7776697a477ee",
+          "bytes": 173264,
+          "schema": "encoded_original",
+          "file_exists": true,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "clear",
+          "file": "images/bahrain-dawn-fog--clear.webp",
+          "thumb": "images/bahrain-dawn-fog--clear-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "b88148f32a97efe68eaa0319d54bc7c6e09a31fa1caa7febe44c120d17b96177",
+          "webpSha256": "ebc018611441d8ca6e7068e72960649f27597f2020992191e335909c2c9dfe50",
+          "bytes": 200122,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "neutral-light",
+          "file": "images/bahrain-dawn-fog--neutral-light.webp",
+          "thumb": "images/bahrain-dawn-fog--neutral-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "55b0895cdbea110139cfa547700c7fcecabe0dac25485398f5868aeaed9431b7",
+          "webpSha256": "db30b63c1124e2bb3f79e806732c3093da97f50b49736508ce60e5f728467735",
+          "bytes": 184764,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "neutral-medium",
+          "file": "images/bahrain-dawn-fog--neutral-medium.webp",
+          "thumb": "images/bahrain-dawn-fog--neutral-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "80ab32be40d784d11a18ec33f8a8059a2cdf6d2180813500c809166a9f88bd35",
+          "webpSha256": "dd8f65950bec94c75e535b593e0dc3c46ce51641f2b1bf6476f3f14f73c6153d",
+          "bytes": 177666,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "neutral-strong",
+          "file": "images/bahrain-dawn-fog--neutral-strong.webp",
+          "thumb": "images/bahrain-dawn-fog--neutral-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "504b31d63630b8489ef60c22f09cb58035aa72c68d98b44e975008f99bf37a68",
+          "webpSha256": "ab161aa005223e4572206099414eea0d124730cf2a8706ab17c999ceda35fde1",
+          "bytes": 170540,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "amber-light",
+          "file": "images/bahrain-dawn-fog--amber-light.webp",
+          "thumb": "images/bahrain-dawn-fog--amber-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "94fc1fd144736ab95670f63b62c992ed17c223095245ab59b32715331c6750ba",
+          "webpSha256": "fbc1b54dadf38ee8c533f627bbbc69f4869bec5010625f878d4a2fb9eae9a2b5",
+          "bytes": 184484,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "amber-medium",
+          "file": "images/bahrain-dawn-fog--amber-medium.webp",
+          "thumb": "images/bahrain-dawn-fog--amber-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "1d561f3feac85a2fe706b4555849b16d69e2f58dd6dd565f290cc527008d7772",
+          "webpSha256": "0de02b004fea5be42580bce0d044760de47a366892f7750647ba4c42c7dcf8b0",
+          "bytes": 177706,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "amber-strong",
+          "file": "images/bahrain-dawn-fog--amber-strong.webp",
+          "thumb": "images/bahrain-dawn-fog--amber-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "78ebfb69fd68bb7b17e9bd8b499d1660dca6e9fe8790e5efade7eb26ba6f5f6c",
+          "webpSha256": "248e09c381827bf78967316068dfa5e99144573479945f492d0b3feea939b229",
+          "bytes": 171818,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "ice-light",
+          "file": "images/bahrain-dawn-fog--ice-light.webp",
+          "thumb": "images/bahrain-dawn-fog--ice-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "c47f31aacaafac5ff0c5fe0a2fefdaa59d40355847ac416c1afce005a2e09e7e",
+          "webpSha256": "51a35815114ab33721769148fdfab5c8ec1b494c648d53be4e6159c5cfa0328b",
+          "bytes": 183866,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "ice-medium",
+          "file": "images/bahrain-dawn-fog--ice-medium.webp",
+          "thumb": "images/bahrain-dawn-fog--ice-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "58d6851c5c7cdb4f676f49c38f5e3b6d220d7ceac2086082350d97d97dbd6a76",
+          "webpSha256": "915457a04e47bab156561e7b8f6b04b4bd610a30b220eec4625004c13c59f47d",
+          "bytes": 177348,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "ice-strong",
+          "file": "images/bahrain-dawn-fog--ice-strong.webp",
+          "thumb": "images/bahrain-dawn-fog--ice-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "04b0388a401675f1d01edf2214eb4491e5666e88d7413ba6a6ecb5e2914ee074",
+          "webpSha256": "cca28a15c0dc9d544eeb41ea97664e0420b54729bc84f6c2a3087215526dafb1",
+          "bytes": 170652,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "rose-light",
+          "file": "images/bahrain-dawn-fog--rose-light.webp",
+          "thumb": "images/bahrain-dawn-fog--rose-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "940f0215fd7650118fa93f9ef4bf7e7ee6931e8ff4ab6ea021dfd71d44ecc80f",
+          "webpSha256": "20147955ddc0319c85f500f33d8aaedce6c1eb7f4c35bdbe0d5e3957ac414ba8",
+          "bytes": 183512,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "rose-medium",
+          "file": "images/bahrain-dawn-fog--rose-medium.webp",
+          "thumb": "images/bahrain-dawn-fog--rose-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "0cfdbcc881ed4156119c3da44063c78721f1784888a22d3741874853476c945c",
+          "webpSha256": "fd87afd009936c4412e3df5bd5f07ab6c8cad11af1a8154be0dbe6fd9c13a325",
+          "bytes": 177200,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "variant": "rose-strong",
+          "file": "images/bahrain-dawn-fog--rose-strong.webp",
+          "thumb": "images/bahrain-dawn-fog--rose-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "40d7232cad1777aabc5a0b773049a78eb2ca1bbe88417332b9807e105eef9b5c",
+          "webpSha256": "a7a0c70fe705bcb8a32ca529349b5b131d57c6bdf0ea2abee50775683bfff2f3",
+          "bytes": 170784,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "off",
+          "file": "images/bahrain-dusk-overcast--off.webp",
+          "thumb": "images/bahrain-dusk-overcast--off-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "66adf9cf105dc6fb7c9c3b5d50a070c1888685d6b326ac935d3be03afa6407b3",
+          "webpSha256": "741375b1c2de4aa6ceac3d67458ae515565644cd40a3e807484d942492a39e62",
+          "bytes": 193310,
+          "schema": "encoded_original",
+          "file_exists": true,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "clear",
+          "file": "images/bahrain-dusk-overcast--clear.webp",
+          "thumb": "images/bahrain-dusk-overcast--clear-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "24ae854d746aa712314ec1d722e6942d0065ef82b9601f5d7f92c0c2e8b989b1",
+          "webpSha256": "bad330fd40c50006a1904d8c94ae9735bf438944cdd0d5daa5c8981f516dbb52",
+          "bytes": 220766,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "neutral-light",
+          "file": "images/bahrain-dusk-overcast--neutral-light.webp",
+          "thumb": "images/bahrain-dusk-overcast--neutral-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "e95b6f1f12f65b0d898bfd30e137a1f2a1ee0834c2a6cd4e0e957c446235d526",
+          "webpSha256": "d63d4d71e84e3df44a5298cc27435acdb61be9535e6ad9bf755888a794c5041c",
+          "bytes": 202954,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "neutral-medium",
+          "file": "images/bahrain-dusk-overcast--neutral-medium.webp",
+          "thumb": "images/bahrain-dusk-overcast--neutral-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "15938a58a2497ff5515a65684d2b756b75cf2989417045de450056b1f3837de5",
+          "webpSha256": "79983e8f0881339844004dde1d419c5f4d335db000ddf737d72807514d0970a1",
+          "bytes": 195346,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "neutral-strong",
+          "file": "images/bahrain-dusk-overcast--neutral-strong.webp",
+          "thumb": "images/bahrain-dusk-overcast--neutral-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "fceb6fa9b3bad8dd1d59c839c19f5136c8d01c8f1f30e8cad0b455e37a819b20",
+          "webpSha256": "4336892398f1368122ace29a1349fd82c91b1d235df11eccd4b8f2b997c7e94a",
+          "bytes": 187004,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "amber-light",
+          "file": "images/bahrain-dusk-overcast--amber-light.webp",
+          "thumb": "images/bahrain-dusk-overcast--amber-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "208a089e56dfe4ca4bbe25bf6851f30b7839c3ea4a18c85d09b8bc24e6d199c7",
+          "webpSha256": "8e72324442ce41ca902b62b7540b5caba9d4fa26e07c3e14fe2c180b2d2d8c10",
+          "bytes": 203622,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "amber-medium",
+          "file": "images/bahrain-dusk-overcast--amber-medium.webp",
+          "thumb": "images/bahrain-dusk-overcast--amber-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "28980a8ce40dcea04e71e81951dc5be9ec0fe1085197448facc0d9bddb241ad4",
+          "webpSha256": "c1ad7e81f3091fef96a5acbbbe6e0e3f19a1a8057161816fb45a91255437da40",
+          "bytes": 195740,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "amber-strong",
+          "file": "images/bahrain-dusk-overcast--amber-strong.webp",
+          "thumb": "images/bahrain-dusk-overcast--amber-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "7d18570873126a42a0997860832d83622082513c9836a26fa3dfdef4566f884a",
+          "webpSha256": "1b5b0cc2270f7d67c91af576db8fd40c60e42d3690973fbb6232a4007b7143d7",
+          "bytes": 188386,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "ice-light",
+          "file": "images/bahrain-dusk-overcast--ice-light.webp",
+          "thumb": "images/bahrain-dusk-overcast--ice-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "4e1d2aeb4c1d40982ea0b61f845dca65fdfa212d688e0965fc7ffcaa6b73a8bc",
+          "webpSha256": "f176b2d0b4ae1a80fb51420d9ecab47446f93d9789291b9e58e2be1eaf81a2ba",
+          "bytes": 202604,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "ice-medium",
+          "file": "images/bahrain-dusk-overcast--ice-medium.webp",
+          "thumb": "images/bahrain-dusk-overcast--ice-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "11012c5bd606c191f393fdf0969aea12cc989856c29c9cea9ed78f60b1926613",
+          "webpSha256": "d33daa88ad92d6aa2d649568571b7aa78fcac0c89d870416bfe4a75608b9f146",
+          "bytes": 196162,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "ice-strong",
+          "file": "images/bahrain-dusk-overcast--ice-strong.webp",
+          "thumb": "images/bahrain-dusk-overcast--ice-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "6ddac199fc11b83a9ff9e116d2f59fe092368ab5d97867f69f93a01c79eafc5c",
+          "webpSha256": "f5391fb8e792816f540abbc2f598fd3e8e8a521e442f7c62fc467bcee769a518",
+          "bytes": 188070,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "rose-light",
+          "file": "images/bahrain-dusk-overcast--rose-light.webp",
+          "thumb": "images/bahrain-dusk-overcast--rose-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "ad025f9092e96ba2dd6d9b8c4a1ae282a46e67ba5d6edd923b6b45ec3d38bab4",
+          "webpSha256": "205cfd7b2e22ce3d1ba5b91613a2b38ec232f57e9c549476fa8acfcfef6a59a2",
+          "bytes": 202926,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "rose-medium",
+          "file": "images/bahrain-dusk-overcast--rose-medium.webp",
+          "thumb": "images/bahrain-dusk-overcast--rose-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "74da8d6267408642706f8cb42f995686ce40f8ba48eabc3c35b697341f586bef",
+          "webpSha256": "c058751b66058f9ac34fe17d4027aa87941aa84dd32f226a1f29209c9fbd98b0",
+          "bytes": 195438,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "variant": "rose-strong",
+          "file": "images/bahrain-dusk-overcast--rose-strong.webp",
+          "thumb": "images/bahrain-dusk-overcast--rose-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "0137386990a5cb8b37c96e6453c7aa5e82b0cadd55f5d66b7e7b7a545dcfc471",
+          "webpSha256": "1557ca2961b39fc17607d4dca1c06f5ee855387b91fd2b67d9009db1ca46f30c",
+          "bytes": 187454,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "off",
+          "file": "images/bahrain-day-wet--off.webp",
+          "thumb": "images/bahrain-day-wet--off-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "e0aad8f371bba6b19662d7218c685f52cab86e3962d118ed8a693b73e9710431",
+          "schema": "settled_identity",
+          "file_exists": true,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "clear",
+          "file": "images/bahrain-day-wet--clear.webp",
+          "thumb": "images/bahrain-day-wet--clear-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "37f42c890a52f787505ee98bc03931d6b7df6aad0daf86bf94960bfe22a6f4e5",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "neutral-light",
+          "file": "images/bahrain-day-wet--neutral-light.webp",
+          "thumb": "images/bahrain-day-wet--neutral-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "e7fcd165321e9e0b152798783441017b18d49aa49d6d447696e3192c36ea9c58",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "neutral-medium",
+          "file": "images/bahrain-day-wet--neutral-medium.webp",
+          "thumb": "images/bahrain-day-wet--neutral-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "30c2911a997899bef26a5ef0c856a9c43cc64842aa4000cfd599d5b35d80510c",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "neutral-strong",
+          "file": "images/bahrain-day-wet--neutral-strong.webp",
+          "thumb": "images/bahrain-day-wet--neutral-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "38437778cd2713149e4e49b5a846a9765c0140342aaf22fcf657a1e1714c3286",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "amber-light",
+          "file": "images/bahrain-day-wet--amber-light.webp",
+          "thumb": "images/bahrain-day-wet--amber-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "c180ff4f885847e4299a8ae17ac2852143eb6634e4451cb490dcf41abc82366c",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "amber-medium",
+          "file": "images/bahrain-day-wet--amber-medium.webp",
+          "thumb": "images/bahrain-day-wet--amber-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "4cce3311d5aa31b36fc44a57c91d909f3e4dded84391522b2ce2efcb87ff2c8c",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "amber-strong",
+          "file": "images/bahrain-day-wet--amber-strong.webp",
+          "thumb": "images/bahrain-day-wet--amber-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "8bf5360f82d569872af71696b4fec17fa5b0ead8bdfc2feda2b73494b125e846",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "ice-light",
+          "file": "images/bahrain-day-wet--ice-light.webp",
+          "thumb": "images/bahrain-day-wet--ice-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "649eb367b8a7697358a80092722decb9bf073870fc07323ce28c4c0bbdcf6eb5",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "ice-medium",
+          "file": "images/bahrain-day-wet--ice-medium.webp",
+          "thumb": "images/bahrain-day-wet--ice-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "8e755be710f97102d71b6155a11ae6f0fddf4bb3fc3419678dc633008c546c64",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "ice-strong",
+          "file": "images/bahrain-day-wet--ice-strong.webp",
+          "thumb": "images/bahrain-day-wet--ice-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "3a8c7c403aa79ef2056daacb4d21394f68196dc6e906b7b0cfd9de350de03a60",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "rose-light",
+          "file": "images/bahrain-day-wet--rose-light.webp",
+          "thumb": "images/bahrain-day-wet--rose-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "0fb6a7d6fd54dadcae2ea114658bf24a632a3a0e7e189e4b76c8d11baf1d15bb",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "rose-medium",
+          "file": "images/bahrain-day-wet--rose-medium.webp",
+          "thumb": "images/bahrain-day-wet--rose-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "2e88e78911bdca6b8645bda1ceb437616028d0fc321d3ed09cf746f9594ffbe4",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "variant": "rose-strong",
+          "file": "images/bahrain-day-wet--rose-strong.webp",
+          "thumb": "images/bahrain-day-wet--rose-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "169d039fc22e6d1f9cfc109d9716af6f7c3c48a053c7956560fd56fb99070c63",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "off",
+          "file": "images/bahrain-night-rain--off.webp",
+          "thumb": "images/bahrain-night-rain--off-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "18d7c3f7d2166d79f2c70b46a7daecb328aaf741023cb7baaf033463a4c704e9",
+          "schema": "settled_identity",
+          "file_exists": true,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "clear",
+          "file": "images/bahrain-night-rain--clear.webp",
+          "thumb": "images/bahrain-night-rain--clear-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "1515253ed22243ab7137bb206ea0712bd8c0ba9d1ba60cdc6f99ce4eac1d5dd9",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "neutral-light",
+          "file": "images/bahrain-night-rain--neutral-light.webp",
+          "thumb": "images/bahrain-night-rain--neutral-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "680f36767e49971c355939040aca4eda8f42204b4af2c48097f5652ec9dc81a4",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "neutral-medium",
+          "file": "images/bahrain-night-rain--neutral-medium.webp",
+          "thumb": "images/bahrain-night-rain--neutral-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "758bb7cdbf87d1b3d0096f9131172c4459f39b035930092ce58d0749a175e8ec",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "neutral-strong",
+          "file": "images/bahrain-night-rain--neutral-strong.webp",
+          "thumb": "images/bahrain-night-rain--neutral-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "0050a8f21392f3ae26259107e26f134b27194290ec9816e7c36a70f291e268be",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "amber-light",
+          "file": "images/bahrain-night-rain--amber-light.webp",
+          "thumb": "images/bahrain-night-rain--amber-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "1f9cb9c8db27ed0ac2c8b15c6fcdf06fa15b4b353c0aabb79f75a1450ead7bc7",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "amber-medium",
+          "file": "images/bahrain-night-rain--amber-medium.webp",
+          "thumb": "images/bahrain-night-rain--amber-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "5273996286f7457bc97bb7094b3ee32e4bef1eeae34445a2aa5c2d6b20aaf079",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "amber-strong",
+          "file": "images/bahrain-night-rain--amber-strong.webp",
+          "thumb": "images/bahrain-night-rain--amber-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "3a78b92527dea012dc21f4ab5af73d30dfb2be018129ef8a17685a5c2c7bbf1c",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "ice-light",
+          "file": "images/bahrain-night-rain--ice-light.webp",
+          "thumb": "images/bahrain-night-rain--ice-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "b9cb22c500f36726a86a017f511314f61eebe9ddc7a84d5a715824a9e0f3cd20",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "ice-medium",
+          "file": "images/bahrain-night-rain--ice-medium.webp",
+          "thumb": "images/bahrain-night-rain--ice-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "93b5a08167bf61564c8804e4a6be99ce5bfd4e69798805d7e1d182927df82123",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "ice-strong",
+          "file": "images/bahrain-night-rain--ice-strong.webp",
+          "thumb": "images/bahrain-night-rain--ice-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "55683c00bb62a96d926ab633291ef3a470c37d5c5a6afb624b9481f74adedfea",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "rose-light",
+          "file": "images/bahrain-night-rain--rose-light.webp",
+          "thumb": "images/bahrain-night-rain--rose-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "a7451c38075712e9929435ae78875da01e18fc65878e14600b8efa18f1534c7f",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "rose-medium",
+          "file": "images/bahrain-night-rain--rose-medium.webp",
+          "thumb": "images/bahrain-night-rain--rose-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "4ec145f63cbf92e583fe40d307b6c0c2298eeccdbd3125cdbbace03aa0bf320b",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "variant": "rose-strong",
+          "file": "images/bahrain-night-rain--rose-strong.webp",
+          "thumb": "images/bahrain-night-rain--rose-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "f8c4cdab272d91889e3db6e5e2af1b347f83af4f18eee3b71e55f07961558946",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "off",
+          "file": "images/bahrain-day-storm--off.webp",
+          "thumb": "images/bahrain-day-storm--off-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "76d2f7c0d6cb92d82a5f1414193332fa6006b113547b585437181d6697cbe412",
+          "schema": "settled_identity",
+          "file_exists": true,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "clear",
+          "file": "images/bahrain-day-storm--clear.webp",
+          "thumb": "images/bahrain-day-storm--clear-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "5bf1415fba7316bcc5f606ccff969b6b490830067500e867ce217a4683c35352",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "neutral-light",
+          "file": "images/bahrain-day-storm--neutral-light.webp",
+          "thumb": "images/bahrain-day-storm--neutral-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "00b658296c6643964614b906485a2f5ed1e18a687422daa3aa61ad3d8fb8562c",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "neutral-medium",
+          "file": "images/bahrain-day-storm--neutral-medium.webp",
+          "thumb": "images/bahrain-day-storm--neutral-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "42992add6cd2191ca3a9837d9a0b8219dc61786e5a5b8a31c5fe098065118ce9",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "neutral-strong",
+          "file": "images/bahrain-day-storm--neutral-strong.webp",
+          "thumb": "images/bahrain-day-storm--neutral-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "0787c045ad18b4370eb8655d93dd11d3231cef9daa57aaf3c7ca9fd59cdb4c7a",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "amber-light",
+          "file": "images/bahrain-day-storm--amber-light.webp",
+          "thumb": "images/bahrain-day-storm--amber-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "d368909ab8baa6d0c0acd9e809810c1140672cac2399b9f64aa62261dc7fdd3b",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "amber-medium",
+          "file": "images/bahrain-day-storm--amber-medium.webp",
+          "thumb": "images/bahrain-day-storm--amber-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "9742e7748d9e7aa559606a6391367af8b9925d0f5b317711330a21c0d2151164",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "amber-strong",
+          "file": "images/bahrain-day-storm--amber-strong.webp",
+          "thumb": "images/bahrain-day-storm--amber-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "0b1536e0bac8567655dd82fa4c44cb70644814a49672caa8a5e03b442d239184",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "ice-light",
+          "file": "images/bahrain-day-storm--ice-light.webp",
+          "thumb": "images/bahrain-day-storm--ice-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "9b00d1ef262176999236a4b1f0f42f3320272ddd7354988977c7541553036d7d",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "ice-medium",
+          "file": "images/bahrain-day-storm--ice-medium.webp",
+          "thumb": "images/bahrain-day-storm--ice-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "e4499c1e04e3967a47846676dcf79096f87f81e884b74f172bdfd999d96909c2",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "ice-strong",
+          "file": "images/bahrain-day-storm--ice-strong.webp",
+          "thumb": "images/bahrain-day-storm--ice-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "bc5c2619cdd1e11b95c9f21459007c50715d9eda336e97d5bbe29814f6205442",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "rose-light",
+          "file": "images/bahrain-day-storm--rose-light.webp",
+          "thumb": "images/bahrain-day-storm--rose-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "0c64c6ab500ef769052daaac27589eda84edb14d79a0072c4d3d990491fa2a3a",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "rose-medium",
+          "file": "images/bahrain-day-storm--rose-medium.webp",
+          "thumb": "images/bahrain-day-storm--rose-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "3eb8b10fa87525bfdd7a2d789832d66ee56b068b9dc309d5767dd61ef97d0fc7",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "variant": "rose-strong",
+          "file": "images/bahrain-day-storm--rose-strong.webp",
+          "thumb": "images/bahrain-day-storm--rose-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "ae58e6bf3b5951d65fabfa3525981183039e5185e13cc7efdff5c66d71bde073",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "off",
+          "file": "images/bahrain-night-dry--off.webp",
+          "thumb": "images/bahrain-night-dry--off-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "84698644b85aba7fd66d231f1c77a56364ace02ac5a9256b3fcda86e63494404",
+          "webpSha256": "c2dab99dd29016408c9adfa5c1d45c0bdcc8e23bcb05f83bc6b0a8cb9515b645",
+          "bytes": 217072,
+          "schema": "encoded_original",
+          "file_exists": true,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "clear",
+          "file": "images/bahrain-night-dry--clear.webp",
+          "thumb": "images/bahrain-night-dry--clear-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "b654c40c9a5ae8c9e9a8f9e2171253563e094d91b61b3c1b2a36127e49e64396",
+          "webpSha256": "e67491dd71cb70441f6ebaa9f724d16fa3c1ce32514395ede780f26c80cc1a23",
+          "bytes": 249110,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "neutral-light",
+          "file": "images/bahrain-night-dry--neutral-light.webp",
+          "thumb": "images/bahrain-night-dry--neutral-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "7e3662abfc13248a14634fa966b1d6f2be11cd724b992211363664afa9406d6e",
+          "webpSha256": "dcbdad6f4b481c7f75d27c2c575971a3e74e49d3e6aef78fc5f1a10fb21db45d",
+          "bytes": 229524,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "neutral-medium",
+          "file": "images/bahrain-night-dry--neutral-medium.webp",
+          "thumb": "images/bahrain-night-dry--neutral-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "fa516edc205d74f7c66e9e2a9c1731a33ad49926d5f3221be2e4e99505962342",
+          "webpSha256": "7769150f248f6f9392df14453101c76e4d5ab589ff07aec3468ea69d89c4616e",
+          "bytes": 219720,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "neutral-strong",
+          "file": "images/bahrain-night-dry--neutral-strong.webp",
+          "thumb": "images/bahrain-night-dry--neutral-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "d4aff5307e6173ab935bedcd71ab21a256db9763d48061ddffee2e0eac52c58d",
+          "webpSha256": "3f52e07990014d43ebb922aaf198c24316083d40f5aa0e006a797589e56e8cd9",
+          "bytes": 210034,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "amber-light",
+          "file": "images/bahrain-night-dry--amber-light.webp",
+          "thumb": "images/bahrain-night-dry--amber-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "53526e526cb2ad00d3cbdf007bc94694340e9ea017d4f9610c32ceb2539ab8be",
+          "webpSha256": "95f3485a05d747a59bfa8ae9896a5d0af3f97006d6166298bad91caef850cd26",
+          "bytes": 228778,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "amber-medium",
+          "file": "images/bahrain-night-dry--amber-medium.webp",
+          "thumb": "images/bahrain-night-dry--amber-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "e1410b5197461bc12dacaa335b07dcada5f88047e65cca7921f376181ea72edf",
+          "webpSha256": "dc7b6b54c2429c2e8c60e0bd1bf2b9c9f425d02348a7be9e829f2f829420c98f",
+          "bytes": 220514,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "amber-strong",
+          "file": "images/bahrain-night-dry--amber-strong.webp",
+          "thumb": "images/bahrain-night-dry--amber-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "972edaadaff53f113ab1285559c4c9bc7b9bf42712bd1265a59e5f479c733718",
+          "webpSha256": "aa5d1fd5bfce2d3f774f119a695d4b75048dc2046e238e0065cbf78ced7d2305",
+          "bytes": 211410,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "ice-light",
+          "file": "images/bahrain-night-dry--ice-light.webp",
+          "thumb": "images/bahrain-night-dry--ice-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "c74a9313ba434c123d1fc9c410d826eb82058d8f7aaef5551a7f57195be472ed",
+          "webpSha256": "0e9f196939618c3bc77de57c23014306ceaba527c5d5ff2428e57e88cb0850fa",
+          "bytes": 228208,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "ice-medium",
+          "file": "images/bahrain-night-dry--ice-medium.webp",
+          "thumb": "images/bahrain-night-dry--ice-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "f99d2399e97d49d83798d9bef0f08b2cb56cf698e81acf30c3b80555623c61d3",
+          "webpSha256": "e6c42d4dc510dcfc18d3ebb4aca69ff7ebd576217113986143e6b4a8b1bcae2c",
+          "bytes": 219788,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "ice-strong",
+          "file": "images/bahrain-night-dry--ice-strong.webp",
+          "thumb": "images/bahrain-night-dry--ice-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "c72958e4b1ef815b271556d7881837138955eb2a15b4c91434305c17fa6d37a9",
+          "webpSha256": "1cdb23f250caf97b6f57cfc2d91adc71b1408142223d075e9020e96124d78d85",
+          "bytes": 210334,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "rose-light",
+          "file": "images/bahrain-night-dry--rose-light.webp",
+          "thumb": "images/bahrain-night-dry--rose-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "4b69843e772d57b19356ad05ec406ee9bb305bfe89a7b1fd00251bbdfeaf3f14",
+          "webpSha256": "cd4548b424ee1a6dac3f2c43fa0c1270bb3fe61eb79605ce57a623cce2f5d557",
+          "bytes": 228878,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "rose-medium",
+          "file": "images/bahrain-night-dry--rose-medium.webp",
+          "thumb": "images/bahrain-night-dry--rose-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "ab8dd96371dc6ba5f64530c6537c2c79d5297a737d297f913ba66482e259cc8d",
+          "webpSha256": "1bab4c78c554f6dc5d010ced66d8fa39bef699fb9e30f22f889eb50b22293a46",
+          "bytes": 220072,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "variant": "rose-strong",
+          "file": "images/bahrain-night-dry--rose-strong.webp",
+          "thumb": "images/bahrain-night-dry--rose-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "pngSha256": "e50255c955467e460562c3f2cab78f2bc4e0d74f60f0343623ee6aa6e9b23157",
+          "webpSha256": "d66423d878109421eafcaa5ae4477fd5d7caea230979306e3d7598b082ca7fab",
+          "bytes": 210536,
+          "schema": "encoded_original",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "off",
+          "file": "images/monza-night-rain--off.webp",
+          "thumb": "images/monza-night-rain--off-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "f74185b889dcc7335408c39060a4e6556b5f84dd9513994732ef3826f3e596de",
+          "schema": "settled_identity",
+          "file_exists": true,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "clear",
+          "file": "images/monza-night-rain--clear.webp",
+          "thumb": "images/monza-night-rain--clear-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "1f1398f2a46276f0987674dcc418b462300f485675fbc4747d14d7970a944132",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "neutral-light",
+          "file": "images/monza-night-rain--neutral-light.webp",
+          "thumb": "images/monza-night-rain--neutral-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "3ceb26216fc992592dbcd3f64e3ec86c60292be4278bb2e7b06d0894c71e2072",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "neutral-medium",
+          "file": "images/monza-night-rain--neutral-medium.webp",
+          "thumb": "images/monza-night-rain--neutral-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "86bbfcecddbdb75aefd252b2b8629100edb4a65983fe6e2562bfa0dd10232205",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "neutral-strong",
+          "file": "images/monza-night-rain--neutral-strong.webp",
+          "thumb": "images/monza-night-rain--neutral-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "547d63c249441d2cca1069a2d5adb2d314c2a8d4081cba2b74577856a577ffc7",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "amber-light",
+          "file": "images/monza-night-rain--amber-light.webp",
+          "thumb": "images/monza-night-rain--amber-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "a0c11862789517a35f5899e97b2dbde13e295fe766c093d1fba3961918f7295d",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "amber-medium",
+          "file": "images/monza-night-rain--amber-medium.webp",
+          "thumb": "images/monza-night-rain--amber-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "212cee299129279d1df4cd85254de92c2ebd7e93c9863af09bcc0be3b9619089",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "amber-strong",
+          "file": "images/monza-night-rain--amber-strong.webp",
+          "thumb": "images/monza-night-rain--amber-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "df24c0b5c907b349281421119d1df6b27c6fb282a945696157517dc7db44199b",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "ice-light",
+          "file": "images/monza-night-rain--ice-light.webp",
+          "thumb": "images/monza-night-rain--ice-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "fdd45253b345831797a8f4aca9c2645d576ebf4f7003737bf369f2571cb1f90b",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "ice-medium",
+          "file": "images/monza-night-rain--ice-medium.webp",
+          "thumb": "images/monza-night-rain--ice-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "5bbd43235801b436b0c37c936be1ee123f1223402dd1987a8010e10f21309207",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "ice-strong",
+          "file": "images/monza-night-rain--ice-strong.webp",
+          "thumb": "images/monza-night-rain--ice-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "bc5abd3ec6b0cc7d62c90806777925e5b9130255d11808e91ba654d7886a0018",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "rose-light",
+          "file": "images/monza-night-rain--rose-light.webp",
+          "thumb": "images/monza-night-rain--rose-light-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "b4a503f5396e322d3094f588f01daa0a2ea799f2c098dfa92f33f9177d19deea",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "rose-medium",
+          "file": "images/monza-night-rain--rose-medium.webp",
+          "thumb": "images/monza-night-rain--rose-medium-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "e893a7bb7c2b859397bd5049fc2318ea4ec097081a10aa8bd707a11a2ecb826f",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        },
+        {
+          "scene": "monza-night-rain",
+          "variant": "rose-strong",
+          "file": "images/monza-night-rain--rose-strong.webp",
+          "thumb": "images/monza-night-rain--rose-strong-thumb.webp",
+          "width": 1920,
+          "height": 1080,
+          "sha256": "ce62ed1aedb9d0c35b87cdcbc9118d722149e66bd671e325491648c998237c44",
+          "schema": "settled_identity",
+          "file_exists": false,
+          "thumb_exists": false
+        }
+      ],
+      "settled_scene_identities": {
+        "bahrain-day-wet": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "wet",
+          "tod": "day",
+          "camera": {
+            "mode": "helmet",
+            "index": 19,
+            "modes": [
+              "chase",
+              "far",
+              "drift",
+              "cockpit",
+              "hood",
+              "overhead",
+              "heli",
+              "reverse",
+              "side",
+              "cinematic",
+              "low",
+              "tcam",
+              "rear",
+              "visor",
+              "trackside",
+              "rival",
+              "pitwall",
+              "drone",
+              "tv",
+              "helmet"
+            ]
+          },
+          "perf": {
+            "scale": 1,
+            "fps": 42.4,
+            "floorMs": 17.8,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 6,
+              "maxMs": 26915.6,
+              "slow": 3
+            },
+            "frameTimes": {
+              "frames": 6,
+              "p50": 83.29999999998836,
+              "p95": 26915.59999999999,
+              "p99": 26915.59999999999,
+              "maxMs": 26915.59999999999,
+              "droppedSimS": 0,
+              "physicsSteps": 8,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 2
+            }
+          },
+          "headless": true,
+          "renderedFrame": {
+            "wetness": 0.5,
+            "rain": 0.014000000000000002,
+            "lightCount": 0
+          },
+          "post": {
+            "reflect": 0.64,
+            "ssrQuality": 0
+          },
+          "tune": {
+            "wetness": 0.5,
+            "ssrWetMul": 1.28
+          }
+        },
+        "bahrain-night-rain": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "rain",
+          "tod": "night",
+          "camera": {
+            "mode": "helmet",
+            "index": 19,
+            "modes": [
+              "chase",
+              "far",
+              "drift",
+              "cockpit",
+              "hood",
+              "overhead",
+              "heli",
+              "reverse",
+              "side",
+              "cinematic",
+              "low",
+              "tcam",
+              "rear",
+              "visor",
+              "trackside",
+              "rival",
+              "pitwall",
+              "drone",
+              "tv",
+              "helmet"
+            ]
+          },
+          "perf": {
+            "scale": 1,
+            "fps": 4.9,
+            "floorMs": 55.6,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 55214.4,
+              "slow": 4
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 1533.2999999999993,
+              "p95": 55214.4,
+              "p99": 55214.4,
+              "maxMs": 55214.4,
+              "droppedSimS": 0.18333333333333332,
+              "physicsSteps": 10,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": false,
+              "softPresent": true,
+              "softBlitGen": 1
+            }
+          },
+          "headless": true,
+          "renderedFrame": {
+            "wetness": 1,
+            "rain": 0.04000000000000001,
+            "lightCount": 40
+          },
+          "post": {
+            "reflect": 1.35,
+            "ssrQuality": 0
+          },
+          "tune": {
+            "wetness": 1,
+            "ssrWetMul": 1.35
+          }
+        },
+        "bahrain-day-storm": {
+          "info": {
+            "state": "race",
+            "track": "bahrain",
+            "n": 1347,
+            "total": 5386.93474180287,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.28,
+              0.62
+            ],
+            "turns": 15
+          },
+          "weather": "storm",
+          "tod": "day",
+          "camera": {
+            "mode": "helmet",
+            "index": 19,
+            "modes": [
+              "chase",
+              "far",
+              "drift",
+              "cockpit",
+              "hood",
+              "overhead",
+              "heli",
+              "reverse",
+              "side",
+              "cinematic",
+              "low",
+              "tcam",
+              "rear",
+              "visor",
+              "trackside",
+              "rival",
+              "pitwall",
+              "drone",
+              "tv",
+              "helmet"
+            ]
+          },
+          "perf": {
+            "scale": 1,
+            "fps": 41.3,
+            "floorMs": 17.9,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 4,
+              "maxMs": 25115.7,
+              "slow": 2
+            },
+            "frameTimes": {
+              "frames": 4,
+              "p50": 99.89999999999418,
+              "p95": 25115.70000000001,
+              "p99": 25115.70000000001,
+              "maxMs": 25115.70000000001,
+              "droppedSimS": 0.016666666666666666,
+              "physicsSteps": 6,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 3
+            }
+          },
+          "headless": true,
+          "renderedFrame": {
+            "wetness": 1,
+            "rain": 0.01335999999998603,
+            "lightCount": 0
+          },
+          "post": {
+            "reflect": 1.4,
+            "ssrQuality": 0
+          },
+          "tune": {
+            "wetness": 1,
+            "ssrWetMul": 1.4
+          }
+        },
+        "monza-night-rain": {
+          "info": {
+            "state": "race",
+            "track": "monza",
+            "n": 1444,
+            "total": 5777.579011126656,
+            "timeTrial": false,
+            "seasonMode": false,
+            "flow": "gp",
+            "session": "race",
+            "career": false,
+            "practice": false,
+            "duel": false,
+            "raceQuali": false,
+            "raceGrid": "random",
+            "lapsTarget": 3,
+            "sectors": [
+              0.26536876,
+              0.58048447
+            ],
+            "turns": 11
+          },
+          "weather": "rain",
+          "tod": "night",
+          "camera": {
+            "mode": "helmet",
+            "index": 19,
+            "modes": [
+              "chase",
+              "far",
+              "drift",
+              "cockpit",
+              "hood",
+              "overhead",
+              "heli",
+              "reverse",
+              "side",
+              "cinematic",
+              "low",
+              "tcam",
+              "rear",
+              "visor",
+              "trackside",
+              "rival",
+              "pitwall",
+              "drone",
+              "tv",
+              "helmet"
+            ]
+          },
+          "perf": {
+            "scale": 1,
+            "fps": 55,
+            "floorMs": 16.9,
+            "auto": false,
+            "tier": 0,
+            "autoTier": 0,
+            "autoShed": 0,
+            "open": {
+              "frames": 6,
+              "maxMs": 42281.7,
+              "slow": 4
+            },
+            "frameTimes": {
+              "frames": 6,
+              "p50": 250,
+              "p95": 42281.70000000001,
+              "p99": 42281.70000000001,
+              "maxMs": 42281.70000000001,
+              "droppedSimS": 0.16666666666666666,
+              "physicsSteps": 8,
+              "windowFrames": 2048
+            },
+            "userTier": 0,
+            "tierFloor": 0,
+            "crashStrikes": 0,
+            "scaleFutile": false,
+            "tierFutile": false,
+            "tierHold": true
+          },
+          "backend": {
+            "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+            "dpr": 1,
+            "viewport": [
+              1920,
+              1080
+            ],
+            "backend": "webgl2",
+            "backendFallback": null,
+            "mobile": false,
+            "mobileTier": false,
+            "hdr": true,
+            "msaa": 4,
+            "renderScale": 1,
+            "gpuErrors": 0,
+            "backendState": {
+              "api": "webgl2",
+              "isMobile": false,
+              "mobileTier": false,
+              "gpuErrors": 0,
+              "gpuFirstError": null,
+              "ctxLost": false,
+              "packLive": true,
+              "softPresent": true,
+              "softBlitGen": 4
+            }
+          },
+          "headless": true,
+          "renderedFrame": {
+            "wetness": 1,
+            "rain": 0.04000000000000001,
+            "lightCount": 40
+          },
+          "post": {
+            "reflect": 1.32,
+            "ssrQuality": 0
+          },
+          "tune": {
+            "wetness": 1,
+            "ssrWetMul": 1.32
+          }
+        }
+      },
+      "state_values": {
+        "off": {
+          "mode": "off",
+          "color": "neutral",
+          "intensity": "light",
+          "background": "oklab(0.158569 0.00418141 -0.0163616 / 0.07)",
+          "shadow": "none"
+        },
+        "clear": {
+          "mode": "clear",
+          "color": "neutral",
+          "intensity": "light",
+          "background": "rgba(0, 0, 0, 0)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "neutral-light": {
+          "mode": "smoke",
+          "color": "neutral",
+          "intensity": "light",
+          "background": "color(srgb 0.0470588 0.0470588 0.0784314 / 0.12)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "neutral-medium": {
+          "mode": "smoke",
+          "color": "neutral",
+          "intensity": "medium",
+          "background": "color(srgb 0.0470588 0.0470588 0.0784314 / 0.18)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "neutral-strong": {
+          "mode": "smoke",
+          "color": "neutral",
+          "intensity": "strong",
+          "background": "color(srgb 0.0470588 0.0470588 0.0784314 / 0.24)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "amber-light": {
+          "mode": "smoke",
+          "color": "amber",
+          "intensity": "light",
+          "background": "color(srgb 0.313726 0.239216 0.12549 / 0.12)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "amber-medium": {
+          "mode": "smoke",
+          "color": "amber",
+          "intensity": "medium",
+          "background": "color(srgb 0.313726 0.239216 0.12549 / 0.18)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "amber-strong": {
+          "mode": "smoke",
+          "color": "amber",
+          "intensity": "strong",
+          "background": "color(srgb 0.313726 0.239216 0.12549 / 0.24)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "ice-light": {
+          "mode": "smoke",
+          "color": "ice",
+          "intensity": "light",
+          "background": "color(srgb 0.137255 0.231373 0.313726 / 0.12)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "ice-medium": {
+          "mode": "smoke",
+          "color": "ice",
+          "intensity": "medium",
+          "background": "color(srgb 0.137255 0.231373 0.313726 / 0.18)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "ice-strong": {
+          "mode": "smoke",
+          "color": "ice",
+          "intensity": "strong",
+          "background": "color(srgb 0.137255 0.231373 0.313726 / 0.24)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "rose-light": {
+          "mode": "smoke",
+          "color": "rose",
+          "intensity": "light",
+          "background": "color(srgb 0.298039 0.176471 0.235294 / 0.12)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "rose-medium": {
+          "mode": "smoke",
+          "color": "rose",
+          "intensity": "medium",
+          "background": "color(srgb 0.298039 0.176471 0.235294 / 0.18)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        },
+        "rose-strong": {
+          "mode": "smoke",
+          "color": "rose",
+          "intensity": "strong",
+          "background": "color(srgb 0.298039 0.176471 0.235294 / 0.24)",
+          "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+        }
+      },
+      "checks": [
+        {
+          "scene": "bahrain-day-dry",
+          "pixels": {
+            "brightFraction": 0.6944986979166666,
+            "centerBrightFraction": 0.7717927631578947,
+            "variance": 2003.5017165871736,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "bahrain-dawn-fog",
+          "pixels": {
+            "brightFraction": 0.8614908854166666,
+            "centerBrightFraction": 0.8947368421052632,
+            "variance": 2457.4376778309747,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "bahrain-dusk-overcast",
+          "pixels": {
+            "brightFraction": 0.8616536458333334,
+            "centerBrightFraction": 0.9046052631578947,
+            "variance": 1882.8302674203596,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "pixels": {
+            "brightFraction": 0.6355794270833334,
+            "centerBrightFraction": 0.733141447368421,
+            "variance": 1884.723108759496,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "bahrain-night-rain",
+          "pixels": {
+            "brightFraction": 0.8907877604166666,
+            "centerBrightFraction": 0.865953947368421,
+            "variance": 943.9902676123761,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "pixels": {
+            "brightFraction": 0.630859375,
+            "centerBrightFraction": 0.7088815789473685,
+            "variance": 2091.8769342868254,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "bahrain-night-dry",
+          "pixels": {
+            "brightFraction": 0.92333984375,
+            "centerBrightFraction": 0.8877467105263158,
+            "variance": 1111.4069968299573,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "monza-night-rain",
+          "pixels": {
+            "brightFraction": 0.7023111979166666,
+            "centerBrightFraction": 0.7232730263157895,
+            "variance": 835.6626134331076,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "name": "color/intensity survive reload",
+          "result": "PASS"
+        }
+      ],
+      "patches": [
+        {
+          "source": {
+            "sha": "76109603111b90451f8bc74f990d6496fcd0f2b5",
+            "dirty": true,
+            "fingerprint": "720069cd0ae75449d5e53b0bec2fdee5f97dcfe4c813856e8c7079d9f1f75928"
+          },
+          "scenes": [
+            "bahrain-night-rain",
+            "bahrain-day-wet",
+            "bahrain-day-storm",
+            "monza-night-rain"
+          ],
+          "reason": "Surface wetness pinned and actual reflection inputs verified before capture",
+          "details": "settled-weather.json"
+        }
+      ],
+      "missing_counts": {
+        "full_resolution": 104,
+        "thumbnail": 112
+      },
+      "semantics": [
+        "scene IDs and variant IDs form unique lookup keys",
+        "file and thumb resolve relative to HTML; hashes are content/provenance fields unused by viewer validation",
+        "56 original entries carry PNG/WebP hashes and byte counts; 56 refreshed entries carry state, detailed identity and sha256 instead",
+        "patch source differs from top-level source; wet scene checks in shots need not equal settled-weather checks",
+        "no explicit per-image license field; no license grant inferred from capture provenance"
+      ]
+    },
+    "settled_suffix": {
+      "partial_initial_capture": "monza-night-rain rose-light inferred from immediately following variants; beginning and its file/state not present in assigned span",
+      "complete_captures": [
+        {
+          "start": 115613,
+          "end": 117731,
+          "value": {
+            "scene": "monza-night-rain",
+            "variant": "rose-medium",
+            "file": "images/monza-night-rain--rose-medium.webp",
+            "thumb": "images/monza-night-rain--rose-medium-thumb.webp",
+            "width": 1920,
+            "height": 1080,
+            "state": {
+              "mode": "smoke",
+              "color": "rose",
+              "intensity": "medium",
+              "background": "color(srgb 0.298039 0.176471 0.235294 / 0.18)",
+              "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+            },
+            "identity": {
+              "info": {
+                "state": "race",
+                "track": "monza",
+                "n": 1444,
+                "total": 5777.579011126656,
+                "timeTrial": false,
+                "seasonMode": false,
+                "flow": "gp",
+                "session": "race",
+                "career": false,
+                "practice": false,
+                "duel": false,
+                "raceQuali": false,
+                "raceGrid": "random",
+                "lapsTarget": 3,
+                "sectors": [
+                  0.26536876,
+                  0.58048447
+                ],
+                "turns": 11
+              },
+              "weather": "rain",
+              "tod": "night",
+              "camera": {
+                "mode": "helmet",
+                "index": 19,
+                "modes": [
+                  "chase",
+                  "far",
+                  "drift",
+                  "cockpit",
+                  "hood",
+                  "overhead",
+                  "heli",
+                  "reverse",
+                  "side",
+                  "cinematic",
+                  "low",
+                  "tcam",
+                  "rear",
+                  "visor",
+                  "trackside",
+                  "rival",
+                  "pitwall",
+                  "drone",
+                  "tv",
+                  "helmet"
+                ]
+              },
+              "perf": {
+                "scale": 1,
+                "fps": 55,
+                "floorMs": 16.9,
+                "auto": false,
+                "tier": 0,
+                "autoTier": 0,
+                "autoShed": 0,
+                "open": {
+                  "frames": 6,
+                  "maxMs": 42281.7,
+                  "slow": 4
+                },
+                "frameTimes": {
+                  "frames": 6,
+                  "p50": 250,
+                  "p95": 42281.70000000001,
+                  "p99": 42281.70000000001,
+                  "maxMs": 42281.70000000001,
+                  "droppedSimS": 0.16666666666666666,
+                  "physicsSteps": 8,
+                  "windowFrames": 2048
+                },
+                "userTier": 0,
+                "tierFloor": 0,
+                "crashStrikes": 0,
+                "scaleFutile": false,
+                "tierFutile": false,
+                "tierHold": true
+              },
+              "backend": {
+                "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+                "dpr": 1,
+                "viewport": [
+                  1920,
+                  1080
+                ],
+                "backend": "webgl2",
+                "backendFallback": null,
+                "mobile": false,
+                "mobileTier": false,
+                "hdr": true,
+                "msaa": 4,
+                "renderScale": 1,
+                "gpuErrors": 0,
+                "backendState": {
+                  "api": "webgl2",
+                  "isMobile": false,
+                  "mobileTier": false,
+                  "gpuErrors": 0,
+                  "gpuFirstError": null,
+                  "ctxLost": false,
+                  "packLive": true,
+                  "softPresent": true,
+                  "softBlitGen": 4
+                }
+              },
+              "headless": true,
+              "renderedFrame": {
+                "wetness": 1,
+                "rain": 0.04000000000000001,
+                "lightCount": 40
+              },
+              "post": {
+                "reflect": 1.32,
+                "ssrQuality": 0
+              },
+              "tune": {
+                "wetness": 1,
+                "ssrWetMul": 1.32
+              }
+            },
+            "sha256": "e893a7bb7c2b859397bd5049fc2318ea4ec097081a10aa8bd707a11a2ecb826f"
+          }
+        },
+        {
+          "start": 117732,
+          "end": 119850,
+          "value": {
+            "scene": "monza-night-rain",
+            "variant": "rose-strong",
+            "file": "images/monza-night-rain--rose-strong.webp",
+            "thumb": "images/monza-night-rain--rose-strong-thumb.webp",
+            "width": 1920,
+            "height": 1080,
+            "state": {
+              "mode": "smoke",
+              "color": "rose",
+              "intensity": "strong",
+              "background": "color(srgb 0.298039 0.176471 0.235294 / 0.24)",
+              "shadow": "color(srgb 0.964706 0.964706 0.976471 / 0.25) 0px 2px 0px 0px inset, color(srgb 0.0470588 0.0470588 0.0784314 / 0.65) 0px -3px 8px 0px inset"
+            },
+            "identity": {
+              "info": {
+                "state": "race",
+                "track": "monza",
+                "n": 1444,
+                "total": 5777.579011126656,
+                "timeTrial": false,
+                "seasonMode": false,
+                "flow": "gp",
+                "session": "race",
+                "career": false,
+                "practice": false,
+                "duel": false,
+                "raceQuali": false,
+                "raceGrid": "random",
+                "lapsTarget": 3,
+                "sectors": [
+                  0.26536876,
+                  0.58048447
+                ],
+                "turns": 11
+              },
+              "weather": "rain",
+              "tod": "night",
+              "camera": {
+                "mode": "helmet",
+                "index": 19,
+                "modes": [
+                  "chase",
+                  "far",
+                  "drift",
+                  "cockpit",
+                  "hood",
+                  "overhead",
+                  "heli",
+                  "reverse",
+                  "side",
+                  "cinematic",
+                  "low",
+                  "tcam",
+                  "rear",
+                  "visor",
+                  "trackside",
+                  "rival",
+                  "pitwall",
+                  "drone",
+                  "tv",
+                  "helmet"
+                ]
+              },
+              "perf": {
+                "scale": 1,
+                "fps": 55,
+                "floorMs": 16.9,
+                "auto": false,
+                "tier": 0,
+                "autoTier": 0,
+                "autoShed": 0,
+                "open": {
+                  "frames": 6,
+                  "maxMs": 42281.7,
+                  "slow": 4
+                },
+                "frameTimes": {
+                  "frames": 6,
+                  "p50": 250,
+                  "p95": 42281.70000000001,
+                  "p99": 42281.70000000001,
+                  "maxMs": 42281.70000000001,
+                  "droppedSimS": 0.16666666666666666,
+                  "physicsSteps": 8,
+                  "windowFrames": 2048
+                },
+                "userTier": 0,
+                "tierFloor": 0,
+                "crashStrikes": 0,
+                "scaleFutile": false,
+                "tierFutile": false,
+                "tierHold": true
+              },
+              "backend": {
+                "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+                "dpr": 1,
+                "viewport": [
+                  1920,
+                  1080
+                ],
+                "backend": "webgl2",
+                "backendFallback": null,
+                "mobile": false,
+                "mobileTier": false,
+                "hdr": true,
+                "msaa": 4,
+                "renderScale": 1,
+                "gpuErrors": 0,
+                "backendState": {
+                  "api": "webgl2",
+                  "isMobile": false,
+                  "mobileTier": false,
+                  "gpuErrors": 0,
+                  "gpuFirstError": null,
+                  "ctxLost": false,
+                  "packLive": true,
+                  "softPresent": true,
+                  "softBlitGen": 4
+                }
+              },
+              "headless": true,
+              "renderedFrame": {
+                "wetness": 1,
+                "rain": 0.04000000000000001,
+                "lightCount": 40
+              },
+              "post": {
+                "reflect": 1.32,
+                "ssrQuality": 0
+              },
+              "tune": {
+                "wetness": 1,
+                "ssrWetMul": 1.32
+              }
+            },
+            "sha256": "ce62ed1aedb9d0c35b87cdcbc9118d722149e66bd671e325491648c998237c44"
+          }
+        }
+      ],
+      "completedScenes": [
+        "bahrain-night-rain",
+        "bahrain-day-wet",
+        "bahrain-day-storm",
+        "monza-night-rain"
+      ],
+      "errors": [],
+      "checks": [
+        {
+          "scene": "bahrain-night-rain",
+          "pixels": {
+            "brightFraction": 0.9573567708333334,
+            "centerBrightFraction": 0.9547697368421053,
+            "variance": 807.5092212270974,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "bahrain-day-wet",
+          "pixels": {
+            "brightFraction": 0.63525390625,
+            "centerBrightFraction": 0.734375,
+            "variance": 1869.03627216362,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "bahrain-day-storm",
+          "pixels": {
+            "brightFraction": 0.6261393229166666,
+            "centerBrightFraction": 0.7171052631578947,
+            "variance": 2165.601771033772,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        },
+        {
+          "scene": "monza-night-rain",
+          "pixels": {
+            "brightFraction": 0.7164713541666666,
+            "centerBrightFraction": 0.7191611842105263,
+            "variance": 492.73175357002685,
+            "black": false,
+            "blackHudOnly": false,
+            "meaningful": true,
+            "classification": "scene-content"
+          }
+        }
+      ],
+      "verdict": "PASS",
+      "checks_semantics": "four scene-content pixel classifications, meaningful true, black and blackHudOnly false; stored report only"
+    },
+    "css": {
+      "purpose": "static captured-gallery presentation only",
+      "tokens": [
+        "--bg",
+        "--panel",
+        "--ink",
+        "--muted",
+        "--line",
+        "--lime"
+      ],
+      "state_contracts": [
+        "button[aria-pressed=true] selected states",
+        "fieldset:disabled fades dependent lens controls",
+        "--wipe clips candidate and positions divider",
+        "body.selector-hidden and .controls[hidden] expand stage and hide selector",
+        ":focus-visible and :has(input:focus-visible) focus indicators"
+      ],
+      "breakpoints_px": [
+        1600,
+        1050,
+        760,
+        1100,
+        600
+      ],
+      "cascade": "late max-width 1920/clamp padding and 240px selector rules override earlier max-width1680/48px layouts; <=1100 single column; <=760 flex stage-first and controls grid; <=600 action hint hidden",
+      "reduced_motion": "smooth HTML scroll disabled",
+      "assets": "no @import, font download, image URL or external asset reference; Inter falls back to system font"
+    }
+  },
+  "missing_or_historical_paths": [
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--off-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "off",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--clear.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "clear",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--clear-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "clear",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--neutral-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "neutral-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--neutral-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "neutral-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--neutral-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "neutral-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--neutral-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "neutral-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--neutral-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "neutral-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--neutral-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "neutral-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--amber-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "amber-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--amber-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "amber-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--amber-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "amber-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--amber-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "amber-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--amber-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "amber-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--amber-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "amber-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--ice-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "ice-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--ice-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "ice-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--ice-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "ice-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--ice-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "ice-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--ice-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "ice-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--ice-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "ice-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--rose-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "rose-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--rose-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "rose-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--rose-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "rose-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--rose-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "rose-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--rose-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "rose-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--rose-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-dry",
+      "variant": "rose-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--off-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "off",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--clear.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "clear",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--clear-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "clear",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--neutral-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "neutral-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--neutral-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "neutral-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--neutral-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "neutral-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--neutral-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "neutral-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--neutral-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "neutral-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--neutral-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "neutral-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--amber-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "amber-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--amber-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "amber-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--amber-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "amber-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--amber-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "amber-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--amber-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "amber-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--amber-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "amber-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--ice-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "ice-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--ice-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "ice-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--ice-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "ice-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--ice-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "ice-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--ice-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "ice-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--ice-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "ice-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--rose-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "rose-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--rose-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "rose-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--rose-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "rose-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--rose-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "rose-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--rose-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "rose-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--rose-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dawn-fog",
+      "variant": "rose-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--off-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "off",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--clear.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "clear",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--clear-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "clear",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--neutral-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "neutral-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--neutral-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "neutral-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--neutral-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "neutral-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--neutral-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "neutral-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--neutral-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "neutral-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--neutral-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "neutral-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--amber-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "amber-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--amber-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "amber-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--amber-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "amber-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--amber-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "amber-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--amber-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "amber-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--amber-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "amber-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--ice-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "ice-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--ice-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "ice-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--ice-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "ice-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--ice-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "ice-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--ice-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "ice-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--ice-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "ice-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--rose-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "rose-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--rose-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "rose-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--rose-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "rose-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--rose-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "rose-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--rose-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "rose-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--rose-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-dusk-overcast",
+      "variant": "rose-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--off-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "off",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--clear.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "clear",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--clear-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "clear",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--neutral-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "neutral-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--neutral-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "neutral-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--neutral-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "neutral-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--neutral-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "neutral-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--neutral-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "neutral-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--neutral-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "neutral-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--amber-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "amber-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--amber-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "amber-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--amber-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "amber-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--amber-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "amber-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--amber-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "amber-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--amber-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "amber-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--ice-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "ice-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--ice-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "ice-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--ice-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "ice-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--ice-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "ice-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--ice-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "ice-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--ice-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "ice-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--rose-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "rose-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--rose-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "rose-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--rose-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "rose-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--rose-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "rose-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--rose-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "rose-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--rose-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-wet",
+      "variant": "rose-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--off-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "off",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--clear.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "clear",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--clear-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "clear",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--neutral-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "neutral-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--neutral-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "neutral-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--neutral-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "neutral-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--neutral-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "neutral-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--neutral-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "neutral-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--neutral-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "neutral-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--amber-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "amber-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--amber-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "amber-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--amber-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "amber-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--amber-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "amber-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--amber-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "amber-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--amber-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "amber-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--ice-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "ice-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--ice-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "ice-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--ice-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "ice-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--ice-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "ice-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--ice-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "ice-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--ice-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "ice-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--rose-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "rose-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--rose-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "rose-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--rose-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "rose-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--rose-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "rose-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--rose-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "rose-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--rose-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-rain",
+      "variant": "rose-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--off-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "off",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--clear.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "clear",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--clear-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "clear",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--neutral-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "neutral-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--neutral-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "neutral-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--neutral-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "neutral-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--neutral-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "neutral-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--neutral-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "neutral-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--neutral-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "neutral-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--amber-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "amber-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--amber-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "amber-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--amber-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "amber-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--amber-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "amber-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--amber-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "amber-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--amber-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "amber-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--ice-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "ice-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--ice-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "ice-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--ice-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "ice-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--ice-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "ice-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--ice-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "ice-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--ice-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "ice-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--rose-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "rose-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--rose-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "rose-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--rose-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "rose-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--rose-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "rose-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--rose-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "rose-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--rose-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-day-storm",
+      "variant": "rose-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--off-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "off",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--clear.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "clear",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--clear-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "clear",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--neutral-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "neutral-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--neutral-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "neutral-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--neutral-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "neutral-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--neutral-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "neutral-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--neutral-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "neutral-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--neutral-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "neutral-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--amber-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "amber-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--amber-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "amber-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--amber-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "amber-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--amber-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "amber-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--amber-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "amber-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--amber-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "amber-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--ice-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "ice-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--ice-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "ice-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--ice-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "ice-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--ice-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "ice-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--ice-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "ice-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--ice-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "ice-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--rose-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "rose-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--rose-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "rose-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--rose-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "rose-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--rose-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "rose-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--rose-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "rose-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--rose-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "bahrain-night-dry",
+      "variant": "rose-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--off-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "off",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--clear.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "clear",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--clear-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "clear",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--neutral-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "neutral-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--neutral-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "neutral-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--neutral-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "neutral-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--neutral-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "neutral-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--neutral-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "neutral-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--neutral-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "neutral-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--amber-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "amber-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--amber-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "amber-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--amber-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "amber-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--amber-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "amber-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--amber-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "amber-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--amber-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "amber-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--ice-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "ice-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--ice-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "ice-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--ice-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "ice-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--ice-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "ice-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--ice-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "ice-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--ice-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "ice-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--rose-light.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "rose-light",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--rose-light-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "rose-light",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--rose-medium.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "rose-medium",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--rose-medium-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "rose-medium",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--rose-strong.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "rose-strong",
+      "field": "file",
+      "status": "missing locally; README says retained in existing gallery output"
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--rose-strong-thumb.webp",
+      "source": "examples/visor-lab/shots.json",
+      "scene": "monza-night-rain",
+      "variant": "rose-strong",
+      "field": "thumb",
+      "status": "missing locally; README says retained in existing gallery output"
+    }
+  ],
+  "limits": [
+    "No tests, browser, network, runtime invocation, source edits, staging or commits.",
+    "Only settled-weather assigned suffix was textually read; its prefix remains group02 responsibility.",
+    "No binary file assigned to group03; no binary line-read or pixel inspection is claimed.",
+    "PASS values and timing counters are stored capture evidence, not current verification."
+  ]
+}

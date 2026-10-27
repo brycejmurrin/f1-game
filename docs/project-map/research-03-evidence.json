@@ -1,0 +1,460 @@
+{
+  "group": "03",
+  "date": "2026-10-27",
+  "rangeConvention": "half-open bytes of original UTF-8 files; whole-file sha256 binds original file, assignedRangeSha256 binds ownership; chunks partition assigned ranges exactly",
+  "coverage": {
+    "assignedBytes": 160000,
+    "readBytes": 160000,
+    "binaryFiles": 0,
+    "testsBrowserNetworkRuntimeResearchCommandsExecuted": false
+  },
+  "entries": [
+    {
+      "path": "docs/research/DRIVING-CONTROLS-RESEARCH.md",
+      "start": 3270,
+      "end": 35219,
+      "kind": "text",
+      "sha256": "ffa1199148fe520b85b89d59a11bc6601f59f71094e153f01954eaad2730e784",
+      "actualWholeFileBytes": 35219,
+      "actualWholeFileSha256": "ffa1199148fe520b85b89d59a11bc6601f59f71094e153f01954eaad2730e784",
+      "wholeFileHashMatchesManifest": true,
+      "assignedRangeSha256": "adbdbec73cf2b5f31f353a3e8b1dbcc10ef1a1781b03b81f5d66224d5315fa1f",
+      "chunks": [
+        {
+          "start": 3270,
+          "end": 11270,
+          "sha256": "00774536443f78b2702774db34029bde16ad9aea47c4db82f9e587a7af60d194",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 11270,
+          "end": 19270,
+          "sha256": "e96804419293651b9da63444e36b9e256c624ccdb120d6b2d6ffbe0e8780e4cb",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 19270,
+          "end": 27270,
+          "sha256": "227fc5f3265a21c1e87458f38f1eb57b372becfe5cbe4b5a734dfb3244a7610a",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 27270,
+          "end": 35219,
+          "sha256": "c6e72aa827c63cfe024faf1e2db5e26319ae4e1283e605f6a1d8b5f173059717",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        }
+      ],
+      "topic": "Driving controls",
+      "semantics": "Industry assist/accessibility comparison, slider arithmetic, input/platform audit and dated Monza JSON probes. Distinguishes sensory cues from intervention, rejects TC/ABS without slip state; later annotations supersede initial slider/rate proposals.",
+      "currentConsumers": "BrakeCue and input/audio comments cite it; input-controls skill routes to it.",
+      "cleanupAndLimits": "Preserve rationale; consolidate repeated shipped status and identify dated probe results. Initial 21-notch proposal is superseded by Phase C; live numbers are historical, not rerun.",
+      "rawHistoryArchiveOrLegacyReferences": [
+        "js/game/*",
+        "tools/tune-sweep.mjs",
+        "js/game/",
+        "node tools/mcp/mcp-cli.mjs probe --eval artifacts/driving-controls-probe.js",
+        "artifacts/logs/driving-controls-probe-v1.json",
+        "artifacts/logs/driving-controls-probe-v2.json"
+      ]
+    },
+    {
+      "path": "docs/research/F1-PROFILING-PLAYBOOK.md",
+      "start": 0,
+      "end": 17627,
+      "kind": "text",
+      "sha256": "3d1c9bdea8e4962c3d8d6ca06b279d890c6d5c3b9479b8e1746c635493bd7b10",
+      "actualWholeFileBytes": 17627,
+      "actualWholeFileSha256": "3d1c9bdea8e4962c3d8d6ca06b279d890c6d5c3b9479b8e1746c635493bd7b10",
+      "wholeFileHashMatchesManifest": true,
+      "assignedRangeSha256": "3d1c9bdea8e4962c3d8d6ca06b279d890c6d5c3b9479b8e1746c635493bd7b10",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "0e517db249181b08e00ec18806d6325b8267e249cd7724c5dbd3de1d64d5e83a",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "0e09b719e3686e5c4c40dc07be42ef7d8437ce0f5dbd450793a7634df7b5ae97",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 16000,
+          "end": 17627,
+          "sha256": "150bde10abdcc058e12bb97323696c433b42c92526df8d6ee536260e82c5175c",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        }
+      ],
+      "topic": "Profiling",
+      "semantics": "Diagnostic design against a dated revision and primary protocol documentation; explicitly no measurement, leak, GPU result or optimization win. Separates retention/churn, CPU/GPU, allocations/residency and software/hardware evidence.",
+      "currentConsumers": "Current profile/query and census tool paths exist; presence does not validate command schemas or diagnostic outcomes.",
+      "cleanupAndLimits": "Keep measurement distinctions and bounded cleanup contract; reconcile proposed modes against installed catalog before use.",
+      "rawHistoryArchiveOrLegacyReferences": [
+        "artifacts/profiles/"
+      ]
+    },
+    {
+      "path": "docs/research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md",
+      "start": 0,
+      "end": 30749,
+      "kind": "text",
+      "sha256": "d41a84dc353f64e84a52eed11d258462ca9cea89105706dd2f337f490331f4ef",
+      "actualWholeFileBytes": 30749,
+      "actualWholeFileSha256": "d41a84dc353f64e84a52eed11d258462ca9cea89105706dd2f337f490331f4ef",
+      "wholeFileHashMatchesManifest": true,
+      "assignedRangeSha256": "d41a84dc353f64e84a52eed11d258462ca9cea89105706dd2f337f490331f4ef",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "cfc4d4c007af12a221fab6416d903d68df03349ae94e987d36b1de613f8bb874",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "1a0bdb9fcb50bf8d0058bcd7b3821bffb6d3a917ed6fda0b0380f5c05e55037a",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "sha256": "e9fb39df4461177a60d9b8307e74faadee8de150c06d34cd86b5902b7c6f5130",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 24000,
+          "end": 30749,
+          "sha256": "feb92df09ffb7ad3755853102bf05dcaa2987450f61111bba2023ca589dd910c",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        }
+      ],
+      "topic": "Mechanics survey",
+      "semantics": "Dated static survey plus one reported isolated collision reproduction. Proposes shared AI grip, conservative collision bound, event identity, wetness, strategy, parity and network contracts.",
+      "currentConsumers": "Collision pairContact currently uses LCAR_MAX; the historical 5.0 m rejection description cannot be treated as current defect. Other proposals were not exhaustively re-audited.",
+      "cleanupAndLimits": "Retain as prioritized historical design; mark implemented items individually only with current evidence. Repo counts and broad feature inventory are dated.",
+      "rawHistoryArchiveOrLegacyReferences": []
+    },
+    {
+      "path": "docs/research/PAUSE-SETTINGS-IA.md",
+      "start": 0,
+      "end": 9862,
+      "kind": "text",
+      "sha256": "c2b04533efafb084eac3ca494314c8d6357ef2eb53464ec2e3aba3e1423512d6",
+      "actualWholeFileBytes": 9862,
+      "actualWholeFileSha256": "c2b04533efafb084eac3ca494314c8d6357ef2eb53464ec2e3aba3e1423512d6",
+      "wholeFileHashMatchesManifest": true,
+      "assignedRangeSha256": "c2b04533efafb084eac3ca494314c8d6357ef2eb53464ec2e3aba3e1423512d6",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "89f087f96e946a0e51dfe94bde4bd094c49caf0598ef22da6582a8857ef0112a",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 8000,
+          "end": 9862,
+          "sha256": "a580854d3840ec6180e858f2bffe38ba24901777af3398fb775b0088d1b269f1",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        }
+      ],
+      "topic": "Pause/settings IA",
+      "semantics": "Rendered/code audit and external navigation/focus guidance motivated stack navigation, disclosures, focus return, visible help and input semantics.",
+      "currentConsumers": "SettingsNav source explicitly cites it and implements a route registry; current route titles and destinations have expanded and differ from its locked list.",
+      "cleanupAndLimits": "Keep navigation rationale; reconcile locked page names and driving-session placement with current registry. No current rendered audit performed.",
+      "rawHistoryArchiveOrLegacyReferences": [
+        "docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md"
+      ]
+    },
+    {
+      "path": "docs/research/PHASE-C-SLIDER-DESIGN.md",
+      "start": 0,
+      "end": 20383,
+      "kind": "text",
+      "sha256": "8d81409f06efc5bf5e2210875556048223376bc3898ba667aae935b60ad6f7be",
+      "actualWholeFileBytes": 20383,
+      "actualWholeFileSha256": "8d81409f06efc5bf5e2210875556048223376bc3898ba667aae935b60ad6f7be",
+      "wholeFileHashMatchesManifest": true,
+      "assignedRangeSha256": "8d81409f06efc5bf5e2210875556048223376bc3898ba667aae935b60ad6f7be",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "5cbbb34bbd52998deb4bcd229c87ffc8841f538d315e85b52ac42a2a06344963",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "1e12a8b2ec76c704742960b66c9e3666f2275d7e732fc311ad3222485438afbc",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 16000,
+          "end": 20383,
+          "sha256": "e12dd00dbf4666490aad71f67d8839821f8187d3b6867156bd4e0fed84574891",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        }
+      ],
+      "topic": "Phase C sliders",
+      "semantics": "Arithmetic derives geometric pace, log-distance migration, hyperbolic speed reference, realistic wheelbase and lag-linear smoothing. Reported controlled sweeps show binary completion is policy noise, while peak slip trends are useful.",
+      "currentConsumers": "steer-tuning source cites it; current mapping constants/functions corroborate 19-notch pace, 55\u2013195 ms lag, 4.4\u20132.6 m wheelbase and 15\u201375 speed reference. Current comments also record a later low-speed plateau.",
+      "cleanupAndLimits": "Retain migration/control-run methodology and historical tables; do not present original pure taper as whole current law. Legacy generator and logs are provenance, not reproducible current tools.",
+      "rawHistoryArchiveOrLegacyReferences": [
+        "tools/tune-sweep.mjs",
+        "node artifacts/tmp/phase-c-tables.mjs",
+        "artifacts/tmp/phase-c-2-3-tables.cjs",
+        "artifacts/logs/tune-sweep-speedsteer-response.log",
+        "artifacts/logs/tune-sweep-round2.log"
+      ]
+    },
+    {
+      "path": "docs/research/PIT-BAY-LOGOS-PLAN-2026-09.md",
+      "start": 0,
+      "end": 18696,
+      "kind": "text",
+      "sha256": "62e4c8e3c06366f297142f5ed1a2ec49cb38dfc0a6434e874e2222493689f840",
+      "actualWholeFileBytes": 18696,
+      "actualWholeFileSha256": "62e4c8e3c06366f297142f5ed1a2ec49cb38dfc0a6434e874e2222493689f840",
+      "wholeFileHashMatchesManifest": true,
+      "assignedRangeSha256": "62e4c8e3c06366f297142f5ed1a2ec49cb38dfc0a6434e874e2222493689f840",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "fcad5e1a8b1c484555a09e782d201b8bd81003583bd7aacf41c2d96476be6be1",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "6a453ab0fae192afe89c5df08d41edf460a3f9050ad5f8f9057321ed3bcac580",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 16000,
+          "end": 18696,
+          "sha256": "53f1617a42fc70c12dd992f8d1840a12e459ba7892ae0621ace946da56c3e4a4",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        }
+      ],
+      "topic": "Pit bay logos",
+      "semantics": "Static renderer/geometry/lifecycle audit plus reported VM dimensions informed shared atlas, separate texMesh, feature detection, standoff and distance gating. Status says shipped despite original plan disclaimer.",
+      "currentConsumers": "PitSigns upload/free/draw currently own textures and meshes; source cites plan. Draw gates by row OR approach anchors and can issue an extra signal draw, extending original one-draw design.",
+      "cleanupAndLimits": "Preserve design and ownership reasoning; replace contradictory status wording and dated dimensions/budgets only after checking current implementation. No visual/readability claim verified.",
+      "rawHistoryArchiveOrLegacyReferences": [
+        "artifacts/"
+      ]
+    },
+    {
+      "path": "docs/research/PIT-ENTRY-LAMPS-PLAN-2026-09.md",
+      "start": 0,
+      "end": 16518,
+      "kind": "text",
+      "sha256": "07e4507c4f0f7ac013ca7936085ba4d29eabd058e8ea79c23e4384b11268b21d",
+      "actualWholeFileBytes": 16518,
+      "actualWholeFileSha256": "07e4507c4f0f7ac013ca7936085ba4d29eabd058e8ea79c23e4384b11268b21d",
+      "wholeFileHashMatchesManifest": true,
+      "assignedRangeSha256": "07e4507c4f0f7ac013ca7936085ba4d29eabd058e8ea79c23e4384b11268b21d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "0140c1301db2bc0db4e35fefef9901f0ffa1ef94957f679e51c10280d501edec",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "40a6ad8b4af1492f981611dac5ac310cbbd556edda37d1f588a48d1f3fa2dec0",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 16000,
+          "end": 16518,
+          "sha256": "40d5f9cc16dbd6a882d440de3eb88dd8a22b18756892f36b45138beaae98ecf3",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        }
+      ],
+      "topic": "Pit entry lamps",
+      "semantics": "Plan revised through reported night captures and geometric measurements: mouth proposal superseded by wall-corner entry-line gate; red steady, green called-in overlay.",
+      "currentConsumers": "SceneryPits comments and gate code match final entry-line revision; PitSigns.draw gates green overlay by called. Current support code extends posts to lane floor, another later revision.",
+      "cleanupAndLimits": "Keep final-state preamble and rejected placements clearly separated. Exit live signal remains an explicitly historical open item unless rechecked; no fresh lighting or all-circuit validation.",
+      "rawHistoryArchiveOrLegacyReferences": [
+        "scratch/captures/pit-hud/",
+        "scratch/pit-lamp-aim.cjs",
+        "scratch/pit-mouth-walls.cjs"
+      ]
+    },
+    {
+      "path": "docs/research/PIT-GUIDANCE-STRATEGY-PLAN-2026-09.md",
+      "start": 0,
+      "end": 14216,
+      "kind": "text",
+      "sha256": "bc0a65b56df67afcfbaaaab6162d8ff804039a4bc0c05f6d01e8a56472bb1804",
+      "actualWholeFileBytes": 16807,
+      "actualWholeFileSha256": "bc0a65b56df67afcfbaaaab6162d8ff804039a4bc0c05f6d01e8a56472bb1804",
+      "wholeFileHashMatchesManifest": true,
+      "assignedRangeSha256": "18b1f993e19c04561d09d63c6ad5d4f3e28fb7bae414279060949fcddad347a9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "5e8bcfaf9e5f59215201ce68646c128d761439f88ee673cdeb373e660eee017c",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        },
+        {
+          "start": 8000,
+          "end": 14216,
+          "sha256": "73443c9d68302db5f69d98f689cfdfc91296ceab82630b11b9895602bc565eee",
+          "readMethod": "individual exec_command Python read_bytes slice decoded UTF-8; max_output_tokens 5000; returned untruncated",
+          "maxBytes": 8000
+        }
+      ],
+      "topic": "Pit guidance/strategy",
+      "semantics": "Assigned prefix covers reported built map/cue/strategy changes and original facts/design/tests/cost through mid strategy section. Shared worthStopping, advisory human plan, exit ladder and engineer quieting avoid conflicting instructions.",
+      "currentConsumers": "Current pit-lane source has worthStopping, served/merge, planFor, planInfo, windowOf, replan; engineer directional guard and exports corroborate integration statically.",
+      "cleanupAndLimits": "Partial-file ownership: remainder belongs group04. Keep preamble as superseding old no-player-plan/no-exit-cue descriptions. Browser ladder walk is explicitly not added; unit evidence is historical, not run here.",
+      "rawHistoryArchiveOrLegacyReferences": []
+    }
+  ],
+  "corroboration": {
+    "methods": [
+      "apex-lsp lsp_definition for named runtime symbols",
+      "bounded static source excerpts",
+      "rg text references and file inventory"
+    ],
+    "lspDefinitions": {
+      "PitSigns": "js/garage/pit-signs.js:8",
+      "PitLane": [
+        "js/race/pit-lane.js:61",
+        "js/race/session-stub.js:54"
+      ],
+      "paceFromSlider": "js/input/steer-tuning.js:142",
+      "BrakeCue": "js/physics/brake-cue.js:4",
+      "SettingsNav": "js/ui/settings-tabs.js:6",
+      "Collide.pairContact": "js/physics/collide.js:496",
+      "PitLane.worthStopping": "js/race/pit-lane.js:640",
+      "PitSigns.draw": "js/garage/pit-signs.js:182",
+      "TrackLights": "js/lighting/track-lights.js:8"
+    },
+    "limits": [
+      "SettingsTabs lookup not found; current global is SettingsNav",
+      "pairContact and worthStopping LSP results explicitly use module fallback and do not establish callers/exports",
+      "No current runtime, visual, hardware or test evidence collected"
+    ],
+    "supportExcerpts": [
+      {
+        "path": "js/input/steer-tuning.js",
+        "linesInclusive": [
+          80,
+          145
+        ],
+        "start": 4969,
+        "end": 9566,
+        "sha256": "d3582a1e760ae2de817527bbabcfed1defad674487b96ac634ac9a1465ce7791",
+        "wholeFileSha256": "da11595017fb4931364a4d11c267cf71fddaf0b8ba022e98f463f1217f2b13f8",
+        "readMethod": "sed inclusive line range, bounded static support excerpt; not whole-file reading"
+      },
+      {
+        "path": "js/physics/brake-cue.js",
+        "linesInclusive": [
+          1,
+          65
+        ],
+        "start": 0,
+        "end": 3357,
+        "sha256": "dc2c128d2d99b34cbac70741b8e0538f9cd6be0a886ff944e786013e10b03eab",
+        "wholeFileSha256": "8b707cb2bbb924f7af1d2da59c79583ee0d9b79769501182370680a64a5ca09b",
+        "readMethod": "sed inclusive line range, bounded static support excerpt; not whole-file reading"
+      },
+      {
+        "path": "js/garage/pit-signs.js",
+        "linesInclusive": [
+          145,
+          205
+        ],
+        "start": 7750,
+        "end": 10929,
+        "sha256": "f2c3cdae4607a5718e802aef8e871427755f90c96594af1455843f4d3f0aef59",
+        "wholeFileSha256": "1ed76b2fc23db5a41f5fe5612880cd75e5689751de38ae328057a996e665f600",
+        "readMethod": "sed inclusive line range, bounded static support excerpt; not whole-file reading"
+      },
+      {
+        "path": "js/track/scenery/pits.js",
+        "linesInclusive": [
+          500,
+          555
+        ],
+        "start": 31442,
+        "end": 35033,
+        "sha256": "19ce0f8e38734e14e50f4d2881c4dc233d69fc903139d61816fb76e9790f39cb",
+        "wholeFileSha256": "cbd80e49853a8975f0656a1472d13532ff48bc38fef3802f742db9e73e72217c",
+        "readMethod": "sed inclusive line range, bounded static support excerpt; not whole-file reading"
+      },
+      {
+        "path": "js/ui/settings-tabs.js",
+        "linesInclusive": [
+          1,
+          65
+        ],
+        "start": 0,
+        "end": 4678,
+        "sha256": "be8b5d1fdf6099dd7150baaff32e6c45227724a8ade4f9ca99232b7c4856b058",
+        "wholeFileSha256": "3034a3d0f4351f0d5853748af087b54ebb9ab2bdc37ae5e4a31d2f5b4e313a33",
+        "readMethod": "sed inclusive line range, bounded static support excerpt; not whole-file reading"
+      },
+      {
+        "path": "js/physics/collide.js",
+        "linesInclusive": [
+          490,
+          525
+        ],
+        "start": 27635,
+        "end": 29770,
+        "sha256": "3856f45ef6db5183ecc4f9584c583f0796bdc5674643a8cbb7a5288324e0d519",
+        "wholeFileSha256": "c62b984abfe3a51ff99921cb5b46991755f627b57b6fccef1e1033eb804c1708",
+        "readMethod": "sed inclusive line range, bounded static support excerpt; not whole-file reading"
+      },
+      {
+        "path": "js/race/pit-lane.js",
+        "linesInclusive": [
+          630,
+          670
+        ],
+        "start": 36266,
+        "end": 38471,
+        "sha256": "91b56ac1dbdfed4762a245912e90dc3424500d17aa3a0984189ee5ec17cb3aa2",
+        "wholeFileSha256": "a18b42d5620d85cb61c3fa5e6b99ac9cb2df45312aeedde44fe11ae13da15d1b",
+        "readMethod": "sed inclusive line range, bounded static support excerpt; not whole-file reading"
+      }
+    ]
+  }
+}

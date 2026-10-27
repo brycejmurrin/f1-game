@@ -1,0 +1,372 @@
+{
+  "group": "06",
+  "assignedBytes": 35942,
+  "readBytes": 35942,
+  "readChunkCount": 8,
+  "maximumReadBytes": 9000,
+  "method": "Whole-source plan SHA256 independently checked, distinct from assigned-range and per-chunk hashes. All assigned half-open text slices individually returned untruncated. No binaries assigned.",
+  "scope": "Static mapping only; no tests/browser/network/runtime/source edits/staging/commit. Attached LSP source navigation only. Historical commands and instructions treated as data.",
+  "instructionReads": [
+    "AGENTS.md",
+    ".claude/skills/code-nav/SKILL.md",
+    ".claude/agents/worker.md"
+  ],
+  "instructionReadNotes": "AGENTS fully reread in bounded 0:8000,8000:16000,16000:24000 outputs c29e00,179641,ccec61; initial oversized combined output excluded. No nested AGENTS under assigned spike paths.",
+  "symbolEvidence": [
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "symbol": "Tracks.build",
+      "result": "js/track/tracks.js:471; export :859"
+    },
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "symbol": "Car3D.build",
+      "result": "js/car/car3d.js:237; export :2888"
+    },
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "symbol": "LightTune.setFrameLights",
+      "result": "js/lighting/frame-lights.js:659; alias/export js/lighting/lighting.js:12,14"
+    }
+  ],
+  "consumerEvidence": [
+    {
+      "method": "scoped rg text search",
+      "path": "spike/capture.mjs",
+      "lines": [
+        102,
+        103,
+        104,
+        109,
+        122,
+        123,
+        124,
+        125,
+        131,
+        133,
+        135,
+        138
+      ],
+      "contract": "Loads harness, waits ready, sets camera, samples stats/frames, resets timing, light-cap and instancing comparisons"
+    },
+    {
+      "method": "scoped rg text search",
+      "path": "spike/physics/deep-sideworld-run.mjs",
+      "lines": [
+        58
+      ],
+      "contract": "Navigates side-world HTML wrapper"
+    },
+    {
+      "method": "scoped rg text search",
+      "path": "spike/physics/README.md",
+      "lines": [
+        30,
+        182
+      ],
+      "contract": "Documents evaluation Node CLI with optional track ID"
+    }
+  ],
+  "dependencyMetadata": [
+    {
+      "path": "spike/spike-data.js",
+      "exists": true,
+      "bytes": 4067,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/log.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/geom.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/scenery-data.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/space.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/surface.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/models.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/graph.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/themes.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/landmark-kit.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/circuit-kit.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/spline.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/mesh.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/scenery-nature.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/scenery-structures.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/scenery-city.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/scenery-identity.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/circuits/singapore.js",
+      "exists": true,
+      "bytes": 11244,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/track/tracks.js",
+      "exists": true,
+      "bytes": 48615,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/car/car3d.js",
+      "exists": true,
+      "bytes": 204590,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../js/game/lighting.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../vendor/three-0.186.1/three.webgpu.min.js",
+      "exists": true,
+      "bytes": 714087,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../vendor/three-0.186.1/three.webgpu.min.js",
+      "exists": true,
+      "bytes": 714087,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../vendor/three-0.186.1/three.tsl.min.js",
+      "exists": true,
+      "bytes": 25647,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/../vendor/three-0.186.1/addons",
+      "exists": true,
+      "bytes": null,
+      "method": "Path exists/stat only; no dependency content read"
+    },
+    {
+      "path": "spike/three-spike.js",
+      "exists": true,
+      "bytes": 19009,
+      "method": "Path exists/stat only; no dependency content read"
+    }
+  ],
+  "parts": [
+    {
+      "path": "spike/physics/rapier-eval.mjs",
+      "start": 6326,
+      "end": 15635,
+      "kind": "text",
+      "sha256": "2605a74ada4a88e97a2311852625315664c17b270bcbf93a60f9ce9bc9579b5a",
+      "wholeSourceBytes": 15635,
+      "actualWholeSourceSha256": "2605a74ada4a88e97a2311852625315664c17b270bcbf93a60f9ce9bc9579b5a",
+      "planWholeSourceHashMatches": true,
+      "assignedRangeSha256": "f156db89c6b871febc998f4ebf2f90a32821ff8e22ce20260bbcf32cb326a13b",
+      "chunks": [
+        {
+          "start": 6326,
+          "end": 15326,
+          "bytes": 9000,
+          "sha256": "54b6ff9a2625225ab9d997ece4d41e64c2f66619e690718a69bdea8375eb0280",
+          "outputChunkId": "db2c79",
+          "method": "Python read_bytes slice; individual exec_command return; untruncated"
+        },
+        {
+          "start": 15326,
+          "end": 15635,
+          "bytes": 309,
+          "sha256": "2aedc2d4b408d28f3a318ca8ec7c22652a9bee6b10da7240ca4757ffeeef527f",
+          "outputChunkId": "99e577",
+          "method": "Python read_bytes slice; individual exec_command return; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/side-world.html",
+      "start": 0,
+      "end": 552,
+      "kind": "text",
+      "sha256": "d427dd8829dce56e4ba65399f29f8579986a2ae1494ad43511021dbf29a5d3f5",
+      "wholeSourceBytes": 552,
+      "actualWholeSourceSha256": "d427dd8829dce56e4ba65399f29f8579986a2ae1494ad43511021dbf29a5d3f5",
+      "planWholeSourceHashMatches": true,
+      "assignedRangeSha256": "d427dd8829dce56e4ba65399f29f8579986a2ae1494ad43511021dbf29a5d3f5",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 552,
+          "bytes": 552,
+          "sha256": "d427dd8829dce56e4ba65399f29f8579986a2ae1494ad43511021dbf29a5d3f5",
+          "outputChunkId": "d5de76",
+          "method": "Python read_bytes slice; individual exec_command return; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "spike/spike-data.js",
+      "start": 0,
+      "end": 4067,
+      "kind": "text",
+      "sha256": "335489da625fef3834d17a89dda559d3ce893ae20bef05510d02ef945bdd7d0a",
+      "wholeSourceBytes": 4067,
+      "actualWholeSourceSha256": "335489da625fef3834d17a89dda559d3ce893ae20bef05510d02ef945bdd7d0a",
+      "planWholeSourceHashMatches": true,
+      "assignedRangeSha256": "335489da625fef3834d17a89dda559d3ce893ae20bef05510d02ef945bdd7d0a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4067,
+          "bytes": 4067,
+          "sha256": "335489da625fef3834d17a89dda559d3ce893ae20bef05510d02ef945bdd7d0a",
+          "outputChunkId": "e8b290",
+          "method": "Python read_bytes slice; individual exec_command return; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "spike/three-spike.html",
+      "start": 0,
+      "end": 3005,
+      "kind": "text",
+      "sha256": "c38d6fc71f17f9ed3a9e417d77e824967d1b36dcc427349d7cc457dfc516e61b",
+      "wholeSourceBytes": 3005,
+      "actualWholeSourceSha256": "c38d6fc71f17f9ed3a9e417d77e824967d1b36dcc427349d7cc457dfc516e61b",
+      "planWholeSourceHashMatches": true,
+      "assignedRangeSha256": "c38d6fc71f17f9ed3a9e417d77e824967d1b36dcc427349d7cc457dfc516e61b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3005,
+          "bytes": 3005,
+          "sha256": "c38d6fc71f17f9ed3a9e417d77e824967d1b36dcc427349d7cc457dfc516e61b",
+          "outputChunkId": "f99254",
+          "method": "Python read_bytes slice; individual exec_command return; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "spike/three-spike.js",
+      "start": 0,
+      "end": 19009,
+      "kind": "text",
+      "sha256": "5d77be6f2c1470ac6a1a5a80ed2e4446e8f9bc4e5b2b05678b0e0bec78218922",
+      "wholeSourceBytes": 19009,
+      "actualWholeSourceSha256": "5d77be6f2c1470ac6a1a5a80ed2e4446e8f9bc4e5b2b05678b0e0bec78218922",
+      "planWholeSourceHashMatches": true,
+      "assignedRangeSha256": "5d77be6f2c1470ac6a1a5a80ed2e4446e8f9bc4e5b2b05678b0e0bec78218922",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "f8458146299bc3b104f328d5667663715122451a3b726f688862546cf14f191d",
+          "outputChunkId": "eb53d8",
+          "method": "Python read_bytes slice; individual exec_command return; untruncated"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "77c16f898208ab517327aa86e3654f1dfddceeae0bdfbdbb3b6babf7386f98d9",
+          "outputChunkId": "e7c736",
+          "method": "Python read_bytes slice; individual exec_command return; untruncated"
+        },
+        {
+          "start": 18000,
+          "end": 19009,
+          "bytes": 1009,
+          "sha256": "3f4115012adcf34d8e8270bc386cffa74a8110f777b278aa5df571172cd4f9e0",
+          "outputChunkId": "65994f",
+          "method": "Python read_bytes slice; individual exec_command return; untruncated"
+        }
+      ]
+    }
+  ],
+  "semantics": {
+    "rapier-eval.mjs": "Suffix of calibration; road-only vehicle sanity, two-world bitwise pose determinism, seeded contact-rich fixtures, three 600-step performance scenarios; console reports, explicit world.free. Prefix is batch05.",
+    "side-world.html": "Static result-output host for module deep-sideworld.js; promises window.__sideworld.result by explanatory text.",
+    "spike-data.js": "GLX capture stub installed before engine evaluation; night Tracks.build, lighting defaults including warmup override, raw meshes and car, 22 grid transforms, per-frame nearest-light cull.",
+    "three-spike.html": "Standalone manually copied engine script sequence, one circuit, import map and ES-module scene. Missing script targets are retained as metadata, not corrected.",
+    "three-spike.js": "WebGPURenderer initialization and backend selection, partial procedural TSL port, 32 stride15 lamps, shadow/bloom, 22-mesh vs instancing, orbit controls and __spike automation surface."
+  },
+  "limits": [
+    "Read coverage is exactly group06, not complete rapier-eval prefix.",
+    "Static findings do not certify harness boot, physical accuracy, cross-host determinism, GPU speed or visual parity.",
+    "Scoped consumer search is not universal absence proof.",
+    "Historical version claims in comments disagree with import-map dependency metadata."
+  ]
+}

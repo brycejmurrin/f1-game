@@ -1,0 +1,720 @@
+{
+  "group": "05",
+  "date": "2026-10-27",
+  "source_manifest": "docs/project-map/plans-batches.json",
+  "assigned_bytes": 134904,
+  "read_bytes": 134904,
+  "max_source_bytes_per_read": 8500,
+  "read_calls": 21,
+  "instructions_read": [
+    "AGENTS.md"
+  ],
+  "files": [
+    {
+      "path": "docs/plans/research-2026-09-16/agent-ergonomics.md",
+      "whole_source_bytes": 19391,
+      "whole_source_sha256": "35204c7b0894ae5a465001e56b076b270b164fa5eec2e2fb645185d3deb5e840",
+      "expected_sha256": "35204c7b0894ae5a465001e56b076b270b164fa5eec2e2fb645185d3deb5e840",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 3668,
+        "end": 19391,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "f9ef95b29f27fc24438e4699a80c784ef40f88097fc94d91c279a57b275e7cfa",
+      "read_ledger": [
+        {
+          "path": "docs/plans/research-2026-09-16/agent-ergonomics.md",
+          "start": 3668,
+          "end": 12168,
+          "bytes": 8500,
+          "sha256": "e2b591d00f777727e6bd8412a84c71c86573afe6748799c36340025ef40ff902",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/agent-ergonomics.md",
+          "start": 12168,
+          "end": 19391,
+          "bytes": 7223,
+          "sha256": "6a53368d724be42355617cb467fe56bc36f877a5cfb2a7eff6488330c9515a73",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "Repeated context/prompt stalls/lost verification and weak cost accounting",
+        "goals": [
+          "context reduction",
+          "mechanical stop enforcement",
+          "measurement",
+          "runner verification"
+        ],
+        "architecture": [
+          "session hooks",
+          "generated query index",
+          "forked noisy skills",
+          "agent memory",
+          "head-based worktree setup",
+          "scoped permission/injected skill context"
+        ],
+        "tasks": "Settings/hooks then context cuts then ledger then indices/edit checks/memory/worktrees/injection; runner notification last.",
+        "status": "Proposals with estimated/unverified savings; assigned continuation excludes first 3668 bytes.",
+        "provenance": "September 16 research extending process-speedup plan; hook/API claims dated to author research.",
+        "supersession": "measurement.md corrects ledger duration/exit assumption and prefers transcript reconstruction.",
+        "consumers": [
+          ".claude/settings.json",
+          ".claude/hooks/stop-guard.sh",
+          "AGENTS.md",
+          ".claude/rules/",
+          "docs/AGENT-SURFACE.md"
+        ],
+        "cleanup": "Keep historical recommendations distinct from current enforced settings; preserve rejected teams/bypass/local-memory substitution."
+      }
+    },
+    {
+      "path": "docs/plans/research-2026-09-16/ci.md",
+      "whole_source_bytes": 15003,
+      "whole_source_sha256": "3654d89e65ac5fc42f8339ac9c4361a826da38865682fbe34105ccfddc80457b",
+      "expected_sha256": "3654d89e65ac5fc42f8339ac9c4361a826da38865682fbe34105ccfddc80457b",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 15003,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "3654d89e65ac5fc42f8339ac9c4361a826da38865682fbe34105ccfddc80457b",
+      "read_ledger": [
+        {
+          "path": "docs/plans/research-2026-09-16/ci.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "a530c8a1b132a39d21e0269d1bc15bba9d120127f2ec29757b823c0592a0beb7",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/ci.md",
+          "start": 8500,
+          "end": 15003,
+          "bytes": 6503,
+          "sha256": "18a16c4bead3314d564108a1044a6b963b8140342aa60934c268c66a052067e2",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "Redundant gates, cancellations, opaque inherited failures, deploy-state uncertainty",
+        "goals": [
+          "input-level result reuse",
+          "serialized landing",
+          "failure digest",
+          "status query"
+        ],
+        "architecture": [
+          "landing bot",
+          "per-job input-hash verdict cache with no-memo auditor",
+          "geometry cache",
+          "timing shards",
+          "merged junit",
+          "base-verdict summary",
+          "published status"
+        ],
+        "tasks": "Ranked: failure/base summary; verdict cache; status; geometry cache; timing shards; landing; merged reports; action conditions/pins; runner experiments.",
+        "status": "Historical live CI observations plus proposals; measured run facts do not show proposed savings realized.",
+        "provenance": "Dated September 16 Actions runs 35066895398, 35048516949, 35048654644, 35049040503; source documents and external API references in original.",
+        "supersession": "Current AGENTS uses PR gate/auto-merge rather than the proposed direct serialized bot push; vm-harness.md challenges geometry caching value.",
+        "consumers": [
+          ".github/workflows/ci.yml",
+          ".github/workflows/pages.yml",
+          "tools/ci/base-verdict.sh",
+          "tools/ci/pages-reuse-verdict.sh",
+          "tools/ci/deploy.mjs"
+        ],
+        "cleanup": "Preserve historical account constraints and explicit unverified runner gains; do not execute old landing recipe."
+      }
+    },
+    {
+      "path": "docs/plans/research-2026-09-16/measurement.md",
+      "whole_source_bytes": 16417,
+      "whole_source_sha256": "4c67d99e2dce96fde5fe07834bd7b52500c1dcefe417e41fb87b101778895499",
+      "expected_sha256": "4c67d99e2dce96fde5fe07834bd7b52500c1dcefe417e41fb87b101778895499",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 16417,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "4c67d99e2dce96fde5fe07834bd7b52500c1dcefe417e41fb87b101778895499",
+      "read_ledger": [
+        {
+          "path": "docs/plans/research-2026-09-16/measurement.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "ed09a3af49d37361675d14440c042c7e3c1ba38ffe28d8f20a7b670dc2128be6",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/measurement.md",
+          "start": 8500,
+          "end": 16417,
+          "bytes": 7917,
+          "sha256": "eb33f73bc59fa2aebbc56f457aa49a277cf4bb00aef1679ec15c04a3e94e828c",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "Successive process audits rederive the same metrics manually",
+        "goals": [
+          "automatic dashboard",
+          "environment-separated timing history",
+          "waste detection",
+          "private session ledger",
+          "read-only time budgets"
+        ],
+        "architecture": [
+          "nightly metrics branch reducer",
+          "junit/reporter aggregation",
+          "advisory detectors",
+          "transcript reconstruction with limited permission hooks",
+          "nightly-only time ratchets"
+        ],
+        "tasks": "Dashboard then durations then detectors then ledger then dependent budgets.",
+        "status": "Proposal; current dashboard/timing consumers statically exist; proposed session-ledger and ledger hook filenames absent.",
+        "provenance": "Three named prior audits and author REST/transcript-key inspection; derived metric schemas contain illustrative numbers.",
+        "supersession": "Revises agent-ergonomics hook ledger; ci.md warns branch-based publication can itself trigger CI.",
+        "consumers": [
+          "tools/ci/process-dashboard.mjs",
+          ".github/workflows/process-dashboard.yml",
+          "tools/ci/spec-timings.mjs",
+          "tools/ci/select-budget.mjs"
+        ],
+        "cleanup": "Never commit raw prompts, outputs, command bodies or session IDs; preserve n/backend separation and advisory-first growth flags."
+      }
+    },
+    {
+      "path": "docs/plans/research-2026-09-16/testing.md",
+      "whole_source_bytes": 19480,
+      "whole_source_sha256": "5ee390606ddce58c1e5e90ebe98313c63d8cc2497eecafc77f3a66b2282839eb",
+      "expected_sha256": "5ee390606ddce58c1e5e90ebe98313c63d8cc2497eecafc77f3a66b2282839eb",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 19480,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "5ee390606ddce58c1e5e90ebe98313c63d8cc2497eecafc77f3a66b2282839eb",
+      "read_ledger": [
+        {
+          "path": "docs/plans/research-2026-09-16/testing.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "4cebca8573f2dfcf3f9f2f4835faf257710c2850bded95598ec4f034b03422bc",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/testing.md",
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "75c10c7fcb5644e74a71b82b083a17f2c0ba01893f292815f45529e2ef7852cf",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/testing.md",
+          "start": 17000,
+          "end": 19480,
+          "bytes": 2480,
+          "sha256": "d37109537e0575c75472ab82fb0f71ca9799d71ca135a276cb107b428ccf9b03",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "DOM-free browser assertions pay rendering cost; twin fidelity unproven",
+        "goals": [
+          "one-source VM specs",
+          "seeded fidelity proof",
+          "measured shards",
+          "bounded time",
+          "coverage-assisted selection"
+        ],
+        "architecture": [
+          "page-shaped VM adapter",
+          "real Playwright expect after measured revision",
+          "mutation matrix",
+          "code caches",
+          "timing database",
+          "optional build cache",
+          "function-range impact map"
+        ],
+        "tasks": "Verify adapter against hand twins; fidelity before deleting browser gate; retain browser parity anchors; nightly timings/coverage/flake work.",
+        "status": "Mixed proposals and explicit BUILT AND MEASURED adapter addendum: 107/140 passed in 7.5 minutes; eligibility is not readiness.",
+        "provenance": "Static census (67/119 originally eligible), source docs and dated adapter runs; measurements belong to original author.",
+        "supersession": "Measured addendum removes matcher shim proposal and corrects portability count; vm-harness.md corrects compile/scenery/cache cost assumptions and makes independent circuit pooling useful.",
+        "consumers": [
+          "tests/helpers/vm-page.js",
+          "tests/helpers/fixtures.js",
+          "tools/check/vm-portable.mjs",
+          "tools/check/twin-fidelity.mjs",
+          "tools/ci/twinned-specs.mjs",
+          ".github/workflows/ci.yml"
+        ],
+        "cleanup": "Preserve blind spots and alongside-browser caveat; reject AST transforms, snapshots, file-loaded impact maps and general full mutation suite."
+      }
+    },
+    {
+      "path": "docs/plans/research-2026-09-16/vm-harness.md",
+      "whole_source_bytes": 14258,
+      "whole_source_sha256": "0581c2e93c1ea52646514f0efad9c49efd6d69fc1d32ae7384e716198889569f",
+      "expected_sha256": "0581c2e93c1ea52646514f0efad9c49efd6d69fc1d32ae7384e716198889569f",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 14258,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "0581c2e93c1ea52646514f0efad9c49efd6d69fc1d32ae7384e716198889569f",
+      "read_ledger": [
+        {
+          "path": "docs/plans/research-2026-09-16/vm-harness.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "afa49c544b71bb697b2a9ae684c7108ba5df948fdee65df0a989f3be1096298a",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/vm-harness.md",
+          "start": 8500,
+          "end": 14258,
+          "bytes": 5758,
+          "sha256": "c80ef46f23f8ac84d760f7ccef35fd279173e314de107e53baf9679999005727",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "Elevation VM test bottleneck incorrectly attributed to scenery/mesh work",
+        "goals": [
+          "reduce wall time without changing driving model",
+          "preserve parent assertions and browser twin parity"
+        ],
+        "architecture": [
+          "independent worker VM pool",
+          "optional car mesh stubs",
+          "profile-guided slope candidate search",
+          "agent-gated bare browser boot",
+          "marginal code cache"
+        ],
+        "tasks": "R1 pool then R2 stubs then A/B R3 search then measure R4 browser then optional R5 cache.",
+        "status": "Historical profiles are measured; projected roughly 100-second pooled end state is estimate; current source header instead records 191-210 seconds vs 400 on shared box.",
+        "provenance": "Seven read-only scratch probes and two CPU profiles, reported load 0.27-2.72 before probes; not reproduced in this map.",
+        "supersession": "Refutes earlier plan scenery/makeCars guesses and testing.md geometry/cache optimism: about 70% stepping; 178 ms manifest eval; scenery about 30 ms/circuit.",
+        "consumers": [
+          "tools/lib/game-vm-pool.cjs",
+          "tests/unit/elevation-tracks-vm.test.mjs",
+          "tests/helpers/elevation-probes.cjs",
+          "tools/lib/game-vm.cjs"
+        ],
+        "cleanup": "Preserve parity anchor, memory/timeout/error safeguards, and rejections of one-car field, scenery removal, geometry persistence, snapshots and early headless."
+      }
+    },
+    {
+      "path": "docs/plans/skilltest-ci-tooling.md",
+      "whole_source_bytes": 11838,
+      "whole_source_sha256": "fa50ff2fb3845f47fc39d1438619075577990e45fa9714b4afd7c286bc53ffb3",
+      "expected_sha256": "fa50ff2fb3845f47fc39d1438619075577990e45fa9714b4afd7c286bc53ffb3",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 11838,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "fa50ff2fb3845f47fc39d1438619075577990e45fa9714b4afd7c286bc53ffb3",
+      "read_ledger": [
+        {
+          "path": "docs/plans/skilltest-ci-tooling.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "4923b8384d6ec7fdd4a5bd82a8a7ede74c74643ad7f2b7620c00a97d12219bd2",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/skilltest-ci-tooling.md",
+          "start": 8500,
+          "end": 11838,
+          "bytes": 3338,
+          "sha256": "1f79d848dd0a4d67bea60fccd2422562b3fe1b366de3e590f7b34d4741a9c932",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "CI/PWA tool help launches work or auth ignores logged-in gh",
+        "goals": [
+          "safe CLI help",
+          "clear usage",
+          "auth fallback"
+        ],
+        "architecture": [
+          "early CLI argument handling",
+          "shared github token discovery"
+        ],
+        "tasks": "Fix PRs 670,672,674,677; proposed remaining usage/environment/desktop/selector work.",
+        "status": "SHIPPED header checked 2026-10-26; original October 1 audit not rerun; counts 38 works/14 caveated/4 fixed/6 untestable.",
+        "provenance": "Original audit tips cd4ec4c6f and 5fa849bb1; PR table records opening heads.",
+        "supersession": "Historical draft/ownership instructions superseded by current workflow; header distinguishes shipped fixes from rerun audit.",
+        "consumers": [
+          "tools/ci/remote-group.mjs",
+          "tools/ci/tooling-fast.mjs",
+          "tools/check/offline-precache-check.cjs",
+          "tools/ci/ci-watch.mjs",
+          "tools/ci/github-token.mjs"
+        ],
+        "cleanup": "Retain no-dispatch/no-browser omissions and verdict caveats; do not treat whole report as current green."
+      }
+    },
+    {
+      "path": "docs/plans/skilltest-content-pipeline.md",
+      "whole_source_bytes": 14138,
+      "whole_source_sha256": "a41aab9991d1596b86fb281735e80b468309e196be6209d3415de6760b4aeaf7",
+      "expected_sha256": "a41aab9991d1596b86fb281735e80b468309e196be6209d3415de6760b4aeaf7",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 14138,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "a41aab9991d1596b86fb281735e80b468309e196be6209d3415de6760b4aeaf7",
+      "read_ledger": [
+        {
+          "path": "docs/plans/skilltest-content-pipeline.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "1bb670358dbf5c81c3ff25799235a64e756e3c9a8c3ffc28ec8480087a953b9d",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/skilltest-content-pipeline.md",
+          "start": 8500,
+          "end": 14138,
+          "bytes": 5638,
+          "sha256": "a7d57d5b5c15501903ca9245db360a171e352edac78e1c5a636a332e473f9171",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "Content CLI silent flags rewrite assets or launch heavy jobs; data projection and renderer checker drift",
+        "goals": [
+          "safe help/flag refusal",
+          "working pack checker",
+          "content/tool distinction"
+        ],
+        "architecture": [
+          "shared CLI parser",
+          "early exit before bake/browser",
+          "renderer pack extraction repair"
+        ],
+        "tasks": "PRs 686,687,688; proposed circuit regeneration, header enforcement, BASE docs, cheap planning and browser discovery.",
+        "status": "SHIPPED header checked 2026-10-26; findings not rerun; counts approximate 45 works/25 caveated/3 broken/15 untestable.",
+        "provenance": "October 1 hands-on audit starting 6434ac25b; original full GPU/network galleries skipped.",
+        "supersession": "Historical draft PR language superseded by shipped header; unresolved proposals not implied shipped.",
+        "consumers": [
+          "tools/gen/assets.mjs",
+          "tools/gfx/tlx-pack-check.cjs",
+          "tools/lib/cli-args.mjs",
+          "tools/track/import-circuit-path.mjs",
+          "tools/lib/chromium-path.mjs"
+        ],
+        "cleanup": "Retain unknown dry-run mutation incident and data-vs-tool distinction; no binary repair or circuit edit performed."
+      }
+    },
+    {
+      "path": "docs/plans/skilltest-game-systems.md",
+      "whole_source_bytes": 9427,
+      "whole_source_sha256": "68aa46be95cb637e60bd2a4d7031145bd446ee7a1284503e91d580fd9d9a8fc7",
+      "expected_sha256": "68aa46be95cb637e60bd2a4d7031145bd446ee7a1284503e91d580fd9d9a8fc7",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 9427,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "68aa46be95cb637e60bd2a4d7031145bd446ee7a1284503e91d580fd9d9a8fc7",
+      "read_ledger": [
+        {
+          "path": "docs/plans/skilltest-game-systems.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "479128a32a0dbb3d3d108491c62033b3a4643d728e302eabbd1b762d0adf3e0c",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/skilltest-game-systems.md",
+          "start": 8500,
+          "end": 9427,
+          "bytes": 927,
+          "sha256": "f93f52e949cd91dc7e1f306fdbce3848b9aa74fabdd54ffec58dc50d101e3c43",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "Expensive game CLI help, auth/server setup friction, drifting skill counts and missing local net recipe",
+        "goals": [
+          "clear/help-safe measurement tools",
+          "self-serving audio",
+          "token fallback"
+        ],
+        "architecture": [
+          "early flags",
+          "audio harness server",
+          "shared auth discovery"
+        ],
+        "tasks": "PRs 673,678,679,682; proposed stuck/rescue census, count hygiene, local room recipe, parser adoption, remote-group fallback.",
+        "status": "SHIPPED header checked 2026-10-26; original audit not rerun; 18 works/12 caveated/4 fixed/5 untestable.",
+        "provenance": "October 1 audit starting 5fa849bb1; unit/VM/small local network invocations reported; full browser groups not run.",
+        "supersession": "Current workflow replaces historical draft/ownership guidance.",
+        "consumers": [
+          "tools/check/defend-duel.mjs",
+          "tools/check/audio-test.cjs",
+          "tools/ci/ci-watch.mjs",
+          "tools/car/career-economy.mjs",
+          "tools/net/rtc-e2e-room.mjs"
+        ],
+        "cleanup": "Preserve unbuilt instrument proposal and no-live-data/browser caveats.",
+        "historical_archive_paths": [
+          "tools/archive/net/rtc-sync-probe.mjs"
+        ],
+        "missing_historical_path_mentioned": [
+          "scratch/defend-duel.mjs"
+        ]
+      }
+    },
+    {
+      "path": "docs/plans/skilltest-guards-and-agent-kit.md",
+      "whole_source_bytes": 8775,
+      "whole_source_sha256": "90bebcfe6465ab3cf35dd71b2afd27200298141142a09335cb9a321d99388445",
+      "expected_sha256": "90bebcfe6465ab3cf35dd71b2afd27200298141142a09335cb9a321d99388445",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 8775,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "90bebcfe6465ab3cf35dd71b2afd27200298141142a09335cb9a321d99388445",
+      "read_ledger": [
+        {
+          "path": "docs/plans/skilltest-guards-and-agent-kit.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "2fd55c8f665d4973f11692f2f77527ab19082734490714c2efd77f56ef203b63",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/skilltest-guards-and-agent-kit.md",
+          "start": 8500,
+          "end": 8775,
+          "bytes": 275,
+          "sha256": "c2eb01cc5eeb698707bade8b77ca19a46853c1a2801218a68dab553dbf6c3433",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "Guard/env CLI help side effects, root resolution bug, deferred renderer treated as always-loaded",
+        "goals": [
+          "safe entry points",
+          "accurate structural validation",
+          "clear advisory diagnostics"
+        ],
+        "architecture": [
+          "early usage",
+          "correct root",
+          "FULL-only global validation",
+          "mirrored agent config"
+        ],
+        "tasks": "PRs 675,676,680,685, report 689; proposed structural routing gate, remaining help, advisory labels, extraction errors and parser tests.",
+        "status": "SHIPPED header checked 2026-10-26; original findings not rerun; 41 works/12 caveated/4 fixed/2 untestable.",
+        "provenance": "October 1 audit starting cd4ec4c6f; source/import/hook syntax checks and small commands reported.",
+        "supersession": "Current deferred renderer rationale statically remains; historic agent/skill counts should not be reused as current census.",
+        "consumers": [
+          "tools/check/quick-validate.mjs",
+          "tools/check/twin-fidelity.mjs",
+          "tools/check/occlusion-estimate.mjs",
+          "tools/env/mirror-skills.sh",
+          ".claude/hooks/live-run.py"
+        ],
+        "cleanup": "Keep report-vs-gate distinction; optional dependencies/model routing were not exercised."
+      }
+    },
+    {
+      "path": "docs/plans/skilltest-probe-debug.md",
+      "whole_source_bytes": 9845,
+      "whole_source_sha256": "ecc7230890a40c887e2e44898a43dcca08b91abb7077fb32d5b2b1f805745368",
+      "expected_sha256": "ecc7230890a40c887e2e44898a43dcca08b91abb7077fb32d5b2b1f805745368",
+      "whole_source_hash_match": true,
+      "assigned_range": {
+        "start": 0,
+        "end": 9845,
+        "convention": "half-open bytes"
+      },
+      "assigned_sha256": "ecc7230890a40c887e2e44898a43dcca08b91abb7077fb32d5b2b1f805745368",
+      "read_ledger": [
+        {
+          "path": "docs/plans/skilltest-probe-debug.md",
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "075f8a9fd94291a262cf5e1560e2defd6f569fe9b181d11dc74f3f270d1bb5c6",
+          "returned_individually": true,
+          "truncated": false
+        },
+        {
+          "path": "docs/plans/skilltest-probe-debug.md",
+          "start": 8500,
+          "end": 9845,
+          "bytes": 1345,
+          "sha256": "2b935f7f821923c4c48e6d20b9804fcfb27d813b5aa063352cb86c2c4a9b376c",
+          "returned_individually": true,
+          "truncated": false
+        }
+      ],
+      "semantics": {
+        "problem": "Probe help launches browsers/servers/sweeps; input schema/tool naming confusion",
+        "goals": [
+          "safe cheap discovery",
+          "shared early help",
+          "bounded smoke paths"
+        ],
+        "architecture": [
+          "exitIfHelp helper",
+          "front-loaded usage guards",
+          "explicit unknown flag schemas"
+        ],
+        "tasks": "PR690 fixes 15 broken entries and UI catalog note; proposed naming docs, key alias/rejection, full flag validation, soft-GPU caveat, bounded galleries.",
+        "status": "SHIPPED header checked 2026-10-26; original audit not rerun; 28 works/14 caveated/15 fixed/6 untestable.",
+        "provenance": "October 1 tips cd4ec4c6f/6434ac25b; report branch cursor/skilltest-probe-debug-6483 and fix cursor/probe-cli-help-guards-6483.",
+        "supersession": "Header supersedes old draft PR instructions; shader/browser observations remain dated.",
+        "consumers": [
+          "tools/lib/cli-args.mjs",
+          "tools/mcp/report-server.mjs",
+          "tools/shot/flyby.mjs",
+          "tools/ui/menu-fit.mjs",
+          "tools/ui/fit-audit.mjs"
+        ],
+        "cleanup": "Keep explicit full-browser/real-GPU/external-service not-run scopes and software all-dark caveat."
+      }
+    }
+  ],
+  "static_corroboration": {
+    "method": "Local read-only filename existence and source text/import/header inspection; no runtime symbols queried or behavior executed. CLI architecture and prose relationships did not require game runtime symbol navigation.",
+    "present": [
+      "tools/lib/game-vm-pool.cjs",
+      "tests/helpers/vm-page.js",
+      "tools/check/twin-fidelity.mjs",
+      "tools/ci/base-verdict.sh",
+      "tools/ci/spec-timings.mjs",
+      "tools/ci/process-dashboard.mjs",
+      ".github/workflows/process-dashboard.yml",
+      ".github/workflows/spec-timings.yml",
+      ".claude/hooks/stop-guard.sh",
+      "tools/lib/cli-args.mjs"
+    ],
+    "missing_proposed_paths": [
+      "tools/ci/session-ledger.mjs",
+      ".claude/hooks/ledger.sh"
+    ],
+    "observations": [
+      {
+        "path": "tests/helpers/fixtures.js",
+        "line": 97,
+        "fact": "Imports VM adapter."
+      },
+      {
+        "path": "tests/unit/elevation-tracks-vm.test.mjs",
+        "line": 44,
+        "fact": "Requires worker pool."
+      },
+      {
+        "path": "tools/lib/game-vm-pool.cjs",
+        "line": 11,
+        "fact": "Header historical measurement: 400 seconds serial to 191-210 pooled, not the proposed approximately 100."
+      },
+      {
+        "path": "tools/ci/select-specs.mjs",
+        "line": 31,
+        "fact": "Imports spec timing database."
+      },
+      {
+        "path": "tools/ci/select-budget.mjs",
+        "line": 11,
+        "fact": "Imports timing database; header describes llvmpipe measured fallback."
+      },
+      {
+        "path": "tools/ci/process-dashboard.mjs",
+        "line": 9,
+        "fact": "Header identifies metrics branch workflow; nightly-only time ratchets defined in source."
+      },
+      {
+        "path": "tools/lib/cli-args.mjs",
+        "line": 159,
+        "fact": "Shared early-help helper exists."
+      },
+      {
+        "path": "tools/shot/flyby.mjs",
+        "line": 42,
+        "fact": "Imports shared early-help helper."
+      },
+      {
+        "path": "tools/check/twin-fidelity.mjs",
+        "line": 88,
+        "fact": "Explicit help branch precedes mutation action."
+      },
+      {
+        "path": "tools/gen/assets.mjs",
+        "line": 1762,
+        "fact": "Unknown flags rejected; explicit help at line 1848."
+      },
+      {
+        "path": "tools/mcp/report-server.mjs",
+        "line": 273,
+        "fact": "Explicit help branch documents old bind-on-help bug."
+      },
+      {
+        "path": "tools/check/quick-validate.mjs",
+        "line": 60,
+        "fact": "Comments and required-global handling exclude deferred renderer islands."
+      }
+    ]
+  },
+  "cleanup": {
+    "performed": "Only map/evidence documents written; no historical source repaired or relocated.",
+    "recommendation": "Retain dated research/audits; preserve corrective measurements, privacy limits, rejected options and not-run evidence. Use current contracts for operations."
+  },
+  "limits": [
+    "Partial agent-ergonomics opening assigned group04; do not infer its unread opening.",
+    "Original author measurements and shipped annotations are attributed, not independently reproduced.",
+    "Static existence/wiring cannot prove fixes function or old verdicts remain valid.",
+    "No tests, browser, network, runtime, proposed workflows, source edits, staging or commits performed.",
+    "No external API documentation refreshed; dated external claims remain historical."
+  ]
+}

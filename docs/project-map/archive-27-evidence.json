@@ -1,0 +1,224 @@
+{
+  "group": "27",
+  "assigned_bytes": 160000,
+  "coverage": "complete for assigned half-open spans only",
+  "method": "Each assigned text chunk returned individually, at most 8000 source bytes, untruncated. SHA-256 plan hashes cover whole source files, not spans. No tests, browser, network, runtime execution, source edits, staging, or commits.",
+  "sources": [
+    {
+      "path": "docs/archive/research/raw/2026-08-total-audit.json",
+      "start": 57811,
+      "end": 205898,
+      "kind": "text",
+      "sha256": "7d0e370454e3e20dc2aeeda6926d9e8e2e4980188b4a748d9621aad26f30bd1b",
+      "source_id": "S01",
+      "whole_file_bytes": 205898,
+      "whole_file_sha256": "7d0e370454e3e20dc2aeeda6926d9e8e2e4980188b4a748d9621aad26f30bd1b",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "3efa5421cb35c6887a51cb6ff4a9e449e70e08bdae485be5924684339f648acd",
+      "read_chunks": [
+        {
+          "start": 57811,
+          "end": 65811,
+          "bytes": 8000,
+          "sha256": "c989750f8f397b670e8293ff0fd6f40f219dd2de484930c5fbb614ec5f4650b0",
+          "returned_untruncated": true
+        },
+        {
+          "start": 65811,
+          "end": 73811,
+          "bytes": 8000,
+          "sha256": "5d8db9ac5cfef8a2ac3500c37d3373475a6c7bf239cc84667be2c5ab3ebce889",
+          "returned_untruncated": true
+        },
+        {
+          "start": 73811,
+          "end": 81811,
+          "bytes": 8000,
+          "sha256": "5eefdba08b9267126c9396e4cf5c23f0f3fc436ad96ae7978d359d116a0fc67e",
+          "returned_untruncated": true
+        },
+        {
+          "start": 81811,
+          "end": 89811,
+          "bytes": 8000,
+          "sha256": "1a3002878e02210adc39819d8babfb622a14a071a174ed6bded4f988d581ab26",
+          "returned_untruncated": true
+        },
+        {
+          "start": 89811,
+          "end": 97811,
+          "bytes": 8000,
+          "sha256": "fd7af291a0cd6a18ea2c66527202a00d8eee950b456cfc1a2a5d708616af154a",
+          "returned_untruncated": true
+        },
+        {
+          "start": 97811,
+          "end": 105811,
+          "bytes": 8000,
+          "sha256": "ce2c2773a4896e181cafb858abdfe4d2a7c0d9ecbd3993c606050f1e0774a06b",
+          "returned_untruncated": true
+        },
+        {
+          "start": 105811,
+          "end": 113811,
+          "bytes": 8000,
+          "sha256": "a623cdffd9c92665d53eaf2fdc906fc0e0be24418cf269728c42b22537bc8604",
+          "returned_untruncated": true
+        },
+        {
+          "start": 113811,
+          "end": 121811,
+          "bytes": 8000,
+          "sha256": "688beb0192ba86527231d8c12d4f99e2ecd1c869518cca411de101a1b4ba1708",
+          "returned_untruncated": true
+        },
+        {
+          "start": 121811,
+          "end": 129811,
+          "bytes": 8000,
+          "sha256": "7bd77121c574c5f70fbb90360e049ccae938d50da85e6bebe4f6338264537984",
+          "returned_untruncated": true
+        },
+        {
+          "start": 129811,
+          "end": 137811,
+          "bytes": 8000,
+          "sha256": "7e47b933a5efe7389448842bf0a7e933a0d5d36619d5e5f885843470220cba4f",
+          "returned_untruncated": true
+        },
+        {
+          "start": 137811,
+          "end": 145811,
+          "bytes": 8000,
+          "sha256": "68d2b0abd6c21383129dd57f7f00e1980192f394c9a289231e57c5f98315e7f0",
+          "returned_untruncated": true
+        },
+        {
+          "start": 145811,
+          "end": 153811,
+          "bytes": 8000,
+          "sha256": "e4238ad5bb2af4e3f88ad4266c2fee2b8c4940e4731c9a112e710d1eebd5e4be",
+          "returned_untruncated": true
+        },
+        {
+          "start": 153811,
+          "end": 161811,
+          "bytes": 8000,
+          "sha256": "fab69899c7ac8214e5e95d09b5ff4ba3c898d678f0cd39ef3b3a1e07ac7c149b",
+          "returned_untruncated": true
+        },
+        {
+          "start": 161811,
+          "end": 169811,
+          "bytes": 8000,
+          "sha256": "2bc1a8bd25b08ca33f0d490740d9023c6c6a715bf66375d67aeb8de8c8213b4a",
+          "returned_untruncated": true
+        },
+        {
+          "start": 169811,
+          "end": 177811,
+          "bytes": 8000,
+          "sha256": "b7963e0def7bdcfba8cbcad6bc81683e3c016ad0f8ee49fb7a715a5be4039eb3",
+          "returned_untruncated": true
+        },
+        {
+          "start": 177811,
+          "end": 185811,
+          "bytes": 8000,
+          "sha256": "5c18f2666dda5e8725132667a3d1a66dd3de5140615700d889b3be07149e7fc6",
+          "returned_untruncated": true
+        },
+        {
+          "start": 185811,
+          "end": 193811,
+          "bytes": 8000,
+          "sha256": "8944d33af224a053c6d0aff19dfe3fd8f040dff8dede1948f2eb6cef5c36626a",
+          "returned_untruncated": true
+        },
+        {
+          "start": 193811,
+          "end": 201811,
+          "bytes": 8000,
+          "sha256": "8c26dda4507144f4688fe6d4d8658c6da9fe8087358575e206d0862a93c1851c",
+          "returned_untruncated": true
+        },
+        {
+          "start": 201811,
+          "end": 205898,
+          "bytes": 4087,
+          "sha256": "d2472c636ec2fcea295de15cbe54d15366b89446c113e1b2e1bf45ece1a58964",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/raw/2026-09-code-survey.json",
+      "start": 0,
+      "end": 11913,
+      "kind": "text",
+      "sha256": "8186ca8f353371b95e2b51c815f51ed607d6e0dd2202c14e6ed30d1169943067",
+      "source_id": "S02",
+      "whole_file_bytes": 138712,
+      "whole_file_sha256": "8186ca8f353371b95e2b51c815f51ed607d6e0dd2202c14e6ed30d1169943067",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "42118a090b65a74b86d4cd74f462bc7a0cb76381d91eb93f5a6f3f4030543499",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "68094d432b7972122a9a9e5fa47e8bad1ea78a9158ff12dee9722da14871849c",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 11913,
+          "bytes": 3913,
+          "sha256": "1393d21fd9388b76bcefb7df3d0d88e7cfc4b9bab1f6971fc462dd0aff509c8a",
+          "returned_untruncated": true
+        }
+      ]
+    }
+  ],
+  "backlinks": [
+    {
+      "source_id": "S01",
+      "path": "docs/archive/research/TOTAL-AUDIT-2026-08.md",
+      "line": 8,
+      "role": "companion explicit raw link; dated execution-plan synthesis"
+    },
+    {
+      "source_id": "S02",
+      "path": "docs/archive/research/CODE-SURVEY-2026-09.md",
+      "line": 17,
+      "role": "companion raw mention; workflow producer and methodology"
+    },
+    {
+      "path": "docs/project-map/coverage.tsv",
+      "lines": [
+        905,
+        906
+      ],
+      "role": "inventory rows; initial unread state, not semantic consumers"
+    }
+  ],
+  "backlink_search": {
+    "scope": [
+      "docs",
+      "tools",
+      ".claude"
+    ],
+    "terms": [
+      "2026-08-total-audit",
+      "2026-09-code-survey"
+    ],
+    "excluded": [
+      "source files",
+      "archive-batches.json",
+      "archive-*-evidence.json"
+    ],
+    "result": "Only companion records and project-map inventory found; bounded textual search does not prove absence of dynamic or differently named consumers."
+  }
+}

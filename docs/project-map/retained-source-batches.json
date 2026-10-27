@@ -5,6 +5,27 @@
       "id": "01",
       "parts": [
         {
+          "path": "artifacts/cli-subagent-check-2026-10-26.md",
+          "start": 0,
+          "end": 2608,
+          "kind": "text",
+          "sha256": "11cbdec2008222f5dc0988e69379403bcfccb87c07f193214e2024012fd40b6f"
+        },
+        {
+          "path": "artifacts/environment-audit-2026-10-26.md",
+          "start": 0,
+          "end": 5104,
+          "kind": "text",
+          "sha256": "cdaf9f68ae37d1ed6dfd2f0c721c3dd832791766560eb69e2aacecda5a8ac555"
+        },
+        {
+          "path": "artifacts/environment-repair-2026-10-26.md",
+          "start": 0,
+          "end": 4415,
+          "kind": "text",
+          "sha256": "9390667c604c80e49f5c764bb1af9d46168cc391bce60795730901a246398d70"
+        },
+        {
           "path": "artifacts/gctx/usage.ts",
           "start": 0,
           "end": 103123,
@@ -12,11 +33,39 @@
           "sha256": "2964284b27c8f049a13bb89ea7df6d4dc749780af1c7e85d2ad4c6dd38a69b38"
         },
         {
+          "path": "artifacts/merge-3894/body-before.md",
+          "start": 0,
+          "end": 7925,
+          "kind": "text",
+          "sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de"
+        },
+        {
+          "path": "artifacts/merge-3894/body-current.md",
+          "start": 0,
+          "end": 7925,
+          "kind": "text",
+          "sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de"
+        },
+        {
+          "path": "artifacts/merge-3894/body-synced.md",
+          "start": 0,
+          "end": 6444,
+          "kind": "text",
+          "sha256": "1af6bee2764cc1ab53cc817241a15d10bf4f4864169b08de7d217700d8b1de5c"
+        },
+        {
           "path": "artifacts/merge-3894/deploy-install.sh",
           "start": 0,
           "end": 4338,
           "kind": "text",
           "sha256": "57c52d0930a0d26c109dc81defe6547f8d566674f0aadb3fe239bdcdb7acbdf6"
+        },
+        {
+          "path": "artifacts/merge-3894/deploy-start-skill.md",
+          "start": 0,
+          "end": 5708,
+          "kind": "text",
+          "sha256": "d21e95c8be5883e7ea01e8f4ab90208bc0a0f0d850f9777cf5ddbdd5eb164f75"
         },
         {
           "path": "artifacts/merge-3894/select-deploy.sh",
@@ -31,6 +80,55 @@
           "end": 3236,
           "kind": "text",
           "sha256": "abb5fd7fea7ec0df323b65ace62c863781a54e40adf33da75af119b9af31cd41"
+        },
+        {
+          "path": "artifacts/playwright-mcp/page-2026-10-25T23-04-46-470Z.yml",
+          "start": 0,
+          "end": 2460,
+          "kind": "text",
+          "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554"
+        },
+        {
+          "path": "artifacts/playwright-mcp/page-2026-10-25T23-05-08-648Z.yml",
+          "start": 0,
+          "end": 2222,
+          "kind": "text",
+          "sha256": "8c2333f821fc3ef1f40c695995480f1203b367ab6d1cc71257a6cca47da5fb6e"
+        },
+        {
+          "path": "artifacts/playwright-mcp/page-2026-10-25T23-12-11-012Z.yml",
+          "start": 0,
+          "end": 2460,
+          "kind": "text",
+          "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554"
+        },
+        {
+          "path": "artifacts/playwright-mcp/page-2026-10-25T23-13-06-760Z.yml",
+          "start": 0,
+          "end": 500,
+          "kind": "text",
+          "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554"
+        }
+      ],
+      "bytes": 160000,
+      "status": "complete"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "artifacts/playwright-mcp/page-2026-10-25T23-13-06-760Z.yml",
+          "start": 500,
+          "end": 2460,
+          "kind": "text",
+          "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554"
+        },
+        {
+          "path": "artifacts/playwright-mcp/page-2026-10-25T23-13-28-650Z.yml",
+          "start": 0,
+          "end": 2460,
+          "kind": "text",
+          "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554"
         },
         {
           "path": "artifacts/safety-bans-stub/sitecustomize.py",
@@ -63,20 +161,6 @@
         {
           "path": "artifacts/shader-validate/COMPOSITE_FS.frag",
           "start": 0,
-          "end": 45911,
-          "kind": "text",
-          "sha256": "f5b193f2455fcee0743d65fcb86597bdcd7521159345b3122f9bfbfbf880d569"
-        }
-      ],
-      "bytes": 160000,
-      "status": "unassigned"
-    },
-    {
-      "id": "02",
-      "parts": [
-        {
-          "path": "artifacts/shader-validate/COMPOSITE_FS.frag",
-          "start": 45911,
           "end": 55426,
           "kind": "text",
           "sha256": "f5b193f2455fcee0743d65fcb86597bdcd7521159345b3122f9bfbfbf880d569"
@@ -89,11 +173,25 @@
           "sha256": "42b4146aee4f2a86c7c8a23c3857d35307e471d6abc6475c1b09c21433379104"
         },
         {
+          "path": "artifacts/shader-validate/DECAL_VS.vert",
+          "start": 0,
+          "end": 358,
+          "kind": "text",
+          "sha256": "455f7c72d13c0231242f55c8eb65fbc215e9f4ab5ef0825346889f99d32299ea"
+        },
+        {
           "path": "artifacts/shader-validate/DEPTH_FS.frag",
           "start": 0,
           "end": 30,
           "kind": "text",
           "sha256": "0bc8ff5f2d22ebcbe630c863825b3d0581ede266b6a6c94891b8f22bcf5ea3e7"
+        },
+        {
+          "path": "artifacts/shader-validate/DEPTH_VS.vert",
+          "start": 0,
+          "end": 399,
+          "kind": "text",
+          "sha256": "624e50814a4804559eee72a546e5f4825b5d753e41bb1d172b337deb7ed19f2a"
         },
         {
           "path": "artifacts/shader-validate/DOWN_FS.frag",
@@ -117,6 +215,13 @@
           "sha256": "36d6428d72f44a63cf74168567a41eb856ce92bb70e9ab0689a754c1809ca402"
         },
         {
+          "path": "artifacts/shader-validate/GLOW_VS.vert",
+          "start": 0,
+          "end": 723,
+          "kind": "text",
+          "sha256": "29426e8947fef3e3aaf9d81c8b4b1b76a0b9d49e89ef10c4678c7ddac3f28611"
+        },
+        {
           "path": "artifacts/shader-validate/GODRAY_FS.frag",
           "start": 0,
           "end": 10634,
@@ -131,25 +236,46 @@
           "sha256": "96368e906b81b96cd8c592d9b577bf6e0478c1e7301b07e66db01d123a22229d"
         },
         {
+          "path": "artifacts/shader-validate/LINE_VS.vert",
+          "start": 0,
+          "end": 602,
+          "kind": "text",
+          "sha256": "e14da7956789ce187a837dfce5a8d571769e1e0d02e0abfa1b33a25488e1512c"
+        },
+        {
           "path": "artifacts/shader-validate/LIT_FS.frag",
           "start": 0,
-          "end": 127861,
+          "end": 73588,
           "kind": "text",
           "sha256": "01d432ea7ca5aafc1fb060aac4345977e8db23ae5da598b66ea856a12e621414"
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "03",
       "parts": [
         {
           "path": "artifacts/shader-validate/LIT_FS.frag",
-          "start": 127861,
+          "start": 73588,
           "end": 141892,
           "kind": "text",
           "sha256": "01d432ea7ca5aafc1fb060aac4345977e8db23ae5da598b66ea856a12e621414"
+        },
+        {
+          "path": "artifacts/shader-validate/LIT_VS.vert",
+          "start": 0,
+          "end": 6149,
+          "kind": "text",
+          "sha256": "00b4d41cb3b7944419f0eaf96e0573a00ff5341feb44921bad118ecbcbbc4ff1"
+        },
+        {
+          "path": "artifacts/shader-validate/MARK_BATCH_VS.vert",
+          "start": 0,
+          "end": 250,
+          "kind": "text",
+          "sha256": "3914e1f68f03b56b6d90dcbcd2be8d5d68924722dd80e743ea0d00a2ebfb01e6"
         },
         {
           "path": "artifacts/shader-validate/MARK_FS.frag",
@@ -180,6 +306,20 @@
           "sha256": "490ee2163c1fbe4ff22152a4e72feb5ffc9474cb0806b3263b19f29bd77ca17d"
         },
         {
+          "path": "artifacts/shader-validate/PARTICLE_VS.vert",
+          "start": 0,
+          "end": 866,
+          "kind": "text",
+          "sha256": "f1f2a619126aaeac5d1ced6be49d2b93ddab8c028d92bbef4be378499dee5cfb"
+        },
+        {
+          "path": "artifacts/shader-validate/POST_VS.vert",
+          "start": 0,
+          "end": 209,
+          "kind": "text",
+          "sha256": "7fcf4220d285fc6ec2ce65e6f9606cfde51ca20c1fae9ac79dcbe00be341ab27"
+        },
+        {
           "path": "artifacts/shader-validate/SGSR_FS.frag",
           "start": 0,
           "end": 3470,
@@ -194,11 +334,25 @@
           "sha256": "90e4b8dd1e5c44b20e3d92eea3b331f45c03458d6a9b460ddc4bf4d83c61984e"
         },
         {
+          "path": "artifacts/shader-validate/SHADOW_VS.vert",
+          "start": 0,
+          "end": 327,
+          "kind": "text",
+          "sha256": "e6fd8fd18d395b8791ccede6863d8092a1c7c695417e64a7de7265c0a30bdc12"
+        },
+        {
           "path": "artifacts/shader-validate/SKY_FS.frag",
           "start": 0,
           "end": 27210,
           "kind": "text",
           "sha256": "785a5d1ead78df1db21830a364838c8f85cc63f2449610a259d1426ba5d8178c"
+        },
+        {
+          "path": "artifacts/shader-validate/SKY_VS.vert",
+          "start": 0,
+          "end": 353,
+          "kind": "text",
+          "sha256": "79b27400b4b24c529200ec76ecf7657373d6955bafff48ae5128e9da0c119897"
         },
         {
           "path": "artifacts/shader-validate/SSAO_FS.frag",
@@ -222,11 +376,32 @@
           "sha256": "3c4ab989cbbf3357fbcba10cb5c1ac15289ca022becfc9ed01c28f5882508289"
         },
         {
+          "path": "artifacts/shader-validate/chunked.js_OCC_VS.vert",
+          "start": 0,
+          "end": 146,
+          "kind": "text",
+          "sha256": "35354a29180179fa210abe3a55ddf1b1cc5308896c650f671aefdd9f92038a96"
+        },
+        {
           "path": "artifacts/shader-validate/environment-negative-control.frag",
           "start": 0,
           "end": 37,
           "kind": "text",
           "sha256": "4541607806c9632a6b7a429a0b0634f7bf147d00a7f468abf94f0bb5c7783403"
+        },
+        {
+          "path": "artifacts/tmp/apex-survey-3zBPLi/index.html",
+          "start": 0,
+          "end": 4655,
+          "kind": "text",
+          "sha256": "b0ecd398b1de28b654ec411145c5c6cd835960750bb43439d4df6425f0577229"
+        },
+        {
+          "path": "artifacts/tmp/apex-survey-D4JeV9/index.html",
+          "start": 0,
+          "end": 4655,
+          "kind": "text",
+          "sha256": "b0ecd398b1de28b654ec411145c5c6cd835960750bb43439d4df6425f0577229"
         },
         {
           "path": "scratch/consolidate-f1.py",
@@ -236,22 +411,64 @@
           "sha256": "99887ee470092220c5b081f698d72b0d03a90043fc85bb0f9fc72f8d42be7115"
         },
         {
-          "path": "scratch/finish-consolidation.py",
+          "path": "scratch/f1-consolidation-pr.md",
           "start": 0,
-          "end": 8361,
+          "end": 6552,
           "kind": "text",
-          "sha256": "9890cb2843c6580ad2dd401d3cdfc03d3fdb2d2f7ab1f748bc2687f3cdabcfe0"
+          "sha256": "515ceea248651a022dd6aae7cc1267ef3fdbf7ef7cd2382fe3aa9913fe145827"
         },
         {
-          "path": "scratch/f1-repair-handoff/f1-toolchain/install-environment.sh",
+          "path": "scratch/f1-pr-status.md",
           "start": 0,
-          "end": 1816,
+          "end": 1500,
           "kind": "text",
-          "sha256": "40a504efe6d26179e7d2a3b9fb842b730f7439d8eb77f519f63f6e855daa9c3f"
+          "sha256": "ceb3245b3dc2b902fa881266d42a245735ab50dde3f7404419dac1125be186a4"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/README.md",
+          "start": 0,
+          "end": 2258,
+          "kind": "text",
+          "sha256": "eeace83d0da002123dded73b7a6101fb2526556e78f7413c193301383ecdb6e9"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/evidence/sdk-existing-work.patch",
+          "start": 0,
+          "end": 1018,
+          "kind": "text",
+          "sha256": "d3b6752df82937e24f582fb03b3b75d8b03d97558ca494c4b0eed8b5f7094e67"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/MCP-STARTUP-SKILL.md",
+          "start": 0,
+          "end": 6023,
+          "kind": "text",
+          "sha256": "26545ef31602ca5e3619f59d4efd27efcd59ebde92886e172fc7f30ec3b9b2d1"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/PLUGIN-BUILD.md",
+          "start": 0,
+          "end": 4108,
+          "kind": "text",
+          "sha256": "3fba4a12c5fa9eb123cceb152fabe37bad503c7f656357936d6eda46fa6af5bd"
         },
         {
           "path": "scratch/f1-repair-handoff/f1-toolchain/environment/preflight.sh",
           "start": 0,
+          "end": 902,
+          "kind": "text",
+          "sha256": "ac11c0ee2ab44e3dff2d2d0ca7f87984e7989eb1220bd61f6db45ec4bd69c5ed"
+        }
+      ],
+      "bytes": 160000,
+      "status": "complete"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/environment/preflight.sh",
+          "start": 902,
           "end": 1701,
           "kind": "text",
           "sha256": "ac11c0ee2ab44e3dff2d2d0ca7f87984e7989eb1220bd61f6db45ec4bd69c5ed"
@@ -262,6 +479,20 @@
           "end": 987,
           "kind": "text",
           "sha256": "d2bf5742ce7030f9707baed183aa0a89420f4d5bdd12dc16f6d750c7854ebb23"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/install-environment.sh",
+          "start": 0,
+          "end": 1816,
+          "kind": "text",
+          "sha256": "40a504efe6d26179e7d2a3b9fb842b730f7439d8eb77f519f63f6e855daa9c3f"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md",
+          "start": 0,
+          "end": 3224,
+          "kind": "text",
+          "sha256": "bcfd60068f7473a7fe79838a0f8b45997ea9a72accad0ebe4299a36630920110"
         },
         {
           "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/chat-gateway.mjs",
@@ -290,10 +521,24 @@
           "end": 1939,
           "kind": "text",
           "sha256": "56522e47a5dfdaad14ddf550e914c47509acfd275479185face4d870d3c3ce6e"
+        },
+        {
+          "path": "scratch/finish-consolidation.py",
+          "start": 0,
+          "end": 8361,
+          "kind": "text",
+          "sha256": "9890cb2843c6580ad2dd401d3cdfc03d3fdb2d2f7ab1f748bc2687f3cdabcfe0"
+        },
+        {
+          "path": "scratch/preserved-doctor.patch",
+          "start": 0,
+          "end": 1018,
+          "kind": "text",
+          "sha256": "d3b6752df82937e24f582fb03b3b75d8b03d97558ca494c4b0eed8b5f7094e67"
         }
       ],
-      "bytes": 90242,
-      "status": "unassigned"
+      "bytes": 27826,
+      "status": "complete"
     }
   ]
 }

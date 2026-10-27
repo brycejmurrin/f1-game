@@ -1,0 +1,233 @@
+{
+  "group": "26",
+  "assigned_bytes": 160000,
+  "coverage": "complete for assigned half-open spans only",
+  "method": "Individual exec returns of at most 8000 source bytes; all assigned text returned untruncated. Additional metadata/header inspection does not extend assigned semantic coverage. No tests, browser, network, or runtime execution.",
+  "sources": [
+    {
+      "source_id": "S01",
+      "path": "docs/archive/research/raw/2026-08-test-audit.json",
+      "start": 89817,
+      "end": 192006,
+      "kind": "text",
+      "sha256": "c59fd9bf71a9d7347e75a401f6028ad68a2f8c72574324c292a6d5c653333cb2",
+      "whole_file_bytes": 192006,
+      "whole_file_sha256": "c59fd9bf71a9d7347e75a401f6028ad68a2f8c72574324c292a6d5c653333cb2",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "582cadd167a701b30e4830f288f0660d5ccc0cc341b4c5ec7424d9492958f518",
+      "read_chunks": [
+        {
+          "start": 89817,
+          "end": 97817,
+          "bytes": 8000,
+          "sha256": "954df8d52b21809993892cde03577c3ed47b4b27e6adc4916c547310995ebbfa",
+          "returned_untruncated": true
+        },
+        {
+          "start": 97817,
+          "end": 105817,
+          "bytes": 8000,
+          "sha256": "9083e1330e7442f8f515fdde28c2107967ccf6c499db22256b26929521490184",
+          "returned_untruncated": true
+        },
+        {
+          "start": 105817,
+          "end": 113817,
+          "bytes": 8000,
+          "sha256": "574c4dff1ce535f2202bf41ece12acf4b7ceecc47aa52e8cce0dd05b768a7fc3",
+          "returned_untruncated": true
+        },
+        {
+          "start": 113817,
+          "end": 121817,
+          "bytes": 8000,
+          "sha256": "0e7c243f08ad577262a92323e66fafbb205296b482ff32456cc85a6ae3be3437",
+          "returned_untruncated": true
+        },
+        {
+          "start": 121817,
+          "end": 129817,
+          "bytes": 8000,
+          "sha256": "c9c8673f952549af45bb3bad53f16d41c3aa908f454432145f8cf8c3a8812ea8",
+          "returned_untruncated": true
+        },
+        {
+          "start": 129817,
+          "end": 137817,
+          "bytes": 8000,
+          "sha256": "4dd0893c3581ff03af72783629e87d707a20c532104c843c977d1ca03d08fa66",
+          "returned_untruncated": true
+        },
+        {
+          "start": 137817,
+          "end": 145817,
+          "bytes": 8000,
+          "sha256": "af2d25952823f99e7c20ef3f525185e2c4f4fe7330202559f66ad3829ace5c0d",
+          "returned_untruncated": true
+        },
+        {
+          "start": 145817,
+          "end": 153817,
+          "bytes": 8000,
+          "sha256": "6e09e0f4952a31658762d30cf0f3be7032e3c7a26a7c2dac0ed9a97968240d62",
+          "returned_untruncated": true
+        },
+        {
+          "start": 153817,
+          "end": 161817,
+          "bytes": 8000,
+          "sha256": "9a1f47b865c2380398aa01da952ad131cf0e3aa656fa6943fd4a0e72aaa21a86",
+          "returned_untruncated": true
+        },
+        {
+          "start": 161817,
+          "end": 169817,
+          "bytes": 8000,
+          "sha256": "8554346e6939dbb914d708cf37c79db0e61028dcbf1ba595cfbfbbfe73167de8",
+          "returned_untruncated": true
+        },
+        {
+          "start": 169817,
+          "end": 177817,
+          "bytes": 8000,
+          "sha256": "76cbe34eda082b35e0aae74151dbc382e82958413f9aabdeefb11f5f5cba7147",
+          "returned_untruncated": true
+        },
+        {
+          "start": 177817,
+          "end": 185817,
+          "bytes": 8000,
+          "sha256": "23362762f4dc716f8d6f7b231f0a2b3de3a4914bfd320040ac86ff049459eda6",
+          "returned_untruncated": true
+        },
+        {
+          "start": 185817,
+          "end": 192006,
+          "bytes": 6189,
+          "sha256": "57a68c7397cea3bd1335e47f347570c7da28742af98d7fe05465722d16afbfd5",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S02",
+      "path": "docs/archive/research/raw/2026-08-total-audit.json",
+      "start": 0,
+      "end": 57811,
+      "kind": "text",
+      "sha256": "7d0e370454e3e20dc2aeeda6926d9e8e2e4980188b4a748d9621aad26f30bd1b",
+      "whole_file_bytes": 205898,
+      "whole_file_sha256": "7d0e370454e3e20dc2aeeda6926d9e8e2e4980188b4a748d9621aad26f30bd1b",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "89027dd3dab69e42d29b3cfffd18484c272a302dbd86fc591aba3896ff0c4a77",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "667116ad94811fce434ae6b658b92ae3b980b84d788f660d7ebb87f9651f0bc0",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "2d1aa549c25cf3cbcb64b05e45a3323bf3caaac8462368cbf225037f652f088f",
+          "returned_untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "2a0062989e9c1f3b9b81e504233b2fa893852121cdd31b480264e63a8bf968ca",
+          "returned_untruncated": true
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "c0faa48f139e19e1ea15e321b22ca7461e2e5a6bc66597087320760113ffbb8c",
+          "returned_untruncated": true
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "a1026beacae394971d33bf39e3bf9d943a21e639df81e7d055b921b634e152ae",
+          "returned_untruncated": true
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "0affa4ba54a8260d20116edea1ac818d267eb846d1038d003c1eb59dd18cc08b",
+          "returned_untruncated": true
+        },
+        {
+          "start": 48000,
+          "end": 56000,
+          "bytes": 8000,
+          "sha256": "d3e5dcc6e791ac74ea54673b9138e724d91b7f04e252f9aee6a17f5b9a6eb405",
+          "returned_untruncated": true
+        },
+        {
+          "start": 56000,
+          "end": 57811,
+          "bytes": 1811,
+          "sha256": "f967f04db4505374db2c6f7d9cf1fce42241bd5b26b2795b1c44551f47bf7c4e",
+          "returned_untruncated": true
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "S01": {
+      "date": "2026-08",
+      "producer": "11-agent test-semantics workflow per companion dated-record header: 8 batch auditors, taxonomy/CI designer, feasibility skeptic; named authors absent",
+      "full_document_per_file_count": 162,
+      "assigned_scope": "Tail of per-file verdict appendix, begins mid-record, ends at JSON EOF"
+    },
+    "S02": {
+      "date": "2026-08",
+      "producer": "Whole-tree audit workflow per companion header: 19 domain finders, batched skeptics, synthesizer; named authors absent",
+      "full_document_total_confirmed": 197,
+      "assigned_scope": "Report synthesis and beginning of confirmed records; ends inside photomode claim, not JSON EOF"
+    }
+  },
+  "backlinks": {
+    "search": "rg -n for both raw basenames and companion title basenames under docs excluding archive and project-map",
+    "live_hits": [
+      {
+        "path": "docs/notes/system-audit-4/anchors.md",
+        "line": 28,
+        "target": "docs/archive/research/TOTAL-AUDIT-2026-08.md",
+        "meaning": "anchor inventory, not direct raw-file consumer"
+      }
+    ],
+    "archive_companions": [
+      "docs/archive/research/TEST-AUDIT-2026-08.md",
+      "docs/archive/research/TOTAL-AUDIT-2026-08.md"
+    ],
+    "related_history": [
+      "docs/archive/research/CAMPAIGN-2026-08.md",
+      "docs/archive/research/AUDIT-SYNTHESIS-2026-08.md"
+    ],
+    "direct_live_raw_references_found": false
+  },
+  "current_use": {
+    "authority": [
+      "AGENTS.md",
+      "docs/WORKERS.md",
+      "docs/TESTING.md",
+      "docs/ARCHITECTURE.md",
+      "docs/PHYSICS.md",
+      "docs/DEBUG-HOOKS.md",
+      "tests/groups.json",
+      "tools/manifest.cjs"
+    ],
+    "limits": "Historical claims and proposals were not revalidated against current implementation. Archived line numbers and proposed target names are not current navigation contracts.",
+    "cleanup": "Preserve raw evidence with companions and batch hashes; classify as historical provenance, not runnable migration/fix queue. No deletion justified by this mapping."
+  }
+}

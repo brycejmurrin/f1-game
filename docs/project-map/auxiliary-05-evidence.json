@@ -1,0 +1,750 @@
+{
+  "group": "05",
+  "assignedBytes": 160000,
+  "readBytes": 160000,
+  "readChunkCount": 30,
+  "maximumReadBytes": 8000,
+  "method": "All 30 assigned text chunks individually returned untruncated, at most 8000 bytes each. Plan sha256 is whole-source identity and independently checked; assigned-range/chunk hashes establish actual reading coverage. No binary assigned.",
+  "scope": "Static mapping only; no tests, browser sessions, network research, game/runtime execution, source edits, staging or commits. MCP LSP used only for source navigation. Historical instructions/reproduction commands audited as data.",
+  "instructionReads": [
+    "AGENTS.md",
+    ".claude/skills/code-nav/SKILL.md",
+    ".claude/agents/worker.md"
+  ],
+  "instructionReadNotes": "Initial combined AGENTS/batch output truncated and excluded from coverage; AGENTS fully reread in 0:8000,8000:16000,16000:EOF calls (9b30dc,90b034,717d88). No nested AGENTS in docs/project-map, sites/design-lab, spike/backends, spike/physics or their ancestors.",
+  "symbolEvidence": [
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "symbol": "Tracks.build",
+      "result": "js/track/tracks.js:471; export :859"
+    },
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "symbol": "Gfx",
+      "result": "js/render/gfx.js:217; window export :318; two top-level declarations, resolved runtime definition"
+    },
+    {
+      "method": "attached apex-lsp lsp_definition + lsp_references files",
+      "symbol": "DebrisWorld",
+      "result": "js/physics/debris-world.js:2; 63 references in 10 js files including game, agent, incident, forces/collide/wall-clamp, racecontrol, options and coach"
+    },
+    {
+      "method": "attached apex-lsp lsp_definition + lsp_references files",
+      "symbol": "IncidentSim",
+      "result": "js/physics/incident-sim.js:2; 16 references in game, agent, incident, collide and coach"
+    },
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "symbol": "RaceControl",
+      "result": "js/race/race-control.js:2"
+    },
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "symbol": "__apex.race",
+      "result": "INVALID_ARGUMENT: checker selects early window.__apex declaration with no race member; dynamic API not disproved by lookup"
+    },
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "symbol": "ApexAPI.race",
+      "result": "INVALID_ARGUMENT: ApexAPI not declared global; no inferred replacement"
+    }
+  ],
+  "consumerEvidence": [
+    {
+      "method": "scoped rg text search",
+      "path": "sites/design-lab/index.html",
+      "lines": [
+        11,
+        12
+      ],
+      "contract": "Sibling styles.css loaded as stylesheet; deferred app.js"
+    },
+    {
+      "method": "bounded static supporting read, no execution",
+      "path": "tests/unit/f1-dev-tools.test.mjs",
+      "lines": [
+        300,
+        310
+      ],
+      "contract": "Extracted M8 shot tests explicit GLX storage and browser cleanup after navigation failure"
+    },
+    {
+      "method": "bounded static supporting read, no execution",
+      "path": "tests/unit/f1-dev-tools.test.mjs",
+      "lines": [
+        337,
+        347
+      ],
+      "contract": "Extracted side-world HTTP route tests decoded traversal denied before filesystem access"
+    },
+    {
+      "method": "bounded static supporting read, no execution",
+      "path": "tests/unit/f1-dev-tools.test.mjs",
+      "lines": [
+        349,
+        365
+      ],
+      "contract": "M8 main tests blank/errors/thrown shots set failure and close server"
+    }
+  ],
+  "searchLimits": "Scoped searches in package.json, tools/manifest.cjs, sw.js, workflow files found no spike launch/build inclusion; does not prove universal absence of consumers. Adjacent group06 owns HTML/__spike runtime and evaluation suffix.",
+  "dependencyMetadata": [
+    {
+      "path": "vendor/rapier-0.19.3/rapier.mjs",
+      "exists": true,
+      "bytes": 2238719,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "vendor/three-0.186.1",
+      "exists": true,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "spike/physics/geometry-singapore.json",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "spike/physics/side-world.html",
+      "exists": true,
+      "bytes": 552,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "spike/three-spike.html",
+      "exists": true,
+      "bytes": 3005,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "spike/three-spike.js",
+      "exists": true,
+      "bytes": 19009,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "spike/spike-data.js",
+      "exists": true,
+      "bytes": 4067,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "tools/manifest.cjs",
+      "exists": true,
+      "bytes": 101567,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "tools/verify-track.cjs",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "tools/apex-capture.mjs",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "js/game/debrisworld.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "js/game/incidentsim.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "js/game/racecontrol.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "spike/babylon-spike.html",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "spike/babylon-spike.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "spike/vendor/babylon",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md",
+      "exists": true,
+      "bytes": 29421,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "docs/archive/moves/spike-backends.json",
+      "exists": true,
+      "bytes": 4130,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "tests/image-grade-shaders.test.mjs",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    },
+    {
+      "path": "js/render/shaders/lit.js",
+      "exists": false,
+      "bytes": null,
+      "method": "Path.exists/stat only; no binary or archived contents read"
+    }
+  ],
+  "commentCleanup": "No source/comments edited. Preserve correction/retraction paragraphs, same-platform determinism/heap and CPU-vs-GPU caveats, path-containment comment, and corrected node-offset clamped explanation. Future separate cleanup may update stale source paths/library headers, qualify console-only verdicts and p95 sums, replace fixed Chromium discovery, and document output dirs/invalid capture mode; no behavior fix attempted.",
+  "limits": [
+    "No results recomputed, upstream package assertions revalidated, GPU image acceptance or current hosted behavior established.",
+    "Geometry default is absent until generator runs; scripts that read/fetch it cannot be assumed runnable as-is.",
+    "Partial CSS suffix and partial rapier-eval prefix only; adjacent groups required for full files.",
+    "No binary inspection, no archived move plan replay; metadata only.",
+    "Experiment imports and browser localStorage/network/file writes are potential execution side effects described from source only."
+  ],
+  "files": [
+    {
+      "path": "sites/design-lab/styles.css",
+      "start": 26779,
+      "end": 29666,
+      "kind": "text",
+      "sha256": "628680e7899308425ea28fbec685c29bb4813e2186899b81531c29475845e78c",
+      "wholeFileBytes": 29666,
+      "actualWholeFileSha256": "628680e7899308425ea28fbec685c29bb4813e2186899b81531c29475845e78c",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "0d1b890a2515d5133988c86f885971ba6cbf0550885ae1f0e8611295afb6e809",
+      "classification": "retained presentation source",
+      "semantics": "Stylesheet suffix only, starts inside prior declaration. Overrides gallery/card context, mobile forms with 16px inputs, receipt dialogs, two-to-one-column zone recipes, focus-visible summary outline, 800/650/360px breakpoints and disabled filter opacity. Consumed by sibling index.html stylesheet link; no standalone CSS-validity or full-cascade claim.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 26779,
+          "end": 29666,
+          "bytes": 2887,
+          "sha256": "0d1b890a2515d5133988c86f885971ba6cbf0550885ae1f0e8611295afb6e809",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "56c6b3"
+        }
+      ]
+    },
+    {
+      "path": "spike/ADOPTION-PLAN.md",
+      "start": 0,
+      "end": 14259,
+      "kind": "text",
+      "sha256": "a994df6dce469d16c9e8e98448b3012947e100b06c8bc8632ba9095120f462f7",
+      "wholeFileBytes": 14259,
+      "actualWholeFileSha256": "a994df6dce469d16c9e8e98448b3012947e100b06c8bc8632ba9095120f462f7",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "a994df6dce469d16c9e8e98448b3012947e100b06c8bc8632ba9095120f462f7",
+      "classification": "historical adoption plan",
+      "semantics": "Dated renderer Phases A-D and Rapier R0-R3 plan with later shipped-status annotations. Picks three/TSL single-source shading despite Babylon speed; keeps bespoke player/AI handling and discusses additive side-world, bounded rollover takeover, caution events and future rigid-body uses. Lists proposal gates, not authorization to run them. Rollover rescue, road-height reconstruction and deterministic-build/SIMD tradeoff remain design provenance. Old shipped-source locations need current LSP resolution.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "2e45fe7f7b4233cff522fb9b5952d60ec9eaaf71f3cd99aa5ee3e27cd9fdb5ca",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "96e3f4"
+        },
+        {
+          "start": 8000,
+          "end": 14259,
+          "bytes": 6259,
+          "sha256": "dc95ec2b6bb6cda7941c857fa11adffc9bedefea7156ad9b8392ebd29b0915a6",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "75237f"
+        }
+      ]
+    },
+    {
+      "path": "spike/PACKAGE-RESEARCH.md",
+      "start": 0,
+      "end": 12010,
+      "kind": "text",
+      "sha256": "0c124737e7b4e2114c2a03a077b5ac11dfba4f43e62cb2e7f94d40ac5830d6ac",
+      "wholeFileBytes": 12010,
+      "actualWholeFileSha256": "0c124737e7b4e2114c2a03a077b5ac11dfba4f43e62cb2e7f94d40ac5830d6ac",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "0c124737e7b4e2114c2a03a077b5ac11dfba4f43e62cb2e7f94d40ac5830d6ac",
+      "classification": "historical package research",
+      "semantics": "Research menu under no-build IIFE/importmap/static-host constraints. Sizes/versions and recommendations are dated claims: locally vs cross-platform deterministic Rapier, SIMD vs threads, worker transferable arrays, rendering helpers, native APIs, GSAP, ghosts/network options. Status annotations say fonts/network/debris/ghosts partly shipped; no adoption established solely by this document. No fetched upstream documentation in this audit.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "69f8ddff938a3bcc3614ebda92c33d720688ec9098ed2b6e7499156abf4344e9",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "cc01dd"
+        },
+        {
+          "start": 8000,
+          "end": 12010,
+          "bytes": 4010,
+          "sha256": "7348e43cca73fdc24789dddacf291a01d19bd958eea6d5db94aae6ee61f1fe88",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "02de5c"
+        }
+      ]
+    },
+    {
+      "path": "spike/README.md",
+      "start": 0,
+      "end": 10194,
+      "kind": "text",
+      "sha256": "81fdcc87734d988cff513eb9cbe44e87bc8756d121899a3741472a63d53d8e78",
+      "wholeFileBytes": 10194,
+      "actualWholeFileSha256": "81fdcc87734d988cff513eb9cbe44e87bc8756d121899a3741472a63d53d8e78",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "81fdcc87734d988cff513eb9cbe44e87bc8756d121899a3741472a63d53d8e78",
+      "classification": "retained experiment documentation",
+      "semantics": "Standalone renderer harness scope, manual launch/capture commands, __spike API, dated criteria and SwiftShader measurements. Explicit WebGPU half missing from headless evidence, visual acceptability pending owner. Library-version header r185.1 disagrees with documented reused 0.186.1; no runtime version checked. Babylon arm and duplicated vendors removed according to narrative; results persist only as historical claims. TSL first-use varying anchor caveat is valuable retained maintenance knowledge.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "6aedbb1b9fb53b967c44c059fb70875d127a30f07791c696578efa5a89c4a808",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "f6e098"
+        },
+        {
+          "start": 8000,
+          "end": 10194,
+          "bytes": 2194,
+          "sha256": "d75ab73e8ec382ba7543bc981f777162efb4e1120be2a46b8a68d2ffb40376b8",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "6fecaf"
+        }
+      ]
+    },
+    {
+      "path": "spike/UI-RESEARCH.md",
+      "start": 0,
+      "end": 8984,
+      "kind": "text",
+      "sha256": "0c69ac6682cee85e223caa428f75f8d19f02b9922204f18dfee1896aed65cf85",
+      "wholeFileBytes": 8984,
+      "actualWholeFileSha256": "0c69ac6682cee85e223caa428f75f8d19f02b9922204f18dfee1896aed65cf85",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "0c69ac6682cee85e223caa428f75f8d19f02b9922204f18dfee1896aed65cf85",
+      "classification": "historical UI package research",
+      "semantics": "Vanilla dark UI recommendation menu: fonts/icons/native CSS/dialog/popover/GSAP/uPlot and bespoke gauges, constraints against framework replacement. Shipped-status annotation for fonts/color-mix/layers/dialog does not adopt remaining recommendations. Compatibility/version/performance assertions dated and unverified; not instructions for this static task.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "4b8ddebb0f3300f74e34ea5a0c018ff032a12196571f8fc893fe209a6b627691",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "ade535"
+        },
+        {
+          "start": 8000,
+          "end": 8984,
+          "bytes": 984,
+          "sha256": "bc0b3cb5af3c8f1f2eeb2553ef72d8fa403aa814dfd2b297a675ba25a79adaa0",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "4acf3e"
+        }
+      ]
+    },
+    {
+      "path": "spike/backends/README.md",
+      "start": 0,
+      "end": 762,
+      "kind": "text",
+      "sha256": "0ec5e39d15a50565e6e3f94a0cc40e965b54c06b2cfba53d79d56066db925cc2",
+      "wholeFileBytes": 762,
+      "actualWholeFileSha256": "0ec5e39d15a50565e6e3f94a0cc40e965b54c06b2cfba53d79d56066db925cc2",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "0ec5e39d15a50565e6e3f94a0cc40e965b54c06b2cfba53d79d56066db925cc2",
+      "classification": "historical move documentation",
+      "semantics": "Records renderer reattachment and nonexecutable completed move inventory. Explains appliedMoves differs from live moves schema to prevent replay. Current ownership deferred to architecture/root/rules; archived inventory not executed or treated as current config.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 762,
+          "bytes": 762,
+          "sha256": "0ec5e39d15a50565e6e3f94a0cc40e965b54c06b2cfba53d79d56066db925cc2",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "c64f42"
+        }
+      ]
+    },
+    {
+      "path": "spike/capture-m8.mjs",
+      "start": 0,
+      "end": 6212,
+      "kind": "text",
+      "sha256": "57edf952d5c2fed2a2a73f2931b18a5222683fb3c02f4bd29dbb5d84a87ceab5",
+      "wholeFileBytes": 6212,
+      "actualWholeFileSha256": "57edf952d5c2fed2a2a73f2931b18a5222683fb3c02f4bd29dbb5d84a87ceab5",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "57edf952d5c2fed2a2a73f2931b18a5222683fb3c02f4bd29dbb5d84a87ceab5",
+      "classification": "retained capture CLI",
+      "semantics": "Node ESM [outdir], defaults scratch captures. Resolves playwright from repo, starts loopback static server with decoded normalized path containment ROOT+sep, five sequential 960x540 shots. Isolated pages set three+forcedGL or explicit webgl2 storage, race/park, assert backend, optionally record TLX post state. Writes PNGs and results JSON, marks <5000-byte frames blank, records page/console errors, catches per-shot failures, exitCode=1 on error/blank/logged errors. Browser and server close in finally. Draw/post correctness or actual mobile/GPU performance not proven by file size.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6212,
+          "bytes": 6212,
+          "sha256": "57edf952d5c2fed2a2a73f2931b18a5222683fb3c02f4bd29dbb5d84a87ceab5",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "53858d"
+        }
+      ]
+    },
+    {
+      "path": "spike/capture.mjs",
+      "start": 0,
+      "end": 11567,
+      "kind": "text",
+      "sha256": "9bd083feca0c83effbad60c898fbfc4e53e6371968974ea3225c15d0cf8dd281",
+      "wholeFileBytes": 11567,
+      "actualWholeFileSha256": "9bd083feca0c83effbad60c898fbfc4e53e6371968974ea3225c15d0cf8dd281",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "9bd083feca0c83effbad60c898fbfc4e53e6371968974ea3225c15d0cf8dd281",
+      "classification": "retained capture CLI",
+      "semantics": "Node ESM [spike|baseline|all] [outdir], default all; unknown command still writes metadata JSON without capture. Free-port loopback static server with ROOT+sep guard, MIME/no-store/length. Launches sequential Playwright browsers with SwiftShader flags; wraps four WebGL draw methods, captures four fixed orbit angles at 960x540, measures spike by >=4 frame deltas vs baseline rAF wall window. Lamp/instancing A-B and real-game GLX backend assertion, night/hud/orbit hooks. PNG+results JSON side effects; <5KiB frame heuristic and console/page error hard gate; finally browser/server cleanup. Readme-relative timing claims are historical, no new execution.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "ccd2828392f3474a7996bbc6a0f677ea4eda3a32eb3be682d3ffb8a824cb6fa5",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "aab364"
+        },
+        {
+          "start": 8000,
+          "end": 11567,
+          "bytes": 3567,
+          "sha256": "327ad435511e57a24719ffdb5a16dfbbe6e869cf7be6126bac9094524db42283",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "afa0b5"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/.gitignore",
+      "start": 0,
+      "end": 16,
+      "kind": "text",
+      "sha256": "e12a78422f4414653e09b5239862a66283388acfab63abe5137b4f22aaeac041",
+      "wholeFileBytes": 16,
+      "actualWholeFileSha256": "e12a78422f4414653e09b5239862a66283388acfab63abe5137b4f22aaeac041",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "e12a78422f4414653e09b5239862a66283388acfab63abe5137b4f22aaeac041",
+      "classification": "regenerable-output config",
+      "semantics": "Single geometry-*.json ignore pattern. Generated geometry not committed; consumer CLIs need builder output before file/fetch reads. Pattern also explains absent default geometry dependency.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 16,
+          "bytes": 16,
+          "sha256": "e12a78422f4414653e09b5239862a66283388acfab63abe5137b4f22aaeac041",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "a917bc"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/DEEP-DIVE.md",
+      "start": 0,
+      "end": 16759,
+      "kind": "text",
+      "sha256": "b688ea5f9355e0e1e12d0dcf50d872a07895ec29455d0cced5f6383b559d7801",
+      "wholeFileBytes": 16759,
+      "actualWholeFileSha256": "b688ea5f9355e0e1e12d0dcf50d872a07895ec29455d0cced5f6383b559d7801",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "b688ea5f9355e0e1e12d0dcf50d872a07895ec29455d0cced5f6383b559d7801",
+      "classification": "historical measurement record",
+      "semantics": "Corrects original understeer artifact (off-road airborne sample) and load clamp wording; documents binary grip/no progressive friction ellipse, browser side-world timing and JS-only heap caveats, 20-seed handover continuity and inverted-rest policy. Static source supports protocols but no results recomputed. Mobile cost is desktop x2 estimate, p95 sum not measured joint percentile, WASM linear heap excluded, browser timing isolates physics and uses COOP/COEP unlike static production host.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "681adce4d0cb573891175149ebd5d335f64ac2fef55b50dba51641060cfe763b",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "61f7af"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "e41fcdf54a271520503b45b51eb041eafe34431d08c0c6d880024eda40a0370e",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "f30033"
+        },
+        {
+          "start": 16000,
+          "end": 16759,
+          "bytes": 759,
+          "sha256": "69d5fdcd12b8ea56681766aa17b3e32c4d98e7869318b3931963156d5d18dbe3",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "c1a6a6"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/README.md",
+      "start": 0,
+      "end": 11888,
+      "kind": "text",
+      "sha256": "01daac8258b6121640252ae8b7b156fed66e6f9d4b7296ad86127992892bc95b",
+      "wholeFileBytes": 11888,
+      "actualWholeFileSha256": "01daac8258b6121640252ae8b7b156fed66e6f9d4b7296ad86127992892bc95b",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "01daac8258b6121640252ae8b7b156fed66e6f9d4b7296ad86127992892bc95b",
+      "classification": "historical evaluation record",
+      "semantics": "Rapier 0.19.3 real-road vehicle calibration, same-platform bitwise determinism and performance claims, bespoke API-fit table and additive-only recommendation. Status points to shipped features at old locations; deep-dive explicitly retracts apparent 2x understeer and clarifies load-scaled clamp without tyre sensitivity. Reports do not certify present runtime or cross-platform replay. Lists generated geometry schema and vendored license attribution.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "9d22fb14770c4b8929dfb38f5c1ee358f5e26990a315aadeffe19edf5478420c",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "1f41ef"
+        },
+        {
+          "start": 8000,
+          "end": 11888,
+          "bytes": 3888,
+          "sha256": "71944191dc3cc4e959be8bca048946818078fafb0b48f438df5be75103ea264a",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "1799d2"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/build-geometry.cjs",
+      "start": 0,
+      "end": 3829,
+      "kind": "text",
+      "sha256": "2e8fa2e655da0fe98f55bd22a9805d25c61cc4aefc29e37aa23997ec99187448",
+      "wholeFileBytes": 3829,
+      "actualWholeFileSha256": "2e8fa2e655da0fe98f55bd22a9805d25c61cc4aefc29e37aa23997ec99187448",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "2e8fa2e655da0fe98f55bd22a9805d25c61cc4aefc29e37aa23997ec99187448",
+      "classification": "retained geometry CLI",
+      "semantics": "CommonJS [trackId], default singapore. Node fs/path/vm; manifest TRACK_VM and CIRCUITS with @circuits expansion. Sandbox window alias and no-op console, GLX raw mesh stub/mobileTier=false; regex top-level const to var exposes VM globals. Tracks.LIST lookup then Tracks.build(def,{night:false}); asserts nonempty finite road.pos. Writes geometry-id JSON {id,total,n,road:{pos,nrm,idx},centre:{px,py,pz,tx,ty,tz,hw}} using Array.from. Road-only, full-detail, +Y up/metres; no terrain/props and normals/indices are not fully validated. Source execution in VM is a reproduction dependency, not performed here.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3829,
+          "bytes": 3829,
+          "sha256": "2e8fa2e655da0fe98f55bd22a9805d25c61cc4aefc29e37aa23997ec99187448",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "f6f203"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/deep-handover.mjs",
+      "start": 0,
+      "end": 13848,
+      "kind": "text",
+      "sha256": "e08e61e2eb12b5a73c037f1c8d7bbcebcad95de527bfad4e07f5d74174d4368a",
+      "wholeFileBytes": 13848,
+      "actualWholeFileSha256": "e08e61e2eb12b5a73c037f1c8d7bbcebcad95de527bfad4e07f5d74174d4368a",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "e08e61e2eb12b5a73c037f1c8d7bbcebcad95de527bfad4e07f5d74174d4368a",
+      "classification": "retained handover probe",
+      "semantics": "Node ESM fixed Singapore JSON and Rapier import/init, seeded 20 moderate/20 aggressive/20 repeated moderate worlds at 1/60. Centre arc cumulative sum, local +/-40 then +/-80 node projection versus global brute force, left=tangent z/-x. Matches 80kmh pose+velocity then vertical and roll impulses; road trimesh plus approximate flat pseudo-terrain. Touchdown+30 stable ticks or 360-step cap, upright/rolled/inverted/timeout classifications; releases worlds, prints continuity/resync/retained-speed diagnostics and raw float64 bit comparison. Not production integration and does not fail process for a false determinism result; proxy centre y differs from bespoke ride height. Corrected clamped flag measures winning node offset, not squared metres.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "0b6e859cbe82569806adc45e216eaaf31f1d3159c5b2a583980529f00209466b",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "d00657"
+        },
+        {
+          "start": 8000,
+          "end": 13848,
+          "bytes": 5848,
+          "sha256": "de24ab5b8760a37ff9ef7def48fc5b8c6435292f3438f683a574ae905eee1cca",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "ffaf77"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/deep-sideworld-run.mjs",
+      "start": 0,
+      "end": 4766,
+      "kind": "text",
+      "sha256": "75747db41a033cd428fddfc6bc3d56faa75aacf45a3fa63e674377c95df0601d",
+      "wholeFileBytes": 4766,
+      "actualWholeFileSha256": "75747db41a033cd428fddfc6bc3d56faa75aacf45a3fa63e674377c95df0601d",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "75747db41a033cd428fddfc6bc3d56faa75aacf45a3fa63e674377c95df0601d",
+      "classification": "retained browser measurement CLI",
+      "semantics": "Node ESM no arguments; resolves Playwright, logs OS load, starts loopback static server with normalized decoded ROOT+sep guard and COOP same-origin/COEP require-corp to unquantize timers. Loads side-world.html at 640x360, waits <=240s for __sideworld.done; error sets exitCode=1 else prints timings/heaps/nonFinite+JSON. Browser/server closed in nested finally. Page/console errors logged but not automatically fatal; nonFinite reported rather than used as exit gate. Header-enabled measurement host differs from production GitHub Pages.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4766,
+          "bytes": 4766,
+          "sha256": "75747db41a033cd428fddfc6bc3d56faa75aacf45a3fa63e674377c95df0601d",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "f407e6"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/deep-sideworld.js",
+      "start": 0,
+      "end": 9567,
+      "kind": "text",
+      "sha256": "23b1042d09b0a3f927b3918d02fa257dc183226c1fa542898d47bae1daf44791",
+      "wholeFileBytes": 9567,
+      "actualWholeFileSha256": "23b1042d09b0a3f927b3918d02fa257dc183226c1fa542898d47bae1daf44791",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "23b1042d09b0a3f927b3918d02fa257dc183226c1fa542898d47bae1daf44791",
+      "classification": "retained browser measurement module",
+      "semantics": "Requires DOM out; owns __sideworld {ready,done,error,result}. Dynamically imports/init Rapier and fetches default generated geometry. Fixed road trimesh, 22 scripted 45-55m/s kinematic mirrors, seed-placed 100 dynamic debris. At 1/60s times pose writes/world.step/100*7 float readback; 60 warmup +600 samples, five ticks per setTimeout. Reports means/p95/max, early/late sleeping, import/init/build timings and optional Chromium JS heap deltas; last read buffer only checked for nonfinite. Error catch sets done+error. No world.free; page closure owns lifetime. Not real game simulation/render cost or mobile memory proof.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "99bbf1502be45eecf42c5d86c24c921efe24b3be680e24dba2032b2492c0d040",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "68f1df"
+        },
+        {
+          "start": 8000,
+          "end": 9567,
+          "bytes": 1567,
+          "sha256": "c8efb9e55babd343eb78b727dc563490e731040fbf4ffbd350b8904034a8c1fc",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "a03cf5"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/deep-tuning.mjs",
+      "start": 0,
+      "end": 26126,
+      "kind": "text",
+      "sha256": "b9e77994f1f3f339edda0445da8543eb03931569c55df3e19d15fdbba229a2bb",
+      "wholeFileBytes": 26126,
+      "actualWholeFileSha256": "b9e77994f1f3f339edda0445da8543eb03931569c55df3e19d15fdbba229a2bb",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "b9e77994f1f3f339edda0445da8543eb03931569c55df3e19d15fdbba229a2bb",
+      "classification": "retained tuning probe",
+      "semantics": "Node ESM Rapier init with flat 4km plane and bespoke-footprint raycast vehicle. Grid frictionSlip 10.5/21/42/84 x side stiffness .5/1/2/4 then suspension/CoM finalists; clean filter by minUp/yaw variation/finite positions. Rear-axle P controller holds speed. Includes transient/speed/low-friction sweeps, optional Singapore baseline replication caught as skipped on missing geometry, straight brake calibration, 1s midcorner brake levels at best and near-limit tunes, mass/suspension and per-wheel clamp ratios. Frees worlds; logs observations only, no acceptance exit gate. Any yaw rise heuristic can label divergent spins PRESENT; deep-dive interprets stability separately. finite/roll checks intentionally incomplete physical validation.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "cf14fd9c95f0ffb9339dbf1284dd891f37f9b3b7e1912c63f6cbd5dafcbd9834",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "7bc9e2"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "38c9c6ff885e352e7b07fcb8727e18281a808ec8c0e56169a5c16fea472e495b",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "300703"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "25559167c95862c11f3dbd4091bdb6fba32c68d9c08a66a016c9cc2933ac3cff",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "6a986a"
+        },
+        {
+          "start": 24000,
+          "end": 26126,
+          "bytes": 2126,
+          "sha256": "c2759a07088886eff0d501d87c72ba75025774cb3f9e25da688c875e2d32b3ee",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "eb4027"
+        }
+      ]
+    },
+    {
+      "path": "spike/physics/rapier-eval.mjs",
+      "start": 0,
+      "end": 6326,
+      "kind": "text",
+      "sha256": "2605a74ada4a88e97a2311852625315664c17b270bcbf93a60f9ce9bc9579b5a",
+      "wholeFileBytes": 15635,
+      "actualWholeFileSha256": "2605a74ada4a88e97a2311852625315664c17b270bcbf93a60f9ce9bc9579b5a",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "53735f1a9608d613c12a5f6077a9254076a9369e99a9108ffdceb7e3af8b1e0a",
+      "classification": "retained evaluation CLI prefix",
+      "semantics": "Only bytes [0,6326): Node ESM [trackId] default singapore, generated JSON and Rapier init, real road typed arrays, world/addRoad/node-frame/yaw/nearest helpers, 798kg chassis, 4 wheel setup/exclusion filter and fixed 1/60 updateVehicle->world.step. Scripted rear engine+front steer schedule and force calibration over 3 seconds; assigned span ends inside fallback condition. Later determinism/performance bodies belong to group06; no full-script verdict asserted from this prefix.",
+      "coverage": "Complete assigned half-open byte span; whole-file hash is identity, not a whole-file-read claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6326,
+          "bytes": 6326,
+          "sha256": "53735f1a9608d613c12a5f6077a9254076a9369e99a9108ffdceb7e3af8b1e0a",
+          "method": "Python Path.read_bytes half-open slice decoded UTF-8, independently returned untruncated exec_command output",
+          "toolChunkId": "5cadf3"
+        }
+      ]
+    }
+  ],
+  "supportReads": [
+    {
+      "path": "tests/unit/f1-dev-tools.test.mjs",
+      "start": 19632,
+      "end": 25117,
+      "lineRangeInclusive": [
+        290,
+        359
+      ],
+      "wholeFileSha256": "57998d55f42006015162c93ff051bfeadb3c20a8bab38624e3ab1149420b9db8",
+      "rangeSha256": "bab05744d2853b9b49eb75189e391618e70bcd29be56d0c31cf3670d73e9d7fa",
+      "method": "sed line slice supporting read only, untruncated; exact byte translation computed afterward",
+      "toolChunkId": "795910"
+    }
+  ]
+}

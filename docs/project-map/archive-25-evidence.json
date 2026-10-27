@@ -1,0 +1,229 @@
+{
+  "group": "25",
+  "assigned_bytes": 160000,
+  "method": "Current AGENTS.md read. All assigned half-open text spans individually returned in untruncated calls of at most 8000 bytes. Plan hashes refer to whole files, separately checked from assigned-part and chunk hashes. No tests/browser/network/runtime/source edits/staging/commits. Historic instructions treated as data. Supplemental structured key/count inspection did not claim full-file reading.",
+  "sources": [
+    {
+      "path": "docs/archive/research/raw/2026-08-redesign-panel.json",
+      "start": 22559,
+      "end": 92742,
+      "kind": "text",
+      "sha256": "72887a4ab6a783f149fe8986efd9b52b0a368c9a16943469f290200922703f8e",
+      "source_id": 1,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 92742,
+      "observed_whole_file_sha256": "72887a4ab6a783f149fe8986efd9b52b0a368c9a16943469f290200922703f8e",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "f58db0dc95afc851a3de27b25c25a31917b634128ccced515ed70a616e7b4222",
+      "complete_file_read": false,
+      "read_chunks": [
+        {
+          "start": 22559,
+          "end": 30559,
+          "bytes": 8000,
+          "sha256": "5ee5920b2bd633ee8d3e560aa96f6ea55b6949857d58342b6409c083695b8772",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 30559,
+          "end": 38559,
+          "bytes": 8000,
+          "sha256": "f8d056d369e2c5d7ffcc93e1b219f9bd14295d4eef85054db370016120fc9b44",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 38559,
+          "end": 46559,
+          "bytes": 8000,
+          "sha256": "808b9fd5433c18c4699cb5d119c6e752600ecbd04d7ff7d11a789dc7cb064cdf",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 46559,
+          "end": 54559,
+          "bytes": 8000,
+          "sha256": "db667c0249d3562d66743a6a032dd0036e0690f357edc7ae321a744f9a359bce",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 54559,
+          "end": 62559,
+          "bytes": 8000,
+          "sha256": "ad025f4068c20910648e6edadb13d1c6f2e88de9bb018c0cbfe55178f04bf5db",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 62559,
+          "end": 70559,
+          "bytes": 8000,
+          "sha256": "e0783b573cc5265daf2425e18723e585206f8e21f192e187089ee531e701cf17",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 70559,
+          "end": 78559,
+          "bytes": 8000,
+          "sha256": "fe1f5add7fdad1a0aa32edeac1a206d93a028e6dab95089a2b902d15edade567",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 78559,
+          "end": 86559,
+          "bytes": 8000,
+          "sha256": "bc2e202ff12723037568bd5a03aaf3f3c071fda9aced243bd3e036dc19afcfc1",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 86559,
+          "end": 92742,
+          "bytes": 6183,
+          "sha256": "fae12e7014ec629c886454e8e3e33727314a1a1a326aeba2b5b8f91bc3f9c5d4",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/raw/2026-08-test-audit.json",
+      "start": 0,
+      "end": 89817,
+      "kind": "text",
+      "sha256": "c59fd9bf71a9d7347e75a401f6028ad68a2f8c72574324c292a6d5c653333cb2",
+      "source_id": 2,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 192006,
+      "observed_whole_file_sha256": "c59fd9bf71a9d7347e75a401f6028ad68a2f8c72574324c292a6d5c653333cb2",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "95c98ce48c1e441cde330c15d49523acec40340f0a7b21d0f316826a5a5e4fc5",
+      "complete_file_read": false,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "8c9eb0b02b3ff9a77d81e2b3a5c6a2e04bb382f373d01c490ddb5d4fb2b69c45",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "e5c93ee412d89fca92cae27c589fa7279cd51693b1e0910eef9e24bd80d5b731",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "7d63f82c4794500a119bb42fcce8b073bdc9ebc4b792c51746304545ed68b481",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "0e2a323efb9cf3353581d7d792b5c21e27978215833eaeb1454f50a4727b8ce1",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "1971f6c7aa2e7d441aff2f2b6a46548a6d20477c5bdb7ef2e94e5c1effc9c57b",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "aa5ce0b29be4eb6614616379067ff3f7059bf7f68af15e1b496b892bcd9d6a2f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 48000,
+          "end": 56000,
+          "bytes": 8000,
+          "sha256": "31db5c32cb3170e60e5d84d95687771b26eaa3e99c934b528496fb47d22e792d",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 56000,
+          "end": 64000,
+          "bytes": 8000,
+          "sha256": "32047beb809a1b9ac4e7efc168b4e5b9e6b3d590453cda0a59e185a4002cee93",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 64000,
+          "end": 72000,
+          "bytes": 8000,
+          "sha256": "096b74ccd185482ce8deb0f5a8e51a5dc8106e44ff41c80de07cdf3b9bdb2a3e",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 72000,
+          "end": 80000,
+          "bytes": 8000,
+          "sha256": "6531f6c9bbd1d7dbb010844fd12a9e4baa40d79f79675ea86f245ad840c861a5",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 80000,
+          "end": 88000,
+          "bytes": 8000,
+          "sha256": "6fe8dfefc42d7928fe01d64861e16f709b7e617ba1165ae8db8adaf3145ae0de",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 88000,
+          "end": 89817,
+          "bytes": 1817,
+          "sha256": "17ca2ecab7412db00e5205ca573cfac103f997aac26bbe38241c21427d34a44e",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    }
+  ],
+  "continuations": {
+    "source_1_prefix_group": "24",
+    "source_2_tail_group": "26"
+  },
+  "live_backlink_search": {
+    "command": [
+      "rg",
+      "-n",
+      "-g",
+      "!docs/archive/**",
+      "-g",
+      "!docs/project-map/**",
+      "2026-08-redesign-panel|2026-08-test-audit|redesign-judge-panel|test-semantics-audit|TEST-AUDIT-2026-08",
+      "docs",
+      "tools",
+      ".claude",
+      ".github"
+    ],
+    "exit_code": 0,
+    "matches": [
+      ".claude/workflows/README.md:31:`test-semantics-audit.js` and `redesign-judge-panel.js` scripts moved to",
+      "docs/NOTES-INDEX.md:197:| [archive/workflows/](archive/workflows) | Spent multi-agent orchestration scripts. Live workflows remain under `.claude/workflows/`; the run-once `test-semantics-audit.js` and `redesign-judge-panel.js` are in [archive/research/workflows/](archive/research/workflows). |",
+      "docs/research/ARCHITECTURE-REDESIGN-2026-08.md:18:[`archive/research/raw/2026-08-redesign-panel.json`](../archive/research/raw/2026-08-redesign-panel.json).",
+      "docs/notes/system-audit-4/anchors.md:74:| 23 | docs/notes/SPIKE-BACKENDS-CHECKLIST.md:421 | .claude/workflows/redesign-judge-panel.js:39 | path-missing | path is docs/archive/research/workflows/redesign-judge-panel.js |",
+      "docs/notes/SPIKE-BACKENDS-CHECKLIST.md:421:| `.claude/workflows/redesign-judge-panel.js:39` | keep | Historical redesign-panel config citing \"the repo already uses an importmap\" as a prior-art note \u2014 describes the past decision, not current structure; provenance, not a live claim. |",
+      "tools/ci/select-budget.mjs:1:// Change-aware CI budget derivation. See docs/archive/research/TEST-AUDIT-2026-08.md \u00a73.",
+      "tools/ci/pick-tests.mjs:464:  // CI design in docs/archive/research/TEST-AUDIT-2026-08.md \u00a73 is built entirely on it.",
+      "docs/notes/HARNESS-SETTINGS-2026-10-26.md:103:  run-once workflow skills (`redesign-judge-panel`, `test-semantics-audit`) and `\"name-only\"` for `code-survey`",
+      "docs/notes/HARNESS-SETTINGS-2026-10-26.md:208:    \"redesign-judge-panel\": \"user-invocable-only\",",
+      "docs/notes/HARNESS-SETTINGS-2026-10-26.md:209:    \"test-semantics-audit\": \"user-invocable-only\",",
+      "docs/notes/AGENT-SURFACE-SURVEY-2026-10-05.md:20:| Workflows `.claude/workflows/` | 4 | `code-survey`, `total-audit`, `test-semantics-audit`, `redesign-judge-panel` |"
+    ]
+  },
+  "supporting_reads": [
+    "AGENTS.md",
+    ".claude/workflows/README.md",
+    "docs/research/ARCHITECTURE-REDESIGN-2026-08.md"
+  ],
+  "limits": [
+    "Source 1 starts within Typed Apex proposal; Graphline full proposal and first Typed Apex prefix are outside scope.",
+    "Source 2 ends inside logging per-file row. Its declared 162 entries are whole-record metadata, not 162 assigned full rows.",
+    "No current implementation or runtime verdict inferred from archived recommendations."
+  ]
+}

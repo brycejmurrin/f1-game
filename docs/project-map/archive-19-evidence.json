@@ -1,0 +1,494 @@
+{
+  "group_id": "19",
+  "mapped_on": "2026-10-27",
+  "assigned_bytes": 160000,
+  "read_chunk_max_bytes": 7000,
+  "read_chunk_count": 28,
+  "sources": [
+    {
+      "source_id": 1,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch6a.py",
+      "start": 42519,
+      "end": 44686,
+      "kind": "text",
+      "sha256": "07515d02cdbec894d77686d4dcf40a14495c0d1ce4765c79e38b586cde2a9288",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 44686,
+      "observed_whole_file_sha256": "07515d02cdbec894d77686d4dcf40a14495c0d1ce4765c79e38b586cde2a9288",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "f52ebac049764472d115dfe75ea1b196d48bc3943c86c575dd31638b49054966",
+      "read_chunks": [
+        {
+          "start": 42519,
+          "end": 44686,
+          "bytes": 2167,
+          "sha256": "f52ebac049764472d115dfe75ea1b196d48bc3943c86c575dd31638b49054966",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [],
+      "scope": "assigned tail only",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    },
+    {
+      "source_id": 2,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch6b.py",
+      "start": 0,
+      "end": 48669,
+      "kind": "text",
+      "sha256": "f8c0e9887938459ebb6add21b16c48adb383f93fb8ed62cd526718c7dfa6053e",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 48669,
+      "observed_whole_file_sha256": "f8c0e9887938459ebb6add21b16c48adb383f93fb8ed62cd526718c7dfa6053e",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "f8c0e9887938459ebb6add21b16c48adb383f93fb8ed62cd526718c7dfa6053e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7000,
+          "bytes": 7000,
+          "sha256": "078a4558f45c33f657f0f10429084b75acb407e14c75aa484ca04df8bc8e796f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7000,
+          "end": 14000,
+          "bytes": 7000,
+          "sha256": "d6bc18ad31ebf48a60e351011db214d06b653b8bc84cafebd509f990b6d98e08",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 14000,
+          "end": 21000,
+          "bytes": 7000,
+          "sha256": "bb78ddc779b4486928eb22128038eab6e1cb0dafa4def8df1e40d3d3896f41b6",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 21000,
+          "end": 28000,
+          "bytes": 7000,
+          "sha256": "1f09c1d5089c013a85700c869144f734afb2695d1c00c8f53a7b6981455fe04b",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 28000,
+          "end": 35000,
+          "bytes": 7000,
+          "sha256": "da1f83956de1af064910bf85784983e6ab2ed38fe0d063d1e54a938bff2349e5",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 35000,
+          "end": 42000,
+          "bytes": 7000,
+          "sha256": "ba64fdb1147a530c1592b3e7081aea3b79ab6e7a37d60bb892e9a6fb30f6ecfa",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 42000,
+          "end": 48669,
+          "bytes": 6669,
+          "sha256": "d28c4bd575f7191037b97e96be88324d103cf257167a77eb206062c9d0f30de9",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260959859",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261099563"
+      ],
+      "scope": "whole file",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    },
+    {
+      "source_id": 3,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch7.py",
+      "start": 0,
+      "end": 18337,
+      "kind": "text",
+      "sha256": "c87fb09c8ac3c08d81c23db8ba323dd3a03f95ccda35543fbb4bd952b146905f",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 18337,
+      "observed_whole_file_sha256": "c87fb09c8ac3c08d81c23db8ba323dd3a03f95ccda35543fbb4bd952b146905f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c87fb09c8ac3c08d81c23db8ba323dd3a03f95ccda35543fbb4bd952b146905f",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7000,
+          "bytes": 7000,
+          "sha256": "347e7e338cc688e163ee4c5d67ac55a3ecf74b4bcc9a586ea08a36368149f445",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7000,
+          "end": 14000,
+          "bytes": 7000,
+          "sha256": "c21dfd0f13c0de96c5695a6dec2dc17f74f30704877e0da3b166749333c3d2ea",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 14000,
+          "end": 18337,
+          "bytes": 4337,
+          "sha256": "713d442c08b8640a10d3b056f9da6c79de63df4a04c44cd3ef91dcdb3f06ce75",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261284192",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261348439",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261404014",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261405190"
+      ],
+      "scope": "whole file",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    },
+    {
+      "source_id": 4,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_late.py",
+      "start": 0,
+      "end": 14111,
+      "kind": "text",
+      "sha256": "9b54524e0d495a2eb7ea5b79e0358f62aac8dd6fbe041ccf508dc165b3177bc6",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 14111,
+      "observed_whole_file_sha256": "9b54524e0d495a2eb7ea5b79e0358f62aac8dd6fbe041ccf508dc165b3177bc6",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "9b54524e0d495a2eb7ea5b79e0358f62aac8dd6fbe041ccf508dc165b3177bc6",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7000,
+          "bytes": 7000,
+          "sha256": "6c86fb93203f52d7740f51192f9d1abf3a7b7f306ba69e776af641c3d70d347b",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7000,
+          "end": 14000,
+          "bytes": 7000,
+          "sha256": "501faf7a67df1716339c0dcfe4a45c85ef7fdb0b5520bbbd4ea84fdb5fe0dabe",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 14000,
+          "end": 14111,
+          "bytes": 111,
+          "sha256": "e22d4348e097d3face042f9f382483183b496175d9d764aa4a967106c77e4ad3",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261492542",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261683714",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261855739",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6262452032",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6263765590"
+      ],
+      "scope": "whole file",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    },
+    {
+      "source_id": 5,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_physics.py",
+      "start": 0,
+      "end": 26477,
+      "kind": "text",
+      "sha256": "d87aa5e146c76411fbaebc41a8ec63aab0e1b9f59d82261f47bf0fc3a3fbc24b",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 26477,
+      "observed_whole_file_sha256": "d87aa5e146c76411fbaebc41a8ec63aab0e1b9f59d82261f47bf0fc3a3fbc24b",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "d87aa5e146c76411fbaebc41a8ec63aab0e1b9f59d82261f47bf0fc3a3fbc24b",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7000,
+          "bytes": 7000,
+          "sha256": "49fdd9c78e648e4da800e108a91ea2b0e3f1042380ee55136b4fff40fc80c42b",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7000,
+          "end": 14000,
+          "bytes": 7000,
+          "sha256": "ad4680c1205b58f08554825ac8c34d90291c486eb2a3a1c7b1d7515fe47d2e3f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 14000,
+          "end": 21000,
+          "bytes": 7000,
+          "sha256": "13e7730d6ae4697e18d6c86d90d9543dcf7f81f6db983ac80900498af100b774",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 21000,
+          "end": 26477,
+          "bytes": 5477,
+          "sha256": "f30ddbdbb4fa12841803007481265ea6f49b45355345358a0f403e9a9e93d723",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [],
+      "scope": "whole file",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    },
+    {
+      "source_id": 6,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_race2p2.py",
+      "start": 0,
+      "end": 2463,
+      "kind": "text",
+      "sha256": "2284b32355ae411e61dbb6555ef452e9282a2bc2ae6662722e919221655b5403",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 2463,
+      "observed_whole_file_sha256": "2284b32355ae411e61dbb6555ef452e9282a2bc2ae6662722e919221655b5403",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2284b32355ae411e61dbb6555ef452e9282a2bc2ae6662722e919221655b5403",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2463,
+          "bytes": 2463,
+          "sha256": "2284b32355ae411e61dbb6555ef452e9282a2bc2ae6662722e919221655b5403",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260585884"
+      ],
+      "scope": "whole file",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    },
+    {
+      "source_id": 7,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_race_car_ui.py",
+      "start": 0,
+      "end": 29752,
+      "kind": "text",
+      "sha256": "2b5af4157a4b6d42e387660734b54aeae89c7d1a62f9546d01bfaf209e50cf4f",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 29752,
+      "observed_whole_file_sha256": "2b5af4157a4b6d42e387660734b54aeae89c7d1a62f9546d01bfaf209e50cf4f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2b5af4157a4b6d42e387660734b54aeae89c7d1a62f9546d01bfaf209e50cf4f",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7000,
+          "bytes": 7000,
+          "sha256": "6c30903c10c3f1a2cbe4a62d73f74626dbd4c1e9a2f981d6a30332ac5f978ebf",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7000,
+          "end": 14000,
+          "bytes": 7000,
+          "sha256": "b1d66b8248e697535c598ec43d13a18d0771b6b989d758980b8d56007b89c594",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 14000,
+          "end": 21000,
+          "bytes": 7000,
+          "sha256": "51378f719f913e7953e07a15195b07d7bb8307e447fe67dbe911eddf57db6ca7",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 21000,
+          "end": 28000,
+          "bytes": 7000,
+          "sha256": "bae7ff57661aa82902663075241ae49e553cf0947ed28f26f969baa663ff03c7",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 28000,
+          "end": 29752,
+          "bytes": 1752,
+          "sha256": "ccbe85925ce4454e6ed4c16fe757e86afdc9488a7abc0fa7c1cb64aa5790e3a9",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260103113",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260188414",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260329296"
+      ],
+      "scope": "whole file",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    },
+    {
+      "source_id": 8,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_render2_mut.py",
+      "start": 0,
+      "end": 14719,
+      "kind": "text",
+      "sha256": "e1feec78686d386dc33b9c25b8a4e88110c3c82d6b0112dd6acbe404f7cc926a",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 14719,
+      "observed_whole_file_sha256": "e1feec78686d386dc33b9c25b8a4e88110c3c82d6b0112dd6acbe404f7cc926a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "e1feec78686d386dc33b9c25b8a4e88110c3c82d6b0112dd6acbe404f7cc926a",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7000,
+          "bytes": 7000,
+          "sha256": "ff37583a0124d686498e9298d6558bc1831d0722b58df6f579733ed2ecd78e5c",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7000,
+          "end": 14000,
+          "bytes": 7000,
+          "sha256": "725c424d28b492522f6b80fb827cb306de494826b2f18087a11335d4eec5653f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 14000,
+          "end": 14719,
+          "bytes": 719,
+          "sha256": "484e61c407d9a91a55695d82bd426115d2c95a8a632c21e4d80c4f8c64a30bb2",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260418691"
+      ],
+      "scope": "whole file",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    },
+    {
+      "source_id": 9,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_tooling2.py",
+      "start": 0,
+      "end": 3305,
+      "kind": "text",
+      "sha256": "7a96c4b543e3da259bf72c6fa2aeb73f8d4da233003ddf3d186af51b8ee95370",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 17748,
+      "observed_whole_file_sha256": "7a96c4b543e3da259bf72c6fa2aeb73f8d4da233003ddf3d186af51b8ee95370",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "b7ef221029f0d5f38cb322157f7c9a9525308605c21c0ab823b002eb18ac39e1",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3305,
+          "bytes": 3305,
+          "sha256": "b7ef221029f0d5f38cb322157f7c9a9525308605c21c0ab823b002eb18ac39e1",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260857784"
+      ],
+      "scope": "whole file",
+      "producer": "Historical issue #2952 review synthesis; R=reviewer, U=subagent-unverified; not runtime code"
+    }
+  ],
+  "supplemental_reads": [
+    {
+      "path": "AGENTS.md",
+      "purpose": "current repository instructions; fully read separately after clipped combined initial read"
+    },
+    {
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch6a.py",
+      "start": 0,
+      "end": 6500,
+      "purpose": "header provenance only; outside assigned span"
+    },
+    {
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows.py",
+      "start": 0,
+      "end": 7000,
+      "purpose": "tuple schema and reviewer markers"
+    },
+    {
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows.py",
+      "line_start": 235,
+      "line_end": 246,
+      "purpose": "static importer NEW concatenation"
+    },
+    {
+      "path": "docs/archive/notes/test-review-2026-10-19/src/build.py",
+      "purpose": "read static producer only; not executed"
+    }
+  ],
+  "backlinks": [
+    {
+      "path": "docs/NOTES-INDEX.md",
+      "line": 198,
+      "type": "archive policy; provenance only"
+    },
+    {
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows.py",
+      "line": 239,
+      "type": "direct static source imports; all nine assigned sources"
+    }
+  ],
+  "backlink_search": {
+    "roots": [
+      "docs",
+      "tools",
+      "tests"
+    ],
+    "excluded": [
+      "docs/archive/**",
+      "docs/project-map/**"
+    ],
+    "result": "No exact source-basename references outside archive/map found; family references only in NOTES-INDEX and system-audit-4/anchors.md"
+  },
+  "relationships": [
+    {
+      "source_ids": [
+        2,
+        5,
+        4
+      ],
+      "type": "physics-2 initial, partial and final continuations; later source 4 closes browser work while preserving branch gaps"
+    },
+    {
+      "source_ids": [
+        3,
+        4
+      ],
+      "type": "platform partial then final run results; debugger remains unrun"
+    },
+    {
+      "source_ids": [
+        7,
+        6,
+        4
+      ],
+      "type": "race-2 partials then final; earlier environment reds reclassified"
+    },
+    {
+      "source_ids": [
+        8
+      ],
+      "type": "mutation addendum to R2-01..R2-21 defined elsewhere; dup_of preserves relation"
+    },
+    {
+      "source_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "type": "rows.py executes files with R/U then concatenates NEW; build.py serializes findings and synthesizes plans"
+    }
+  ],
+  "limits": [
+    "Static read only; no tests/browser/network/runtime or archived code executed.",
+    "Historical instructions and remediation text are provenance only; no present bug/fix status established.",
+    "Source 1 prefix belongs to prior group; source 9 contains header only, with no NEW rows.",
+    "Whole-file hashes differ in scope from assigned partial hash for source 1."
+  ]
+}

@@ -1,0 +1,820 @@
+{
+  "group": "06",
+  "date": "2026-10-27",
+  "assigned_bytes": 160000,
+  "instructions_read": [
+    "AGENTS.md",
+    ".claude/skills/code-nav/SKILL.md"
+  ],
+  "nested_instructions": "No docs AGENTS.md found by rg --files -g AGENTS.md docs",
+  "files": [
+    {
+      "path": "docs/research/TREE-RESTRUCTURE-2026-09.md",
+      "start": 7773,
+      "end": 53642,
+      "kind": "text",
+      "sha256": "6dde9bb2b248db18844f79411a61f0233186e873a61e1d2a1af45702e622b152",
+      "actual_whole_file_bytes": 53642,
+      "actual_whole_file_sha256": "6dde9bb2b248db18844f79411a61f0233186e873a61e1d2a1af45702e622b152",
+      "plan_sha256_scope": "whole file, not assigned part or read chunk",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "652ff508b9bf1198035979b3c0d22572febb5e8251dd7c280cc69a8763959660",
+      "read_method": "Each <=8000-byte half-open slice individually returned by exec_command Python read_bytes/decode; no slice output truncated; all 23 slices fully read.",
+      "chunks": [
+        {
+          "start": 7773,
+          "end": 15773,
+          "sha256": "ff473cb4dce734e8a4ec5cd4c7610fcb3dc9990d566994c3d712c3148bad2418"
+        },
+        {
+          "start": 15773,
+          "end": 23773,
+          "sha256": "041a03bd0b7f0bda08a068badebb646d6a980a168b3d589872132dfb8246ed9a"
+        },
+        {
+          "start": 23773,
+          "end": 31773,
+          "sha256": "0725073e388f80fc25d58962940da862096370b632babd8e0335e755ed2a216a"
+        },
+        {
+          "start": 31773,
+          "end": 39773,
+          "sha256": "3f8b7fd0f1d84f9bd28e4d21d6a6860633db05a2ca41ba1f699f2a7ba18def12"
+        },
+        {
+          "start": 39773,
+          "end": 47773,
+          "sha256": "189471d4947421f1bb5508fe3d6db5a5cf76ba9cbc7065a715d6228202216242"
+        },
+        {
+          "start": 47773,
+          "end": 53642,
+          "sha256": "9b41b6fcad63f29d03a651d379b6c872672d14e9ad7d2887e932d1bae36fcce9"
+        }
+      ],
+      "semantic_map": {
+        "question": "How to remove lockstep edits, central game coupling and scattered domain ownership?",
+        "method_evidence": "Assigned continuation records staged moves, reference-sweep blind spots, measured carve hazards and dated deployment/test reports; no historical command rerun.",
+        "results_proposals": "Generator/manifest, ratchets and domain moves reported landed; car-draw and shadow-pass carves reported; test taxonomy, tools consolidation and remaining carves include open proposals. Backend spike-out explicitly reversed.",
+        "current_consumers": "renderer-picker header, gen-arch-table, check-gctx, vstd-lint, ratchets and tests cite plan. Current AGENTS confirms manifest, generated roster and domain structure.",
+        "cleanup_limits": "Keep as dated decision ledger; close-out checklist and direct-deploy instructions are historical, not current operating rules. Opening 7773 bytes assigned elsewhere."
+      },
+      "cited_path_tokens": [
+        ".claude/hooks/protect-worktree-files.sh:23",
+        ".claude/skills/",
+        ".claude/skills/README.md",
+        ".claude/workflows/*.js",
+        "artifacts/logs/tiny.log",
+        "docs/AGENT-SURFACE.md",
+        "docs/ARCHITECTURE.md",
+        "docs/ARCHITECTURE.md:23-29",
+        "docs/README.md",
+        "docs/TESTING.md",
+        "docs/archive/moves/phase2.json",
+        "docs/archive/moves/phase4-tools.json",
+        "docs/archive/moves/spike-backends.json",
+        "docs/notes/",
+        "docs/notes/CEILING-HISTORY.md",
+        "docs/notes/DEFECT-LEDGER.md.",
+        "docs/notes/GAME-JS-DECISIONS.md",
+        "docs/notes/TESTING-FIELD-NOTES.md",
+        "docs/research/",
+        "docs/research/APEX-TOOLS-MCP.md",
+        "docs/research/TREE-RESTRUCTURE-2026-09.md",
+        "docs/research/WEBGPU-PARITY.md",
+        "docs/tracks",
+        "js/agent/",
+        "js/agent/apex.js",
+        "js/audio/",
+        "js/camera/",
+        "js/car/",
+        "js/car/car-draw.js",
+        "js/career/",
+        "js/circuits/",
+        "js/core/",
+        "js/css",
+        "js/data/",
+        "js/fx/",
+        "js/game",
+        "js/game.js",
+        "js/game.js:77-247",
+        "js/game/",
+        "js/garage/",
+        "js/input/",
+        "js/lighting/",
+        "js/log.js\"",
+        "js/net/",
+        "js/perf/",
+        "js/physics/",
+        "js/race/",
+        "js/render/",
+        "js/render/glx/",
+        "js/render/shared/shadow-pass.js",
+        "js/render/three/",
+        "js/render/webgpu/",
+        "js/roster.js",
+        "js/track/",
+        "js/track/CLAUDE.md",
+        "js/ui/",
+        "js/zzfix/\u2026",
+        "spike/backends/",
+        "spike/backends/README.md",
+        "tests/browser/",
+        "tests/data/foundation/",
+        "tests/data/ratchets.json",
+        "tests/groups.json",
+        "tests/guards/",
+        "tests/manual/",
+        "tests/node/",
+        "tests/node/twins",
+        "tests/node/twins/",
+        "tests/specs/tlx-probes.spec.js",
+        "tests/sweeps/",
+        "tests/tools/",
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/mcp-cli.test.mjs",
+        "tests/unit/module-size.test.mjs",
+        "tests/unit/physics-baseline-present.test.mjs",
+        "tests/unit/ratchets.test.mjs",
+        "tests/unit/tests-split.test.mjs",
+        "tests/unit/{agent-surface",
+        "tests/unit/{webgpu-lifecycle",
+        "tests/{guards",
+        "tools/README.md",
+        "tools/apex-tools-mcp.{mjs",
+        "tools/carview.html:61-79",
+        "tools/check/offline-precache-check.cjs",
+        "tools/check/ratchets.mjs",
+        "tools/ci/deploy.mjs",
+        "tools/ci/tooling-fast.mjs",
+        "tools/ci/twinned-specs.mjs",
+        "tools/ci/verify-change.mjs",
+        "tools/gen/gen-shell.mjs",
+        "tools/gfx/wgx-shot.mjs",
+        "tools/lib/game-vm.cjs",
+        "tools/lighting/look-survey-sheet.py",
+        "tools/manifest.cjs",
+        "tools/moves/",
+        "tools/tests-split.mjs",
+        "tools/{lib",
+        "vendor/three-0.185.1/"
+      ]
+    },
+    {
+      "path": "docs/research/TYRE-STRATEGY-DESIGN.md",
+      "start": 0,
+      "end": 42957,
+      "kind": "text",
+      "sha256": "2fd30886c4390f2c59f0a32902743cb8d6d130f0e6f3bc9c397c1f31d2d01085",
+      "actual_whole_file_bytes": 42957,
+      "actual_whole_file_sha256": "2fd30886c4390f2c59f0a32902743cb8d6d130f0e6f3bc9c397c1f31d2d01085",
+      "plan_sha256_scope": "whole file, not assigned part or read chunk",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2fd30886c4390f2c59f0a32902743cb8d6d130f0e6f3bc9c397c1f31d2d01085",
+      "read_method": "Each <=8000-byte half-open slice individually returned by exec_command Python read_bytes/decode; no slice output truncated; all 23 slices fully read.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "ff680fba607df6807483d847d23ba2e037f0e2b4796eda114decf887470f444c"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "4d1330a739b720ca0ce4d36782441065aa335663bbc05bcdcf7eb17b092a4c69"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "sha256": "ef69b2089f2bfac3fb717d8cea92e9765f969ab61ecd2653c58cb7fb67e1a23e"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "sha256": "6fb730d2a3a01160fa4ee62d95a0be865be9197e0417f607bc098b53fbb915c6"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "sha256": "ed1b2829e18647027224ce334eb354bc360ba8f98c2168fc1e32178f7369b4a0"
+        },
+        {
+          "start": 40000,
+          "end": 42957,
+          "sha256": "bcba2b270088650784195bb8f7b43ce29405ad7c06ffdecd897aa5fdaebbe9eb"
+        }
+      ],
+      "semantic_map": {
+        "question": "How can tyre wear, thermal state and pit strategy matter at short race distances?",
+        "method_evidence": "Inline regulatory/press/game/strategy research, equations and constraints; reported failed lateral pit prototypes, measured pit loss and thermal calibration; source header and LSP corroboration.",
+        "results_proposals": "Normalise life to scheduled race; integrate measured forces without curvature; fuel counterweight, catalog life/ownership, deterministic AI, thermal layers. Header says shipped; historical OFF recommendation and abstract lane state are superseded by current source.",
+        "current_consumers": "tyre-model, pit-lane, ai-drive, game, authored circuit severity and tyre tests cite sections. LSP reports 98 TyreModel references in 15 JS files.",
+        "cleanup_limits": "Refresh default to real and pit geometry evolution; phase order not fully audited. External numerical sources remain unverified and retain stated FIA extraction/aggregator/Monaco uncertainty."
+      },
+      "cited_path_tokens": [
+        "docs/PHYSICS.md",
+        "docs/notes/TYRE-SEVERITY-AUTHORING-2026-09-30.md",
+        "js/car/parts.js",
+        "js/circuits/",
+        "js/data/telemetry.js",
+        "js/game.js",
+        "js/physics/ai-drive.js",
+        "js/physics/consts.js",
+        "js/physics/tyre-model.js",
+        "js/race/pit-lane.js",
+        "js/race/race-control.js",
+        "js/race/race-settings.js",
+        "js/race/reliability.js",
+        "js/track/tracks.js",
+        "js/ui/hud-tyres.js",
+        "tests/data/ratchets.json",
+        "tests/specs/physics-characterization.spec.js",
+        "tests/specs/tyre-wear.spec.js",
+        "tests/unit/parts-ladder.test.mjs",
+        "tests/unit/tyre-model.test.mjs",
+        "tools/car/parts-ladder.mjs",
+        "tools/check/ai-race.mjs",
+        "tools/check/vstd-lint.mjs",
+        "tools/ci/test-bg.mjs",
+        "tools/gen/gen-shell.mjs",
+        "tools/manifest.cjs",
+        "tools/track/verify-track.cjs"
+      ]
+    },
+    {
+      "path": "docs/research/UI-DESIGN-PRINCIPLES.md",
+      "start": 0,
+      "end": 5985,
+      "kind": "text",
+      "sha256": "36ccf2b89cad43b662a28a5864900c09250f6e5ec1229e13272ef9b67cd1063b",
+      "actual_whole_file_bytes": 5985,
+      "actual_whole_file_sha256": "36ccf2b89cad43b662a28a5864900c09250f6e5ec1229e13272ef9b67cd1063b",
+      "plan_sha256_scope": "whole file, not assigned part or read chunk",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "36ccf2b89cad43b662a28a5864900c09250f6e5ec1229e13272ef9b67cd1063b",
+      "read_method": "Each <=8000-byte half-open slice individually returned by exec_command Python read_bytes/decode; no slice output truncated; all 23 slices fully read.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5985,
+          "sha256": "36ccf2b89cad43b662a28a5864900c09250f6e5ec1229e13272ef9b67cd1063b"
+        }
+      ],
+      "semantic_map": {
+        "question": "Which phone-first sizing and component-sharing rules should govern type and primitive consolidation?",
+        "method_evidence": "Two cited design articles, platform analogy and existing component governance audit.",
+        "results_proposals": "Size smallest type for landscape phone viewing; shared primitives require three screens and future usefulness; slots/composition; local exceptions; container sheet governs local layout.",
+        "current_consumers": "tokens.css phone readability rationale and css-token-adoption unit test cite it.",
+        "cleanup_limits": "Preserve rationale; component collapse and no-new-family goals are design constraints, not proof of current completion."
+      },
+      "cited_path_tokens": [
+        "docs/COMPONENTS.md",
+        "docs/README.md]",
+        "tests/unit/component-inventory.test.mjs"
+      ]
+    },
+    {
+      "path": "docs/research/UI-REDESIGN-2026-08-18.md",
+      "start": 0,
+      "end": 16599,
+      "kind": "text",
+      "sha256": "c7e1487189dda2ef68eebc8d43f94b14bdfec216bad8cf3f6ec91a4f7466fd7c",
+      "actual_whole_file_bytes": 16599,
+      "actual_whole_file_sha256": "c7e1487189dda2ef68eebc8d43f94b14bdfec216bad8cf3f6ec91a4f7466fd7c",
+      "plan_sha256_scope": "whole file, not assigned part or read chunk",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c7e1487189dda2ef68eebc8d43f94b14bdfec216bad8cf3f6ec91a4f7466fd7c",
+      "read_method": "Each <=8000-byte half-open slice individually returned by exec_command Python read_bytes/decode; no slice output truncated; all 23 slices fully read.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "f299ccadaafb724154acd8c8a6baf70dfd9c0067b587562b5e7921cad6e79e9e"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "e0ce6d93298288535ee5716f003c5c6f51fbb9dba8665fee243adbf6e648a5f5"
+        },
+        {
+          "start": 16000,
+          "end": 16599,
+          "sha256": "2f55db2b29f785e8bdbb644ece5ff48a34a0c18b66e7a2978afda26f96b6c8c8"
+        }
+      ],
+      "semantic_map": {
+        "question": "How to preserve useful content and navigation in short/zoomed catalogue and task screens?",
+        "method_evidence": "Reported 410-cell baseline, specific scroller dimensions, standards-derived targets and screen/viewport/scale/input matrix.",
+        "results_proposals": "One dominant work scroller, rail/strip/stack navigation, local density, proper tabs/focus and pinned actions. Rollout 1-5 marked done; final matrix unmarked.",
+        "current_consumers": "ui-journey-career test cites step 4; LSP resolves SheetShape in current ui/sheet-shape.js.",
+        "cleanup_limits": "Do not equate dated done labels to present visual acceptance; final matrix and cache-bump instruction require current workflow reconciliation."
+      },
+      "cited_path_tokens": [
+        "docs/Web/CSS/Guides/Containment/Container_queries",
+        "docs/Web/CSS/Reference/Properties/zoom"
+      ]
+    },
+    {
+      "path": "docs/research/UPSCALING-2026-09.md",
+      "start": 0,
+      "end": 16594,
+      "kind": "text",
+      "sha256": "13f65cbcb733720da1150b1bc15ac2ddcc213fb72728f4b90f075d41b1dc6428",
+      "actual_whole_file_bytes": 16594,
+      "actual_whole_file_sha256": "13f65cbcb733720da1150b1bc15ac2ddcc213fb72728f4b90f075d41b1dc6428",
+      "plan_sha256_scope": "whole file, not assigned part or read chunk",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "13f65cbcb733720da1150b1bc15ac2ddcc213fb72728f4b90f075d41b1dc6428",
+      "read_method": "Each <=8000-byte half-open slice individually returned by exec_command Python read_bytes/decode; no slice output truncated; all 23 slices fully read.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "f055b489bd2a53259fe1967f3114a7afb5ee95060a8114e0026109ec2b1ac2ba"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "ffcaf5bb30e5466b4a80aa4bb3270a72a23b497d71ee82306e6cf933d6f58187"
+        },
+        {
+          "start": 16000,
+          "end": 16594,
+          "sha256": "f5d60cf283d8cf80f8cfdd15ab5cdb8fc8d28d088218bf42aed436cb40b0928a"
+        }
+      ],
+      "semantic_map": {
+        "question": "Can spatial reconstruction improve reduced-resolution 3D without hurting phone frame budget?",
+        "method_evidence": "Backend source survey, cited FSR/SGSR mobile costs and API constraints, followed by recorded cross-backend spike and macOS soft-present A/B.",
+        "results_proposals": "Shared one-pass SGSR1 with render/present size split, flag OFF and scale gate; gather fast path WGX; temporal/frame generation rejected for scope/latency. Reported same 79.3 luma/~60 fps Metal does not establish headed sharpness.",
+        "current_consumers": "scale/settings-export, apex/agentview, gfx, GLX post/shader/resize, WGX post/resize and TLX resize cite it. Scale source retains raw flag OFF.",
+        "cleanup_limits": "Keep hardware/headed visual A/B prerequisite and separate gross from net cost; historic GLX-default assertion superseded by current Gfx TLX default."
+      },
+      "cited_path_tokens": [
+        "docs/FidelityFX-FSR-Overview-Integration.pdf",
+        "docs/archive/tools/gfx/soft-present-bench.mjs",
+        "js/39326",
+        "js/perf/governor.js",
+        "js/render/glx/glx.js",
+        "js/render/glx/post.js",
+        "js/render/glx/{glx",
+        "js/render/three/tlx.js",
+        "js/render/three/{tlx",
+        "js/render/webgpu/wgsl-post.js",
+        "js/render/webgpu/wgx.js",
+        "js/ui/scale.js"
+      ]
+    },
+    {
+      "path": "docs/research/WEBGPU-PARITY.md",
+      "start": 0,
+      "end": 31996,
+      "kind": "text",
+      "sha256": "ba60c6f35a579debb165ce7c847ab3ae7dac6a05aefb00ef6b4bf9d28d700236",
+      "actual_whole_file_bytes": 61689,
+      "actual_whole_file_sha256": "ba60c6f35a579debb165ce7c847ab3ae7dac6a05aefb00ef6b4bf9d28d700236",
+      "plan_sha256_scope": "whole file, not assigned part or read chunk",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "900c7fa99fd3836c717e4c5c35b6804ad451d00db37d9d96bd237ff42812e65a",
+      "read_method": "Each <=8000-byte half-open slice individually returned by exec_command Python read_bytes/decode; no slice output truncated; all 23 slices fully read.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "800e105b620754797ef357203c8da171ec5573c4155000b8875ccbd48a4ca6c5"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "bf0b9de0ffcb2d6ce48ded62c9b8e3d1e87d9c534dffa95063b5c9af2006748c"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "sha256": "3386e8bd894b2715a6e0c4ff9d8c78abcc9129a0276adfffafedd3360c55d2a0"
+        },
+        {
+          "start": 24000,
+          "end": 31996,
+          "sha256": "baadb7da2503f34ec748aa55ec0ce1320a56a6d30643785c1044d1b4a1ff1ffb"
+        }
+      ],
+      "semantic_map": {
+        "question": "Which GLX/WGX look/API gaps are portable and how can live evidence expose mock-only blind spots?",
+        "method_evidence": "Assigned opening inventory, API recipes, dated source audit and reported first real device/software readback failures; not current runtime validation.",
+        "results_proposals": "Most inventory marked implemented; explicit backend surface parity; timestamp feature gate, mip generation, material arrays, PCSS/godray/lamp/shadow/MSAA/instancing recipes. Remaining flag/foliage attribute gap and TAA-off caveats.",
+        "current_consumers": "WGX and shader headers, GLX shader comment, TLX depth comment, renderer-debug reference and render-wgx rule cite it. LSP resolves WGX current declaration/export.",
+        "cleanup_limits": "Only first 31996 bytes read, ending mid section 4.9; recipes preserve pre-port states and upload sample conflicts with later raw-byte correction in opening. Current TLX default supersedes GLX-default prose. No visual claims verified."
+      },
+      "cited_path_tokens": [
+        "docs/ARCHITECTURE.md",
+        "docs/Web/API/GPUCommandEncoder/beginRenderPass",
+        "docs/archive/ATTIC.md",
+        "docs/archive/webgpu/",
+        "js/render/glx/",
+        "js/render/glx/glx.js",
+        "js/render/glx/post.js",
+        "js/render/glx/shaders/glsl-fx.js",
+        "js/render/glx/shaders/glsl-lit.js",
+        "js/render/glx/shaders/glsl-lit.js:",
+        "js/render/shaders/",
+        "js/render/shared/assets.js",
+        "js/render/webgpu/wgx.js",
+        "tests/unit/backend-surface-parity.test.mjs",
+        "tests/unit/light-grid.test.mjs",
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tools/gfx/gfx-probe.mjs",
+        "tools/gfx/wgx-capture.mjs",
+        "tools/mcp/mcp-cli.mjs"
+      ]
+    }
+  ],
+  "binary_files": [],
+  "static_reference_evidence": [
+    {
+      "path": "js/game.js",
+      "line": 1570,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// The fitted catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md"
+    },
+    {
+      "path": "js/agent/agentview.js",
+      "line": 1906,
+      "document": "UPSCALING-2026-09",
+      "text": "+ \"AND renderScale<~1; see UPSCALING-2026-09 \u00a76\u20137\","
+    },
+    {
+      "path": "js/agent/apex.js",
+      "line": 1657,
+      "document": "UPSCALING-2026-09",
+      "text": "// spatialUpscale(v?) \u2014 GLX + WGX + TLX SGSR1 (docs/research/UPSCALING-2026-09.md \u00a76\u20137)."
+    },
+    {
+      "path": "js/circuits/albert_park.js",
+      "line": 21,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// mean of the seven measured circuits \u2014 docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.5."
+    },
+    {
+      "path": "js/circuits/miami.js",
+      "line": 26,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// mean of the seven measured circuits \u2014 docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.5."
+    },
+    {
+      "path": "js/circuits/monaco.js",
+      "line": 17,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// mean of the seven measured circuits \u2014 docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.5."
+    },
+    {
+      "path": "js/circuits/redbull.js",
+      "line": 30,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// mean of the seven measured circuits \u2014 docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.5."
+    },
+    {
+      "path": "js/circuits/shanghai.js",
+      "line": 21,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// mean of the seven measured circuits \u2014 docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.5."
+    },
+    {
+      "path": "js/circuits/silverstone.js",
+      "line": 44,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// mean of the seven measured circuits \u2014 docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.5."
+    },
+    {
+      "path": "js/circuits/suzuka.js",
+      "line": 30,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// mean of the seven measured circuits \u2014 docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.5."
+    },
+    {
+      "path": "js/perf/renderer-picker.js",
+      "line": 3,
+      "document": "TREE-RESTRUCTURE-2026-09",
+      "text": "Split out of js/perf/quality-preset.js (Phase 2a of docs/research/TREE-RESTRUCTURE-2026-09.md): that file is the GRAPHICS quality PRESET model and button; this one is which backend boots. Same load-order stance \u2014 every global read (GLX, PerfGov, GameAudio, __apex) is resolved at CALL time, never at eval, so the file has no HARD_EDGES pair and can sit anywhere in the shell. */"
+    },
+    {
+      "path": "js/physics/ai-drive.js",
+      "line": 1237,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// (docs/research/TYRE-STRATEGY-DESIGN.md \u00a72.8). We do not need a solver: with"
+    },
+    {
+      "path": "js/physics/ai-drive.js",
+      "line": 1469,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// their value was measured (docs/research/TYRE-STRATEGY-DESIGN.md \u00a72.7, \u00a72.9)."
+    },
+    {
+      "path": "js/physics/tyre-model.js",
+      "line": 21,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "* docs/research/TYRE-STRATEGY-DESIGN.md."
+    },
+    {
+      "path": "js/physics/tyre-model.js",
+      "line": 27,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "* tyres and corners do not (docs/research/TYRE-STRATEGY-DESIGN.md \u00a72.4)."
+    },
+    {
+      "path": "js/physics/tyre-model.js",
+      "line": 317,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// around (docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.4)."
+    },
+    {
+      "path": "js/physics/tyre-model.js",
+      "line": 359,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// (docs/research/TYRE-STRATEGY-DESIGN.md \u00a72.2): GRAINING is SURFACE damage"
+    },
+    {
+      "path": "js/physics/tyre-model.js",
+      "line": 515,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// term the crossing does not exist (docs/research/TYRE-STRATEGY-DESIGN.md \u00a72.5)."
+    },
+    {
+      "path": "js/physics/tyre-model.js",
+      "line": 664,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// The catalog row IS the compound (docs/research/TYRE-STRATEGY-DESIGN.md \u00a76):"
+    },
+    {
+      "path": "js/race/pit-lane.js",
+      "line": 9,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "* (docs/research/TYRE-STRATEGY-DESIGN.md \u00a72.6, \u00a72.8). A hardcoded penalty"
+    },
+    {
+      "path": "js/race/pit-lane.js",
+      "line": 15,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "* by preference. docs/research/TYRE-STRATEGY-DESIGN.md \u00a75.2 proposed a real"
+    },
+    {
+      "path": "js/render/gfx.js",
+      "line": 41,
+      "document": "UPSCALING-2026-09",
+      "text": "*     upscale (opt-in; feature-detect). See docs/research/UPSCALING-2026-09.md."
+    },
+    {
+      "path": "js/ui/scale.js",
+      "line": 236,
+      "document": "UPSCALING-2026-09",
+      "text": "// (docs/research/UPSCALING-2026-09.md \u00a76\u20137). Same raw key GLX already"
+    },
+    {
+      "path": "js/ui/settings-export.js",
+      "line": 119,
+      "document": "UPSCALING-2026-09",
+      "text": "{ k: \"spatialUpscale\", lane: \"raw\", group: \"display\", def: \"0\", src: \"js/ui/scale.js + GLX/WGX/TLX SGSR (UPSCALING-2026-09 \u00a76\u20137; OFF by default)\" },"
+    },
+    {
+      "path": "js/render/glx/glx.js",
+      "line": 988,
+      "document": "UPSCALING-2026-09",
+      "text": "// (css\u00d7dpr) and SGSR1 reconstructs the missing pixels (UPSCALING-2026-09 \u00a76)."
+    },
+    {
+      "path": "js/render/glx/post.js",
+      "line": 6,
+      "document": "UPSCALING-2026-09",
+      "text": "* upscale (flag OFF by default \u2014 UPSCALING-2026-09 \u00a76), and the procedural"
+    },
+    {
+      "path": "js/render/glx/post.js",
+      "line": 861,
+      "document": "UPSCALING-2026-09",
+      "text": "//    that LDR (or FXAA's aaTex) to present size \u2014 UPSCALING-2026-09 \u00a76."
+    },
+    {
+      "path": "js/render/three/tlx.js",
+      "line": 1168,
+      "document": "UPSCALING-2026-09",
+      "text": "// and scene/post RTs stay at W\u00d7H \u2014 SGSR reconstructs (UPSCALING-2026-09 \u00a77)."
+    },
+    {
+      "path": "js/render/three/tlx.js",
+      "line": 1388,
+      "document": "WEBGPU-PARITY",
+      "text": "// cannot resolve a depth attachment (docs/research/WEBGPU-PARITY.md)."
+    },
+    {
+      "path": "js/render/webgpu/wgsl-chunks.js",
+      "line": 5,
+      "document": "WEBGPU-PARITY",
+      "text": "* vec3<f32>, @builtin(vertex_index). See docs/research/WEBGPU-PARITY.md."
+    },
+    {
+      "path": "js/render/webgpu/wgsl-post.js",
+      "line": 908,
+      "document": "UPSCALING-2026-09",
+      "text": "//    aaTex at render size when SGSR1 spatial upscale follows (UPSCALING-2026-09 \u00a76)."
+    },
+    {
+      "path": "js/render/webgpu/wgsl-post.js",
+      "line": 1009,
+      "document": "UPSCALING-2026-09",
+      "text": "//    (render) size. See docs/research/UPSCALING-2026-09.md \u00a76\u20137."
+    },
+    {
+      "path": "js/render/webgpu/wgx.js",
+      "line": 5,
+      "document": "WEBGPU-PARITY",
+      "text": "* of create(). Full parity matrix, traps, soft-present: docs/research/WEBGPU-PARITY.md."
+    },
+    {
+      "path": "js/render/webgpu/wgx.js",
+      "line": 919,
+      "document": "UPSCALING-2026-09",
+      "text": "// is FULL present size and SGSR1 reconstructs (UPSCALING-2026-09 \u00a76\u20137)."
+    },
+    {
+      "path": "js/render/glx/shaders/glsl-lit.js",
+      "line": 90,
+      "document": "WEBGPU-PARITY",
+      "text": "// has no per-vertex mat attribute (docs/research/WEBGPU-PARITY.md)."
+    },
+    {
+      "path": "js/render/glx/shaders/glsl-post.js",
+      "line": 1439,
+      "document": "UPSCALING-2026-09",
+      "text": "// textureLod taps. See docs/research/UPSCALING-2026-09.md \u00a76."
+    },
+    {
+      "path": "css/tokens.css",
+      "line": 423,
+      "document": "UI-DESIGN-PRINCIPLES",
+      "text": "first rule in docs/research/UI-DESIGN-PRINCIPLES.md says the smallest rung"
+    },
+    {
+      "path": "tools/check/check-gctx.mjs",
+      "line": 88,
+      "document": "TREE-RESTRUCTURE-2026-09",
+      "text": "// (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2 \u2014 tools rewritten before the move.)"
+    },
+    {
+      "path": "tools/check/ratchets.mjs",
+      "line": 23,
+      "document": "TREE-RESTRUCTURE-2026-09",
+      "text": "// docs/research/TREE-RESTRUCTURE-2026-09.md). The idiom is unchanged \u2014 a number"
+    },
+    {
+      "path": "tools/check/vstd-lint.mjs",
+      "line": 63,
+      "document": "TREE-RESTRUCTURE-2026-09",
+      "text": "// (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2 \u2014 tools rewritten before the move.)"
+    },
+    {
+      "path": "tools/gen/gen-arch-table.mjs",
+      "line": 19,
+      "document": "TREE-RESTRUCTURE-2026-09",
+      "text": "* (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2 \u2014 regenerated per"
+    },
+    {
+      "path": "tests/specs/pit-lane.spec.js",
+      "line": 23,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// built and is recorded in docs/research/TYRE-STRATEGY-DESIGN.md. What this"
+    },
+    {
+      "path": "tests/unit/css-token-adoption.test.mjs",
+      "line": 12,
+      "document": "UI-DESIGN-PRINCIPLES",
+      "text": "* That floor is not a preference. docs/research/UI-DESIGN-PRINCIPLES.md derives"
+    },
+    {
+      "path": "tests/unit/docs-integrity.test.mjs",
+      "line": 941,
+      "document": "WEBGPU-PARITY",
+      "text": "// written relative to docs/ \u2014 `research/WEBGPU-PARITY.md`, `../AGENTS.md`,"
+    },
+    {
+      "path": "tests/unit/gen-arch-table.test.mjs",
+      "line": 13,
+      "document": "TREE-RESTRUCTURE-2026-09",
+      "text": "* (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2 \u2014 the generator this"
+    },
+    {
+      "path": "tests/unit/gfx-backend-canary.test.mjs",
+      "line": 5864,
+      "document": "UPSCALING-2026-09",
+      "text": "// linked program). See docs/research/UPSCALING-2026-09.md \u00a76."
+    },
+    {
+      "path": "tests/unit/pick-tests.test.mjs",
+      "line": 180,
+      "document": "TREE-RESTRUCTURE-2026-09",
+      "text": "// (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2). A file that moves out"
+    },
+    {
+      "path": "tests/unit/tyre-model.test.mjs",
+      "line": 13,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "*     this game offers (docs/research/TYRE-STRATEGY-DESIGN.md \u00a74). Every"
+    },
+    {
+      "path": "tests/unit/tyre-model.test.mjs",
+      "line": 427,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// trade in it (docs/research/TYRE-STRATEGY-DESIGN.md \u00a72.8)."
+    },
+    {
+      "path": "tests/unit/tyre-model.test.mjs",
+      "line": 915,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "// 2026 anchors from TYRE-STRATEGY-DESIGN \u00a75.5."
+    },
+    {
+      "path": "tests/unit/ui-journey-career.test.mjs",
+      "line": 3,
+      "document": "UI-REDESIGN-2026-08-18",
+      "text": "* Step 4 of docs/research/UI-REDESIGN-2026-08-18.md: #career-offers,"
+    },
+    {
+      "path": ".claude/rules/render-wgx.md",
+      "line": 24,
+      "document": "WEBGPU-PARITY",
+      "text": "refuse silently and fall back (`docs/research/WEBGPU-PARITY.md` \u00a75a):"
+    },
+    {
+      "path": ".claude/skills/race-weekend/SKILL.md",
+      "line": 25,
+      "document": "TYRE-STRATEGY-DESIGN",
+      "text": "Design evidence: `docs/research/TYRE-STRATEGY-DESIGN.md`, `docs/research/PIT-*.md`."
+    },
+    {
+      "path": ".claude/skills/renderer-debug/references/wgx.md",
+      "line": 75,
+      "document": "WEBGPU-PARITY",
+      "text": "`docs/research/WEBGPU-PARITY.md` \u2014 Gfx fa\u00e7ade \u00d7 3 backends."
+    }
+  ],
+  "lsp_evidence": [
+    {
+      "query": "TyreModel",
+      "definition": "js/physics/tyre-model.js:29",
+      "references": "98 in 15 files; pit-lane 26, wheel-state 15, player-forces 14, game 9, forecast 6, real-race 5, weather-arc 5, car-draw 4, engineer 3, lobby-settings/grip-steer/model/race-control/race-settings 2 each, apex 1"
+    },
+    {
+      "query": "PitLane",
+      "definitions": [
+        "js/race/pit-lane.js:61",
+        "js/race/session-stub.js:54"
+      ]
+    },
+    {
+      "query": "SheetShape",
+      "definition": "js/ui/sheet-shape.js:36"
+    },
+    {
+      "query": "WGX",
+      "definition": "js/render/webgpu/wgx.js:11",
+      "export": "js/render/webgpu/wgx.js:6085"
+    },
+    {
+      "query": "Gfx",
+      "definition": "js/render/gfx.js:217",
+      "export": "js/render/gfx.js:318"
+    },
+    {
+      "query": "__apex.spatialUpscale",
+      "result": "INVALID_ARGUMENT: window.__apex at game.js:79 has no member; dynamic attachment not established by this query"
+    }
+  ],
+  "current_source_reads": {
+    "js/race/pit-lane.js": [
+      1,
+      65
+    ],
+    "js/physics/tyre-model.js": [
+      1,
+      48
+    ],
+    "js/ui/scale.js": [
+      215,
+      250
+    ],
+    "js/render/gfx.js": [
+      217,
+      245
+    ],
+    "css/tokens.css": [
+      414,
+      440
+    ]
+  },
+  "limits": [
+    "No research command, tests, browser, network, runtime, staging or commit executed.",
+    "Only mapped docs written; source not edited.",
+    "Historic reports not rerun; citations do not prove execution; no image inspected or visual result independently verified.",
+    "Whole-file hashes for split files bind provenance only; semantic coverage limited to assigned ranges.",
+    "Initial support read combining code-nav skill and example evidence was truncated after skill; example evidence not used as complete coverage."
+  ]
+}

@@ -1,0 +1,364 @@
+{
+  "group": "23",
+  "assigned_bytes": 160000,
+  "read_bytes": 160000,
+  "read_method": "25 individually returned byte slices, at most 8000 bytes each; all untruncated. UTF-8 boundaries may split a character; byte hashes preserve exact coverage. Initial combined plan/instruction read clipped and was not counted; AGENTS was reread alone and plan parsed separately.",
+  "current_instructions_read": [
+    "AGENTS.md"
+  ],
+  "historical_instructions": "data only",
+  "verification": "Static read and metadata/backlink inspection only; no tests, browser, network or runtime.",
+  "backlink_scope": "rg fixed basename outside archived tree and project-map; exact basename only, so aliases and omitted/renamed titles are not exhaustively detected.",
+  "sources": [
+    {
+      "source_id": 1,
+      "path": "docs/archive/research/TOTAL-AUDIT-2026-08.md",
+      "start": 50088,
+      "end": 73108,
+      "kind": "text",
+      "sha256": "e4b6bf6ef5198c13200ba336decaf1d8f43fce89c5d19986818065222f571950",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 73108,
+      "observed_whole_file_sha256": "e4b6bf6ef5198c13200ba336decaf1d8f43fce89c5d19986818065222f571950",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "7061ebe3e8f6372adfe0f78bef567dcd3556f2404ed55e61b28f500c121487ae",
+      "complete_file_read": false,
+      "read_chunks": [
+        {
+          "start": 50088,
+          "end": 58088,
+          "bytes": 8000,
+          "sha256": "9989ba06ef91e34763ede92b4df66a93e24419a00a95ad6ade1d95c3ea80dda9",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 58088,
+          "end": 66088,
+          "bytes": 8000,
+          "sha256": "20da292ff29c19162bea962446aa02edb8f0fd6d8db13a9c116b1b3d2b1cba99",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 66088,
+          "end": 73108,
+          "bytes": 7020,
+          "sha256": "df03d913f93bf4c39d6452823de7f28c4599ed888074d78f1161cd2f7dda7db3",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "TOTAL-AUDIT-2026-08.md"
+      ],
+      "live_backlinks": [
+        "./docs/notes/system-audit-4/anchors.md:28:| docs/archive/research/TOTAL-AUDIT-2026-08.md | 259 | 408 |"
+      ]
+    },
+    {
+      "source_id": 2,
+      "path": "docs/archive/research/UI-CSS-RESEARCH-2026-08.md",
+      "start": 0,
+      "end": 19713,
+      "kind": "text",
+      "sha256": "bff3caef354c65597e8953f48a5122207a83720bf609ca73cc0640051bcc3c51",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 19713,
+      "observed_whole_file_sha256": "bff3caef354c65597e8953f48a5122207a83720bf609ca73cc0640051bcc3c51",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "bff3caef354c65597e8953f48a5122207a83720bf609ca73cc0640051bcc3c51",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "462a8a16c7e0a358e95f6f4e39a74ad3cb2f08c3443a3523cdd128aed4fa8f16",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "f7fa412aab6a940ab18a451ad67d854333a8bb00832bc2dfa47889a33d24311d",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 19713,
+          "bytes": 3713,
+          "sha256": "f222ad7051bc9676a4092c7f0c4b366a3d86e8181f14e695c1cf54c3339a30c6",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "UI-CSS-RESEARCH-2026-08.md"
+      ],
+      "live_backlinks": []
+    },
+    {
+      "source_id": 3,
+      "path": "docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md",
+      "start": 0,
+      "end": 9513,
+      "kind": "text",
+      "sha256": "2427fede461956b9d7d38ebe5ff2c7dc688322a48705fe34e7ca7beadddc7ef1",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 9513,
+      "observed_whole_file_sha256": "2427fede461956b9d7d38ebe5ff2c7dc688322a48705fe34e7ca7beadddc7ef1",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2427fede461956b9d7d38ebe5ff2c7dc688322a48705fe34e7ca7beadddc7ef1",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "b55d17b26e6154a0c07ccf5f20139a52a6ea503c25b008bd8f8ec4fbe14005e4",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 9513,
+          "bytes": 1513,
+          "sha256": "e86f9b8e4a8f86a92a3c0738b3bbf9e4832135564cb987e933ce882e14ba5bac",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "UI-LAYOUT-CRITIQUE-2026-08.md"
+      ],
+      "live_backlinks": [
+        "./docs/research/PAUSE-SETTINGS-IA.md:11:(`docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md`). Three peer tabs"
+      ]
+    },
+    {
+      "source_id": 4,
+      "path": "docs/archive/research/UI-LAYOUT-RESEARCH.md",
+      "start": 0,
+      "end": 35203,
+      "kind": "text",
+      "sha256": "50eb9af840e555fd790838d1c35b6727057d2f38306a4de898035575425832fb",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 35203,
+      "observed_whole_file_sha256": "50eb9af840e555fd790838d1c35b6727057d2f38306a4de898035575425832fb",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "50eb9af840e555fd790838d1c35b6727057d2f38306a4de898035575425832fb",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "05c3e2a5face436be15d9d1aa33b9efe4b72c2c69110f1f6ce15f832fd329334",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "6bbcd6edf7017e49ec63c488cc35f33666569feaa5afb12aab461ddba188f17f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "799dba9ce822e5c35400d59bc838622107325d0efd3a1ccb1b38672c8c0fac77",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "129e1aa8ceeec4ed3a3a40773645d2d83fdc264f25694729d23948ebe2ebd431",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 35203,
+          "bytes": 3203,
+          "sha256": "82f0f3f42aaf29d5877dcdc4212fc24f131353313fe5e273718583c0f02c2900",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "UI-LAYOUT-RESEARCH.md"
+      ],
+      "live_backlinks": [
+        "./css/touch-controls.css:375:     height it had. Measured after: see the table in docs/archive/research/UI-LAYOUT-RESEARCH.md. */",
+        "./css/hud.css:2010:   Used sparingly and only here, per the note in docs/archive/research/UI-LAYOUT-RESEARCH.md"
+      ]
+    },
+    {
+      "source_id": 5,
+      "path": "docs/archive/research/UI-REDESIGN-2026-08.md",
+      "start": 0,
+      "end": 24127,
+      "kind": "text",
+      "sha256": "1467b7f123acac128154132e4dd3cad5e6826f7be84b7706cb8da5d2ed788c3a",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 24127,
+      "observed_whole_file_sha256": "1467b7f123acac128154132e4dd3cad5e6826f7be84b7706cb8da5d2ed788c3a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "1467b7f123acac128154132e4dd3cad5e6826f7be84b7706cb8da5d2ed788c3a",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "7ce49a0a4c4a543ecea3f6af1345bb0ba4ab34a9f42bd1b23a1a077679d876b7",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "7849406304c213c41c59055530f6f15084018ad869e464f82910c9d356b644b1",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "73fd9af4318233994e20494651e7c273c76f8192b3810921eeae922689b54700",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 24127,
+          "bytes": 127,
+          "sha256": "4d83e9def279de3701379b464f09a2f39c2684602af957c9b894884157a4d2df",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "UI-REDESIGN-2026-08.md"
+      ],
+      "live_backlinks": []
+    },
+    {
+      "source_id": 6,
+      "path": "docs/archive/research/UI-REMODEL-DECISION-2026-08.md",
+      "start": 0,
+      "end": 8571,
+      "kind": "text",
+      "sha256": "c34eeff7d51eda89b95e4319e5928142d7b9a5c4437e20bdde889824aea27be9",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 8571,
+      "observed_whole_file_sha256": "c34eeff7d51eda89b95e4319e5928142d7b9a5c4437e20bdde889824aea27be9",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c34eeff7d51eda89b95e4319e5928142d7b9a5c4437e20bdde889824aea27be9",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "d26eda29b332b53551bcda4bd3336d402aaf798f9b95c3315f4f6e0a5e99fd54",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 8571,
+          "bytes": 571,
+          "sha256": "0f75c4fac4af726b844c2f0b75010904866c0cfae15acd34dc06640aeb9f8b2a",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "UI-REMODEL-DECISION-2026-08.md"
+      ],
+      "live_backlinks": [
+        "./docs/research/STRUCTURE-REDECISION-2026-08.md:79:**Execution debt, formally recorded:** the rule-11 distinct-class ratchet prescribed by UI-REMODEL-DECISION-2026-08.md (\"start at 538\") was **never installed** \u2014 no test carries a ceiling \u2014 and the count crept 538\u2192543 in five days. This is non-execution of the upheld ruling, not evidence against it. **Authorized now (this session's continuation, in-place work):** install the class-count ratchet test in the module-size idiom, seeded at the current count; then the six one-surface-cluster collapses. Ordered *behind* the zoom/data-density migration per ZOOM-ORIENTATION-STRUCTURE-2026-08.md's 4-step sequence where they touch the same surfaces.",
+        "./docs/research/STRUCTURE-REDECISION-2026-08.md:96:- **`docs/archive/research/UI-REMODEL-DECISION-2026-08.md`:** annotate that \"38 screens\" was the matrix's row count (sub-states/tabs), source truth being 20 screens / 25 layers \u2014 the survey's verdict stands on the corrected count; and annotate that its prescribed rule-11 class-count ratchet was not installed and the count crept 538\u2192543 before this record ordered installation."
+      ]
+    },
+    {
+      "source_id": 7,
+      "path": "docs/archive/research/UI-SCALE-AND-ZOOM.md",
+      "start": 0,
+      "end": 17483,
+      "kind": "text",
+      "sha256": "5b291ee331f129a6816a48123c6697868b355a7f387a6a6809c3ddf469c8aabe",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 17483,
+      "observed_whole_file_sha256": "5b291ee331f129a6816a48123c6697868b355a7f387a6a6809c3ddf469c8aabe",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "5b291ee331f129a6816a48123c6697868b355a7f387a6a6809c3ddf469c8aabe",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "1de44ecf6a93f72c681d26005958e7d191ddd3fae21a9d6230336354c229a8dd",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "4b5e3b1037974aa200ba5d46a5a779a82949c24ed3acc1a971a390db5d02a823",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 17483,
+          "bytes": 1483,
+          "sha256": "f0cce1c4f9fb4421bd984bcd89e2fe1fbde418a8387945597dc130bb3c5608d2",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "UI-SCALE-AND-ZOOM.md"
+      ],
+      "live_backlinks": [
+        "./css/tuner.css:48:     docs/archive/research/UI-SCALE-AND-ZOOM.md \u00a75b deferred; --cs-sheet-w was the",
+        "./css/carsetup.css:1232:     This is the deferred `--cs-sheet-w` defect in docs/archive/research/UI-SCALE-AND-ZOOM.md"
+      ]
+    },
+    {
+      "source_id": 8,
+      "path": "docs/archive/research/W4-AUDIT-2026-08.md",
+      "start": 0,
+      "end": 22370,
+      "kind": "text",
+      "sha256": "6e382c7db84c42557538531956492e025f3da6814b341e4a2a42b49e9bb0320b",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 37311,
+      "observed_whole_file_sha256": "6e382c7db84c42557538531956492e025f3da6814b341e4a2a42b49e9bb0320b",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "110b540c0c9c239ef99428af9fc9894351d80b0231601ac9afa3825ac537a838",
+      "complete_file_read": false,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "abb21499928d4e4a1315d7f361273cc9555436598328f9f4a70e8a767991278a",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "2c567bc4d97c6af9c714cbce389e44fa385d19d730671d88a49b3e991eacd726",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 22370,
+          "bytes": 6370,
+          "sha256": "8f7b06bc26d41dedcf747af25b30d8963bae849ae92b078a765d3819b210b870",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "W4-AUDIT-2026-08.md"
+      ],
+      "live_backlinks": [
+        "./docs/notes/system-audit-4/anchors.md:30:| docs/archive/research/W4-AUDIT-2026-08.md | 106 | 130 |"
+      ]
+    }
+  ]
+}

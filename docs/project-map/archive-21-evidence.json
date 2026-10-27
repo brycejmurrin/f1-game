@@ -1,0 +1,355 @@
+{
+  "group": "21",
+  "assigned_bytes": 160000,
+  "method": "Read current AGENTS.md. Assigned half-open text spans returned individually untruncated in chunks of at most 8000 bytes. Source 1 prefix is in group 20; source 8 continuation is in group 22. No tests/browser/network/runtime/source edits/staging/commits. An initial exploratory source 8 read included unassigned continuation; only its assigned prefix is mapped here.",
+  "sources": [
+    {
+      "path": "docs/archive/research/CAMPAIGN-2026-08.md",
+      "start": 32418,
+      "end": 76819,
+      "kind": "text",
+      "sha256": "6ae27ba36f8c14ab04a9214e816fadd864e6f32111b3ec3be54a102c5822f1f6",
+      "source_id": 1,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 76819,
+      "observed_whole_file_sha256": "6ae27ba36f8c14ab04a9214e816fadd864e6f32111b3ec3be54a102c5822f1f6",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "671510572a3a8782289dec64f30b73da56c7c7d0fa7d2d06bb2fffa55f058722",
+      "complete_file_read": false,
+      "read_chunks": [
+        {
+          "start": 32418,
+          "end": 40418,
+          "bytes": 8000,
+          "sha256": "cb0fae0fdbdbbe2812358b08e9a65a0b83054e85f7097ca098839530b984f54e",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 40418,
+          "end": 48418,
+          "bytes": 8000,
+          "sha256": "d552748320b30b99195a2b481e63aa9f0ffe549b37123c3d1466167e9932e6f7",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 48418,
+          "end": 56418,
+          "bytes": 8000,
+          "sha256": "51f0dfb8b6ff1d9efef5735d0668b87f41608c52f9e323c391afbbc7bb8e2806",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 56418,
+          "end": 64418,
+          "bytes": 8000,
+          "sha256": "bfc7e36c84a1bd5b8873191d9307fe874b7610909a5e26774cb450acd43adaf6",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 64418,
+          "end": 72418,
+          "bytes": 8000,
+          "sha256": "14b06e2a9e17cd5b4c49b4755f28422539eba345fa9bc3209597e01a5736d097",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 72418,
+          "end": 76819,
+          "bytes": 4401,
+          "sha256": "da3cf92c617c6dfd702bbc9a65ec8a4ce4ae39d9b26dfd3ea763d01c666372f5",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "CAMPAIGN-2026-08.md"
+      ],
+      "live_backlinks": [
+        "./tools/ci/ci-coverage.mjs:7:// \"gated by nothing\". See docs/archive/research/CAMPAIGN-2026-08.md.",
+        "./js/track/scenery/city.js:751:          // re-measured \u2014 see docs/archive/research/CAMPAIGN-2026-08.md.",
+        "./docs/research/STRUCTURE-REDECISION-2026-08.md:59:**Deciding evidence.** No new fact disturbs a doubly-recorded ruling (CLAUDE.md \"grandfathered \u2014 do not churn them\"; CAMPAIGN-2026-08.md:913 \"js/game rename NO-GO is final\"). The governing test \u2014 \"renaming is not restructuring: does it reduce a COUNT?\" \u2014 fails a 15-file rename outright: same 46 files, same contents. Each rename is a 5-point lockstep (git mv + index.html tag + manifest.cjs + sw.js precache + `?v`/version.json) under load-order.test.mjs, executed by parallel agent sessions \u2014 the exact unsynchronized-bulk-change shape the repo's post-mortems identify as its historical damage source \u2014 plus blame discontinuity on files whose headers carry safety contracts (`debrisworld.js` \"NEVER moves a game car\"). The genuinely confusable clusters (cam-tune/cam-tuner/tuner; lighting/light-store/light-presets) are all hyphenated already and handled by CLAUDE.md's disambiguation table. **Earliest rational reconsideration point:** after gen-manifest lands, when a rename becomes a one-field edit \u2014 and even then the payoff is cosmetic.",
+        "./docs/research/STRUCTURE-REDECISION-2026-08.md:99:- **`docs/archive/research/CAMPAIGN-2026-08.md`:** no annotation needed \u2014 the R3 cut and the js/game rename NO-GO were both re-tested against fresh evidence and held."
+      ]
+    },
+    {
+      "path": "docs/archive/research/CLEANUP-SWEEP-2026-08-18.md",
+      "start": 0,
+      "end": 6564,
+      "kind": "text",
+      "sha256": "03c1862b681242b6c9c316b8ec2e81b85f281111ffea3df29ed23a6fb36c2c19",
+      "source_id": 2,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 6564,
+      "observed_whole_file_sha256": "03c1862b681242b6c9c316b8ec2e81b85f281111ffea3df29ed23a6fb36c2c19",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "03c1862b681242b6c9c316b8ec2e81b85f281111ffea3df29ed23a6fb36c2c19",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6564,
+          "bytes": 6564,
+          "sha256": "03c1862b681242b6c9c316b8ec2e81b85f281111ffea3df29ed23a6fb36c2c19",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "CLEANUP-SWEEP-2026-08-18.md"
+      ],
+      "live_backlinks": [
+        "./docs/notes/DEFECT-LEDGER.md:1121:[`../archive/research/CLEANUP-SWEEP-2026-08-18.md`](../archive/research/CLEANUP-SWEEP-2026-08-18.md)."
+      ]
+    },
+    {
+      "path": "docs/archive/research/CODE-SURVEY-2026-09.md",
+      "start": 0,
+      "end": 37835,
+      "kind": "text",
+      "sha256": "7e490627b902e74280e4e21787204c7ef8a435c495d0f69a4dd1bfca43c4f06b",
+      "source_id": 3,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 37835,
+      "observed_whole_file_sha256": "7e490627b902e74280e4e21787204c7ef8a435c495d0f69a4dd1bfca43c4f06b",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "7e490627b902e74280e4e21787204c7ef8a435c495d0f69a4dd1bfca43c4f06b",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "6fc2e878dd9661214656c40f50107990552d416566889540a98e6818f2302ef1",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "0543c635857f0431583cb9996cb2f8f903369a479d0a2ebee4b065adf9b425f4",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "8c9c7954e4e10571a2071e6246252a95b24344102d20aceab6431a94cea71570",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "4a18e87f1907cb35bd81c616b2cef3f6ae4da16016c14523bbcf15d75b9d489f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 37835,
+          "bytes": 5835,
+          "sha256": "d7a77d44be044c378ff9903a718bf048c0c2ce8fae50bfedf8a68c9ac199fbd5",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "CODE-SURVEY-2026-09.md"
+      ],
+      "live_backlinks": [
+        "./docs/notes/system-audit-4/anchors.md:32:| docs/archive/research/CODE-SURVEY-2026-09.md | 85 | 100 |"
+      ]
+    },
+    {
+      "path": "docs/archive/research/EXTERNAL-MODEL-SOURCES.md",
+      "start": 0,
+      "end": 17089,
+      "kind": "text",
+      "sha256": "af235fd61d7167e57158835f407abde794634314dc05903ac1781198b0824c38",
+      "source_id": 4,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 17089,
+      "observed_whole_file_sha256": "af235fd61d7167e57158835f407abde794634314dc05903ac1781198b0824c38",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "af235fd61d7167e57158835f407abde794634314dc05903ac1781198b0824c38",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "c742577d6f03faec5dbe4e595bce4119b5285893a83a6ef70fa4dd1eec61461a",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "53c6e845f04e8b33b475f9c05e8417e334b57d86b77a41dc3ffb4d4f54107e18",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 17089,
+          "bytes": 1089,
+          "sha256": "a7726329a2f0ddd79402fa3b14fa84c6856c52a764dcde780010e2422a34df36",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "EXTERNAL-MODEL-SOURCES.md"
+      ],
+      "live_backlinks": [
+        "./docs/research/SCENE-GRAPH-PLAN.md:208:[`../archive/research/EXTERNAL-MODEL-SOURCES.md`](../archive/research/EXTERNAL-MODEL-SOURCES.md) concluded that external assets need an offline bake"
+      ]
+    },
+    {
+      "path": "docs/archive/research/PERF-LEDGER-2026-08.md",
+      "start": 0,
+      "end": 25545,
+      "kind": "text",
+      "sha256": "ca2b0790fddec348a5ee81ffa171926b156b2bbc219f7a0fb8175572f801b8bf",
+      "source_id": 5,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 25545,
+      "observed_whole_file_sha256": "ca2b0790fddec348a5ee81ffa171926b156b2bbc219f7a0fb8175572f801b8bf",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "ca2b0790fddec348a5ee81ffa171926b156b2bbc219f7a0fb8175572f801b8bf",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "e945e52a8b9187531b7a3d8ef0eea574f20de4c853429cc6644751f0a77acad8",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "22f18ccd03ddd98deaf630a39063bd6fe95c4f76a8b8586a19c8fff68439b08d",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "e26bd96ff3fa01a5e891bbccf63bb2c3f9c2a6952d3b981e35efda31023cafa3",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 25545,
+          "bytes": 1545,
+          "sha256": "5a797c163c6bdd580528b0dcc58e42cd3fc507aed6768d6704c60900209068b5",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "PERF-LEDGER-2026-08.md"
+      ],
+      "live_backlinks": [
+        "./docs/notes/PERF-FINDINGS.md:3132:[../archive/research/PERF-LEDGER-2026-08.md](../archive/research/PERF-LEDGER-2026-08.md)"
+      ]
+    },
+    {
+      "path": "docs/archive/research/RENDERING-IMPROVEMENTS.md",
+      "start": 0,
+      "end": 16644,
+      "kind": "text",
+      "sha256": "8f156a4cc2c468cb62abb7f3d3c7a67ee13f669a866834fe0b2aed437a83be34",
+      "source_id": 6,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 16644,
+      "observed_whole_file_sha256": "8f156a4cc2c468cb62abb7f3d3c7a67ee13f669a866834fe0b2aed437a83be34",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "8f156a4cc2c468cb62abb7f3d3c7a67ee13f669a866834fe0b2aed437a83be34",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "c3c557e1a44bb0f64f1d1b4958a6629b92d9b51e11b9f814c0cc0e72691ed653",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "cebaa00af8bdc6cbe992696d9dcbd2ddcebb082a281eeee15c3832eb58c28764",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 16644,
+          "bytes": 644,
+          "sha256": "902d4005e6c25f5300c0bfd47d78aaeb9e2ed3c923a07df5a4b364cbdc0d3b3d",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "RENDERING-IMPROVEMENTS.md"
+      ],
+      "live_backlinks": [
+        "./docs/research/ASSET-API-RESEARCH.md:88:- **RENDERING-IMPROVEMENTS.md Part 2 rejected impostors and billboard",
+        "./docs/research/ASSET-API-RESEARCH.md:259:RENDERING-IMPROVEMENTS.md. That is wrong: `buildRoad` stamps",
+        "./docs/research/ASSET-API-RESEARCH.md:397:- **This walks back a documented decision.** RENDERING-IMPROVEMENTS.md Part 2"
+      ]
+    },
+    {
+      "path": "docs/archive/research/RESEARCH-WAVE-2026-08.md",
+      "start": 0,
+      "end": 7126,
+      "kind": "text",
+      "sha256": "fba004d6baecade1b6ef8bd414d27c8fd72de3e2c0145794659dabba06695623",
+      "source_id": 7,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 7126,
+      "observed_whole_file_sha256": "fba004d6baecade1b6ef8bd414d27c8fd72de3e2c0145794659dabba06695623",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "fba004d6baecade1b6ef8bd414d27c8fd72de3e2c0145794659dabba06695623",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7126,
+          "bytes": 7126,
+          "sha256": "fba004d6baecade1b6ef8bd414d27c8fd72de3e2c0145794659dabba06695623",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "RESEARCH-WAVE-2026-08.md"
+      ],
+      "live_backlinks": []
+    },
+    {
+      "path": "docs/archive/research/SURVEY-BUGS-PERF-2026-08-17.md",
+      "start": 0,
+      "end": 4796,
+      "kind": "text",
+      "sha256": "dd20d192cf9051a1cff1a930e48506900513446ef2aeaffacae15ea1ec712fca",
+      "source_id": 8,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 14197,
+      "observed_whole_file_sha256": "dd20d192cf9051a1cff1a930e48506900513446ef2aeaffacae15ea1ec712fca",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "33be5f16386347d9febc1062c667ee61e34fa0cd5451457506fa370293f4825b",
+      "complete_file_read": false,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 4796,
+          "bytes": 4796,
+          "sha256": "33be5f16386347d9febc1062c667ee61e34fa0cd5451457506fa370293f4825b",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "SURVEY-BUGS-PERF-2026-08-17.md"
+      ],
+      "live_backlinks": [
+        "./docs/notes/SPIKE-BACKENDS-CHECKLIST.md:414:| `CI-RENDERING-PERFORMANCE.md`, `BUG-HUNT-2026-09-02.md`, `PERF-HUNT-2026-08-18.md`, `ENGINEERING-PRACTICE-NOTES.md` | keep | Moved to `docs/notes/` by the Phase 5 docs pass (2026-09-03); `SURVEY-BUGS-PERF-2026-08-17.md` went to the attic in the same pass. Dated records either way. No edit required; they remain accurate as history of what was investigated when WGX/TLX were live. |",
+        "./docs/notes/DEFECT-LEDGER.md:1124:[`../archive/research/SURVEY-BUGS-PERF-2026-08-17.md`](../archive/research/SURVEY-BUGS-PERF-2026-08-17.md)."
+      ]
+    }
+  ]
+}

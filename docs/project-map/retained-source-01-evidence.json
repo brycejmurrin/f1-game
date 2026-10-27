@@ -1,0 +1,605 @@
+{
+  "group": "01",
+  "assigned_bytes": 160000,
+  "read_bytes": 160000,
+  "range_convention": "half-open raw byte offsets [start,end)",
+  "status": "complete",
+  "authority": "Current root AGENTS.md read. Retained recovery instructions treated as historical audit content only. No retained commands executed.",
+  "hash_plan": "Plan hashes verified over whole files. Assigned span hashes and every <=8000 byte raw-read chunk hash recorded separately; whole-file hashing is not raw-read credit.",
+  "lsp": "No current runtime symbol navigation needed. Generated shadow function names and historical shell/Python/prose cannot be treated as current runtime LSP definitions. Current generator provenance inspected as text without running it.",
+  "validation": "No tests, browser, network, installs, environment changes, staging or commits performed. Only requested map outputs written.",
+  "files": [
+    {
+      "id": "01-01",
+      "path": "artifacts/cli-subagent-check-2026-10-26.md",
+      "start": 0,
+      "end": 2608,
+      "kind": "text",
+      "sha256": "11cbdec2008222f5dc0988e69379403bcfccb87c07f193214e2024012fd40b6f",
+      "whole_file_bytes": 2608,
+      "whole_file_sha256": "11cbdec2008222f5dc0988e69379403bcfccb87c07f193214e2024012fd40b6f",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "11cbdec2008222f5dc0988e69379403bcfccb87c07f193214e2024012fd40b6f",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 2608,
+          "bytes": 2608,
+          "sha256": "11cbdec2008222f5dc0988e69379403bcfccb87c07f193214e2024012fd40b6f",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "8c429a"
+        }
+      ],
+      "category": "historical-cli-diagnosis",
+      "semantics": "Independent CLI/subagent and gateway capability observations; local catalog and supervisor health do not establish account authorization, hosted attachment, or provider boot registration.",
+      "consumers_provenance": "Human audit readers; no executable consumer.",
+      "effects_limits_cleanup": "No side effects as prose. Retain concise capability distinctions; dated duplicate observations are cleanup candidates."
+    },
+    {
+      "id": "01-02",
+      "path": "artifacts/environment-audit-2026-10-26.md",
+      "start": 0,
+      "end": 5104,
+      "kind": "text",
+      "sha256": "cdaf9f68ae37d1ed6dfd2f0c721c3dd832791766560eb69e2aacecda5a8ac555",
+      "whole_file_bytes": 5104,
+      "whole_file_sha256": "cdaf9f68ae37d1ed6dfd2f0c721c3dd832791766560eb69e2aacecda5a8ac555",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "cdaf9f68ae37d1ed6dfd2f0c721c3dd832791766560eb69e2aacecda5a8ac555",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 5104,
+          "bytes": 5104,
+          "sha256": "cdaf9f68ae37d1ed6dfd2f0c721c3dd832791766560eb69e2aacecda5a8ac555",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "5c6928"
+        }
+      ],
+      "category": "historical-environment-audit",
+      "semantics": "Diagnoses source-revision mismatch, absent startup/lifecycle entrypoints, weak doctor preflight, upstream fallback uncertainty and plugin version skew. Records focused local tests and 33 GLSL variants; skips static WGSL/TLX and excludes gameplay/hosted certification.",
+      "consumers_provenance": "Repair narrative later updated by 01-03 and 01-05 through 01-07.",
+      "effects_limits_cleanup": "Audit-only commands and prescriptions must not run. Superseded incident detail can be compacted after durable provenance is retained."
+    },
+    {
+      "id": "01-03",
+      "path": "artifacts/environment-repair-2026-10-26.md",
+      "start": 0,
+      "end": 4415,
+      "kind": "text",
+      "sha256": "9390667c604c80e49f5c764bb1af9d46168cc391bce60795730901a246398d70",
+      "whole_file_bytes": 4415,
+      "whole_file_sha256": "9390667c604c80e49f5c764bb1af9d46168cc391bce60795730901a246398d70",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "9390667c604c80e49f5c764bb1af9d46168cc391bce60795730901a246398d70",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 4415,
+          "bytes": 4415,
+          "sha256": "9390667c604c80e49f5c764bb1af9d46168cc391bce60795730901a246398d70",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "38db8c"
+        }
+      ],
+      "category": "historical-repair-report",
+      "semantics": "Reports branch-independent retained runtime and locked SDK restoration, command override, improved doctor, plugin builds, saved draft and idempotent process reuse. Distinguishes local transport from hosted/account/publication evidence.",
+      "consumers_provenance": "Historical repair and package provenance; not current readiness.",
+      "effects_limits_cleanup": "Describes installs, activation, package rebuilds, environment writes and browser use performed historically; none performed by this mapping."
+    },
+    {
+      "id": "01-04",
+      "path": "artifacts/gctx/usage.ts",
+      "start": 0,
+      "end": 103123,
+      "kind": "text",
+      "sha256": "2964284b27c8f049a13bb89ea7df6d4dc749780af1c7e85d2ad4c6dd38a69b38",
+      "whole_file_bytes": 103123,
+      "whole_file_sha256": "2964284b27c8f049a13bb89ea7df6d4dc749780af1c7e85d2ad4c6dd38a69b38",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2964284b27c8f049a13bb89ea7df6d4dc749780af1c7e85d2ad4c6dd38a69b38",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "c15041cb847de4dd352f32ac806609945bd7cd25ca01d3690db2ec5d4b32a2b3",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "4348ad"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "1b34a1d7f8b398bfa1769250b8745b3ddce8e2be8961e513e0cbced513fe0be4",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "525f5a"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "96d58afb92a47ed376b7adf039a4938941c06883d71a80baa610a6e626a1b12d",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "cc20a0"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "7543e8128170e56ee42a94feab6ba29e0da8d34230bf9250eb382e1d36887f00",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "ffb820"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "42a960a1d3d45660b5f528fd676c83e1b60e58d185af494bbe97472e447929e8",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "8c1571"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "56f38d84dab980148b7852fd6554969972550d0b3ad289b34145c6030ddfbfbd",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "5a3bb4"
+        },
+        {
+          "start": 48000,
+          "end": 56000,
+          "bytes": 8000,
+          "sha256": "b148eef3aa36451f9336e59fcd6c8b78b6f0bcf85af90af94c32eac0a6c04db6",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "8985ba"
+        },
+        {
+          "start": 56000,
+          "end": 64000,
+          "bytes": 8000,
+          "sha256": "e7fd76cd5e5f877f8e0f822410bd0dffed51dae897cf8da36aedbeb72fcedc9d",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "684fcb"
+        },
+        {
+          "start": 64000,
+          "end": 72000,
+          "bytes": 8000,
+          "sha256": "dd9b13282c0bc3dbd5135c35fc29c418b500b64ab7b85faa5d9dd5ed52610b39",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "70fc15"
+        },
+        {
+          "start": 72000,
+          "end": 80000,
+          "bytes": 8000,
+          "sha256": "8605ea606cabfedb164f587d54cf60eab32c7ce4bf55696074481a3548f26831",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "0d30a1"
+        },
+        {
+          "start": 80000,
+          "end": 88000,
+          "bytes": 8000,
+          "sha256": "fdf21d4dd82683e8522db91c1be49081ec0635b3062f7a9dc8ef72ce6ce5bb20",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "8f06c1"
+        },
+        {
+          "start": 88000,
+          "end": 96000,
+          "bytes": 8000,
+          "sha256": "b0aa6bddec83fbe92004ea31cb88fef7f876a381932de4705c2dfad2a9d5bb75",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "76230e"
+        },
+        {
+          "start": 96000,
+          "end": 103123,
+          "bytes": 7123,
+          "sha256": "be0144d3265a3e00049a56b5965fe0a46634a5ada9e275a4759352b5074012bb",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "8356a7"
+        }
+      ],
+      "category": "generated-type-projection",
+      "semantics": "Generated GameCtx usage shadow: function per normalized module filename; void reads, __never writes and destructures check member existence and writability. G.els nested names included. Does not preserve expressions, control flow, argument types or runtime execution.",
+      "consumers_provenance": "Current tools/check/check-gctx.mjs emits this disposable output and tsconfig; TypeScript noEmit consumes it against types/game-ctx.d.ts.",
+      "effects_limits_cleanup": "Regenerable cleanup candidate. Never runtime-loaded or hand edited. Source line mapping exists in generator memory, not as comments on every retained statement."
+    },
+    {
+      "id": "01-05",
+      "path": "artifacts/merge-3894/body-before.md",
+      "start": 0,
+      "end": 7925,
+      "kind": "text",
+      "sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de",
+      "whole_file_bytes": 7925,
+      "whole_file_sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 7925,
+          "bytes": 7925,
+          "sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "046aa5"
+        }
+      ],
+      "category": "historical-pr-body",
+      "semantics": "Pre-sync PR3894 consolidation handoff; source migration, clean-source rebuild and local MCP evidence, with full gate/hosted/import/publication gaps. Includes restoration failure and pinned repair-head recovery.",
+      "consumers_provenance": "Human PR history; exact duplicate of 01-06.",
+      "effects_limits_cleanup": "Prose includes historical workflow instructions and authorization claims; no current authority. One identical copy is redundant."
+    },
+    {
+      "id": "01-06",
+      "path": "artifacts/merge-3894/body-current.md",
+      "start": 0,
+      "end": 7925,
+      "kind": "text",
+      "sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de",
+      "whole_file_bytes": 7925,
+      "whole_file_sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 7925,
+          "bytes": 7925,
+          "sha256": "c998067ef2ff999760d83fbbf74fd2a2560921299e592acaa5657f37336bc1de",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "0d8aba"
+        }
+      ],
+      "category": "historical-pr-body-duplicate",
+      "semantics": "Byte-identical to 01-05, independently read and hashed.",
+      "consumers_provenance": "Historical PR update material.",
+      "effects_limits_cleanup": "Duplicate cleanup candidate, preserving one copy plus hashes."
+    },
+    {
+      "id": "01-07",
+      "path": "artifacts/merge-3894/body-synced.md",
+      "start": 0,
+      "end": 6444,
+      "kind": "text",
+      "sha256": "1af6bee2764cc1ab53cc817241a15d10bf4f4864169b08de7d217700d8b1de5c",
+      "whole_file_bytes": 6444,
+      "whole_file_sha256": "1af6bee2764cc1ab53cc817241a15d10bf4f4864169b08de7d217700d8b1de5c",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "1af6bee2764cc1ab53cc817241a15d10bf4f4864169b08de7d217700d8b1de5c",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 6444,
+          "bytes": 6444,
+          "sha256": "1af6bee2764cc1ab53cc817241a15d10bf4f4864169b08de7d217700d8b1de5c",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "c57efc"
+        }
+      ],
+      "category": "historical-synced-pr-body",
+      "semantics": "Later PR3894 handoff records 204 affected tests, focused generated metadata fixes, substantive draft CI, claimed user publication/fresh local restore, deferred hosted import and pending exact-head landing gate.",
+      "consumers_provenance": "Human PR history supersedes earlier pending-state narrative, but is not fresh validation.",
+      "effects_limits_cleanup": "Historical merge authorization is audit content only. Retain state transition and limits rather than activate its next steps."
+    },
+    {
+      "id": "01-08",
+      "path": "artifacts/merge-3894/deploy-install.sh",
+      "start": 0,
+      "end": 4338,
+      "kind": "text",
+      "sha256": "57c52d0930a0d26c109dc81defe6547f8d566674f0aadb3fe239bdcdb7acbdf6",
+      "whole_file_bytes": 4338,
+      "whole_file_sha256": "57c52d0930a0d26c109dc81defe6547f8d566674f0aadb3fe239bdcdb7acbdf6",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "57c52d0930a0d26c109dc81defe6547f8d566674f0aadb3fe239bdcdb7acbdf6",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 4338,
+          "bytes": 4338,
+          "sha256": "57c52d0930a0d26c109dc81defe6547f8d566674f0aadb3fe239bdcdb7acbdf6",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "611eda"
+        }
+      ],
+      "category": "historical-install-payload",
+      "semantics": "Embeds guarded deploy selector then canonical install and plugin registration verification. Parses install receipts, checks marketplace source/name/version/installed/enabled, ensures cache under active home plugins and compares every canonical source file byte-for-byte.",
+      "consumers_provenance": "Historical saved environment install payload; invokes canonical environment scripts and Codex CLI.",
+      "effects_limits_cleanup": "Would fetch/switch/fast-forward Git, install dependencies/build packages and mutate active plugin registration/cache. Never executed; fixed checkout assumptions and CLI output schema are portability limits."
+    },
+    {
+      "id": "01-09",
+      "path": "artifacts/merge-3894/deploy-start-skill.md",
+      "start": 0,
+      "end": 5708,
+      "kind": "text",
+      "sha256": "d21e95c8be5883e7ea01e8f4ab90208bc0a0f0d850f9777cf5ddbdd5eb164f75",
+      "whole_file_bytes": 5708,
+      "whole_file_sha256": "d21e95c8be5883e7ea01e8f4ab90208bc0a0f0d850f9777cf5ddbdd5eb164f75",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "d21e95c8be5883e7ea01e8f4ab90208bc0a0f0d850f9777cf5ddbdd5eb164f75",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 5708,
+          "bytes": 5708,
+          "sha256": "d21e95c8be5883e7ea01e8f4ab90208bc0a0f0d850f9777cf5ddbdd5eb164f75",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "3d2d9b"
+        }
+      ],
+      "category": "historical-startup-guidance",
+      "semantics": "Startup skill duplicates selector and invokes activation, plugin-install, list and resume. Requires PID reuse, single tunnel, native readyz/poll and real local MCP catalog/status; keeps hosted evidence separate.",
+      "consumers_provenance": "Historical saved startup payload and human recovery guidance.",
+      "effects_limits_cleanup": "Would mutate checkout/plugin/runtime state. Never activated. Credential variable names only, no secret values copied to reports. Do not infer current environment policy from it."
+    },
+    {
+      "id": "01-10",
+      "path": "artifacts/merge-3894/select-deploy.sh",
+      "start": 0,
+      "end": 1532,
+      "kind": "text",
+      "sha256": "3192628b531828b452cfbed8028319c64c3de5717244f7f0faa2edb2c21041a0",
+      "whole_file_bytes": 1532,
+      "whole_file_sha256": "3192628b531828b452cfbed8028319c64c3de5717244f7f0faa2edb2c21041a0",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "3192628b531828b452cfbed8028319c64c3de5717244f7f0faa2edb2c21041a0",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 1532,
+          "bytes": 1532,
+          "sha256": "3192628b531828b452cfbed8028319c64c3de5717244f7f0faa2edb2c21041a0",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "763e63"
+        }
+      ],
+      "category": "historical-shell-selector",
+      "semantics": "Requires exact repository root and clean tracked/untracked tree; fetches deploy tracking ref, requires canonical installer at target and ancestor checks for current HEAD/local deploy, then switches/creates branch and fast-forwards only.",
+      "consumers_provenance": "Embedded verbatim in 01-08 and 01-09; 01-11 fixture test invokes it.",
+      "effects_limits_cleanup": "Would perform network fetch and Git mutations. Refuses dirty/nonancestor/diverged cases, with no stash/reset; fetch can update remote ref before later refusal. Historical standalone candidate for deduplication."
+    },
+    {
+      "id": "01-11",
+      "path": "artifacts/merge-3894/test-select-deploy.py",
+      "start": 0,
+      "end": 3236,
+      "kind": "text",
+      "sha256": "abb5fd7fea7ec0df323b65ace62c863781a54e40adf33da75af119b9af31cd41",
+      "whole_file_bytes": 3236,
+      "whole_file_sha256": "abb5fd7fea7ec0df323b65ace62c863781a54e40adf33da75af119b9af31cd41",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "abb5fd7fea7ec0df323b65ace62c863781a54e40adf33da75af119b9af31cd41",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 3236,
+          "bytes": 3236,
+          "sha256": "abb5fd7fea7ec0df323b65ace62c863781a54e40adf33da75af119b9af31cd41",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "3a7772"
+        }
+      ],
+      "category": "historical-selector-fixtures",
+      "semantics": "Python unittest creates temporary local bare/seed/checkout repositories, configures test author and disables hooks/signing, runs selector with timeout15 and checks clean repeat, dirty preservation, unmerged commit preservation, divergent local deploy preservation.",
+      "consumers_provenance": "Only historical selector test, not current test inventory.",
+      "effects_limits_cleanup": "Would write temporary repositories and commits under its retained directory; no tests run. Four fixture cases do not prove real hosted restore or arbitrary Git configurations."
+    },
+    {
+      "id": "01-12",
+      "path": "artifacts/playwright-mcp/page-2026-10-25T23-04-46-470Z.yml",
+      "start": 0,
+      "end": 2460,
+      "kind": "text",
+      "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "whole_file_bytes": 2460,
+      "whole_file_sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 2460,
+          "bytes": 2460,
+          "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "8931ac"
+        }
+      ],
+      "category": "historical-a11y-snapshot",
+      "semantics": "Title-screen YAML accessibility projection with named groups, selected daily Suzuka/dry, Practice, Visual Studio and Saves/Data.",
+      "consumers_provenance": "Browser MCP capture, human UI audit; not authoritative DOM source.",
+      "effects_limits_cleanup": "Read-only snapshot; ephemeral ref IDs and text glyph noise cannot prove rendered appearance, responsive behavior or control actions."
+    },
+    {
+      "id": "01-13",
+      "path": "artifacts/playwright-mcp/page-2026-10-25T23-05-08-648Z.yml",
+      "start": 0,
+      "end": 2222,
+      "kind": "text",
+      "sha256": "8c2333f821fc3ef1f40c695995480f1203b367ab6d1cc71257a6cca47da5fb6e",
+      "whole_file_bytes": 2222,
+      "whole_file_sha256": "8c2333f821fc3ef1f40c695995480f1203b367ab6d1cc71257a6cca47da5fb6e",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "8c2333f821fc3ef1f40c695995480f1203b367ab6d1cc71257a6cca47da5fb6e",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 2222,
+          "bytes": 2222,
+          "sha256": "8c2333f821fc3ef1f40c695995480f1203b367ab6d1cc71257a6cca47da5fb6e",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "ba0f9e"
+        }
+      ],
+      "category": "historical-a11y-snapshot-older-layout",
+      "semantics": "Earlier title projection uses generic containers, daily placeholder and fewer visible utilities, with Watch/Practice/Photo/Garage together.",
+      "consumers_provenance": "Historical UI comparison with 01-12 and 01-14.",
+      "effects_limits_cleanup": "No viewport, DOM event or pixel evidence. Candidate retain one per meaningful layout state."
+    },
+    {
+      "id": "01-14",
+      "path": "artifacts/playwright-mcp/page-2026-10-25T23-12-11-012Z.yml",
+      "start": 0,
+      "end": 2460,
+      "kind": "text",
+      "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "whole_file_bytes": 2460,
+      "whole_file_sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 2460,
+          "bytes": 2460,
+          "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "55b7ee"
+        }
+      ],
+      "category": "historical-a11y-snapshot-duplicate",
+      "semantics": "Exact whole-file duplicate of 01-12 despite different capture timestamp.",
+      "consumers_provenance": "Historical UI capture.",
+      "effects_limits_cleanup": "Redundant cleanup candidate after timestamp/provenance retention."
+    },
+    {
+      "id": "01-15",
+      "path": "artifacts/playwright-mcp/page-2026-10-25T23-13-06-760Z.yml",
+      "start": 0,
+      "end": 500,
+      "kind": "text",
+      "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "whole_file_bytes": 2460,
+      "whole_file_sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "plan_sha256_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "bf4dd0278cf1ed88ac63b6d60698a9209a7d7d601b42a73ba99ddbf98a7aff4f",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 500,
+          "bytes": 500,
+          "sha256": "bf4dd0278cf1ed88ac63b6d60698a9209a7d7d601b42a73ba99ddbf98a7aff4f",
+          "raw_read": true,
+          "untruncated": true,
+          "method": "individual exec_command Python bytes slice decode; chunks returned separately (batched calls remain individual tool results)",
+          "tool_result_chunk_id": "9d2504"
+        }
+      ],
+      "category": "partial-historical-a11y-snapshot",
+      "semantics": "Assigned first500 bytes only: active root/status, glyph noise, heading and Sound On; group02 owns remaining1960 bytes.",
+      "consumers_provenance": "Partial projection; whole-file identity matches 01-12/01-14, but this group does not claim raw reading remainder.",
+      "effects_limits_cleanup": "Do not equate whole-file hash with complete semantic read. No runtime consumer."
+    }
+  ],
+  "supporting_current_source": [
+    {
+      "path": "tools/check/check-gctx.mjs",
+      "read_ranges": [
+        [
+          0,
+          7000
+        ],
+        [
+          17500,
+          24500
+        ]
+      ],
+      "purpose": "Generator provenance, module roster, scope/alias extraction, shadow emission and limitations; supporting partial read only.",
+      "whole_file_sha256": "337f129aa6508cb6e9877d90bbb9e6f1fd3d630aa820a79b5c011350bf403405",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 7000,
+          "sha256": "29f56bc9f313b6664c63b1cfd38ee43bf95a87b993301d9c9e305f384db63f76",
+          "tool_result_chunk_id": "2d1215",
+          "raw_read": true,
+          "untruncated": true
+        },
+        {
+          "start": 17500,
+          "end": 24500,
+          "sha256": "d0fd61dcc145ac5b3813784263c9859f0333f234dac444dfb48456d5c2b05785",
+          "tool_result_chunk_id": "277772",
+          "raw_read": true,
+          "untruncated": true
+        }
+      ]
+    }
+  ],
+  "cross_group": "01-15 remainder is assigned to group02. Shader source itself belongs to groups02/03; this group only maps dated compilation claims in reports, not shader correctness.",
+  "read_notes": "Initial aggregate output for five late projection chunks was truncated at the wrapper; all five ranges were reread in separate calls and only those accepted result IDs are credited. Initial combined AGENTS/catalog output truncated; root AGENTS tail was reread. Historical payloads were never executed."
+}

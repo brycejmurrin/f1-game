@@ -1,0 +1,627 @@
+{
+  "group": "02",
+  "assigned_bytes": 160000,
+  "read_bytes": 160000,
+  "range_convention": "half-open bytes; full-file hashes compared separately from assigned/chunk hashes",
+  "method": "Read-only byte slices <=8000 bytes; small whole spans batched into returned calls <=8500 raw bytes; no retained code executed. Read current root AGENTS.md. Metadata hashing uses read-only Python, not program validation.",
+  "entries": [
+    {
+      "id": 1,
+      "path": "artifacts/playwright-mcp/page-2026-10-25T23-13-06-760Z.yml",
+      "start": 500,
+      "end": 2460,
+      "kind": "text",
+      "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "file_bytes": 2460,
+      "actual_wholefile_sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "hash_matches": true,
+      "assigned_sha256": "2684b0df5ba9d9f960abfcec63bdeee5571c0f015b0ef15c60cf978e9f818483",
+      "reads": [
+        {
+          "start": 500,
+          "end": 2460,
+          "bytes": 1960,
+          "sha256": "2684b0df5ba9d9f960abfcec63bdeee5571c0f015b0ef15c60cf978e9f818483",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "16868c"
+        }
+      ],
+      "semantics": "Partial accessibility snapshot; title-menu groups, buttons and legal notice; no interaction or renderer proof."
+    },
+    {
+      "id": 2,
+      "path": "artifacts/playwright-mcp/page-2026-10-25T23-13-28-650Z.yml",
+      "start": 0,
+      "end": 2460,
+      "kind": "text",
+      "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "file_bytes": 2460,
+      "actual_wholefile_sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "hash_matches": true,
+      "assigned_sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+      "reads": [
+        {
+          "start": 0,
+          "end": 2460,
+          "bytes": 2460,
+          "sha256": "fc5b3d9fc743a163090a2963a04ab1ffd638b64a1f5d630ad5e5e90658a30554",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "16868c"
+        }
+      ],
+      "semantics": "Complete duplicate-hash accessibility snapshot with active root, status, sound toggle and title menu."
+    },
+    {
+      "id": 3,
+      "path": "artifacts/safety-bans-stub/sitecustomize.py",
+      "start": 0,
+      "end": 90,
+      "kind": "text",
+      "sha256": "80c599c8eaebd3dad9e7b2f18621514e77d2ddbd68fd1d97ff8d59925036e12b",
+      "file_bytes": 90,
+      "actual_wholefile_sha256": "80c599c8eaebd3dad9e7b2f18621514e77d2ddbd68fd1d97ff8d59925036e12b",
+      "hash_matches": true,
+      "assigned_sha256": "80c599c8eaebd3dad9e7b2f18621514e77d2ddbd68fd1d97ff8d59925036e12b",
+      "reads": [
+        {
+          "start": 0,
+          "end": 90,
+          "bytes": 90,
+          "sha256": "80c599c8eaebd3dad9e7b2f18621514e77d2ddbd68fd1d97ff8d59925036e12b",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "16868c"
+        }
+      ],
+      "semantics": "Python startup shim monkeypatches os.listdir: only exact string /proc returns []; every other path delegates. Import is process-global side effect; do not activate."
+    },
+    {
+      "id": 4,
+      "path": "artifacts/shader-validate/BLOCKER_FS.frag",
+      "start": 0,
+      "end": 470,
+      "kind": "text",
+      "sha256": "84a383aeaa574908022ad96fdf8fd64a3f499030f674760467e001f2b48e04f9",
+      "file_bytes": 470,
+      "actual_wholefile_sha256": "84a383aeaa574908022ad96fdf8fd64a3f499030f674760467e001f2b48e04f9",
+      "hash_matches": true,
+      "assigned_sha256": "84a383aeaa574908022ad96fdf8fd64a3f499030f674760467e001f2b48e04f9",
+      "reads": [
+        {
+          "start": 0,
+          "end": 470,
+          "bytes": 470,
+          "sha256": "84a383aeaa574908022ad96fdf8fd64a3f499030f674760467e001f2b48e04f9",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "16868c"
+        }
+      ],
+      "semantics": "Depth blocker min-reduction: texture-size/512 stride, at most 4x4 samples; outputs minimum red depth."
+    },
+    {
+      "id": 5,
+      "path": "artifacts/shader-validate/BLUR_FS.frag",
+      "start": 0,
+      "end": 476,
+      "kind": "text",
+      "sha256": "fb058b70b0f963036a2900722daf6d83efd2cf5e5df65bff70a260cdfba8179b",
+      "file_bytes": 476,
+      "actual_wholefile_sha256": "fb058b70b0f963036a2900722daf6d83efd2cf5e5df65bff70a260cdfba8179b",
+      "hash_matches": true,
+      "assigned_sha256": "fb058b70b0f963036a2900722daf6d83efd2cf5e5df65bff70a260cdfba8179b",
+      "reads": [
+        {
+          "start": 0,
+          "end": 476,
+          "bytes": 476,
+          "sha256": "fb058b70b0f963036a2900722daf6d83efd2cf5e5df65bff70a260cdfba8179b",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "16868c"
+        }
+      ],
+      "semantics": "Five-fetch separable Gaussian blur; CPU supplies direction/texel step."
+    },
+    {
+      "id": 6,
+      "path": "artifacts/shader-validate/BRIGHT_FS.frag",
+      "start": 0,
+      "end": 824,
+      "kind": "text",
+      "sha256": "ef6511f71c0c1a030b1a1c880b23808ba837d09d801a9c8ea5beb06e441ad364",
+      "file_bytes": 824,
+      "actual_wholefile_sha256": "ef6511f71c0c1a030b1a1c880b23808ba837d09d801a9c8ea5beb06e441ad364",
+      "hash_matches": true,
+      "assigned_sha256": "ef6511f71c0c1a030b1a1c880b23808ba837d09d801a9c8ea5beb06e441ad364",
+      "reads": [
+        {
+          "start": 0,
+          "end": 824,
+          "bytes": 824,
+          "sha256": "ef6511f71c0c1a030b1a1c880b23808ba837d09d801a9c8ea5beb06e441ad364",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "16868c"
+        }
+      ],
+      "semantics": "Exposure-aware bloom bright extraction with quadratic soft knee and protected luminance division."
+    },
+    {
+      "id": 7,
+      "path": "artifacts/shader-validate/COMPOSITE_FS.frag",
+      "start": 0,
+      "end": 55426,
+      "kind": "text",
+      "sha256": "f5b193f2455fcee0743d65fcb86597bdcd7521159345b3122f9bfbfbf880d569",
+      "file_bytes": 55426,
+      "actual_wholefile_sha256": "f5b193f2455fcee0743d65fcb86597bdcd7521159345b3122f9bfbfbf880d569",
+      "hash_matches": true,
+      "assigned_sha256": "f5b193f2455fcee0743d65fcb86597bdcd7521159345b3122f9bfbfbf880d569",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "c33ec44a4377a6ac9ec12dad8467c8acff338cb3f19eb87da2086b0cf5721d37",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "618b4d"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "1bde11e19a5fc39b684d514454dec5805d89f23e43e4b0e68d7e07207abec776",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "603f93"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "a3931b21d9325c36b88d3980b370aa5cdf082cd279320d1e896f27dc638b773a",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "0c364a"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "a5a5a2cbb26a250804b33cb626d167c4e5b6010e5c10c36ea8d173f57f520c4e",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "5e4705"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "83875a9d03b9c1292b01c2603b19d704c014925e7b6c83d46c4eec02d83aec27",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "640142"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "867c3a1a1e0a4bccb9f8e660ec3feef5f8b097b3054001f3bbc3ffde4ea7e2f4",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "677251"
+        },
+        {
+          "start": 48000,
+          "end": 55426,
+          "bytes": 7426,
+          "sha256": "604e57fb225240b0af9260f92fb5d4dcc05ee5060bd08e916a73d9664e4b3a5f",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "762183"
+        }
+      ],
+      "semantics": "Full HDR composite: heat haze excluding car alpha tags, chromatic aberration, speed blur, sharpen, bilateral half-resolution AO, godray add, gated road/car SSR, exposure/bloom/dirt/shafts, HDR grade/ACES/colour grade, depth-occluded flare, aspect-correct vignette, animated dither/grain. CPU must bind depth/projection/textures and tags consistently; SSR quality 8/16/24 march and 1/2/4 refine, rejects offscreen and same-facing road hits; road miss uses sky fallback. Shader writes output only; comments describe historical performance/bug observations, not measured here."
+    },
+    {
+      "id": 8,
+      "path": "artifacts/shader-validate/DECAL_FS.frag",
+      "start": 0,
+      "end": 3106,
+      "kind": "text",
+      "sha256": "42b4146aee4f2a86c7c8a23c3857d35307e471d6abc6475c1b09c21433379104",
+      "file_bytes": 3106,
+      "actual_wholefile_sha256": "42b4146aee4f2a86c7c8a23c3857d35307e471d6abc6475c1b09c21433379104",
+      "hash_matches": true,
+      "assigned_sha256": "42b4146aee4f2a86c7c8a23c3857d35307e471d6abc6475c1b09c21433379104",
+      "reads": [
+        {
+          "start": 0,
+          "end": 3106,
+          "bytes": 3106,
+          "sha256": "42b4146aee4f2a86c7c8a23c3857d35307e471d6abc6475c1b09c21433379104",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "3a5a6e"
+        }
+      ],
+      "semantics": "Decal shaded texture: alpha discard below .02; ambient/sun 4-tap PCF and sparse lamp-bake atlas with height gate plus emissive glow."
+    },
+    {
+      "id": 9,
+      "path": "artifacts/shader-validate/DECAL_VS.vert",
+      "start": 0,
+      "end": 358,
+      "kind": "text",
+      "sha256": "455f7c72d13c0231242f55c8eb65fbc215e9f4ab5ef0825346889f99d32299ea",
+      "file_bytes": 358,
+      "actual_wholefile_sha256": "455f7c72d13c0231242f55c8eb65fbc215e9f4ab5ef0825346889f99d32299ea",
+      "hash_matches": true,
+      "assigned_sha256": "455f7c72d13c0231242f55c8eb65fbc215e9f4ab5ef0825346889f99d32299ea",
+      "reads": [
+        {
+          "start": 0,
+          "end": 358,
+          "bytes": 358,
+          "sha256": "455f7c72d13c0231242f55c8eb65fbc215e9f4ab5ef0825346889f99d32299ea",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "3a5a6e"
+        }
+      ],
+      "semantics": "Decal vertex: model/view-projection, normal mat3, UV and world position; no inverse-transpose normal correction."
+    },
+    {
+      "id": 10,
+      "path": "artifacts/shader-validate/DEPTH_FS.frag",
+      "start": 0,
+      "end": 30,
+      "kind": "text",
+      "sha256": "0bc8ff5f2d22ebcbe630c863825b3d0581ede266b6a6c94891b8f22bcf5ea3e7",
+      "file_bytes": 30,
+      "actual_wholefile_sha256": "0bc8ff5f2d22ebcbe630c863825b3d0581ede266b6a6c94891b8f22bcf5ea3e7",
+      "hash_matches": true,
+      "assigned_sha256": "0bc8ff5f2d22ebcbe630c863825b3d0581ede266b6a6c94891b8f22bcf5ea3e7",
+      "reads": [
+        {
+          "start": 0,
+          "end": 30,
+          "bytes": 30,
+          "sha256": "0bc8ff5f2d22ebcbe630c863825b3d0581ede266b6a6c94891b8f22bcf5ea3e7",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "3a5a6e"
+        }
+      ],
+      "semantics": "Empty fragment stage for depth-only pass."
+    },
+    {
+      "id": 11,
+      "path": "artifacts/shader-validate/DEPTH_VS.vert",
+      "start": 0,
+      "end": 399,
+      "kind": "text",
+      "sha256": "624e50814a4804559eee72a546e5f4825b5d753e41bb1d172b337deb7ed19f2a",
+      "file_bytes": 399,
+      "actual_wholefile_sha256": "624e50814a4804559eee72a546e5f4825b5d753e41bb1d172b337deb7ed19f2a",
+      "hash_matches": true,
+      "assigned_sha256": "624e50814a4804559eee72a546e5f4825b5d753e41bb1d172b337deb7ed19f2a",
+      "reads": [
+        {
+          "start": 0,
+          "end": 399,
+          "bytes": 399,
+          "sha256": "624e50814a4804559eee72a546e5f4825b5d753e41bb1d172b337deb7ed19f2a",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "3a5a6e"
+        }
+      ],
+      "semantics": "Depth vertex: chooses per-instance columns or model matrix and light VP."
+    },
+    {
+      "id": 12,
+      "path": "artifacts/shader-validate/DOWN_FS.frag",
+      "start": 0,
+      "end": 2274,
+      "kind": "text",
+      "sha256": "cbcb9bf2e1b405416e84e19cabaed0484dae5fe18e12c1542430033819f146d1",
+      "file_bytes": 2274,
+      "actual_wholefile_sha256": "cbcb9bf2e1b405416e84e19cabaed0484dae5fe18e12c1542430033819f146d1",
+      "hash_matches": true,
+      "assigned_sha256": "cbcb9bf2e1b405416e84e19cabaed0484dae5fe18e12c1542430033819f146d1",
+      "reads": [
+        {
+          "start": 0,
+          "end": 2274,
+          "bytes": 2274,
+          "sha256": "cbcb9bf2e1b405416e84e19cabaed0484dae5fe18e12c1542430033819f146d1",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "3a5a6e"
+        }
+      ],
+      "semantics": "13-tap downsample; first mip optional partial Karis weighting normalizes five quads to reduce HDR fireflies."
+    },
+    {
+      "id": 13,
+      "path": "artifacts/shader-validate/FXAA_FS.frag",
+      "start": 0,
+      "end": 3055,
+      "kind": "text",
+      "sha256": "c704b8456b0ccf309c06ebd39e808edf033840bc8dec8447a3ff78da3ff481e7",
+      "file_bytes": 3055,
+      "actual_wholefile_sha256": "c704b8456b0ccf309c06ebd39e808edf033840bc8dec8447a3ff78da3ff481e7",
+      "hash_matches": true,
+      "assigned_sha256": "c704b8456b0ccf309c06ebd39e808edf033840bc8dec8447a3ff78da3ff481e7",
+      "reads": [
+        {
+          "start": 0,
+          "end": 3055,
+          "bytes": 3055,
+          "sha256": "c704b8456b0ccf309c06ebd39e808edf033840bc8dec8447a3ff78da3ff481e7",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "8fb024"
+        }
+      ],
+      "semantics": "FXAA luminance edge detector with flat-area return; eight bounded search steps and subpixel offset."
+    },
+    {
+      "id": 14,
+      "path": "artifacts/shader-validate/GLOW_FS.frag",
+      "start": 0,
+      "end": 455,
+      "kind": "text",
+      "sha256": "36d6428d72f44a63cf74168567a41eb856ce92bb70e9ab0689a754c1809ca402",
+      "file_bytes": 455,
+      "actual_wholefile_sha256": "36d6428d72f44a63cf74168567a41eb856ce92bb70e9ab0689a754c1809ca402",
+      "hash_matches": true,
+      "assigned_sha256": "36d6428d72f44a63cf74168567a41eb856ce92bb70e9ab0689a754c1809ca402",
+      "reads": [
+        {
+          "start": 0,
+          "end": 455,
+          "bytes": 455,
+          "sha256": "36d6428d72f44a63cf74168567a41eb856ce92bb70e9ab0689a754c1809ca402",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "8fb024"
+        }
+      ],
+      "semantics": "Additive lamp halo fragment Gaussian core/veil; expects ONE/ONE blending."
+    },
+    {
+      "id": 15,
+      "path": "artifacts/shader-validate/GLOW_VS.vert",
+      "start": 0,
+      "end": 723,
+      "kind": "text",
+      "sha256": "29426e8947fef3e3aaf9d81c8b4b1b76a0b9d49e89ef10c4678c7ddac3f28611",
+      "file_bytes": 723,
+      "actual_wholefile_sha256": "29426e8947fef3e3aaf9d81c8b4b1b76a0b9d49e89ef10c4678c7ddac3f28611",
+      "hash_matches": true,
+      "assigned_sha256": "29426e8947fef3e3aaf9d81c8b4b1b76a0b9d49e89ef10c4678c7ddac3f28611",
+      "reads": [
+        {
+          "start": 0,
+          "end": 723,
+          "bytes": 723,
+          "sha256": "29426e8947fef3e3aaf9d81c8b4b1b76a0b9d49e89ef10c4678c7ddac3f28611",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "8fb024"
+        }
+      ],
+      "semantics": "Eye-facing world-space halo quad; radius/HDR colour attributes, epsilon-stabilized right basis."
+    },
+    {
+      "id": 16,
+      "path": "artifacts/shader-validate/GODRAY_FS.frag",
+      "start": 0,
+      "end": 10634,
+      "kind": "text",
+      "sha256": "bc2d9e99dd7831d3ab23d101fd92a2300b6fa04618ab275cd8ea5f5f9b97def5",
+      "file_bytes": 10634,
+      "actual_wholefile_sha256": "bc2d9e99dd7831d3ab23d101fd92a2300b6fa04618ab275cd8ea5f5f9b97def5",
+      "hash_matches": true,
+      "assigned_sha256": "bc2d9e99dd7831d3ab23d101fd92a2300b6fa04618ab275cd8ea5f5f9b97def5",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "0fabdce3b2acf494b4985fb133dbadad5694d2973b1e04a71161e783f3b6621e",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "13faed"
+        },
+        {
+          "start": 8000,
+          "end": 10634,
+          "bytes": 2634,
+          "sha256": "b606e2ba57b3a265dcd419628f51d63918f3a42d20b314b57b736ab7a8e4b79c",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "f4fe05"
+        }
+      ],
+      "semantics": "16-step volumetric sunlight/lamp march capped 260m; six sorted lamps, lamp range rejects, cloud deck coherent with lit/sky, shadow sampling and Beer-Lambert extinction, phase anisotropy clamped .95. Lamp mapping index must refer to this six-slot ordering."
+    },
+    {
+      "id": 17,
+      "path": "artifacts/shader-validate/LINE_FS.frag",
+      "start": 0,
+      "end": 3070,
+      "kind": "text",
+      "sha256": "96368e906b81b96cd8c592d9b577bf6e0478c1e7301b07e66db01d123a22229d",
+      "file_bytes": 3070,
+      "actual_wholefile_sha256": "96368e906b81b96cd8c592d9b577bf6e0478c1e7301b07e66db01d123a22229d",
+      "hash_matches": true,
+      "assigned_sha256": "96368e906b81b96cd8c592d9b577bf6e0478c1e7301b07e66db01d123a22229d",
+      "reads": [
+        {
+          "start": 0,
+          "end": 3070,
+          "bytes": 3070,
+          "sha256": "96368e906b81b96cd8c592d9b577bf6e0478c1e7301b07e66db01d123a22229d",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "8fb024"
+        }
+      ],
+      "semantics": "Driving-line fragment: pace ratio green/amber/red or accessible palette, five-metre chevrons, corners fade, emissive strength and clamped coverage; highp along distance prevents phone fp16 quantization."
+    },
+    {
+      "id": 18,
+      "path": "artifacts/shader-validate/LINE_VS.vert",
+      "start": 0,
+      "end": 602,
+      "kind": "text",
+      "sha256": "e14da7956789ce187a837dfce5a8d571769e1e0d02e0abfa1b33a25488e1512c",
+      "file_bytes": 602,
+      "actual_wholefile_sha256": "e14da7956789ce187a837dfce5a8d571769e1e0d02e0abfa1b33a25488e1512c",
+      "hash_matches": true,
+      "assigned_sha256": "e14da7956789ce187a837dfce5a8d571769e1e0d02e0abfa1b33a25488e1512c",
+      "reads": [
+        {
+          "start": 0,
+          "end": 602,
+          "bytes": 602,
+          "sha256": "e14da7956789ce187a837dfce5a8d571769e1e0d02e0abfa1b33a25488e1512c",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "8fb024"
+        }
+      ],
+      "semantics": "Driving-line vertex passes world metres and across/speed/zone/along with view-projection."
+    },
+    {
+      "id": 19,
+      "path": "artifacts/shader-validate/LIT_FS.frag",
+      "start": 0,
+      "end": 73588,
+      "kind": "text",
+      "sha256": "01d432ea7ca5aafc1fb060aac4345977e8db23ae5da598b66ea856a12e621414",
+      "file_bytes": 141892,
+      "actual_wholefile_sha256": "01d432ea7ca5aafc1fb060aac4345977e8db23ae5da598b66ea856a12e621414",
+      "hash_matches": true,
+      "assigned_sha256": "bd93d25c1257b52c773ece81c84a25d1789bd14f68da713916e17d28d8220337",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "e88577db973d209654cb9624c3756f53c246637b4b1126bbc0500b7e096bdcdf",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "e4e6ca"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "a61d4e63635366f2f92c68b5f4a0ca128d4820b30123ea5779f70e01d08230ba",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "617d5f"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "da220bb943e63c753529179bbb3d5c2232ae47f5baa6d41370d11dbeb760ea9d",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "ca2222"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "92dafd31b675ee4a05565cb2148f7306e237f360065431927a73e5d45e6f111b",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "a314f5"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "e48e29ceec0cb3a5f1a31ab0db233a2138f898b677585a00f3747074dafcee94",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "fb6923"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "b5873abf88be01c54f5ee437e3002b34bf562f2481335b0ec8d4257e41f07687",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "38b92d"
+        },
+        {
+          "start": 48000,
+          "end": 56000,
+          "bytes": 8000,
+          "sha256": "de969458de9ea6549bbe8aef0f5f8c6caac2ee1b0f1046618b4492ef68e18d2b",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "266f0c"
+        },
+        {
+          "start": 56000,
+          "end": 64000,
+          "bytes": 8000,
+          "sha256": "0ae3b42c05991c6f0655ca2922f09be47711bfc5d2c4a2ce187c942a3d1c7b03",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "99cf98"
+        },
+        {
+          "start": 64000,
+          "end": 72000,
+          "bytes": 8000,
+          "sha256": "97eb2e7daea03244c1b5f00f138440272b22f5aa9ae1ece60e1309da7e1a1037",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "22f071"
+        },
+        {
+          "start": 72000,
+          "end": 73588,
+          "bytes": 1588,
+          "sha256": "e4012c6ade3778830cf96355a25bbd5930f1d3a962f1c5a723c070f64b922cc3",
+          "raw_returned": true,
+          "truncated": false,
+          "tool_output_chunk_id": "bac696"
+        }
+      ],
+      "semantics": "Prefix of large lit fragment only: GLSL uniforms, 17-layer material array contract and scale/absence gates, live cube/three shadow-map families, sparse two-half lamp-bake atlas, 48 interleaved four-vec4 lights; GGX/Smith/Schlick functions; material 1..16 procedural and baked normal/albedo/roughness, footprint and distance fades; analytical road/pit-lane/box painting; cloud drift; PCSS/PCF sun and dynamic-car shadows; main front-face normal flip, derivative inputs in uniform flow, car surface classification 20..90 and finish remaps 60..85, object-space peel/carbon/forged/flake/candy/gold/anodised shading. Assigned span ends inside chameleon comment; later lighting/output must be read in group03 before whole-program conclusions."
+    }
+  ],
+  "provenance": {
+    "support": "tools/check/shader-validate.mjs",
+    "support_read": [
+      0,
+      8000
+    ],
+    "contract": "VM resolves shader templates and interpolated chunks; AST extracts static ES300 inline stage constants; stage inferred from VS suffix; sanitized id plus .frag/.vert written then glslangValidator -S stage. These are generated validator inputs, not runtime-loaded authority. Naming and content fit this producer; generation timestamp/source revision not independently established.",
+    "current_source_paths": [
+      "js/render/glx/shaders/glsl-chunks.js",
+      "js/render/glx/shaders/glsl-fx.js",
+      "js/render/glx/shaders/glsl-lit.js",
+      "js/render/glx/shaders/glsl-post.js",
+      "js/render/glx/glx.js",
+      "js/render/glx/post.js"
+    ],
+    "limits": "No current named symbol lookup or LSP resolution attempted; source relationships follow producer and embedded comments, not proof of byte parity against current source. No compilation/tests/browser/network performed. A reference compiler receipt does not establish GPU runtime compatibility."
+  },
+  "cleanup": "Generated shader inputs can be regenerated by authoritative producer; preserve associated receipts and hashes before deletion. Snapshots are historical evidence; shim is retained repair data and must not be imported or placed on Python path. No cleanup performed."
+}

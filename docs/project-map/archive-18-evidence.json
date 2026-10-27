@@ -1,0 +1,462 @@
+{
+  "group": "18",
+  "assigned_bytes": 160000,
+  "method": "Full assigned byte-span reading, individual untruncated tool results <=8000 bytes; whole-file plan hashes separately checked from assigned-part/chunk hashes. No tests/browser/network/runtime/source edits/staging/commits. Source 1 opening belongs to group 17; source 9 suffix belongs to group 19. Sources 5 and 6 returned in one combined tool result totaling 4770 bytes.",
+  "sources": [
+    {
+      "source_id": 1,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-1ofn.md",
+      "start": 9819,
+      "end": 24876,
+      "kind": "text",
+      "sha256": "0a3c2b47165a3b8cac6b103f80b5c830ecd3dd2af6f95908141731ef7a9e1852",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 24876,
+      "observed_whole_file_sha256": "0a3c2b47165a3b8cac6b103f80b5c830ecd3dd2af6f95908141731ef7a9e1852",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "faff2bc20402a60749efb167afe200d311a9d5c7abeb21fa14c5e7daee549ecd",
+      "complete_file_read": false,
+      "read_chunks": [
+        {
+          "start": 9819,
+          "end": 17819,
+          "bytes": 8000,
+          "sha256": "1685a299832e020188bde38ab8c37b2f6b011ce0527d54cd702234242e1b9653",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 17819,
+          "end": 24876,
+          "bytes": 7057,
+          "sha256": "52a8c098468eae0c7c618b51083b147004d71b7848deea7a7212a6ffe24ceaa9",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-1ofn.md",
+        "ui-2.part-1ofn.md"
+      ],
+      "backlinks": [
+        "docs/notes/system-audit-4/anchors.md:37:| docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-1ofn.md | 46 | 92 |",
+        "docs/archive/notes/test-review-2026-10-19/src/status.py:10:       \"race-2\": \"[part 1/n](reports/race-2.part-1ofn.md) + [part 2/2](reports/race-2.part-2of2.md) + [part 3/3](reports/race-2.part-3of3.md) (race-2b)\", \"audio-1\": \"[audio-1](reports/audio-1.md)\", \"tooling-4\": \"[tooling-4](reports/tooling-4.md)\", \"car-1\": \"[car-1](reports/car-1.md)\", \"ui-1\": \"[ui-1](reports/ui-1.md)\", \"tooling-2\": \"[tooling-2](reports/tooling-2.md)\", \"tracks-1\": \"[tracks-1](reports/tracks-1.md)\", \"tracks-2\": \"[part 1/n](reports/tracks-2.part-1ofn.md) + [spec addendum](reports/tracks-2.addendum-specs.md) + [part 2/2](reports/tracks-2.part-2of2.md)\", \"platform\": \"[part 1/n](reports/platform.part-1ofn.md) + [part 2/2](reports/platform.part-2of2.md) (continuation; counted final)\", \"tooling-1\": \"[tooling-1](reports/tooling-1.md)\", \"tooling-3\": \"[tooling-3](reports/tooling-3.md)\", \"modes-1\": \"[modes-1](reports/modes-1.md)\", \"net\": \"[net](reports/net.md)\", \"race-1\": \"[part 1/n](reports/race-1.part-1ofn.md) + [part 2/2](reports/race-1.part-2of2.md)\", \"ui-2\": \"[part 1/n](reports/ui-2.part-1ofn.md) + [part 2/n](reports/ui-2.part-2ofn.md)\", \"car-2\": \"[part 1/n](reports/car-2.part-1ofn.md) + [part 2/2](reports/car-2.part-2of2.md)\"}",
+        "docs/archive/notes/test-review-2026-10-19/SYNTHESIS.md:48:| ui-2 | partial 2/n (120k cap) | [part 1/n](reports/ui-2.part-1ofn.md) + [part 2/n](reports/ui-2.part-2ofn.md) |"
+      ]
+    },
+    {
+      "source_id": 2,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-2ofn.md",
+      "start": 0,
+      "end": 5785,
+      "kind": "text",
+      "sha256": "b05dc295f54f913f6fba76cdcbf5afeacd1bde035a1a9343af72f57803e779c6",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 5785,
+      "observed_whole_file_sha256": "b05dc295f54f913f6fba76cdcbf5afeacd1bde035a1a9343af72f57803e779c6",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "b05dc295f54f913f6fba76cdcbf5afeacd1bde035a1a9343af72f57803e779c6",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 5785,
+          "bytes": 5785,
+          "sha256": "b05dc295f54f913f6fba76cdcbf5afeacd1bde035a1a9343af72f57803e779c6",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-2ofn.md",
+        "ui-2.part-2ofn.md"
+      ],
+      "backlinks": [
+        "docs/archive/notes/test-review-2026-10-19/src/status.py:10:       \"race-2\": \"[part 1/n](reports/race-2.part-1ofn.md) + [part 2/2](reports/race-2.part-2of2.md) + [part 3/3](reports/race-2.part-3of3.md) (race-2b)\", \"audio-1\": \"[audio-1](reports/audio-1.md)\", \"tooling-4\": \"[tooling-4](reports/tooling-4.md)\", \"car-1\": \"[car-1](reports/car-1.md)\", \"ui-1\": \"[ui-1](reports/ui-1.md)\", \"tooling-2\": \"[tooling-2](reports/tooling-2.md)\", \"tracks-1\": \"[tracks-1](reports/tracks-1.md)\", \"tracks-2\": \"[part 1/n](reports/tracks-2.part-1ofn.md) + [spec addendum](reports/tracks-2.addendum-specs.md) + [part 2/2](reports/tracks-2.part-2of2.md)\", \"platform\": \"[part 1/n](reports/platform.part-1ofn.md) + [part 2/2](reports/platform.part-2of2.md) (continuation; counted final)\", \"tooling-1\": \"[tooling-1](reports/tooling-1.md)\", \"tooling-3\": \"[tooling-3](reports/tooling-3.md)\", \"modes-1\": \"[modes-1](reports/modes-1.md)\", \"net\": \"[net](reports/net.md)\", \"race-1\": \"[part 1/n](reports/race-1.part-1ofn.md) + [part 2/2](reports/race-1.part-2of2.md)\", \"ui-2\": \"[part 1/n](reports/ui-2.part-1ofn.md) + [part 2/n](reports/ui-2.part-2ofn.md)\", \"car-2\": \"[part 1/n](reports/car-2.part-1ofn.md) + [part 2/2](reports/car-2.part-2of2.md)\"}",
+        "docs/archive/notes/test-review-2026-10-19/SYNTHESIS.md:48:| ui-2 | partial 2/n (120k cap) | [part 1/n](reports/ui-2.part-1ofn.md) + [part 2/n](reports/ui-2.part-2ofn.md) |"
+      ]
+    },
+    {
+      "source_id": 3,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/build.py",
+      "start": 0,
+      "end": 6838,
+      "kind": "text",
+      "sha256": "c0268b6240fa1b0bdba6b3664b3fd11772f0077cc0f0f7fd8feebaf5da176a2f",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 6838,
+      "observed_whole_file_sha256": "c0268b6240fa1b0bdba6b3664b3fd11772f0077cc0f0f7fd8feebaf5da176a2f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c0268b6240fa1b0bdba6b3664b3fd11772f0077cc0f0f7fd8feebaf5da176a2f",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6838,
+          "bytes": 6838,
+          "sha256": "c0268b6240fa1b0bdba6b3664b3fd11772f0077cc0f0f7fd8feebaf5da176a2f",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/src/build.py",
+        "src/build.py"
+      ],
+      "backlinks": [
+        "docs/archive/notes/test-review-2026-10-19/README.md:28:`python3 src/build.py src .` from this folder. `build.py` fails on a duplicate id, a `dup_of` that names no row, or a"
+      ]
+    },
+    {
+      "source_id": 4,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/lanes.py",
+      "start": 0,
+      "end": 43285,
+      "kind": "text",
+      "sha256": "281e6cae97e9ff367f05be1cfd5218e2b2a06f149ae0fa1d6c6b646af3449b38",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 43285,
+      "observed_whole_file_sha256": "281e6cae97e9ff367f05be1cfd5218e2b2a06f149ae0fa1d6c6b646af3449b38",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "281e6cae97e9ff367f05be1cfd5218e2b2a06f149ae0fa1d6c6b646af3449b38",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "f54af11a4d1e41c4adb9d0ec7867920e6d5123f60da746b83d7de6cfa0d5afae",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "4e9f92a39bdf018a97c0c82dd7ca068f75489786bc5415e3e998cf1684a49a09",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "370fd0145863dd7df03e328329c199050288f7facbea3abb48fba4cca5ce4df9",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "2d8d084763d1e5e0847f06ef434bffe7c9ce403b3620e9348c87252582e3a99f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "b32b9d27734949c0058112fec1567af969d064259229c0edd036c6869a144c5f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 40000,
+          "end": 43285,
+          "bytes": 3285,
+          "sha256": "d55b8c05c370ce3169fa66e33b65621eb3f6840b5efbab62df09f115a6c55dc4",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/src/lanes.py",
+        "src/lanes.py"
+      ],
+      "backlinks": [
+        "docs/archive/notes/test-review-2026-10-19/README.md:27:All three are generated: edit `src/rows.py` (findings), `src/status.py` (status and prose) or `src/lanes.py` (lanes), then"
+      ]
+    },
+    {
+      "source_id": 5,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/mkreports.py",
+      "start": 0,
+      "end": 2067,
+      "kind": "text",
+      "sha256": "2cfb7e51cd455312820cb58d3049a3172a3a8a17f76b0f89ed547564f0f2a128",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 2067,
+      "observed_whole_file_sha256": "2cfb7e51cd455312820cb58d3049a3172a3a8a17f76b0f89ed547564f0f2a128",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2cfb7e51cd455312820cb58d3049a3172a3a8a17f76b0f89ed547564f0f2a128",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2067,
+          "bytes": 2067,
+          "sha256": "2cfb7e51cd455312820cb58d3049a3172a3a8a17f76b0f89ed547564f0f2a128",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/src/mkreports.py",
+        "src/mkreports.py"
+      ],
+      "backlinks": [
+        "docs/archive/notes/test-review-2026-10-19/README.md:29:finding in two lanes. `src/mkreports.py <dir with comments.json and reportmap.json> reports` rewrites the verbatim reports."
+      ]
+    },
+    {
+      "source_id": 6,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/reportmap.json",
+      "start": 0,
+      "end": 2703,
+      "kind": "text",
+      "sha256": "15adda648bda2e03e714292d3205d88f50f672385448f99c88c004635b03d9fb",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 2703,
+      "observed_whole_file_sha256": "15adda648bda2e03e714292d3205d88f50f672385448f99c88c004635b03d9fb",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "15adda648bda2e03e714292d3205d88f50f672385448f99c88c004635b03d9fb",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2703,
+          "bytes": 2703,
+          "sha256": "15adda648bda2e03e714292d3205d88f50f672385448f99c88c004635b03d9fb",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/src/reportmap.json",
+        "src/reportmap.json"
+      ],
+      "backlinks": [
+        "docs/archive/notes/test-review-2026-10-19/src/mkreports.py:4: m=json.load(open(S+'/reportmap.json'))"
+      ]
+    },
+    {
+      "source_id": 7,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows.py",
+      "start": 0,
+      "end": 28115,
+      "kind": "text",
+      "sha256": "dd496f179fb6896a39e0b1b5d0a99798804aadef273e08b24a1c7b7bdd3dca66",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 28115,
+      "observed_whole_file_sha256": "dd496f179fb6896a39e0b1b5d0a99798804aadef273e08b24a1c7b7bdd3dca66",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "dd496f179fb6896a39e0b1b5d0a99798804aadef273e08b24a1c7b7bdd3dca66",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "239941aec817087f106dfda519a8f3305bfe35dab6353c3f767334ed62eaa294",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "99014ee9e439f1beb1973b42191add4cedb0ddbd5eb86e854322224268983d1d",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "3392aa2ab6f94b645cd68d26ae15938fe5878fabf01e126d9b05b7d96dba69cf",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 28115,
+          "bytes": 4115,
+          "sha256": "2faa0fb603148eafc9929ce939ddebabc06cbccb4b5a5333f9c35d3d80e379f7",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/src/rows.py",
+        "src/rows.py"
+      ],
+      "backlinks": [
+        "docs/archive/notes/test-review-2026-10-19/src/rows_physics.py:1:# Physics batch rows (physics-1, physics-2) for docs/notes/test-review-2026-10-19/src/rows.py.",
+        "docs/archive/notes/test-review-2026-10-19/README.md:27:All three are generated: edit `src/rows.py` (findings), `src/status.py` (status and prose) or `src/lanes.py` (lanes), then"
+      ]
+    },
+    {
+      "source_id": 8,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_audio1.py",
+      "start": 0,
+      "end": 13631,
+      "kind": "text",
+      "sha256": "3adc6670819bd5b24d7bbc2e97acab7a5749eee7c9ceb6caca2393052d6751ee",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 13631,
+      "observed_whole_file_sha256": "3adc6670819bd5b24d7bbc2e97acab7a5749eee7c9ceb6caca2393052d6751ee",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "3adc6670819bd5b24d7bbc2e97acab7a5749eee7c9ceb6caca2393052d6751ee",
+      "complete_file_read": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "d163bb3678f0c97b90f18f605cf6bed3e7f1bd66d79a4d69bcc88472ef0aa9cf",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 13631,
+          "bytes": 5631,
+          "sha256": "81f025552c36fed45ccf356524bb3b38c9c22e9b6f8f6e015b09b1a31f226f7c",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/src/rows_audio1.py",
+        "src/rows_audio1.py"
+      ],
+      "backlinks": [
+        "docs/archive/notes/test-review-2026-10-19/src/rows.py: import loop names rows_audio1.py; exec appends NEW"
+      ]
+    },
+    {
+      "source_id": 9,
+      "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch6a.py",
+      "start": 0,
+      "end": 42519,
+      "kind": "text",
+      "sha256": "07515d02cdbec894d77686d4dcf40a14495c0d1ce4765c79e38b586cde2a9288",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 44686,
+      "observed_whole_file_sha256": "07515d02cdbec894d77686d4dcf40a14495c0d1ce4765c79e38b586cde2a9288",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "4761667b48fc45725387f0ce3602c430bbe100a13f39b22f5d08e86e89551f39",
+      "complete_file_read": false,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "023861be22eceb01a94e879d60c724933f118112c7437376e5181f09e54269d9",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "17fdeef5b7f6b381e3efaa919d9bdb838d9724597c484679a481b4c0efedc859",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "cfb8b9a07a5df1637c2da06191e7ace30075d5288b1ba79a5429b524bb1f1251",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "7480952c816e491c5d17a53516790293c5c4b406d496e313842a6757a58c74c2",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "d2fabbbe3d55627fd413852e469df0965f63148bb11fe75451c8cd91914a8dd3",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 40000,
+          "end": 42519,
+          "bytes": 2519,
+          "sha256": "c897c8340266504c4fb003365f0a628afb5be2636968c00de4a6abe4cb9bc08a",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "backlink_search_patterns": [
+        "docs/archive/notes/test-review-2026-10-19/src/rows_batch6a.py",
+        "src/rows_batch6a.py"
+      ],
+      "backlinks": [
+        "docs/archive/notes/test-review-2026-10-19/src/rows.py: import loop names rows_batch6a.py; exec appends NEW"
+      ]
+    }
+  ],
+  "provenance": {
+    "review_date": "2026-10-19",
+    "archive_date_context": "2026-10-26 per docs/NOTES-INDEX.md:198",
+    "source_1": {
+      "issue_comment_url": "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260884152",
+      "header_outside_assigned_span": true
+    },
+    "source_2": {
+      "issue_comment_url": "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261404014",
+      "posted_utc": "2026-10-19T06:46:50Z",
+      "comment_author": "brycejmurrin",
+      "reviewer_session": "not stated",
+      "assistant_footer": "Claude Code"
+    },
+    "source_8_synthesis_tree": "7b27c153",
+    "source_9_high_severity_synthesis_tree": "a027eaf4"
+  },
+  "support_reads": [
+    "AGENTS.md",
+    "docs/archive/notes/test-review-2026-10-19/README.md:1-37",
+    "docs/NOTES-INDEX.md:198",
+    "docs/notes/system-audit-4/anchors.md:37",
+    "docs/project-map/archive-17.md",
+    "docs/project-map/GOAL.md"
+  ],
+  "current_use_search": {
+    "paths": [
+      "tools/manifest.cjs",
+      "package.json",
+      "tests/groups.json"
+    ],
+    "patterns": [
+      "test-review",
+      "rows_",
+      "mkreports",
+      "reportmap",
+      "lanes.py",
+      "build.py"
+    ],
+    "matches": [],
+    "limit": "textual bounded search; no execution or external-consumer proof"
+  },
+  "cleanup_candidates": [
+    "Preserve raw comment bodies and ordered amendments; historical commands are provenance only.",
+    "Align emitted score prose with hidden-bug bonus if this producer is ever maintained.",
+    "Clarify missing-lane reporting versus duplicate/unknown-lane assertions and unvalidated ownership glob disjointness.",
+    "Reconcile stale partial classifications with continuation sources before using rows for present remediation."
+  ],
+  "producer_edges": [
+    {
+      "from_source_id": 3,
+      "to_source_id": 7,
+      "contract": "load rows.py ROWS via importlib"
+    },
+    {
+      "from_source_id": 3,
+      "to_source_id": 4,
+      "contract": "load lanes.py LANES via importlib"
+    },
+    {
+      "from_source_id": 5,
+      "to_source_id": 6,
+      "contract": "json.load reportmap.json from supplied source directory"
+    },
+    {
+      "from_source_id": 7,
+      "to_source_id": 8,
+      "contract": "exec rows_audio1.py and append NEW"
+    },
+    {
+      "from_source_id": 7,
+      "to_source_id": 9,
+      "contract": "exec rows_batch6a.py and append NEW"
+    }
+  ],
+  "backlink_limit": "Backlinks record exact-path/relative-path rg matches plus explicitly labeled directly read producer edges; not an exhaustive basename search."
+}

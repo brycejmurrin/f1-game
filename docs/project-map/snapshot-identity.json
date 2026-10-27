@@ -54664,6 +54664,297 @@
         }
       ],
       "canonicalWholeSha256": "c79b3b7726f51baed438d0c1a3345ad7641b5bd73622bb437f241b2c60205e42"
+    },
+    {
+      "path": "artifacts/logs/environment-repair-index.html",
+      "canonical": "index.html",
+      "bytes": 355560,
+      "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0",
+      "canonicalWholeSha256": "198787c00ff4055628ee7c524dff5453c5bc90ee6724948304d4f41d32499348",
+      "equalBlocks": [
+        {
+          "canonicalLines": [
+            1,
+            5
+          ],
+          "snapshotLines": [
+            1,
+            5
+          ],
+          "bytes": 87,
+          "sha256": "154bf6f60bcb72aa8087ad6bf491343e919a706dcdf2fe960af33a5e312edd0d",
+          "canonicalStartByte": 0,
+          "canonicalEndByte": 87,
+          "snapshotStartByte": 0,
+          "snapshotEndByte": 87
+        },
+        {
+          "canonicalLines": [
+            7,
+            283
+          ],
+          "snapshotLines": [
+            7,
+            283
+          ],
+          "bytes": 18203,
+          "sha256": "ee33357f3541930da15f7113066905d2da54325930caceac948225fcf2cb9510",
+          "canonicalStartByte": 927,
+          "canonicalEndByte": 19130,
+          "snapshotStartByte": 927,
+          "snapshotEndByte": 19130
+        },
+        {
+          "canonicalLines": [
+            287,
+            477
+          ],
+          "snapshotLines": [
+            284,
+            474
+          ],
+          "bytes": 11198,
+          "sha256": "4316deb2fce00fa1522ca04a247fed2d1256381810ece8a966b66ddd6d141aab",
+          "canonicalStartByte": 19349,
+          "canonicalEndByte": 30547,
+          "snapshotStartByte": 19130,
+          "snapshotEndByte": 30328
+        },
+        {
+          "canonicalLines": [
+            479,
+            881
+          ],
+          "snapshotLines": [
+            475,
+            877
+          ],
+          "bytes": 27689,
+          "sha256": "502444018a14968c6099cbdc3f427967e9737a94555a51694634d9f4f5a5fda9",
+          "canonicalStartByte": 30582,
+          "canonicalEndByte": 58271,
+          "snapshotStartByte": 30328,
+          "snapshotEndByte": 58017
+        },
+        {
+          "canonicalLines": [
+            883,
+            2074
+          ],
+          "snapshotLines": [
+            879,
+            2070
+          ],
+          "bytes": 96485,
+          "sha256": "d4a7e5c740231eedba9eeaf878c232498b38fbb7af784992b115d09311e94db0",
+          "canonicalStartByte": 58357,
+          "canonicalEndByte": 154842,
+          "snapshotStartByte": 58097,
+          "snapshotEndByte": 154582
+        },
+        {
+          "canonicalLines": [
+            2076,
+            2095
+          ],
+          "snapshotLines": [
+            2072,
+            2091
+          ],
+          "bytes": 1472,
+          "sha256": "26fb2b72f00df23478e948f9251555d7c8e92d75cb559a6c038c51acbaffc11d",
+          "canonicalStartByte": 154924,
+          "canonicalEndByte": 156396,
+          "snapshotStartByte": 154663,
+          "snapshotEndByte": 156135
+        },
+        {
+          "canonicalLines": [
+            2097,
+            2672
+          ],
+          "snapshotLines": [
+            2093,
+            2668
+          ],
+          "bytes": 91327,
+          "sha256": "293a283631ed15c8988bedbe9b29f48a1fcc03505659ee3c31252d66637b6b92",
+          "canonicalStartByte": 156476,
+          "canonicalEndByte": 247803,
+          "snapshotStartByte": 156214,
+          "snapshotEndByte": 247541
+        },
+        {
+          "canonicalLines": [
+            2674,
+            3325
+          ],
+          "snapshotLines": [
+            2670,
+            3321
+          ],
+          "bytes": 60848,
+          "sha256": "72e0ea64d18776828671649b4505152c5c46eda2e4448132b64a0df1a26e358a",
+          "canonicalStartByte": 247866,
+          "canonicalEndByte": 308714,
+          "snapshotStartByte": 247609,
+          "snapshotEndByte": 308457
+        },
+        {
+          "canonicalLines": [
+            3327,
+            3385
+          ],
+          "snapshotLines": [
+            3323,
+            3381
+          ],
+          "bytes": 3550,
+          "sha256": "8f70b871e26514f5c8cb60291becc100099979db4458037a3f8a4216da9dc2d3",
+          "canonicalStartByte": 308802,
+          "canonicalEndByte": 312352,
+          "snapshotStartByte": 308544,
+          "snapshotEndByte": 312094
+        },
+        {
+          "canonicalLines": [
+            3387,
+            3401
+          ],
+          "snapshotLines": [
+            3383,
+            3397
+          ],
+          "bytes": 840,
+          "sha256": "25e49da6b319d73410830354c729cbc6b5d335d2004c3d54c0d89d982759e0cb",
+          "canonicalStartByte": 312458,
+          "canonicalEndByte": 313298,
+          "snapshotStartByte": 312195,
+          "snapshotEndByte": 313035
+        },
+        {
+          "canonicalLines": [
+            3404,
+            3426
+          ],
+          "snapshotLines": [
+            3400,
+            3422
+          ],
+          "bytes": 1468,
+          "sha256": "2c9177b63dca53b52fcb2fea9735aeb2664a1aa2b789e6166b9cf12be4476fb6",
+          "canonicalStartByte": 313439,
+          "canonicalEndByte": 314907,
+          "snapshotStartByte": 313165,
+          "snapshotEndByte": 314633
+        },
+        {
+          "canonicalLines": [
+            3429,
+            3794
+          ],
+          "snapshotLines": [
+            3425,
+            3790
+          ],
+          "bytes": 26367,
+          "sha256": "9f8cf3a80d6f9bdc36c1412496f3104be4fe8ede149c53c0fb180878500512e9",
+          "canonicalStartByte": 315022,
+          "canonicalEndByte": 341389,
+          "snapshotStartByte": 314743,
+          "snapshotEndByte": 341110
+        },
+        {
+          "canonicalLines": [
+            3796,
+            3970
+          ],
+          "snapshotLines": [
+            3791,
+            3965
+          ],
+          "bytes": 14450,
+          "sha256": "70d3f0dd5fcb31254abc5502217ab36152990992d9e56095ad40c641f23acefa",
+          "canonicalStartByte": 341471,
+          "canonicalEndByte": 355921,
+          "snapshotStartByte": 341110,
+          "snapshotEndByte": 355560
+        }
+      ],
+      "differentRanges": [
+        {
+          "start": 87,
+          "end": 927,
+          "snapshotLines": [
+            6,
+            6
+          ]
+        },
+        {
+          "start": 58017,
+          "end": 58097,
+          "snapshotLines": [
+            878,
+            878
+          ]
+        },
+        {
+          "start": 154582,
+          "end": 154663,
+          "snapshotLines": [
+            2071,
+            2071
+          ]
+        },
+        {
+          "start": 156135,
+          "end": 156214,
+          "snapshotLines": [
+            2092,
+            2092
+          ]
+        },
+        {
+          "start": 247541,
+          "end": 247609,
+          "snapshotLines": [
+            2669,
+            2669
+          ]
+        },
+        {
+          "start": 308457,
+          "end": 308544,
+          "snapshotLines": [
+            3322,
+            3322
+          ]
+        },
+        {
+          "start": 312094,
+          "end": 312195,
+          "snapshotLines": [
+            3382,
+            3382
+          ]
+        },
+        {
+          "start": 313035,
+          "end": 313165,
+          "snapshotLines": [
+            3398,
+            3399
+          ]
+        },
+        {
+          "start": 314633,
+          "end": 314743,
+          "snapshotLines": [
+            3423,
+            3424
+          ]
+        }
+      ]
     }
   ]
 }

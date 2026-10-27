@@ -1,0 +1,508 @@
+{
+  "group": "05",
+  "date": "2026-10-27",
+  "scope": "assigned half-open TEXT bytes; all six parts; no binaries in group",
+  "assigned_bytes": 160000,
+  "read_method": "24 individual untruncated read calls, each at most 8000 source bytes; ancillary static reads separate",
+  "instructions": [
+    "AGENTS.md",
+    ".claude/skills/code-nav/SKILL.md"
+  ],
+  "parts": [
+    {
+      "path": "docs/research/RENDERER-PERF-AUDIT-2026-09-02.md",
+      "start": 18178,
+      "end": 34714,
+      "kind": "text",
+      "sha256": "8c3288d16a28d6b5ccc8aa546c705b9c1b84b1a881a22c67c392823abc93065d",
+      "file_bytes": 34714,
+      "whole_file_sha256": "8c3288d16a28d6b5ccc8aa546c705b9c1b84b1a881a22c67c392823abc93065d",
+      "plan_hash_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "5280f72f2039017eb12fb25472a571f7d62ecece29f62ac6978241b5839d5821",
+      "chunks": [
+        {
+          "start": 18178,
+          "end": 26178,
+          "bytes": 8000,
+          "sha256": "c7fdb68d9b419890e47df28b40d32ce4222f804d2f76b2091654454c1e383f8d",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 26178,
+          "end": 34178,
+          "bytes": 8000,
+          "sha256": "1a820f3bffdaaf9d4a62a4435dcb8450b87d40c0c658f9a48a73124bbe3fff7d",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 34178,
+          "end": 34714,
+          "bytes": 536,
+          "sha256": "9745822e8ef9c7496dceb5c20bd2d23699073814995eb01ed50dd33343d59929",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        }
+      ],
+      "semantics": {
+        "question": "Which renderer/CPU work is provably redundant or incorrect?",
+        "method": "Assigned tail of same-day round-two read-only GLX/TLX/WGX/CPU audit; source traces, census corrections and upstream source discussion, not a fresh benchmark.",
+        "evidence": "Sun-shaft zero-contribution bound; state/instance upload traces; earlier call census; compiler-versus-text validation defect.",
+        "results": "Records landed sun-shaft/material/tint/index-cache/menu rendering changes; retracts overestimated GL state counts and pine-adjacent magnitude assumptions; static JS parse guard and governor/env-state instrumentation landed.",
+        "proposals": "Late TLX sky, attribute usage/ranges and shadow attachment changes; GLX depth-bias/double-sided/per-chunk lamps; WGX material fetches/invariant writes; CPU pair scans/cache keys/haze/frustum/closures.",
+        "current": "wgx-validate now parse-checks the entire manifest WebGPU deferred roster using vm.Script; gpu-game-check still captures governor and envState. Other ranked entries were not individually revalidated.",
+        "cleanup": "Preserve corrections and dated measurements; refresh the unlanded/landed ledger only with current source plus affected renderer evidence.",
+        "limits": "Part begins mid-item at byte 18178; opening audit and earlier backlog outside this assignment. No timing, raster, GPU or claimed bit-exact behavior independently reproduced."
+      }
+    },
+    {
+      "path": "docs/research/SCENE-GRAPH-PLAN.md",
+      "start": 0,
+      "end": 24738,
+      "kind": "text",
+      "sha256": "2916d21862bda36c8b4ce6016d51edcf1ae9e102f950d8e00c705ce29c726878",
+      "file_bytes": 24738,
+      "whole_file_sha256": "2916d21862bda36c8b4ce6016d51edcf1ae9e102f950d8e00c705ce29c726878",
+      "plan_hash_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2916d21862bda36c8b4ce6016d51edcf1ae9e102f950d8e00c705ce29c726878",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "1d57dbe61fd3b7ef89254666b75407eebc85906fa042a5c4de7efa57ebffb5dd",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "fdafc8b2a1e1d7bd3de1b9f8d60d5270c56f3537c3e3c756f78ad1f2c45f2ba8",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "5f50aa97d91066b7828b1d5d3b15a828bd09fde61f76428110f5b338adad326e",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 24000,
+          "end": 24738,
+          "bytes": 738,
+          "sha256": "c8e8737cc216f06ac6f209d8df020e84a3e442db3e074561f4d3ffcfcea50f40",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        }
+      ],
+      "semantics": {
+        "question": "How can detailed scenery become affordable without placement-multiplied geometry?",
+        "method": "Staged scene graph design with corrected fleet measurements, guarded replay parity and by-kind reuse accounting.",
+        "evidence": "Sixteen migrated emitter table, 383403 nodes/10144 models, 383402 instanceable nodes, one bake-only fallback; pine affine dimensions invalidate the original three-model estimate.",
+        "results": "Documents S0-S2 and batch-data infrastructure as landed; GLX consumer existed but game draw wiring was then absent. Later current graph has mirrored LH canonical geometry.",
+        "proposals": "Instance rendering before LOD/detail; scale-linear vegetation; imported model slots; transform motion; retain guarded bake fallback.",
+        "current": "TrackGraph references resolve in nature/city/build-props; batches body in graph.js emits variant geometry and matrices; current drawInstanced functions exist in all three backends. No current active rendering/wiring verdict from named-symbol references alone.",
+        "cleanup": "Keep corrected pine result and replay-vs-triangle rationale; reconcile historical unwired/TLX-not-instanced text before treating S3 status as a current task.",
+        "limits": "Fleet counts, parity and memory estimates are dated research outputs; LSP batches lookup explicitly used module-file fallback and did not verify caller/export coverage."
+      }
+    },
+    {
+      "path": "docs/research/STREET-PIT-LANES-PLAN-2026-09.md",
+      "start": 0,
+      "end": 21872,
+      "kind": "text",
+      "sha256": "ef2f8e6c995ab6924f9b390e8cc702bd1b451cc3a637b100aa28fb2c77f149c1",
+      "file_bytes": 21872,
+      "whole_file_sha256": "ef2f8e6c995ab6924f9b390e8cc702bd1b451cc3a637b100aa28fb2c77f149c1",
+      "plan_hash_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "ef2f8e6c995ab6924f9b390e8cc702bd1b451cc3a637b100aa28fb2c77f149c1",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "6c7838f86b847e5e3f5ef0c7a252b77663fc2d4cd4b6dc6bfce261fb349ef573",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "e6257704beb6a6c0eae9925b1ee9959f22b980eb0cf89310f28f4d35415db4a8",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 21872,
+          "bytes": 5872,
+          "sha256": "9099b9d373abdbf6dbf2a6c5274971a73fb76068404804923d39c98aecc38f2b",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        }
+      ],
+      "semantics": {
+        "question": "How should five street circuits gain a separated physical pit complex?",
+        "method": "VM geometry counterfactual measurements at c70542d, per-circuit authored/racing coordinate analysis, keep-out and barrier-record traces.",
+        "evidence": "STREET 10.6m bands, 2.5m placeable threshold, Jeddah 190m compressed pitch, per-circuit casualty tables and boundary margin 1.5m.",
+        "results": "Plan specified built street mode, wall/window splits, street-barrier omission, bay-pitch guard, five circuit configs; current index says built 2026-09-16 and source/test content corroborates built street behavior.",
+        "proposals": "Originally ten-step implementation and circuit verification, terrain/gantry/flood follow-ups; narrow retained as explicit painted fallback.",
+        "current": "TrackPit.resolve defaults street defs to street, narrow alone is painted; STREET bands match; five defs select street, Jeddah disables bays. Singapore now uses default 80, superseding plan 60.",
+        "cleanup": "Treat plan-only banner and Singapore 60km/h as historical; retain authored-side conversions and unresolved survey prerequisites rather than blindly applying old line-number edits.",
+        "limits": "No current VM build or physics/visual sign-off; real Baku side/Jeddah corner registration explicitly unresolved in plan; historical commands not run."
+      }
+    },
+    {
+      "path": "docs/research/STRUCTURE-REDECISION-2026-08.md",
+      "start": 0,
+      "end": 16497,
+      "kind": "text",
+      "sha256": "b54bdf2fd7a96a95f3e624bcef4f9589df9cde7f12c79ca92d76ea844165a731",
+      "file_bytes": 16497,
+      "whole_file_sha256": "b54bdf2fd7a96a95f3e624bcef4f9589df9cde7f12c79ca92d76ea844165a731",
+      "plan_hash_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "b54bdf2fd7a96a95f3e624bcef4f9589df9cde7f12c79ca92d76ea844165a731",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "8d3eba6d64bd65f3ed89f1aa14a0afc899c731edf42960fb6785cbedd253d97b",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "b539aa2c15664d68a5556b8a1455b330a73fa8ad1fe4ae21ec20b8c0cbeb9688",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 16497,
+          "bytes": 497,
+          "sha256": "14af92de9d8bb3c993803e8d78e5db7223bcf8b9aa97eef282c92dc1552ef8d2",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        }
+      ],
+      "semantics": {
+        "question": "Should six structural decisions be reversed?",
+        "method": "Fresh measurements at 21f44b21; surveyor, three prior-constrained analysts and two judges; unanimous judge agreement required to flip.",
+        "evidence": "Corrects DOM/screens/dialog counts, brace-count versus gap-method function sizes, CSS overrides and missing class-ratchet execution.",
+        "results": "All six UPHOLD: single shell, screen inventory, no cosmetic filename churn, ranked safe carves, CSS layout, no immediate JS moves. Q4 judge split preserved.",
+        "proposals": "Execute generated manifest prerequisite; body/class ratchets; boundary-ranked carves; reconsider one JS/UI wave after generator or demonstrated navigation failure.",
+        "current": "gen-shell now exists and owns shell/precache/roster output; current domain paths and renderer-picker provenance show later restructuring proceeded. This record is a dated decision, not a present freeze.",
+        "cleanup": "Retain corrected measurement method and judge disagreement; do not restate August counts or missing-generator status as current.",
+        "limits": "Assigned entire record; prior exhibits not independently read here. Authorizations are dated research context, not new user permission."
+      }
+    },
+    {
+      "path": "docs/research/TRACK-SOURCE-AUDIT-2026-10-19.md",
+      "start": 0,
+      "end": 72584,
+      "kind": "text",
+      "sha256": "da84c277e7940c387a177742123bedc6efc74c1415eda64da89db5f96983aa54",
+      "file_bytes": 72584,
+      "whole_file_sha256": "da84c277e7940c387a177742123bedc6efc74c1415eda64da89db5f96983aa54",
+      "plan_hash_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "da84c277e7940c387a177742123bedc6efc74c1415eda64da89db5f96983aa54",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "7020989ad90626d507def6fc33d2b64c9168f93f29d14189b507db9d094cdc52",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "d22b61a01fe876d969f4f4eeb9198030d165174d3c7405347d5997afbc55fb09",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "8f0d74204e84bb08ab6a00c993d176f526138576dd389673a72868286f85827c",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "e1da120653717439c61357ce31dd41cc9d14b7d3b79bb7427daf2c50f20beedb",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "e096cb4ce54d30d59d98f54410d29db096ddc570519756460a5635a10221f4f2",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "742ac81932a7eee2ac055465b83cb5550b6fa7f1fc050cebe2ecc569d2f35fbd",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 48000,
+          "end": 56000,
+          "bytes": 8000,
+          "sha256": "b5adf4d6ec11a1c39f0f212a2f4356cab0720c57db4008f91fbfc1bdc1e42b83",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 56000,
+          "end": 64000,
+          "bytes": 8000,
+          "sha256": "35bc609bbb7e21b0b506c1ab91eb281862feae0bf8e0f7fac9d2f4be677ad091",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 64000,
+          "end": 72000,
+          "bytes": 8000,
+          "sha256": "4042d15efe366a252047a3a7966922aa9a1cd2af300d49edfe5297d7d5738db1",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 72000,
+          "end": 72584,
+          "bytes": 584,
+          "sha256": "a5a581f8978ce9a8128d28a5da5285c144ca73b9489235b32f2a2e49e7cbb268",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        }
+      ],
+      "semantics": {
+        "question": "Which of 52 circuit definitions disagree with layout-specific sources and constructed geometry?",
+        "method": "19 October primary-source register plus CPU build inventory at recorded revisions, line:false centerlines, normal scenery/assets and injected instanced/non-instanced renderer seams; source availability explicitly separated from correctness.",
+        "evidence": "122 references/119 URLs; availability length51/52, turns47/52, width19/52, direction35/52, relief7/52, banking6/52; 208/208 CPU construction cases, zero rejected meshes or required-model failures; Shanghai fold remained.",
+        "results": "Ranked width, banking units/location, elevation anchors, marker identity, shared length smoothing, Shanghai road fold and shared width-window/LH instance findings. No circuit edits in audit.",
+        "proposals": "Register maps/stations and correct circuit-scoped data; independently validate generic engine fixes; preserve bridge/grade/grounding constraints; never remove smoothing simply because totals increase.",
+        "current": "Tracks.build resolves in track/tracks.js. Graph batch source now mirrors LH canonical variants as well as tangent matrix flip, so original LH-asymmetry lead is historical; no blanket verdict on remaining circuit backlog.",
+        "cleanup": "Maintain source/layout-era distinctions, unknown dimensions and percent/degree conversions; preserve conflict records such as Fuji16/17, Kyalami direction, Lusail old/current length; do not promote counts to accuracy scores.",
+        "limits": "No source URLs opened anew, no image inspected, no reproduction helpers run. Reported selective ten screenshots/software-WebGPU evidence is attributed to audit; no current visual, GPU, phone, physics, clipping or all-track accuracy claims."
+      }
+    },
+    {
+      "path": "docs/research/TREE-RESTRUCTURE-2026-09.md",
+      "start": 0,
+      "end": 7773,
+      "kind": "text",
+      "sha256": "6dde9bb2b248db18844f79411a61f0233186e873a61e1d2a1af45702e622b152",
+      "file_bytes": 53642,
+      "whole_file_sha256": "6dde9bb2b248db18844f79411a61f0233186e873a61e1d2a1af45702e622b152",
+      "plan_hash_scope": "whole file, not assigned part",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "7cdd2b629c8bdde82a1adb87b5dc185c7b7dc954167112f2a901d0f485b8137f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7773,
+          "bytes": 7773,
+          "sha256": "7cdd2b629c8bdde82a1adb87b5dc185c7b7dc954167112f2a901d0f485b8137f",
+          "method": "individual exec_command Python read_bytes slice decoded UTF-8 and returned in full",
+          "untruncated": true
+        }
+      ],
+      "semantics": {
+        "question": "What large tree restructuring improves comprehensibility and reduces maintenance cost?",
+        "method": "Assigned opening diagnosis of September plan: nine whole-file readers, eight claim verifiers and design review; baseline and explicit corrected counts.",
+        "evidence": "Six lifecycle classes mixed in game directory, manual roster duplication/cache churn, saturated size ratchets, circuit data seven homes, brittle source pins and tool/doc accretion. Corrections distinguish 114 spec files, 14 VM twins and foundation code from data.",
+        "results": "Opening says Phase0 A/B and Phase1-lite landed, presents generator prerequisite and verified diagnosis; assignment ends mid in-flight heading.",
+        "proposals": "Execute generator before domain moves and reduce guard/tool/doc surface; detailed later phases/status are outside assigned range.",
+        "current": "gen-shell source and current domain layout corroborate implemented generator and later migration; renderer-picker header and tools/tests cite plan phases.",
+        "cleanup": "Retain explicit remeasurements and causal diagnosis; baseline inventory cannot be used as current totals. Coordinate continuation with group06.",
+        "limits": "Only bytes0:7773 of 53642 assigned/read; no claims about later sections or whole plan completion."
+      }
+    }
+  ],
+  "static_reference_scan": {
+    "method": "literal filename mentions in js/tools/tests; full matching lines retained",
+    "references": [
+      {
+        "path": "js/circuits/scenery/baku.js",
+        "line": 72,
+        "text": "      // measured) \u2014 docs/research/STREET-PIT-LANES-PLAN-2026-09.md \u00a74."
+      },
+      {
+        "path": "js/circuits/scenery/jeddah.js",
+        "line": 153,
+        "text": "          // right \u2014 docs/research/STREET-PIT-LANES-PLAN-2026-09.md \u00a74."
+      },
+      {
+        "path": "js/circuits/scenery/monaco.js",
+        "line": 189,
+        "text": "      // stretch \u2014 docs/research/STREET-PIT-LANES-PLAN-2026-09.md \u00a74."
+      },
+      {
+        "path": "js/circuits/scenery/singapore.js",
+        "line": 851,
+        "text": "      // reads right \u2014 docs/research/STREET-PIT-LANES-PLAN-2026-09.md \u00a74."
+      },
+      {
+        "path": "js/circuits/scenery/vegas.js",
+        "line": 187,
+        "text": "      // platform band \u2014 docs/research/STREET-PIT-LANES-PLAN-2026-09.md \u00a74."
+      },
+      {
+        "path": "js/perf/renderer-picker.js",
+        "line": 3,
+        "text": "   Split out of js/perf/quality-preset.js (Phase 2a of docs/research/TREE-RESTRUCTURE-2026-09.md): that file is the GRAPHICS quality PRESET model and button; this one is which backend boots. Same load-order stance \u2014 every global read (GLX, PerfGov, GameAudio, __apex) is resolved at CALL time, never at eval, so the file has no HARD_EDGES pair and can sit anywhere in the shell. */"
+      },
+      {
+        "path": "js/race/pit-lane.js",
+        "line": 179,
+        "text": "  // STREET-PIT-LANES-PLAN-2026-09.md). laneUniform() is null there; the road"
+      },
+      {
+        "path": "js/render/glx/glx.js",
+        "line": 2073,
+        "text": "  // docs/research/SCENE-GRAPH-PLAN.md; the producer is graph.batches()."
+      },
+      {
+        "path": "js/track/core/pit.js",
+        "line": 24,
+        "text": "  // (docs/research/STREET-PIT-LANES-PLAN-2026-09.md). NARROW is the PAINTED"
+      },
+      {
+        "path": "tools/check/check-gctx.mjs",
+        "line": 88,
+        "text": "// (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2 \u2014 tools rewritten before the move.)"
+      },
+      {
+        "path": "tools/check/ratchets.mjs",
+        "line": 23,
+        "text": "// docs/research/TREE-RESTRUCTURE-2026-09.md). The idiom is unchanged \u2014 a number"
+      },
+      {
+        "path": "tools/check/vstd-lint.mjs",
+        "line": 63,
+        "text": "// (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2 \u2014 tools rewritten before the move.)"
+      },
+      {
+        "path": "tools/gen/gen-arch-table.mjs",
+        "line": 19,
+        "text": " * (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2 \u2014 regenerated per"
+      },
+      {
+        "path": "tests/unit/gen-arch-table.test.mjs",
+        "line": 13,
+        "text": " * (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2 \u2014 the generator this"
+      },
+      {
+        "path": "tests/unit/pick-tests.test.mjs",
+        "line": 180,
+        "text": "  // (docs/research/TREE-RESTRUCTURE-2026-09.md \u00a7Phase 2). A file that moves out"
+      },
+      {
+        "path": "tests/unit/pit-complex.test.mjs",
+        "line": 214,
+        "text": "  // (docs/research/STREET-PIT-LANES-PLAN-2026-09.md)."
+      }
+    ]
+  },
+  "lsp": [
+    {
+      "query": "TrackPit.resolve definition body",
+      "result": "js/track/core/pit.js:144-173; street default and narrow painted behavior"
+    },
+    {
+      "query": "TrackGraph references files",
+      "result": "11 references in 4 files: nature, city, graph, build-props"
+    },
+    {
+      "query": "TrackGraph.batches definition body",
+      "result": "graph.js:409-458 module-file fallback; export/caller coverage explicitly unverified; mirrored canonical LH variant plus tangent flip"
+    },
+    {
+      "query": "Gfx.drawInstanced references",
+      "result": "INVALID_ARGUMENT: member not visible to checker; not evidence of absence"
+    },
+    {
+      "query": "drawInstanced symbols",
+      "result": "functions glx.js:2359, tlx.js:2370, wgx.js:5216"
+    },
+    {
+      "query": "GLX drawInstanced declaration references files",
+      "result": "2 references in glx.js only; dynamic facade/render wiring not established"
+    },
+    {
+      "query": "Tracks.build definition",
+      "result": "tracks.js:471; export at859"
+    }
+  ],
+  "historical_provenance": [
+    {
+      "source": "docs/research/SCENE-GRAPH-PLAN.md",
+      "reference": "spike/ADOPTION-PLAN.md",
+      "classification": "historical/archive/artifact provenance; not executed",
+      "exists": true
+    },
+    {
+      "source": "docs/research/SCENE-GRAPH-PLAN.md",
+      "reference": "../archive/research/EXTERNAL-MODEL-SOURCES.md",
+      "classification": "historical/archive/artifact provenance; not executed",
+      "exists": false
+    },
+    {
+      "source": "docs/research/STRUCTURE-REDECISION-2026-08.md",
+      "reference": "docs/archive/research/UI-REMODEL-DECISION-2026-08.md",
+      "classification": "historical/archive/artifact provenance; not executed",
+      "exists": true
+    },
+    {
+      "source": "docs/research/STRUCTURE-REDECISION-2026-08.md",
+      "reference": "docs/archive/research/CAMPAIGN-2026-08.md",
+      "classification": "historical/archive/artifact provenance; not executed",
+      "exists": true
+    },
+    {
+      "source": "docs/research/STRUCTURE-REDECISION-2026-08.md",
+      "reference": "docs/archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md",
+      "classification": "historical/archive/artifact provenance; not executed",
+      "exists": true
+    },
+    {
+      "source": "docs/research/TRACK-SOURCE-AUDIT-2026-10-19.md",
+      "reference": "artifacts/track-research-8d41/",
+      "classification": "historical/archive/artifact provenance; not executed",
+      "exists": false
+    }
+  ],
+  "limits": [
+    "No research commands, tests, browser, network, runtime or image inspection",
+    "Only documentation map outputs written",
+    "Current consumers are static references/source definitions, not demonstrated execution",
+    "Renderer audit prefix and tree plan continuation belong to adjacent groups"
+  ]
+}

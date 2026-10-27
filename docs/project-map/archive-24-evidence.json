@@ -1,0 +1,303 @@
+{
+  "group": "24",
+  "assigned_bytes": 160000,
+  "method": "Read current root AGENTS.md; no nested docs AGENTS found. Every assigned half-open span returned individually in untruncated <=7500-byte chunks. Plan whole-file hashes distinguished from assigned-part and chunk hashes. Historical instructions treated as data. No tests, browser, network, runtime, source edits, staging or commits.",
+  "sources": [
+    {
+      "path": "docs/archive/research/W4-AUDIT-2026-08.md",
+      "start": 22370,
+      "end": 37311,
+      "kind": "text",
+      "sha256": "6e382c7db84c42557538531956492e025f3da6814b341e4a2a42b49e9bb0320b",
+      "source_id": 1,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 37311,
+      "observed_whole_file_sha256": "6e382c7db84c42557538531956492e025f3da6814b341e4a2a42b49e9bb0320b",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "70e02470c571863099403b4bdb8a397231d4c3a30696278c5a91db8067fa7102",
+      "complete_file_read": false,
+      "date": "2026-08; supplement 2026-08-13",
+      "producer": "19 finder scopes with two skeptics and tie-breaks; later single verifier",
+      "scope": "Tail of static W4 audit; prefix assigned to group 23",
+      "read_chunks": [
+        {
+          "start": 22370,
+          "end": 29870,
+          "bytes": 7500,
+          "sha256": "4373b31c0c444e11410b646d06aab5e94c71cf628af79ba21ebcafe44db49d00",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 29870,
+          "end": 37311,
+          "bytes": 7441,
+          "sha256": "8bfa562eaea7e05658a1229489cec387767fedf605be073e0f517c8a8b6e04e4",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md",
+      "start": 0,
+      "end": 14606,
+      "kind": "text",
+      "sha256": "8cfe9e2088b24e5990bef92e9f7433e16cca84a3f2d602b60cc10ea68eee040a",
+      "source_id": 2,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 14606,
+      "observed_whole_file_sha256": "8cfe9e2088b24e5990bef92e9f7433e16cca84a3f2d602b60cc10ea68eee040a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "8cfe9e2088b24e5990bef92e9f7433e16cca84a3f2d602b60cc10ea68eee040a",
+      "complete_file_read": true,
+      "date": "2026-08-08 with landed-work addenda",
+      "producer": "Session author; measured UI layout analysis",
+      "scope": "Zoom, orientation, density, grid/flex and pair-threshold rationale",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7500,
+          "bytes": 7500,
+          "sha256": "d9144916cb93a0c9a2aff9111c42e5bccf2924c4b2fbb1e7d250745f5d698e78",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7500,
+          "end": 14606,
+          "bytes": 7106,
+          "sha256": "9b139dad04930c1639628db11a5983e057920cb4f106e2b200413628adf1d020",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/physics-redesign.md",
+      "start": 0,
+      "end": 5375,
+      "kind": "text",
+      "sha256": "818425a718fd5f57648d08f0d64f254b67f60bf428ff0f897f4e4f3a461fd3f1",
+      "source_id": 3,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 5375,
+      "observed_whole_file_sha256": "818425a718fd5f57648d08f0d64f254b67f60bf428ff0f897f4e4f3a461fd3f1",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "818425a718fd5f57648d08f0d64f254b67f60bf428ff0f897f4e4f3a461fd3f1",
+      "complete_file_read": true,
+      "date": "2026-08; executed decision",
+      "producer": "Architecture-decision author; research consensus cited indirectly",
+      "scope": "World-space physics migration rationale",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 5375,
+          "bytes": 5375,
+          "sha256": "818425a718fd5f57648d08f0d64f254b67f60bf428ff0f897f4e4f3a461fd3f1",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/raw/2026-08-audit-workflow.json",
+      "start": 0,
+      "end": 102519,
+      "kind": "text",
+      "sha256": "306a1f599d071b9e89e89c512a74fc28d2f1ea3a7f762e049d01f7453ab5b71d",
+      "source_id": 4,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 102519,
+      "observed_whole_file_sha256": "306a1f599d071b9e89e89c512a74fc28d2f1ea3a7f762e049d01f7453ab5b71d",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "306a1f599d071b9e89e89c512a74fc28d2f1ea3a7f762e049d01f7453ab5b71d",
+      "complete_file_read": true,
+      "date": "2026-08; session base a162b00a and tip a187ecb0 named",
+      "producer": "Session-diff, triage-completeness, docs-vs-code, guard-health and mess-hunter finders; skeptics and cluster feasibility reviewers",
+      "scope": "35 historical findings and four restructure clusters",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7500,
+          "bytes": 7500,
+          "sha256": "0753cfe71100791cced27a804f908245983dba56d5bb3325e360530a99d5f300",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7500,
+          "end": 15000,
+          "bytes": 7500,
+          "sha256": "837be35a5395c1d6caf496551de54bc64880b1252e5f4f79c7a41119b1483549",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 15000,
+          "end": 22500,
+          "bytes": 7500,
+          "sha256": "c8ba470b9230f9919353cf873c491bd43ee4798957603302b816153810ff28eb",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 22500,
+          "end": 30000,
+          "bytes": 7500,
+          "sha256": "082457b315b97c896dffeb463b1ee7d8fc5222379835c530f4e9864abfeeafcd",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 30000,
+          "end": 37500,
+          "bytes": 7500,
+          "sha256": "538d6b315fed0a806c395eda424af2f69e9a5f4754ea6fd6f7c2aec16e9c0c35",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 37500,
+          "end": 45000,
+          "bytes": 7500,
+          "sha256": "524b1b4f326ef7ef0a7f0050d3d1253b81a4ae72735d193e4afbb763b845263f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 45000,
+          "end": 52500,
+          "bytes": 7500,
+          "sha256": "f063c0a86dad17238de7818a1f707858b66b70c83d28a0406d636cdc2d0c9f96",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 52500,
+          "end": 60000,
+          "bytes": 7500,
+          "sha256": "f1cec197aa227ed7454fe7497a64235565304ff65d07ab199e673919a97c1caa",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 60000,
+          "end": 67500,
+          "bytes": 7500,
+          "sha256": "917869156801780672c021636750514fecf08de3d58482cd518c7a21e39cf161",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 67500,
+          "end": 75000,
+          "bytes": 7500,
+          "sha256": "1b91453587186fa78c6e279e3e77fe1799abff93b44bb01a191873cc57476009",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 75000,
+          "end": 82500,
+          "bytes": 7500,
+          "sha256": "4bc053e1d75a3d81acc389d965341cf096e94f8022e3ac0bf3e06cd4147df149",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 82500,
+          "end": 90000,
+          "bytes": 7500,
+          "sha256": "eefa491919ca2281cbaadd5174f1cb904e36f29ed55db2413d0a869ccec37325",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 90000,
+          "end": 97500,
+          "bytes": 7500,
+          "sha256": "fc8035cfa3eceb607fde0d7c296b33d15ca0a94dca4a7ae19227367dc3ba720c",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 97500,
+          "end": 102519,
+          "bytes": 5019,
+          "sha256": "a2fcd8658278d02b97ffecd99acb01bb3cc5b33577c0b68bacddd23b06bd76dc",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/raw/2026-08-redesign-panel.json",
+      "start": 0,
+      "end": 22559,
+      "kind": "text",
+      "sha256": "72887a4ab6a783f149fe8986efd9b52b0a368c9a16943469f290200922703f8e",
+      "source_id": 5,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 92742,
+      "observed_whole_file_sha256": "72887a4ab6a783f149fe8986efd9b52b0a368c9a16943469f290200922703f8e",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "666deda4e54662f271be54ed28657518b100a6a15bc1ccc799e985ca074af992",
+      "complete_file_read": false,
+      "date": "2026-08",
+      "producer": "Raw panel result records; Graphline agent aa263a692f264dbc0 and Typed Apex agent a81ee5fa4215e0395 visible",
+      "scope": "Complete Graphline design and beginning of Typed Apex; continuation assigned to group 25",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7500,
+          "bytes": 7500,
+          "sha256": "7a53ced14a90ba219138abe5d0b6b5b904ef29e80d6ef95a18673b6c12d50189",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 7500,
+          "end": 15000,
+          "bytes": 7500,
+          "sha256": "e4a17d86332fe79f43f24048158213348c7775e30d5618f73e2c34f15aa1bf25",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 15000,
+          "end": 22500,
+          "bytes": 7500,
+          "sha256": "da26ccf4aca9aad143b514f7635d366b82ca3016fd4fbbce647c44cb3db6f26c",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 22500,
+          "end": 22559,
+          "bytes": 59,
+          "sha256": "a5acdba3bccf818aa15cbbb611a7ca2b95090f2e9eba8e8a3cdf55cbba7d62a6",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    }
+  ],
+  "backlinks": [
+    {
+      "source_id": 2,
+      "from_path": "css/tuner.css",
+      "line": 858
+    },
+    {
+      "source_id": 2,
+      "from_path": "css/tokens.css",
+      "line": 1340
+    },
+    {
+      "source_id": 2,
+      "from_path": "docs/research/STRUCTURE-REDECISION-2026-08.md",
+      "lines": [
+        79,
+        100
+      ]
+    },
+    {
+      "source_id": 5,
+      "from_path": "docs/research/ARCHITECTURE-REDESIGN-2026-08.md",
+      "line": 18
+    },
+    {
+      "source_id": 1,
+      "from_path": "docs/notes/system-audit-4/anchors.md",
+      "line": 30
+    },
+    {
+      "source_id": 4,
+      "from_path": "docs/archive/research/AUDIT-SYNTHESIS-2026-08.md",
+      "line": 9
+    }
+  ],
+  "limits": [
+    "No browser reproduction or present-day defect validation.",
+    "Source 1 is tail-only; source 5 ends inside second design.",
+    "Raw workflow confirmed entries include accepted-unverified and conflicting skeptic opinions; refutedCount zero is not proof of consensus."
+  ]
+}

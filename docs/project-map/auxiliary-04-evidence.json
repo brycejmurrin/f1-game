@@ -1,0 +1,657 @@
+{
+  "group": "04",
+  "assignedBytes": 160000,
+  "readBytes": 160000,
+  "method": "All assigned text returned in individual <=8500-byte untruncated calls. Whole-file SHA256 independently identifies snapshot; assigned-range and per-read chunk SHA256 establish exact coverage. No binary assigned. Initial combined AGENTS/batches output truncated, excluded from coverage; AGENTS reread in 8500-byte slices.",
+  "scope": "Static documentation only; no tests, browser, network, runtime execution, source edits, stage or commit. Audited historical commands/recommendations treated as data.",
+  "instructionReads": [
+    "AGENTS.md",
+    ".claude/skills/code-nav/SKILL.md"
+  ],
+  "nestedInstructions": "No AGENTS.md in docs, docs/project-map, sites, sites/design-lab, scratch, scratch/h23 or relevant ancestor directories. Other scratch subtree instructions do not apply.",
+  "symbolEvidence": [
+    {
+      "method": "attached apex-lsp lsp_outline",
+      "query": "GLX",
+      "result": "js/render/shared/glx-facade.js:5; install:21, isMobile:12, mobileTier:18; dynamically installed backend facade, not static proof of historical runtime fields."
+    }
+  ],
+  "consumerEvidence": [
+    {
+      "method": "scoped rg text search followed by bounded line reads",
+      "path": "docs/CAPTURE-REVIEW.md",
+      "lines": [
+        40,
+        55
+      ],
+      "contract": "Design Lab source separate from portable exporter; export preserves provenance and validates files/hashes."
+    },
+    {
+      "path": "scratch/h23/build_gallery.py",
+      "lines": [
+        1,
+        38
+      ],
+      "contract": "Consumes pairs.json and hand-assembled facts.json, selects ORDER excluding grid/MED helmet."
+    },
+    {
+      "path": ".github/workflows/gpu-census.yml",
+      "lines": [
+        487,
+        496
+      ],
+      "contract": "Optional livery census then summarizer stdout appended to GITHUB_STEP_SUMMARY, both commands || true, continue-on-error true, timeout 26min."
+    }
+  ],
+  "missingDependencies": [
+    {
+      "path": "sites/design-lab/captures.json",
+      "exists": false,
+      "method": "Path.exists metadata only"
+    },
+    {
+      "path": "sites/design-lab/assets",
+      "exists": false,
+      "method": "Path.exists metadata only"
+    },
+    {
+      "path": "sites/design-lab/collection",
+      "exists": false,
+      "method": "Path.exists metadata only"
+    }
+  ],
+  "limits": [
+    "No current runtime or hosted-site behavior validated.",
+    "No binary image inspection; image references/metrics remain producer receipts.",
+    "No proof of no other consumers from scoped textual search.",
+    "Stylesheet prefix and census suffix only; remaining bytes assigned to adjacent groups.",
+    "Historical source revisions, absolute paths, PR labels and recommendations are provenance, not current deploy state."
+  ],
+  "commentCleanup": "No edits made. Keep comments defining synchronous metrics scope and snapshot boundaries; consider separately removing duplicate sourceLabel conditional and identity renameConceptText naming, qualifying summarizer never-fails comment, and consolidating CSS overrides only with actual behavior verification.",
+  "files": [
+    {
+      "path": "scratch/h23/census/game-webgl2-macos-latest.json",
+      "start": 82593,
+      "end": 82788,
+      "kind": "text",
+      "sha256": "52dbbe98b1013187ccea45e6ef44a817e73c4353c92aa2d9e310add3531fae66",
+      "wholeFileBytes": 82788,
+      "actualWholeFileSha256": "52dbbe98b1013187ccea45e6ef44a817e73c4353c92aa2d9e310add3531fae66",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "31d11917e9c72562cd97d7bc182e37cfc8ea1d330bd6b16295374a9f5d740f81",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 82593,
+          "end": 82788,
+          "bytes": 195,
+          "sha256": "31d11917e9c72562cd97d7bc182e37cfc8ea1d330bd6b16295374a9f5d740f81",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "1d781b"
+        }
+      ],
+      "semantics": "Census suffix only: warning tail, originating runner root, pageClosed and browserGone true; no independent full census interpretation from this range.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/diff.py",
+      "start": 0,
+      "end": 2354,
+      "kind": "text",
+      "sha256": "3c59876f1fd058d94d8932c3ac684337409b1a8690478bcd4847b98b72b1c230",
+      "wholeFileBytes": 2354,
+      "actualWholeFileSha256": "3c59876f1fd058d94d8932c3ac684337409b1a8690478bcd4847b98b72b1c230",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "3c59876f1fd058d94d8932c3ac684337409b1a8690478bcd4847b98b72b1c230",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2354,
+          "bytes": 2354,
+          "sha256": "3c59876f1fd058d94d8932c3ac684337409b1a8690478bcd4847b98b72b1c230",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "a94d89"
+        }
+      ],
+      "semantics": "Offline paired still comparator: numpy/Pillow RGB int16; overlap crop, sum absolute RGB >30 percent, channel MAD, strongest third-size window at twelfth strides; luminance coefficients; JPEG paired half-size, native crop, quarter-size heatmap and pairs JSON writes. Skips incomplete image pairs; tiny images can yield zero stride.",
+      "classification": "historical experiment source"
+    },
+    {
+      "path": "scratch/h23/facts.json",
+      "start": 0,
+      "end": 7584,
+      "kind": "text",
+      "sha256": "50623e99bcd9f0d4d3c2c4668a249f2992061686049c7131869a040753327978",
+      "wholeFileBytes": 7584,
+      "actualWholeFileSha256": "50623e99bcd9f0d4d3c2c4668a249f2992061686049c7131869a040753327978",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "50623e99bcd9f0d4d3c2c4668a249f2992061686049c7131869a040753327978",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7584,
+          "bytes": 7584,
+          "sha256": "50623e99bcd9f0d4d3c2c4668a249f2992061686049c7131869a040753327978",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "4e557e"
+        }
+      ],
+      "semantics": "Hand-assembled dated phone-renderer narrative and tabular facts/captions; software memory excludes GPU memory; Mac paravirtual Apple GPU forced phone caps is not an iPhone; local SwiftShader timing explicitly has no signal; grid and MED helmet comparisons rejected as mismatched moments. Recommendation is historical content, not current authority.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/gallery/pairs.json",
+      "start": 0,
+      "end": 2368,
+      "kind": "text",
+      "sha256": "e389a0bd03963835b0b0499aa5a96a3df0ebfab920d51433ee372e2deaea855f",
+      "wholeFileBytes": 2368,
+      "actualWholeFileSha256": "e389a0bd03963835b0b0499aa5a96a3df0ebfab920d51433ee372e2deaea855f",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "e389a0bd03963835b0b0499aa5a96a3df0ebfab920d51433ee372e2deaea855f",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2368,
+          "bytes": 2368,
+          "sha256": "e389a0bd03963835b0b0499aa5a96a3df0ebfab920d51433ee372e2deaea855f",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "5f1048"
+        }
+      ],
+      "semantics": "Fourteen paired-image metric records, including mismatched grid/MED helmet frames excluded by narrative; pctDiff, mad, crop, cropMad and luminances. Data does not prove image correctness.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/mem-three.json",
+      "start": 0,
+      "end": 1588,
+      "kind": "text",
+      "sha256": "5e3ddb46e5fc160a9c427963f495333224ffd514352383270a0431e6a5ab2a33",
+      "wholeFileBytes": 1588,
+      "actualWholeFileSha256": "5e3ddb46e5fc160a9c427963f495333224ffd514352383270a0431e6a5ab2a33",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "5e3ddb46e5fc160a9c427963f495333224ffd514352383270a0431e6a5ab2a33",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1588,
+          "bytes": 1588,
+          "sha256": "5e3ddb46e5fc160a9c427963f495333224ffd514352383270a0431e6a5ab2a33",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "622e68"
+        }
+      ],
+      "semantics": "TLX low phone memory snapshot, menu and three sequential races; heap+ArrayBuffers totals, embedder separately, program counts and no recorded errors; GPU memory excluded.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/mem-webgl2.json",
+      "start": 0,
+      "end": 1543,
+      "kind": "text",
+      "sha256": "3f0f3dd5eda7145af49dd5353b238129474a716443e3cb306c315ace520c0a04",
+      "wholeFileBytes": 1543,
+      "actualWholeFileSha256": "3f0f3dd5eda7145af49dd5353b238129474a716443e3cb306c315ace520c0a04",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "3f0f3dd5eda7145af49dd5353b238129474a716443e3cb306c315ace520c0a04",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1543,
+          "bytes": 1543,
+          "sha256": "3f0f3dd5eda7145af49dd5353b238129474a716443e3cb306c315ace520c0a04",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "a6d73a"
+        }
+      ],
+      "semantics": "GLX matching memory snapshot; null backend/api environment fields retained, totals and rows, no recorded errors; null does not independently identify failed boot.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/perf-low-three-x4.json",
+      "start": 0,
+      "end": 2249,
+      "kind": "text",
+      "sha256": "dae7ad03c342189fb4bf5b0de5de70db21e5d35583f718ea082488e8b531bf16",
+      "wholeFileBytes": 2249,
+      "actualWholeFileSha256": "dae7ad03c342189fb4bf5b0de5de70db21e5d35583f718ea082488e8b531bf16",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "dae7ad03c342189fb4bf5b0de5de70db21e5d35583f718ea082488e8b531bf16",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2249,
+          "bytes": 2249,
+          "sha256": "dae7ad03c342189fb4bf5b0de5de70db21e5d35583f718ea082488e8b531bf16",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "a3a3e7"
+        }
+      ],
+      "semantics": "TLX low 4x CPU-throttled 30-second Monza/Monaco frame sample, 0.3/0.2 fps, 9/6 frames, governor/environment receipt.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/perf-low-three.json",
+      "start": 0,
+      "end": 2249,
+      "kind": "text",
+      "sha256": "4b5052f9dcc33aa8017f670b265da5375af055b71dece2d574e3bd469f13526b",
+      "wholeFileBytes": 2249,
+      "actualWholeFileSha256": "4b5052f9dcc33aa8017f670b265da5375af055b71dece2d574e3bd469f13526b",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "4b5052f9dcc33aa8017f670b265da5375af055b71dece2d574e3bd469f13526b",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2249,
+          "bytes": 2249,
+          "sha256": "4b5052f9dcc33aa8017f670b265da5375af055b71dece2d574e3bd469f13526b",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "b3af59"
+        }
+      ],
+      "semantics": "TLX low unthrottled 30-second sample, 0.4/0.2 fps, 12/8 frames, environment/governor and empty errors.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/perf-low-webgl2-x4.json",
+      "start": 0,
+      "end": 2220,
+      "kind": "text",
+      "sha256": "1b75c1362ec00204a1b1f6c4b8a7f63a6619800393e1a891ff9b3a1b9eaeabac",
+      "wholeFileBytes": 2220,
+      "actualWholeFileSha256": "1b75c1362ec00204a1b1f6c4b8a7f63a6619800393e1a891ff9b3a1b9eaeabac",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "1b75c1362ec00204a1b1f6c4b8a7f63a6619800393e1a891ff9b3a1b9eaeabac",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2220,
+          "bytes": 2220,
+          "sha256": "1b75c1362ec00204a1b1f6c4b8a7f63a6619800393e1a891ff9b3a1b9eaeabac",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "7b6a18"
+        }
+      ],
+      "semantics": "GLX low 4x CPU-throttled sample 0.4/0.2 fps, 12/7 frames; environment fields may be null; empty errors.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/perf-low-webgl2.json",
+      "start": 0,
+      "end": 2252,
+      "kind": "text",
+      "sha256": "291655df7e9645a2916865e48cc1100e6b426126a315c1d05e5fe19562e32a56",
+      "wholeFileBytes": 2252,
+      "actualWholeFileSha256": "291655df7e9645a2916865e48cc1100e6b426126a315c1d05e5fe19562e32a56",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "291655df7e9645a2916865e48cc1100e6b426126a315c1d05e5fe19562e32a56",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2252,
+          "bytes": 2252,
+          "sha256": "291655df7e9645a2916865e48cc1100e6b426126a315c1d05e5fe19562e32a56",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "efb412"
+        }
+      ],
+      "semantics": "GLX low unthrottled sample 0.3/0.2 fps, 10/6 frames; software timing is not phone performance evidence.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/stills-low-three.json",
+      "start": 0,
+      "end": 5512,
+      "kind": "text",
+      "sha256": "d9e09524c7aac3b14e592d28958c7fd3ff3b968b95d2450b420ab7d77a40052f",
+      "wholeFileBytes": 5512,
+      "actualWholeFileSha256": "d9e09524c7aac3b14e592d28958c7fd3ff3b968b95d2450b420ab7d77a40052f",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "d9e09524c7aac3b14e592d28958c7fd3ff3b968b95d2450b420ab7d77a40052f",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5512,
+          "bytes": 5512,
+          "sha256": "d9e09524c7aac3b14e592d28958c7fd3ff3b968b95d2450b420ab7d77a40052f",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "ea0331"
+        }
+      ],
+      "semantics": "TLX low still receipts for menu, garage, grid and mirror, source image paths, capture duration, environment and detailed mirror state; mirror shown/drawn in recorded snapshot.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/stills-low-webgl2.json",
+      "start": 0,
+      "end": 5256,
+      "kind": "text",
+      "sha256": "97085105a98d61290f181253e92103685c717fbb86ddc73f4d159c7f2b89c039",
+      "wholeFileBytes": 5256,
+      "actualWholeFileSha256": "97085105a98d61290f181253e92103685c717fbb86ddc73f4d159c7f2b89c039",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "97085105a98d61290f181253e92103685c717fbb86ddc73f4d159c7f2b89c039",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5256,
+          "bytes": 5256,
+          "sha256": "97085105a98d61290f181253e92103685c717fbb86ddc73f4d159c7f2b89c039",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "5bd03f"
+        }
+      ],
+      "semantics": "GLX low equivalent receipts: mirror recorded not shown, zero draws/unprepared. Facts narrative describes subsequent reshoots; these receipts alone do not establish matched mirrors.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/stills-med-three.json",
+      "start": 0,
+      "end": 1062,
+      "kind": "text",
+      "sha256": "0abb848ca8cde226d58e7be8d2b712e3022d4da5d4a1b5b8a00d38a3d1c13c47",
+      "wholeFileBytes": 1062,
+      "actualWholeFileSha256": "0abb848ca8cde226d58e7be8d2b712e3022d4da5d4a1b5b8a00d38a3d1c13c47",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "0abb848ca8cde226d58e7be8d2b712e3022d4da5d4a1b5b8a00d38a3d1c13c47",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1062,
+          "bytes": 1062,
+          "sha256": "0abb848ca8cde226d58e7be8d2b712e3022d4da5d4a1b5b8a00d38a3d1c13c47",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "f4b001"
+        }
+      ],
+      "semantics": "TLX MED helmet receipt, upscale enabled scale .75, 1266x585 canvas, phone DPR3; comparison later rejected by narrative.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/h23/out/stills-med-webgl2.json",
+      "start": 0,
+      "end": 1078,
+      "kind": "text",
+      "sha256": "3f22504e00adf08101d7c4bbe01c1566aba1a5943da944352eb54e2dbf796d82",
+      "wholeFileBytes": 1078,
+      "actualWholeFileSha256": "3f22504e00adf08101d7c4bbe01c1566aba1a5943da944352eb54e2dbf796d82",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "3f22504e00adf08101d7c4bbe01c1566aba1a5943da944352eb54e2dbf796d82",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1078,
+          "bytes": 1078,
+          "sha256": "3f22504e00adf08101d7c4bbe01c1566aba1a5943da944352eb54e2dbf796d82",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "22a9c7"
+        }
+      ],
+      "semantics": "GLX MED helmet receipt, upscale .75 and same canvas; long software frames; later rejected as different moment.",
+      "classification": "historical experimental evidence"
+    },
+    {
+      "path": "scratch/render-submit-metrics.mjs",
+      "start": 0,
+      "end": 3704,
+      "kind": "text",
+      "sha256": "9fa6aeda97db15088b66e33e43bba84c72136c02b204a3be1653ca5d902dd4aa",
+      "wholeFileBytes": 3704,
+      "actualWholeFileSha256": "9fa6aeda97db15088b66e33e43bba84c72136c02b204a3be1653ca5d902dd4aa",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "9fa6aeda97db15088b66e33e43bba84c72136c02b204a3be1653ca5d902dd4aa",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3704,
+          "bytes": 3704,
+          "sha256": "9fa6aeda97db15088b66e33e43bba84c72136c02b204a3be1653ca5d902dd4aa",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "0f9905"
+        }
+      ],
+      "semantics": "Exported installer idempotently defines browser global instrumentation; wraps renderer.render once, depth suppresses nested calls, tracks successful synchronous submission durations and draw/triangle deltas by render-target identity, counts failures in finally. start clears rows/target IDs, stop returns aggregates/quantiles; output-name target or scene canvas counts main. Wrapper persists, no detach. No GPU time or async readback measurement; unbounded duration arrays until reset/stop.",
+      "classification": "auxiliary instrumentation source"
+    },
+    {
+      "path": "scratch/summarize-livery-census.mjs",
+      "start": 0,
+      "end": 2144,
+      "kind": "text",
+      "sha256": "d6a11e402b29802933474952fe7fdd0b05cbf9b31cb6f8d82380ec376f24e75b",
+      "wholeFileBytes": 2144,
+      "actualWholeFileSha256": "d6a11e402b29802933474952fe7fdd0b05cbf9b31cb6f8d82380ec376f24e75b",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "d6a11e402b29802933474952fe7fdd0b05cbf9b31cb6f8d82380ec376f24e75b",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2144,
+          "bytes": 2144,
+          "sha256": "d6a11e402b29802933474952fe7fdd0b05cbf9b31cb6f8d82380ec376f24e75b",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "d412b5"
+        }
+      ],
+      "semantics": "Node JSON-to-Markdown summarizer: argv[2] or default census file; groups nonmissing edits by kind, median next-frame, max frame, long-task totals, whitelist delta/allocation counters; stdout only. Assumes request/arms/edits/pageErrors shape; malformed/missing input throws despite comment that it never fails the job. CI caller masks failure with || true.",
+      "classification": "auxiliary instrumentation source"
+    },
+    {
+      "path": "sites/design-lab/README.md",
+      "start": 0,
+      "end": 2768,
+      "kind": "text",
+      "sha256": "2ab2ad3a9ca7edf828324cebf5e0b15c2fcebb948a09795f49c99e355b7699e0",
+      "wholeFileBytes": 2768,
+      "actualWholeFileSha256": "2ab2ad3a9ca7edf828324cebf5e0b15c2fcebb948a09795f49c99e355b7699e0",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "2ab2ad3a9ca7edf828324cebf5e0b15c2fcebb948a09795f49c99e355b7699e0",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2768,
+          "bytes": 2768,
+          "sha256": "2ab2ad3a9ca7edf828324cebf5e0b15c2fcebb948a09795f49c99e355b7699e0",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "b63fbd"
+        }
+      ],
+      "semantics": "Authored Design Lab presentation-source provenance: exact site commit receipt, separate hosting/deployment, captures.json record distinct from matrix gallery.json, external image/font/collection dependencies, HTTP fetch requirement, Site publication separate from game PR.",
+      "classification": "retained presentation source"
+    },
+    {
+      "path": "sites/design-lab/app.js",
+      "start": 0,
+      "end": 17883,
+      "kind": "text",
+      "sha256": "f4f245cc8556912df101e025c06adcadd7ae5d9fa77d29d925d166ca281f18b2",
+      "wholeFileBytes": 17883,
+      "actualWholeFileSha256": "f4f245cc8556912df101e025c06adcadd7ae5d9fa77d29d925d166ca281f18b2",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "f4f245cc8556912df101e025c06adcadd7ae5d9fa77d29d925d166ca281f18b2",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "948bcc8ecd4269f8542a1f6bb2213b27390a914d181e60ebd5a0abceaad72693",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "8dab38"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "ee9893f68b30e27d8dc44d48d8e9232780104d7318cb84310c5995d126d8b93a",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "b60acc"
+        },
+        {
+          "start": 17000,
+          "end": 17883,
+          "bytes": 883,
+          "sha256": "12816eef4547b2ec95a9da16b8d157a9eb37c2554942f33f18068b2dd8ab73de",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "359417"
+        }
+      ],
+      "semantics": "Plain strict IIFE gallery: fetch same-directory captures record, same-origin http(s) source sanitization, normalized items and derived finish/search cache, scope/category/body/palette/finish/light/search filters, 24-item pagination and focus restoration; dialog receipt, material-zone colors validated hex, keyboard arrows and slash search. No build/library imports, no writes/storage/auth; failure view with retry.",
+      "classification": "retained presentation source"
+    },
+    {
+      "path": "sites/design-lab/index.html",
+      "start": 0,
+      "end": 69212,
+      "kind": "text",
+      "sha256": "9c45630bd5a8b5dd7c826e553da3667a708fbe84c1955ed32e3353687595f877",
+      "wholeFileBytes": 69212,
+      "actualWholeFileSha256": "9c45630bd5a8b5dd7c826e553da3667a708fbe84c1955ed32e3353687595f877",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "9c45630bd5a8b5dd7c826e553da3667a708fbe84c1955ed32e3353687595f877",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "55b7871fab4a160d39303d9bb265d874eb1bac998f2f4e65cd5f4149e05b60ea",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "871091"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "9830a98124482f2f8c76245a1ff4574c3271bdb3560be4b93a0e97a15897707b",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "de4c13"
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "c0a3dad0debad40d5fedf28bc60db6e6ba14df690021d28f0f9b61e554aa7d51",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "6f5c31"
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "bytes": 8500,
+          "sha256": "cfb3a2364a2b5f442197693871951cbe0a5d907cb2c63dfedac70f045dcf6fbb",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "2ac69f"
+        },
+        {
+          "start": 34000,
+          "end": 42500,
+          "bytes": 8500,
+          "sha256": "1cdc9e9e71657081d93c224ae6dc49de19a214d3913a82703d38551ca1efb341",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "70299d"
+        },
+        {
+          "start": 42500,
+          "end": 51000,
+          "bytes": 8500,
+          "sha256": "c4862afb3bfc3e1577d7c143c3cddd96fa47dc2e83fdd61a8b36f9fe52435bed",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "bd75a6"
+        },
+        {
+          "start": 51000,
+          "end": 59500,
+          "bytes": 8500,
+          "sha256": "6a2d7617fcbfc515aad28814c8123fff0adf5ba687a06f0612d34bd343610e3d",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "710f27"
+        },
+        {
+          "start": 59500,
+          "end": 68000,
+          "bytes": 8500,
+          "sha256": "59731a64c018795ca5910efc73cf02beb7201aa3a02c71f12db30ca9f0169a6a",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "b61732"
+        },
+        {
+          "start": 68000,
+          "end": 69212,
+          "bytes": 1212,
+          "sha256": "8083f6309a4206ff6b9e1169db372abc9ba8d0d0300e9395f8832561b244d720",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "3f8833"
+        }
+      ],
+      "semantics": "HTML presentation shell and static pinned catalog: CSS and deferred JS, accessible controls/skip link/dialog, gallery placeholders, 26 body and 56 STYLE inventory, twelve category tables totalling 353 options, finish IDs, snapshot/history distinctions, generated concept vs native/CPU descriptions. Static counts/revision are authored snapshot claims; local dataset not bundled.",
+      "classification": "retained presentation source"
+    },
+    {
+      "path": "sites/design-lab/styles.css",
+      "start": 0,
+      "end": 26779,
+      "kind": "text",
+      "sha256": "628680e7899308425ea28fbec685c29bb4813e2186899b81531c29475845e78c",
+      "wholeFileBytes": 29666,
+      "actualWholeFileSha256": "628680e7899308425ea28fbec685c29bb4813e2186899b81531c29475845e78c",
+      "wholeFileHashMatchesPlan": true,
+      "assignedRangeSha256": "8466d37a3057fba08a19484f4cddd601347f9396430388b2ee5e9e9852b3b9b8",
+      "coverage": "assigned half-open bytes completely read; whole-file hash is identity, not whole-file reading claim",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "f7a5b0543ff5037073da3278572ae8c5d48a4966aa20c3f9b49eeebc49e6f599",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "b250d3"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "afcf06465cb772b49aa7c45656ab1258e4c35d00550ff6fc529fac35b06988d1",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "37e614"
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "8ef387f6d6ba15b0f6f265408771f8ec391762289d63d74f006103e0ae8c7ce9",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "a1250b"
+        },
+        {
+          "start": 25500,
+          "end": 26779,
+          "bytes": 1279,
+          "sha256": "f0713cfb03debad8b6ecca82e5847208abe5a6a5f82091d5188fa6df6a02fab9",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned untruncated exec_command output",
+          "toolChunkId": "361de6"
+        }
+      ],
+      "semantics": "CSS prefix 0:26779 only: eight local font faces, theme/layout/cards/dialog, responsive breakpoints, focus states/hidden handling, mobile touch sizing, reduced motion, records/catalog/recipe tables, palette controls. Later overrides alter early declarations. Ends midway through card-description declaration; suffix belongs to group05 so no complete stylesheet claim.",
+      "classification": "retained presentation source"
+    }
+  ]
+}

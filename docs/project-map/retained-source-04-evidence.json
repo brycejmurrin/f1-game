@@ -1,0 +1,262 @@
+{
+  "group": "04",
+  "supportfilename": "retained-source-04.md",
+  "plan_file": "docs/project-map/retained-source-batches.json",
+  "plan_sha256_at_write": "63c3e840053a8c2bd30177a4886e04f5cab5d3fadc2061f8a03c5d14272417fb",
+  "scope": "All ten assigned half-open byte spans; no claim of reading outside assigned span for RS04-01",
+  "assigned_bytes": 27826,
+  "authority": "Current root AGENTS read; retained scripts, skills and embedded generated docs treated as historical evidence only. No source programs executed, installation, activation, browser, tests, network, staging or commit. Python used only for raw reads, hashes and authorized documentation outputs.",
+  "verification": "All whole-source hashes match plan. All assigned spans individually returned without truncation and <=8500 bytes. Source inspection only; no historical command success or current symbol equivalence claimed.",
+  "sources": [
+    {
+      "id": "RS04-01",
+      "path": "scratch/f1-repair-handoff/f1-toolchain/environment/preflight.sh",
+      "start": 902,
+      "end": 1701,
+      "kind": "text",
+      "sha256": "ac11c0ee2ab44e3dff2d2d0ca7f87984e7989eb1220bd61f6db45ec4bd69c5ed",
+      "whole_source_bytes": 1701,
+      "planned_whole_source_sha256": "ac11c0ee2ab44e3dff2d2d0ca7f87984e7989eb1220bd61f6db45ec4bd69c5ed",
+      "observed_whole_source_sha256": "ac11c0ee2ab44e3dff2d2d0ca7f87984e7989eb1220bd61f6db45ec4bd69c5ed",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "3c06e64b0a80916f2b1c1e9ddc1a9f17979bdffb08be0ea6a25f1a676fc2217e",
+      "read_ledger": [
+        {
+          "start": 902,
+          "end": 1701,
+          "bytes": 799,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 1
+        }
+      ],
+      "semantics": "Partial preflight tail: checks gateway SDK resolution, Chromium locator, readable retained private profile, executable tunnel client, and presence of credential binding. Fail-fast diagnostics only; begins inside a statement, so preceding logic belongs to group03."
+    },
+    {
+      "id": "RS04-02",
+      "path": "scratch/f1-repair-handoff/f1-toolchain/environment/verify.sh",
+      "start": 0,
+      "end": 987,
+      "kind": "text",
+      "sha256": "d2bf5742ce7030f9707baed183aa0a89420f4d5bdd12dc16f6d750c7854ebb23",
+      "whole_source_bytes": 987,
+      "planned_whole_source_sha256": "d2bf5742ce7030f9707baed183aa0a89420f4d5bdd12dc16f6d750c7854ebb23",
+      "observed_whole_source_sha256": "d2bf5742ce7030f9707baed183aa0a89420f4d5bdd12dc16f6d750c7854ebb23",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "d2bf5742ce7030f9707baed183aa0a89420f4d5bdd12dc16f6d750c7854ebb23",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 987,
+          "bytes": 987,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 2
+        }
+      ],
+      "semantics": "Historical verification orchestrator: sources activation and runs shellcheck, environment/health Python tests, runtime/catalog Node tests, stdio lifecycle, preflight, lifecycle doctor, mirrored-skill check, workflow/shader requirements, plugin tests and build check. Would execute many subprocesses including browser compilation; not run here."
+    },
+    {
+      "id": "RS04-03",
+      "path": "scratch/f1-repair-handoff/f1-toolchain/install-environment.sh",
+      "start": 0,
+      "end": 1816,
+      "kind": "text",
+      "sha256": "40a504efe6d26179e7d2a3b9fb842b730f7439d8eb77f519f63f6e855daa9c3f",
+      "whole_source_bytes": 1816,
+      "planned_whole_source_sha256": "40a504efe6d26179e7d2a3b9fb842b730f7439d8eb77f519f63f6e855daa9c3f",
+      "observed_whole_source_sha256": "40a504efe6d26179e7d2a3b9fb842b730f7439d8eb77f519f63f6e855daa9c3f",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "40a504efe6d26179e7d2a3b9fb842b730f7439d8eb77f519f63f6e855daa9c3f",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 1816,
+          "bytes": 1816,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 3
+        }
+      ],
+      "semantics": "Historical installer accepts no arguments, sources activation, acquires nonblocking file-descriptor-9 flock, requires a long retained-source and two plugin-directory inventory, then runs dependency/tool installers, builder and verify. Downloads/installations and filesystem writes delegated to helpers; does not start services. Lock released by process exit; no rollback shown."
+    },
+    {
+      "id": "RS04-04",
+      "path": "scratch/f1-repair-handoff/f1-toolchain/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md",
+      "start": 0,
+      "end": 3224,
+      "kind": "text",
+      "sha256": "bcfd60068f7473a7fe79838a0f8b45997ea9a72accad0ebe4299a36630920110",
+      "whole_source_bytes": 3224,
+      "planned_whole_source_sha256": "bcfd60068f7473a7fe79838a0f8b45997ea9a72accad0ebe4299a36630920110",
+      "observed_whole_source_sha256": "bcfd60068f7473a7fe79838a0f8b45997ea9a72accad0ebe4299a36630920110",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "bcfd60068f7473a7fe79838a0f8b45997ea9a72accad0ebe4299a36630920110",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 3224,
+          "bytes": 3224,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 4
+        }
+      ],
+      "semantics": "Retained cloud skill prose prioritizes actual host discovery/status and distinguishes local package/runtime readiness from hosted attachment. Recovery and install commands are historical audit data, not session instructions. Preserves identities and secrets, separates startup/install/publication, requires browser serialization and bounded caller-supplied doctor names."
+    },
+    {
+      "id": "RS04-05",
+      "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/chat-gateway.mjs",
+      "start": 0,
+      "end": 6391,
+      "kind": "text",
+      "sha256": "2e7ca0fa4f50d30978c0980e74a068f40c3a4b9974120804a7fc6f0ac57229ac",
+      "whole_source_bytes": 6391,
+      "planned_whole_source_sha256": "2e7ca0fa4f50d30978c0980e74a068f40c3a4b9974120804a7fc6f0ac57229ac",
+      "observed_whole_source_sha256": "2e7ca0fa4f50d30978c0980e74a068f40c3a4b9974120804a7fc6f0ac57229ac",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "2e7ca0fa4f50d30978c0980e74a068f40c3a4b9974120804a7fc6f0ac57229ac",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 6391,
+          "bytes": 6391,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 5
+        }
+      ],
+      "semantics": "Historical SDK stdio gateway: exports five upstream names, release tool and createGateway. Reads checkout MCP configuration unless connector injected; memoizes lazy client promises, drops failed connects, passes inherited environment and offline preference, discards stderr. Catalog paginates serially with 20-second timeouts, rejects repeated cursors and duplicate names, namespaces upstream names and caches route map. Augments doctor schema and adds release. Calls serialize through a promise queue (rejection does not poison next call); browser ownership inferred from upstream or Browser-prefixed description; competing modes return error. Call timeout 180 seconds. Successful attach/detach toggles debugger guard; release refuses while attached, closes owner and deletes client; explicit browser_close clears owner. Supplied doctor names bypass upstream and invoke adapter. close allSettled closes clients and clears ownership; signal/stdin shutdown closes gateway/server. Warms all catalogs before advertising stdio. Limits: catalog caching, heuristic ownership, upstream failure after acquisition can retain owner, no proof of live host attachment or successful browser execution."
+    },
+    {
+      "id": "RS04-06",
+      "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/check-doctor-catalog.mjs",
+      "start": 0,
+      "end": 1442,
+      "kind": "text",
+      "sha256": "bf425c90ca08f34b397ca4fbf661b6a6ba0f2adb68d63d60c61d42383fbdc5f6",
+      "whole_source_bytes": 1442,
+      "planned_whole_source_sha256": "bf425c90ca08f34b397ca4fbf661b6a6ba0f2adb68d63d60c61d42383fbdc5f6",
+      "observed_whole_source_sha256": "bf425c90ca08f34b397ca4fbf661b6a6ba0f2adb68d63d60c61d42383fbdc5f6",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "bf425c90ca08f34b397ca4fbf661b6a6ba0f2adb68d63d60c61d42383fbdc5f6",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 1442,
+          "bytes": 1442,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 6
+        }
+      ],
+      "semantics": "Historical local MCP validation client reads names JSON from argv, spawns retained gateway with inherited environment and discarded stderr, verifies advertised schema and successful dependency/catalog checks, prints hostedCall=false, closes client and transport in finally. It provides intended assertions only; no result artifact or test execution verified here."
+    },
+    {
+      "id": "RS04-07",
+      "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/doctor-catalog.mjs",
+      "start": 0,
+      "end": 1849,
+      "kind": "text",
+      "sha256": "02e08c14a9034613fcb6e0b25c09b22cb16b01eef7b43a65d2aa6cf7fa332d17",
+      "whole_source_bytes": 1849,
+      "planned_whole_source_sha256": "02e08c14a9034613fcb6e0b25c09b22cb16b01eef7b43a65d2aa6cf7fa332d17",
+      "observed_whole_source_sha256": "02e08c14a9034613fcb6e0b25c09b22cb16b01eef7b43a65d2aa6cf7fa332d17",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "02e08c14a9034613fcb6e0b25c09b22cb16b01eef7b43a65d2aa6cf7fa332d17",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 1849,
+          "bytes": 1849,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 7
+        }
+      ],
+      "semantics": "Adapter exports bounded array schema and doctorWithCatalog(root,args). Maximum 2000 nonempty names, each <=256 ASCII name characters; rejects unknown args and invalid boolean/output levels. Caller cannot choose root via args. dryRun returns provenance only; otherwise dynamically imports checkout doctor, maps names to catalog.tools, calls synchronous diagnose, filters pass checks unless full requested (preserves session.catalog), returns status/exit/checkout/time and caller-supplied provenance. Root selected by trusted gateway caller; catalog metadata is not execution evidence."
+    },
+    {
+      "id": "RS04-08",
+      "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/doctor-catalog.test.mjs",
+      "start": 0,
+      "end": 1939,
+      "kind": "text",
+      "sha256": "56522e47a5dfdaad14ddf550e914c47509acfd275479185face4d870d3c3ce6e",
+      "whole_source_bytes": 1939,
+      "planned_whole_source_sha256": "56522e47a5dfdaad14ddf550e914c47509acfd275479185face4d870d3c3ce6e",
+      "observed_whole_source_sha256": "56522e47a5dfdaad14ddf550e914c47509acfd275479185face4d870d3c3ce6e",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "56522e47a5dfdaad14ddf550e914c47509acfd275479185face4d870d3c3ce6e",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 1939,
+          "bytes": 1939,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 8
+        }
+      ],
+      "semantics": "Retained Node tests assert caller names reach doctor and SDK dependencies resolve; reject scalar/pathlike/oversized/root/command/string-boolean inputs; injected upstream confirms schema augmentation, ordinary doctor forwarding, adapter dispatch and finally cleanup. Tests import real checkout doctor in two cases, so source inspection does not establish portable execution or pass status."
+    },
+    {
+      "id": "RS04-09",
+      "path": "scratch/finish-consolidation.py",
+      "start": 0,
+      "end": 8361,
+      "kind": "text",
+      "sha256": "9890cb2843c6580ad2dd401d3cdfc03d3fdb2d2f7ab1f748bc2687f3cdabcfe0",
+      "whole_source_bytes": 8361,
+      "planned_whole_source_sha256": "9890cb2843c6580ad2dd401d3cdfc03d3fdb2d2f7ab1f748bc2687f3cdabcfe0",
+      "observed_whole_source_sha256": "9890cb2843c6580ad2dd401d3cdfc03d3fdb2d2f7ab1f748bc2687f3cdabcfe0",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "9890cb2843c6580ad2dd401d3cdfc03d3fdb2d2f7ab1f748bc2687f3cdabcfe0",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8361,
+          "bytes": 8361,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 9
+        }
+      ],
+      "semantics": "One-off Python consolidation writer: targets environment sources, string-replaces root and test sections via index boundaries, rewrites verification glob, appends canonical PATH entry, overwrites ignore file and three docs. Generated prose declares checkout canonical ownership of environment/lifecycle/gateway, one SDK lock, retained state separate from source, explicit install versus resume, no replacement identity, account/publication/fresh-restore boundaries, deterministic archive intentions and unpinned installation limits. Not idempotent (PATH append), brittle to changed anchor strings, destructive overwrites, no transaction/backup/rollback. Embedded shell instructions and URLs are historical generated content, not actions performed. Current target equality and historical execution not established."
+    },
+    {
+      "id": "RS04-10",
+      "path": "scratch/preserved-doctor.patch",
+      "start": 0,
+      "end": 1018,
+      "kind": "text",
+      "sha256": "d3b6752df82937e24f582fb03b3b75d8b03d97558ca494c4b0eed8b5f7094e67",
+      "whole_source_bytes": 1018,
+      "planned_whole_source_sha256": "d3b6752df82937e24f582fb03b3b75d8b03d97558ca494c4b0eed8b5f7094e67",
+      "observed_whole_source_sha256": "d3b6752df82937e24f582fb03b3b75d8b03d97558ca494c4b0eed8b5f7094e67",
+      "whole_source_hash_matches_plan": true,
+      "assigned_span_sha256": "d3b6752df82937e24f582fb03b3b75d8b03d97558ca494c4b0eed8b5f7094e67",
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 1018,
+          "bytes": 1018,
+          "method": "individual raw byte slice decoded UTF-8, returned in full by exec_command",
+          "max_bytes": 8500,
+          "untruncated": true,
+          "read_order": 10
+        }
+      ],
+      "semantics": "Preserved patch changes doctor dependency probing: MCP SDK resolves server/index.js subpath instead of package root, all other dependencies keep package-name resolution and missing-name aggregation. Patch is evidence of intended compatibility repair, not applied-state proof; duplicate retained copy is identified by matching whole-source hash."
+    }
+  ]
+}

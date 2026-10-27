@@ -1,0 +1,389 @@
+{
+  "batch": "03",
+  "assigned_bytes": 81313,
+  "range_convention": "half-open byte offsets; plan sha256 is whole source, not part/chunk",
+  "sources": [
+    {
+      "path": "docs/tracks/sepang.md",
+      "start": 6288,
+      "end": 7640,
+      "kind": "text",
+      "sha256": "a49f958280dd946e7ea8a9423d66a51fa31817972f2d611fe3f2b768266bad94",
+      "whole_source_bytes": 7640,
+      "actual_whole_source_sha256": "a49f958280dd946e7ea8a9423d66a51fa31817972f2d611fe3f2b768266bad94",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "64005abcf90b96b5ffcce4e1ef83d2b55fa9f95bdf0722bb7922ba49cca74d17",
+      "read_chunks": [
+        {
+          "start": 6288,
+          "end": 7640,
+          "bytes": 1352,
+          "sha256": "64005abcf90b96b5ffcce4e1ef83d2b55fa9f95bdf0722bb7922ba49cca74d17",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/shanghai.md",
+      "start": 0,
+      "end": 7869,
+      "kind": "text",
+      "sha256": "8f5e1776d1aa0a3a6100c3be5fb87a98848e95512f43567a2aa1f383ec0deb06",
+      "whole_source_bytes": 7869,
+      "actual_whole_source_sha256": "8f5e1776d1aa0a3a6100c3be5fb87a98848e95512f43567a2aa1f383ec0deb06",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "8f5e1776d1aa0a3a6100c3be5fb87a98848e95512f43567a2aa1f383ec0deb06",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7869,
+          "bytes": 7869,
+          "sha256": "8f5e1776d1aa0a3a6100c3be5fb87a98848e95512f43567a2aa1f383ec0deb06",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/silverstone.md",
+      "start": 0,
+      "end": 7656,
+      "kind": "text",
+      "sha256": "80fee1d211047a50058e199c7f7bc10461240c4f35de0fe7d1ef5532c096fac6",
+      "whole_source_bytes": 7656,
+      "actual_whole_source_sha256": "80fee1d211047a50058e199c7f7bc10461240c4f35de0fe7d1ef5532c096fac6",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "80fee1d211047a50058e199c7f7bc10461240c4f35de0fe7d1ef5532c096fac6",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7656,
+          "bytes": 7656,
+          "sha256": "80fee1d211047a50058e199c7f7bc10461240c4f35de0fe7d1ef5532c096fac6",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/singapore.md",
+      "start": 0,
+      "end": 6298,
+      "kind": "text",
+      "sha256": "701a5db48c8229c7d84f7751a295e2e4c110c205ce4f34b0c86093ad608f173f",
+      "whole_source_bytes": 6298,
+      "actual_whole_source_sha256": "701a5db48c8229c7d84f7751a295e2e4c110c205ce4f34b0c86093ad608f173f",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "701a5db48c8229c7d84f7751a295e2e4c110c205ce4f34b0c86093ad608f173f",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6298,
+          "bytes": 6298,
+          "sha256": "701a5db48c8229c7d84f7751a295e2e4c110c205ce4f34b0c86093ad608f173f",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/sochi.md",
+      "start": 0,
+      "end": 6534,
+      "kind": "text",
+      "sha256": "65cb537553c8e39b80af77303dafe26852b724d292179ae42b2450eb0c756b43",
+      "whole_source_bytes": 6534,
+      "actual_whole_source_sha256": "65cb537553c8e39b80af77303dafe26852b724d292179ae42b2450eb0c756b43",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "65cb537553c8e39b80af77303dafe26852b724d292179ae42b2450eb0c756b43",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6534,
+          "bytes": 6534,
+          "sha256": "65cb537553c8e39b80af77303dafe26852b724d292179ae42b2450eb0c756b43",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/spa.md",
+      "start": 0,
+      "end": 10884,
+      "kind": "text",
+      "sha256": "2c05fdd73cb579e6839950c09b99b108d84406985858b773a37a231f758052cb",
+      "whole_source_bytes": 10884,
+      "actual_whole_source_sha256": "2c05fdd73cb579e6839950c09b99b108d84406985858b773a37a231f758052cb",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "2c05fdd73cb579e6839950c09b99b108d84406985858b773a37a231f758052cb",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "c7edd645eac03048c7c1836423376873610232cc4a25eeddbb664a08604cbc2f",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 10884,
+          "bytes": 2384,
+          "sha256": "10489b4b49276ebfbca2db4f87cafb460e6df3d90f9a4dd0f014cb820b542f10",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/suzuka.md",
+      "start": 0,
+      "end": 6959,
+      "kind": "text",
+      "sha256": "f52dc13ed5bb83eeb9a6d00b3610e5bc8caca96b59eae2ab22e0050449a00fd6",
+      "whole_source_bytes": 6959,
+      "actual_whole_source_sha256": "f52dc13ed5bb83eeb9a6d00b3610e5bc8caca96b59eae2ab22e0050449a00fd6",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "f52dc13ed5bb83eeb9a6d00b3610e5bc8caca96b59eae2ab22e0050449a00fd6",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6959,
+          "bytes": 6959,
+          "sha256": "f52dc13ed5bb83eeb9a6d00b3610e5bc8caca96b59eae2ab22e0050449a00fd6",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/track-designer-overhaul.md",
+      "start": 0,
+      "end": 4726,
+      "kind": "text",
+      "sha256": "253e63e57649e8b93a87cf74a2774ffdc607e09ccd6e2aac6d103f8272d87311",
+      "whole_source_bytes": 4726,
+      "actual_whole_source_sha256": "253e63e57649e8b93a87cf74a2774ffdc607e09ccd6e2aac6d103f8272d87311",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "253e63e57649e8b93a87cf74a2774ffdc607e09ccd6e2aac6d103f8272d87311",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 4726,
+          "bytes": 4726,
+          "sha256": "253e63e57649e8b93a87cf74a2774ffdc607e09ccd6e2aac6d103f8272d87311",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/vegas.md",
+      "start": 0,
+      "end": 7640,
+      "kind": "text",
+      "sha256": "abfad6fcee5d9774404c83aeda139fb3632c3060c3c93a1c02522b58ac1403ed",
+      "whole_source_bytes": 7640,
+      "actual_whole_source_sha256": "abfad6fcee5d9774404c83aeda139fb3632c3060c3c93a1c02522b58ac1403ed",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "abfad6fcee5d9774404c83aeda139fb3632c3060c3c93a1c02522b58ac1403ed",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7640,
+          "bytes": 7640,
+          "sha256": "abfad6fcee5d9774404c83aeda139fb3632c3060c3c93a1c02522b58ac1403ed",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/watkins_glen.md",
+      "start": 0,
+      "end": 7163,
+      "kind": "text",
+      "sha256": "a8d852a6a4838d64f9857434e05dc24ef0065264137c0b005ed19307b9130988",
+      "whole_source_bytes": 7163,
+      "actual_whole_source_sha256": "a8d852a6a4838d64f9857434e05dc24ef0065264137c0b005ed19307b9130988",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "a8d852a6a4838d64f9857434e05dc24ef0065264137c0b005ed19307b9130988",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7163,
+          "bytes": 7163,
+          "sha256": "a8d852a6a4838d64f9857434e05dc24ef0065264137c0b005ed19307b9130988",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/zandvoort.md",
+      "start": 0,
+      "end": 7393,
+      "kind": "text",
+      "sha256": "744caef26240f7cdec3656ec1d88cd96933e36ef4217fc7315ae72f06fffa64e",
+      "whole_source_bytes": 7393,
+      "actual_whole_source_sha256": "744caef26240f7cdec3656ec1d88cd96933e36ef4217fc7315ae72f06fffa64e",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "744caef26240f7cdec3656ec1d88cd96933e36ef4217fc7315ae72f06fffa64e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7393,
+          "bytes": 7393,
+          "sha256": "744caef26240f7cdec3656ec1d88cd96933e36ef4217fc7315ae72f06fffa64e",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/zolder.md",
+      "start": 0,
+      "end": 6839,
+      "kind": "text",
+      "sha256": "a93298f6e64ed72d22d50f5471f794b28871643c9b72b0b56267d9031f693cfc",
+      "whole_source_bytes": 6839,
+      "actual_whole_source_sha256": "a93298f6e64ed72d22d50f5471f794b28871643c9b72b0b56267d9031f693cfc",
+      "plan_hash_matches_whole_source": true,
+      "assigned_part_sha256": "a93298f6e64ed72d22d50f5471f794b28871643c9b72b0b56267d9031f693cfc",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6839,
+          "bytes": 6839,
+          "sha256": "a93298f6e64ed72d22d50f5471f794b28871643c9b72b0b56267d9031f693cfc",
+          "returned_untruncated": true
+        }
+      ]
+    }
+  ],
+  "semantic_map": [
+    {
+      "id": "sepang",
+      "support": "docs/tracks/sepang.md",
+      "geometry_scenery_constraints": "Assigned tail only: bare positive-rake terraces under the petal canopy; heavy equatorial haze, green venue accents, and terrain-seated motorhomes with a 2.5 m rejection threshold. Race-control and KLIA skyline are reported registered; palm grid stays 0.10\u20130.90.",
+      "provenance_status_limits": "Operator/engineering sources support petal canopy and K1/F stands; alternative hypar, T15 umbrella and sponsor livery remain uncertain. No full-lap geometry conclusion from this tail.",
+      "current_consumer": "js/circuits/sepang.js"
+    },
+    {
+      "id": "shanghai",
+      "support": "docs/tracks/shanghai.md",
+      "geometry_scenery_constraints": "Flat reclaimed-marsh \u4e0a plan: gentle 6.7 m relief, broad back-straight crest near s .45; no sharp jolts. Twin wing bridges, lotus roof, Yu Garden lake pavilions and a single hazed Pudong cluster define the skyline. Eight flooded bunded paddy blocks, 22% fallow, use reflective waterSurface.",
+      "provenance_status_limits": "Wikipedia, 2004 grandprix/Autosport, China Daily/GKD and Taiyo support silhouettes; wing roles, spacing and exact canopy bay counts remain uncertain. Residual frame debt .09 requires probing before start-key edits; closed stand/tower cores avoid hollow faces.",
+      "current_consumer": "js/circuits/shanghai.js"
+    },
+    {
+      "id": "silverstone",
+      "support": "docs/tracks/silverstone.md",
+      "geometry_scenery_constraints": "Modern Wing startFrac .5224 differs from legacy sceneryStartFrac .0200: table fractions require frame-aware conversion. Flat open airfield, copse/hedgerow farmland, grey overcast and sparse Hangar Straight carry the scene. Active pit architecture roofProfile replaces overlapping legacy Wing masses.",
+      "provenance_status_limits": "Populous supports changing angular roof and 360 m real building; crown knots/heights are artistic, not reconstruction. Four campsite fields use metre pitch spacing: ~780 one-prism tents cost ~17k vertices, 14% caravans. Campsites beyond terrainOuter 110 m expose an existing ribbon-edge step, not a measured new regression.",
+      "current_consumer": "js/circuits/silverstone.js"
+    },
+    {
+      "id": "singapore",
+      "support": "docs/tracks/singapore.md",
+      "geometry_scenery_constraints": "Anticlockwise floodlit street lap requires reverse and sceneryLapMirror plus mirrored markings/race override. Flat reclaimed bay, tight continuous concrete barriers, cool dark sky and warm flood pools; Sands/Flyer/Helix/Merlion/civic buildings are silhouette anchors. Post-2023 straight bypasses the Float.",
+      "provenance_status_limits": "Independent Pirelli/National Library/fansite direction evidence exposed same-dataset accuracy blindness. Research heading says not yet built, but Outcome reports Supreme Court and St Andrews built and Parliament/Merlion required; retain that chronology rather than presenting backlog as current. No new performance measurement.",
+      "current_consumer": "js/circuits/singapore.js"
+    },
+    {
+      "id": "sochi",
+      "support": "docs/tracks/sochi.md",
+      "geometry_scenery_constraints": "Keep classic 2014\u201321 GP loop despite current short-course venue. Nearly level coastal relief; open paved Olympic park in first .30, regular lighting columns, clipped hedges then subtropical outer loop, Caucasus skyline. Required assemblies include station, Ice Cube, venues and flame tower.",
+      "provenance_status_limits": "Wikipedia/operator/park sources support identity and layout history. Exact metre offsets and night fountain shows are uncertain; day palette only. Ground-audit changes are reported fixes (rings/plinth, glass/deck, armco instead of buried jersey), not fresh observations.",
+      "current_consumer": "js/circuits/sochi.js"
+    },
+    {
+      "id": "spa",
+      "support": "docs/tracks/spa.md",
+      "geometry_scenery_constraints": "19 map-matched racing markers; built 6947.385 m versus reference 7004 m. Source describes 64-knot coarse SRTM fit with authored Raidillon climb, about 101 m relief. Authored Gold 3 .142\u2013.170 and brook .176\u2013.191 differ from racing fractions; do not shift turn markers. terrainFalloffStart 54 within 90 m ribbon smooths distant descent.",
+      "provenance_status_limits": "Official 2025 map supports count, not absolute scale/sectors or 2026 aero rules; seating/ELMS support roofed Gold 3, not surveyed footprint. Camps/chalets footprint-seat with supports. Pouhon lobed substitutions capped 30 per side preserve placement hashes; no snowcaps. Old-road ribbon and village church are reported built. modelGroup can fail closed: historical 490538\u2192490664 prop vertices showed geometry emitted where verify OK alone did not.",
+      "current_consumer": "js/circuits/spa.js"
+    },
+    {
+      "id": "suzuka",
+      "support": "docs/tracks/suzuka.md",
+      "geometry_scenery_constraints": "Figure-eight: terrain-independent bridge lift near .82 and underpass .37; SRTM ~40 m undulation. Ferris wheel owns main-straight skyline; keep coaster/swing clutter removed, sakura only Esses .18\u2013.22. Ten bamboo groves and one Spoon-side shrine provide regional landscape.",
+      "provenance_status_limits": "Motopia photos/maps and visitor notes support silhouette; wheel radius 38 m is artistic versus cited ~50 m real height, exact LED dimensions uncertain. Pavilion roofs seat on place tops because anchor terrain differs ~10 m. Reported wheel unsupported 2.21 m and shrine burial .08 m led local group/step repairs; shared helper was deliberately untouched.",
+      "current_consumer": "js/circuits/suzuka.js"
+    },
+    {
+      "id": "vegas",
+      "support": "docs/tracks/vegas.md",
+      "geometry_scenery_constraints": "Anticlockwise night street corridor with near-black ground/sky, one cyan-blue Sphere and ordered Venetian/High Roller/Caesars/Bellagio/Paris Strip silhouettes. Heroes use racing sl(); dressingExclusions are authored. Authored Strip .642\u2013.972 maps to racing .485\u2013.815; Sphere window .377\u2013.497 maps .22\u2013.34.",
+      "provenance_status_limits": "Venue/Wikipedia research outcome reports major heroes already built. Historical setback fixes prevent massBlocked suppression and overlapping wheel/building masses. place size[0] is lateral: four forecourt strips swapped length/depth and reportedly changed 0/1\u21921/0 emitted/rejected. Never turn emissive verge strips into tarmac pools. Open-face shared buildings remain a separately noted limitation.",
+      "current_consumer": "js/circuits/vegas.js"
+    },
+    {
+      "id": "watkins_glen",
+      "support": "docs/tracks/watkins_glen.md",
+      "geometry_scenery_constraints": "Keep GP Boot ~5.4 km, not NASCAR Bus Stop. Autumn scarlet/amber lobed front maples against green/deep conifer, real rolling Boot/Esses relief, modest kerbs and armco. Concrete garages, bare timber stands, Pit Terrace scaffold and angle-iron 2006 tower define infrastructure.",
+      "provenance_status_limits": "Wikipedia/facility maps/track guides support Boot history and stand/tower roles. Booth count/heights and bay inventory are compositional; Seneca Lake visibility uncertain and town gorge excluded. Use cheap deep tree ranks; woodland tents seat independently on terrainYAt rather than lifting entire clearings.",
+      "current_consumer": "js/circuits/watkins_glen.js"
+    },
+    {
+      "id": "zandvoort",
+      "support": "docs/tracks/zandvoort.md",
+      "geometry_scenery_constraints": "Coastal dune circuit: sand-first rolling midlap, sparse vegetation, low North Sea peeks and monochrome orange crowds. Wheel/stage festival pair, lighthouse and watertoren required. Banked geometry/kerbs and SAFER rail carry the signature.",
+      "provenance_status_limits": "Main brief names Hugenholtz and final Luyendyk, but research/outcome instead claims Tarzan/final bankings; unresolved internal inconsistency, not certified geometry. Outcome says dunes/crowd/sea were already implemented. Festival sources support on-circuit wheel distinct from town wheel; ~45 m height and Gate-2 placement remain approximate. No new timing or geometry verification.",
+      "current_consumer": "js/circuits/zandvoort.js"
+    },
+    {
+      "id": "zolder",
+      "support": "docs/tracks/zolder.md",
+      "geometry_scenery_constraints": "Playable trace is modern 4.010 km/10 turns, unlike F1-era 4.262 km/15 turns. Frame debt startFrac .1226 vs scenery 0 gives shift ~.844: pit/SF sl(), corner K(). Scots pine and pale sand, low club buildings, restrained chicane plaque and separate required five-pole paddock sculpture.",
+      "provenance_status_limits": "Operator museum supports stand/archive hall; pilgrimage source supports sculpture; observatory drum and terril bearing uncertain. No more pine beyond props-tris ratchet. Historical audit reports buried 28\u21927, severe clip 99\u219239 then later 12\u21920 and coplanar 18\u21924; different passes, not present measurements. OWNED suppressions and moving observatory prevent folded pit overlap.",
+      "current_consumer": "js/circuits/zolder.js"
+    },
+    {
+      "id": "track-designer-overhaul",
+      "support": "docs/tracks/track-designer-overhaul.md",
+      "geometry_scenery_constraints": "Dated UX audit and staged implementation plan, not a circuit brief. Per-node heights parallel pts at .25 m lattice flow through CustomTracks.toRaw to optional [x,z,y] and TrackDef.realPoints; old saves flat, legacy cosine elevations remain raceable until edits/presets clear them. Bridges stay cosine.",
+      "provenance_status_limits": "A\u2013C are described done/in-PR; D/H/J follow-ups, E/F/G simultaneously labelled follow-up and this-PR; I append-only themes described done. Treat status as dated prose, not current implementation proof. Mobile \u226544 px grips and hidden landscape elevation strip are audit concerns. designer.js serialization is an ownership constraint; no historical commands executed.",
+      "current_consumer": [
+        "js/editor/custom-tracks.js",
+        "js/track/core/def.js"
+      ]
+    }
+  ],
+  "lsp_evidence": {
+    "circuit_outline": "Eleven matching data IIFEs; no functions; bounded limit 8 concise outlines, not full source reads",
+    "TrackSpace.sceneryRange": {
+      "definition": "js/track/core/space.js:129",
+      "references": {
+        "js/track/scenery/build-props.js": 3,
+        "js/track/core/space.js": 2
+      },
+      "body_read_lines": [
+        129,
+        144
+      ]
+    },
+    "CustomTracks.toRaw": {
+      "references": {
+        "js/editor/custom-tracks.js": 2,
+        "js/editor/validate.js": 1,
+        "js/net/lobby-settings.js": 1
+      }
+    },
+    "TrackDef.realPoints": {
+      "definition": "js/track/core/def.js:69",
+      "body_read_lines": [
+        69,
+        93
+      ],
+      "limit": "10 more lines omitted; module-file fallback, no direct use; export and caller coverage unverified"
+    }
+  },
+  "historical_reference_only": [
+    "track-designer-overhaul: dated build 14034, PR 1042/1039, screenshot evidence and /opt/cursor/artifacts/designer-*.png; not opened or executed",
+    "Singapore direction ledger/archive index mentioned but not followed"
+  ],
+  "cleanup": {
+    "delete_candidates": [],
+    "changes": "Only this batch markdown and evidence authored; temporary generator removed",
+    "commands_from_sources_executed": false
+  },
+  "limits": [
+    "Only assigned sepang tail read; no inference about preceding bytes",
+    "No browser/network/runtime/tests/source edits/stage/commit",
+    "Provenance URLs recorded in read source; not fetched",
+    "Circuit/scenery implementation not fully read; matching LSP outlines are navigation not implementation proof",
+    "No binary assigned",
+    "Existing prose contradictions retained explicitly"
+  ]
+}

@@ -1,0 +1,2217 @@
+{
+  "scope": "docs-other group04",
+  "method": "All assigned half-open byte spans returned as raw text in individual tool calls, each <=8500 bytes. Aggregate output truncation repaired by rereading affected w24b tail and w24c head. Whole-source SHA-256 is separate from assigned-span and chunk SHA-256. Historical instructions treated as data; no commands from documents executed.",
+  "assignedBytes": 132389,
+  "files": [
+    {
+      "path": "docs/evidence/historical-catalog.json",
+      "sourceBytes": 84115,
+      "sourceSha256": "200734eefe76e3958f4cfcb6e9792fa0ce94ec90a9c12419ae109dd8d5233f8b",
+      "manifestSha256": "200734eefe76e3958f4cfcb6e9792fa0ce94ec90a9c12419ae109dd8d5233f8b",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        60744,
+        84115
+      ],
+      "assignedSha256": "00f3ae722967888a3b947af20828f659e4cd44311987f1739baabfc350aec395",
+      "completeSourceRead": false,
+      "chunks": [
+        {
+          "range": [
+            60744,
+            69244
+          ],
+          "bytes": 8500,
+          "sha256": "4fbab04900fe972f8e0da94dd605eac20e6359abad8e96ff859aa9fe9b2ef162",
+          "firstLine": 1140,
+          "lastLine": 1251,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            69244,
+            77744
+          ],
+          "bytes": 8500,
+          "sha256": "ddd4d97c8b5bdffb85fac04bc544c06adfcc8e07bd535ac0874903cbdffcc46d",
+          "firstLine": 1251,
+          "lastLine": 1377,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            77744,
+            84115
+          ],
+          "bytes": 6371,
+          "sha256": "fb6114775c0f45bbb97cd9ad2d1cf45bba7ba0f813a49a6e4de301df99397b97",
+          "firstLine": 1377,
+          "lastLine": 1489,
+          "rawReturned": true
+        }
+      ],
+      "parsedComplete": false,
+      "boundary": "Starts at a complete selection object, omits catalog header and all earlier selections; ends at EOF. Parsed three complete selection objects independently, plus trailing limitations. No claim to full catalog parsing.",
+      "completeSelectionRecords": [
+        {
+          "label": "legacy-look-survey",
+          "sourceCommit": "cb0cb2c386dbda6f45d4984cfb4c297a520556b0",
+          "sourcePaths": [
+            "docs/look-survey"
+          ],
+          "sourceRefs": [],
+          "directImages": true,
+          "retentionReason": "Preserve all 25 contact sheets, including ten currently linked from documentation.",
+          "fileCount": 26,
+          "sourceBytes": 48301054,
+          "entryPoints": [],
+          "publication": {
+            "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188943550",
+            "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+            "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-look-survey-7c4004602495dd34",
+            "tag": "evidence-legacy-look-survey-7c4004602495dd34",
+            "archiveName": "legacy-look-survey-cb0cb2c386db.tar.gz",
+            "archiveSha256": "7c4004602495dd34b41bf27d225ebb5b1bfc336876b8cfe18323afa2cf2473d7",
+            "archiveBytes": 48276024,
+            "verifiedDownload": true,
+            "verifiedAt": "2026-10-19T02:14:31.681153+00:00",
+            "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+            "fileCount": 26,
+            "assets": [
+              {
+                "name": "image-0902cf30ba8141fc371dc1cc20ff90f4c35d3611bb7b25b5367df34cf24ef17e-singapore-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-0902cf30ba8141fc371dc1cc20ff90f4c35d3611bb7b25b5367df34cf24ef17e-singapore-grid.png",
+                "size": 1914437,
+                "digest": "sha256:0902cf30ba8141fc371dc1cc20ff90f4c35d3611bb7b25b5367df34cf24ef17e"
+              },
+              {
+                "name": "image-219ee392e4d96e1dea721297ff3e38d476eb0626851fbacb74b0075bd0eae646-hockenheim-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-219ee392e4d96e1dea721297ff3e38d476eb0626851fbacb74b0075bd0eae646-hockenheim-grid.png",
+                "size": 1862135,
+                "digest": "sha256:219ee392e4d96e1dea721297ff3e38d476eb0626851fbacb74b0075bd0eae646"
+              },
+              {
+                "name": "image-288d8de820bdff200d7c5c4683d302820837c8834a439dcdc86e2573c3b31b31-baku-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-288d8de820bdff200d7c5c4683d302820837c8834a439dcdc86e2573c3b31b31-baku-grid.png",
+                "size": 2060572,
+                "digest": "sha256:288d8de820bdff200d7c5c4683d302820837c8834a439dcdc86e2573c3b31b31"
+              },
+              {
+                "name": "image-2b5ac1683654b14bc0aac686cb1c5a37e5b262f6c75d0e6c64f35d134c70e707-imola-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-2b5ac1683654b14bc0aac686cb1c5a37e5b262f6c75d0e6c64f35d134c70e707-imola-grid.png",
+                "size": 1987582,
+                "digest": "sha256:2b5ac1683654b14bc0aac686cb1c5a37e5b262f6c75d0e6c64f35d134c70e707"
+              },
+              {
+                "name": "image-33f05a791fe9db628586e5bb7e8e7866314a96a612ec674631d2ad20ae3991a0-buenos-aires-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-33f05a791fe9db628586e5bb7e8e7866314a96a612ec674631d2ad20ae3991a0-buenos-aires-grid.png",
+                "size": 1982075,
+                "digest": "sha256:33f05a791fe9db628586e5bb7e8e7866314a96a612ec674631d2ad20ae3991a0"
+              },
+              {
+                "name": "image-355aef1634b63de5cd5bc2b8713ad9b38aad8ce67f7a4996519522cb5d16217a-bahrain-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-355aef1634b63de5cd5bc2b8713ad9b38aad8ce67f7a4996519522cb5d16217a-bahrain-grid.png",
+                "size": 1880322,
+                "digest": "sha256:355aef1634b63de5cd5bc2b8713ad9b38aad8ce67f7a4996519522cb5d16217a"
+              },
+              {
+                "name": "image-37925f0817e4d6e6795c66e88a29c0dabf412aef592d835facacfe8e3edf4956-abudhabi-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-37925f0817e4d6e6795c66e88a29c0dabf412aef592d835facacfe8e3edf4956-abudhabi-grid.png",
+                "size": 1919095,
+                "digest": "sha256:37925f0817e4d6e6795c66e88a29c0dabf412aef592d835facacfe8e3edf4956"
+              },
+              {
+                "name": "image-4ad180f02a69783d16940629b0b1a769242df90b827f7d65fe79c2f4c9f2d9aa-estoril-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-4ad180f02a69783d16940629b0b1a769242df90b827f7d65fe79c2f4c9f2d9aa-estoril-grid.png",
+                "size": 1931723,
+                "digest": "sha256:4ad180f02a69783d16940629b0b1a769242df90b827f7d65fe79c2f4c9f2d9aa"
+              },
+              {
+                "name": "image-5d2566efe61a76666c3ada52653239d871b0b295da10df6458cc331fae060b0d-spa-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-5d2566efe61a76666c3ada52653239d871b0b295da10df6458cc331fae060b0d-spa-grid.png",
+                "size": 1938006,
+                "digest": "sha256:5d2566efe61a76666c3ada52653239d871b0b295da10df6458cc331fae060b0d"
+              },
+              {
+                "name": "image-5d5d11187290aee951dc46b2ce62af92ff9528d9d5cf6121bb7e5fb40bf042be-vegas-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-5d5d11187290aee951dc46b2ce62af92ff9528d9d5cf6121bb7e5fb40bf042be-vegas-grid.png",
+                "size": 1912949,
+                "digest": "sha256:5d5d11187290aee951dc46b2ce62af92ff9528d9d5cf6121bb7e5fb40bf042be"
+              },
+              {
+                "name": "image-5fbc3be014487b1918e3552bfa26f204ef3225eba9c235f5ab1f6c4ca014157f-catalunya-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-5fbc3be014487b1918e3552bfa26f204ef3225eba9c235f5ab1f6c4ca014157f-catalunya-grid.png",
+                "size": 2051274,
+                "digest": "sha256:5fbc3be014487b1918e3552bfa26f204ef3225eba9c235f5ab1f6c4ca014157f"
+              },
+              {
+                "name": "image-6c634fdc6a450cfd807da1cfd8ecbbac08631f51e271c23df1b108ca209896c9-suzuka-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-6c634fdc6a450cfd807da1cfd8ecbbac08631f51e271c23df1b108ca209896c9-suzuka-grid.png",
+                "size": 1985317,
+                "digest": "sha256:6c634fdc6a450cfd807da1cfd8ecbbac08631f51e271c23df1b108ca209896c9"
+              },
+              {
+                "name": "image-765081f5a3f2160d521854b6399ef416630c101f1f2757cff3db534d5af551be-indianapolis-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-765081f5a3f2160d521854b6399ef416630c101f1f2757cff3db534d5af551be-indianapolis-grid.png",
+                "size": 1868030,
+                "digest": "sha256:765081f5a3f2160d521854b6399ef416630c101f1f2757cff3db534d5af551be"
+              },
+              {
+                "name": "image-85c1a2f1666c2b938ca34f6139b1c93b16bf3930c5412e0a973e2853c2433cc7-qatar-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-85c1a2f1666c2b938ca34f6139b1c93b16bf3930c5412e0a973e2853c2433cc7-qatar-grid.png",
+                "size": 1790254,
+                "digest": "sha256:85c1a2f1666c2b938ca34f6139b1c93b16bf3930c5412e0a973e2853c2433cc7"
+              },
+              {
+                "name": "image-895b09444315c5e726faad56648c7f66337bed629b0dba731c12bc90f06f03bd-monaco-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-895b09444315c5e726faad56648c7f66337bed629b0dba731c12bc90f06f03bd-monaco-grid.png",
+                "size": 1979418,
+                "digest": "sha256:895b09444315c5e726faad56648c7f66337bed629b0dba731c12bc90f06f03bd"
+              },
+              {
+                "name": "image-8c5946d5c9d161cd07e1ef2b86879cbbaa1e5fc538af2cf48236726abec93999-interlagos-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-8c5946d5c9d161cd07e1ef2b86879cbbaa1e5fc538af2cf48236726abec93999-interlagos-grid.png",
+                "size": 1962095,
+                "digest": "sha256:8c5946d5c9d161cd07e1ef2b86879cbbaa1e5fc538af2cf48236726abec93999"
+              },
+              {
+                "name": "image-9587d886b9455603dc7f55866cf9126cc75750a06ef59628157864987bd8adf6-istanbul-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-9587d886b9455603dc7f55866cf9126cc75750a06ef59628157864987bd8adf6-istanbul-grid.png",
+                "size": 1963600,
+                "digest": "sha256:9587d886b9455603dc7f55866cf9126cc75750a06ef59628157864987bd8adf6"
+              },
+              {
+                "name": "image-9b499fdfaecafac5f9ca1ae9d84d770cbb006a34f543370397252f8ea678bcb6-jeddah-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-9b499fdfaecafac5f9ca1ae9d84d770cbb006a34f543370397252f8ea678bcb6-jeddah-grid.png",
+                "size": 2014153,
+                "digest": "sha256:9b499fdfaecafac5f9ca1ae9d84d770cbb006a34f543370397252f8ea678bcb6"
+              },
+              {
+                "name": "image-c156e07ee2060ce4cb44de8a255b9a500ec8ce427043c481fd7bb22e79e4f2e8-cota-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-c156e07ee2060ce4cb44de8a255b9a500ec8ce427043c481fd7bb22e79e4f2e8-cota-grid.png",
+                "size": 1837900,
+                "digest": "sha256:c156e07ee2060ce4cb44de8a255b9a500ec8ce427043c481fd7bb22e79e4f2e8"
+              },
+              {
+                "name": "image-c48a4a2af37d963151578ca29cc59641504277572368f3fce20badc301617b3a-jacarepagua-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-c48a4a2af37d963151578ca29cc59641504277572368f3fce20badc301617b3a-jacarepagua-grid.png",
+                "size": 1879946,
+                "digest": "sha256:c48a4a2af37d963151578ca29cc59641504277572368f3fce20badc301617b3a"
+              },
+              {
+                "name": "image-c6ab2879e47e08cdad56113d16fc26eb501edaadd035b10714fe7c3b9f6a0e93-zandvoort-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-c6ab2879e47e08cdad56113d16fc26eb501edaadd035b10714fe7c3b9f6a0e93-zandvoort-grid.png",
+                "size": 2031507,
+                "digest": "sha256:c6ab2879e47e08cdad56113d16fc26eb501edaadd035b10714fe7c3b9f6a0e93"
+              },
+              {
+                "name": "image-d6a3096d7ec3c97f05f3092c26d0322ffcde9f8c914b06b2f2946874f3468682-kyalami-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-d6a3096d7ec3c97f05f3092c26d0322ffcde9f8c914b06b2f2946874f3468682-kyalami-grid.png",
+                "size": 1817774,
+                "digest": "sha256:d6a3096d7ec3c97f05f3092c26d0322ffcde9f8c914b06b2f2946874f3468682"
+              },
+              {
+                "name": "image-e9685287007064b8f7f453f2a4d7ab65a7ee433c9d198de43486786db8fef6fd-monza-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-e9685287007064b8f7f453f2a4d7ab65a7ee433c9d198de43486786db8fef6fd-monza-grid.png",
+                "size": 1888830,
+                "digest": "sha256:e9685287007064b8f7f453f2a4d7ab65a7ee433c9d198de43486786db8fef6fd"
+              },
+              {
+                "name": "image-eda2284e0e0ac1b801bc7581885411a5447cfad5c64271ef2d60d8b8a84e8cfe-albert-park-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-eda2284e0e0ac1b801bc7581885411a5447cfad5c64271ef2d60d8b8a84e8cfe-albert-park-grid.png",
+                "size": 1993148,
+                "digest": "sha256:eda2284e0e0ac1b801bc7581885411a5447cfad5c64271ef2d60d8b8a84e8cfe"
+              },
+              {
+                "name": "image-f1b48a4b2f0ed0ac618f2424e0a86b6355f1477c6dbe48781c737cc6db497568-silverstone-grid.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/image-f1b48a4b2f0ed0ac618f2424e0a86b6355f1477c6dbe48781c737cc6db497568-silverstone-grid.png",
+                "size": 1846838,
+                "digest": "sha256:f1b48a4b2f0ed0ac618f2424e0a86b6355f1477c6dbe48781c737cc6db497568"
+              },
+              {
+                "name": "legacy-look-survey-cb0cb2c386db.tar.gz",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/legacy-look-survey-cb0cb2c386db.tar.gz",
+                "size": 48276024,
+                "digest": "sha256:7c4004602495dd34b41bf27d225ebb5b1bfc336876b8cfe18323afa2cf2473d7"
+              },
+              {
+                "name": "legacy-look-survey-cb0cb2c386db.tar.gz.sha256",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/legacy-look-survey-cb0cb2c386db.tar.gz.sha256",
+                "size": 4069,
+                "digest": "sha256:897f1cb19a31c0d58fb0eb031a333cbeee1f45ac57b78db0018a5aa8b1d89efb"
+              },
+              {
+                "name": "legacy-look-survey-manifest.json",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-look-survey-7c4004602495dd34/legacy-look-survey-manifest.json",
+                "size": 11375,
+                "digest": "sha256:d82e4857ae1201ed53ce5d0feff1f1d799b6862fef69b9d0ef9d12aec6228aa9"
+              }
+            ],
+            "inspection": {
+              "verifiedAt": "2026-10-19T02:14:54.028Z",
+              "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+              "pages": [
+                {
+                  "path": "docs/look-survey/abudhabi_grid.png",
+                  "title": "abudhabi_grid.png (2110\u00d7868)",
+                  "imageElements": 1,
+                  "loadedImages": 1,
+                  "bodyText": "",
+                  "pageErrors": []
+                }
+              ]
+            }
+          }
+        },
+        {
+          "label": "legacy-track-designer",
+          "sourceCommit": "cb0cb2c386dbda6f45d4984cfb4c297a520556b0",
+          "sourcePaths": [
+            "artifacts/shots/tracks-ui/16-designer-edit-randomise.png"
+          ],
+          "sourceRefs": [],
+          "directImages": true,
+          "retentionReason": "Preserve the screenshot linked by the track-designer overhaul document.",
+          "fileCount": 1,
+          "sourceBytes": 179986,
+          "entryPoints": [],
+          "publication": {
+            "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188948660",
+            "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+            "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-track-designer-5a29f67456742bc7",
+            "tag": "evidence-legacy-track-designer-5a29f67456742bc7",
+            "archiveName": "legacy-track-designer-cb0cb2c386db.tar.gz",
+            "archiveSha256": "5a29f67456742bc7ec1614cea3e67743beffee38dc3666cd90c875a3a0a459ab",
+            "archiveBytes": 175916,
+            "verifiedDownload": true,
+            "verifiedAt": "2026-10-19T02:14:25.740002+00:00",
+            "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+            "fileCount": 1,
+            "assets": [
+              {
+                "name": "image-9c3dae675bbafd854a215ebee73b0411aaf3a2acbfbde66f3b4039c72ad3b0ea-16-designer-edit-randomise.png",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/image-9c3dae675bbafd854a215ebee73b0411aaf3a2acbfbde66f3b4039c72ad3b0ea-16-designer-edit-randomise.png",
+                "size": 179986,
+                "digest": "sha256:9c3dae675bbafd854a215ebee73b0411aaf3a2acbfbde66f3b4039c72ad3b0ea"
+              },
+              {
+                "name": "legacy-track-designer-cb0cb2c386db.tar.gz",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/legacy-track-designer-cb0cb2c386db.tar.gz",
+                "size": 175916,
+                "digest": "sha256:5a29f67456742bc7ec1614cea3e67743beffee38dc3666cd90c875a3a0a459ab"
+              },
+              {
+                "name": "legacy-track-designer-cb0cb2c386db.tar.gz.sha256",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/legacy-track-designer-cb0cb2c386db.tar.gz.sha256",
+                "size": 378,
+                "digest": "sha256:23c30583d4eee403178dd7cece804d4f62899d8525a8e9aa69f6308031348bc4"
+              },
+              {
+                "name": "legacy-track-designer-manifest.json",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-track-designer-5a29f67456742bc7/legacy-track-designer-manifest.json",
+                "size": 1078,
+                "digest": "sha256:0fe625d57c27253466a3719598e4b2c4e9146acb330e325fe83139b020651981"
+              }
+            ],
+            "inspection": {
+              "verifiedAt": "2026-10-19T02:14:54.973Z",
+              "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+              "pages": [
+                {
+                  "path": "artifacts/shots/tracks-ui/16-designer-edit-randomise.png",
+                  "title": "16-designer-edit-randomise.png (1440\u00d7900)",
+                  "imageElements": 1,
+                  "loadedImages": 1,
+                  "bodyText": "",
+                  "pageErrors": []
+                }
+              ]
+            }
+          }
+        },
+        {
+          "label": "legacy-garage-finishes",
+          "sourceCommit": "014ff2d6c2268e6c3f7840074c37788ce905204b",
+          "sourcePaths": [
+            "gallery/garage-finishes/garage-finishes-current.jpg"
+          ],
+          "sourceRefs": [],
+          "directImages": true,
+          "retentionReason": "Preserve the current garage finish image linked by the review note.",
+          "fileCount": 1,
+          "sourceBytes": 62505,
+          "entryPoints": [],
+          "publication": {
+            "archiveWorkflowRunUrl": "https://github.com/brycejmurrin/f1-game/actions/runs/39188957294",
+            "publisherSha": "311c5de14dee86f24c3326e0b0a262fb1a3fda55",
+            "releaseUrl": "https://github.com/brycejmurrin/f1-game/releases/tag/evidence-legacy-garage-finishes-451ecada81bf082f",
+            "tag": "evidence-legacy-garage-finishes-451ecada81bf082f",
+            "archiveName": "legacy-garage-finishes-014ff2d6c226.tar.gz",
+            "archiveSha256": "451ecada81bf082f19ae53506b54c49770b63735c5f802118760882975409814",
+            "archiveBytes": 51887,
+            "verifiedDownload": true,
+            "verifiedAt": "2026-10-19T02:14:27.877085+00:00",
+            "verification": "Downloaded all assets; sha256sum -c passed; all restored file SHA-256/Git blob identities match the original commit; manifest origin and fixed tag anchor checked. Gallery inspection recorded separately.",
+            "fileCount": 1,
+            "assets": [
+              {
+                "name": "image-ab0cd5f477761efe9a5c535b752ab9b588791ef80199ec4f2f797963c603339f-garage-finishes-current.jpg",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/image-ab0cd5f477761efe9a5c535b752ab9b588791ef80199ec4f2f797963c603339f-garage-finishes-current.jpg",
+                "size": 62505,
+                "digest": "sha256:ab0cd5f477761efe9a5c535b752ab9b588791ef80199ec4f2f797963c603339f"
+              },
+              {
+                "name": "legacy-garage-finishes-014ff2d6c226.tar.gz",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/legacy-garage-finishes-014ff2d6c226.tar.gz",
+                "size": 51887,
+                "digest": "sha256:451ecada81bf082f19ae53506b54c49770b63735c5f802118760882975409814"
+              },
+              {
+                "name": "legacy-garage-finishes-014ff2d6c226.tar.gz.sha256",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/legacy-garage-finishes-014ff2d6c226.tar.gz.sha256",
+                "size": 377,
+                "digest": "sha256:bf7859266656756c30468ee5e31a93fc3170cd5fd0e955d1615a188a4ca731f1"
+              },
+              {
+                "name": "legacy-garage-finishes-manifest.json",
+                "browser_download_url": "https://github.com/brycejmurrin/f1-game/releases/download/evidence-legacy-garage-finishes-451ecada81bf082f/legacy-garage-finishes-manifest.json",
+                "size": 1065,
+                "digest": "sha256:21009d7bbc7f2f87b89e558443ea7bc07cdb2eb836f1c9ebb71c44aa5686cf97"
+              }
+            ],
+            "inspection": {
+              "verifiedAt": "2026-10-19T02:14:55.500Z",
+              "method": "Opened restored HTML galleries or a representative image in isolated Chromium over local HTTP; external requests blocked; confirmed decoded image content.",
+              "pages": [
+                {
+                  "path": "gallery/garage-finishes/garage-finishes-current.jpg",
+                  "title": "garage-finishes-current.jpg (1920\u00d7540)",
+                  "imageElements": 1,
+                  "loadedImages": 1,
+                  "bodyText": "",
+                  "pageErrors": []
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "trailingLimitations": [
+        "Captures prove original stored Git bytes, not the actual game revision rendered.",
+        "Archived HTML/producer metadata may retain original Git/full-resolution source links; audit those separately before any future purge.",
+        "Historical snapshots on other branches, PR descriptions and external consumers are not rewritten by this documentation migration.",
+        "This catalog does not authorize deleting history, recovery refs, backups or PR refs."
+      ],
+      "semanticMap": {
+        "purpose": "Historical selection/publication registry suffix",
+        "producer": "Evidence migration and publication workflow",
+        "consumers": "Evidence-storage, documentation and cleanup reviewers",
+        "policy": "Retain original bytes and publication provenance; no history deletion authority",
+        "currentValidityAndLimits": "Three independent complete selection objects parsed; header/earlier selections not read; release checks stored not rerun"
+      }
+    },
+    {
+      "path": "docs/look-survey/README.md",
+      "sourceBytes": 4562,
+      "sourceSha256": "d56b640ad0cd4a8b87b32ecf5f2f278769eaee4852f6a5a83c0431289ca92863",
+      "manifestSha256": "d56b640ad0cd4a8b87b32ecf5f2f278769eaee4852f6a5a83c0431289ca92863",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        4562
+      ],
+      "assignedSha256": "d56b640ad0cd4a8b87b32ecf5f2f278769eaee4852f6a5a83c0431289ca92863",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            4562
+          ],
+          "bytes": 4562,
+          "sha256": "d56b640ad0cd4a8b87b32ecf5f2f278769eaee4852f6a5a83c0431289ca92863",
+          "firstLine": 1,
+          "lastLine": 65,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "Look-survey contact sheets",
+        "How to shoot",
+        "Serve the game (Chrome MCP needs a live URL \u2014 not file://)",
+        "Single circuit \u2014 all 20 tod\u00d7weather combos",
+        "Or a subset",
+        "Batch plan (shoots only missing PNGs, safe to re-run)",
+        "Stitch the sheet after shooting",
+        "look-survey vs slider-effect",
+        "Sheets"
+      ],
+      "historicalOrSupportReferences": [
+        "artifacts/lighting/shots/<id>/",
+        "artifacts/look-survey/",
+        "dawn / day / dusk / night",
+        "docs/LIGHTING-TUNER-SLIDERS.md",
+        "dry / wet / rain / fog / overcast",
+        "files/docs/look-survey/",
+        "tests/unit/committed-images.test.mjs"
+      ],
+      "semanticMap": {
+        "purpose": "Twenty-condition contact-sheet operator workflow",
+        "producer": "Capture CLI then sheet stitcher then reviewed release publication",
+        "consumers": "Lighting authors and human reviewers",
+        "policy": "Ignored output only, no committed generated images; capture tools serialize Chromium",
+        "currentValidityAndLimits": "Historical sheets; no links downloaded or screenshots inspected"
+      }
+    },
+    {
+      "path": "docs/look-survey/flyby-signatures/bahrain-flyby.json",
+      "sourceBytes": 3802,
+      "sourceSha256": "c94f3d0e922d6bc93bd34f8cdff764896bb3d4a78aaab4b0ca16279b5e7b9edd",
+      "manifestSha256": "c94f3d0e922d6bc93bd34f8cdff764896bb3d4a78aaab4b0ca16279b5e7b9edd",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        3802
+      ],
+      "assignedSha256": "c94f3d0e922d6bc93bd34f8cdff764896bb3d4a78aaab4b0ca16279b5e7b9edd",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            3802
+          ],
+          "bytes": 3802,
+          "sha256": "c94f3d0e922d6bc93bd34f8cdff764896bb3d4a78aaab4b0ca16279b5e7b9edd",
+          "firstLine": 1,
+          "lastLine": 219,
+          "rawReturned": true
+        }
+      ],
+      "parsedComplete": true,
+      "topLevelKeys": [
+        "track",
+        "backend",
+        "timeOfDay",
+        "weather",
+        "seed",
+        "grid",
+        "shots",
+        "sheet",
+        "frames"
+      ],
+      "parsedDocument": {
+        "track": "bahrain",
+        "backend": "webgl2",
+        "timeOfDay": "night",
+        "weather": "dry",
+        "seed": 3,
+        "grid": "tier",
+        "shots": null,
+        "sheet": "bahrain-sheet.png",
+        "frames": [
+          {
+            "u": 0,
+            "shot": "wide",
+            "index": 0,
+            "fov": 36,
+            "eye": [
+              403.93,
+              249.92,
+              -647.82
+            ],
+            "target": [
+              90.63,
+              76,
+              51.74
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u000-wide.png"
+          },
+          {
+            "u": 0.125,
+            "shot": "wide2",
+            "index": 1,
+            "fov": 37.1,
+            "eye": [
+              297.12,
+              183.88,
+              538.09
+            ],
+            "target": [
+              90.63,
+              57.32,
+              51.74
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u013-wide2.png"
+          },
+          {
+            "u": 0.25,
+            "shot": "landmark1",
+            "index": 2,
+            "fov": 38,
+            "eye": [
+              -426.07,
+              16,
+              392.34
+            ],
+            "target": [
+              -366.9,
+              8.56,
+              425.4
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u025-landmark1.png"
+          },
+          {
+            "u": 0.375,
+            "shot": "turn-first",
+            "index": 4,
+            "fov": 39.2,
+            "eye": [
+              378.24,
+              8.67,
+              570.38
+            ],
+            "target": [
+              344.82,
+              0.72,
+              598.69
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u038-turn-first.png"
+          },
+          {
+            "u": 0.5,
+            "shot": "turn-mid",
+            "index": 5,
+            "fov": 43.8,
+            "eye": [
+              129.21,
+              8.14,
+              433.08
+            ],
+            "target": [
+              158.82,
+              0.59,
+              413.56
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u050-turn-mid.png"
+          },
+          {
+            "u": 0.625,
+            "shot": "grid-walk",
+            "index": 7,
+            "fov": 49.7,
+            "eye": [
+              387.89,
+              1.67,
+              -86.28
+            ],
+            "target": [
+              386.08,
+              0.69,
+              0.3
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 0,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u063-grid-walk.png"
+          },
+          {
+            "u": 0.75,
+            "shot": "grid-crane",
+            "index": 8,
+            "fov": 31.6,
+            "eye": [
+              390.58,
+              5,
+              -130.53
+            ],
+            "target": [
+              385.62,
+              0.77,
+              -44.79
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": -0.22,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u075-grid-crane.png"
+          },
+          {
+            "u": 0.875,
+            "shot": "grid-front",
+            "index": 9,
+            "fov": 40,
+            "eye": [
+              378.84,
+              1.76,
+              40.9
+            ],
+            "target": [
+              382.36,
+              0.54,
+              19.02
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 2.51,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u088-grid-front.png"
+          },
+          {
+            "u": 1,
+            "shot": "grid-mine",
+            "index": 10,
+            "fov": 40,
+            "eye": [
+              383.97,
+              1.38,
+              -66.02
+            ],
+            "target": [
+              379.89,
+              1.15,
+              74.96
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 2.8,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "bahrain-u100-grid-mine.png"
+          }
+        ]
+      },
+      "semanticMap": {
+        "purpose": "Bahrain nine-frame deterministic camera signature",
+        "producer": "flyby.mjs solver/canvas capture",
+        "consumers": "Authoring comparison and script readers; no filename-specific tool/test consumer found",
+        "policy": "Pinned night/dry/seed3/tier/webgl2; generated image files separate",
+        "currentValidityAndLimits": "Null defect is stored result, not fresh visual verdict; source SHA absent"
+      }
+    },
+    {
+      "path": "docs/look-survey/flyby-signatures/monaco-flyby.json",
+      "sourceBytes": 3809,
+      "sourceSha256": "90bfc9f57aad715d1e3af2842a9fa60eacedbb27be3f1943c62592f211291693",
+      "manifestSha256": "90bfc9f57aad715d1e3af2842a9fa60eacedbb27be3f1943c62592f211291693",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        3809
+      ],
+      "assignedSha256": "90bfc9f57aad715d1e3af2842a9fa60eacedbb27be3f1943c62592f211291693",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            3809
+          ],
+          "bytes": 3809,
+          "sha256": "90bfc9f57aad715d1e3af2842a9fa60eacedbb27be3f1943c62592f211291693",
+          "firstLine": 1,
+          "lastLine": 219,
+          "rawReturned": true
+        }
+      ],
+      "parsedComplete": true,
+      "topLevelKeys": [
+        "track",
+        "backend",
+        "timeOfDay",
+        "weather",
+        "seed",
+        "grid",
+        "shots",
+        "sheet",
+        "frames"
+      ],
+      "parsedDocument": {
+        "track": "monaco",
+        "backend": "webgl2",
+        "timeOfDay": "default",
+        "weather": "dry",
+        "seed": 3,
+        "grid": "tier",
+        "shots": null,
+        "sheet": "monaco-sheet.png",
+        "frames": [
+          {
+            "u": 0,
+            "shot": "wide",
+            "index": 0,
+            "fov": 36,
+            "eye": [
+              584.96,
+              258.23,
+              -300.1
+            ],
+            "target": [
+              40.3,
+              8.23,
+              46.49
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u000-wide.png"
+          },
+          {
+            "u": 0.125,
+            "shot": "wide2",
+            "index": 1,
+            "fov": 37.1,
+            "eye": [
+              -396.75,
+              173.06,
+              130.21
+            ],
+            "target": [
+              40.3,
+              8.23,
+              46.49
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u013-wide2.png"
+          },
+          {
+            "u": 0.25,
+            "shot": "landmark1",
+            "index": 2,
+            "fov": 38,
+            "eye": [
+              271.78,
+              32.35,
+              -374.85
+            ],
+            "target": [
+              321.8,
+              45.27,
+              -442.3
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u025-landmark1.png"
+          },
+          {
+            "u": 0.375,
+            "shot": "turn-first",
+            "index": 4,
+            "fov": 39.2,
+            "eye": [
+              -273.69,
+              36.15,
+              421.98
+            ],
+            "target": [
+              -317.14,
+              20.72,
+              394.31
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u038-turn-first.png"
+          },
+          {
+            "u": 0.5,
+            "shot": "turn-mid",
+            "index": 5,
+            "fov": 37.6,
+            "eye": [
+              228.6,
+              5.14,
+              -423.82
+            ],
+            "target": [
+              186.23,
+              0.7,
+              -462.84
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": -3,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u050-turn-mid.png"
+          },
+          {
+            "u": 0.625,
+            "shot": "grid-walk",
+            "index": 7,
+            "fov": 49.7,
+            "eye": [
+              337.31,
+              1.79,
+              -322.6
+            ],
+            "target": [
+              359.22,
+              0.49,
+              -238.75
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 0,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u063-grid-walk.png"
+          },
+          {
+            "u": 0.75,
+            "shot": "grid-crane",
+            "index": 8,
+            "fov": 31.6,
+            "eye": [
+              324.67,
+              4.87,
+              -365.11
+            ],
+            "target": [
+              348.36,
+              0.8,
+              -282.55
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": -0.22,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u075-grid-crane.png"
+          },
+          {
+            "u": 0.875,
+            "shot": "grid-front",
+            "index": 9,
+            "fov": 40,
+            "eye": [
+              360.19,
+              1.99,
+              -197.64
+            ],
+            "target": [
+              359.94,
+              0.64,
+              -219.77
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 2.51,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u088-grid-front.png"
+          },
+          {
+            "u": 1,
+            "shot": "grid-mine",
+            "index": 10,
+            "fov": 40,
+            "eye": [
+              340.95,
+              1.56,
+              -302.4
+            ],
+            "target": [
+              365.85,
+              1.03,
+              -164.09
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 2,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "monaco-u100-grid-mine.png"
+          }
+        ]
+      },
+      "semanticMap": {
+        "purpose": "Monaco nine-frame deterministic camera signature",
+        "producer": "flyby.mjs solver/canvas capture",
+        "consumers": "Authoring comparison and script readers; no filename-specific tool/test consumer found",
+        "policy": "Pinned default-time/dry/seed3/tier/webgl2",
+        "currentValidityAndLimits": "Five on-road frames; source SHA absent"
+      }
+    },
+    {
+      "path": "docs/look-survey/flyby-signatures/spa-flyby.json",
+      "sourceBytes": 3888,
+      "sourceSha256": "39c01164e568e38cb74bda139381b8e893ac096a921e28e3bf5a1a4ee09bde78",
+      "manifestSha256": "39c01164e568e38cb74bda139381b8e893ac096a921e28e3bf5a1a4ee09bde78",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        3888
+      ],
+      "assignedSha256": "39c01164e568e38cb74bda139381b8e893ac096a921e28e3bf5a1a4ee09bde78",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            3888
+          ],
+          "bytes": 3888,
+          "sha256": "39c01164e568e38cb74bda139381b8e893ac096a921e28e3bf5a1a4ee09bde78",
+          "firstLine": 1,
+          "lastLine": 226,
+          "rawReturned": true
+        }
+      ],
+      "parsedComplete": true,
+      "topLevelKeys": [
+        "track",
+        "backend",
+        "timeOfDay",
+        "weather",
+        "seed",
+        "grid",
+        "shots",
+        "sheet",
+        "frames"
+      ],
+      "parsedDocument": {
+        "track": "spa",
+        "backend": "webgl2",
+        "timeOfDay": "default",
+        "weather": "dry",
+        "seed": 3,
+        "grid": "tier",
+        "shots": null,
+        "sheet": "spa-sheet.png",
+        "frames": [
+          {
+            "u": 0,
+            "shot": "wide",
+            "index": 0,
+            "fov": 36,
+            "eye": [
+              -109.85,
+              485.28,
+              687.17
+            ],
+            "target": [
+              -44.97,
+              257.53,
+              -160.35
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u000-wide.png"
+          },
+          {
+            "u": 0.125,
+            "shot": "wide2",
+            "index": 1,
+            "fov": 37.1,
+            "eye": [
+              -615.37,
+              355.34,
+              -785.13
+            ],
+            "target": [
+              -44.97,
+              -5.47,
+              -160.35
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u013-wide2.png"
+          },
+          {
+            "u": 0.25,
+            "shot": "landmark1",
+            "index": 2,
+            "fov": 38,
+            "eye": [
+              308.44,
+              -12.43,
+              -368.69
+            ],
+            "target": [
+              241.9,
+              -17.13,
+              -377.1
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u025-landmark1.png"
+          },
+          {
+            "u": 0.375,
+            "shot": "turn-first",
+            "index": 4,
+            "fov": 39.2,
+            "eye": [
+              371.71,
+              14.77,
+              987.53
+            ],
+            "target": [
+              355.17,
+              6.53,
+              1028.42
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u038-turn-first.png"
+          },
+          {
+            "u": 0.5,
+            "shot": "turn-mid",
+            "index": 5,
+            "fov": 39.6,
+            "eye": [
+              129.29,
+              19.39,
+              490.05
+            ],
+            "target": [
+              92.06,
+              -7,
+              531.6
+            ],
+            "lift": 0,
+            "onRoad": false,
+            "lat": null,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u050-turn-mid.png"
+          },
+          {
+            "u": 0.625,
+            "shot": "grid-walk",
+            "index": 7,
+            "fov": 49.7,
+            "eye": [
+              187.03,
+              -1.55,
+              697.46
+            ],
+            "target": [
+              232.79,
+              -0.63,
+              771
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 0,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u063-grid-walk.png"
+          },
+          {
+            "u": 0.75,
+            "shot": "grid-crane",
+            "index": 8,
+            "fov": 31.6,
+            "eye": [
+              165.06,
+              -0.17,
+              658.94
+            ],
+            "target": [
+              207.76,
+              -1.35,
+              733.47
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": -0.22,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u075-grid-crane.png"
+          },
+          {
+            "u": 0.875,
+            "shot": "grid-front",
+            "index": 9,
+            "fov": 40,
+            "eye": [
+              248.39,
+              2.11,
+              809.2
+            ],
+            "target": [
+              239.59,
+              -0.1,
+              788.86
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 2.5,
+            "inside": {
+              "kind": "gantry",
+              "size": [
+                18.2,
+                7.7,
+                11.2
+              ]
+            },
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u088-grid-front.png"
+          },
+          {
+            "u": 1,
+            "shot": "grid-mine",
+            "index": 10,
+            "fov": 40,
+            "eye": [
+              194.63,
+              -1.25,
+              716.67
+            ],
+            "target": [
+              267.5,
+              2.29,
+              837.41
+            ],
+            "lift": 0,
+            "onRoad": true,
+            "lat": 3,
+            "inside": null,
+            "defect": null,
+            "liftWarn": false,
+            "file": "spa-u100-grid-mine.png"
+          }
+        ]
+      },
+      "semanticMap": {
+        "purpose": "Spa nine-frame deterministic camera signature",
+        "producer": "flyby.mjs solver/canvas capture",
+        "consumers": "Authoring comparison and script readers; no filename-specific tool/test consumer found",
+        "policy": "Pinned default-time/dry/seed3/tier/webgl2",
+        "currentValidityAndLimits": "Grid-front gantry inside object with null defect; source SHA absent"
+      }
+    },
+    {
+      "path": "docs/perf/iphone-browserstack-2026-10-21.md",
+      "sourceBytes": 3979,
+      "sourceSha256": "c1d382ecf58cc4880a18755ed09ca4f8bc1292a58584826c98127462847db670",
+      "manifestSha256": "c1d382ecf58cc4880a18755ed09ca4f8bc1292a58584826c98127462847db670",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        3979
+      ],
+      "assignedSha256": "c1d382ecf58cc4880a18755ed09ca4f8bc1292a58584826c98127462847db670",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            3979
+          ],
+          "bytes": 3979,
+          "sha256": "c1d382ecf58cc4880a18755ed09ca4f8bc1292a58584826c98127462847db670",
+          "firstLine": 1,
+          "lastLine": 99,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "iPhone BrowserStack profiling \u2014 2026-10-21",
+        "Devices and backends",
+        "Racing \u2014 MEDIUM (iPhone 15)",
+        "Preset drive \u2014 Monza 60 s (iPhone 15)",
+        "Older phone \u2014 iPhone 13",
+        "Menu / garage hitches (iPhone 15)",
+        "Race start load",
+        "Product decisions taken from this pass",
+        "Suite provenance"
+      ],
+      "historicalOrSupportReferences": [
+        "PHONE-RENDERER-AB-2026-10-21.md",
+        "docs/notes/LIVE-FRAME-H10-2026-10-20.md",
+        "docs/notes/PHONE-GPU-TEST-2026-10-21.md",
+        "docs/notes/PHONE-RENDERER-AB-2026-10-21.md",
+        "docs/notes/RENDER-SETTINGS-TOOLING-RESEARCH-2026-10-21.md",
+        "js/perf/quality-preset.js",
+        "js/ui/scale.js"
+      ],
+      "semanticMap": {
+        "purpose": "Real iPhone performance summary and policy motivation",
+        "producer": "External BrowserStack suite on owner machine",
+        "consumers": "Phone preset/default/cap policy and repeat measurements",
+        "policy": "Separate resolution and quality; preserve backend/device/OS; comparable metric columns",
+        "currentValidityAndLimits": "Raw suite absent; current policy symbols/text corroborated, measurements historical"
+      }
+    },
+    {
+      "path": "docs/superpowers/specs/2026-10-25-grok-transcripts-cli-design.md",
+      "sourceBytes": 5364,
+      "sourceSha256": "7b5adfcce9212a2bd7754ab97a3f9ca009583010d19073f400599a3674536d4e",
+      "manifestSha256": "7b5adfcce9212a2bd7754ab97a3f9ca009583010d19073f400599a3674536d4e",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        5364
+      ],
+      "assignedSha256": "7b5adfcce9212a2bd7754ab97a3f9ca009583010d19073f400599a3674536d4e",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            5364
+          ],
+          "bytes": 5364,
+          "sha256": "7b5adfcce9212a2bd7754ab97a3f9ca009583010d19073f400599a3674536d4e",
+          "firstLine": 1,
+          "lastLine": 122,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "Grok transcripts CLI \u2014 streamer design",
+        "Goal",
+        "Non-goals",
+        "Record shape (verified on real dumps)",
+        "Streamer architecture",
+        "CLI surface",
+        "`search <paths\u2026> --query <str> [filters] [--json] [--context N]`",
+        "`export <paths\u2026> [filters] [--out file|-]`",
+        "`digest <paths\u2026>`",
+        "Flags / exits",
+        "Output formats",
+        "Acceptance checks",
+        "Layout"
+      ],
+      "historicalOrSupportReferences": [
+        " / ",
+        "#!/usr/bin/env node",
+        "digest.mjs",
+        "format.mjs",
+        "match.mjs",
+        "node tools/transcripts/cli.mjs",
+        "node tools/transcripts/cli.mjs <cmd> \u2026",
+        "stream.mjs",
+        "tests/fixtures/grok-transcripts/sample.jsonl",
+        "tests/groups.json",
+        "tests/unit/transcripts-cli.test.mjs",
+        "tools/manifest.cjs",
+        "tools/transcripts/**",
+        "tools/transcripts/lib/",
+        "uploads/Mom.jsonl"
+      ],
+      "semanticMap": {
+        "purpose": "Approved local JSONL streaming CLI design",
+        "producer": "Design author and local transcript CLI implementation",
+        "consumers": "CLI implementers and operators",
+        "policy": "Read-only inputs; no network/database/runtime; bounded streaming; exits0/1/2",
+        "currentValidityAndLimits": "Entry/stream imports and cleanup corroborated; full acceptance not run"
+      }
+    },
+    {
+      "path": "docs/survey/perf-survey-boot-css-racestart-2026-10-06.md",
+      "sourceBytes": 17516,
+      "sourceSha256": "fa21ab80b2d7411422e0f0eb6c88fee3bf1e639df67e088ac71ca584864a3989",
+      "manifestSha256": "fa21ab80b2d7411422e0f0eb6c88fee3bf1e639df67e088ac71ca584864a3989",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        17516
+      ],
+      "assignedSha256": "fa21ab80b2d7411422e0f0eb6c88fee3bf1e639df67e088ac71ca584864a3989",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            8500
+          ],
+          "bytes": 8500,
+          "sha256": "277ceae0d8a4384fb094e0a4e0d4d0580cf305aba53dc9e42c5d854c689ecead",
+          "firstLine": 1,
+          "lastLine": 151,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            8500,
+            17000
+          ],
+          "bytes": 8500,
+          "sha256": "16e597c9adaf1ccfe1f5ce8944d6d0ec62ce2d4b0a5ca51644bf2aad788e99e3",
+          "firstLine": 151,
+          "lastLine": 323,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            17000,
+            17516
+          ],
+          "bytes": 516,
+          "sha256": "5f50f3ad214621d25a65e3ec062fca0272aa60e6ceef81659b0e36d2a199d715",
+          "firstLine": 323,
+          "lastLine": 330,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "Perf survey \u2014 boot, CSS critical path, race start (2026-10-06)",
+        "Source map (ship tip line refs)",
+        "Ranked findings (impact first)",
+        "1. Boot script wall is 7.21 MB / 313 deferred IIFEs \u2014 largest remaining LCP driver",
+        "2. Race start: three-quarters of the freeze is not `loadTrack`; car-asset warm is a second ~1.2 s task",
+        "3. CSS: 933 KB shipped; 225 KB still render-blocking; preload fetches 79 KB of non-title sheets",
+        "4. `tokens.css` @font-face wall: 8 faces / 118 KB in the blocking sheet; title uses 3",
+        "5. Title Home / picker prep races the boot wall (same `loadTrackStepped`)",
+        "6. Governor: opening window is ~frames 10\u201395; scale reallocs are the hitch, not boot LCP",
+        "7. `index.html` itself is 338 KB + 26 KB inline scripts",
+        "What is already taken (do not re-open)",
+        "Ranked next (max 3)",
+        "Blockers"
+      ],
+      "historicalOrSupportReferences": [
+        " / ",
+        " / sentinel across build | ",
+        " at flyby / ",
+        " churn from pane/resize (",
+        " header / settle vs hunt | ",
+        ", 8 ms/frame default in ",
+        "/",
+        "PERF-FINDINGS.md",
+        "PERF-OPTIONS-2026-09-16.md",
+        "claude/f1-game-project-26h3ng",
+        "css/career.css",
+        "css/carsetup.css",
+        "css/data.css",
+        "css/hud.css",
+        "css/tokens.css",
+        "css/tuner.css",
+        "docs/notes/PERF-FINDINGS.md",
+        "docs/notes/PERF-OPTIONS-2026-09-16.md",
+        "docs/plans/2026-09-30-load-download-weight.md",
+        "driver-ratings.js",
+        "governor.js",
+        "js/audio/",
+        "js/camera/",
+        "js/car/",
+        "js/car/car-draw.js",
+        "js/car/car3d.js",
+        "js/car/liverytex.js",
+        "js/career/",
+        "js/career/career-ui.js",
+        "js/circuits/",
+        "js/core/lazy-bundles.js",
+        "js/core/log.js",
+        "js/data/teams.js",
+        "js/editor",
+        "js/editor/",
+        "js/game.js",
+        "js/garage/",
+        "js/lighting/",
+        "js/lighting/presets.js",
+        "js/perf/governor.js",
+        "js/perf/race-entry-profile.js",
+        "js/physics/",
+        "js/race/",
+        "js/render/renderer-boot.js",
+        "js/track/",
+        "js/track/scenery/build-props.js",
+        "js/track/tracks.js",
+        "js/ui/",
+        "js/ui/experience.js",
+        "js/ui/home-world.js",
+        "js/ui/title-flow.js",
+        "js/xr",
+        "js/xr/",
+        "legends.js",
+        "sw.js",
+        "three.tsl.min.js",
+        "tools/manifest.cjs",
+        "vendor/three-0.186.1/three.webgpu.min.js"
+      ],
+      "semanticMap": {
+        "purpose": "Pinned boot/CSS/race-entry survey",
+        "producer": "Static census plus cited prior timing ledger",
+        "consumers": "Boot/lazy/CSS/entry performance owners",
+        "policy": "Distinguish new census vs cited timing and menu-settled vs cold agent path",
+        "currentValidityAndLimits": "Historic eager circuit recommendation superseded by current AGENTS lazy definition hydration"
+      }
+    },
+    {
+      "path": "docs/survey/perf-survey-particles-probes-physics-2026-10-06.md",
+      "sourceBytes": 20575,
+      "sourceSha256": "49296a8cd84f6318d0c201aaff6cae6b9bfdba75a825876982bb7f649465bcb6",
+      "manifestSha256": "49296a8cd84f6318d0c201aaff6cae6b9bfdba75a825876982bb7f649465bcb6",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        20575
+      ],
+      "assignedSha256": "49296a8cd84f6318d0c201aaff6cae6b9bfdba75a825876982bb7f649465bcb6",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            8500
+          ],
+          "bytes": 8500,
+          "sha256": "a55169fe574c8ee2d5744a612ea555aea6cf7a5389a3df0f0d8dc15d8ea2e00d",
+          "firstLine": 1,
+          "lastLine": 157,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            8500,
+            17000
+          ],
+          "bytes": 8500,
+          "sha256": "b9e0b6f4b5c9ab4d45d22315306b204f53e6249a6fc5bbd71a5b75e310a6d7e1",
+          "firstLine": 157,
+          "lastLine": 355,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            17000,
+            20575
+          ],
+          "bytes": 3575,
+          "sha256": "2dd482f6744a7206d616149b5c16d37c24ff27a849b1c14876fece54903262ae",
+          "firstLine": 355,
+          "lastLine": 449,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "Perf survey \u2014 particles, env probes, physics hot paths (2026-10-06)",
+        "Ranked findings (act first)",
+        "1. Env probe \u2014 extra world pass, not the 64 px target",
+        "What ships",
+        "Measured",
+        "Suggested fix (do not implement here)",
+        "2. Physics \u2014 `updateCar` O(n\u00b2) traffic, collide already bucketed",
+        "Profile (vegas, 600 `_apex.step(1/60)`, 68 821 samples, interval 200 \u00b5s)",
+        "VM wall (same 22-car vegas, debris off)",
+        "Traffic scan (the remaining O(n\u00b2))",
+        "Suggested fix",
+        "3. GC churn \u2014 elevated in the JS remainder",
+        "Suggested fix",
+        "4. Particles \u2014 pool is fine; flares and GLX VBO are not",
+        "Pool (negative result still true)",
+        "Dirty latch vs one-frame flares",
+        "GLX shared VBO (WGX/TLX already split)",
+        "Suggested fix",
+        "5. Rain \u2014 2 m cell rebuilds at speed",
+        "Suggested fix",
+        "6. Debris / Rapier \u2014 still the large optional tax",
+        "Suggested fix",
+        "7. `sweepContacts` \u2014 nested pairs, already cheap-rejected",
+        "8. Particle `oldest()` \u2014 only when full",
+        "Methods appendix",
+        "ship SHA",
+        "vegas \u2014 911 chunks, 744652 tris, 13 stations",
+        "  900 m  236.4 chunks  1041208 indices",
+        "  300 m   41.0 chunks   312678 indices  (\u221270%)",
+        "1220.7 ms / 600 ticks / 22 cars / cap 256 / debris enabled false / furnCount 17",
+        "68821 samples; GPU sync 96.4% getError; JS remainder: update 21.5, updateCar 17.1, GC 12.6",
+        "scratch/profiles/vegas-physics.cpuprofile",
+        "Explicit non-findings (do not re-open)",
+        "Suggested next (max 3)",
+        "Blockers"
+      ],
+      "historicalOrSupportReferences": [
+        " / ",
+        " / collide relaxation: shared ",
+        " is an **O(MAX)** scan per spawn (MAX 256/96) | code; VM ",
+        " | every car every tick when wear **on** | wear **off** in VM/profile (game-vm seed); still **1.1%** ",
+        " | track/field change | ",
+        "_apex.step(1/60)",
+        "age/life",
+        "ai-band.js",
+        "apex-eval.mjs --vm",
+        "artifacts/logs/chunk-reach-vegas.log",
+        "claude/f1-game-project-26h3ng",
+        "collide.js",
+        "debris-world.js",
+        "debrisworld.js:step",
+        "docs/PERF-FINDINGS.md",
+        "docs/notes/PERF-FINDINGS.md",
+        "fix(zolder): clear S/F stand clip cluster",
+        "game.js",
+        "grip-steer.js",
+        "incident-sim.js",
+        "js/agent/apex.js",
+        "js/fx/car-fx.js",
+        "js/fx/particles.js",
+        "js/game.js",
+        "js/lighting/knobs.js",
+        "js/perf/governor.js",
+        "js/perf/quality-preset.js",
+        "js/physics/ai-drive.js",
+        "js/physics/collide.js",
+        "js/physics/contact-geometry.js",
+        "js/physics/debris-world.js",
+        "js/physics/player-forces.js",
+        "js/physics/tyre-model.js",
+        "js/race/marshal-panels.js",
+        "js/race/start-lights.js",
+        "js/render/glx/glx.js",
+        "js/render/three/tlx.js",
+        "js/render/webgpu/wgx.js",
+        "node tools/gfx/chunk-reach.cjs vegas 900,300",
+        "node tools/shot/profile-gameloop.mjs vegas physics",
+        "particles.js",
+        "physics-hotpath.spec.js",
+        "player-forces.js",
+        "profile-vegas-physics.log",
+        "scratch/cockpit3/heap-mobile2.mjs",
+        "tests/specs/physics-hotpath.spec.js",
+        "tlx.js",
+        "tyre-model.js",
+        "vm-rain.log",
+        "vm-step-particles.log"
+      ],
+      "semanticMap": {
+        "purpose": "Pinned particle/probe/physics survey",
+        "producer": "CPU sampler, VM tick and geometry census with ledger citations",
+        "consumers": "Render/physics/performance owners",
+        "policy": "No software GPU claims; wrap-aware lapped-car semantics; preserve negative findings",
+        "currentValidityAndLimits": "No live debris/render emitters in VM; profile denominator excludes96.4% sync"
+      }
+    },
+    {
+      "path": "docs/surveys/w24a-logging.md",
+      "sourceBytes": 9328,
+      "sourceSha256": "6f1beb601eb7643495daf7fbafc434deb9e080a6ef6a30fae3d45b329018f7d6",
+      "manifestSha256": "6f1beb601eb7643495daf7fbafc434deb9e080a6ef6a30fae3d45b329018f7d6",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        9328
+      ],
+      "assignedSha256": "6f1beb601eb7643495daf7fbafc434deb9e080a6ef6a30fae3d45b329018f7d6",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            8500
+          ],
+          "bytes": 8500,
+          "sha256": "ccc4cc83fdd00e440c82925ac4020a82838547c590487b88a028f3246944dbe5",
+          "firstLine": 1,
+          "lastLine": 174,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            8500,
+            9328
+          ],
+          "bytes": 828,
+          "sha256": "bed4bc241544d8c962878db984b52dd9c6919413e803da541d4cb2e357b0ea36",
+          "firstLine": 174,
+          "lastLine": 194,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "W24a survey \u2014 logging & telemetry for phone profiling (2026-10-24)",
+        "Source map (logging surface)",
+        "Ranked findings (impact first; top 10)",
+        "1. Soak samples too coarse for jank causality \u2014 **M \u00b7 A**",
+        "2. Governor decisions never become timeline events \u2014 **S \u00b7 A**",
+        "3. Phone soak schema omits phone-critical governor latches \u2014 **S \u00b7 A**",
+        "4. Two telemetry tiers: BenchCapture rich, PhoneRecorder thin \u2014 **M \u00b7 D**",
+        "5. Chrome-shaped phase tracing is a dead end on iOS Safari \u2014 **M \u00b7 D**",
+        "6. Memory correlation weak on WebKit \u2014 **S \u00b7 D**",
+        "7. Log module cannot carry a perf timeline \u2014 **M \u00b7 D**",
+        "8. Perf HUD is display-only; no join into SHARE \u2014 **S \u00b7 D**",
+        "9. Device Farm Instruments path is effectively off \u2014 **M \u00b7 D**",
+        "10. DF scripts don\u2019t pull PhoneRecorder / continuous governor series \u2014 **M \u00b7 D**",
+        "Highest-leverage trio",
+        "Out of scope (sibling W24 briefs)"
+      ],
+      "historicalOrSupportReferences": [
+        " / ",
+        " / shed Log elsewhere in ",
+        " and/or rate-limited ",
+        " keys (geo/tex/draws/warm/presentMs); mark heap ",
+        "/",
+        "claude/f1-game-project-26h3ng",
+        "docs/notes/AWS-DEVICE-FARM-IPHONE-2026-10-23.md",
+        "docs/notes/PERF-*",
+        "docs/notes/PERF-IPHONE-AUDIT-2026-10-21.md",
+        "game.js",
+        "governor.js",
+        "js/agent/apex.js",
+        "js/agent/apex.js:1629",
+        "js/agent/apex.js:1675",
+        "js/core/log.js",
+        "js/core/log.js:14-31",
+        "js/perf/bench-capture.js",
+        "js/perf/bench-capture.js:1-14",
+        "js/perf/bench-capture.js:101-104",
+        "js/perf/governor.js",
+        "js/perf/governor.js:452",
+        "js/perf/metrics-overlay.js",
+        "js/perf/metrics-overlay.js:1-24",
+        "js/perf/metrics-overlay.js:22",
+        "js/perf/phone-recorder.js",
+        "js/perf/phone-recorder.js:148-177",
+        "js/perf/phone-recorder.js:201-203",
+        "js/perf/phone-recorder.js:23-24",
+        "js/perf/phone-recorder.js:67-76",
+        "js/perf/spans.js",
+        "js/perf/spans.js:12",
+        "js/perf/{phone-recorder,governor,spans,bench-capture,metrics-overlay}.js",
+        "p50/p95/p99",
+        "report.json",
+        "tools/perf/",
+        "tools/perf/devicefarm-*.mjs",
+        "tools/perf/devicefarm-host.mjs",
+        "tools/perf/devicefarm-host.mjs:16-18",
+        "tools/perf/devicefarm-host.mjs:40-46",
+        "tools/perf/devicefarm-iphone.mjs",
+        "tools/perf/devicefarm-iphone.mjs:459"
+      ],
+      "semanticMap": {
+        "purpose": "Ten phone logging/telemetry proposals",
+        "producer": "Static W24 fleet survey",
+        "consumers": "Phone recorder/governor/tools owners",
+        "policy": "Bounded event/log rings; iOS unsupported metric semantics; no paid jobs",
+        "currentValidityAndLimits": "Cadence and module declarations corroborated; remaining proposal status unverified"
+      }
+    },
+    {
+      "path": "docs/surveys/w24b-tools.md",
+      "sourceBytes": 12008,
+      "sourceSha256": "5f280a8f1eda631c6980fad7bd2580854286ada087d0c5ab9790688ad2d13b2f",
+      "manifestSha256": "5f280a8f1eda631c6980fad7bd2580854286ada087d0c5ab9790688ad2d13b2f",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        12008
+      ],
+      "assignedSha256": "5f280a8f1eda631c6980fad7bd2580854286ada087d0c5ab9790688ad2d13b2f",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            8500
+          ],
+          "bytes": 8500,
+          "sha256": "29167663e39e1f497e90f894a8850444a331d7f97c6fedcf7a4127272e08f780",
+          "firstLine": 1,
+          "lastLine": 179,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            8500,
+            12008
+          ],
+          "bytes": 3508,
+          "sha256": "d09ef0716baf57b530c0844fbb329963837323da31fae123301c81d56d67adfb",
+          "firstLine": 179,
+          "lastLine": 260,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "D\u00b7W24b \u2014 profiling tools & DEV tiles survey",
+        "Source map (tip line refs)",
+        "Ranked findings (impact first, max 10)",
+        "1. METRICS has no live frame-budget / PerfSpans page",
+        "2. `GameMetrics` is not scriptable via `__apex`",
+        "3. Narrow (phone) GOV drops the profiling rows",
+        "4. GPU timer is the wrong default oracle on iPhone",
+        "5. Shot / evidence packs omit live perf counters",
+        "6. Per-pass GPU timing is still unbuilt (I5); WGX is lit-pass only",
+        "7. GOV never arms `gpuTimer`; CPU vs GPU stays opt-in",
+        "8. `gpuCapture` is WebGL/Spector only \u2014 no WGX agent capture",
+        "9. Pass-census counts do not transfer as times; CLI is SwiftShader",
+        "10. BenchCapture pass IDs are opaque (`r12`); METRICS has no clipboard",
+        "Out of scope / already covered elsewhere",
+        "Suggested first builds (after this survey merges)"
+      ],
+      "historicalOrSupportReferences": [
+        " / ",
+        " \u201cChrome/Android only\u201d (",
+        "*.json",
+        "/",
+        "AGENT-WORLD-API.md",
+        "claude/f1-game-project-26h3ng",
+        "docs/AGENT-WORLD-API.md",
+        "docs/AGENT-WORLD-API.md:1\u20136",
+        "docs/DEBUG-HOOKS.md",
+        "docs/DEBUG-HOOKS.md:1046\u20131057",
+        "docs/README.md",
+        "docs/notes/BENCH-CAPTURE-2026-10-23.md",
+        "docs/notes/BENCH-CAPTURE-2026-10-23.md:10\u201324",
+        "docs/notes/GPU-CAPTURE-2026-10-19.md",
+        "docs/notes/MEASURING-GPU-PERF-2026-09-16.md",
+        "docs/notes/MEASURING-GPU-PERF-2026-09-16.md:143\u2013150",
+        "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+        "docs/notes/PROFILER-DESIGN-2026-10-16.md:42\u201360",
+        "docs/notes/TLX-PHONE-PASS-CENSUS-2026-10-23.md",
+        "fps/ms \u00b7 gpu \u00b7 scale/tier",
+        "game.js",
+        "governor.js",
+        "js/agent/*",
+        "js/agent/apex-gpu-capture.js",
+        "js/agent/apex-gpu-capture.js:1\u20134",
+        "js/agent/apex.js",
+        "js/agent/apex.js:1489",
+        "js/agent/apex.js:1672\u20131686",
+        "js/agent/apex.js:933\u2013935",
+        "js/perf/*",
+        "js/perf/bench-capture.js",
+        "js/perf/bench-capture.js:57\u201365",
+        "js/perf/gpu-test-run.js",
+        "js/perf/gpu-test-run.js:14\u201316",
+        "js/perf/metrics-overlay.js",
+        "js/perf/metrics-overlay.js:192",
+        "js/perf/metrics-overlay.js:22\u201323",
+        "js/perf/metrics-overlay.js:262\u2013267",
+        "js/perf/metrics-overlay.js:35",
+        "js/perf/metrics-overlay.js:653\u2013661",
+        "js/perf/metrics-overlay.js:653\u2013676",
+        "js/perf/phone-recorder.js",
+        "js/perf/phone-recorder.js:14\u201316",
+        "js/perf/phone-recorder.js:169\u2013171",
+        "js/perf/spans.js",
+        "js/perf/spans.js:95\u2013125",
+        "js/render/glx/glx.js",
+        "js/render/glx/glx.js:100\u2013108",
+        "js/render/webgpu/wgx.js",
+        "js/render/webgpu/wgx.js:5020\u20135022",
+        "off|n/a|ms",
+        "surveys/",
+        "tools/gfx/pass-census.mjs",
+        "tools/gfx/pass-census.mjs:16\u201317",
+        "tools/perf/",
+        "tools/perf/profile.mjs",
+        "tools/perf/profile.mjs:24\u201325",
+        "tools/shot/",
+        "tools/shot/*",
+        "tools/shot/apex-capture.mjs",
+        "tools/shot/apex-capture.mjs:149\u2013166",
+        "tools/shot/publish-evidence.mjs",
+        "tools/shot/publish-evidence.mjs:60\u201365"
+      ],
+      "semanticMap": {
+        "purpose": "Ten profiling tool/DEV-tile proposals",
+        "producer": "Static W24 fleet survey",
+        "consumers": "Metrics UI/agent/capture/render owners",
+        "policy": "CPU wall vs GPU elapsed vs software counts; iOS timer fallback",
+        "currentValidityAndLimits": "Historical missing features/open PR claims require current recheck"
+      }
+    },
+    {
+      "path": "docs/surveys/w24c-tests.md",
+      "sourceBytes": 11205,
+      "sourceSha256": "9660185d7b1c140651799d7d57aeaaf6c0ded719e37c25013a681d17474212df",
+      "manifestSha256": "9660185d7b1c140651799d7d57aeaaf6c0ded719e37c25013a681d17474212df",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        11205
+      ],
+      "assignedSha256": "9660185d7b1c140651799d7d57aeaaf6c0ded719e37c25013a681d17474212df",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            8500
+          ],
+          "bytes": 8500,
+          "sha256": "83631eb5377d2f9688bfac25bc6fd4cc6c2c61f2e35083f630aaff9d63ef95cd",
+          "firstLine": 1,
+          "lastLine": 191,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            8500,
+            11205
+          ],
+          "bytes": 2705,
+          "sha256": "00061aeb1366a914be1602f7758dea386873e8fd90568b095fe8a62f51ab2756",
+          "firstLine": 191,
+          "lastLine": 256,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "W24c survey \u2014 test coverage for perf / memory profiling",
+        "Ranked findings (impact first, max 10)",
+        "1. Race-cycle heap slope is logged, never gated \u2014 phone growth returns green",
+        "2. Decoded audio PCM (`audioMB`) never asserted in browser memory specs",
+        "3. `renderer.info.memory` has no post-warm menu ceiling",
+        "4. `perf-frametime` stays soft and off the Pages gate",
+        "5. `perf-race-entry` has stage tables but no stage-duration baseline",
+        "6. Governor 0.1 scale steps can park a phone on a 30 Hz floor with no \u201ccould still do 60\u201d regression",
+        "7. TLX CPU geometry release / mirror sweep has no phone memory soak gate",
+        "8. Garage\u2192race session heap is not tied to pick-cost / churn counters",
+        "9. `race-retain-vm` still omits garage open/close (every-commit twin gap)",
+        "10. WebKit / iOS proxy samples heap but never asserts growth; soak schema lacks `audioMB`",
+        "Not proposed (already covered or rejected)",
+        "Suggested first three follow-up PRs"
+      ],
+      "historicalOrSupportReferences": [
+        " / ",
+        " / builds / atlases / reuploads. ",
+        " / nightly with ",
+        ".github/workflows/",
+        ".test.mjs",
+        "/",
+        "TESTING-COVERAGE.md",
+        "artifacts/logs/race-cycle-memory.json",
+        "artifacts/perf-race-entry/*.json",
+        "audio-sample-upgrade.test.mjs",
+        "claude/f1-game-project-26h3ng",
+        "docs/README.md",
+        "docs/TESTING-COVERAGE.md",
+        "docs/TESTING.md:452",
+        "docs/TESTING.md:454",
+        "docs/TESTING.md:457",
+        "docs/notes/MEMORY-TOOLING-RESEARCH-2026-10-21.md:72",
+        "docs/notes/PERF-KNOWN-WINS-2026-10-23.md",
+        "docs/plans/2026-10-03-perf-memory.md",
+        "docs/plans/2026-10-03-perf-memory.md:101",
+        "docs/surveys/",
+        "game.js",
+        "governor.js",
+        "js/perf/governor.js",
+        "js/perf/governor.js:859",
+        "perf-race-entry.spec.js",
+        "perf-race-entry.test.mjs",
+        "race-cycle-memory.spec.js",
+        "race-retain-vm.test.mjs",
+        "soak-run.spec.js",
+        "surveys/",
+        "tests/",
+        "tests/data/",
+        "tests/data/<new>-perf-race-entry-baseline.json",
+        "tests/specs/",
+        "tests/specs/<new>-audio-session-memory.spec.js",
+        "tests/specs/<new>-garage-race-handoff-memory.spec.js",
+        "tests/specs/<new>-tlx-mirror-sweep-memory.spec.js",
+        "tests/specs/garage-pick-cost.spec.js:15",
+        "tests/specs/perf-frametime.spec.js:2\u20134",
+        "tests/specs/perf-race-entry.spec.js:108\u2013114",
+        "tests/specs/race-cycle-memory.spec.js:17\u201318",
+        "tests/specs/race-cycle-memory.spec.js:91\u201394",
+        "tests/specs/webkit-boot.spec.js:108",
+        "tests/unit/audio-sample-upgrade.test.mjs",
+        "tests/unit/diagnostics-tools.test.mjs:49",
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/perf-governor.test.mjs",
+        "tests/unit/race-retain-vm.test.mjs:96\u201397",
+        "tlx.js",
+        "tools/lib/mem-census.mjs:17\u201319",
+        "track-switch-memory.spec.js",
+        "track-switch-release.spec.js",
+        "webkit-boot.spec.js"
+      ],
+      "semanticMap": {
+        "purpose": "Ten memory/performance coverage proposals",
+        "producer": "Static test inventory and research comparison",
+        "consumers": "Test/CI/performance owners",
+        "policy": "Warm growth baselines over fixed limits; no software FPS player gates",
+        "currentValidityAndLimits": "No tests run; proposal completion not re-audited"
+      }
+    },
+    {
+      "path": "docs/surveys/w24d-devicefarm.md",
+      "sourceBytes": 11331,
+      "sourceSha256": "549063395105d59c8e08a7dac5cf2eda9b76cf5c13be36ee98fc7720974818ac",
+      "manifestSha256": "549063395105d59c8e08a7dac5cf2eda9b76cf5c13be36ee98fc7720974818ac",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        11331
+      ],
+      "assignedSha256": "549063395105d59c8e08a7dac5cf2eda9b76cf5c13be36ee98fc7720974818ac",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            8500
+          ],
+          "bytes": 8500,
+          "sha256": "64d107d249eafa37fcd13a0f45cc0d79424d221f25b8d28e0230a862e8dd609c",
+          "firstLine": 1,
+          "lastLine": 162,
+          "rawReturned": true
+        },
+        {
+          "range": [
+            8500,
+            11331
+          ],
+          "bytes": 2831,
+          "sha256": "03de1777718b1b4414177107077d642f32bf2a54a58844adcd5e90ca6b7109dd",
+          "firstLine": 162,
+          "lastLine": 222,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "W24d \u2014 Device Farm test types for better phone profiling (2026-10-26)",
+        "Gap map (today vs brief)",
+        "Ranked findings (impact first, max 10)",
+        "1. Standing 14 / 14 Pro matrix is still missing \u2014 **S \u00b7 D**",
+        "2. Cold-boot never paid for on Fleet D phones \u2014 **S \u00b7 D**",
+        "3. Multi-minute thermal time series (not 60 s soak) \u2014 **M \u00b7 D** (governor read: A)",
+        "4. Active memory-pressure scenario (syslog is not a recipe) \u2014 **M \u00b7 D**",
+        "5. Long-race scenario (continuous 5\u201310 min) \u2014 **M \u00b7 D**",
+        "6. Port garage livery churn to Device Farm \u2014 **M \u00b7 D**",
+        "7. Background / resume mid-race \u2014 **M \u00b7 D**",
+        "8. Shared `sampleArm()` metric pack for new scenarios \u2014 **M \u00b7 D**",
+        "9. Chain budget: one 13-minute session = boot + garage + race + resume \u2014 **S\u2013M \u00b7 D**",
+        "10. Keep A\u00b7D1 owed runs and new catalog work on separate queues \u2014 **S \u00b7 process**",
+        "Explicitly not re-proposed (already landed or filed)",
+        "Suggested first paid minutes (after harness flags land)"
+      ],
+      "historicalOrSupportReferences": [
+        " / ",
+        " edits with settle; record flap/texture proxies via ",
+        "/",
+        "AWS-DEVICE-FARM-IPHONE-2026-10-23.md",
+        "DEVICE-FARM-LEDGER-2026-10-23.md",
+        "DEVICE-FARM-LEDGER-2026-10-23.md:115",
+        "claude/f1-game-project-26h3ng",
+        "devicefarm-boot.mjs",
+        "devicefarm-boot.mjs --trials 3",
+        "devicefarm-boot.mjs:132\u2013135",
+        "devicefarm-iphone.mjs",
+        "devicefarm-iphone.mjs:1090\u20131103",
+        "devicefarm-iphone.mjs:11\u201318",
+        "devicefarm-iphone.mjs:16\u201318",
+        "devicefarm-iphone.mjs:546\u2013556",
+        "devicefarm-iphone.mjs:612\u2013650",
+        "devicefarm-method.mjs",
+        "devicefarm-syslog.mjs",
+        "devicefarm-syslog.mjs:2\u20137",
+        "docs/notes/DEVICE-FARM-ANALYSIS-2026-10-24.md",
+        "game.js:2715",
+        "garage-livery-churn.spec.js",
+        "js/game.js:2715",
+        "js/perf/governor.js",
+        "js/render/three/",
+        "js/ui/platform-session.js",
+        "js/ui/platform-session.js:323\u2013335",
+        "platform-session.js",
+        "platform-session.js:324\u2013335",
+        "tests/specs/garage-livery-churn.spec.js",
+        "tests/specs/garage-livery-churn.spec.js:100\u2013122",
+        "tools/archive/perf/devicefarm-boot.mjs",
+        "tools/archive/perf/devicefarm-boot.mjs:9",
+        "tools/perf/devicefarm-*.mjs"
+      ],
+      "semanticMap": {
+        "purpose": "Ten Device Farm scenario/process proposals",
+        "producer": "Static harness/ledger survey",
+        "consumers": "iOS harness operators and implementers",
+        "policy": "No paid jobs; matched device/build/thermal units; chain budget",
+        "currentValidityAndLimits": "New flags may not exist; old method fixes already cited landed"
+      }
+    },
+    {
+      "path": "docs/surveys/w25d-tools-ci.md",
+      "sourceBytes": 1651,
+      "sourceSha256": "c1bb72bf33239828e82f8c1e399f9eab5005251b652f5a2eb244a8198d876aeb",
+      "manifestSha256": "c1bb72bf33239828e82f8c1e399f9eab5005251b652f5a2eb244a8198d876aeb",
+      "manifestHashMatches": true,
+      "assignedRange": [
+        0,
+        1651
+      ],
+      "assignedSha256": "c1bb72bf33239828e82f8c1e399f9eab5005251b652f5a2eb244a8198d876aeb",
+      "completeSourceRead": true,
+      "chunks": [
+        {
+          "range": [
+            0,
+            1651
+          ],
+          "bytes": 1651,
+          "sha256": "c1bb72bf33239828e82f8c1e399f9eab5005251b652f5a2eb244a8198d876aeb",
+          "firstLine": 1,
+          "lastLine": 40,
+          "rawReturned": true
+        }
+      ],
+      "headings": [
+        "W25d \u2014 tools/CI js-debugger smoke for perf agents (2026-10-24)",
+        "Paths this PR touches (vs A\u00b7H16 / #3694)",
+        "What shipped",
+        "#3117-shaped wall-time help"
+      ],
+      "historicalOrSupportReferences": [
+        "bash tools/mcp/js-debugger-mcp.sh list-tools",
+        "claude/f1-game-project-26h3ng",
+        "docs/README.md",
+        "docs/changelog.d/w25d-tools-ci.md",
+        "docs/surveys/w25d-tools-ci.md",
+        "surveys/",
+        "sync-pr.mjs",
+        "tests/groups.json",
+        "tests/unit/",
+        "tools/README.md",
+        "tools/ci",
+        "tools/ci/js-debugger-smoke.mjs",
+        "tools/ci/tooling-fast.mjs",
+        "tools/mcp/js-debugger*"
+      ],
+      "semanticMap": {
+        "purpose": "Debugger smoke CLI shipped-slice provenance",
+        "producer": "W25 tools/CI lane",
+        "consumers": "Perf agents before paid phone sessions",
+        "policy": "No-browser fixture smoke; generated README from annotations",
+        "currentValidityAndLimits": "Historical holds/deferred twin not current authority; CLI not executed"
+      }
+    }
+  ],
+  "supportReads": [
+    {
+      "path": "tools/shot/flyby.mjs",
+      "lines": [
+        145,
+        198
+      ],
+      "purpose": "Confirms producer schema, deterministic solver sampling and output file naming."
+    },
+    {
+      "path": "tools/transcripts/cli.mjs",
+      "lines": [
+        1,
+        60
+      ],
+      "purpose": "Confirms imports, entry arguments, readable paths and digest streamer consumer."
+    },
+    {
+      "path": "tools/transcripts/lib/stream.mjs",
+      "lines": [
+        1,
+        65
+      ],
+      "purpose": "Confirms line-wise createReadStream/readline, malformed JSON skip, await callback, close/destroy cleanup."
+    },
+    {
+      "path": "js/perf/phone-recorder.js",
+      "method": "targeted text constants/events search",
+      "purpose": "Confirms 120000 ms and 2048-frame cadence still present; report line numbers drifted."
+    },
+    {
+      "path": "js/perf/quality-preset.js",
+      "method": "targeted text search",
+      "purpose": "Confirms phone ULTRA note, weak-phone and default/cap surfaces remain."
+    }
+  ],
+  "limits": [
+    "No tests, browser, network, runtime, generators, staging or commits.",
+    "LSP definitions corroborate present declarations only, not exports, callers or behavior.",
+    "Historical measurements and proposed flags are not current runtime truth.",
+    "Archive URLs and stored verification claims were not revalidated externally."
+  ],
+  "lsp": [
+    {
+      "query": "GfxQuality.isWeakPhone",
+      "definition": "js/perf/quality-preset.js:75:10",
+      "caveat": "Module-file fallback; export and caller coverage unverified."
+    },
+    {
+      "query": "PhoneRecorder",
+      "definition": "js/perf/phone-recorder.js:18:7"
+    },
+    {
+      "query": "PerfSpans",
+      "definition": "js/perf/spans.js:23:7"
+    },
+    {
+      "query": "GameMetrics",
+      "definition": "js/perf/metrics-overlay.js:25:7"
+    }
+  ]
+}

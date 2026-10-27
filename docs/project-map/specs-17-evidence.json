@@ -1,0 +1,5280 @@
+{
+  "batch": "17",
+  "assignedBytes": 127596,
+  "rangeConvention": "half-open UTF-8 bytes; inclusive lines",
+  "inspection": "Static source reads and local LSP navigation only; no tests/browser/network/game runtime/source edits/stage/commit",
+  "files": [
+    {
+      "path": "tests/specs/ui-scale.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 103854,
+      "manifestWholeFileSha256": "1e39cc2ab8cf8f65d7c94ccf3391a21fdf548b968e9aec64f473e81b566bd278",
+      "wholeFileSha256": "1e39cc2ab8cf8f65d7c94ccf3391a21fdf548b968e9aec64f473e81b566bd278",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 83420,
+        "end": 103854,
+        "bytes": 20434,
+        "sha256": "d7f33c8ef91a5ab69e7bda737305b810b002cf9719156aa01c1c43d66738cbb4"
+      },
+      "partialFile": true,
+      "chunks": [
+        {
+          "start": 83420,
+          "end": 91920,
+          "bytes": 8500,
+          "sha256": "07d22681bde0e6697a4905c307302cfc4eb99ca695d82b3518a3da20fe5f9dfb",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 91920,
+          "end": 100420,
+          "bytes": 8500,
+          "sha256": "aedc6ef794a474e30f69dba8dd53f65192b29a2d1e5c8de62f2f4c2f4f0b760d",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 100420,
+          "end": 103854,
+          "bytes": 3434,
+          "sha256": "98d405aff3947198d5cb5719eb9ccf4d6c8e160beb29a6e53ed5e7398b5eabc9",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "`race setup preserves an editable task across constrained layouts (${textSize})`",
+          "bytes": [
+            73868,
+            89888
+          ],
+          "lines": [
+            1196,
+            1462
+          ],
+          "partial": true
+        },
+        {
+          "title": "\"a narrow saved Home stack stays bounded and actionable after rotation\"",
+          "bytes": [
+            90066,
+            93744
+          ],
+          "lines": [
+            1469,
+            1544
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"default Home separates landscape regions and keeps destinations readable through enlargement\"",
+          "bytes": [
+            94013,
+            103848
+          ],
+          "lines": [
+            1551,
+            1706
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            84448,
+            84532
+          ],
+          "lines": [
+            1376,
+            1376
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            84778,
+            84811
+          ],
+          "lines": [
+            1382,
+            1382
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            84825,
+            84944
+          ],
+          "lines": [
+            1383,
+            1383
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            85439,
+            85525
+          ],
+          "lines": [
+            1391,
+            1391
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            85553,
+            85661
+          ],
+          "lines": [
+            1393,
+            1393
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            86530,
+            86563
+          ],
+          "lines": [
+            1409,
+            1409
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            86577,
+            86688
+          ],
+          "lines": [
+            1410,
+            1410
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            86759,
+            86847
+          ],
+          "lines": [
+            1413,
+            1413
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveValue",
+          "bytes": [
+            87535,
+            87591
+          ],
+          "lines": [
+            1425,
+            1425
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveValue",
+          "bytes": [
+            87698,
+            87756
+          ],
+          "lines": [
+            1427,
+            1427
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            88843,
+            88895
+          ],
+          "lines": [
+            1446,
+            1446
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            88905,
+            88961
+          ],
+          "lines": [
+            1447,
+            1447
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            88971,
+            89045
+          ],
+          "lines": [
+            1448,
+            1448
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            89055,
+            89124
+          ],
+          "lines": [
+            1449,
+            1449
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            89285,
+            89343
+          ],
+          "lines": [
+            1452,
+            1452
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            89736,
+            89787
+          ],
+          "lines": [
+            1459,
+            1459
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            89801,
+            89846
+          ],
+          "lines": [
+            1460,
+            1460
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            89854,
+            89880
+          ],
+          "lines": [
+            1461,
+            1461
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            91182,
+            91237
+          ],
+          "lines": [
+            1496,
+            1496
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            91332,
+            91374
+          ],
+          "lines": [
+            1498,
+            1498
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            91711,
+            91800
+          ],
+          "lines": [
+            1508,
+            1508
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            91905,
+            91949
+          ],
+          "lines": [
+            1510,
+            1510
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            92055,
+            92079
+          ],
+          "lines": [
+            1513,
+            1513
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            92089,
+            92162
+          ],
+          "lines": [
+            1514,
+            1514
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            92172,
+            92211
+          ],
+          "lines": [
+            1515,
+            1515
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            92221,
+            92260
+          ],
+          "lines": [
+            1516,
+            1516
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            92270,
+            92335
+          ],
+          "lines": [
+            1517,
+            1517
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            92345,
+            92412
+          ],
+          "lines": [
+            1518,
+            1518
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            92643,
+            92684
+          ],
+          "lines": [
+            1523,
+            1523
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            92692,
+            92737
+          ],
+          "lines": [
+            1524,
+            1524
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            92745,
+            92786
+          ],
+          "lines": [
+            1525,
+            1525
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            92980,
+            93069
+          ],
+          "lines": [
+            1531,
+            1531
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            93285,
+            93334
+          ],
+          "lines": [
+            1536,
+            1536
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            93400,
+            93448
+          ],
+          "lines": [
+            1538,
+            1538
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            93460,
+            93506
+          ],
+          "lines": [
+            1539,
+            1539
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            93512,
+            93601
+          ],
+          "lines": [
+            1540,
+            1540
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            94767,
+            95149
+          ],
+          "lines": [
+            1566,
+            1571
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            96327,
+            96377
+          ],
+          "lines": [
+            1590,
+            1590
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            96718,
+            96790
+          ],
+          "lines": [
+            1598,
+            1598
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            96812,
+            96914
+          ],
+          "lines": [
+            1600,
+            1600
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            97019,
+            97063
+          ],
+          "lines": [
+            1602,
+            1602
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            97514,
+            97566
+          ],
+          "lines": [
+            1611,
+            1611
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            97632,
+            97688
+          ],
+          "lines": [
+            1613,
+            1613
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            97698,
+            97765
+          ],
+          "lines": [
+            1614,
+            1614
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            97775,
+            97874
+          ],
+          "lines": [
+            1615,
+            1615
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            98411,
+            98564
+          ],
+          "lines": [
+            1626,
+            1626
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            98574,
+            98663
+          ],
+          "lines": [
+            1627,
+            1627
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            98810,
+            98922
+          ],
+          "lines": [
+            1630,
+            1630
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            98932,
+            98996
+          ],
+          "lines": [
+            1631,
+            1631
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            99152,
+            99262
+          ],
+          "lines": [
+            1634,
+            1634
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            99272,
+            99341
+          ],
+          "lines": [
+            1635,
+            1635
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            99493,
+            99608
+          ],
+          "lines": [
+            1638,
+            1638
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            99687,
+            99791
+          ],
+          "lines": [
+            1640,
+            1640
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            100014,
+            100055
+          ],
+          "lines": [
+            1645,
+            1645
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            100063,
+            100104
+          ],
+          "lines": [
+            1646,
+            1646
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            101706,
+            101771
+          ],
+          "lines": [
+            1672,
+            1672
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            101829,
+            101885
+          ],
+          "lines": [
+            1674,
+            1674
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            101895,
+            101974
+          ],
+          "lines": [
+            1675,
+            1675
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            101984,
+            102029
+          ],
+          "lines": [
+            1676,
+            1676
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            102039,
+            102097
+          ],
+          "lines": [
+            1677,
+            1677
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            102165,
+            102210
+          ],
+          "lines": [
+            1680,
+            1680
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            102271,
+            102317
+          ],
+          "lines": [
+            1682,
+            1682
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeNull",
+          "bytes": [
+            102325,
+            102413
+          ],
+          "lines": [
+            1683,
+            1683
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            103089,
+            103160
+          ],
+          "lines": [
+            1693,
+            1693
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            103518,
+            103574
+          ],
+          "lines": [
+            1699,
+            1699
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            103580,
+            103628
+          ],
+          "lines": [
+            1700,
+            1700
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            89953,
+            90061
+          ],
+          "lines": [
+            1467,
+            1467
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.use",
+          "bytes": [
+            93875,
+            94008
+          ],
+          "lines": [
+            1549,
+            1549
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            1372,
+            1435
+          ],
+          "lines": [
+            25,
+            25
+          ],
+          "partial": true
+        },
+        {
+          "source": "../../tools/lib/ui-device-profile.mjs",
+          "bytes": [
+            1436,
+            1506
+          ],
+          "lines": [
+            26,
+            26
+          ],
+          "partial": true
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/understeer-cue.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 21517,
+      "manifestWholeFileSha256": "6db46351ba40ec0c14afcde42449a412544db1719f73099c636c015e2481d0a0",
+      "wholeFileSha256": "6db46351ba40ec0c14afcde42449a412544db1719f73099c636c015e2481d0a0",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 21517,
+        "bytes": 21517,
+        "sha256": "6db46351ba40ec0c14afcde42449a412544db1719f73099c636c015e2481d0a0"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "9eff9716d4d348bf3c6112042921c66723df63391f121755cbf00bdc7a01db3b",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "892c244457f0764cbffd675b02424a04a85358ecc0237c1a1fbebd32c94498ec",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 17000,
+          "end": 21517,
+          "bytes": 4517,
+          "sha256": "15a7a86a053a7b7e2e2c3eaf5cf938c055bd623f12bbc6c77e4b1849953c12f5",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"fires when the front axle is saturated, on both channels\"",
+          "bytes": [
+            11953,
+            12764
+          ],
+          "lines": [
+            229,
+            242
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"stays silent when the car is doing what it is told\"",
+          "bytes": [
+            12769,
+            13912
+          ],
+          "lines": [
+            244,
+            264
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"is silent below the speed floor however saturated the front is\"",
+          "bytes": [
+            13917,
+            15053
+          ],
+          "lines": [
+            266,
+            286
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"is silent off-track, where the driver has bigger problems\"",
+          "bytes": [
+            15058,
+            16171
+          ],
+          "lines": [
+            288,
+            308
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"repeats at a bounded rate, not once per frame\"",
+          "bytes": [
+            16176,
+            17260
+          ],
+          "lines": [
+            310,
+            328
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"deeper saturation pulses more often than shallow saturation\"",
+          "bytes": [
+            17265,
+            19199
+          ],
+          "lines": [
+            330,
+            364
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"at the same depth in the grip envelope, pace does not change the cue\"",
+          "bytes": [
+            20484,
+            21511
+          ],
+          "lines": [
+            387,
+            405
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            6133,
+            6205
+          ],
+          "lines": [
+            106,
+            106
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            6209,
+            6275
+          ],
+          "lines": [
+            107,
+            107
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeNull",
+          "bytes": [
+            7014,
+            7084
+          ],
+          "lines": [
+            125,
+            125
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            12336,
+            12394
+          ],
+          "lines": [
+            236,
+            236
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            12481,
+            12534
+          ],
+          "lines": [
+            238,
+            238
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            12623,
+            12703
+          ],
+          "lines": [
+            240,
+            240
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            12709,
+            12758
+          ],
+          "lines": [
+            241,
+            241
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            13122,
+            13201
+          ],
+          "lines": [
+            251,
+            251
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            13527,
+            13580
+          ],
+          "lines": [
+            257,
+            257
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            13586,
+            13638
+          ],
+          "lines": [
+            258,
+            258
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            13789,
+            13846
+          ],
+          "lines": [
+            262,
+            262
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            13852,
+            13906
+          ],
+          "lines": [
+            263,
+            263
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            14450,
+            14528
+          ],
+          "lines": [
+            276,
+            276
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            14534,
+            14585
+          ],
+          "lines": [
+            277,
+            277
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            14896,
+            14975
+          ],
+          "lines": [
+            284,
+            284
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            14981,
+            15047
+          ],
+          "lines": [
+            285,
+            285
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            15282,
+            15373
+          ],
+          "lines": [
+            293,
+            293
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            15750,
+            15803
+          ],
+          "lines": [
+            302,
+            302
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            16029,
+            16107
+          ],
+          "lines": [
+            306,
+            306
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            16113,
+            16165
+          ],
+          "lines": [
+            307,
+            307
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            16474,
+            16539
+          ],
+          "lines": [
+            316,
+            316
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            16780,
+            16857
+          ],
+          "lines": [
+            321,
+            321
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            17000,
+            17078
+          ],
+          "lines": [
+            324,
+            324
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            17208,
+            17254
+          ],
+          "lines": [
+            327,
+            327
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            18315,
+            18406
+          ],
+          "lines": [
+            349,
+            349
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            18786,
+            18877
+          ],
+          "lines": [
+            357,
+            357
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            18996,
+            19089
+          ],
+          "lines": [
+            361,
+            361
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            19097,
+            19187
+          ],
+          "lines": [
+            362,
+            362
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            20991,
+            21057
+          ],
+          "lines": [
+            397,
+            397
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            21147,
+            21217
+          ],
+          "lines": [
+            400,
+            400
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            21223,
+            21293
+          ],
+          "lines": [
+            401,
+            401
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            21299,
+            21367
+          ],
+          "lines": [
+            402,
+            402
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            21373,
+            21436
+          ],
+          "lines": [
+            403,
+            403
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            21442,
+            21505
+          ],
+          "lines": [
+            404,
+            404
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            11915,
+            11948
+          ],
+          "lines": [
+            227,
+            227
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            2548,
+            2611
+          ],
+          "lines": [
+            43,
+            43
+          ],
+          "partial": false
+        },
+        {
+          "source": "../helpers/factory-seat.js",
+          "bytes": [
+            2612,
+            2672
+          ],
+          "lines": [
+            44,
+            44
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/vegas-foundation.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 5966,
+      "manifestWholeFileSha256": "97d1552bad4457cf2f01b11b67241161deda6ff4077e5f8a108409324d167f8b",
+      "wholeFileSha256": "97d1552bad4457cf2f01b11b67241161deda6ff4077e5f8a108409324d167f8b",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 5966,
+        "bytes": 5966,
+        "sha256": "97d1552bad4457cf2f01b11b67241161deda6ff4077e5f8a108409324d167f8b"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5966,
+          "bytes": 5966,
+          "sha256": "97d1552bad4457cf2f01b11b67241161deda6ff4077e5f8a108409324d167f8b",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"uses explicit racing coordinates and a shallow Sphere-sector dip\"",
+          "bytes": [
+            756,
+            2728
+          ],
+          "lines": [
+            19,
+            57
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"emits required landmarks, typed water, and safe overhead spans\"",
+          "bytes": [
+            2733,
+            4970
+          ],
+          "lines": [
+            59,
+            103
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"keeps full-lap street walls tight and retains night lighting\"",
+          "bytes": [
+            4975,
+            5960
+          ],
+          "lines": [
+            105,
+            126
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2119,
+            2160
+          ],
+          "lines": [
+            46,
+            46
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2166,
+            2202
+          ],
+          "lines": [
+            47,
+            47
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2208,
+            2241
+          ],
+          "lines": [
+            48,
+            48
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            2247,
+            2296
+          ],
+          "lines": [
+            49,
+            49
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            2302,
+            2451
+          ],
+          "lines": [
+            50,
+            52
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            2553,
+            2607
+          ],
+          "lines": [
+            54,
+            54
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            2613,
+            2667
+          ],
+          "lines": [
+            55,
+            55
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            2673,
+            2722
+          ],
+          "lines": [
+            56,
+            56
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3077,
+            3158
+          ],
+          "lines": [
+            67,
+            67
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3334,
+            3385
+          ],
+          "lines": [
+            73,
+            73
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4542,
+            4593
+          ],
+          "lines": [
+            94,
+            94
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4692,
+            4755
+          ],
+          "lines": [
+            97,
+            97
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4836,
+            4879
+          ],
+          "lines": [
+            99,
+            99
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            4889,
+            4950
+          ],
+          "lines": [
+            100,
+            100
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5554,
+            5593
+          ],
+          "lines": [
+            118,
+            118
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5599,
+            5637
+          ],
+          "lines": [
+            119,
+            119
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5643,
+            5695
+          ],
+          "lines": [
+            120,
+            120
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5701,
+            5753
+          ],
+          "lines": [
+            121,
+            121
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            5759,
+            5805
+          ],
+          "lines": [
+            122,
+            122
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5811,
+            5861
+          ],
+          "lines": [
+            123,
+            123
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5908,
+            5954
+          ],
+          "lines": [
+            125,
+            125
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            690,
+            723
+          ],
+          "lines": [
+            16,
+            16
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            727,
+            751
+          ],
+          "lines": [
+            17,
+            17
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "bytes": [
+            13,
+            61
+          ],
+          "lines": [
+            2,
+            2
+          ],
+          "partial": false
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            62,
+            111
+          ],
+          "lines": [
+            3,
+            3
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/vr-emulated.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 22424,
+      "manifestWholeFileSha256": "91aa77603de5edae3bc5d4d19fe566a7b364302f1752faaf936474067274fd96",
+      "wholeFileSha256": "91aa77603de5edae3bc5d4d19fe566a7b364302f1752faaf936474067274fd96",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 22424,
+        "bytes": 22424,
+        "sha256": "91aa77603de5edae3bc5d4d19fe566a7b364302f1752faaf936474067274fd96"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "f3608ce241864306caa0c523a5074b29cc4d98267fd0adb40de20cc400740407",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "5f095e1cc4ac8b792681e20f45aaa1c4aa05a2f01bd0e80f1aa83df4aa57ff0c",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 17000,
+          "end": 22424,
+          "bytes": 5424,
+          "sha256": "5e3850b56ba9f1739d0bd09d73fe7c7306e4da846c99fa7476d4c63c3f864fb4",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"pinned IWER vendor is present and ENTER VR appears; session starts/exits/re-enters\"",
+          "bytes": [
+            4303,
+            5341
+          ],
+          "lines": [
+            98,
+            125
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"head pose stays seated, preserves physical movement, and repeated recenter is stable\"",
+          "bytes": [
+            5344,
+            8172
+          ],
+          "lines": [
+            127,
+            187
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"controller thumbstick/trigger/squeeze/A-B map through Input.remoteSample/remoteEvent\"",
+          "bytes": [
+            8175,
+            12124
+          ],
+          "lines": [
+            189,
+            275
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"controller disconnect and visibility-blurred pause the race and restore on visible\"",
+          "bytes": [
+            12127,
+            15984
+          ],
+          "lines": [
+            277,
+            344
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"WebGPU path negotiates via enabledFeatures and falls back to WebGL2\"",
+          "bytes": [
+            15987,
+            17263
+          ],
+          "lines": [
+            346,
+            375
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"EXIT VR resumes the game tick and restores the live camera without changing its preference\"",
+          "bytes": [
+            17266,
+            19029
+          ],
+          "lines": [
+            377,
+            416
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"ENTER VR without an attachable backend pins TLX+forceGL, stashes the prior pick and reloads\"",
+          "bytes": [
+            19032,
+            20508
+          ],
+          "lines": [
+            418,
+            445
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"stereo viewports: left width > 0; non-blank canvas capture; flat mode after exit\"",
+          "bytes": [
+            20511,
+            22422
+          ],
+          "lines": [
+            447,
+            486
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2605,
+            2639
+          ],
+          "lines": [
+            54,
+            54
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2643,
+            2674
+          ],
+          "lines": [
+            55,
+            55
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2678,
+            2710
+          ],
+          "lines": [
+            56,
+            56
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2714,
+            2754
+          ],
+          "lines": [
+            57,
+            57
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2758,
+            2799
+          ],
+          "lines": [
+            58,
+            58
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            2803,
+            2862
+          ],
+          "lines": [
+            59,
+            59
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            2866,
+            2927
+          ],
+          "lines": [
+            60,
+            60
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3019,
+            3092
+          ],
+          "lines": [
+            62,
+            62
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3221,
+            3249
+          ],
+          "lines": [
+            67,
+            67
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            4522,
+            4547
+          ],
+          "lines": [
+            103,
+            103
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveText",
+          "bytes": [
+            4557,
+            4592
+          ],
+          "lines": [
+            104,
+            104
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4728,
+            4791
+          ],
+          "lines": [
+            108,
+            108
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4795,
+            4832
+          ],
+          "lines": [
+            109,
+            109
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4836,
+            4874
+          ],
+          "lines": [
+            110,
+            110
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveText",
+          "bytes": [
+            4884,
+            4918
+          ],
+          "lines": [
+            111,
+            111
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveText",
+          "bytes": [
+            5090,
+            5125
+          ],
+          "lines": [
+            117,
+            117
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5167,
+            5214
+          ],
+          "lines": [
+            120,
+            120
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            5292,
+            5337
+          ],
+          "lines": [
+            124,
+            124
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5633,
+            5662
+          ],
+          "lines": [
+            132,
+            132
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            7002,
+            7029
+          ],
+          "lines": [
+            159,
+            159
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            7033,
+            7088
+          ],
+          "lines": [
+            160,
+            160
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            7092,
+            7150
+          ],
+          "lines": [
+            161,
+            161
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            7389,
+            7434
+          ],
+          "lines": [
+            171,
+            171
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            7438,
+            7514
+          ],
+          "lines": [
+            172,
+            172
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            7518,
+            7589
+          ],
+          "lines": [
+            173,
+            173
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7633,
+            7667
+          ],
+          "lines": [
+            176,
+            176
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            7671,
+            7728
+          ],
+          "lines": [
+            177,
+            177
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            7732,
+            7792
+          ],
+          "lines": [
+            178,
+            178
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            7828,
+            7868
+          ],
+          "lines": [
+            179,
+            179
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            7961,
+            8019
+          ],
+          "lines": [
+            182,
+            182
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            8056,
+            8096
+          ],
+          "lines": [
+            183,
+            183
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            8123,
+            8168
+          ],
+          "lines": [
+            186,
+            186
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            8348,
+            8391
+          ],
+          "lines": [
+            192,
+            192
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            10763,
+            10799
+          ],
+          "lines": [
+            248,
+            248
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            10803,
+            10881
+          ],
+          "lines": [
+            249,
+            249
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            10947,
+            11009
+          ],
+          "lines": [
+            251,
+            251
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11013,
+            11041
+          ],
+          "lines": [
+            252,
+            252
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11045,
+            11073
+          ],
+          "lines": [
+            253,
+            253
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11077,
+            11110
+          ],
+          "lines": [
+            254,
+            254
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11342,
+            11378
+          ],
+          "lines": [
+            259,
+            259
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            11440,
+            11498
+          ],
+          "lines": [
+            261,
+            261
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            11502,
+            11539
+          ],
+          "lines": [
+            262,
+            262
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            11543,
+            11580
+          ],
+          "lines": [
+            263,
+            263
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeUndefined",
+          "bytes": [
+            11820,
+            11853
+          ],
+          "lines": [
+            267,
+            267
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            11857,
+            11896
+          ],
+          "lines": [
+            268,
+            268
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11976,
+            12005
+          ],
+          "lines": [
+            270,
+            270
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            12009,
+            12049
+          ],
+          "lines": [
+            271,
+            271
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            12075,
+            12120
+          ],
+          "lines": [
+            274,
+            274
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            12726,
+            12786
+          ],
+          "lines": [
+            285,
+            285
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            12790,
+            12900
+          ],
+          "lines": [
+            286,
+            286
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            12904,
+            12947
+          ],
+          "lines": [
+            287,
+            287
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            12951,
+            13077
+          ],
+          "lines": [
+            288,
+            288
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            15442,
+            15515
+          ],
+          "lines": [
+            333,
+            333
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            15708,
+            15814
+          ],
+          "lines": [
+            339,
+            339
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            15818,
+            15909
+          ],
+          "lines": [
+            340,
+            340
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            15935,
+            15980
+          ],
+          "lines": [
+            343,
+            343
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            16503,
+            16532
+          ],
+          "lines": [
+            356,
+            356
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            16536,
+            16574
+          ],
+          "lines": [
+            357,
+            357
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            16578,
+            16632
+          ],
+          "lines": [
+            358,
+            358
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            17081,
+            17116
+          ],
+          "lines": [
+            369,
+            369
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            17120,
+            17153
+          ],
+          "lines": [
+            370,
+            370
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            17157,
+            17188
+          ],
+          "lines": [
+            371,
+            371
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            17214,
+            17259
+          ],
+          "lines": [
+            374,
+            374
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            17589,
+            17632
+          ],
+          "lines": [
+            383,
+            383
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            17961,
+            17999
+          ],
+          "lines": [
+            393,
+            393
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            18003,
+            18037
+          ],
+          "lines": [
+            394,
+            394
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            18041,
+            18095
+          ],
+          "lines": [
+            395,
+            395
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            18837,
+            18871
+          ],
+          "lines": [
+            411,
+            411
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            18875,
+            18906
+          ],
+          "lines": [
+            412,
+            412
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            18910,
+            18947
+          ],
+          "lines": [
+            413,
+            413
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            18951,
+            18976
+          ],
+          "lines": [
+            414,
+            414
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            18980,
+            19025
+          ],
+          "lines": [
+            415,
+            415
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            20212,
+            20248
+          ],
+          "lines": [
+            439,
+            439
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            20252,
+            20310
+          ],
+          "lines": [
+            440,
+            440
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            20314,
+            20353
+          ],
+          "lines": [
+            441,
+            441
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            20357,
+            20385
+          ],
+          "lines": [
+            442,
+            442
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            20389,
+            20421
+          ],
+          "lines": [
+            443,
+            443
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeNull",
+          "bytes": [
+            20425,
+            20504
+          ],
+          "lines": [
+            444,
+            444
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            20680,
+            20723
+          ],
+          "lines": [
+            450,
+            450
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            21026,
+            21072
+          ],
+          "lines": [
+            457,
+            457
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            21076,
+            21110
+          ],
+          "lines": [
+            458,
+            458
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            21139,
+            21177
+          ],
+          "lines": [
+            459,
+            459
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            21327,
+            21361
+          ],
+          "lines": [
+            463,
+            463
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            21365,
+            21407
+          ],
+          "lines": [
+            464,
+            464
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            21626,
+            21686
+          ],
+          "lines": [
+            469,
+            469
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            21873,
+            21969
+          ],
+          "lines": [
+            473,
+            473
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            22301,
+            22336
+          ],
+          "lines": [
+            483,
+            483
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            22340,
+            22369
+          ],
+          "lines": [
+            484,
+            484
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            22373,
+            22418
+          ],
+          "lines": [
+            485,
+            485
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.describe.configure",
+          "bytes": [
+            894,
+            937
+          ],
+          "lines": [
+            22,
+            22
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.beforeEach",
+          "bytes": [
+            940,
+            1264
+          ],
+          "lines": [
+            24,
+            30
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.skip",
+          "bytes": [
+            980,
+            1077
+          ],
+          "lines": [
+            25,
+            25
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            4418,
+            4442
+          ],
+          "lines": [
+            99,
+            99
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            5461,
+            5485
+          ],
+          "lines": [
+            128,
+            128
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            8292,
+            8316
+          ],
+          "lines": [
+            190,
+            190
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            12242,
+            12266
+          ],
+          "lines": [
+            278,
+            278
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            16087,
+            16111
+          ],
+          "lines": [
+            347,
+            347
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            17389,
+            17413
+          ],
+          "lines": [
+            378,
+            378
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            19156,
+            19180
+          ],
+          "lines": [
+            419,
+            419
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            20624,
+            20648
+          ],
+          "lines": [
+            448,
+            448
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "bytes": [
+            662,
+            710
+          ],
+          "lines": [
+            15,
+            15
+          ],
+          "partial": false
+        },
+        {
+          "source": "../helpers/iwer-install.mjs",
+          "bytes": [
+            711,
+            871
+          ],
+          "lines": [
+            16,
+            19
+          ],
+          "partial": false
+        },
+        {
+          "source": "fs",
+          "bytes": [
+            872,
+            892
+          ],
+          "lines": [
+            20,
+            20
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/wake-lock.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 16661,
+      "manifestWholeFileSha256": "874897edf9ceb49fd626faa8f2f7339034dd25594608b268bcc0dc47a960b665",
+      "wholeFileSha256": "874897edf9ceb49fd626faa8f2f7339034dd25594608b268bcc0dc47a960b665",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 16661,
+        "bytes": 16661,
+        "sha256": "874897edf9ceb49fd626faa8f2f7339034dd25594608b268bcc0dc47a960b665"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "0b49c2af14ee8f31ddbcc197123d1dd93b6529d001cdd95ffe42075f419c4a33",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8500,
+          "end": 16661,
+          "bytes": 8161,
+          "sha256": "d98c9c3c4b089ed180494cefebf32db8371fe29c81bb164249c9109f70e75e30",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "`${late ? \"late grant\" : \"held lock\"} handles ${synchronous ? \"synchronous\" : \"asynchronous\"} release failure`",
+          "bytes": [
+            3795,
+            5399
+          ],
+          "lines": [
+            76,
+            112
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"a visible UA release with no visibilitychange re-acquires; drop and hidden do not\"",
+          "bytes": [
+            5414,
+            7307
+          ],
+          "lines": [
+            116,
+            162
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"starting a race requests the lock\"",
+          "bytes": [
+            7312,
+            7771
+          ],
+          "lines": [
+            164,
+            173
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"finishing the race releases it\"",
+          "bytes": [
+            7776,
+            8205
+          ],
+          "lines": [
+            175,
+            182
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"quitting mid-race (no results screen) also releases it\"",
+          "bytes": [
+            8210,
+            9358
+          ],
+          "lines": [
+            184,
+            202
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"hiding the page releases it; RESUME after the return re-acquires it\"",
+          "bytes": [
+            9363,
+            10624
+          ],
+          "lines": [
+            204,
+            227
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"pausing releases it; resuming re-acquires it\"",
+          "bytes": [
+            10629,
+            11422
+          ],
+          "lines": [
+            229,
+            241
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"a missing Wake Lock API (older iOS) degrades silently\"",
+          "bytes": [
+            11427,
+            12367
+          ],
+          "lines": [
+            243,
+            259
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"a rejecting request() (permission denied) degrades silently\"",
+          "bytes": [
+            12372,
+            13446
+          ],
+          "lines": [
+            261,
+            281
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"a lock granted after the race ended is released immediately\"",
+          "bytes": [
+            13451,
+            14843
+          ],
+          "lines": [
+            283,
+            316
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"a late release event from an old sentinel cannot clear its replacement\"",
+          "bytes": [
+            14848,
+            16655
+          ],
+          "lines": [
+            318,
+            360
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5197,
+            5228
+          ],
+          "lines": [
+            109,
+            109
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5238,
+            5271
+          ],
+          "lines": [
+            110,
+            110
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            5281,
+            5389
+          ],
+          "lines": [
+            111,
+            111
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7113,
+            7146
+          ],
+          "lines": [
+            158,
+            158
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7152,
+            7187
+          ],
+          "lines": [
+            159,
+            159
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7193,
+            7244
+          ],
+          "lines": [
+            160,
+            160
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7250,
+            7301
+          ],
+          "lines": [
+            161,
+            161
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            7686,
+            7765
+          ],
+          "lines": [
+            172,
+            172
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            8109,
+            8199
+          ],
+          "lines": [
+            181,
+            181
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            9262,
+            9352
+          ],
+          "lines": [
+            201,
+            201
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            10293,
+            10383
+          ],
+          "lines": [
+            222,
+            222
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            10510,
+            10618
+          ],
+          "lines": [
+            226,
+            226
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            11308,
+            11416
+          ],
+          "lines": [
+            240,
+            240
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            12335,
+            12361
+          ],
+          "lines": [
+            258,
+            258
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            13414,
+            13440
+          ],
+          "lines": [
+            280,
+            280
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            14747,
+            14837
+          ],
+          "lines": [
+            315,
+            315
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            16513,
+            16649
+          ],
+          "lines": [
+            357,
+            359
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            877,
+            961
+          ],
+          "lines": [
+            15,
+            15
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/watch-transport-layout.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 2308,
+      "manifestWholeFileSha256": "936ab2dbe500e2ad16d479d4b2bbe8f0732ba475b4d21d873490a1a299b0c2c1",
+      "wholeFileSha256": "936ab2dbe500e2ad16d479d4b2bbe8f0732ba475b4d21d873490a1a299b0c2c1",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 2308,
+        "bytes": 2308,
+        "sha256": "936ab2dbe500e2ad16d479d4b2bbe8f0732ba475b4d21d873490a1a299b0c2c1"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2308,
+          "bytes": 2308,
+          "sha256": "936ab2dbe500e2ad16d479d4b2bbe8f0732ba475b4d21d873490a1a299b0c2c1",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"open chapters drawer keeps select and jump button on one row and under 62% of the height\"",
+          "bytes": [
+            539,
+            2298
+          ],
+          "lines": [
+            11,
+            36
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2123,
+            2151
+          ],
+          "lines": [
+            32,
+            32
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            2159,
+            2191
+          ],
+          "lines": [
+            33,
+            33
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            2199,
+            2241
+          ],
+          "lines": [
+            34,
+            34
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            2249,
+            2290
+          ],
+          "lines": [
+            35,
+            35
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            474,
+            532
+          ],
+          "lines": [
+            9,
+            9
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            259,
+            322
+          ],
+          "lines": [
+            5,
+            5
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/webgl-probes.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 12841,
+      "manifestWholeFileSha256": "4376c098a62a2e9bea06bff25bac72f43ee410ed150b92e9abf7af339f9f64a4",
+      "wholeFileSha256": "4376c098a62a2e9bea06bff25bac72f43ee410ed150b92e9abf7af339f9f64a4",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 12841,
+        "bytes": 12841,
+        "sha256": "4376c098a62a2e9bea06bff25bac72f43ee410ed150b92e9abf7af339f9f64a4"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "c12667cff0b4f961d2ae8d90b8dfc281b4923e5a4cacb0591d11ffa8ed1dc0f5",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8500,
+          "end": 12841,
+          "bytes": 4341,
+          "sha256": "8a093204bbcdcf98921055f145104f70585510215b505a69bf620fb56e86abea",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"scene({visible:true}) reports scenery chunks inside the camera frustum\"",
+          "bytes": [
+            2209,
+            3661
+          ],
+          "lines": [
+            43,
+            67
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"dynamic player shadow uses the current-frame car transform\"",
+          "bytes": [
+            3666,
+            6720
+          ],
+          "lines": [
+            69,
+            135
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"setTimeOfDay night increases numLights on track with floodlights\"",
+          "bytes": [
+            6725,
+            8535
+          ],
+          "lines": [
+            137,
+            175
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"day mode has zero floodlights (monza)\"",
+          "bytes": [
+            8540,
+            9132
+          ],
+          "lines": [
+            177,
+            186
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"monaco day reports always-on tunnel bake\"",
+          "bytes": [
+            9137,
+            9935
+          ],
+          "lines": [
+            188,
+            205
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"night raises lights and the shader never receives more than 48\"",
+          "bytes": [
+            10179,
+            10835
+          ],
+          "lines": [
+            210,
+            222
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"no INVALID_OPERATION spam on the standard mobile tier\"",
+          "bytes": [
+            11641,
+            12835
+          ],
+          "lines": [
+            239,
+            263
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3051,
+            3089
+          ],
+          "lines": [
+            55,
+            55
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3095,
+            3131
+          ],
+          "lines": [
+            56,
+            56
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3137,
+            3185
+          ],
+          "lines": [
+            57,
+            57
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3340,
+            3389
+          ],
+          "lines": [
+            60,
+            60
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            3395,
+            3460
+          ],
+          "lines": [
+            61,
+            61
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            3466,
+            3521
+          ],
+          "lines": [
+            62,
+            62
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            3570,
+            3611
+          ],
+          "lines": [
+            64,
+            64
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3619,
+            3649
+          ],
+          "lines": [
+            65,
+            65
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4180,
+            4218
+          ],
+          "lines": [
+            76,
+            76
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4448,
+            4535
+          ],
+          "lines": [
+            81,
+            81
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toMatchObject",
+          "bytes": [
+            6491,
+            6567
+          ],
+          "lines": [
+            132,
+            132
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            6573,
+            6642
+          ],
+          "lines": [
+            133,
+            133
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            6648,
+            6714
+          ],
+          "lines": [
+            134,
+            134
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveProperty",
+          "bytes": [
+            7147,
+            7185
+          ],
+          "lines": [
+            144,
+            144
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7191,
+            7233
+          ],
+          "lines": [
+            145,
+            145
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveProperty",
+          "bytes": [
+            7239,
+            7278
+          ],
+          "lines": [
+            146,
+            146
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7284,
+            7331
+          ],
+          "lines": [
+            147,
+            147
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7337,
+            7373
+          ],
+          "lines": [
+            148,
+            148
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveProperty",
+          "bytes": [
+            7379,
+            7421
+          ],
+          "lines": [
+            149,
+            149
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7427,
+            7477
+          ],
+          "lines": [
+            150,
+            150
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7483,
+            7522
+          ],
+          "lines": [
+            151,
+            151
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveProperty",
+          "bytes": [
+            7528,
+            7565
+          ],
+          "lines": [
+            152,
+            152
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toHaveProperty",
+          "bytes": [
+            7571,
+            7608
+          ],
+          "lines": [
+            153,
+            153
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7614,
+            7655
+          ],
+          "lines": [
+            154,
+            154
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            8483,
+            8529
+          ],
+          "lines": [
+            174,
+            174
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            9059,
+            9087
+          ],
+          "lines": [
+            184,
+            184
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeDefined",
+          "bytes": [
+            9093,
+            9126
+          ],
+          "lines": [
+            185,
+            185
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            9793,
+            9832
+          ],
+          "lines": [
+            202,
+            202
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            9838,
+            9879
+          ],
+          "lines": [
+            203,
+            203
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            9885,
+            9929
+          ],
+          "lines": [
+            204,
+            204
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            10619,
+            10699
+          ],
+          "lines": [
+            219,
+            219
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            10785,
+            10829
+          ],
+          "lines": [
+            221,
+            221
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            12382,
+            12431
+          ],
+          "lines": [
+            252,
+            252
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            12801,
+            12829
+          ],
+          "lines": [
+            262,
+            262
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.describe.configure",
+          "bytes": [
+            1108,
+            1153
+          ],
+          "lines": [
+            19,
+            19
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.use",
+          "bytes": [
+            1966,
+            1999
+          ],
+          "lines": [
+            36,
+            36
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.afterEach",
+          "bytes": [
+            2004,
+            2204
+          ],
+          "lines": [
+            38,
+            41
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.use",
+          "bytes": [
+            11393,
+            11636
+          ],
+          "lines": [
+            232,
+            237
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            11962,
+            11986
+          ],
+          "lines": [
+            243,
+            243
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            932,
+            1005
+          ],
+          "lines": [
+            16,
+            16
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/webkit-boot.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 7586,
+      "manifestWholeFileSha256": "c12680fb6799dc0adbe6ee391ebfcf8c62e26ccdb5bb1166553c1bcb43e7c189",
+      "wholeFileSha256": "c12680fb6799dc0adbe6ee391ebfcf8c62e26ccdb5bb1166553c1bcb43e7c189",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 7586,
+        "bytes": 7586,
+        "sha256": "c12680fb6799dc0adbe6ee391ebfcf8c62e26ccdb5bb1166553c1bcb43e7c189"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7586,
+          "bytes": 7586,
+          "sha256": "c12680fb6799dc0adbe6ee391ebfcf8c62e26ccdb5bb1166553c1bcb43e7c189",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"boots three+tlxForceGL, race frame, frame-time sample, two-cycle heap\"",
+          "bytes": [
+            4039,
+            7580
+          ],
+          "lines": [
+            108,
+            197
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5208,
+            5267
+          ],
+          "lines": [
+            137,
+            137
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            5273,
+            5422
+          ],
+          "lines": [
+            138,
+            139
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5744,
+            5821
+          ],
+          "lines": [
+            148,
+            148
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5952,
+            6034
+          ],
+          "lines": [
+            154,
+            154
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.describe.configure",
+          "bytes": [
+            1402,
+            1447
+          ],
+          "lines": [
+            30,
+            30
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.use",
+          "bytes": [
+            3983,
+            4034
+          ],
+          "lines": [
+            106,
+            106
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.skip",
+          "bytes": [
+            4240,
+            4370
+          ],
+          "lines": [
+            110,
+            111
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "node:fs",
+          "bytes": [
+            873,
+            898
+          ],
+          "lines": [
+            16,
+            16
+          ],
+          "partial": false
+        },
+        {
+          "source": "node:path",
+          "bytes": [
+            899,
+            928
+          ],
+          "lines": [
+            17,
+            17
+          ],
+          "partial": false
+        },
+        {
+          "source": "node:url",
+          "bytes": [
+            929,
+            970
+          ],
+          "lines": [
+            18,
+            18
+          ],
+          "partial": false
+        },
+        {
+          "source": "@playwright/test",
+          "bytes": [
+            971,
+            1019
+          ],
+          "lines": [
+            19,
+            19
+          ],
+          "partial": false
+        },
+        {
+          "source": "../helpers/presented-canvas.js",
+          "bytes": [
+            1020,
+            1089
+          ],
+          "lines": [
+            20,
+            20
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/world-physics.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 9859,
+      "manifestWholeFileSha256": "bb0e3bdac9c4eadd40240f3b97ce2aa66012554fb12c45acd362930478eb576b",
+      "wholeFileSha256": "bb0e3bdac9c4eadd40240f3b97ce2aa66012554fb12c45acd362930478eb576b",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 9859,
+        "bytes": 9859,
+        "sha256": "bb0e3bdac9c4eadd40240f3b97ce2aa66012554fb12c45acd362930478eb576b"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "6cab9e3bb63c34d5384b4c3fae8ae2acb254b8e8816d24eb733fa9b06803168b",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8500,
+          "end": 9859,
+          "bytes": 1359,
+          "sha256": "99d3e356d80f430a8d93141ecccb4ee5ca5d2f201b1d716a2b9ce38b10c5a7f8",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"loads and runs a race with no uncaught errors\"",
+          "bytes": [
+            1668,
+            2229
+          ],
+          "lines": [
+            27,
+            38
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"progress advances ~linearly with speed\"",
+          "bytes": [
+            2234,
+            2865
+          ],
+          "lines": [
+            40,
+            54
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"steer direction: +steer goes right (+x), -steer goes left\"",
+          "bytes": [
+            2870,
+            3463
+          ],
+          "lines": [
+            56,
+            69
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"no input runs wide with road-follow off; tracks the corner once switched on\"",
+          "bytes": [
+            3633,
+            5283
+          ],
+          "lines": [
+            73,
+            107
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"a shorter wheelbase turns in more\"",
+          "bytes": [
+            6150,
+            7151
+          ],
+          "lines": [
+            122,
+            141
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"AI stays on track and progresses after the racing-line flip\"",
+          "bytes": [
+            7156,
+            9853
+          ],
+          "lines": [
+            143,
+            185
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            2159,
+            2223
+          ],
+          "lines": [
+            37,
+            37
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2755,
+            2785
+          ],
+          "lines": [
+            52,
+            52
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2820,
+            2859
+          ],
+          "lines": [
+            53,
+            53
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3363,
+            3408
+          ],
+          "lines": [
+            67,
+            67
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            3414,
+            3457
+          ],
+          "lines": [
+            68,
+            68
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            4827,
+            4862
+          ],
+          "lines": [
+            99,
+            99
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5168,
+            5211
+          ],
+          "lines": [
+            104,
+            104
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            5219,
+            5271
+          ],
+          "lines": [
+            105,
+            105
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            7102,
+            7145
+          ],
+          "lines": [
+            140,
+            140
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            9398,
+            9424
+          ],
+          "lines": [
+            178,
+            178
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            9666,
+            9743
+          ],
+          "lines": [
+            182,
+            182
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            9749,
+            9847
+          ],
+          "lines": [
+            183,
+            184
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            647,
+            710
+          ],
+          "lines": [
+            10,
+            10
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/xr-plan.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 4048,
+      "manifestWholeFileSha256": "4eac0a214cd708464124aa6ecc1e212da2378612cf62513ca31754ba46c4996f",
+      "wholeFileSha256": "4eac0a214cd708464124aa6ecc1e212da2378612cf62513ca31754ba46c4996f",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 4048,
+        "bytes": 4048,
+        "sha256": "4eac0a214cd708464124aa6ecc1e212da2378612cf62513ca31754ba46c4996f"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4048,
+          "bytes": 4048,
+          "sha256": "4eac0a214cd708464124aa6ecc1e212da2378612cf62513ca31754ba46c4996f",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"armed webgl2: ApexXR path is webgl2; GLX requested xrCompatible if navigator.xr\"",
+          "bytes": [
+            619,
+            2699
+          ],
+          "lines": [
+            19,
+            66
+          ],
+          "partial": false
+        },
+        {
+          "title": "\"armed webgpu without XRGPUBinding: path falls back to webgl2 with a fallback entry\"",
+          "bytes": [
+            2702,
+            4046
+          ],
+          "lines": [
+            68,
+            103
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1997,
+            2051
+          ],
+          "lines": [
+            52,
+            52
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2055,
+            2129
+          ],
+          "lines": [
+            53,
+            53
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2133,
+            2171
+          ],
+          "lines": [
+            54,
+            54
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2175,
+            2204
+          ],
+          "lines": [
+            55,
+            55
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3689,
+            3721
+          ],
+          "lines": [
+            95,
+            95
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3727,
+            3844
+          ],
+          "lines": [
+            96,
+            97
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            3947,
+            3996
+          ],
+          "lines": [
+            100,
+            100
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4004,
+            4042
+          ],
+          "lines": [
+            102,
+            102
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.describe.configure",
+          "bytes": [
+            384,
+            427
+          ],
+          "lines": [
+            12,
+            12
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.beforeEach",
+          "bytes": [
+            430,
+            616
+          ],
+          "lines": [
+            14,
+            17
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.skip",
+          "bytes": [
+            470,
+            567
+          ],
+          "lines": [
+            15,
+            15
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            731,
+            755
+          ],
+          "lines": [
+            20,
+            20
+          ],
+          "partial": false
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            2817,
+            2841
+          ],
+          "lines": [
+            69,
+            69
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "bytes": [
+            211,
+            259
+          ],
+          "lines": [
+            6,
+            6
+          ],
+          "partial": false
+        },
+        {
+          "source": "fs",
+          "bytes": [
+            260,
+            280
+          ],
+          "lines": [
+            7,
+            7
+          ],
+          "partial": false
+        },
+        {
+          "source": "../helpers/iwer-install.mjs",
+          "bytes": [
+            281,
+            382
+          ],
+          "lines": [
+            8,
+            10
+          ],
+          "partial": false
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/zandvoort-foundation.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 3952,
+      "manifestWholeFileSha256": "1d62430c322786338b13a07df753df15bea17f373ae0d521f5ccd0865540a965",
+      "wholeFileSha256": "1d62430c322786338b13a07df753df15bea17f373ae0d521f5ccd0865540a965",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 3952,
+        "bytes": 3952,
+        "sha256": "1d62430c322786338b13a07df753df15bea17f373ae0d521f5ccd0865540a965"
+      },
+      "partialFile": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3952,
+          "bytes": 3952,
+          "sha256": "1d62430c322786338b13a07df753df15bea17f373ae0d521f5ccd0865540a965",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "cases": [
+        {
+          "title": "\"has explicit coordinates, safe models, and clean road clearance\"",
+          "bytes": [
+            1060,
+            3946
+          ],
+          "lines": [
+            22,
+            80
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1582,
+            1630
+          ],
+          "lines": [
+            34,
+            34
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            1636,
+            1691
+          ],
+          "lines": [
+            35,
+            35
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1697,
+            1758
+          ],
+          "lines": [
+            36,
+            36
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            1934,
+            1970
+          ],
+          "lines": [
+            42,
+            42
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            2368,
+            2587
+          ],
+          "lines": [
+            48,
+            53
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2593,
+            2632
+          ],
+          "lines": [
+            54,
+            54
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2638,
+            2690
+          ],
+          "lines": [
+            55,
+            55
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2696,
+            2748
+          ],
+          "lines": [
+            56,
+            56
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3661,
+            3721
+          ],
+          "lines": [
+            73,
+            73
+          ],
+          "partial": false
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3899,
+            3940
+          ],
+          "lines": [
+            79,
+            79
+          ],
+          "partial": false
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.describe.configure",
+          "bytes": [
+            1011,
+            1055
+          ],
+          "lines": [
+            20,
+            20
+          ],
+          "partial": false
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "bytes": [
+            13,
+            61
+          ],
+          "lines": [
+            2,
+            2
+          ],
+          "partial": false
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            62,
+            111
+          ],
+          "lines": [
+            3,
+            3
+          ],
+          "partial": false
+        }
+      ]
+    }
+  ],
+  "lsp": [
+    {
+      "query": "RaceWakeLock.create",
+      "definition": "js/core/wake-lock.js:12",
+      "export": "js/core/wake-lock.js:56",
+      "bodyCap": 25,
+      "semantic": "wanted/pending/held owner; late grants released; identity-guarded release"
+    },
+    {
+      "query": "XrSession.start",
+      "definition": "js/xr/xr-session.js:148",
+      "export": "js/xr/xr-session.js:479",
+      "bodyCap": 12,
+      "semantic": "coalesces pending start; reuses live session; generation tracked"
+    },
+    {
+      "query": "WatchTransport.create",
+      "definition": "js/ui/watch-transport.js:10",
+      "export": "js/ui/watch-transport.js:166",
+      "bodyCap": 12,
+      "semantic": "replay-backed transport with pending seek state"
+    }
+  ]
+}

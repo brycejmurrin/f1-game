@@ -1,0 +1,323 @@
+{
+  "group": "07",
+  "rangeConvention": "half-open bytes",
+  "assignedTextBytes": 39714,
+  "binaryBytes": 5658394,
+  "allWholeSourcePlanHashesMatch": true,
+  "sources": [
+    {
+      "path": "docs/research/WEBGPU-PARITY.md",
+      "start": 31996,
+      "end": 61689,
+      "kind": "text",
+      "sha256": "ba60c6f35a579debb165ce7c847ab3ae7dac6a05aefb00ef6b4bf9d28d700236",
+      "wholeSourceBytes": 61689,
+      "wholeSourceSha256": "ba60c6f35a579debb165ce7c847ab3ae7dac6a05aefb00ef6b4bf9d28d700236",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "320ef71fcd4a4547843ee75a3dddc3e1f8ae2d551a8f645a921ba5548b0e692f",
+      "readMethod": "Individually returned exec_command Python byte-slice decode for WEBGPU tail; cat for whole smaller UTF-8 sources; all outputs untruncated, <=8000 source bytes per return",
+      "chunks": [
+        {
+          "start": 31996,
+          "end": 39996,
+          "bytes": 8000,
+          "sha256": "03d3f395d8604dd2dc63a3f21b260b2c22f83fb541992e2e88a90d24a31c7396"
+        },
+        {
+          "start": 39996,
+          "end": 47996,
+          "bytes": 8000,
+          "sha256": "6734bbf165d0222fa8bff71bdb05a70f8e55c39fc7cffd01a1a2e8e3f29415a5"
+        },
+        {
+          "start": 47996,
+          "end": 55996,
+          "bytes": 8000,
+          "sha256": "ce1b6e817c8898e1f0681b828552d40224f33fb6c73cae5311e582dc0a755ea6"
+        },
+        {
+          "start": 55996,
+          "end": 61689,
+          "bytes": 5693,
+          "sha256": "613fb50e5737607fa7706630f927977e0c41fce3db937ee0c1bbdff8e762e114"
+        }
+      ]
+    },
+    {
+      "path": "docs/research/steering-research.md",
+      "start": 0,
+      "end": 5759,
+      "kind": "text",
+      "sha256": "4abe28161d1b3a0218127ba917850b3cfc41f1772c000c6a208a9b0220b329a2",
+      "wholeSourceBytes": 5759,
+      "wholeSourceSha256": "4abe28161d1b3a0218127ba917850b3cfc41f1772c000c6a208a9b0220b329a2",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "4abe28161d1b3a0218127ba917850b3cfc41f1772c000c6a208a9b0220b329a2",
+      "readMethod": "Individually returned exec_command Python byte-slice decode for WEBGPU tail; cat for whole smaller UTF-8 sources; all outputs untruncated, <=8000 source bytes per return",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5759,
+          "bytes": 5759,
+          "sha256": "4abe28161d1b3a0218127ba917850b3cfc41f1772c000c6a208a9b0220b329a2"
+        }
+      ]
+    },
+    {
+      "path": "docs/research/wgx-gallery-manifest.json",
+      "start": 0,
+      "end": 3502,
+      "kind": "text",
+      "sha256": "0d454cd13a48bd9c2d9958c25baca9fce94b6bb15c8e6bc4696246eef7556e81",
+      "wholeSourceBytes": 3502,
+      "wholeSourceSha256": "0d454cd13a48bd9c2d9958c25baca9fce94b6bb15c8e6bc4696246eef7556e81",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "0d454cd13a48bd9c2d9958c25baca9fce94b6bb15c8e6bc4696246eef7556e81",
+      "readMethod": "Individually returned exec_command Python byte-slice decode for WEBGPU tail; cat for whole smaller UTF-8 sources; all outputs untruncated, <=8000 source bytes per return",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3502,
+          "bytes": 3502,
+          "sha256": "0d454cd13a48bd9c2d9958c25baca9fce94b6bb15c8e6bc4696246eef7556e81"
+        }
+      ]
+    },
+    {
+      "path": "docs/research/wgx-gallery/README.md",
+      "start": 0,
+      "end": 760,
+      "kind": "text",
+      "sha256": "c5874c54e91e59f5bf4dd578e95d6896f0368302423a5b81060592e717cfe561",
+      "wholeSourceBytes": 760,
+      "wholeSourceSha256": "c5874c54e91e59f5bf4dd578e95d6896f0368302423a5b81060592e717cfe561",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "c5874c54e91e59f5bf4dd578e95d6896f0368302423a5b81060592e717cfe561",
+      "readMethod": "Individually returned exec_command Python byte-slice decode for WEBGPU tail; cat for whole smaller UTF-8 sources; all outputs untruncated, <=8000 source bytes per return",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 760,
+          "bytes": 760,
+          "sha256": "c5874c54e91e59f5bf4dd578e95d6896f0368302423a5b81060592e717cfe561"
+        }
+      ]
+    },
+    {
+      "path": "docs/research/wgx-gallery/bahrain.png",
+      "start": 0,
+      "end": 810436,
+      "kind": "binary",
+      "sha256": "eaaf61266c98ff116451d9e938b933beb6a3424ddc32c535505b529cb63b6a18",
+      "wholeSourceBytes": 810436,
+      "wholeSourceSha256": "eaaf61266c98ff116451d9e938b933beb6a3424ddc32c535505b529cb63b6a18",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "eaaf61266c98ff116451d9e938b933beb6a3424ddc32c535505b529cb63b6a18",
+      "readMethod": "Python read_bytes SHA256 and PNG signature/IHDR parse; no pixel view",
+      "metadata": {
+        "signature": "89504e470d0a1a0a",
+        "width": 1280,
+        "height": 720,
+        "bitDepth": 8,
+        "colorType": 2
+      },
+      "visuallyInspected": false
+    },
+    {
+      "path": "docs/research/wgx-gallery/monaco-eye.png",
+      "start": 0,
+      "end": 865752,
+      "kind": "binary",
+      "sha256": "3dedf52dde09e04cd0803212cecf91481ccbe819140c86d0fc6c58a77e0130db",
+      "wholeSourceBytes": 865752,
+      "wholeSourceSha256": "3dedf52dde09e04cd0803212cecf91481ccbe819140c86d0fc6c58a77e0130db",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "3dedf52dde09e04cd0803212cecf91481ccbe819140c86d0fc6c58a77e0130db",
+      "readMethod": "Python read_bytes SHA256 and PNG signature/IHDR parse; no pixel view",
+      "metadata": {
+        "signature": "89504e470d0a1a0a",
+        "width": 1280,
+        "height": 720,
+        "bitDepth": 8,
+        "colorType": 2
+      },
+      "visuallyInspected": false
+    },
+    {
+      "path": "docs/research/wgx-gallery/montreal-eye.png",
+      "start": 0,
+      "end": 773708,
+      "kind": "binary",
+      "sha256": "c554acf6c7c4f7effbc9945d1b6cd4c9856753d5f98cc2576ca8df0db9a5bf34",
+      "wholeSourceBytes": 773708,
+      "wholeSourceSha256": "c554acf6c7c4f7effbc9945d1b6cd4c9856753d5f98cc2576ca8df0db9a5bf34",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "c554acf6c7c4f7effbc9945d1b6cd4c9856753d5f98cc2576ca8df0db9a5bf34",
+      "readMethod": "Python read_bytes SHA256 and PNG signature/IHDR parse; no pixel view",
+      "metadata": {
+        "signature": "89504e470d0a1a0a",
+        "width": 1280,
+        "height": 720,
+        "bitDepth": 8,
+        "colorType": 2
+      },
+      "visuallyInspected": false
+    },
+    {
+      "path": "docs/research/wgx-gallery/montreal.png",
+      "start": 0,
+      "end": 772806,
+      "kind": "binary",
+      "sha256": "49c8911638903569df53c55de7e9bded22d2f68ffb8792fffdd76e2ab0575916",
+      "wholeSourceBytes": 772806,
+      "wholeSourceSha256": "49c8911638903569df53c55de7e9bded22d2f68ffb8792fffdd76e2ab0575916",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "49c8911638903569df53c55de7e9bded22d2f68ffb8792fffdd76e2ab0575916",
+      "readMethod": "Python read_bytes SHA256 and PNG signature/IHDR parse; no pixel view",
+      "metadata": {
+        "signature": "89504e470d0a1a0a",
+        "width": 1280,
+        "height": 720,
+        "bitDepth": 8,
+        "colorType": 2
+      },
+      "visuallyInspected": false
+    },
+    {
+      "path": "docs/research/wgx-gallery/singapore.png",
+      "start": 0,
+      "end": 721518,
+      "kind": "binary",
+      "sha256": "3500c5b5d3c71c83e26eb0b82f4f839973bfa3a92d8f94d9ef63fa2b3aee702c",
+      "wholeSourceBytes": 721518,
+      "wholeSourceSha256": "3500c5b5d3c71c83e26eb0b82f4f839973bfa3a92d8f94d9ef63fa2b3aee702c",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "3500c5b5d3c71c83e26eb0b82f4f839973bfa3a92d8f94d9ef63fa2b3aee702c",
+      "readMethod": "Python read_bytes SHA256 and PNG signature/IHDR parse; no pixel view",
+      "metadata": {
+        "signature": "89504e470d0a1a0a",
+        "width": 1280,
+        "height": 720,
+        "bitDepth": 8,
+        "colorType": 2
+      },
+      "visuallyInspected": false
+    },
+    {
+      "path": "docs/research/wgx-gallery/spa.png",
+      "start": 0,
+      "end": 851656,
+      "kind": "binary",
+      "sha256": "166e08ac91b4554d6b077c7f9a3a26ce090d383df1d3fb45f25dca58446cb59c",
+      "wholeSourceBytes": 851656,
+      "wholeSourceSha256": "166e08ac91b4554d6b077c7f9a3a26ce090d383df1d3fb45f25dca58446cb59c",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "166e08ac91b4554d6b077c7f9a3a26ce090d383df1d3fb45f25dca58446cb59c",
+      "readMethod": "Python read_bytes SHA256 and PNG signature/IHDR parse; no pixel view",
+      "metadata": {
+        "signature": "89504e470d0a1a0a",
+        "width": 1280,
+        "height": 720,
+        "bitDepth": 8,
+        "colorType": 2
+      },
+      "visuallyInspected": false
+    },
+    {
+      "path": "docs/research/wgx-gallery/vegas.png",
+      "start": 0,
+      "end": 862518,
+      "kind": "binary",
+      "sha256": "c355c4a3cecb1e5003edbccb540dc5c5d3c6807b3e816755ef0939251ba02d24",
+      "wholeSourceBytes": 862518,
+      "wholeSourceSha256": "c355c4a3cecb1e5003edbccb540dc5c5d3c6807b3e816755ef0939251ba02d24",
+      "wholeSourcePlanHashMatches": true,
+      "assignedPartSha256": "c355c4a3cecb1e5003edbccb540dc5c5d3c6807b3e816755ef0939251ba02d24",
+      "readMethod": "Python read_bytes SHA256 and PNG signature/IHDR parse; no pixel view",
+      "metadata": {
+        "signature": "89504e470d0a1a0a",
+        "width": 1280,
+        "height": 720,
+        "bitDepth": 8,
+        "colorType": 2
+      },
+      "visuallyInspected": false
+    }
+  ],
+  "semanticMap": [
+    {
+      "source": "WEBGPU-PARITY.md",
+      "question": "Close native WGX versus GLX visual/API/performance gaps without changing default backend",
+      "method": "Dated API/spec synthesis, source comparison, reported Dawn validation, software captures, call counters and macOS Metal census",
+      "results": "Hazard catalogue; state elision and draw batching wins; corrected vertex-index block; driving-line port and TLX depth-bias correction",
+      "proposals": "Indexed road, half-resolution SSR, render bundles and static post UBO writes explicitly deferred; original slice table is historical",
+      "limits": "Only assigned tail read; performance and hardware results are historical reports, not rerun. Software capture noise invalidates some image A/B claims."
+    },
+    {
+      "source": "steering-research.md",
+      "question": "Improve mobile steering feel and discoverable defaults",
+      "method": "Comparative game conventions and sensor-filter literature synthesis; no traceable primary bibliography in this file",
+      "results": "Presets first; calibrate/deadzone/rescale/curve/adaptive filter/clamp pipeline; preserve manual heading model",
+      "proposals": "Casual/Standard/Pro, advanced controls, One-Euro filter, validation harness and proposed tuning table",
+      "limits": "Explicit dated record; table Casual PULL 2 differs from broad manual/off-default wording and requires current policy reconciliation."
+    },
+    {
+      "source": "wgx-gallery-manifest.json + README.md + seven PNGs",
+      "question": "Preserve reference frames from software native WebGPU rendering",
+      "method": "Historical lite gallery capture with per-shot backend/errors/coverage metadata; present inspection only PNG header metadata and SHA256",
+      "results": "Seven reported successful shots; backend webgpu and zero gpuErrors; 1280x720 RGB8 PNG metadata corroborated",
+      "proposals": "Refresh instructions retained as historical provenance, not executed",
+      "limits": "Images not visually inspected; coverage percentages and success are manifest claims, not current rendering proof; manifest timestamp/build do not establish current parity."
+    }
+  ],
+  "staticCorroboration": [
+    {
+      "path": "tools/gfx/wgx-shot.mjs",
+      "lines": [
+        80,
+        135
+      ],
+      "finding": "Writes current reference manifest; current schema lacks committed image/build fields, so old manifest regeneration is not schema-preserving."
+    },
+    {
+      "path": "tools/track/build-gallery.cjs",
+      "lines": [
+        335,
+        355
+      ],
+      "finding": "Enumerates research gallery image bucket."
+    },
+    {
+      "path": "tests/unit/committed-images.test.mjs",
+      "lines": [
+        40,
+        67
+      ],
+      "finding": "All seven PNGs remain explicit legacy allowlist; list must shrink, not grow."
+    },
+    {
+      "path": ".claude/skills/tune-physics/SKILL.md",
+      "lines": [
+        78,
+        78
+      ],
+      "finding": "References steering synthesis."
+    },
+    {
+      "path": "docs/NOTES-INDEX.md",
+      "lines": [
+        149,
+        179
+      ],
+      "finding": "Indexes parity, steering and gallery; records spike-out/reattach history."
+    }
+  ],
+  "historicalRawPaths": [
+    "docs/archive/tools/gfx/wgx-vid-repro.mjs",
+    "artifacts/r6-drawcount.mjs",
+    "artifacts/wgsl-dump-iphone",
+    "artifacts/tmp/wgx-gallery-commit",
+    "spike/backends/README.md"
+  ],
+  "constraints": "No tests, browser, network, runtime or research commands executed. No source edits. No current symbol behavior inferred from names."
+}

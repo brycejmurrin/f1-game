@@ -501,7 +501,7 @@ Evidence limits: Offline bounded AgentView check is executed when this suite run
 
 - All assigned tests import Node builtins plus actual local helpers/modules; third-party dependencies are yaml, sharp and jsqr. Shader compiler executables and python3 are external prerequisites with policies described above. Manifest-driven track code, real shell/workflow text and canonical skill/agent trees are read-time dependencies, not proven run results.
 - Temporary tiny shell source files, canned executable/skill-read names, synthetic track IDs, planted shader failures and removed skill names are intentional positive/negative fixtures. They do not imply missing production modules. No archive paths are recorded here.
-- Comment cleanup candidates: shared-track-foundation header lines 2–3 says the known full-lap modulo behavior will change, while case 273–316 already asserts full-lap handling; header line8 says five checks though six declared cases exist. Its lines403–409 retain old fleet-count history immediately before line410 delegates counts elsewhere.
+- Comment cleanup candidates: shared-track-foundation header lines 2–3 says the known full-lap modulo behavior will change, while case 273–316 already asserts full-lap handling. Its lines403–409 retain old fleet-count history immediately before line410 delegates counts elsewhere.
 - shared-math header lines19–20 claims a no-private-wrap ratchet, but PRIVATE_DEF (133) checks clamp/lerp only; wrapDelta has semantic and consumption checks. Matrix case205 title says associative but assertions208–217 establish identity and composition order only.
 - share-card render preamble134–135 and shared-math historical mutation narrative185–191 describe former coverage gaps; preserve as dated history or shorten to current intent to avoid sounding like present coverage. shell-ids line17 pins an incidental VM-test count; leave qualitative rationale instead.
 - skill-progressive folded-skill case title150 and failure170 label the set 2026-09 even though the list includes October folds. Removed-path regex assertions are intentionally negative; describe their meaning without resurrecting their old paths.
@@ -509,3 +509,5 @@ Evidence limits: Offline bounded AgentView check is executed when this suite run
 - Weaknesses worth preserving in review: share-card-data line36 self-comparison; Shanghai audit tolerates missing matching findings unless source contract still exists; fleet scope can select no tracks; sim budget parser ignores child exit status; static regex guards generally assert shape rather than runtime behavior.
 
 No runtime source edits, tests, browser work, commits or batch-status changes were made by this lane.
+
+Independent cleanup review correction: the shared-track-foundation header count is accurate: five literal declarations at118,206,273,331,366. The earlier six-case candidate was rejected; see comment-cleanup.md and its evidence.

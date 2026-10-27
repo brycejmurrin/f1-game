@@ -1,0 +1,1079 @@
+{
+  "group": "02",
+  "plan": {
+    "path": "docs/project-map/examples-batches.json",
+    "sha256": "fac144f347bfceaf58fd9c999fa7cfb711b82ba439aa034e5fc69b935d3bb2bd",
+    "assigned_text_bytes": 160000
+  },
+  "files": [
+    {
+      "path": "examples/visor-lab/comparisons.json",
+      "start": 116541,
+      "end": 133129,
+      "kind": "text",
+      "sha256": "de7fa68605dd2da10563eedf344b68ec8247d56b7c8e996e8ac9e2df9f29c06e",
+      "whole_source_sha256": "de7fa68605dd2da10563eedf344b68ec8247d56b7c8e996e8ac9e2df9f29c06e",
+      "whole_source_bytes": 133129,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "75abc7d7ee72e89b58b452ea7f166cfd3be74b93839a39e46d71fbe517434a27",
+      "range_convention": "half-open bytes",
+      "method": "individual bounded UTF-8 byte-slice calls",
+      "chunks": [
+        {
+          "start": 116541,
+          "end": 125041,
+          "bytes": 8500,
+          "sha256": "37a755c4a5dc054e24a8b90a1f8005d988a9f0f39eb6adb111d32729322a8116",
+          "returned_untruncated": true
+        },
+        {
+          "start": 125041,
+          "end": 133129,
+          "bytes": 8088,
+          "sha256": "6e431a4f0408e948a0429282f1fff3b85822b3e59c6fb657f8b07cdb6237615c",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "assigned portion only",
+      "full_json_parse": {
+        "method": "Python json.loads whole source, supplemental structure only; textual coverage remains assigned range",
+        "keys": [
+          "version",
+          "pairs",
+          "visorLab"
+        ]
+      }
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-frames.json",
+      "start": 0,
+      "end": 4726,
+      "kind": "text",
+      "sha256": "59910ad5f5a5a46d88a34d5f1c1c50cd24501da02da50ff7c9f87ef3fc4b84c2",
+      "whole_source_sha256": "59910ad5f5a5a46d88a34d5f1c1c50cd24501da02da50ff7c9f87ef3fc4b84c2",
+      "whole_source_bytes": 4726,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "59910ad5f5a5a46d88a34d5f1c1c50cd24501da02da50ff7c9f87ef3fc4b84c2",
+      "range_convention": "half-open bytes",
+      "method": "individual bounded UTF-8 byte-slice calls",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4726,
+          "bytes": 4726,
+          "sha256": "59910ad5f5a5a46d88a34d5f1c1c50cd24501da02da50ff7c9f87ef3fc4b84c2",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "entire file",
+      "full_json_parse": {
+        "method": "Python json.loads whole source, supplemental structure only; textual coverage remains assigned range",
+        "keys": [
+          "scene",
+          "settings",
+          "frames"
+        ]
+      }
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-strip.webp",
+      "start": 0,
+      "end": 416022,
+      "kind": "binary",
+      "sha256": "6fa4ee26e85501392c6f650dfe6c9d61a96dbfa6bc680fd0148d225b89896917",
+      "whole_source_sha256": "6fa4ee26e85501392c6f650dfe6c9d61a96dbfa6bc680fd0148d225b89896917",
+      "whole_source_bytes": 416022,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "6fa4ee26e85501392c6f650dfe6c9d61a96dbfa6bc680fd0148d225b89896917",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1694,
+        "height": 1682,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "drive-by supporting contact strip; no direct reference found by rg in lab non-JSON text or shot tools",
+      "provenance": "same-stem frame JSON scene/settings and eight numbered PNG source names; no strip hash/source revision embedded in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-frames.json",
+      "start": 0,
+      "end": 3698,
+      "kind": "text",
+      "sha256": "afdb1737d5771121c2648f446411fcffcff3f644d47d0a9eabde0d7e886f0e86",
+      "whole_source_sha256": "afdb1737d5771121c2648f446411fcffcff3f644d47d0a9eabde0d7e886f0e86",
+      "whole_source_bytes": 3698,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "afdb1737d5771121c2648f446411fcffcff3f644d47d0a9eabde0d7e886f0e86",
+      "range_convention": "half-open bytes",
+      "method": "individual bounded UTF-8 byte-slice calls",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3698,
+          "bytes": 3698,
+          "sha256": "afdb1737d5771121c2648f446411fcffcff3f644d47d0a9eabde0d7e886f0e86",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "entire file",
+      "full_json_parse": {
+        "method": "Python json.loads whole source, supplemental structure only; textual coverage remains assigned range",
+        "keys": [
+          "scene",
+          "settings",
+          "frames"
+        ]
+      }
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-strip.webp",
+      "start": 0,
+      "end": 350934,
+      "kind": "binary",
+      "sha256": "1f4fc0a4dfc918d5956bb1d043161831f35d2f9f7581c25f72530824a6db11d7",
+      "whole_source_sha256": "1f4fc0a4dfc918d5956bb1d043161831f35d2f9f7581c25f72530824a6db11d7",
+      "whole_source_bytes": 350934,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "1f4fc0a4dfc918d5956bb1d043161831f35d2f9f7581c25f72530824a6db11d7",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1694,
+        "height": 1682,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "drive-by supporting contact strip; no direct reference found by rg in lab non-JSON text or shot tools",
+      "provenance": "same-stem frame JSON scene/settings and eight numbered PNG source names; no strip hash/source revision embedded in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-frames.json",
+      "start": 0,
+      "end": 4189,
+      "kind": "text",
+      "sha256": "d4938f4c07c2e7e06d121c482c21b3f45526dd9961866d73c7775757fd8c74b1",
+      "whole_source_sha256": "d4938f4c07c2e7e06d121c482c21b3f45526dd9961866d73c7775757fd8c74b1",
+      "whole_source_bytes": 4189,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "d4938f4c07c2e7e06d121c482c21b3f45526dd9961866d73c7775757fd8c74b1",
+      "range_convention": "half-open bytes",
+      "method": "individual bounded UTF-8 byte-slice calls",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4189,
+          "bytes": 4189,
+          "sha256": "d4938f4c07c2e7e06d121c482c21b3f45526dd9961866d73c7775757fd8c74b1",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "entire file",
+      "full_json_parse": {
+        "method": "Python json.loads whole source, supplemental structure only; textual coverage remains assigned range",
+        "keys": [
+          "scene",
+          "settings",
+          "frames"
+        ]
+      }
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-strip.webp",
+      "start": 0,
+      "end": 447198,
+      "kind": "binary",
+      "sha256": "663eaa2c3c73cfbc1fd699236d83915e843a694bf1127b80d6effe1c7697fa2b",
+      "whole_source_sha256": "663eaa2c3c73cfbc1fd699236d83915e843a694bf1127b80d6effe1c7697fa2b",
+      "whole_source_bytes": 447198,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "663eaa2c3c73cfbc1fd699236d83915e843a694bf1127b80d6effe1c7697fa2b",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1694,
+        "height": 1682,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "drive-by supporting contact strip; no direct reference found by rg in lab non-JSON text or shot tools",
+      "provenance": "same-stem frame JSON scene/settings and eight numbered PNG source names; no strip hash/source revision embedded in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dawn-fog--off.webp",
+      "start": 0,
+      "end": 173264,
+      "kind": "binary",
+      "sha256": "6e13b385ab571da23d7d0363e6dfaddf9bae1631e5a80cea2cc7776697a477ee",
+      "whole_source_sha256": "6e13b385ab571da23d7d0363e6dfaddf9bae1631e5a80cea2cc7776697a477ee",
+      "whole_source_bytes": 173264,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "6e13b385ab571da23d7d0363e6dfaddf9bae1631e5a80cea2cc7776697a477ee",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1920,
+        "height": 1080,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "optics scene baseline; static gallery off variant",
+      "provenance_records": {
+        "shots.json": [
+          {
+            "scene": "bahrain-dawn-fog",
+            "variant": "off",
+            "record_sha256": null,
+            "matches_current_binary": null,
+            "source": {
+              "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+              "dirty": true,
+              "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+            }
+          }
+        ],
+        "settled-weather.json": []
+      }
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-dry--off.webp",
+      "start": 0,
+      "end": 199160,
+      "kind": "binary",
+      "sha256": "cbdb686aa22a23512f0b846f7924a99c46edd87e086e6136bcb17332ba83ef0c",
+      "whole_source_sha256": "cbdb686aa22a23512f0b846f7924a99c46edd87e086e6136bcb17332ba83ef0c",
+      "whole_source_bytes": 199160,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "cbdb686aa22a23512f0b846f7924a99c46edd87e086e6136bcb17332ba83ef0c",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1920,
+        "height": 1080,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "optics scene baseline; static gallery off variant",
+      "provenance_records": {
+        "shots.json": [
+          {
+            "scene": "bahrain-day-dry",
+            "variant": "off",
+            "record_sha256": null,
+            "matches_current_binary": null,
+            "source": {
+              "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+              "dirty": true,
+              "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+            }
+          }
+        ],
+        "settled-weather.json": []
+      }
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-storm--off.webp",
+      "start": 0,
+      "end": 965368,
+      "kind": "binary",
+      "sha256": "497ec36eba865a2991eec55395ab93ff03a4e7b51d4ec18a2efdcaa77bebec37",
+      "whole_source_sha256": "497ec36eba865a2991eec55395ab93ff03a4e7b51d4ec18a2efdcaa77bebec37",
+      "whole_source_bytes": 965368,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "497ec36eba865a2991eec55395ab93ff03a4e7b51d4ec18a2efdcaa77bebec37",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1920,
+        "height": 1080,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "optics scene baseline; static gallery off variant",
+      "provenance_records": {
+        "shots.json": [
+          {
+            "scene": "bahrain-day-storm",
+            "variant": "off",
+            "record_sha256": "76d2f7c0d6cb92d82a5f1414193332fa6006b113547b585437181d6697cbe412",
+            "matches_current_binary": false,
+            "source": {
+              "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+              "dirty": true,
+              "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+            }
+          }
+        ],
+        "settled-weather.json": [
+          {
+            "scene": "bahrain-day-storm",
+            "variant": "off",
+            "record_sha256": "76d2f7c0d6cb92d82a5f1414193332fa6006b113547b585437181d6697cbe412",
+            "matches_current_binary": false,
+            "source": {
+              "sha": "76109603111b90451f8bc74f990d6496fcd0f2b5",
+              "dirty": true,
+              "fingerprint": "720069cd0ae75449d5e53b0bec2fdee5f97dcfe4c813856e8c7079d9f1f75928"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-day-wet--off.webp",
+      "start": 0,
+      "end": 1114482,
+      "kind": "binary",
+      "sha256": "4d61a51c6839dd98ac520168858b4bfc350c82a941c19418b3ff846670cf8f39",
+      "whole_source_sha256": "4d61a51c6839dd98ac520168858b4bfc350c82a941c19418b3ff846670cf8f39",
+      "whole_source_bytes": 1114482,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "4d61a51c6839dd98ac520168858b4bfc350c82a941c19418b3ff846670cf8f39",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1920,
+        "height": 1080,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "optics scene baseline; static gallery off variant",
+      "provenance_records": {
+        "shots.json": [
+          {
+            "scene": "bahrain-day-wet",
+            "variant": "off",
+            "record_sha256": "e0aad8f371bba6b19662d7218c685f52cab86e3962d118ed8a693b73e9710431",
+            "matches_current_binary": false,
+            "source": {
+              "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+              "dirty": true,
+              "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+            }
+          }
+        ],
+        "settled-weather.json": [
+          {
+            "scene": "bahrain-day-wet",
+            "variant": "off",
+            "record_sha256": "e0aad8f371bba6b19662d7218c685f52cab86e3962d118ed8a693b73e9710431",
+            "matches_current_binary": false,
+            "source": {
+              "sha": "76109603111b90451f8bc74f990d6496fcd0f2b5",
+              "dirty": true,
+              "fingerprint": "720069cd0ae75449d5e53b0bec2fdee5f97dcfe4c813856e8c7079d9f1f75928"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-dusk-overcast--off.webp",
+      "start": 0,
+      "end": 193310,
+      "kind": "binary",
+      "sha256": "741375b1c2de4aa6ceac3d67458ae515565644cd40a3e807484d942492a39e62",
+      "whole_source_sha256": "741375b1c2de4aa6ceac3d67458ae515565644cd40a3e807484d942492a39e62",
+      "whole_source_bytes": 193310,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "741375b1c2de4aa6ceac3d67458ae515565644cd40a3e807484d942492a39e62",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1920,
+        "height": 1080,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "optics scene baseline; static gallery off variant",
+      "provenance_records": {
+        "shots.json": [
+          {
+            "scene": "bahrain-dusk-overcast",
+            "variant": "off",
+            "record_sha256": null,
+            "matches_current_binary": null,
+            "source": {
+              "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+              "dirty": true,
+              "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+            }
+          }
+        ],
+        "settled-weather.json": []
+      }
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-dry--off.webp",
+      "start": 0,
+      "end": 217072,
+      "kind": "binary",
+      "sha256": "c2dab99dd29016408c9adfa5c1d45c0bdcc8e23bcb05f83bc6b0a8cb9515b645",
+      "whole_source_sha256": "c2dab99dd29016408c9adfa5c1d45c0bdcc8e23bcb05f83bc6b0a8cb9515b645",
+      "whole_source_bytes": 217072,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "c2dab99dd29016408c9adfa5c1d45c0bdcc8e23bcb05f83bc6b0a8cb9515b645",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1920,
+        "height": 1080,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "optics scene baseline; static gallery off variant",
+      "provenance_records": {
+        "shots.json": [
+          {
+            "scene": "bahrain-night-dry",
+            "variant": "off",
+            "record_sha256": null,
+            "matches_current_binary": null,
+            "source": {
+              "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+              "dirty": true,
+              "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+            }
+          }
+        ],
+        "settled-weather.json": []
+      }
+    },
+    {
+      "path": "examples/visor-lab/images/bahrain-night-rain--off.webp",
+      "start": 0,
+      "end": 1162158,
+      "kind": "binary",
+      "sha256": "e0251427e868b94db192676b296fcd25287daf6a25b84180cc5674d7ff7317a5",
+      "whole_source_sha256": "e0251427e868b94db192676b296fcd25287daf6a25b84180cc5674d7ff7317a5",
+      "whole_source_bytes": 1162158,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "e0251427e868b94db192676b296fcd25287daf6a25b84180cc5674d7ff7317a5",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1920,
+        "height": 1080,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "optics scene baseline; static gallery off variant",
+      "provenance_records": {
+        "shots.json": [
+          {
+            "scene": "bahrain-night-rain",
+            "variant": "off",
+            "record_sha256": "18d7c3f7d2166d79f2c70b46a7daecb328aaf741023cb7baaf033463a4c704e9",
+            "matches_current_binary": false,
+            "source": {
+              "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+              "dirty": true,
+              "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+            }
+          }
+        ],
+        "settled-weather.json": [
+          {
+            "scene": "bahrain-night-rain",
+            "variant": "off",
+            "record_sha256": "18d7c3f7d2166d79f2c70b46a7daecb328aaf741023cb7baaf033463a4c704e9",
+            "matches_current_binary": false,
+            "source": {
+              "sha": "76109603111b90451f8bc74f990d6496fcd0f2b5",
+              "dirty": true,
+              "fingerprint": "720069cd0ae75449d5e53b0bec2fdee5f97dcfe4c813856e8c7079d9f1f75928"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "path": "examples/visor-lab/images/monza-night-rain--off.webp",
+      "start": 0,
+      "end": 1211372,
+      "kind": "binary",
+      "sha256": "50347cbe29857c00902f614ba57be054bc4b3d5c6bc35c4e5bf5df716c90d034",
+      "whole_source_sha256": "50347cbe29857c00902f614ba57be054bc4b3d5c6bc35c4e5bf5df716c90d034",
+      "whole_source_bytes": 1211372,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "50347cbe29857c00902f614ba57be054bc4b3d5c6bc35c4e5bf5df716c90d034",
+      "range_convention": "half-open bytes",
+      "method": "whole-file hash plus Pillow image header metadata; no textual line read",
+      "image": {
+        "format": "WEBP",
+        "width": 1920,
+        "height": 1080,
+        "mode": "RGB",
+        "frames": 1,
+        "metadata": {
+          "loop": 1,
+          "background": [
+            255,
+            255,
+            255,
+            255
+          ]
+        }
+      },
+      "license": "No image-specific license attribution found in inspected lab sources or embedded Pillow metadata; no license conclusion inferred.",
+      "usage": "optics scene baseline; static gallery off variant",
+      "provenance_records": {
+        "shots.json": [
+          {
+            "scene": "monza-night-rain",
+            "variant": "off",
+            "record_sha256": "f74185b889dcc7335408c39060a4e6556b5f84dd9513994732ef3826f3e596de",
+            "matches_current_binary": false,
+            "source": {
+              "sha": "185ab0bac18b4b18943a97f10d19956f0ee8e231",
+              "dirty": true,
+              "fingerprint": "4ffe615ce5466e7b556a079cdca5bcf0cdd6d98fa83c8281ab10c22517ef1706"
+            }
+          }
+        ],
+        "settled-weather.json": [
+          {
+            "scene": "monza-night-rain",
+            "variant": "off",
+            "record_sha256": "f74185b889dcc7335408c39060a4e6556b5f84dd9513994732ef3826f3e596de",
+            "matches_current_binary": false,
+            "source": {
+              "sha": "76109603111b90451f8bc74f990d6496fcd0f2b5",
+              "dirty": true,
+              "fingerprint": "720069cd0ae75449d5e53b0bec2fdee5f97dcfe4c813856e8c7079d9f1f75928"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "path": "examples/visor-lab/index.html",
+      "start": 0,
+      "end": 5367,
+      "kind": "text",
+      "sha256": "4c7172734f5519b890df8d72506d7e73d7238c0a403af6a48d1f959fa6c14986",
+      "whole_source_sha256": "4c7172734f5519b890df8d72506d7e73d7238c0a403af6a48d1f959fa6c14986",
+      "whole_source_bytes": 5367,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "4c7172734f5519b890df8d72506d7e73d7238c0a403af6a48d1f959fa6c14986",
+      "range_convention": "half-open bytes",
+      "method": "individual bounded UTF-8 byte-slice calls",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5367,
+          "bytes": 5367,
+          "sha256": "4c7172734f5519b890df8d72506d7e73d7238c0a403af6a48d1f959fa6c14986",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "entire file"
+    },
+    {
+      "path": "examples/visor-lab/optics.html",
+      "start": 0,
+      "end": 11425,
+      "kind": "text",
+      "sha256": "d31ffc88af2e844980c99ef5a3a934a83043cc3078e42627a62a63788440c1c5",
+      "whole_source_sha256": "d31ffc88af2e844980c99ef5a3a934a83043cc3078e42627a62a63788440c1c5",
+      "whole_source_bytes": 11425,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "d31ffc88af2e844980c99ef5a3a934a83043cc3078e42627a62a63788440c1c5",
+      "range_convention": "half-open bytes",
+      "method": "individual bounded UTF-8 byte-slice calls",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "2fc96300aef663b55b992a4eec05eeea5d6747ea127515d6cd410d289ffa246e",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 11425,
+          "bytes": 2925,
+          "sha256": "743d6ac489ea8a5eaf75e954f1cc4ad1635d3c2b90e9d5f6c80b9c8e6944fcb7",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "entire file"
+    },
+    {
+      "path": "examples/visor-lab/settled-weather.json",
+      "start": 0,
+      "end": 114007,
+      "kind": "text",
+      "sha256": "974cde498af28023bac3a1a04ed62dc5fd2d8f4c8761abdf93627e2add058951",
+      "whole_source_sha256": "974cde498af28023bac3a1a04ed62dc5fd2d8f4c8761abdf93627e2add058951",
+      "whole_source_bytes": 120909,
+      "plan_sha256_scope": "whole source file",
+      "whole_source_matches_plan": true,
+      "assigned_range_sha256": "73843add50d35b9ea8b2b81a3f820026c4875a690300bfbb75c4f89fe8a38018",
+      "range_convention": "half-open bytes",
+      "method": "individual bounded UTF-8 byte-slice calls",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "3eb67f9c6a6a1dc79bdc34c0722f2675e039318b79aa898fd9d13a78311d95ec",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "e7991ea0dcd00d3340969637f36f1838b8137ffeed0fde677fc6f2c8c40af7dd",
+          "returned_untruncated": true
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "c1009ceaae60c4604a3ba94cd23bb3231f8b60761774cff13177bc0116c749ad",
+          "returned_untruncated": true
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "bytes": 8500,
+          "sha256": "66f18ab7426bb3bc8afae70fd5743ca3178e5254163f28a99c3fcf21a5e51f9f",
+          "returned_untruncated": true
+        },
+        {
+          "start": 34000,
+          "end": 42500,
+          "bytes": 8500,
+          "sha256": "a1598f0b39512dae79d6e65720a2c5b79d28c7e75e1ec554010a314529c25ab8",
+          "returned_untruncated": true
+        },
+        {
+          "start": 42500,
+          "end": 51000,
+          "bytes": 8500,
+          "sha256": "09247fbc6acfb8706ecec96d8c52d1e18a82272cdbbfd5036c342f525013725b",
+          "returned_untruncated": true
+        },
+        {
+          "start": 51000,
+          "end": 59500,
+          "bytes": 8500,
+          "sha256": "1c790df638c3d5c56695812ca40a4f42520a224d681e4d9ed4ae69e8a8d52ff4",
+          "returned_untruncated": true
+        },
+        {
+          "start": 59500,
+          "end": 68000,
+          "bytes": 8500,
+          "sha256": "8fc23522c6a9e78d4afe5e4e37920a334efcad9381ddc76028c390ee8e5cd467",
+          "returned_untruncated": true
+        },
+        {
+          "start": 68000,
+          "end": 76500,
+          "bytes": 8500,
+          "sha256": "f0ae5c22d665d55f968e5611f00141d88f9e75014affadba640c90ee7fcd0d65",
+          "returned_untruncated": true
+        },
+        {
+          "start": 76500,
+          "end": 85000,
+          "bytes": 8500,
+          "sha256": "09065ec4d5b4b8a30c7d9d9b54db14d958a60e9526e22470bcfeb026272db9d3",
+          "returned_untruncated": true
+        },
+        {
+          "start": 85000,
+          "end": 93500,
+          "bytes": 8500,
+          "sha256": "7997508eec3cd96382cf98093a3e366c8f3a627454ecfbdf6c41cad83b111ba4",
+          "returned_untruncated": true
+        },
+        {
+          "start": 93500,
+          "end": 102000,
+          "bytes": 8500,
+          "sha256": "b99aa2f5b1eb83f4fed21012ddc32a25688743f3e0b0fa73ca2b34af55145e5d",
+          "returned_untruncated": true
+        },
+        {
+          "start": 102000,
+          "end": 110500,
+          "bytes": 8500,
+          "sha256": "8b2207621c44b5d5c81ce743d4fb563009e8ec5a7eaf7ed8f02daf12784a53d0",
+          "returned_untruncated": true
+        },
+        {
+          "start": 110500,
+          "end": 114007,
+          "bytes": 3507,
+          "sha256": "62eef8e8ce54feda207270b7b22a10bdec2045854de933256655bf08d7ad7db0",
+          "returned_untruncated": true
+        }
+      ],
+      "coverage": "assigned portion only",
+      "full_json_parse": {
+        "method": "Python json.loads whole source, supplemental structure only; textual coverage remains assigned range",
+        "keys": [
+          "captureVersion",
+          "source",
+          "viewport",
+          "reducedMotion",
+          "requestedBackend",
+          "quality",
+          "scale",
+          "scenes",
+          "variants",
+          "captures",
+          "completedScenes",
+          "errors",
+          "checks",
+          "verdict"
+        ]
+      }
+    }
+  ],
+  "supplemental_reads": [
+    {
+      "path": "AGENTS.md",
+      "whole_source_bytes": 22722,
+      "whole_source_sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+      "method": "full source returned as supplemental text; assigned-range completion excludes supplemental reads"
+    },
+    {
+      "path": "examples/visor-lab/README.md",
+      "whole_source_bytes": 5444,
+      "whole_source_sha256": "694611edc3c4c3474cbb5ec474ba2aa48ca7bf71a4dda04c047e5c626bac074c",
+      "method": "full source returned as supplemental text; assigned-range completion excludes supplemental reads"
+    },
+    {
+      "path": "examples/visor-lab/app.js",
+      "whole_source_bytes": 6302,
+      "whole_source_sha256": "a59aa2f78d0ed0be0659aa98aceb44bd6d2b8f73610d7f3994ddaf6fedf4b427",
+      "method": "full source returned as supplemental text; assigned-range completion excludes supplemental reads"
+    },
+    {
+      "path": "tools/shot/visor-lab-export.mjs",
+      "whole_source_bytes": 2154,
+      "whole_source_sha256": "5225794dfb3a818e82e8f0def0df6eb8ebd87026bb583dff11319a8d033a806b",
+      "method": "full source returned as supplemental text; assigned-range completion excludes supplemental reads"
+    }
+  ],
+  "reference_search": {
+    "method": "rg text demo references; no runtime symbol lookup claimed",
+    "roots": [
+      "examples/visor-lab",
+      "tools/shot"
+    ],
+    "terms": [
+      "drive-by",
+      "night-strip",
+      "frames.json",
+      "settled-weather",
+      "comparisons.json",
+      "license",
+      "licence"
+    ]
+  },
+  "semantic_map": {
+    "index.html": "app.js static captured wipe gallery DOM, style.css, shots.json PASS gate, optics/comparisons navigation",
+    "optics.html": "Canvas demo adapter; scene/configure/advance/animate browser globals; CockpitOpts and Droplets from exported game runtime; generation guard, decoded-frame atomic swap, aspect-preserving crop, CSS wipe, motion preference and controls",
+    "comparisons.json": {
+      "start_boundary": "mid identity.info tail of preceding phone optics pair",
+      "end_boundary": "document end",
+      "full_parse_pairs": 34,
+      "tail": "Suzuka dawn/COTA dawn phone matched pairs, four imported old/new phone pairs with null provenance"
+    },
+    "settled-weather.json": {
+      "start_boundary": "document start",
+      "end_boundary": "inside monza-night-rain rose-light identity.info; remainder assigned group03",
+      "full_parse_summary_only": {
+        "captureVersion": 5,
+        "source": {
+          "sha": "76109603111b90451f8bc74f990d6496fcd0f2b5",
+          "dirty": true,
+          "fingerprint": "720069cd0ae75449d5e53b0bec2fdee5f97dcfe4c813856e8c7079d9f1f75928"
+        },
+        "scenes": 4,
+        "variants": 14,
+        "captures": 56,
+        "verdict": "PASS"
+      },
+      "schema": "scene/variant join; capture file/thumb/dimensions/state/identity/sha256; identity camera roster/backend/frame/post/tuner/historical perf"
+    },
+    "drive-by": "three eight-frame telemetry JSONs: scene/settings and ordinal file/speedKph/head/s/sun/rays/glints/paintMs",
+    "image_digest_limit": "Capture-record SHA256 differs from current wet WebP bytes; README describes WebP exports from PNG originals. Recorded hash target is not asserted as the committed WebP; current binary matches batch plan."
+  },
+  "missing_or_historical_paths": [
+    {
+      "path": "examples/visor-lab/visor-options.js",
+      "exists": false,
+      "reason": "export-generated runtime alias"
+    },
+    {
+      "path": "examples/visor-lab/visor-droplets.js",
+      "exists": false,
+      "reason": "export-generated runtime alias"
+    },
+    {
+      "path": "examples/visor-lab/visor-optics.css",
+      "exists": false,
+      "reason": "export-generated runtime alias"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-f00.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-f01.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-f02.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-f03.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-f04.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-f05.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-f06.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/bahrain-night-f07.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-f00.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-f01.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-f02.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-f03.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-f04.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-f05.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-f06.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/monaco-night-f07.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-f00.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-f01.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-f02.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-f03.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-f04.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-f05.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-f06.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    },
+    {
+      "path": "examples/visor-lab/drive-by/spa-dusk-f07.png",
+      "exists": false,
+      "reason": "historical numbered frame named in telemetry"
+    }
+  ],
+  "limits": [
+    "No browser/network/runtime/tests/source edits/staging/commits.",
+    "Whole JSON parse is supplemental structural analysis; split-document text read coverage is only assigned ranges.",
+    "Binary metadata only; no visual image review.",
+    "Historical capture telemetry is not current performance evidence."
+  ]
+}

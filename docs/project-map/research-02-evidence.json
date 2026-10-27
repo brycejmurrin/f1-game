@@ -1,0 +1,606 @@
+{
+  "batch": "02",
+  "date": "2026-10-27",
+  "root": "/workspace/f1-game",
+  "instructions_read": [
+    "AGENTS.md"
+  ],
+  "scope": {
+    "assigned_bytes": 160000,
+    "read_bytes": 160000,
+    "binary_files": 0,
+    "max_chunk_bytes": 8500,
+    "range_convention": "half-open bytes"
+  },
+  "ledger": [
+    {
+      "path": "docs/research/APEX-TOOLS-MCP.md",
+      "start": 13812,
+      "end": 21054,
+      "kind": "text",
+      "sha256": "01696575e391ce1d77be662e1db23c172afe9a92f599240714cc7c29815240ef",
+      "whole_file_bytes": 21054,
+      "whole_file_sha256": "01696575e391ce1d77be662e1db23c172afe9a92f599240714cc7c29815240ef",
+      "plan_hash_scope": "whole original file, not assigned range",
+      "plan_hash_matches": true,
+      "assigned_range_sha256": "dd6db74f2ba0cda9c65d0e8511beb1cd5ac298c31d412ac754af7358832318c7",
+      "read_chunks": [
+        {
+          "start": 13812,
+          "end": 21054,
+          "bytes": 7242,
+          "sha256": "dd6db74f2ba0cda9c65d0e8511beb1cd5ac298c31d412ac754af7358832318c7",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        }
+      ],
+      "coverage": "complete assigned half-open span; outside span not claimed"
+    },
+    {
+      "path": "docs/research/ARCHITECTURE-REDESIGN-2026-08.md",
+      "start": 0,
+      "end": 46863,
+      "kind": "text",
+      "sha256": "99b64e62ca8a29aa06388420f5521d3a08335e568f69f7807230a0e7357dad5e",
+      "whole_file_bytes": 46863,
+      "whole_file_sha256": "99b64e62ca8a29aa06388420f5521d3a08335e568f69f7807230a0e7357dad5e",
+      "plan_hash_scope": "whole original file, not assigned range",
+      "plan_hash_matches": true,
+      "assigned_range_sha256": "99b64e62ca8a29aa06388420f5521d3a08335e568f69f7807230a0e7357dad5e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "660092777fdc2dbd5f5f143e652276a842250628b0078850bbbc2333a2cbf09f",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "7c3ba227ad25c9410ba90a140ad6ee3b7240f147f0303da9d768c1e677ac1293",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "3da6970f05c807f4660f844bc054ab6ec0f3383dd29c16672fb2202584324a16",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "bytes": 8500,
+          "sha256": "d4e63599054c12bb3f673629135545fbdb5b4c233bd90f0b67d232cd5616b942",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 34000,
+          "end": 42500,
+          "bytes": 8500,
+          "sha256": "124ce1c72cb4403ecb232748285abd5816f41b4e2339fa06374219f96650e53a",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 42500,
+          "end": 46863,
+          "bytes": 4363,
+          "sha256": "6d11cd7f2cded2b07947fc257db925ae56af147e7ee77e28ee267524ba86e253",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        }
+      ],
+      "coverage": "complete assigned half-open span; outside span not claimed"
+    },
+    {
+      "path": "docs/research/ASSET-API-RESEARCH.md",
+      "start": 0,
+      "end": 30268,
+      "kind": "text",
+      "sha256": "0c9a407b34501122c4b27821069fbb398a92c53e26c393314212f6f961595d8d",
+      "whole_file_bytes": 30268,
+      "whole_file_sha256": "0c9a407b34501122c4b27821069fbb398a92c53e26c393314212f6f961595d8d",
+      "plan_hash_scope": "whole original file, not assigned range",
+      "plan_hash_matches": true,
+      "assigned_range_sha256": "0c9a407b34501122c4b27821069fbb398a92c53e26c393314212f6f961595d8d",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "433bc6ad9ffd15a3168762e7f9fc5804b504d9acaa5293d4ca13475aac5ad315",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "494dac2dbfe81ec076c22d84ad8644cd93614a25107321f060707944d0dc9b04",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "9a8de9c4ec145f6d6f8494f9d6015bd81a0d6afbf1387fd6a0d28d2d7cfe0fdf",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 25500,
+          "end": 30268,
+          "bytes": 4768,
+          "sha256": "4e03f14d735f65ebaf5a4b60137098b637c94f2bb96f430e4bf472627ccff772",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        }
+      ],
+      "coverage": "complete assigned half-open span; outside span not claimed"
+    },
+    {
+      "path": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "start": 0,
+      "end": 10340,
+      "kind": "text",
+      "sha256": "8df8a2e4f9cc61cd56b77c93052efd5114875a867dbe3bc84109f81ce7f37a4a",
+      "whole_file_bytes": 10340,
+      "whole_file_sha256": "8df8a2e4f9cc61cd56b77c93052efd5114875a867dbe3bc84109f81ce7f37a4a",
+      "plan_hash_scope": "whole original file, not assigned range",
+      "plan_hash_matches": true,
+      "assigned_range_sha256": "8df8a2e4f9cc61cd56b77c93052efd5114875a867dbe3bc84109f81ce7f37a4a",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "f594d9b4dce86518e6e95fee752250a3bf78e4f57253355ca1ec5cb88afd8f5f",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 10340,
+          "bytes": 1840,
+          "sha256": "514a1ccecc654b6b8f100a180cbe6166eb55b62377376db894f35f59b967465f",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        }
+      ],
+      "coverage": "complete assigned half-open span; outside span not claimed"
+    },
+    {
+      "path": "docs/research/CONTROLS-AUDIT-2026-09.md",
+      "start": 0,
+      "end": 46429,
+      "kind": "text",
+      "sha256": "9a03b843689f948d50c2ce28a3f804c8a0f7abc2362208d4069cf631ec858d62",
+      "whole_file_bytes": 46429,
+      "whole_file_sha256": "9a03b843689f948d50c2ce28a3f804c8a0f7abc2362208d4069cf631ec858d62",
+      "plan_hash_scope": "whole original file, not assigned range",
+      "plan_hash_matches": true,
+      "assigned_range_sha256": "9a03b843689f948d50c2ce28a3f804c8a0f7abc2362208d4069cf631ec858d62",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "7e0bba821163b1ec55b90a2a7d17d7377175ac609deb9eb68bceba0e3a649b44",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "bde746b16d57ef8383b809c322c87fecb5d644e773068fcb39b513ba46617923",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "d34bed7789598adfc5c844fd880bcf613ca234914080f1669126439ce8fb0e75",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "bytes": 8500,
+          "sha256": "8913d9907fb1b6a092bee2a38b1d9fa16d1fc20dcc93801bbf666a9290478991",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 34000,
+          "end": 42500,
+          "bytes": 8500,
+          "sha256": "76ca515d1d34bd8332f951213f2345cba2e3133f19159a662d137f3938230979",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 42500,
+          "end": 46429,
+          "bytes": 3929,
+          "sha256": "bab42724da0f1ac9738fb74b02d569fdc91dbecbf1ce68ba4cb677810f11f45c",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        }
+      ],
+      "coverage": "complete assigned half-open span; outside span not claimed"
+    },
+    {
+      "path": "docs/research/CONTROLS-RESEARCH-2026-09-14.md",
+      "start": 0,
+      "end": 15588,
+      "kind": "text",
+      "sha256": "ae6a9f631a1ffe291372b5e67f1a8f7ed1c0bf030d1fca4c20bd8c9213abfee5",
+      "whole_file_bytes": 15588,
+      "whole_file_sha256": "ae6a9f631a1ffe291372b5e67f1a8f7ed1c0bf030d1fca4c20bd8c9213abfee5",
+      "plan_hash_scope": "whole original file, not assigned range",
+      "plan_hash_matches": true,
+      "assigned_range_sha256": "ae6a9f631a1ffe291372b5e67f1a8f7ed1c0bf030d1fca4c20bd8c9213abfee5",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "d5aa996164fe53d27d350a66dbca0abe5e81c17a0c7aedb0b1b1cc77a6c01eaa",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 15588,
+          "bytes": 7088,
+          "sha256": "fae09ec3ffdc69edfd0688035af160365d73d0837990fd57c3cb4688025eb067",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        }
+      ],
+      "coverage": "complete assigned half-open span; outside span not claimed"
+    },
+    {
+      "path": "docs/research/DRIVING-CONTROLS-RESEARCH.md",
+      "start": 0,
+      "end": 3270,
+      "kind": "text",
+      "sha256": "ffa1199148fe520b85b89d59a11bc6601f59f71094e153f01954eaad2730e784",
+      "whole_file_bytes": 35219,
+      "whole_file_sha256": "ffa1199148fe520b85b89d59a11bc6601f59f71094e153f01954eaad2730e784",
+      "plan_hash_scope": "whole original file, not assigned range",
+      "plan_hash_matches": true,
+      "assigned_range_sha256": "bc2392a4ae416cd1db7a1f3f3bf083824bc8c7d6d222b8bdfc965a911f508f01",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3270,
+          "bytes": 3270,
+          "sha256": "bc2392a4ae416cd1db7a1f3f3bf083824bc8c7d6d222b8bdfc965a911f508f01",
+          "method": "exec_command python3 binary slice decoded UTF-8 and individually returned in full",
+          "untruncated": true
+        }
+      ],
+      "coverage": "complete assigned half-open span; outside span not claimed"
+    }
+  ],
+  "semantic_map": [
+    {
+      "file": "APEX-TOOLS-MCP.md",
+      "question": "Safe task-oriented wrappers over existing local CLIs",
+      "method": [
+        "dated tool retests",
+        "timings",
+        "process cleanup failure analysis",
+        "mock refusal assertions"
+      ],
+      "results": [
+        "persistent sessions and thumbnails",
+        "process-tree cleanup before unlock",
+        "one-sided occupancy protection"
+      ],
+      "proposals_or_negatives": [
+        "no duplicate car-shot tool",
+        "do not wrap orchestration/writers/network workloads"
+      ],
+      "current_consumers": [
+        "tools/mcp/apex-tools-mcp.mjs:12",
+        "tools/mcp/apex-tools-mcp.mjs:35",
+        "tools/mcp/apex-tools-mcp.mjs:983",
+        "tools/mcp/apex-tools-mcp.mjs:3126",
+        "docs/AGENT-SURFACE.md:195",
+        "tests/unit/apex-tools-mcp.test.mjs:1434"
+      ],
+      "limits": [
+        "tail only",
+        "dated counts/timings",
+        "external browser paths may evade lock"
+      ]
+    },
+    {
+      "file": "ARCHITECTURE-REDESIGN-2026-08.md",
+      "question": "Redesign safely under unsynchronized agent change risk",
+      "method": [
+        "three independent designs",
+        "two judge scorecards",
+        "synthesis"
+      ],
+      "results": [
+        "Bedrock with interface and dependency-scanner grafts adopted",
+        "record says Phase 0 and first half Phase 1 landed"
+      ],
+      "proposals_or_negatives": [
+        "generated manifest",
+        "renderer port/install",
+        "sealed domain state",
+        "ESM escalation path"
+      ],
+      "current_consumers": [
+        "tools/check/scan-globals.mjs",
+        "tools/check/check-gctx.mjs",
+        "types/game-ctx.d.ts",
+        "tests/unit/global-registry.test.mjs:3",
+        "tests/unit/game-ctx-surface.test.mjs:14",
+        "tools/manifest.cjs:644",
+        "tools/gen/gen-shell.mjs"
+      ],
+      "limits": [
+        "panel scores and costs are judgments",
+        "shadow contract checking does not check all module expression types",
+        "no Gfx.install member found by LSP",
+        "not every phase status investigated"
+      ],
+      "raw_history_archive_paths": [
+        "docs/archive/research/raw/2026-08-redesign-panel.json"
+      ],
+      "missing_proposed_paths": [
+        "tools/gen-manifest.mjs",
+        "tools/gen/gen-manifest.mjs"
+      ]
+    },
+    {
+      "file": "ASSET-API-RESEARCH.md",
+      "question": "Author-time real assets without runtime service dependency",
+      "method": [
+        "API/spec survey",
+        "recorded browser probes",
+        "layout inspection",
+        "VRAM arithmetic",
+        "synthetic bake tests",
+        "recorded A/B"
+      ],
+      "results": [
+        "MAT-indexed triplanar arrays",
+        "PNG filmstrip pack and fallback",
+        "bake/licence/hash/budget tools",
+        "environment and baked-model adoption"
+      ],
+      "proposals_or_negatives": [
+        "KTX2 declined",
+        "motion checking before stronger asphalt normals",
+        "per-profile appearance tuning"
+      ],
+      "current_consumers": [
+        "js/render/shared/assets.js:978",
+        "js/lighting/atmosphere.js:423",
+        "js/track/scenery/build-props.js:1831",
+        "js/track/build-client.js:254",
+        "js/track/build-worker.js:68",
+        "js/circuits/scenery/spa.js:206",
+        "js/circuits/scenery/silverstone.js:588",
+        "js/circuits/scenery/vegas.js:411",
+        ".claude/skills/asset-pack/SKILL.md:14",
+        ".claude/skills/asset-pack/references/workflow.md:76"
+      ],
+      "limits": [
+        "rollout summaries conflict with later adoption text",
+        "no current quality/VRAM/endpoint verification",
+        "current scenery disproves no-circuit-consumer statement"
+      ]
+    },
+    {
+      "file": "CHROME-DEVTOOLS-MCP.md",
+      "question": "Reliable interactive measurement recipes",
+      "method": [
+        "measured setup traps",
+        "DOM vs screenshot comparisons",
+        "traces",
+        "heap comparisons",
+        "Lighthouse snapshots"
+      ],
+      "results": [
+        "DOM geometry outranks suspect shell MCP captures",
+        "Lighthouse contaminates heap signals",
+        "persistent daemon preserves state"
+      ],
+      "proposals_or_negatives": [
+        "track heap growth is a lead only",
+        "interactive twin not CI gate"
+      ],
+      "current_consumers": [
+        "tools/mcp/cdmcp-cli.py:46",
+        ".claude/skills/mcp-probe/SKILL.md:70",
+        ".claude/skills/mcp-probe/references/chrome.md:83"
+      ],
+      "limits": [
+        "build-specific local metrics",
+        "old wait loop and temporary-path examples conflict with current AGENTS guidance",
+        "no browser launched"
+      ]
+    },
+    {
+      "file": "CONTROLS-AUDIT-2026-09.md",
+      "question": "Whole-device/mode input audit against external practice",
+      "method": [
+        "four independent web passes with written briefs",
+        "subsequent source checks",
+        "recorded base-vs-change failure comparisons"
+      ],
+      "results": [
+        "brief corrections for haptics/gamma/rebinding/damping",
+        "recorded tier implementation",
+        "camera default collision and RELAX realignment",
+        "test harness failure analysis"
+      ],
+      "proposals_or_negatives": [
+        "no TC/ABS without slip model",
+        "no virtual wheel",
+        "no predicted steering events",
+        "no permanent mobile look-back dock button"
+      ],
+      "current_consumers": [
+        "js/input/input.js:1813",
+        "js/input/bindings.js:67",
+        "js/input/steer-tuning.js:633",
+        "js/input/haptics.js:130",
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/digital-steer.test.mjs",
+        "js/ui/onboard.js"
+      ],
+      "limits": [
+        "earlier findings superseded by explicit corrections",
+        "historical green not rerun",
+        "community defaults and inaccessible studies qualified",
+        "no own playtest data"
+      ]
+    },
+    {
+      "file": "CONTROLS-RESEARCH-2026-09-14.md",
+      "question": "Mobile usability/accessibility follow-up without repeating rejected work",
+      "method": [
+        "four independent web passes",
+        "source checks",
+        "explicit correction of mistaken initializer reading"
+      ],
+      "results": [
+        "many recommendations already existed",
+        "later latch/opacity/reduced-motion adoption noted"
+      ],
+      "proposals_or_negatives": [
+        "reposition controls",
+        "per-scheme profiles",
+        "pointer migration",
+        "portrait support",
+        "assist disengage",
+        "comfort settings"
+      ],
+      "current_consumers": [
+        "js/input/steer-tuning.js:682",
+        "js/input/input.js:1221",
+        "js/game.js:946",
+        "js/game.js:9351",
+        "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/phone-input-improvements.test.mjs"
+      ],
+      "limits": [
+        "then-open status does not establish present absence",
+        "haptics performance benefit not shown",
+        "competitor scan absence claim limited by survey"
+      ]
+    },
+    {
+      "file": "DRIVING-CONTROLS-RESEARCH.md",
+      "question": "Sliders/assists rationale and deliberate negative decisions",
+      "method": [
+        "assigned introductory summary of shipped-game guides, EA accessibility docs and forums"
+      ],
+      "results": [
+        "geometric pace",
+        "lag-based smoothing",
+        "lock/rate steer separation",
+        "informational brake cue"
+      ],
+      "proposals_or_negatives": [
+        "slip prerequisite for TC/ABS",
+        "LIGHT/FULL brake takeover then unbuilt"
+      ],
+      "current_consumers": [
+        ".claude/skills/input-controls/SKILL.md:118",
+        "tests/unit/audio-tune.test.mjs:1552"
+      ],
+      "limits": [
+        "only bytes 0..3270 read; summary cuts mid-table",
+        "later argument and sources assigned to batch 03"
+      ]
+    }
+  ],
+  "corroboration": {
+    "methods": [
+      "static rg reference searches",
+      "static path inventory",
+      "apex-lsp definition/references"
+    ],
+    "lsp": [
+      {
+        "query": "Assets.env definition",
+        "result": "js/render/shared/assets.js:978; exported at :1007"
+      },
+      {
+        "query": "Assets.env references",
+        "result": "js/lighting/atmosphere.js:423,425; definition/export"
+      },
+      {
+        "query": "Input.steer definition",
+        "result": "js/input/input.js:1813; export :2540"
+      },
+      {
+        "query": "Input.rumble definition",
+        "result": "js/input/haptics.js:130; alias input.js:1767 and export :2536"
+      },
+      {
+        "query": "Gfx.install definition",
+        "result": "INVALID_ARGUMENT: Gfx has no member install checker can see; no implementation claim"
+      },
+      {
+        "query": "Assets.modelSync references",
+        "result": "assets.js:886,1007; build-client.js:254,258; build-worker.js:68; scenery/build-props.js:1831,1832"
+      }
+    ],
+    "runtime_executed": false,
+    "tests_executed": false,
+    "network_used": false,
+    "browser_used": false,
+    "research_commands_executed": false
+  },
+  "cleanup": [
+    "Dated tool/catalog counts should route to current implementation",
+    "Architecture adoption status needs reconciliation",
+    "Asset rollout rows contradict later adoption/current consumers",
+    "Chrome historical wait/path guidance superseded by current AGENTS",
+    "Controls correction chains should supersede initial findings explicitly"
+  ],
+  "limits": [
+    "Current references checked selectively; no claim of exhaustive runtime verification",
+    "External citations were read as document text and not fetched",
+    "No binary visual claims",
+    "No source edits, staging, or commits"
+  ],
+  "path_checks": [
+    {
+      "path": "tools/gen-manifest.mjs",
+      "exists": false,
+      "method": "Path.exists static filesystem metadata"
+    },
+    {
+      "path": "tools/gen/gen-manifest.mjs",
+      "exists": false,
+      "method": "Path.exists static filesystem metadata"
+    },
+    {
+      "path": "docs/archive/research/raw/2026-08-redesign-panel.json",
+      "exists": true,
+      "method": "Path.exists static filesystem metadata"
+    }
+  ]
+}

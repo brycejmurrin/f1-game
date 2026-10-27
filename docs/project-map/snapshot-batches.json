@@ -1606,7 +1606,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete raw differing spans; equal-block inheritance reconciled separately"
     },
     {
       "id": "02",
@@ -6949,7 +6949,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete raw differing spans; equal-block inheritance reconciled separately"
     },
     {
       "id": "03",
@@ -9716,7 +9716,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete raw differing spans; equal-block inheritance reconciled separately"
     },
     {
       "id": "04",
@@ -10251,7 +10251,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete raw differing spans; equal-block inheritance reconciled separately"
     },
     {
       "id": "05",
@@ -11378,7 +11378,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete raw differing spans; equal-block inheritance reconciled separately"
     },
     {
       "id": "06",
@@ -11697,7 +11697,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete raw differing spans; equal-block inheritance reconciled separately"
     },
     {
       "id": "07",
@@ -13080,7 +13080,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete raw differing spans; equal-block inheritance reconciled separately"
     },
     {
       "id": "08",
@@ -13484,10 +13484,82 @@
           "end": 45081,
           "kind": "text",
           "sha256": "81c6b3d1f2d3f3f130b7848f5a8f1be1bf1ebbe58b1bc44276cd779b98fdf0a3"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 87,
+          "end": 927,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 58017,
+          "end": 58097,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 154582,
+          "end": 154663,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 156135,
+          "end": 156214,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 247541,
+          "end": 247609,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 308457,
+          "end": 308544,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 312094,
+          "end": 312195,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 313035,
+          "end": 313165,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
+        },
+        {
+          "path": "artifacts/logs/environment-repair-index.html",
+          "canonical": "index.html",
+          "start": 314633,
+          "end": 314743,
+          "kind": "text",
+          "sha256": "20ca30ef5ee88985b45a0accf2dc3ea2b76f19d384ec5f356ff198fceb7a48d0"
         }
       ],
-      "bytes": 19991,
-      "status": "unassigned"
+      "bytes": 21567,
+      "status": "complete raw differing spans; equal-block inheritance reconciled separately"
     }
   ]
 }

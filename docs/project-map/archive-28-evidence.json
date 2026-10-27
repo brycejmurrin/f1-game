@@ -1,0 +1,268 @@
+{
+  "group": "28",
+  "assigned_bytes": 160000,
+  "scope": "Historical records only; no archived instruction executed; no tests/browser/network/runtime changes",
+  "parts": [
+    {
+      "path": "docs/archive/research/raw/2026-09-code-survey.json",
+      "start": 11913,
+      "end": 138712,
+      "kind": "text",
+      "sha256": "8186ca8f353371b95e2b51c815f51ed607d6e0dd2202c14e6ed30d1169943067",
+      "source_id": "1",
+      "whole_file_bytes": 138712,
+      "whole_file_sha256": "8186ca8f353371b95e2b51c815f51ed607d6e0dd2202c14e6ed30d1169943067",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "93ffb63463e2185b84782cfe13e6663759cda5259992c80cfb168433436d7d33",
+      "read_chunks": [
+        {
+          "start": 11913,
+          "end": 19913,
+          "bytes": 8000,
+          "sha256": "fac13533c50b05925a467be99f4fdbe11ecfa96a0223d724ec500b8d15ec668e",
+          "returned_untruncated": true
+        },
+        {
+          "start": 19913,
+          "end": 27913,
+          "bytes": 8000,
+          "sha256": "9b553e450207f2fe42e5120641913249c5057a8510123540474db156f702c799",
+          "returned_untruncated": true
+        },
+        {
+          "start": 27913,
+          "end": 35913,
+          "bytes": 8000,
+          "sha256": "0e9a083cf659864588c23a61b43512cee64731ad54f06af0949672ab5cef19fe",
+          "returned_untruncated": true
+        },
+        {
+          "start": 35913,
+          "end": 43913,
+          "bytes": 8000,
+          "sha256": "d7fd30d324903d26924c220d39ee062f3990ce37bb7211decb5d8507845a4ce4",
+          "returned_untruncated": true
+        },
+        {
+          "start": 43913,
+          "end": 51913,
+          "bytes": 8000,
+          "sha256": "20d068dfee6fe7ed488e758959e21769407a84325f3be545ccffbb7d9486aa97",
+          "returned_untruncated": true
+        },
+        {
+          "start": 51913,
+          "end": 59913,
+          "bytes": 8000,
+          "sha256": "5f167f2ee40a73050f4531036c97e21bb9cf006a4c0a4ee423721c5721408bd1",
+          "returned_untruncated": true
+        },
+        {
+          "start": 59913,
+          "end": 67913,
+          "bytes": 8000,
+          "sha256": "801b01ad86d835ac2feea40f6134767ac0ce74ccc72452ce98e19976e51e2a00",
+          "returned_untruncated": true
+        },
+        {
+          "start": 67913,
+          "end": 75913,
+          "bytes": 8000,
+          "sha256": "17f22f1dad68a74275834d7fd665a0dcb317acf1456c245bfcfe25c0952968fa",
+          "returned_untruncated": true
+        },
+        {
+          "start": 75913,
+          "end": 83913,
+          "bytes": 8000,
+          "sha256": "c3be4162964ba90b63da5fc229f1009d8c253560a08c74cfadaab1237c17a316",
+          "returned_untruncated": true
+        },
+        {
+          "start": 83913,
+          "end": 91913,
+          "bytes": 8000,
+          "sha256": "9c5416f4cc748ee36f950d26f1241fabc655478827460ae50a08d1bd5bfa0b46",
+          "returned_untruncated": true
+        },
+        {
+          "start": 91913,
+          "end": 99913,
+          "bytes": 8000,
+          "sha256": "9868bd4c0d0dee5e3886562d848ad8e8b9cedfe9c553a983a585eb8dd24e694f",
+          "returned_untruncated": true
+        },
+        {
+          "start": 99913,
+          "end": 107913,
+          "bytes": 8000,
+          "sha256": "79753fa8639b38ae084793f86ce04b9f225db868fb0b5f7ff0537950f672dd94",
+          "returned_untruncated": true
+        },
+        {
+          "start": 107913,
+          "end": 115913,
+          "bytes": 8000,
+          "sha256": "e8105d178893118951c6ccfc950104d59f8354147070afc92546faca95e9eb20",
+          "returned_untruncated": true
+        },
+        {
+          "start": 115913,
+          "end": 123913,
+          "bytes": 8000,
+          "sha256": "1d41947f20f0afd9781d1d3ec2cba899d9d6af32b5604667a77058fd1641e218",
+          "returned_untruncated": true
+        },
+        {
+          "start": 123913,
+          "end": 131913,
+          "bytes": 8000,
+          "sha256": "dd6c158b05241df169e18facc8b9b4668c783dae496830afa725b5947d298094",
+          "returned_untruncated": true
+        },
+        {
+          "start": 131913,
+          "end": 138712,
+          "bytes": 6799,
+          "sha256": "1048c450ccc64917d4092b2a59cdcc3834eabef1d5000684b6f9f5f783c5c681",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/raw/w4-audit.json",
+      "start": 0,
+      "end": 33201,
+      "kind": "text",
+      "sha256": "e424ccb31a57f1faa449354242647fdbc6238c00fdc0cd37e683470739532667",
+      "source_id": "2",
+      "whole_file_bytes": 142904,
+      "whole_file_sha256": "e424ccb31a57f1faa449354242647fdbc6238c00fdc0cd37e683470739532667",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "057a8b820c00e71144a4bc37adbbf40e73b57d0b71bd3ac4f52f01bdec8f8e2b",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "85594d2b64d0c8dc7e7fc828914fb01bc1fb3550abbae9535886d2bc008c3570",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "c5bdd2a62528314a45a4eb0a3a440ef14a5603ac4371d7002c64e9298072d7b1",
+          "returned_untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "b0ab3d35550e8f9d2f64a799f091410ec0b5652564de28409ac1d7c4a76119c3",
+          "returned_untruncated": true
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "25a720fc05a32229d30eebdfd9d89327e8ea340e0d924d759a957a88efd5f252",
+          "returned_untruncated": true
+        },
+        {
+          "start": 32000,
+          "end": 33201,
+          "bytes": 1201,
+          "sha256": "7c307658ce1f13972e8bacb4473184572b0298695e3bb4f7375965423885744e",
+          "returned_untruncated": true
+        }
+      ]
+    }
+  ],
+  "provenance": {
+    "1": {
+      "date": "2026-09",
+      "workflow": "code-survey",
+      "runId": "wf_6e796843-7e4",
+      "rounds": 3,
+      "producer": "Companion reports 125 agents, recon/finders/two perspective-diverse skeptics per batch, high-severity tiebreaker, completeness critic, performance triage and synthesis; no named human author",
+      "whole_file_counts": {
+        "confirmed": 68,
+        "bug": 39,
+        "dead-code": 22,
+        "perf": 7,
+        "high": 2,
+        "medium": 26,
+        "low": 40
+      },
+      "assigned_scope": "Starts inside coverage note; remaining coverage notes and complete confirmed array through EOF"
+    },
+    "2": {
+      "date": "2026-08-13",
+      "producer": "Companion: total-audit workflow, 19 round-1 domain finders with two skeptics and high-severity tiebreak; 8 round-2 gap finders whose initial verification/synthesis hit session limit",
+      "tree_audited": "21f44b21",
+      "companion_recheck_tree": "0f0c3b84",
+      "whole_file_confirmed": 121,
+      "assigned_scope": "report:null and beginning confirmed array; ends inside building DAY-facade evidence; later confirmed records, coverage and round2Verified outside assignment"
+    }
+  },
+  "supporting_reads": [
+    {
+      "path": "AGENTS.md",
+      "purpose": "Current session rules; read first main output and final 45 lines"
+    },
+    {
+      "path": "docs/archive/research/CODE-SURVEY-2026-09.md",
+      "start": 0,
+      "end": 3500,
+      "purpose": "Companion provenance and method header"
+    },
+    {
+      "path": "docs/archive/research/W4-AUDIT-2026-08.md",
+      "start": 0,
+      "end": 3500,
+      "purpose": "Companion provenance and method header"
+    }
+  ],
+  "backlinks": {
+    "search_scope": "All readable docs files excluding archive and project-map directory components; exact raw and companion basenames",
+    "direct_live_raw_references_found": false,
+    "live_hits": [
+      {
+        "path": "docs/notes/system-audit-4/anchors.md",
+        "line": 30,
+        "target": "docs/archive/research/W4-AUDIT-2026-08.md"
+      },
+      {
+        "path": "docs/notes/system-audit-4/anchors.md",
+        "line": 32,
+        "target": "docs/archive/research/CODE-SURVEY-2026-09.md"
+      }
+    ],
+    "archive_companions": [
+      "docs/archive/research/CODE-SURVEY-2026-09.md",
+      "docs/archive/research/W4-AUDIT-2026-08.md"
+    ]
+  },
+  "limitations": [
+    "Raw survey coverage notes explicitly disclose sampling, gaps and rejected recon false positives.",
+    "September raw finding gfxBackendWas conflicts with coverage-note claim that it has readers; preserve both rather than resolving against current code.",
+    "Static performance counts are not measured player-GPU results.",
+    "Historical line numbers, module locations, proposed fixes and test outcomes were not revalidated.",
+    "W4 fragment is not complete JSON; whole-file metadata inspection supplies context but does not extend assigned text coverage."
+  ],
+  "current_authority": [
+    "AGENTS.md",
+    "docs/WORKERS.md",
+    "docs/ARCHITECTURE.md",
+    "docs/TESTING.md",
+    "docs/PHYSICS.md",
+    "docs/DEBUG-HOOKS.md",
+    "types/game-ctx.d.ts",
+    "tools/manifest.cjs",
+    "tests/groups.json"
+  ],
+  "cleanup": "Retain with companions and evidence hashes. No deletion or automatic fix queue justified; any promotion requires present-day reproduction and ownership checks."
+}

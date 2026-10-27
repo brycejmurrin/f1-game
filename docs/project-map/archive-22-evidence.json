@@ -1,0 +1,256 @@
+{
+  "group": "22",
+  "assigned_bytes": 160000,
+  "method": "Read current root AGENTS.md. Every assigned half-open text span returned individually, untruncated, in chunks <=8000 bytes. Whole-file plan hash distinguished from assigned-part and chunk hashes. Historic instructions treated as data. No tests, browser, network, runtime, source edits, staging or commits.",
+  "sources": [
+    {
+      "path": "docs/archive/research/SURVEY-BUGS-PERF-2026-08-17.md",
+      "start": 4796,
+      "end": 14197,
+      "kind": "text",
+      "sha256": "dd20d192cf9051a1cff1a930e48506900513446ef2aeaffacae15ea1ec712fca",
+      "source_id": 1,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 14197,
+      "observed_whole_file_sha256": "dd20d192cf9051a1cff1a930e48506900513446ef2aeaffacae15ea1ec712fca",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "81c219d1261a7565b6bd9c1172bd6300fd71410ac4ac75135a4ef48686224850",
+      "complete_file_read": false,
+      "date": "2026-08-17",
+      "producer": "Eight explore agents, physics-contract auditor, deploy-research worker; parent verified selected sites",
+      "scope": "Tail of multi-domain bug/performance survey; prefix belongs to group 21",
+      "read_chunks": [
+        {
+          "start": 4796,
+          "end": 12000,
+          "bytes": 7204,
+          "sha256": "3c1eb4703d06eeb2df621a3e751407772b76cc8fa8c99ebc1cf4d8b3186d3fdd",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 12000,
+          "end": 14197,
+          "bytes": 2197,
+          "sha256": "38a75983f7a3922bb617bcd2d9664e67a7297db14a624477d385015f441fa94f",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/TEST-AUDIT-2026-08.md",
+      "start": 0,
+      "end": 100511,
+      "kind": "text",
+      "sha256": "aa166fe4653f03a00f7f7eb5a6b91cc58c3d28663b73ef99d2778294a332c0d0",
+      "source_id": 2,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 100511,
+      "observed_whole_file_sha256": "aa166fe4653f03a00f7f7eb5a6b91cc58c3d28663b73ef99d2778294a332c0d0",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "aa166fe4653f03a00f7f7eb5a6b91cc58c3d28663b73ef99d2778294a332c0d0",
+      "complete_file_read": true,
+      "date": "2026-08, with 2026-08-07 updates",
+      "producer": "11-agent semantics workflow: eight batch auditors, taxonomy/CI designer, feasibility skeptic",
+      "scope": "All 162-file verdict rows plus test taxonomy, restructuring, landed strengthening and rejected CI design",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "b80f7520be7fd2df11b0333643825c1f3c13b75b934b9a1c627b00343a18f6c8",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "c3d93ff40962a464d83e359600ef40b903d8ca68a07bfb6d91e43b37fa4e5f00",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "0fe1c25537cd2a627562ec50a22ae059d059a55ca12248ec5c6159959c3b77ee",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "d9e541d5bcada087117004328c801470d9eb3202e2950035ed1295f095d0e83f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "a0a5e213a5381363a69f3b536da07e466abf6bdfc75ec1e8474d1efac770277b",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "4fc11474b84cdb9f429c549dcb29c2d60798667eab7ff2040ea70a6505b6ecee",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 48000,
+          "end": 56000,
+          "bytes": 8000,
+          "sha256": "14c530f2e4aa6890862c35c64f8a84d2f751eec5f58a34d0ebe870c51f2fc11c",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 56000,
+          "end": 64000,
+          "bytes": 8000,
+          "sha256": "5e328c5935345c9f2a01fc8d50211d6375394f422c0f0aa86f6db15d25620434",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 64000,
+          "end": 72000,
+          "bytes": 8000,
+          "sha256": "1f1e24185a6aa0bde08859b25ee293c94f3af9a70f6aee85f0878a17feb65c13",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 72000,
+          "end": 80000,
+          "bytes": 8000,
+          "sha256": "9dd47e5ecb370cc0b1e79de5a5909e71a4091ad3fc50939724c866db359dece4",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 80000,
+          "end": 88000,
+          "bytes": 8000,
+          "sha256": "a9c095717fb5332790e49a0c90b384907ffc09ecc4d0c3914d23c2a0af123c13",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 88000,
+          "end": 96000,
+          "bytes": 8000,
+          "sha256": "1a00f060866e5746d8225b8f113c902f46c60c38de647a13a8d4472d040e49c5",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 96000,
+          "end": 100511,
+          "bytes": 4511,
+          "sha256": "92197770dec94d49a8b70b77c65e447c331500532a9df152933fb5f720723c25",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/research/TOTAL-AUDIT-2026-08.md",
+      "start": 0,
+      "end": 50088,
+      "kind": "text",
+      "sha256": "e4b6bf6ef5198c13200ba336decaf1d8f43fce89c5d19986818065222f571950",
+      "source_id": 3,
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 73108,
+      "observed_whole_file_sha256": "e4b6bf6ef5198c13200ba336decaf1d8f43fce89c5d19986818065222f571950",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "fb678bbb5c51569a806c12345dd7a265bd5e6fb9242deb4e7cf88aeef08e6312",
+      "complete_file_read": false,
+      "date": "2026-08, with 2026-08-07 landing notes",
+      "producer": "19 domain finders, one or two adversarial reviewers per batch, synthesizer; parent addendum",
+      "scope": "Synthesis, batches, deferrals, coverage limits and beginning of 197-finding appendix; continuation belongs to group 23",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "760f6b5f2ef075472490c2587b8c46ef69702a84649f5e3477f4473e64782eeb",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "d1205da4f94e988d8393856642752500886adeb515b3577e9d180302adf99199",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "d9671014d285c98807a45bc8606c9ca7423b1cd99ece5f9e50f2190eb4380230",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "b9f8247365b7f0da95aeb64ead483724847853fc4fda18ccfe01f80de14c24c1",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "d326dac9697846eaefde1b79a55fdf7be05b275f764d32bcee0eaf7b416ce956",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "7174850b6edf9cd175f5abd62bcb5db6302051aff363711955a9f3948f9ebc44",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 48000,
+          "end": 50088,
+          "bytes": 2088,
+          "sha256": "3b04f8573f33afe4416dbc83afc0e5559aa08fe25da10c5357bf34ac138d99e8",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    }
+  ],
+  "backlinks": [
+    {
+      "source_id": 1,
+      "path": "docs/notes/DEFECT-LEDGER.md",
+      "line": 1124,
+      "role": "direct historic survey reference"
+    },
+    {
+      "source_id": 1,
+      "path": "docs/notes/SPIKE-BACKENDS-CHECKLIST.md",
+      "line": 414,
+      "role": "explicit keep-as-history rationale and archive-move provenance"
+    },
+    {
+      "source_id": 2,
+      "path": "tools/ci/select-budget.mjs",
+      "line": 1,
+      "role": "CI budget provenance; current code notes llvmpipe fallback superseding old SwiftShader assumptions"
+    },
+    {
+      "source_id": 2,
+      "path": "tools/ci/pick-tests.mjs",
+      "line": 464,
+      "role": "retains since-argument failure explanation"
+    },
+    {
+      "source_id": 3,
+      "path": "docs/notes/system-audit-4/anchors.md",
+      "line": 28,
+      "role": "line-anchor ledger"
+    }
+  ],
+  "limits": [
+    "Source 1 prefix not assigned; date and producer also explicit in assigned tail/title inventory.",
+    "Source 3 source file is 73108 bytes; only first 50088 assigned/read; appendix continuation not claimed.",
+    "Historic line numbers, filenames, severity, open/landed labels and measurements are dated source claims, not current verification.",
+    "Backlink search excluded archive tree and inventory; incidental project-map evidence references not counted as operational consumers."
+  ]
+}

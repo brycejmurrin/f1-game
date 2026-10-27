@@ -1,0 +1,2655 @@
+{
+  "schemaVersion": 1,
+  "group": "06",
+  "scope": "novel historical byte spans only; static read-only mapping",
+  "rootInstructionsRead": "AGENTS.md",
+  "coordinateConvention": "zero-based UTF-8 bytes; half-open ranges",
+  "assignedBytes": 160000,
+  "observedPartBytes": 160000,
+  "files": [
+    {
+      "id": "F01",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/agent-history.mjs",
+      "canonicalPath": "tools/ci/agent-history.mjs",
+      "wholeBytes": 54934,
+      "planWholeSha256": "8d65cc0bca37364a8b20c550a9677cbe2974f183d5cc6cf76c3bbbe5a6542a78",
+      "observedWholeSha256": "8d65cc0bca37364a8b20c550a9677cbe2974f183d5cc6cf76c3bbbe5a6542a78",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 54934,
+          "snapshotLines": [
+            1,
+            843
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F02",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/agent-msg.mjs",
+      "canonicalPath": "tools/ci/agent-msg.mjs",
+      "wholeBytes": 18136,
+      "planWholeSha256": "7a1df8dd50322d768ed54711cf8229d13b6367264b3c09e7669715a3dd55c8e7",
+      "observedWholeSha256": "7a1df8dd50322d768ed54711cf8229d13b6367264b3c09e7669715a3dd55c8e7",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 18136,
+          "snapshotLines": [
+            1,
+            401
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F03",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/behind-ship.mjs",
+      "canonicalPath": "tools/ci/behind-ship.mjs",
+      "wholeBytes": 4019,
+      "planWholeSha256": "1eb4153168fd4b3d9d3f9bf1347c310bea1c90e3a246df6db4a13c490e0cd2dc",
+      "observedWholeSha256": "1eb4153168fd4b3d9d3f9bf1347c310bea1c90e3a246df6db4a13c490e0cd2dc",
+      "wholeHashMatchesPlan": true,
+      "currentExists": true,
+      "currentWholeSha256": "62fe11c8ebd4c0a38430fd64ecd3e4be229eaeacb063b2c1224cfacef93b6ea4",
+      "identityCanonicalWholeSha256": "62fe11c8ebd4c0a38430fd64ecd3e4be229eaeacb063b2c1224cfacef93b6ea4",
+      "equalBlocks": [
+        {
+          "canonicalLines": [
+            1,
+            6
+          ],
+          "snapshotLines": [
+            1,
+            6
+          ],
+          "bytes": 164,
+          "sha256": "4257d2dd26519b25e6bb12a8a268cee4d3d889b5040e7236b234b3cc8f5ee77c",
+          "canonicalStartByte": 0,
+          "canonicalEndByte": 164,
+          "snapshotStartByte": 0,
+          "snapshotEndByte": 164
+        },
+        {
+          "canonicalLines": [
+            8,
+            96
+          ],
+          "snapshotLines": [
+            8,
+            96
+          ],
+          "bytes": 3776,
+          "sha256": "d8c57ea3f9c231a1d9d81cb8544f49cc25c01a373b62ed1d8280d9d03a2dace2",
+          "canonicalStartByte": 241,
+          "canonicalEndByte": 4017,
+          "snapshotStartByte": 243,
+          "snapshotEndByte": 4019
+        }
+      ],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 164,
+          "end": 243,
+          "snapshotLines": [
+            7,
+            7
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F04",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/branch-audit.mjs",
+      "canonicalPath": "tools/ci/branch-audit.mjs",
+      "wholeBytes": 14312,
+      "planWholeSha256": "396052338a2e901dedbdadbe4345a20b7c0b318314d3dc1866ed005af990a0da",
+      "observedWholeSha256": "396052338a2e901dedbdadbe4345a20b7c0b318314d3dc1866ed005af990a0da",
+      "wholeHashMatchesPlan": true,
+      "currentExists": true,
+      "currentWholeSha256": "a6ffcbe8e0b583b2fbb229cf1c6554e2219911e417c0942574cc8ac685e2ad10",
+      "identityCanonicalWholeSha256": "a6ffcbe8e0b583b2fbb229cf1c6554e2219911e417c0942574cc8ac685e2ad10",
+      "equalBlocks": [
+        {
+          "canonicalLines": [
+            1,
+            47
+          ],
+          "snapshotLines": [
+            1,
+            47
+          ],
+          "bytes": 3488,
+          "sha256": "ee88a49e709f9a047e6162e1a59098469cd568cdc590fac281e9ae66ee8a105a",
+          "canonicalStartByte": 0,
+          "canonicalEndByte": 3488,
+          "snapshotStartByte": 0,
+          "snapshotEndByte": 3488
+        },
+        {
+          "canonicalLines": [
+            49,
+            258
+          ],
+          "snapshotLines": [
+            49,
+            258
+          ],
+          "bytes": 10763,
+          "sha256": "e43a90549503b83ad3645dd5f7b04b55e20f72548799542511ca71100ba7de02",
+          "canonicalStartByte": 3557,
+          "canonicalEndByte": 14320,
+          "snapshotStartByte": 3549,
+          "snapshotEndByte": 14312
+        }
+      ],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 3488,
+          "end": 3549,
+          "snapshotLines": [
+            48,
+            48
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F05",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/bump-cache.mjs",
+      "canonicalPath": "tools/ci/bump-cache.mjs",
+      "wholeBytes": 13871,
+      "planWholeSha256": "d751cca5ee7bc8dde480ac0e1c83190989cd65110b598d39fa17d059db4d27e7",
+      "observedWholeSha256": "d751cca5ee7bc8dde480ac0e1c83190989cd65110b598d39fa17d059db4d27e7",
+      "wholeHashMatchesPlan": true,
+      "currentExists": true,
+      "currentWholeSha256": "20b1d8e2fe5dea1fb23041709ae5a6de836a93668ad80f6bef4cf55de0a96808",
+      "identityCanonicalWholeSha256": "20b1d8e2fe5dea1fb23041709ae5a6de836a93668ad80f6bef4cf55de0a96808",
+      "equalBlocks": [
+        {
+          "canonicalLines": [
+            1,
+            41
+          ],
+          "snapshotLines": [
+            1,
+            41
+          ],
+          "bytes": 2604,
+          "sha256": "e397e7c26512e5203b09475b01335d918151334c83521bfdc4e78c9880442fd4",
+          "canonicalStartByte": 0,
+          "canonicalEndByte": 2604,
+          "snapshotStartByte": 0,
+          "snapshotEndByte": 2604
+        },
+        {
+          "canonicalLines": [
+            43,
+            45
+          ],
+          "snapshotLines": [
+            43,
+            45
+          ],
+          "bytes": 79,
+          "sha256": "7694a2ba8abcaed784aa9a9056997a217a833e09c7bbd9a2b87c807404b02ebe",
+          "canonicalStartByte": 2655,
+          "canonicalEndByte": 2734,
+          "snapshotStartByte": 2654,
+          "snapshotEndByte": 2733
+        },
+        {
+          "canonicalLines": [
+            47,
+            47
+          ],
+          "snapshotLines": [
+            47,
+            47
+          ],
+          "bytes": 115,
+          "sha256": "3881ccb8bc204f02b8fe36b4b2e96c23666fcde299efdcef7b120d09ccd3265e",
+          "canonicalStartByte": 2940,
+          "canonicalEndByte": 3055,
+          "snapshotStartByte": 2862,
+          "snapshotEndByte": 2977
+        },
+        {
+          "canonicalLines": [
+            50,
+            82
+          ],
+          "snapshotLines": [
+            49,
+            81
+          ],
+          "bytes": 2050,
+          "sha256": "b21a9f2ed390e9383154f3422200d0e0857f668354ede9f22d0e9d91d9139397",
+          "canonicalStartByte": 3312,
+          "canonicalEndByte": 5362,
+          "snapshotStartByte": 3053,
+          "snapshotEndByte": 5103
+        },
+        {
+          "canonicalLines": [
+            85,
+            88
+          ],
+          "snapshotLines": [
+            86,
+            89
+          ],
+          "bytes": 345,
+          "sha256": "8c032ccebdaf576dba8d90230a4ae7340273d5a757281b7f34f7610c38d80726",
+          "canonicalStartByte": 5564,
+          "canonicalEndByte": 5909,
+          "snapshotStartByte": 5388,
+          "snapshotEndByte": 5733
+        },
+        {
+          "canonicalLines": [
+            90,
+            258
+          ],
+          "snapshotLines": [
+            91,
+            259
+          ],
+          "bytes": 8052,
+          "sha256": "258b102f8c4919c1b8c10d89e232e2cd715b641e365b869819f0355fe2c59370",
+          "canonicalStartByte": 5937,
+          "canonicalEndByte": 13989,
+          "snapshotStartByte": 5819,
+          "snapshotEndByte": 13871
+        }
+      ],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 2604,
+          "end": 2654,
+          "snapshotLines": [
+            42,
+            42
+          ]
+        },
+        {
+          "start": 2733,
+          "end": 2862,
+          "snapshotLines": [
+            46,
+            46
+          ]
+        },
+        {
+          "start": 2977,
+          "end": 3053,
+          "snapshotLines": [
+            48,
+            48
+          ]
+        },
+        {
+          "start": 5103,
+          "end": 5388,
+          "snapshotLines": [
+            82,
+            85
+          ]
+        },
+        {
+          "start": 5733,
+          "end": 5819,
+          "snapshotLines": [
+            90,
+            90
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F06",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/ci-watch.mjs",
+      "canonicalPath": "tools/ci/ci-watch.mjs",
+      "wholeBytes": 39262,
+      "planWholeSha256": "196c3febc741f2e09f35339dccb1c60563114ea89140e36105f6fe33610e5ed0",
+      "observedWholeSha256": "196c3febc741f2e09f35339dccb1c60563114ea89140e36105f6fe33610e5ed0",
+      "wholeHashMatchesPlan": true,
+      "currentExists": true,
+      "currentWholeSha256": "a410bd3b1a57dae99924af53eeec8bcb874bdfc913b1b929a34696da82fb8e47",
+      "identityCanonicalWholeSha256": "a410bd3b1a57dae99924af53eeec8bcb874bdfc913b1b929a34696da82fb8e47",
+      "equalBlocks": [
+        {
+          "canonicalLines": [
+            1,
+            74
+          ],
+          "snapshotLines": [
+            1,
+            74
+          ],
+          "bytes": 5733,
+          "sha256": "ef09badde221004b299cc6052b910327b4b891bd14e75fd47feef21a3f4db3da",
+          "canonicalStartByte": 0,
+          "canonicalEndByte": 5733,
+          "snapshotStartByte": 0,
+          "snapshotEndByte": 5733
+        },
+        {
+          "canonicalLines": [
+            76,
+            313
+          ],
+          "snapshotLines": [
+            76,
+            313
+          ],
+          "bytes": 14330,
+          "sha256": "e4292c2ac7ced3c15d6e49aaa6c5d4a0fc6a92a1fc3009c0ce95679a279218fd",
+          "canonicalStartByte": 5784,
+          "canonicalEndByte": 20114,
+          "snapshotStartByte": 5783,
+          "snapshotEndByte": 20113
+        },
+        {
+          "canonicalLines": [
+            315,
+            319
+          ],
+          "snapshotLines": [
+            315,
+            319
+          ],
+          "bytes": 580,
+          "sha256": "a10eeecda8dbc75010e3843921e5eb364e3b49a7aad8748f3254363762b21aa4",
+          "canonicalStartByte": 20321,
+          "canonicalEndByte": 20901,
+          "snapshotStartByte": 20316,
+          "snapshotEndByte": 20896
+        },
+        {
+          "canonicalLines": [
+            325,
+            596
+          ],
+          "snapshotLines": [
+            321,
+            592
+          ],
+          "bytes": 18240,
+          "sha256": "64a5c68ef0e9bd59c8370de32fc46a7e58ea539090f5371ef90125dcfc4e3e5d",
+          "canonicalStartByte": 21438,
+          "canonicalEndByte": 39678,
+          "snapshotStartByte": 21022,
+          "snapshotEndByte": 39262
+        }
+      ],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 5733,
+          "end": 5783,
+          "snapshotLines": [
+            75,
+            75
+          ]
+        },
+        {
+          "start": 20113,
+          "end": 20316,
+          "snapshotLines": [
+            314,
+            314
+          ]
+        },
+        {
+          "start": 20896,
+          "end": 21022,
+          "snapshotLines": [
+            320,
+            320
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F07",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/claude-usage.mjs",
+      "canonicalPath": "tools/ci/claude-usage.mjs",
+      "wholeBytes": 10942,
+      "planWholeSha256": "4d714507a9359fb2810762decc5dc819c902be369a158e8c0f2c90387b959a72",
+      "observedWholeSha256": "4d714507a9359fb2810762decc5dc819c902be369a158e8c0f2c90387b959a72",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 10942,
+          "snapshotLines": [
+            1,
+            199
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F08",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/cursor-agents.mjs",
+      "canonicalPath": "tools/ci/cursor-agents.mjs",
+      "wholeBytes": 48096,
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610",
+      "observedWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610",
+      "wholeHashMatchesPlan": true,
+      "currentExists": true,
+      "currentWholeSha256": "048f4e7e8a9250b91bb607b28a9768149cbcfdfda9453dc278d7f38eb6b828a0",
+      "identityCanonicalWholeSha256": "048f4e7e8a9250b91bb607b28a9768149cbcfdfda9453dc278d7f38eb6b828a0",
+      "equalBlocks": [
+        {
+          "canonicalLines": [
+            1,
+            4
+          ],
+          "snapshotLines": [
+            1,
+            4
+          ],
+          "bytes": 889,
+          "sha256": "dbadbaa75a764c24745f3366e2ee57abc32a055a46d403013953b7646e095a4b",
+          "canonicalStartByte": 0,
+          "canonicalEndByte": 889,
+          "snapshotStartByte": 0,
+          "snapshotEndByte": 889
+        },
+        {
+          "canonicalLines": [
+            6,
+            342
+          ],
+          "snapshotLines": [
+            6,
+            342
+          ],
+          "bytes": 16917,
+          "sha256": "e0f068411bd2c557be90dcb9b551da3392412d0a7726d408a25625a8828726da",
+          "canonicalStartByte": 907,
+          "canonicalEndByte": 17824,
+          "snapshotStartByte": 911,
+          "snapshotEndByte": 17828
+        },
+        {
+          "canonicalLines": [
+            362,
+            367
+          ],
+          "snapshotLines": [
+            343,
+            348
+          ],
+          "bytes": 188,
+          "sha256": "f94eab66563a367c1f9585fecda180174f80aa166bd7f8b299531ef4aa6de2fc",
+          "canonicalStartByte": 19063,
+          "canonicalEndByte": 19251,
+          "snapshotStartByte": 17828,
+          "snapshotEndByte": 18016
+        },
+        {
+          "canonicalLines": [
+            370,
+            370
+          ],
+          "snapshotLines": [
+            351,
+            351
+          ],
+          "bytes": 78,
+          "sha256": "1037d7cee11346b3e987f3f87000d9afd6206b48e3e55e50aac4581e8321ef93",
+          "canonicalStartByte": 19485,
+          "canonicalEndByte": 19563,
+          "snapshotStartByte": 18197,
+          "snapshotEndByte": 18275
+        },
+        {
+          "canonicalLines": [
+            372,
+            372
+          ],
+          "snapshotLines": [
+            352,
+            352
+          ],
+          "bytes": 103,
+          "sha256": "bd10e816687437366581a173f0fbf23eb6a09f79274cf4d9b4e209e59779fffc",
+          "canonicalStartByte": 19669,
+          "canonicalEndByte": 19772,
+          "snapshotStartByte": 18275,
+          "snapshotEndByte": 18378
+        },
+        {
+          "canonicalLines": [
+            374,
+            377
+          ],
+          "snapshotLines": [
+            353,
+            356
+          ],
+          "bytes": 28,
+          "sha256": "584ed37ac27c89305afa2cb126c86b138d061f6409d42865a9dabdabfe6551c1",
+          "canonicalStartByte": 19790,
+          "canonicalEndByte": 19818,
+          "snapshotStartByte": 18378,
+          "snapshotEndByte": 18406
+        },
+        {
+          "canonicalLines": [
+            379,
+            379
+          ],
+          "snapshotLines": [
+            358,
+            358
+          ],
+          "bytes": 132,
+          "sha256": "1ea443384d4cf46738acd5544afc3486cfd3974f4f2613baac18cea379813a11",
+          "canonicalStartByte": 19857,
+          "canonicalEndByte": 19989,
+          "snapshotStartByte": 18439,
+          "snapshotEndByte": 18571
+        },
+        {
+          "canonicalLines": [
+            381,
+            387
+          ],
+          "snapshotLines": [
+            360,
+            366
+          ],
+          "bytes": 436,
+          "sha256": "0896eb3610b85fd491d0ce4dcb9820b76c1dda3580988df3d30117d9d3d6692d",
+          "canonicalStartByte": 20102,
+          "canonicalEndByte": 20538,
+          "snapshotStartByte": 18678,
+          "snapshotEndByte": 19114
+        },
+        {
+          "canonicalLines": [
+            390,
+            403
+          ],
+          "snapshotLines": [
+            368,
+            381
+          ],
+          "bytes": 1099,
+          "sha256": "ab9a1a886571417d03bd7dc2daf5fb3fdd283e9c2040d9ba23b66e29e899e5d6",
+          "canonicalStartByte": 20600,
+          "canonicalEndByte": 21699,
+          "snapshotStartByte": 19145,
+          "snapshotEndByte": 20244
+        },
+        {
+          "canonicalLines": [
+            405,
+            417
+          ],
+          "snapshotLines": [
+            383,
+            395
+          ],
+          "bytes": 690,
+          "sha256": "361c233bc008a89ff626007ad326c9843fb68bf42faeae41cd5a7defe2215cbc",
+          "canonicalStartByte": 21770,
+          "canonicalEndByte": 22460,
+          "snapshotStartByte": 20309,
+          "snapshotEndByte": 20999
+        },
+        {
+          "canonicalLines": [
+            419,
+            419
+          ],
+          "snapshotLines": [
+            396,
+            396
+          ],
+          "bytes": 62,
+          "sha256": "72ebf16929c11edf3821568d548b3dfe9324e876e48f42993c185db943d98961",
+          "canonicalStartByte": 22637,
+          "canonicalEndByte": 22699,
+          "snapshotStartByte": 20999,
+          "snapshotEndByte": 21061
+        },
+        {
+          "canonicalLines": [
+            421,
+            424
+          ],
+          "snapshotLines": [
+            398,
+            401
+          ],
+          "bytes": 308,
+          "sha256": "ca9237823914da9ce77a3d1bc7217976e8128180f5c6c1bfbe658075e5ab84b1",
+          "canonicalStartByte": 22784,
+          "canonicalEndByte": 23092,
+          "snapshotStartByte": 21140,
+          "snapshotEndByte": 21448
+        },
+        {
+          "canonicalLines": [
+            427,
+            433
+          ],
+          "snapshotLines": [
+            404,
+            410
+          ],
+          "bytes": 304,
+          "sha256": "aa73375c83ee3e412a244772a679f8b4008c4a49f9b1c602082efd0f6ce19f29",
+          "canonicalStartByte": 23344,
+          "canonicalEndByte": 23648,
+          "snapshotStartByte": 21688,
+          "snapshotEndByte": 21992
+        },
+        {
+          "canonicalLines": [
+            437,
+            469
+          ],
+          "snapshotLines": [
+            411,
+            443
+          ],
+          "bytes": 1769,
+          "sha256": "00fe4dd1fcd40b7a705cac1b443162c4e20acaf912f79fb9fdc086b3ac7a10f8",
+          "canonicalStartByte": 23868,
+          "canonicalEndByte": 25637,
+          "snapshotStartByte": 21992,
+          "snapshotEndByte": 23761
+        },
+        {
+          "canonicalLines": [
+            471,
+            502
+          ],
+          "snapshotLines": [
+            444,
+            475
+          ],
+          "bytes": 1800,
+          "sha256": "a4a5c7a3203f47e450f4882e781d4e3655db82ffd4b20dc97c76264081d5f5a7",
+          "canonicalStartByte": 25720,
+          "canonicalEndByte": 27520,
+          "snapshotStartByte": 23761,
+          "snapshotEndByte": 25561
+        },
+        {
+          "canonicalLines": [
+            504,
+            549
+          ],
+          "snapshotLines": [
+            476,
+            521
+          ],
+          "bytes": 1800,
+          "sha256": "43b5e47ab08355e9ae6c0cece3e784885c8ad9f04d4becff249dd73ac2729220",
+          "canonicalStartByte": 27592,
+          "canonicalEndByte": 29392,
+          "snapshotStartByte": 25561,
+          "snapshotEndByte": 27361
+        },
+        {
+          "canonicalLines": [
+            554,
+            560
+          ],
+          "snapshotLines": [
+            522,
+            528
+          ],
+          "bytes": 533,
+          "sha256": "87bd6112a3d3a75e65892310e5e4d72fb5aa7b8d9d2fc629e5079661d21bed70",
+          "canonicalStartByte": 29736,
+          "canonicalEndByte": 30269,
+          "snapshotStartByte": 27361,
+          "snapshotEndByte": 27894
+        },
+        {
+          "canonicalLines": [
+            562,
+            619
+          ],
+          "snapshotLines": [
+            530,
+            587
+          ],
+          "bytes": 3215,
+          "sha256": "de9fd2e3ed47e8730bc633d47d48003a77352e366d7600f48f86272a09652435",
+          "canonicalStartByte": 30464,
+          "canonicalEndByte": 33679,
+          "snapshotStartByte": 28043,
+          "snapshotEndByte": 31258
+        },
+        {
+          "canonicalLines": [
+            621,
+            947
+          ],
+          "snapshotLines": [
+            589,
+            915
+          ],
+          "bytes": 16768,
+          "sha256": "1441e76ab813764684709ac6aca0cb3050b3698a456111ed35087b0cb6e1e913",
+          "canonicalStartByte": 33787,
+          "canonicalEndByte": 50555,
+          "snapshotStartByte": 31328,
+          "snapshotEndByte": 48096
+        }
+      ],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 889,
+          "end": 911,
+          "snapshotLines": [
+            5,
+            5
+          ]
+        },
+        {
+          "start": 18016,
+          "end": 18197,
+          "snapshotLines": [
+            349,
+            350
+          ]
+        },
+        {
+          "start": 18406,
+          "end": 18439,
+          "snapshotLines": [
+            357,
+            357
+          ]
+        },
+        {
+          "start": 18571,
+          "end": 18678,
+          "snapshotLines": [
+            359,
+            359
+          ]
+        },
+        {
+          "start": 19114,
+          "end": 19145,
+          "snapshotLines": [
+            367,
+            367
+          ]
+        },
+        {
+          "start": 20244,
+          "end": 20309,
+          "snapshotLines": [
+            382,
+            382
+          ]
+        },
+        {
+          "start": 21061,
+          "end": 21140,
+          "snapshotLines": [
+            397,
+            397
+          ]
+        },
+        {
+          "start": 21448,
+          "end": 21688,
+          "snapshotLines": [
+            402,
+            403
+          ]
+        },
+        {
+          "start": 27894,
+          "end": 28043,
+          "snapshotLines": [
+            529,
+            529
+          ]
+        },
+        {
+          "start": 31258,
+          "end": 31328,
+          "snapshotLines": [
+            588,
+            588
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F09",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/deploy.mjs",
+      "canonicalPath": "tools/ci/deploy.mjs",
+      "wholeBytes": 68902,
+      "planWholeSha256": "de7bdb9c02d2cf1b7f54bc3bff7530e818ee41f30a9ec55ae7f8da2b3e110a22",
+      "observedWholeSha256": "de7bdb9c02d2cf1b7f54bc3bff7530e818ee41f30a9ec55ae7f8da2b3e110a22",
+      "wholeHashMatchesPlan": true,
+      "currentExists": true,
+      "currentWholeSha256": "9f382db2243c5c3c667c8b90c91287269234d1ed7ce6a91a23ed9861f107c3de",
+      "identityCanonicalWholeSha256": "9f382db2243c5c3c667c8b90c91287269234d1ed7ce6a91a23ed9861f107c3de",
+      "equalBlocks": [
+        {
+          "canonicalLines": [
+            1,
+            39
+          ],
+          "snapshotLines": [
+            1,
+            39
+          ],
+          "bytes": 3550,
+          "sha256": "f44c69a2190490d82e7ee888594766bc5da6d63fcb7206fc44b57c2958682d42",
+          "canonicalStartByte": 0,
+          "canonicalEndByte": 3550,
+          "snapshotStartByte": 0,
+          "snapshotEndByte": 3550
+        },
+        {
+          "canonicalLines": [
+            42,
+            76
+          ],
+          "snapshotLines": [
+            40,
+            74
+          ],
+          "bytes": 2190,
+          "sha256": "25f69c78014e8061a7db894e0e35d6417fabd6fd60cb2a150aeb713128e46447",
+          "canonicalStartByte": 3727,
+          "canonicalEndByte": 5917,
+          "snapshotStartByte": 3550,
+          "snapshotEndByte": 5740
+        },
+        {
+          "canonicalLines": [
+            79,
+            82
+          ],
+          "snapshotLines": [
+            75,
+            78
+          ],
+          "bytes": 157,
+          "sha256": "a48b68c45d466ee4527d7f84dd8569573a000ad986ca24d441fa7dbeac2f8986",
+          "canonicalStartByte": 6022,
+          "canonicalEndByte": 6179,
+          "snapshotStartByte": 5740,
+          "snapshotEndByte": 5897
+        },
+        {
+          "canonicalLines": [
+            91,
+            95
+          ],
+          "snapshotLines": [
+            79,
+            83
+          ],
+          "bytes": 181,
+          "sha256": "d0404d7b1305ef9219bdce10d88631af061cd79e713ba44c7162af37c4351c1d",
+          "canonicalStartByte": 6850,
+          "canonicalEndByte": 7031,
+          "snapshotStartByte": 5897,
+          "snapshotEndByte": 6078
+        },
+        {
+          "canonicalLines": [
+            99,
+            970
+          ],
+          "snapshotLines": [
+            92,
+            963
+          ],
+          "bytes": 56055,
+          "sha256": "89cb74a97f9fd6fab1184006c98514fb0c22ec59e93d6f91c71e5ef0f9ef1a8e",
+          "canonicalStartByte": 7196,
+          "canonicalEndByte": 63251,
+          "snapshotStartByte": 6396,
+          "snapshotEndByte": 62451
+        },
+        {
+          "canonicalLines": [
+            972,
+            1046
+          ],
+          "snapshotLines": [
+            965,
+            1039
+          ],
+          "bytes": 5277,
+          "sha256": "6b4f366b665d74051d6cd6236a5a611b374649000c348f1e1a5f3d2ca505b3c0",
+          "canonicalStartByte": 63323,
+          "canonicalEndByte": 68600,
+          "snapshotStartByte": 62607,
+          "snapshotEndByte": 67884
+        },
+        {
+          "canonicalLines": [
+            1049,
+            1067
+          ],
+          "snapshotLines": [
+            1040,
+            1058
+          ],
+          "bytes": 1018,
+          "sha256": "c52512307365e8024193232339f5054cd944745724870a46a549431ddb88a98d",
+          "canonicalStartByte": 68740,
+          "canonicalEndByte": 69758,
+          "snapshotStartByte": 67884,
+          "snapshotEndByte": 68902
+        }
+      ],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 6078,
+          "end": 6396,
+          "snapshotLines": [
+            84,
+            91
+          ]
+        },
+        {
+          "start": 62451,
+          "end": 62607,
+          "snapshotLines": [
+            964,
+            964
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F10",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/flake-tally.mjs",
+      "canonicalPath": "tools/ci/flake-tally.mjs",
+      "wholeBytes": 39763,
+      "planWholeSha256": "da9cf2142c6a14632d046eaabc60248c95953a708117a2681ec81cbe117a46f3",
+      "observedWholeSha256": "da9cf2142c6a14632d046eaabc60248c95953a708117a2681ec81cbe117a46f3",
+      "wholeHashMatchesPlan": true,
+      "currentExists": true,
+      "currentWholeSha256": "015286807ce9365496ac7b4e55227f85adc719c1fab7cac4ac00f9ba3a62eaa5",
+      "identityCanonicalWholeSha256": "015286807ce9365496ac7b4e55227f85adc719c1fab7cac4ac00f9ba3a62eaa5",
+      "equalBlocks": [
+        {
+          "canonicalLines": [
+            1,
+            34
+          ],
+          "snapshotLines": [
+            1,
+            34
+          ],
+          "bytes": 2258,
+          "sha256": "53ad7be5feaffd41a8f4c19148aaa43228310d52dd0fdfdbed4366345e866d00",
+          "canonicalStartByte": 0,
+          "canonicalEndByte": 2258,
+          "snapshotStartByte": 0,
+          "snapshotEndByte": 2258
+        },
+        {
+          "canonicalLines": [
+            36,
+            210
+          ],
+          "snapshotLines": [
+            36,
+            210
+          ],
+          "bytes": 7361,
+          "sha256": "1176e2112ec7f7ec785d12155c601540acad3bb0ae1766a120462d4c18bb606d",
+          "canonicalStartByte": 2335,
+          "canonicalEndByte": 9696,
+          "snapshotStartByte": 2337,
+          "snapshotEndByte": 9698
+        },
+        {
+          "canonicalLines": [
+            241,
+            399
+          ],
+          "snapshotLines": [
+            211,
+            369
+          ],
+          "bytes": 7804,
+          "sha256": "00bf8cb8809a2a50254dd7e9f95a087cc0e87ed61cf362932d81415f983ebdee",
+          "canonicalStartByte": 11237,
+          "canonicalEndByte": 19041,
+          "snapshotStartByte": 9698,
+          "snapshotEndByte": 17502
+        },
+        {
+          "canonicalLines": [
+            403,
+            722
+          ],
+          "snapshotLines": [
+            371,
+            690
+          ],
+          "bytes": 14921,
+          "sha256": "4355ac481902dc5040f954f5fdf16d2314ba0bcf98ce78ff5a6e9ba03bf5271a",
+          "canonicalStartByte": 19276,
+          "canonicalEndByte": 34197,
+          "snapshotStartByte": 17542,
+          "snapshotEndByte": 32463
+        },
+        {
+          "canonicalLines": [
+            725,
+            725
+          ],
+          "snapshotLines": [
+            692,
+            692
+          ],
+          "bytes": 45,
+          "sha256": "4bd0536f67dff34cfb990ba8a58c1990af558fdb4738144f244b63caf62cc429",
+          "canonicalStartByte": 34349,
+          "canonicalEndByte": 34394,
+          "snapshotStartByte": 32545,
+          "snapshotEndByte": 32590
+        },
+        {
+          "canonicalLines": [
+            728,
+            734
+          ],
+          "snapshotLines": [
+            694,
+            700
+          ],
+          "bytes": 326,
+          "sha256": "8051b8fa55308839284f1a681bb4fa2386b0515d925143d778a7648f35661bce",
+          "canonicalStartByte": 34511,
+          "canonicalEndByte": 34837,
+          "snapshotStartByte": 32686,
+          "snapshotEndByte": 33012
+        },
+        {
+          "canonicalLines": [
+            737,
+            764
+          ],
+          "snapshotLines": [
+            702,
+            729
+          ],
+          "bytes": 1106,
+          "sha256": "9ee8d5de868f8ac8c291be04ce071ca89e89a5bfeaef0f1e81e7bd5c576e65d7",
+          "canonicalStartByte": 34981,
+          "canonicalEndByte": 36087,
+          "snapshotStartByte": 33073,
+          "snapshotEndByte": 34179
+        },
+        {
+          "canonicalLines": [
+            766,
+            870
+          ],
+          "snapshotLines": [
+            731,
+            835
+          ],
+          "bytes": 5519,
+          "sha256": "e0927073ade300a7e827695d7536816ff47051d99ae4a0c321ef0f31fab5f80c",
+          "canonicalStartByte": 36161,
+          "canonicalEndByte": 41680,
+          "snapshotStartByte": 34244,
+          "snapshotEndByte": 39763
+        }
+      ],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 2258,
+          "end": 2337,
+          "snapshotLines": [
+            35,
+            35
+          ]
+        },
+        {
+          "start": 17502,
+          "end": 17542,
+          "snapshotLines": [
+            370,
+            370
+          ]
+        },
+        {
+          "start": 32463,
+          "end": 32545,
+          "snapshotLines": [
+            691,
+            691
+          ]
+        },
+        {
+          "start": 32590,
+          "end": 32686,
+          "snapshotLines": [
+            693,
+            693
+          ]
+        },
+        {
+          "start": 33012,
+          "end": 33073,
+          "snapshotLines": [
+            701,
+            701
+          ]
+        },
+        {
+          "start": 34179,
+          "end": 34244,
+          "snapshotLines": [
+            730,
+            730
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F11",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/fleet-archive.mjs",
+      "canonicalPath": "tools/ci/fleet-archive.mjs",
+      "wholeBytes": 10526,
+      "planWholeSha256": "83ef9f9f3a2ad7e5f5b50c16ba81a0caa4db2d4515f404cfd581e5029dfea080",
+      "observedWholeSha256": "83ef9f9f3a2ad7e5f5b50c16ba81a0caa4db2d4515f404cfd581e5029dfea080",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 10526,
+          "snapshotLines": [
+            1,
+            162
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F12",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/fleet-board-snapshot.mjs",
+      "canonicalPath": "tools/ci/fleet-board-snapshot.mjs",
+      "wholeBytes": 11769,
+      "planWholeSha256": "c8ce6f19044590a3be421c9fa94d98a249bfd5e5cd7a003aae9e2cf468a05e92",
+      "observedWholeSha256": "c8ce6f19044590a3be421c9fa94d98a249bfd5e5cd7a003aae9e2cf468a05e92",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 11769,
+          "snapshotLines": [
+            1,
+            229
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F13",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/fleet-board.mjs",
+      "canonicalPath": "tools/ci/fleet-board.mjs",
+      "wholeBytes": 15763,
+      "planWholeSha256": "83342ebefed843050e0be9743f688e84edc1606f9bfcf8420c5d76eeb7219e75",
+      "observedWholeSha256": "83342ebefed843050e0be9743f688e84edc1606f9bfcf8420c5d76eeb7219e75",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 15763,
+          "snapshotLines": [
+            1,
+            237
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F14",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/fleet-brief.mjs",
+      "canonicalPath": "tools/ci/fleet-brief.mjs",
+      "wholeBytes": 10823,
+      "planWholeSha256": "38794d7d17e07ddc2feb95f3b9dcb2b738b28d87d07d139791b2bf1bfd66db8d",
+      "observedWholeSha256": "38794d7d17e07ddc2feb95f3b9dcb2b738b28d87d07d139791b2bf1bfd66db8d",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 10823,
+          "snapshotLines": [
+            1,
+            172
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F15",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/fleet-bus-mirror.mjs",
+      "canonicalPath": "tools/ci/fleet-bus-mirror.mjs",
+      "wholeBytes": 6565,
+      "planWholeSha256": "5cad2c960003cb26cfb7bbc53c9e1d1d7a2b2cc402518b8268a002a237c4ab1b",
+      "observedWholeSha256": "5cad2c960003cb26cfb7bbc53c9e1d1d7a2b2cc402518b8268a002a237c4ab1b",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 6565,
+          "snapshotLines": [
+            1,
+            111
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F16",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/fleet-bus.mjs",
+      "canonicalPath": "tools/ci/fleet-bus.mjs",
+      "wholeBytes": 43544,
+      "planWholeSha256": "61df28589d1618451cb646e274473f22aa1def05a76a68579275b4a8932f19cf",
+      "observedWholeSha256": "61df28589d1618451cb646e274473f22aa1def05a76a68579275b4a8932f19cf",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 43544,
+          "snapshotLines": [
+            1,
+            703
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F17",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/fleet-flags.mjs",
+      "canonicalPath": "tools/ci/fleet-flags.mjs",
+      "wholeBytes": 4519,
+      "planWholeSha256": "995070f945244b4182319a7fdb2478b72f0dfefd48a10f05576b9450eb227ac9",
+      "observedWholeSha256": "995070f945244b4182319a7fdb2478b72f0dfefd48a10f05576b9450eb227ac9",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 4519,
+          "snapshotLines": [
+            1,
+            65
+          ]
+        }
+      ]
+    },
+    {
+      "id": "F18",
+      "historicalPath": "scratch/f1-source-restore/tools/ci/fleet-owner.mjs",
+      "canonicalPath": "tools/ci/fleet-owner.mjs",
+      "wholeBytes": 23816,
+      "planWholeSha256": "73fc0759510b2ffe74b56823a0559b8cb7abf42e1dcb8d65b191d34d6f405fd6",
+      "observedWholeSha256": "73fc0759510b2ffe74b56823a0559b8cb7abf42e1dcb8d65b191d34d6f405fd6",
+      "wholeHashMatchesPlan": true,
+      "currentExists": false,
+      "currentWholeSha256": null,
+      "identityCanonicalWholeSha256": null,
+      "equalBlocks": [],
+      "inheritance": "Equal blocks are not raw-read here. Reuse is conditional on matching closed canonical full-source evidence; this report does not certify that other scope.",
+      "differentRanges": [
+        {
+          "start": 0,
+          "end": 23816,
+          "snapshotLines": [
+            1,
+            450
+          ]
+        }
+      ]
+    }
+  ],
+  "parts": [
+    {
+      "id": "P01",
+      "fileId": "F01",
+      "startByte": 40700,
+      "endByteExclusive": 54934,
+      "bytes": 14234,
+      "partSha256": "fb4bb8f506821d1aef0e98c9f3cb2ea2622aa1d3c0f3493a2073d319c297be4a",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "8d65cc0bca37364a8b20c550a9677cbe2974f183d5cc6cf76c3bbbe5a6542a78"
+    },
+    {
+      "id": "P02",
+      "fileId": "F02",
+      "startByte": 0,
+      "endByteExclusive": 18136,
+      "bytes": 18136,
+      "partSha256": "7a1df8dd50322d768ed54711cf8229d13b6367264b3c09e7669715a3dd55c8e7",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "7a1df8dd50322d768ed54711cf8229d13b6367264b3c09e7669715a3dd55c8e7"
+    },
+    {
+      "id": "P03",
+      "fileId": "F03",
+      "startByte": 164,
+      "endByteExclusive": 243,
+      "bytes": 79,
+      "partSha256": "e0da1487b64df242cb8822002313ed6c08e4fca083c1747246952824a0b5699d",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "1eb4153168fd4b3d9d3f9bf1347c310bea1c90e3a246df6db4a13c490e0cd2dc"
+    },
+    {
+      "id": "P04",
+      "fileId": "F04",
+      "startByte": 3488,
+      "endByteExclusive": 3549,
+      "bytes": 61,
+      "partSha256": "efef2400eb21edb4f30db77f166f0d429f810b33ffb9d1a1c8ac60cad294e180",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "396052338a2e901dedbdadbe4345a20b7c0b318314d3dc1866ed005af990a0da"
+    },
+    {
+      "id": "P05",
+      "fileId": "F05",
+      "startByte": 2604,
+      "endByteExclusive": 2654,
+      "bytes": 50,
+      "partSha256": "0e5cf42b919a34cdd02b6dfc65ce8be6e320fc473823f859183b40692fc8b032",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "d751cca5ee7bc8dde480ac0e1c83190989cd65110b598d39fa17d059db4d27e7"
+    },
+    {
+      "id": "P06",
+      "fileId": "F05",
+      "startByte": 2733,
+      "endByteExclusive": 2862,
+      "bytes": 129,
+      "partSha256": "209ca65336a3fe76ec2a87bf485538102386f1c9a2ca4c0fa8f6747ecfbce9d2",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "d751cca5ee7bc8dde480ac0e1c83190989cd65110b598d39fa17d059db4d27e7"
+    },
+    {
+      "id": "P07",
+      "fileId": "F05",
+      "startByte": 2977,
+      "endByteExclusive": 3053,
+      "bytes": 76,
+      "partSha256": "1c83765160892be62444c1c298a844ac5295532bedbc419bd894e3eeb3ea387e",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "d751cca5ee7bc8dde480ac0e1c83190989cd65110b598d39fa17d059db4d27e7"
+    },
+    {
+      "id": "P08",
+      "fileId": "F05",
+      "startByte": 5103,
+      "endByteExclusive": 5388,
+      "bytes": 285,
+      "partSha256": "00297198f1b47109a6a1e5fb3d652be1164c0eda9614c8da4c043304d7b4161d",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "d751cca5ee7bc8dde480ac0e1c83190989cd65110b598d39fa17d059db4d27e7"
+    },
+    {
+      "id": "P09",
+      "fileId": "F05",
+      "startByte": 5733,
+      "endByteExclusive": 5819,
+      "bytes": 86,
+      "partSha256": "b9cbeaefac71f516ba987f2624e3f0ff575a2cdd626a503b41449b75cf81632c",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "d751cca5ee7bc8dde480ac0e1c83190989cd65110b598d39fa17d059db4d27e7"
+    },
+    {
+      "id": "P10",
+      "fileId": "F06",
+      "startByte": 5733,
+      "endByteExclusive": 5783,
+      "bytes": 50,
+      "partSha256": "0e5cf42b919a34cdd02b6dfc65ce8be6e320fc473823f859183b40692fc8b032",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "196c3febc741f2e09f35339dccb1c60563114ea89140e36105f6fe33610e5ed0"
+    },
+    {
+      "id": "P11",
+      "fileId": "F06",
+      "startByte": 20113,
+      "endByteExclusive": 20316,
+      "bytes": 203,
+      "partSha256": "d1da349b3a5ef52703cbc9b0d788fa6289f990d57e284f761a095332cd6134e9",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "196c3febc741f2e09f35339dccb1c60563114ea89140e36105f6fe33610e5ed0"
+    },
+    {
+      "id": "P12",
+      "fileId": "F06",
+      "startByte": 20896,
+      "endByteExclusive": 21022,
+      "bytes": 126,
+      "partSha256": "6dff11b553408ed7f45d5a0d83292eba1f606f1575dd1b9c10c866f71a99d8c6",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "196c3febc741f2e09f35339dccb1c60563114ea89140e36105f6fe33610e5ed0"
+    },
+    {
+      "id": "P13",
+      "fileId": "F07",
+      "startByte": 0,
+      "endByteExclusive": 10942,
+      "bytes": 10942,
+      "partSha256": "4d714507a9359fb2810762decc5dc819c902be369a158e8c0f2c90387b959a72",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "4d714507a9359fb2810762decc5dc819c902be369a158e8c0f2c90387b959a72"
+    },
+    {
+      "id": "P14",
+      "fileId": "F08",
+      "startByte": 889,
+      "endByteExclusive": 911,
+      "bytes": 22,
+      "partSha256": "84431bb2980e08b68e8720a32abe5a212c9465a53c3098665447f2d9796929e1",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P15",
+      "fileId": "F08",
+      "startByte": 18016,
+      "endByteExclusive": 18197,
+      "bytes": 181,
+      "partSha256": "29905dfe8186bb76ba39b0ca7ddd011fb90e24a73708e98ff6e2461767e04ef1",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P16",
+      "fileId": "F08",
+      "startByte": 18406,
+      "endByteExclusive": 18439,
+      "bytes": 33,
+      "partSha256": "711848b651fd8c98d4d04229420b9dff8ae73dc75d96eec5b8c417ae93bdfcc5",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P17",
+      "fileId": "F08",
+      "startByte": 18571,
+      "endByteExclusive": 18678,
+      "bytes": 107,
+      "partSha256": "310c9280e699ba5d74df7c65f1f1a815be9d271b499704868600104c23cb2ff6",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P18",
+      "fileId": "F08",
+      "startByte": 19114,
+      "endByteExclusive": 19145,
+      "bytes": 31,
+      "partSha256": "9ebc8a3494895b5f28f21ccb5785d2d67b5dc73ed075d81ae92ace6afc85cabe",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P19",
+      "fileId": "F08",
+      "startByte": 20244,
+      "endByteExclusive": 20309,
+      "bytes": 65,
+      "partSha256": "b72a91139a3695d3064e95db74e3c81b036207281141ab2fd9b92417ed91834a",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P20",
+      "fileId": "F08",
+      "startByte": 21061,
+      "endByteExclusive": 21140,
+      "bytes": 79,
+      "partSha256": "09220afd2857df34cbf9ac199e521407cffad5ee56f29d46f5a4a923e2a07e24",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P21",
+      "fileId": "F08",
+      "startByte": 21448,
+      "endByteExclusive": 21688,
+      "bytes": 240,
+      "partSha256": "92c58697d1dbf8901334d1f63d54b3ff8a9ff0bbc1b90fca8aeab7ee4358576d",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P22",
+      "fileId": "F08",
+      "startByte": 27894,
+      "endByteExclusive": 28043,
+      "bytes": 149,
+      "partSha256": "52d20a69843e74f4a034580929e9de111f621ea9a003ab32a3eea9891932dc4b",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P23",
+      "fileId": "F08",
+      "startByte": 31258,
+      "endByteExclusive": 31328,
+      "bytes": 70,
+      "partSha256": "779863bf73703109eb09a07d8ba009b6c8481ec75b605349220b54243fbf2872",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "616cf5eae00d818cb0f5d53dfcd7880d2c06e9bddb3b10c55dbeaf15a87dc610"
+    },
+    {
+      "id": "P24",
+      "fileId": "F09",
+      "startByte": 6078,
+      "endByteExclusive": 6396,
+      "bytes": 318,
+      "partSha256": "e4b060aabf088dc297424dafdd345ff0df483f5cfb972e1ef612e58b93669022",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "de7bdb9c02d2cf1b7f54bc3bff7530e818ee41f30a9ec55ae7f8da2b3e110a22"
+    },
+    {
+      "id": "P25",
+      "fileId": "F09",
+      "startByte": 62451,
+      "endByteExclusive": 62607,
+      "bytes": 156,
+      "partSha256": "41a63e8b6e98330316488bb169dccf1a0297c95819e9804c8d0eb86b4678e0e8",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "de7bdb9c02d2cf1b7f54bc3bff7530e818ee41f30a9ec55ae7f8da2b3e110a22"
+    },
+    {
+      "id": "P26",
+      "fileId": "F10",
+      "startByte": 2258,
+      "endByteExclusive": 2337,
+      "bytes": 79,
+      "partSha256": "89b0a225c9719453d9a9241bc645eb8860d3541e160ade47d2138112264d1e20",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "da9cf2142c6a14632d046eaabc60248c95953a708117a2681ec81cbe117a46f3"
+    },
+    {
+      "id": "P27",
+      "fileId": "F10",
+      "startByte": 17502,
+      "endByteExclusive": 17542,
+      "bytes": 40,
+      "partSha256": "9ce3479002598d3d0a61278864cc4135edb72a163b9037474f92857a1e760cbf",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "da9cf2142c6a14632d046eaabc60248c95953a708117a2681ec81cbe117a46f3"
+    },
+    {
+      "id": "P28",
+      "fileId": "F10",
+      "startByte": 32463,
+      "endByteExclusive": 32545,
+      "bytes": 82,
+      "partSha256": "d1efdf03545fc94af0d76d0cfd5b15bf28d04dc41cb5cb2ff62d00cecaafcd11",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "da9cf2142c6a14632d046eaabc60248c95953a708117a2681ec81cbe117a46f3"
+    },
+    {
+      "id": "P29",
+      "fileId": "F10",
+      "startByte": 32590,
+      "endByteExclusive": 32686,
+      "bytes": 96,
+      "partSha256": "6c99dd6f65ad76792097c6af61e20215532e13e00f93ed29eb3085a1f44df79f",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "da9cf2142c6a14632d046eaabc60248c95953a708117a2681ec81cbe117a46f3"
+    },
+    {
+      "id": "P30",
+      "fileId": "F10",
+      "startByte": 33012,
+      "endByteExclusive": 33073,
+      "bytes": 61,
+      "partSha256": "68887b209beee12ffa511092cccd9c70f4470895c2dcb22136266a45f10af546",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "da9cf2142c6a14632d046eaabc60248c95953a708117a2681ec81cbe117a46f3"
+    },
+    {
+      "id": "P31",
+      "fileId": "F10",
+      "startByte": 34179,
+      "endByteExclusive": 34244,
+      "bytes": 65,
+      "partSha256": "b7cf0624be0383a9e436fe6e0616b4d6fda5efe3f4dc1ba792dc85d57cad63c0",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "da9cf2142c6a14632d046eaabc60248c95953a708117a2681ec81cbe117a46f3"
+    },
+    {
+      "id": "P32",
+      "fileId": "F11",
+      "startByte": 0,
+      "endByteExclusive": 10526,
+      "bytes": 10526,
+      "partSha256": "83ef9f9f3a2ad7e5f5b50c16ba81a0caa4db2d4515f404cfd581e5029dfea080",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "83ef9f9f3a2ad7e5f5b50c16ba81a0caa4db2d4515f404cfd581e5029dfea080"
+    },
+    {
+      "id": "P33",
+      "fileId": "F12",
+      "startByte": 0,
+      "endByteExclusive": 11769,
+      "bytes": 11769,
+      "partSha256": "c8ce6f19044590a3be421c9fa94d98a249bfd5e5cd7a003aae9e2cf468a05e92",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "c8ce6f19044590a3be421c9fa94d98a249bfd5e5cd7a003aae9e2cf468a05e92"
+    },
+    {
+      "id": "P34",
+      "fileId": "F13",
+      "startByte": 0,
+      "endByteExclusive": 15763,
+      "bytes": 15763,
+      "partSha256": "83342ebefed843050e0be9743f688e84edc1606f9bfcf8420c5d76eeb7219e75",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "83342ebefed843050e0be9743f688e84edc1606f9bfcf8420c5d76eeb7219e75"
+    },
+    {
+      "id": "P35",
+      "fileId": "F14",
+      "startByte": 0,
+      "endByteExclusive": 10823,
+      "bytes": 10823,
+      "partSha256": "38794d7d17e07ddc2feb95f3b9dcb2b738b28d87d07d139791b2bf1bfd66db8d",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "38794d7d17e07ddc2feb95f3b9dcb2b738b28d87d07d139791b2bf1bfd66db8d"
+    },
+    {
+      "id": "P36",
+      "fileId": "F15",
+      "startByte": 0,
+      "endByteExclusive": 6565,
+      "bytes": 6565,
+      "partSha256": "5cad2c960003cb26cfb7bbc53c9e1d1d7a2b2cc402518b8268a002a237c4ab1b",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "5cad2c960003cb26cfb7bbc53c9e1d1d7a2b2cc402518b8268a002a237c4ab1b"
+    },
+    {
+      "id": "P37",
+      "fileId": "F16",
+      "startByte": 0,
+      "endByteExclusive": 43544,
+      "bytes": 43544,
+      "partSha256": "61df28589d1618451cb646e274473f22aa1def05a76a68579275b4a8932f19cf",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "61df28589d1618451cb646e274473f22aa1def05a76a68579275b4a8932f19cf"
+    },
+    {
+      "id": "P38",
+      "fileId": "F17",
+      "startByte": 0,
+      "endByteExclusive": 4519,
+      "bytes": 4519,
+      "partSha256": "995070f945244b4182319a7fdb2478b72f0dfefd48a10f05576b9450eb227ac9",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "995070f945244b4182319a7fdb2478b72f0dfefd48a10f05576b9450eb227ac9"
+    },
+    {
+      "id": "P39",
+      "fileId": "F18",
+      "startByte": 0,
+      "endByteExclusive": 10160,
+      "bytes": 10160,
+      "partSha256": "137c85c89139e910329757c29f43853a2918d0d99e14f8822f700d619ff4c268",
+      "planHashMeaning": "whole file, not part",
+      "planWholeSha256": "73fc0759510b2ffe74b56823a0559b8cb7abf42e1dcb8d65b191d34d6f405fd6"
+    }
+  ],
+  "readLedger": [
+    {
+      "id": "C01",
+      "partId": "P01",
+      "startByte": 40700,
+      "endByteExclusive": 48700,
+      "bytes": 8000,
+      "sha256": "04e1b1940e27c19f4a047e5dd9e40878260265261f98fe38be154c4a68a89f25",
+      "returnedRaw": true,
+      "untruncatedReturn": "c315bd",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C02",
+      "partId": "P01",
+      "startByte": 48700,
+      "endByteExclusive": 54934,
+      "bytes": 6234,
+      "sha256": "009abf366229f89d69e9d7852b9b193e647e0cbcde82e0a739a6997a423b3a0e",
+      "returnedRaw": true,
+      "untruncatedReturn": "43648d",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C03",
+      "partId": "P02",
+      "startByte": 0,
+      "endByteExclusive": 8000,
+      "bytes": 8000,
+      "sha256": "92a6d16f78d109ef68a9af7550b1210873e7b7eb5d7694956adaf43ab235fb90",
+      "returnedRaw": true,
+      "untruncatedReturn": "cd1b66",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C04",
+      "partId": "P02",
+      "startByte": 8000,
+      "endByteExclusive": 16000,
+      "bytes": 8000,
+      "sha256": "388e9303f83a65e9fd3e8ea53c9c6a5fb25658ab9c5a89581e0d7fa9072e4a73",
+      "returnedRaw": true,
+      "untruncatedReturn": "26e4a1",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C05",
+      "partId": "P02",
+      "startByte": 16000,
+      "endByteExclusive": 18136,
+      "bytes": 2136,
+      "sha256": "82399370b39cc48225f34f4e257bbf5f5eb1d1c2c41861dcac2dd0c62348b194",
+      "returnedRaw": true,
+      "untruncatedReturn": "c7ea97",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C06",
+      "partId": "P03",
+      "startByte": 164,
+      "endByteExclusive": 243,
+      "bytes": 79,
+      "sha256": "e0da1487b64df242cb8822002313ed6c08e4fca083c1747246952824a0b5699d",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C07",
+      "partId": "P04",
+      "startByte": 3488,
+      "endByteExclusive": 3549,
+      "bytes": 61,
+      "sha256": "efef2400eb21edb4f30db77f166f0d429f810b33ffb9d1a1c8ac60cad294e180",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C08",
+      "partId": "P05",
+      "startByte": 2604,
+      "endByteExclusive": 2654,
+      "bytes": 50,
+      "sha256": "0e5cf42b919a34cdd02b6dfc65ce8be6e320fc473823f859183b40692fc8b032",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C09",
+      "partId": "P06",
+      "startByte": 2733,
+      "endByteExclusive": 2862,
+      "bytes": 129,
+      "sha256": "209ca65336a3fe76ec2a87bf485538102386f1c9a2ca4c0fa8f6747ecfbce9d2",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C10",
+      "partId": "P07",
+      "startByte": 2977,
+      "endByteExclusive": 3053,
+      "bytes": 76,
+      "sha256": "1c83765160892be62444c1c298a844ac5295532bedbc419bd894e3eeb3ea387e",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C11",
+      "partId": "P08",
+      "startByte": 5103,
+      "endByteExclusive": 5388,
+      "bytes": 285,
+      "sha256": "00297198f1b47109a6a1e5fb3d652be1164c0eda9614c8da4c043304d7b4161d",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C12",
+      "partId": "P09",
+      "startByte": 5733,
+      "endByteExclusive": 5819,
+      "bytes": 86,
+      "sha256": "b9cbeaefac71f516ba987f2624e3f0ff575a2cdd626a503b41449b75cf81632c",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C13",
+      "partId": "P10",
+      "startByte": 5733,
+      "endByteExclusive": 5783,
+      "bytes": 50,
+      "sha256": "0e5cf42b919a34cdd02b6dfc65ce8be6e320fc473823f859183b40692fc8b032",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C14",
+      "partId": "P11",
+      "startByte": 20113,
+      "endByteExclusive": 20316,
+      "bytes": 203,
+      "sha256": "d1da349b3a5ef52703cbc9b0d788fa6289f990d57e284f761a095332cd6134e9",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C15",
+      "partId": "P12",
+      "startByte": 20896,
+      "endByteExclusive": 21022,
+      "bytes": 126,
+      "sha256": "6dff11b553408ed7f45d5a0d83292eba1f606f1575dd1b9c10c866f71a99d8c6",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C16",
+      "partId": "P13",
+      "startByte": 0,
+      "endByteExclusive": 8000,
+      "bytes": 8000,
+      "sha256": "427df6acd460f5788271ca2287a154e620806385d3cd34cb3833d7d2ce392bdd",
+      "returnedRaw": true,
+      "untruncatedReturn": "1809fe",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C17",
+      "partId": "P13",
+      "startByte": 8000,
+      "endByteExclusive": 10942,
+      "bytes": 2942,
+      "sha256": "43c1cece5e79d8ab2b08c023597dfe6fd1c21c02729ee035cf2f77b4f97c88dc",
+      "returnedRaw": true,
+      "untruncatedReturn": "8a508e",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C18",
+      "partId": "P14",
+      "startByte": 889,
+      "endByteExclusive": 911,
+      "bytes": 22,
+      "sha256": "84431bb2980e08b68e8720a32abe5a212c9465a53c3098665447f2d9796929e1",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C19",
+      "partId": "P15",
+      "startByte": 18016,
+      "endByteExclusive": 18197,
+      "bytes": 181,
+      "sha256": "29905dfe8186bb76ba39b0ca7ddd011fb90e24a73708e98ff6e2461767e04ef1",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C20",
+      "partId": "P16",
+      "startByte": 18406,
+      "endByteExclusive": 18439,
+      "bytes": 33,
+      "sha256": "711848b651fd8c98d4d04229420b9dff8ae73dc75d96eec5b8c417ae93bdfcc5",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C21",
+      "partId": "P17",
+      "startByte": 18571,
+      "endByteExclusive": 18678,
+      "bytes": 107,
+      "sha256": "310c9280e699ba5d74df7c65f1f1a815be9d271b499704868600104c23cb2ff6",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C22",
+      "partId": "P18",
+      "startByte": 19114,
+      "endByteExclusive": 19145,
+      "bytes": 31,
+      "sha256": "9ebc8a3494895b5f28f21ccb5785d2d67b5dc73ed075d81ae92ace6afc85cabe",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C23",
+      "partId": "P19",
+      "startByte": 20244,
+      "endByteExclusive": 20309,
+      "bytes": 65,
+      "sha256": "b72a91139a3695d3064e95db74e3c81b036207281141ab2fd9b92417ed91834a",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C24",
+      "partId": "P20",
+      "startByte": 21061,
+      "endByteExclusive": 21140,
+      "bytes": 79,
+      "sha256": "09220afd2857df34cbf9ac199e521407cffad5ee56f29d46f5a4a923e2a07e24",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C25",
+      "partId": "P21",
+      "startByte": 21448,
+      "endByteExclusive": 21688,
+      "bytes": 240,
+      "sha256": "92c58697d1dbf8901334d1f63d54b3ff8a9ff0bbc1b90fca8aeab7ee4358576d",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C26",
+      "partId": "P22",
+      "startByte": 27894,
+      "endByteExclusive": 28043,
+      "bytes": 149,
+      "sha256": "52d20a69843e74f4a034580929e9de111f621ea9a003ab32a3eea9891932dc4b",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C27",
+      "partId": "P23",
+      "startByte": 31258,
+      "endByteExclusive": 31328,
+      "bytes": 70,
+      "sha256": "779863bf73703109eb09a07d8ba009b6c8481ec75b605349220b54243fbf2872",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C28",
+      "partId": "P24",
+      "startByte": 6078,
+      "endByteExclusive": 6396,
+      "bytes": 318,
+      "sha256": "e4b060aabf088dc297424dafdd345ff0df483f5cfb972e1ef612e58b93669022",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C29",
+      "partId": "P25",
+      "startByte": 62451,
+      "endByteExclusive": 62607,
+      "bytes": 156,
+      "sha256": "41a63e8b6e98330316488bb169dccf1a0297c95819e9804c8d0eb86b4678e0e8",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C30",
+      "partId": "P26",
+      "startByte": 2258,
+      "endByteExclusive": 2337,
+      "bytes": 79,
+      "sha256": "89b0a225c9719453d9a9241bc645eb8860d3541e160ade47d2138112264d1e20",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C31",
+      "partId": "P27",
+      "startByte": 17502,
+      "endByteExclusive": 17542,
+      "bytes": 40,
+      "sha256": "9ce3479002598d3d0a61278864cc4135edb72a163b9037474f92857a1e760cbf",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C32",
+      "partId": "P28",
+      "startByte": 32463,
+      "endByteExclusive": 32545,
+      "bytes": 82,
+      "sha256": "d1efdf03545fc94af0d76d0cfd5b15bf28d04dc41cb5cb2ff62d00cecaafcd11",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C33",
+      "partId": "P29",
+      "startByte": 32590,
+      "endByteExclusive": 32686,
+      "bytes": 96,
+      "sha256": "6c99dd6f65ad76792097c6af61e20215532e13e00f93ed29eb3085a1f44df79f",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C34",
+      "partId": "P30",
+      "startByte": 33012,
+      "endByteExclusive": 33073,
+      "bytes": 61,
+      "sha256": "68887b209beee12ffa511092cccd9c70f4470895c2dcb22136266a45f10af546",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C35",
+      "partId": "P31",
+      "startByte": 34179,
+      "endByteExclusive": 34244,
+      "bytes": 65,
+      "sha256": "b7cf0624be0383a9e436fe6e0616b4d6fda5efe3f4dc1ba792dc85d57cad63c0",
+      "returnedRaw": true,
+      "untruncatedReturn": "879fed",
+      "batch": "tiny spans combined, individually labeled; combined source bytes below 8500",
+      "note": null
+    },
+    {
+      "id": "C36",
+      "partId": "P32",
+      "startByte": 0,
+      "endByteExclusive": 8000,
+      "bytes": 8000,
+      "sha256": "6c5f74e285fe7b37280b2c039b662dd5a210ff6fd987e0b9961d6f6541937fd0",
+      "returnedRaw": true,
+      "untruncatedReturn": "d2d6db",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C37",
+      "partId": "P32",
+      "startByte": 8000,
+      "endByteExclusive": 10526,
+      "bytes": 2526,
+      "sha256": "3944f6da8215895cf02c0d29ff98dfe589445815c8de21d099a7bd13c554742b",
+      "returnedRaw": true,
+      "untruncatedReturn": "2bd430",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C38",
+      "partId": "P33",
+      "startByte": 0,
+      "endByteExclusive": 8000,
+      "bytes": 8000,
+      "sha256": "07795378914cd989967b01f9d070d650b6138aafdf4e4b279056ac1fc52f1a7c",
+      "returnedRaw": true,
+      "untruncatedReturn": "7fbef4",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C39",
+      "partId": "P33",
+      "startByte": 8000,
+      "endByteExclusive": 11769,
+      "bytes": 3769,
+      "sha256": "04f230c218a50796fbf5413eedf12301796a2b4c9675c8e050429965df9325c3",
+      "returnedRaw": true,
+      "untruncatedReturn": "726617",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C40",
+      "partId": "P34",
+      "startByte": 0,
+      "endByteExclusive": 8000,
+      "bytes": 8000,
+      "sha256": "9bbfcf8efed915865a9e2ced38fbd8f4c6281ee09d8ed95408fce281ec555f5e",
+      "returnedRaw": true,
+      "untruncatedReturn": "a47953",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": "Earlier aggregate display truncated this chunk; individually re-read in full."
+    },
+    {
+      "id": "C41",
+      "partId": "P34",
+      "startByte": 8000,
+      "endByteExclusive": 15763,
+      "bytes": 7763,
+      "sha256": "1101dfb759802ed2228aaa9ae28ffee4104dd26a5d60c11dda2bb55c2a22aaf7",
+      "returnedRaw": true,
+      "untruncatedReturn": "c09fce",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C42",
+      "partId": "P35",
+      "startByte": 0,
+      "endByteExclusive": 8000,
+      "bytes": 8000,
+      "sha256": "17f084550ad42e776e50eb3ce09295b2674aa65db53420c79d4bce88c7ae0251",
+      "returnedRaw": true,
+      "untruncatedReturn": "2c8ce3",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C43",
+      "partId": "P35",
+      "startByte": 8000,
+      "endByteExclusive": 10823,
+      "bytes": 2823,
+      "sha256": "5e682ffa46b124f3d1a312ef95f466ff9a5345668c26e5eb1c6b4e5abcff3169",
+      "returnedRaw": true,
+      "untruncatedReturn": "300059",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C44",
+      "partId": "P36",
+      "startByte": 0,
+      "endByteExclusive": 6565,
+      "bytes": 6565,
+      "sha256": "5cad2c960003cb26cfb7bbc53c9e1d1d7a2b2cc402518b8268a002a237c4ab1b",
+      "returnedRaw": true,
+      "untruncatedReturn": "f672cf",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C45",
+      "partId": "P37",
+      "startByte": 0,
+      "endByteExclusive": 8000,
+      "bytes": 8000,
+      "sha256": "f9e159030e1f6d5bd7f65e26b12a550edd30e3bffe4ad02afd741c69de54660c",
+      "returnedRaw": true,
+      "untruncatedReturn": "698b37",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C46",
+      "partId": "P37",
+      "startByte": 8000,
+      "endByteExclusive": 16000,
+      "bytes": 8000,
+      "sha256": "b9aa4de629928dae129b7a776badd62019fabe79a7f027c793d1f5570aae806b",
+      "returnedRaw": true,
+      "untruncatedReturn": "89349d",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C47",
+      "partId": "P37",
+      "startByte": 16000,
+      "endByteExclusive": 24000,
+      "bytes": 8000,
+      "sha256": "3b031db41e1505c9355f0bd0df54338c673a9558f8a9a0679822e8079b8aee90",
+      "returnedRaw": true,
+      "untruncatedReturn": "4d8803",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C48",
+      "partId": "P37",
+      "startByte": 24000,
+      "endByteExclusive": 32000,
+      "bytes": 8000,
+      "sha256": "2a359ad7850dc70d9519ea3e3d6d4bd826864cb6084bbb7c84d16a4ae88c2274",
+      "returnedRaw": true,
+      "untruncatedReturn": "ecd74e",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C49",
+      "partId": "P37",
+      "startByte": 32000,
+      "endByteExclusive": 40000,
+      "bytes": 8000,
+      "sha256": "0895aee0229cfdb9c12581be95fd3eaad03f3630e9170c66f388b271167221c7",
+      "returnedRaw": true,
+      "untruncatedReturn": "72fe51",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C50",
+      "partId": "P37",
+      "startByte": 40000,
+      "endByteExclusive": 43544,
+      "bytes": 3544,
+      "sha256": "4d179f932e7c641910a19d3e703c3a31e28ae01df13998b3da42c6aeea4c6a57",
+      "returnedRaw": true,
+      "untruncatedReturn": "cd9f6c",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C51",
+      "partId": "P38",
+      "startByte": 0,
+      "endByteExclusive": 4519,
+      "bytes": 4519,
+      "sha256": "995070f945244b4182319a7fdb2478b72f0dfefd48a10f05576b9450eb227ac9",
+      "returnedRaw": true,
+      "untruncatedReturn": "f49079",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C52",
+      "partId": "P39",
+      "startByte": 0,
+      "endByteExclusive": 8000,
+      "bytes": 8000,
+      "sha256": "1c9ed607202b8ba362229aeb4220b959187e379d2ea63a322ac75364af9ae7f4",
+      "returnedRaw": true,
+      "untruncatedReturn": "813397",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    },
+    {
+      "id": "C53",
+      "partId": "P39",
+      "startByte": 8000,
+      "endByteExclusive": 10160,
+      "bytes": 2160,
+      "sha256": "ca20083ecb3d8bf2966110f1e3e3d95623ae24f3d8215b8b0152e8e1eca690ff",
+      "returnedRaw": true,
+      "untruncatedReturn": "36bad1",
+      "batch": "individual tool return <=8000 source bytes",
+      "note": null
+    }
+  ],
+  "semanticChanges": [
+    {
+      "files": [
+        "F01"
+      ],
+      "parts": [
+        "P01"
+      ],
+      "change": "Historical agent-history tail: ZIP stored/deflate import, split upload join and text sniffing, safe relative names; optional Node zstd log decoding; provider-aware token-cost formulas; summaries, tables, patterns and timeline CLI. Whole historical file is larger than this group; prefix belongs to another group.",
+      "contracts": "PART_RE accepts numbered/lettered byte splits; refuses zip-s spanned sets. No CRC/Zip64 checking shown; ZIP imports recurse. Cost unknown without tokens/prices. Timeline output labels records DATA, not instructions.",
+      "consumers": "CLI users, digest/report workflows; upstream digestText/group data shapes are outside assigned tail."
+    },
+    {
+      "files": [
+        "F02"
+      ],
+      "parts": [
+        "P02"
+      ],
+      "change": "Entire historical messaging CLI absent current: webhook plus bus mirror and optional per-letter routine relay.",
+      "contracts": "Typed INFO/QUESTION/READY/HANDOFF/INCIDENT/REQUEST/ROTATE/LEND/RETURN/TRANSFER; READY receipt by default; body/address checks precede remote send. Bus written before relay/webhook. HTTPS relay only; up to two retries only for 429/5xx, retry-after at most 120s, no retry on ambiguous network failure. Missing webhook env may still succeed with bus. Dry-run still prints payload; secret redaction is error-oriented, not a blanket data sanitizer.",
+      "consumers": "fleet-bus shared sendBusLine, gate-receipt readiness, configured routine/webhook receiver; stale warning reads latest local bus window."
+    },
+    {
+      "files": [
+        "F03",
+        "F04"
+      ],
+      "parts": [
+        "P03",
+        "P04"
+      ],
+      "change": "Current references Coordination and retired claims board; historical comment references Concurrent PRs / who-is-on-it.",
+      "contracts": "Comment-only provenance, not changed runtime inferred from these spans."
+    },
+    {
+      "files": [
+        "F05"
+      ],
+      "parts": [
+        "P05",
+        "P06",
+        "P07",
+        "P08",
+        "P09"
+      ],
+      "change": "Current strictFlags replaces help-only parsing; unknown flags exit 2; current roster includes bitmap worker because client now uses ScriptLoader.url. Historical excluded worker to retain build-keyed precache.",
+      "consumers": "cache/version tag auditor and staged release output; roster manifest, bitmap worker client and service worker must agree."
+    },
+    {
+      "files": [
+        "F06"
+      ],
+      "parts": [
+        "P10",
+        "P11",
+        "P12"
+      ],
+      "change": "Current exports usage/known-flags and validates only entrypoint invocation, allowing importing tools to carry independent argv. Historical exitIfHelp runs at import.",
+      "consumers": "CI watch CLI and importers; historic dashboard importer explicitly deferred import because help handling read argv."
+    },
+    {
+      "files": [
+        "F07"
+      ],
+      "parts": [
+        "P13"
+      ],
+      "change": "Entire historical Claude JSONL usage digester absent current.",
+      "contracts": "Dedup by requestId/message.id with maxima per counter; dedup resumed turns by uuid; meta and tool-results do not open turns; sidechain separate; missing counters unknown. Host origin preferred over envelope inference. Low-tool wake proxy cannot establish waste or billing; transcript/per-turn outputs private, not committed.",
+      "consumers": "local transcript files/directories/stdin-independent CLI input; optional --turns/--json."
+    },
+    {
+      "files": [
+        "F08"
+      ],
+      "parts": [
+        "P14",
+        "P15",
+        "P16",
+        "P17",
+        "P18",
+        "P19",
+        "P20",
+        "P21",
+        "P22",
+        "P23"
+      ],
+      "change": "Current steward tag; env-name allowlist and MCP-host allowlist added; interpolation records names in nonenumerable envRefs, launch/followup logs names only. Historical interpolation allowed arbitrary available names.",
+      "contracts": "Current allowed sources APEX_FLEET_AS, APEX_SESSION_ID, APEX_AGENT_WEBHOOK_URL, APEX_AGENT_WEBHOOK_AUTH, CURSOR_API_KEY; remote hosts Cursor API, GitHub/subdomains or configured webhook host. Current changes read as differing text, not executed."
+    },
+    {
+      "files": [
+        "F09"
+      ],
+      "parts": [
+        "P24",
+        "P25"
+      ],
+      "change": "Current git helpers delegated to git-run/gitMust and strict flag validation occurs before fetch/log/merge; usage is derived from marked header instead of a fixed slice.",
+      "consumers": "deploy command protocol and library extraction."
+    },
+    {
+      "files": [
+        "F10"
+      ],
+      "parts": [
+        "P26",
+        "P27",
+        "P28",
+        "P29",
+        "P30",
+        "P31"
+      ],
+      "change": "Current tally also parses node FAIL/TAP blocks and broadens browser classification to staged jobs; historical only browser logs. Current quarantine proposals filter to Playwright specs, leaving node repeats as fixes.",
+      "contracts": "Node failures are first-try fail events, no assumed retry. Tally retains owner/evidence contract; comment now names Coordination."
+    },
+    {
+      "files": [
+        "F11"
+      ],
+      "parts": [
+        "P32"
+      ],
+      "change": "Entire historical archive planner absent current.",
+      "contracts": "Saved list_sessions page is data. ARCHIVE requires agent-created eligible role, idle >=60min, no running/no-archive/in-flight summary, every named PR closed/merged. Retired orchestrator requires distinct LIVE successor; unknown/offline keeps. Tool only prints decisions, never archives.",
+      "consumers": "session operator, gh PR state, fleet-bus successor discovery."
+    },
+    {
+      "files": [
+        "F12"
+      ],
+      "parts": [
+        "P33"
+      ],
+      "change": "Entire historical six-dataset dashboard snapshot utility absent current.",
+      "contracts": "prs,bus,claims,deploy,derived,snapshot; per-source errors produce empty dataset/error metadata and nonzero partial verdict. Default 25 PRs, 40 bus entries, claims 120min. API file list first page can limit classification. --no-fetch does not disable REST or ls-remote.",
+      "consumers": "dashboard JSON datasets; ci-watch verdict, pr-board status, claims board and fleet bus."
+    },
+    {
+      "files": [
+        "F13"
+      ],
+      "parts": [
+        "P34"
+      ],
+      "change": "Entire historical issue board/claimed-label reconciler absent current.",
+      "contracts": "Preview default; --apply writes labels/comments/pinned issue. Associations differ from ownership; merged references do not prove completion. API or claim incompleteness aborts before writes; nested timeline/closing-link pagination limit fails closed. Read-only retries only HTTP 502/503/504.",
+      "consumers": "fleet workflow and phone board; claims board, issue timeline, closing references, labels manifest."
+    },
+    {
+      "files": [
+        "F14"
+      ],
+      "parts": [
+        "P35"
+      ],
+      "change": "Entire historical brief generator absent current.",
+      "contracts": "2048-byte compact JSON and <=40-line Markdown; removes bus, board, shortens texts, drops lanes/asks and records drops. Disk newline means bytes cap applies JSON.stringify, not complete written file. Header advertises --queue-md/launch-policy budget behavior absent from implemented VALUE set and main: documentation is ahead of implementation in this snapshot.",
+      "consumers": "successor handoff from queue, saved pr-board, bus/cursor and explicit triggers/asks; data hint never authority."
+    },
+    {
+      "files": [
+        "F15"
+      ],
+      "parts": [
+        "P36"
+      ],
+      "change": "Entire historical PR bus-comment mirror absent current.",
+      "contracts": "Only to:#digits, open PRs; short-sha comment markers dedupe; default last200/24h when no known cursor; closed/merged skipped. API lookup failure treated not-PR, post errors counted; no transactional cursor update shown.",
+      "consumers": "fleet workflow; PR issue-comment subscribers."
+    },
+    {
+      "files": [
+        "F16"
+      ],
+      "parts": [
+        "P37"
+      ],
+      "change": "Entire historical bus/lease implementation absent current; current WORKERS explicitly retires it 2026-10-27.",
+      "contracts": "Branch commit subjects typed messages; lease.json tree; fast-forward compare-and-swap with five tries and object-id guard against deletion refspec. Protocol body20-600 chars, send allowlisted types/flags/address; dedupe last200, automatic READY/DONE keys, DONE across senders. Read default skips hidden lines, strict preserves at-least-once boundary, peek no cursor; watch seen500 and interval5-600s suppresses foreign broadcast train chatter. LIVE requires self or ROTATE; stale45min based last own line. Leases default60/max240min; break requires recorded user grant.",
+      "consumers": "agent-msg, archive, brief, mirror, dashboard and ownership utilities; ready receipts, claims dispatch and local cursor files."
+    },
+    {
+      "files": [
+        "F17"
+      ],
+      "parts": [
+        "P38"
+      ],
+      "change": "Entire historical session flag formatter absent current.",
+      "contracts": "Saved get_session/ccr data; defaults cost15,context300000,stale30min; explicit cost overrides metadata; missing values null, configured/served normalized; working-disconnected/stale flags. Exit0 always, no action or network; flags are evidence prompts."
+    },
+    {
+      "files": [
+        "F18"
+      ],
+      "parts": [
+        "P39"
+      ],
+      "change": "Only first10160 historical bytes assigned here; current utility absent. Tail and complete ownership resolution belong to another group.",
+      "contracts": "Prefix defines HELD open-diff > live CLAIMED > FREE precedence, release-answer prints only, path/glob/directory matching, caller claim identity, fleet-block owner fallback, paginated open PR listing and start of files API enumeration. Header promises local three-dot diff/cache/parallel API fail-closed behavior; implementation beyond prefix not certified here.",
+      "consumers": "push guard/path coordination historically; current root retains open-PR ownership rule but uses GitHub coordination."
+    }
+  ],
+  "currentComparison": "Computed differing-line replacements only against current files; no equal-block raw rereads. Current hash captured for retained files; absent paths checked on disk.",
+  "supportingReads": [
+    {
+      "path": "docs/WORKERS.md",
+      "lines": [
+        95,
+        116
+      ],
+      "return": "b4a027",
+      "finding": "Explicit retirement of fleet bus/claims/orchestrators/relay/watcher sessions, protocol and workflows dated2026-10-27."
+    },
+    {
+      "path": "tools/ci/dispatch.mjs",
+      "line": 102,
+      "kind": "reference search",
+      "finding": "Retains session extractor provenance from retired archive tool."
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md",
+      "line": 39,
+      "kind": "reference search",
+      "finding": "Stale authoritative fleet-bus reference survives."
+    }
+  ],
+  "limits": [
+    "No historical module executed/imported, tests/browser/network/staging/commit not run.",
+    "Current comparative changed text is static evidence only, not live runtime validation.",
+    "Agent-history prefix and fleet-owner suffix lie outside this group; equal blocks inherit only after canonical scope closes."
+  ],
+  "cleanup": [
+    "Do not revive retired bus/relay/claims protocols from snapshots.",
+    "Consider updating surviving plugin transport authority text to current GitHub-only coordination; no source edits made.",
+    "Historical brief header/implementation disagreement should remain provenance, not an instruction to implement obsolete flow."
+  ]
+}

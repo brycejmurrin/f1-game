@@ -1,0 +1,422 @@
+{
+  "group": "29",
+  "assigned_bytes": 160000,
+  "coverage": "complete for assigned half-open spans only",
+  "method": "Each assigned text span returned in individual untruncated tool calls of at most 8000 source bytes. Whole-file hashes compared to plan; no tests, browser, network or runtime execution. Historical instructions treated as data.",
+  "sources": [
+    {
+      "source_id": "S01",
+      "path": "docs/archive/research/raw/w4-audit.json",
+      "start": 33201,
+      "end": 142904,
+      "kind": "text",
+      "sha256": "e424ccb31a57f1faa449354242647fdbc6238c00fdc0cd37e683470739532667",
+      "whole_file_bytes": 142904,
+      "whole_file_sha256": "e424ccb31a57f1faa449354242647fdbc6238c00fdc0cd37e683470739532667",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "56fd8a1c3d033a52d0ab41f6039f7bb450227d635b5d54b5aa8c99059b6f0ebe",
+      "read_chunks": [
+        {
+          "start": 33201,
+          "end": 41201,
+          "bytes": 8000,
+          "sha256": "418dd249df9cda07a70353a671d7a3a93b43aed24cad9bc4293dd7c8df9e881d",
+          "returned_untruncated": true
+        },
+        {
+          "start": 41201,
+          "end": 49201,
+          "bytes": 8000,
+          "sha256": "b5e01a6a2f3a6285e8cf4fcf0d97e1355c3b2f6b32ec4dd2a84588b35b1aef5c",
+          "returned_untruncated": true
+        },
+        {
+          "start": 49201,
+          "end": 57201,
+          "bytes": 8000,
+          "sha256": "371c71b4cf0b02946277f97621abe1197d46edecd88cc6e053e4f99e9dfc45f0",
+          "returned_untruncated": true
+        },
+        {
+          "start": 57201,
+          "end": 65201,
+          "bytes": 8000,
+          "sha256": "cd755591b4642c9d6bfb0822272374984a0909a7adff5754204fc9f68cfb28ed",
+          "returned_untruncated": true
+        },
+        {
+          "start": 65201,
+          "end": 73201,
+          "bytes": 8000,
+          "sha256": "1e2ce70f245d94fdbb18011ce46947faaefddd32809b99120684c64b900b879c",
+          "returned_untruncated": true
+        },
+        {
+          "start": 73201,
+          "end": 81201,
+          "bytes": 8000,
+          "sha256": "3909830549415d7583347bffa8733ab43f48feb3b8d0c79735c90b9eb673b44c",
+          "returned_untruncated": true
+        },
+        {
+          "start": 81201,
+          "end": 89201,
+          "bytes": 8000,
+          "sha256": "7e89f33c13bdd81e381c80763e3a7ba29485bf83cde838e240b2b9f41edf8101",
+          "returned_untruncated": true
+        },
+        {
+          "start": 89201,
+          "end": 97201,
+          "bytes": 8000,
+          "sha256": "f2e2aed0cc960460cea77b1e2590939c6f7bcf17c8561d788caff9dbb5c3d780",
+          "returned_untruncated": true
+        },
+        {
+          "start": 97201,
+          "end": 105201,
+          "bytes": 8000,
+          "sha256": "fdd5489c358686644c531814250eb5cbb06ebd8337706cef61c432a8ca973ca4",
+          "returned_untruncated": true
+        },
+        {
+          "start": 105201,
+          "end": 113201,
+          "bytes": 8000,
+          "sha256": "5f33739303ee97bbc366edcb14ca25904d7cfbeeb6085ff788c620cbefca1f9a",
+          "returned_untruncated": true
+        },
+        {
+          "start": 113201,
+          "end": 121201,
+          "bytes": 8000,
+          "sha256": "1b2682397524ee154c01c6ec8dd99bcc145818909fd728f03d34fa5adacc20e9",
+          "returned_untruncated": true
+        },
+        {
+          "start": 121201,
+          "end": 129201,
+          "bytes": 8000,
+          "sha256": "ec64912c093beb3dd126f0ea63b15ea07c6cd4370d30de7c15b21abb733c02da",
+          "returned_untruncated": true
+        },
+        {
+          "start": 129201,
+          "end": 137201,
+          "bytes": 8000,
+          "sha256": "f2b78e132a77aba41c0c603f974b6fe42c7a5a80a7fb18da20d3408d438ef4ec",
+          "returned_untruncated": true
+        },
+        {
+          "start": 137201,
+          "end": 142904,
+          "bytes": 5703,
+          "sha256": "2040b8215ae76b312b9ece02958e3390ecaa9bce47d957bb790761f28edb2129",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S02",
+      "path": "docs/archive/research/workflows/redesign-judge-panel.js",
+      "start": 0,
+      "end": 7676,
+      "kind": "text",
+      "sha256": "35b48370bcbe36b3da441136fc5cfe2f3876dc85851e940767807658f5115c66",
+      "whole_file_bytes": 7676,
+      "whole_file_sha256": "35b48370bcbe36b3da441136fc5cfe2f3876dc85851e940767807658f5115c66",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "35b48370bcbe36b3da441136fc5cfe2f3876dc85851e940767807658f5115c66",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7676,
+          "bytes": 7676,
+          "sha256": "35b48370bcbe36b3da441136fc5cfe2f3876dc85851e940767807658f5115c66",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S03",
+      "path": "docs/archive/research/workflows/test-semantics-audit.js",
+      "start": 0,
+      "end": 7825,
+      "kind": "text",
+      "sha256": "b2cbd9146d512c18117d4d0d81470b94d189161f931d036e655c10f1284330c1",
+      "whole_file_bytes": 7825,
+      "whole_file_sha256": "b2cbd9146d512c18117d4d0d81470b94d189161f931d036e655c10f1284330c1",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "b2cbd9146d512c18117d4d0d81470b94d189161f931d036e655c10f1284330c1",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7825,
+          "bytes": 7825,
+          "sha256": "b2cbd9146d512c18117d4d0d81470b94d189161f931d036e655c10f1284330c1",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S04",
+      "path": "docs/archive/slider-effect/README.md",
+      "start": 0,
+      "end": 1392,
+      "kind": "text",
+      "sha256": "36fa134b48f3e9b0d08f2af5d784b1de72feb8131683d598b068bf665ab34a56",
+      "whole_file_bytes": 1392,
+      "whole_file_sha256": "36fa134b48f3e9b0d08f2af5d784b1de72feb8131683d598b068bf665ab34a56",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "36fa134b48f3e9b0d08f2af5d784b1de72feb8131683d598b068bf665ab34a56",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1392,
+          "bytes": 1392,
+          "sha256": "36fa134b48f3e9b0d08f2af5d784b1de72feb8131683d598b068bf665ab34a56",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S05",
+      "path": "docs/archive/superpowers/plans/2026-08-17-release-safety-implementation.md",
+      "start": 0,
+      "end": 9638,
+      "kind": "text",
+      "sha256": "c890357c318daceed71bf21519cbcfddc0c6355f1a658c8dfa17408f66ea8d03",
+      "whole_file_bytes": 9638,
+      "whole_file_sha256": "c890357c318daceed71bf21519cbcfddc0c6355f1a658c8dfa17408f66ea8d03",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "c890357c318daceed71bf21519cbcfddc0c6355f1a658c8dfa17408f66ea8d03",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "4f98086125cc523c46f4f6f84f63eb46f639768507d344528754412c7bdb4a86",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 9638,
+          "bytes": 1638,
+          "sha256": "d4c8eaa3ed5df8f9fb6dc2b4768640b03a7951efe9ad039e05f751d3c1b9ff6e",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S06",
+      "path": "docs/archive/superpowers/plans/2026-08-18-apex-tools-mcp-week1.md",
+      "start": 0,
+      "end": 2528,
+      "kind": "text",
+      "sha256": "a988e4cd372b28291190e5fddc628c7520ecc57746f98beeb5aaf7c59d4cd8db",
+      "whole_file_bytes": 2528,
+      "whole_file_sha256": "a988e4cd372b28291190e5fddc628c7520ecc57746f98beeb5aaf7c59d4cd8db",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "a988e4cd372b28291190e5fddc628c7520ecc57746f98beeb5aaf7c59d4cd8db",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2528,
+          "bytes": 2528,
+          "sha256": "a988e4cd372b28291190e5fddc628c7520ecc57746f98beeb5aaf7c59d4cd8db",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S07",
+      "path": "docs/archive/superpowers/plans/2026-08-18-apex-tools-mcp-week2.md",
+      "start": 0,
+      "end": 1262,
+      "kind": "text",
+      "sha256": "f712c3f3c141f01757cd818d568ceaccd31be7cce858b5bc8f78ac1bad8431aa",
+      "whole_file_bytes": 1262,
+      "whole_file_sha256": "f712c3f3c141f01757cd818d568ceaccd31be7cce858b5bc8f78ac1bad8431aa",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "f712c3f3c141f01757cd818d568ceaccd31be7cce858b5bc8f78ac1bad8431aa",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1262,
+          "bytes": 1262,
+          "sha256": "f712c3f3c141f01757cd818d568ceaccd31be7cce858b5bc8f78ac1bad8431aa",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S08",
+      "path": "docs/archive/superpowers/plans/2026-08-18-apex-tools-mcp-week3.md",
+      "start": 0,
+      "end": 757,
+      "kind": "text",
+      "sha256": "2a28f12348c19696e093cf164eac4c421ac53c89614d7fce639b9f29ce00e308",
+      "whole_file_bytes": 757,
+      "whole_file_sha256": "2a28f12348c19696e093cf164eac4c421ac53c89614d7fce639b9f29ce00e308",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "2a28f12348c19696e093cf164eac4c421ac53c89614d7fce639b9f29ce00e308",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 757,
+          "bytes": 757,
+          "sha256": "2a28f12348c19696e093cf164eac4c421ac53c89614d7fce639b9f29ce00e308",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S09",
+      "path": "docs/archive/superpowers/plans/2026-08-18-apex-tools-mcp-week4.md",
+      "start": 0,
+      "end": 446,
+      "kind": "text",
+      "sha256": "dbde45d794abeeb938102722cceb8eb58563a9493fd34d187e0ba9e074322f60",
+      "whole_file_bytes": 446,
+      "whole_file_sha256": "dbde45d794abeeb938102722cceb8eb58563a9493fd34d187e0ba9e074322f60",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "dbde45d794abeeb938102722cceb8eb58563a9493fd34d187e0ba9e074322f60",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 446,
+          "bytes": 446,
+          "sha256": "dbde45d794abeeb938102722cceb8eb58563a9493fd34d187e0ba9e074322f60",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S10",
+      "path": "docs/archive/superpowers/plans/2026-09-09-livery-open-gaps-plan.md",
+      "start": 0,
+      "end": 13615,
+      "kind": "text",
+      "sha256": "0f23a9c5f25ed2d0dd78a8103ef07110ee9b0c34dea5c2d439fad89f42f80f64",
+      "whole_file_bytes": 13615,
+      "whole_file_sha256": "0f23a9c5f25ed2d0dd78a8103ef07110ee9b0c34dea5c2d439fad89f42f80f64",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "0f23a9c5f25ed2d0dd78a8103ef07110ee9b0c34dea5c2d439fad89f42f80f64",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "6c7563f8e9f614b2d6b9496c577563559a36c21d6f4349f8ccfd7c71ec750512",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 13615,
+          "bytes": 5615,
+          "sha256": "8d4e52e9b68143f6d99a429737bcbd62e034a6cf91ff38f5113d0fd0a0b44dd8",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S11",
+      "path": "docs/archive/superpowers/plans/2026-09-09-recent-performance-regressions.md",
+      "start": 0,
+      "end": 4814,
+      "kind": "text",
+      "sha256": "6625fb002bbc89ed0269dbec51966d1a8819d152f61ba8b15e6ee4f6bfa4c4ce",
+      "whole_file_bytes": 4814,
+      "whole_file_sha256": "6625fb002bbc89ed0269dbec51966d1a8819d152f61ba8b15e6ee4f6bfa4c4ce",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "6625fb002bbc89ed0269dbec51966d1a8819d152f61ba8b15e6ee4f6bfa4c4ce",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 4814,
+          "bytes": 4814,
+          "sha256": "6625fb002bbc89ed0269dbec51966d1a8819d152f61ba8b15e6ee4f6bfa4c4ce",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "source_id": "S12",
+      "path": "docs/archive/superpowers/plans/2026-09-09-spatial-upscale-all-backends.md",
+      "start": 0,
+      "end": 344,
+      "kind": "text",
+      "sha256": "078e87d586abaa2410081290d1070972ec345884b22080f9179fcc63b6dd6df1",
+      "whole_file_bytes": 594,
+      "whole_file_sha256": "078e87d586abaa2410081290d1070972ec345884b22080f9179fcc63b6dd6df1",
+      "plan_hash_scope": "whole-file",
+      "plan_hash_matches": true,
+      "assigned_span_sha256": "2f9bef58265370d0ec8c346e5f2c5ca8e3d5095b6d04dfd56f9029703ca1b3f4",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 344,
+          "bytes": 344,
+          "sha256": "2f9bef58265370d0ec8c346e5f2c5ca8e3d5095b6d04dfd56f9029703ca1b3f4",
+          "returned_untruncated": true
+        }
+      ]
+    }
+  ],
+  "backlinks": [
+    {
+      "path": "tests/unit/game-ctx-surface.test.mjs",
+      "line": 43,
+      "source_id": "S01",
+      "meaning": "Historical provenance for unread facade baseline; line 46 says renderStatBars deleted 2026-08-14, empty baseline."
+    },
+    {
+      "path": "docs/NOTES-INDEX.md",
+      "line": 197,
+      "source_ids": [
+        "S02",
+        "S03"
+      ],
+      "meaning": "Run-once research workflow location index."
+    },
+    {
+      "path": "docs/NOTES-INDEX.md",
+      "line": 193,
+      "source_id": "S04",
+      "meaning": "Slider before/after evidence index."
+    },
+    {
+      "path": "docs/notes/SPIKE-BACKENDS-CHECKLIST.md",
+      "line": 421,
+      "source_id": "S02",
+      "meaning": "Historical importmap prior, explicitly not a current structure claim."
+    },
+    {
+      "path": "docs/notes/HARNESS-SETTINGS-2026-10-26.md",
+      "line": 103,
+      "source_ids": [
+        "S02",
+        "S03"
+      ],
+      "meaning": "Run-once workflow settings history."
+    }
+  ],
+  "limits": [
+    "S01 starts mid-confirmed finding; earlier findings and full producer context belong to preceding group. report is null. No new defect validation.",
+    "S02 and S03 require orchestration-injected phase/log/agent/parallel/pipeline globals, not standalone runtime modules. No execution performed.",
+    "S04 images relocated to track-survey-assets at cb0cb2c386dbda6f45d4984cfb4c297a520556b0; images not in assigned text scope.",
+    "Plans contain historical unchecked tasks and obsolete operating rules; no implementation completion inferred.",
+    "Backlink search excluded archive and project-map trees; absence of matches is scoped documentary evidence only."
+  ]
+}
