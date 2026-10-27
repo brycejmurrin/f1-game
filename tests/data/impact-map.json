@@ -3333,6 +3333,9 @@
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
+      "catLabel": [
+        "tests/unit/i18n-parts-career.test.mjs"
+      ],
       "displayStat": [
         "tests/unit/garage-sheet-round2.test.mjs"
       ],
@@ -3396,6 +3399,9 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
+      ],
+      "optLabel": [
+        "tests/unit/i18n-parts-career.test.mjs"
       ],
       "resolveSetup": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -3663,6 +3669,7 @@
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "*": [
+        "tests/unit/i18n-parts-career.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]
@@ -5454,6 +5461,7 @@
       "*": [
         "tests/unit/data-standings.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/i18n-parts-career.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
     },
@@ -5666,6 +5674,9 @@
       ],
       "weekendSessions": [
         "tests/unit/data-schedule-tz.test.mjs"
+      ],
+      "*": [
+        "tests/unit/i18n-parts-career.test.mjs"
       ]
     },
     "js/data/settings-defaults.js": {

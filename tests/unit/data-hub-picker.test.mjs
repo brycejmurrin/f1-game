@@ -12,6 +12,7 @@
  * Run: node --test tests/unit/data-hub-picker.test.mjs
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -109,7 +110,7 @@ function harness({ motion, latest = undefined, realTelemetry = false, drivers = 
     cancelAll() { cancels++; }, cacheEntryT: () => null,
   };
   class Clock extends Date { constructor(...a) { super(...(a.length ? a : [clock.now])); } static now() { return clock.now; } }
-  const ctx = vm.createContext({ document, F1API, Log: { info() {}, warn() {} }, navigator: { onLine: true }, queueMicrotask, console,
+  const ctx = vm.createContext({ I18n: i18nStub(),  document, F1API, Log: { info() {}, warn() {} }, navigator: { onLine: true }, queueMicrotask, console,
     Date: clock ? Clock : Date,
     localStorage: { length: 0, key: () => null, getItem: () => null },
     setTimeout: clock ? clock.setTimeout : setTimeout, clearTimeout: clock ? clock.clearTimeout : clearTimeout, Teams: { LIST: [] },
