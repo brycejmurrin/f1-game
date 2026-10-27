@@ -2274,7 +2274,7 @@
     {
       "path": "js/camera/flyby-editor.js",
       "global": "FlybyEditor",
-      "order": 556,
+      "order": 557,
       "roster": "LAZY_CAM_EDITOR"
     },
     {
@@ -2352,7 +2352,7 @@
     {
       "path": "js/camera/tuner-panel.js",
       "global": "CamTunerEditor",
-      "order": 555,
+      "order": 556,
       "roster": "LAZY_CAM_EDITOR"
     },
     {
@@ -2526,7 +2526,7 @@
     {
       "path": "js/career/career-planning-ui.js",
       "global": "CareerPlanningUI",
-      "order": 557,
+      "order": 558,
       "roster": "LAZY_CAREER_UI"
     },
     {
@@ -2544,7 +2544,7 @@
     {
       "path": "js/career/career-ui.js",
       "global": "CareerScreen",
-      "order": 558,
+      "order": 559,
       "roster": "LAZY_CAREER_UI"
     },
     {
@@ -3456,7 +3456,7 @@
     {
       "path": "js/editor/bridge-panel.js",
       "global": "DesignerBridges",
-      "order": 546,
+      "order": 547,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3480,7 +3480,7 @@
     {
       "path": "js/editor/designer.js",
       "global": "TrackDesigner",
-      "order": 548,
+      "order": 549,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3498,7 +3498,7 @@
     {
       "path": "js/editor/followup-tools.js",
       "global": "DesignerFollowup",
-      "order": 544,
+      "order": 545,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3510,7 +3510,7 @@
     {
       "path": "js/editor/profile.js",
       "global": "DesignerProfile",
-      "order": 542,
+      "order": 543,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3528,7 +3528,7 @@
     {
       "path": "js/editor/scenery-panel.js",
       "global": "DesignerScenery",
-      "order": 545,
+      "order": 546,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3540,7 +3540,7 @@
     {
       "path": "js/editor/selection-panel.js",
       "global": "DesignerSelection",
-      "order": 543,
+      "order": 544,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3570,7 +3570,13 @@
     {
       "path": "js/editor/workspace.js",
       "global": "DesignerWorkspace",
-      "order": 547,
+      "order": 548,
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/zones.js",
+      "global": "TrackZones",
+      "order": 542,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -5322,7 +5328,7 @@
     {
       "path": "js/xr/apex-xr.js",
       "global": "ApexXR",
-      "order": 553,
+      "order": 554,
       "roster": "LAZY_XR"
     },
     {
@@ -5334,7 +5340,7 @@
     {
       "path": "js/xr/xr-input.js",
       "global": "XrInput",
-      "order": 551,
+      "order": 552,
       "roster": "LAZY_XR"
     },
     {
@@ -5346,25 +5352,25 @@
     {
       "path": "js/xr/xr-plan.js",
       "global": "XRPlan",
-      "order": 549,
+      "order": 550,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-rig.js",
       "global": "XrRig",
-      "order": 550,
+      "order": 551,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-session.js",
       "global": "XrSession",
-      "order": 552,
+      "order": 553,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-ui.js",
       "global": "XrUi",
-      "order": 554,
+      "order": 555,
       "roster": "LAZY_XR"
     }
   ]

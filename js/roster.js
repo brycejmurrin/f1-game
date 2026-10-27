@@ -593,6 +593,7 @@
     "js/editor/scenery-preview.js",
     "js/editor/canvas.js",
     "js/editor/elev-presets.js",
+    "js/editor/zones.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
     "js/editor/followup-tools.js",
@@ -625,6 +626,10 @@
     [
       "js/editor/shape.js",
       "js/editor/canvas.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/zones.js"
     ],
     [
       "js/editor/shape.js",
@@ -672,6 +677,10 @@
     ],
     [
       "js/editor/elev-presets.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/zones.js",
       "js/editor/designer.js"
     ],
     [
