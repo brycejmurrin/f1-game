@@ -1,0 +1,219 @@
+{
+  "group": "12",
+  "assigned_bytes": 160000,
+  "method": "Read-only mapping; assigned spans returned in individual <=9000-byte calls. No tests/browser/network/runtime/source edits.",
+  "sources": [
+    {
+      "source_id": 1,
+      "path": "docs/archive/notes/test-review-2026-10-19/SYNTHESIS.md",
+      "start": 50113,
+      "end": 58139,
+      "kind": "text",
+      "sha256": "9d63d1930f22c6ac3b08a0698bcadbf535c57e2be07a08a76dd68bf330ee7306",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 58139,
+      "observed_whole_file_sha256": "9d63d1930f22c6ac3b08a0698bcadbf535c57e2be07a08a76dd68bf330ee7306",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "a8276965ab8d5a3f58b0e549bf968081f7e305aff1d6eca792748edfce4b797d",
+      "read_chunks": [
+        {
+          "start": 50113,
+          "end": 58139,
+          "bytes": 8026,
+          "sha256": "a8276965ab8d5a3f58b0e549bf968081f7e305aff1d6eca792748edfce4b797d",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 2,
+      "path": "docs/archive/notes/test-review-2026-10-19/batches.json",
+      "start": 0,
+      "end": 43068,
+      "kind": "text",
+      "sha256": "b24d7ac6ae661e82cce74159c93725aa6409454eebead5056db07ba6f9e35c3c",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 43068,
+      "observed_whole_file_sha256": "b24d7ac6ae661e82cce74159c93725aa6409454eebead5056db07ba6f9e35c3c",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "b24d7ac6ae661e82cce74159c93725aa6409454eebead5056db07ba6f9e35c3c",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "48cd4bd470bd86a391af9d3bf096027e3190b702ec01302bec71009887b693d8",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "58b7744eec3015bf0bc7a94475c6214914be78b7a27c78a688522d474b79aefd",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 18000,
+          "end": 27000,
+          "bytes": 9000,
+          "sha256": "e019e6936c327404fd8619b89c9ca9568e5f575d1ad3b5d39094cf097475497f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 27000,
+          "end": 36000,
+          "bytes": 9000,
+          "sha256": "0b5f575f4eb99e476156a686032f5440b470fc9cbad0dd7c65f0df3d3ef1135d",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 36000,
+          "end": 43068,
+          "bytes": 7068,
+          "sha256": "a481a8ea9973e97bfdb8a6d8fd916762b1cc530aa7d4690e17ae67ab1cb820cd",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 3,
+      "path": "docs/archive/notes/test-review-2026-10-19/findings.jsonl",
+      "start": 0,
+      "end": 108906,
+      "kind": "text",
+      "sha256": "dc4621343bccceb0ce47cea578178ad51926e3a80abb4d270e53db5977fb771a",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 376771,
+      "observed_whole_file_sha256": "dc4621343bccceb0ce47cea578178ad51926e3a80abb4d270e53db5977fb771a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "220ebeac3b678a21716bdb7358e06301ca603af1765f1b3c4edae7851148f23f",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "676993a4610be7c4f72136d6ad6ae6daad4a822a56dab13c890f3e443b6b0322",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "f053ebf585454ac5285c345fa1dd9d40f8e61a3460301099d59e1684cc7b5d00",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 18000,
+          "end": 27000,
+          "bytes": 9000,
+          "sha256": "1819dd6b99a9b2d146a38028bc497ffdd978a037c8a0863e92a8567bc37f915f",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 27000,
+          "end": 36000,
+          "bytes": 9000,
+          "sha256": "268ac649a492b2950c438ec99591dc840d54ad369e65fe23c23a702be631f7dc",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 36000,
+          "end": 45000,
+          "bytes": 9000,
+          "sha256": "937c77c4f0509da0b53efbf36872b943afdf254a263e3f2a75efbda190df2c74",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 45000,
+          "end": 54000,
+          "bytes": 9000,
+          "sha256": "7f67d2185b1819762701d144f27473e987772d4aa6e50970a31c21ebeac50503",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 54000,
+          "end": 63000,
+          "bytes": 9000,
+          "sha256": "6325daf2a8fa11fe9c8037c6cc8188a8f0d24ba1fdecab7da8589ecadd039b24",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 63000,
+          "end": 72000,
+          "bytes": 9000,
+          "sha256": "f321a1b876a1e66bde0510c52e3c8aa0d9cd0f89bbce7025e5b7650f769465c5",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 72000,
+          "end": 81000,
+          "bytes": 9000,
+          "sha256": "702a6615218fc26246e54d0fe063da764cd29f7bf98e81c3a6487d7374e57de4",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 81000,
+          "end": 90000,
+          "bytes": 9000,
+          "sha256": "5e8792421ec39fd13beea86c1b2912592b6c945365a1467f5beb7c77bbfca986",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 90000,
+          "end": 99000,
+          "bytes": 9000,
+          "sha256": "515a2ddfb6e42a1d8120a71689ad52940ae83101dcf6bba1b1fb0b116a52ae50",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 99000,
+          "end": 108000,
+          "bytes": 9000,
+          "sha256": "f3939cc24ac87e71b2d81f6b4506451bf9fa6dff0c000cb57963e75895620de2",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 108000,
+          "end": 108906,
+          "bytes": 906,
+          "sha256": "13972d523d731a4dbec932efd45bfe4284dbd7a1c3c221b5719ea748d4ede201",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    }
+  ],
+  "boundaries": {
+    "1": "Continuation from group 11; begins inside debugger issue list, ends at synthesis EOF.",
+    "2": "Whole file: 22 batches, 1013 entries, including one deleted-file annotation.",
+    "3": "Prefix only: 159 complete rows R1-01 through U1-16, plus unfinished U1-17; continuation belongs to group 13."
+  },
+  "backlink_search": {
+    "scope": "docs .claude tools tests excluding archive and project-map",
+    "terms": [
+      "test-review-2026-10-19",
+      "findings.jsonl",
+      "SYNTHESIS.md",
+      "batches.json"
+    ],
+    "hits": [
+      {
+        "path": "docs/NOTES-INDEX.md",
+        "line": 198,
+        "meaning": "Explicit 2026-10-26 archive provenance policy."
+      },
+      {
+        "path": "docs/notes/system-audit-4/anchors.md",
+        "lines": [
+          36,
+          37,
+          38,
+          43,
+          44
+        ],
+        "meaning": "Sibling review reports cited in historical anchor debt ledger; not direct assigned-file consumers."
+      }
+    ],
+    "limits": "No direct active consumer of the three assigned files found by scoped textual search; no exhaustive runtime dependency claim."
+  },
+  "cleanup": "Retain linked provenance set and IDs; classify scan/stub/vacuous tests for revalidation, not automatic deletion. Current resolution requires current source/issue checks."
+}

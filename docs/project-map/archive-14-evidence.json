@@ -1,0 +1,257 @@
+{
+  "group": "14",
+  "assigned_bytes": 160000,
+  "method": "Assigned half-open spans fully returned in 22 individual calls of at most 8000 bytes; no tests/browser/network/runtime/source edits.",
+  "sources": [
+    {
+      "source_id": 1,
+      "path": "docs/archive/notes/test-review-2026-10-19/findings.jsonl",
+      "start": 268906,
+      "end": 376771,
+      "kind": "text",
+      "sha256": "dc4621343bccceb0ce47cea578178ad51926e3a80abb4d270e53db5977fb771a",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 376771,
+      "observed_whole_file_sha256": "dc4621343bccceb0ce47cea578178ad51926e3a80abb4d270e53db5977fb771a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "3e7d39507255d1c91a92270e70eb971e170173d0a532371d0d421b94cf47a761",
+      "read_chunks": [
+        {
+          "start": 268906,
+          "end": 276906,
+          "bytes": 8000,
+          "sha256": "a966578c329deeb127bcff809c41739808d362ea2aeb347fb5f5a87bac8a442c",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 276906,
+          "end": 284906,
+          "bytes": 8000,
+          "sha256": "3a275a84d52b6cfcff6def092962e96886a6d23f7e6e232978d27e68b18cadea",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 284906,
+          "end": 292906,
+          "bytes": 8000,
+          "sha256": "99838ffd7db088bae345651cb387f805eb4f41bd45d83581cecc079ecaae5337",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 292906,
+          "end": 300906,
+          "bytes": 8000,
+          "sha256": "fa2d00f84de2609fb1ea4784e8c898a8e9c00e30fb0ae1b90f01040877975494",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 300906,
+          "end": 308906,
+          "bytes": 8000,
+          "sha256": "06c3bfdbb305fc88b325a082c3859785c320f070fd62e3b7377f019ede5b48d7",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 308906,
+          "end": 316906,
+          "bytes": 8000,
+          "sha256": "8f496afa2da3db9a77508b8fcbd7eef04480983526aeda2dbb5ccf070f833146",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 316906,
+          "end": 324906,
+          "bytes": 8000,
+          "sha256": "52ec64514f89c50adb842db1b8b7ca1f2857bbb5608624130d008e795913e358",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 324906,
+          "end": 332906,
+          "bytes": 8000,
+          "sha256": "e9feb77d02e9ec94fc5eb64e914d23700bfd8b7e45ac8ec3b0b34b9b898b08a7",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 332906,
+          "end": 340906,
+          "bytes": 8000,
+          "sha256": "e2568271439ad0c244cd8def7d9b280c1fd12c21324cd7575adbdc8c218de6fb",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 340906,
+          "end": 348906,
+          "bytes": 8000,
+          "sha256": "e1f2784d4fd4e40f958ca672ef303341ed2ab572bec87d28d7603cbf96e192e8",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 348906,
+          "end": 356906,
+          "bytes": 8000,
+          "sha256": "cfb9aeb030fc9dbca32b6e4ec7f6cf8ecbc6facf7b52a7baa8240b7440ad79b0",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 356906,
+          "end": 364906,
+          "bytes": 8000,
+          "sha256": "2f974ff5ecd5df8d2e43c9bda397523aa7cfb994d1fdf28b081619eb1ef7405d",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 364906,
+          "end": 372906,
+          "bytes": 8000,
+          "sha256": "ba21830f8e241e1f53bc3b9c5a0db7be098d32f75db2e42ac3ed7293d1517d54",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 372906,
+          "end": 376771,
+          "bytes": 3865,
+          "sha256": "b1887d9b30bfe7b7d99199c0b6f7a2aa6591a26f8853139d6ded14fbf9f9a350",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 2,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/audio-1.md",
+      "start": 0,
+      "end": 19694,
+      "kind": "text",
+      "sha256": "1b7d81c2264611a725297652622b9872e4112923a00a86528e7d4facba5a1de6",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 19694,
+      "observed_whole_file_sha256": "1b7d81c2264611a725297652622b9872e4112923a00a86528e7d4facba5a1de6",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "1b7d81c2264611a725297652622b9872e4112923a00a86528e7d4facba5a1de6",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "0903c43566d2ae55483563ec3b5ef3dbb1dcbf2e33904ad5b4fe06c9c7343440",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "de8430049addbc90983f127ed01349bbd4990ba55d2a4fdf0782c22829c0517d",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 19694,
+          "bytes": 3694,
+          "sha256": "1c40532b6b7c324622e9eb987418d6b75a9e35a1d0a5d29e021ba53e75d31337",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 3,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/car-1.md",
+      "start": 0,
+      "end": 23029,
+      "kind": "text",
+      "sha256": "c77d8a9b48440bfd3f4ca6b0872ff47785852c89e951a0803fa39698796e73be",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 23029,
+      "observed_whole_file_sha256": "c77d8a9b48440bfd3f4ca6b0872ff47785852c89e951a0803fa39698796e73be",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c77d8a9b48440bfd3f4ca6b0872ff47785852c89e951a0803fa39698796e73be",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "e72d9af8268fa502a8ecb4ca204b782b320bdb34f1d8bd02af22c92484d0c67b",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "493c181201147b70ab956987625e40d39003c38cf8fdd136e63544102f4f2ddb",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 23029,
+          "bytes": 7029,
+          "sha256": "1ce0dd6bf1a8cd3292d1e75f05e55a01b9d8a3f37b6120db96e7333cdcdb20ae",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 4,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/car-2.part-1ofn.md",
+      "start": 0,
+      "end": 9412,
+      "kind": "text",
+      "sha256": "6ceea5d9f250f4251462e8735ca60a8df0723504c91d8e661213ea5a00410ff8",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 13618,
+      "observed_whole_file_sha256": "6ceea5d9f250f4251462e8735ca60a8df0723504c91d8e661213ea5a00410ff8",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "20cd0f4a47a8099b000002a35562fecec201d137ebb9aabbd5b8a7bace5f0fd0",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "a555fa1d431af8f0f15531c61433fa01615d0b5ff298b658a100977a1ff9a35e",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 9412,
+          "bytes": 1412,
+          "sha256": "58278e1fcd59cb8e6d25307952a500219cc17412e05abfa544736de962374a44",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    }
+  ],
+  "boundaries": {
+    "1": "Starts inside N1-10; ends ledger EOF after PL-29. Earlier ledger spans in groups 12 and 13.",
+    "2": "Whole file.",
+    "3": "Whole file.",
+    "4": "Prefix ends inside ranked finding five; remainder in group 15."
+  },
+  "backlink_search": {
+    "scope": "docs .claude tools tests excluding docs/archive/** and docs/project-map/**",
+    "terms": [
+      "test-review-2026-10-19",
+      "audio-1.md",
+      "car-1.md",
+      "car-2.part-1ofn",
+      "findings.jsonl"
+    ],
+    "hits": [
+      {
+        "path": "docs/NOTES-INDEX.md",
+        "line": 198,
+        "meaning": "Archive provenance-only policy."
+      },
+      {
+        "path": "docs/notes/system-audit-4/anchors.md",
+        "lines": [
+          36,
+          37,
+          38,
+          43,
+          44
+        ],
+        "meaning": "References sibling reports, not direct assigned-source consumers."
+      }
+    ],
+    "limits": "No direct active assigned-source consumer found by scoped textual search; no external/runtime dependency claim."
+  },
+  "cleanup": "Retain report provenance, source supersession, IDs, synthesis checks and duplicate links; revalidate current code and issue resolution before acting on historical cleanup proposals."
+}

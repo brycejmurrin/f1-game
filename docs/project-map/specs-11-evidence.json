@@ -1,0 +1,5896 @@
+{
+  "batch": "11",
+  "assignedBytes": 160000,
+  "rangeConvention": "half-open UTF-8 byte offsets; inclusive lines",
+  "inspection": "Static source only; no tests/browser/runtime/source edits/staging/commit",
+  "files": [
+    {
+      "path": "tests/specs/parts-setup-ids.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 20559,
+      "manifestWholeFileSha256": "d944d0a675a44f26f847915534c7ca268e74654e5ffab2a90117db3c59c10ff3",
+      "wholeFileSha256": "d944d0a675a44f26f847915534c7ca268e74654e5ffab2a90117db3c59c10ff3",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 19441,
+        "end": 20559,
+        "sha256": "770a0a57f51e2231a2a263fda072902b7c750f9b31054993097de21e47c10d9a",
+        "bytes": 1118
+      },
+      "chunks": [
+        {
+          "start": 19441,
+          "end": 20559,
+          "bytes": 1118,
+          "sha256": "770a0a57f51e2231a2a263fda072902b7c750f9b31054993097de21e47c10d9a",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": true,
+      "semantic": "Camera tail only: distance clamps at 4.55–15.05; dragging stops spin, changes azimuth >0.15 and preserves distance. Setup and earlier assertions belong to the preceding batch.",
+      "cases": [
+        {
+          "title": "zoom is clamped and drag orbits without touching distance",
+          "bytes": [
+            18398,
+            20553
+          ],
+          "lines": [
+            365,
+            410
+          ],
+          "partial": true
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            19595,
+            19654
+          ],
+          "lines": [
+            389,
+            389
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            19695,
+            19752
+          ],
+          "lines": [
+            391,
+            391
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            19975,
+            20016
+          ],
+          "lines": [
+            397,
+            397
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            20399,
+            20429
+          ],
+          "lines": [
+            407,
+            407
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            20435,
+            20495
+          ],
+          "lines": [
+            408,
+            408
+          ]
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            20501,
+            20547
+          ],
+          "lines": [
+            409,
+            409
+          ]
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            524,
+            592
+          ],
+          "lines": [
+            10,
+            10
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "bytes": [
+            593,
+            685
+          ],
+          "lines": [
+            11,
+            11
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/perf-boost-press-pipelines-gl.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 3150,
+      "manifestWholeFileSha256": "3a8dea6371a1129a2464bea22594042a2d67f0c35d73a7b2f5b6844ea0ad0617",
+      "wholeFileSha256": "3a8dea6371a1129a2464bea22594042a2d67f0c35d73a7b2f5b6844ea0ad0617",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 3150,
+        "sha256": "3a8dea6371a1129a2464bea22594042a2d67f0c35d73a7b2f5b6844ea0ad0617",
+        "bytes": 3150
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3150,
+          "bytes": 3150,
+          "sha256": "3a8dea6371a1129a2464bea22594042a2d67f0c35d73a7b2f5b6844ea0ad0617",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "TLX forced WebGL2 landscape touch: backend count reachable, all presses deploy ERS, boostVerdict rejects repeat BOOST pipelines and excess background streams; first press is annotation only.",
+      "cases": [
+        {
+          "title": "TLX WebGL2: BOOST presses 2..N re-mint no BOOST pipelines and add no background ones",
+          "bytes": [
+            1977,
+            3148
+          ],
+          "lines": [
+            26,
+            38
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            2317,
+            2401
+          ],
+          "lines": [
+            30,
+            30
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2802,
+            2902
+          ],
+          "lines": [
+            34,
+            34
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3099,
+            3144
+          ],
+          "lines": [
+            37,
+            37
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            1907,
+            1974
+          ],
+          "lines": [
+            24,
+            24
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            2104,
+            2127
+          ],
+          "lines": [
+            27,
+            27
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            1749,
+            1812
+          ],
+          "lines": [
+            21,
+            21
+          ]
+        },
+        {
+          "source": "../../tools/perf/boost-press-census.mjs",
+          "bytes": [
+            1813,
+            1905
+          ],
+          "lines": [
+            22,
+            22
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": [
+        "docs/notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md",
+        "docs/notes/PERF-FINDINGS.md:"
+      ]
+    },
+    {
+      "path": "tests/specs/perf-boost-press-pipelines.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 3579,
+      "manifestWholeFileSha256": "0640b94a6211338656dc0159896f5888136f2f6e6b2592458ea77730903b1983",
+      "wholeFileSha256": "0640b94a6211338656dc0159896f5888136f2f6e6b2592458ea77730903b1983",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 3579,
+        "sha256": "0640b94a6211338656dc0159896f5888136f2f6e6b2592458ea77730903b1983",
+        "bytes": 3579
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3579,
+          "bytes": 3579,
+          "sha256": "0640b94a6211338656dc0159896f5888136f2f6e6b2592458ea77730903b1983",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "TLX requested WebGPU landscape touch: same BOOST contract, with explicit WebGL2 fallback annotation. Counts are software-valid; phone latency is not measured.",
+      "cases": [
+        {
+          "title": "TLX WebGPU: BOOST presses 2..N re-mint no BOOST pipelines and add no background ones",
+          "bytes": [
+            2232,
+            3577
+          ],
+          "lines": [
+            28,
+            41
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            2573,
+            2657
+          ],
+          "lines": [
+            32,
+            32
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3231,
+            3331
+          ],
+          "lines": [
+            37,
+            37
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3528,
+            3573
+          ],
+          "lines": [
+            40,
+            40
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            2162,
+            2229
+          ],
+          "lines": [
+            26,
+            26
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            2359,
+            2382
+          ],
+          "lines": [
+            29,
+            29
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            2004,
+            2067
+          ],
+          "lines": [
+            23,
+            23
+          ]
+        },
+        {
+          "source": "../../tools/perf/boost-press-census.mjs",
+          "bytes": [
+            2068,
+            2160
+          ],
+          "lines": [
+            24,
+            24
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": [
+        "docs/notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md",
+        "docs/notes/PERF-FINDINGS.md:"
+      ]
+    },
+    {
+      "path": "tests/specs/perf-frametime.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 7605,
+      "manifestWholeFileSha256": "c0cd85ea4c40a54acd18566fa4d40d1d00210ce5f90bdfd5f87fc7aed71dfece",
+      "wholeFileSha256": "c0cd85ea4c40a54acd18566fa4d40d1d00210ce5f90bdfd5f87fc7aed71dfece",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 7605,
+        "sha256": "c0cd85ea4c40a54acd18566fa4d40d1d00210ce5f90bdfd5f87fc7aed71dfece",
+        "bytes": 7605
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7605,
+          "bytes": 7605,
+          "sha256": "c0cd85ea4c40a54acd18566fa4d40d1d00210ce5f90bdfd5f87fc7aed71dfece",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Pinned factory seat and seeded closed-loop driver: warm/sample intervals collect frametime percentiles, long tasks and heap. Snapshot >4 frames; baseline regressions only fail in STRICT mode. Updating requires a reason/blessing. Interval and input cleared after sampling.",
+      "cases": [
+        {
+          "title": "records p50/p95/p99, long tasks, and heap vs baseline",
+          "bytes": [
+            1408,
+            7599
+          ],
+          "lines": [
+            35,
+            219
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            5134,
+            5191
+          ],
+          "lines": [
+            149,
+            149
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5197,
+            5293
+          ],
+          "lines": [
+            150,
+            150
+          ]
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            7042,
+            7071
+          ],
+          "lines": [
+            203,
+            203
+          ]
+        },
+        {
+          "matcher": "toHaveLength",
+          "bytes": [
+            7377,
+            7424
+          ],
+          "lines": [
+            213,
+            213
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            1362,
+            1403
+          ],
+          "lines": [
+            33,
+            33
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            1496,
+            1520
+          ],
+          "lines": [
+            36,
+            36
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "node:fs",
+          "bytes": [
+            405,
+            430
+          ],
+          "lines": [
+            8,
+            8
+          ]
+        },
+        {
+          "source": "node:path",
+          "bytes": [
+            431,
+            460
+          ],
+          "lines": [
+            9,
+            9
+          ]
+        },
+        {
+          "source": "node:timers/promises",
+          "bytes": [
+            461,
+            520
+          ],
+          "lines": [
+            10,
+            10
+          ]
+        },
+        {
+          "source": "node:url",
+          "bytes": [
+            521,
+            562
+          ],
+          "lines": [
+            11,
+            11
+          ]
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            563,
+            643
+          ],
+          "lines": [
+            12,
+            12
+          ]
+        },
+        {
+          "source": "../helpers/factory-seat.js",
+          "bytes": [
+            644,
+            704
+          ],
+          "lines": [
+            13,
+            13
+          ]
+        },
+        {
+          "source": "../helpers/perf-frametime.mjs",
+          "bytes": [
+            705,
+            846
+          ],
+          "lines": [
+            14,
+            21
+          ]
+        },
+        {
+          "source": "../helpers/baseline-blessing.mjs",
+          "bytes": [
+            847,
+            907
+          ],
+          "lines": [
+            22,
+            22
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/perf-idle-pipeline-churn.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 2347,
+      "manifestWholeFileSha256": "353768974b31ccf8b65f112747d11443cca86ba4b477c3d0e1ec4b8afe6882bc",
+      "wholeFileSha256": "353768974b31ccf8b65f112747d11443cca86ba4b477c3d0e1ec4b8afe6882bc",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 2347,
+        "sha256": "353768974b31ccf8b65f112747d11443cca86ba4b477c3d0e1ec4b8afe6882bc",
+        "bytes": 2347
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2347,
+          "bytes": 2347,
+          "sha256": "353768974b31ccf8b65f112747d11443cca86ba4b477c3d0e1ec4b8afe6882bc",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "GAS held, 120 warm frames and six 60-frame idle windows: reachable backend and zero new pipelines per window. WebGPU fallback is annotated.",
+      "cases": [
+        {
+          "title": "TLX WebGPU: steady driving builds no render pipelines after warm-up",
+          "bytes": [
+            1256,
+            2345
+          ],
+          "lines": [
+            19,
+            30
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            1585,
+            1669
+          ],
+          "lines": [
+            23,
+            23
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            2113,
+            2341
+          ],
+          "lines": [
+            28,
+            29
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            1186,
+            1253
+          ],
+          "lines": [
+            17,
+            17
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            1366,
+            1389
+          ],
+          "lines": [
+            20,
+            20
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            1041,
+            1104
+          ],
+          "lines": [
+            14,
+            14
+          ]
+        },
+        {
+          "source": "../../tools/perf/idle-pipeline-census.mjs",
+          "bytes": [
+            1105,
+            1184
+          ],
+          "lines": [
+            15,
+            15
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/perf-race-entry.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 5302,
+      "manifestWholeFileSha256": "67c0e4ae302bea504d6ac0a420c7c54b70826aaaf47bb7aae38799c294d575c9",
+      "wholeFileSha256": "67c0e4ae302bea504d6ac0a420c7c54b70826aaaf47bb7aae38799c294d575c9",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 5302,
+        "sha256": "67c0e4ae302bea504d6ac0a420c7c54b70826aaaf47bb7aae38799c294d575c9",
+        "bytes": 5302
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5302,
+          "bytes": 5302,
+          "sha256": "67c0e4ae302bea504d6ac0a420c7c54b70826aaaf47bb7aae38799c294d575c9",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Full-intro menu race versus practice profiles: entry identity, populated marks, intro/flyby and distinct handoff ownership. Wall-time cap is strict only when configured; emits stage/diff artifact.",
+      "cases": [
+        {
+          "title": "race vs practice menu entry stages (full intro)",
+          "bytes": [
+            2614,
+            5296
+          ],
+          "lines": [
+            63,
+            130
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toHaveText",
+          "bytes": [
+            1902,
+            1974
+          ],
+          "lines": [
+            46,
+            46
+          ]
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            3833,
+            3886
+          ],
+          "lines": [
+            104,
+            104
+          ]
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            3892,
+            3953
+          ],
+          "lines": [
+            105,
+            105
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3959,
+            3997
+          ],
+          "lines": [
+            106,
+            106
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4003,
+            4049
+          ],
+          "lines": [
+            107,
+            107
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            4055,
+            4136
+          ],
+          "lines": [
+            108,
+            108
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4197,
+            4296
+          ],
+          "lines": [
+            110,
+            112
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4302,
+            4443
+          ],
+          "lines": [
+            113,
+            115
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4449,
+            4531
+          ],
+          "lines": [
+            116,
+            116
+          ]
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            4537,
+            4627
+          ],
+          "lines": [
+            117,
+            117
+          ]
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            4696,
+            4775
+          ],
+          "lines": [
+            119,
+            119
+          ]
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            4781,
+            4908
+          ],
+          "lines": [
+            120,
+            120
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            4935,
+            5016
+          ],
+          "lines": [
+            123,
+            123
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            2568,
+            2609
+          ],
+          "lines": [
+            61,
+            61
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            2696,
+            2722
+          ],
+          "lines": [
+            64,
+            64
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            109,
+            172
+          ],
+          "lines": [
+            3,
+            3
+          ]
+        },
+        {
+          "source": "../helpers/factory-seat.js",
+          "bytes": [
+            173,
+            233
+          ],
+          "lines": [
+            4,
+            4
+          ]
+        },
+        {
+          "source": "../../tools/shot/loading-probe.mjs",
+          "bytes": [
+            234,
+            305
+          ],
+          "lines": [
+            5,
+            5
+          ]
+        },
+        {
+          "source": "../helpers/perf-race-entry.mjs",
+          "bytes": [
+            306,
+            457
+          ],
+          "lines": [
+            6,
+            13
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/perf-sw-cache-hit.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 4875,
+      "manifestWholeFileSha256": "09cbd71df61f505ed250c2ad72ef4e6b6d4c6747cb371bcdb29f56979d710eb4",
+      "wholeFileSha256": "09cbd71df61f505ed250c2ad72ef4e6b6d4c6747cb371bcdb29f56979d710eb4",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 4875,
+        "sha256": "09cbd71df61f505ed250c2ad72ef4e6b6d4c6747cb371bcdb29f56979d710eb4",
+        "bytes": 4875
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4875,
+          "bytes": 4875,
+          "sha256": "09cbd71df61f505ed250c2ad72ef4e6b6d4c6747cb371bcdb29f56979d710eb4",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Real service-worker settled install caches are snapshotted before Monza race; shell >50 entries, race loads code, no checked same-origin script/style misses. Runtime opt-ins and manifest-derived dev agent files excluded; does not prove offline networking.",
+      "cases": [
+        {
+          "title": "a first race loads no script or stylesheet the service worker install did not precache",
+          "bytes": [
+            2263,
+            4873
+          ],
+          "lines": [
+            34,
+            68
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3402,
+            3488
+          ],
+          "lines": [
+            48,
+            48
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            4563,
+            4644
+          ],
+          "lines": [
+            65,
+            65
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            4648,
+            4753
+          ],
+          "lines": [
+            66,
+            66
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            4757,
+            4869
+          ],
+          "lines": [
+            67,
+            67
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            2062,
+            2129
+          ],
+          "lines": [
+            29,
+            29
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            2410,
+            2433
+          ],
+          "lines": [
+            35,
+            35
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "node:module",
+          "bytes": [
+            1628,
+            1672
+          ],
+          "lines": [
+            21,
+            21
+          ]
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            1673,
+            1736
+          ],
+          "lines": [
+            22,
+            22
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/persistence-dom.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 3187,
+      "manifestWholeFileSha256": "fd4609ea1641e4c25d90fbf97e56be037f9acafbc6ecb8d6bd9dea4d07d65a16",
+      "wholeFileSha256": "fd4609ea1641e4c25d90fbf97e56be037f9acafbc6ecb8d6bd9dea4d07d65a16",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 3187,
+        "sha256": "fd4609ea1641e4c25d90fbf97e56be037f9acafbc6ecb8d6bd9dea4d07d65a16",
+        "bytes": 3187
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3187,
+          "bytes": 3187,
+          "sha256": "fd4609ea1641e4c25d90fbf97e56be037f9acafbc6ecb8d6bd9dea4d07d65a16",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Injected apex26 storage quota failures: collapsible SESSION ONLY warning, race suppression, and downloaded recovery JSON containing live career rather than storage cache.",
+      "cases": [
+        {
+          "title": "the warning names the session-only consequence and folds away",
+          "bytes": [
+            924,
+            1947
+          ],
+          "lines": [
+            25,
+            44
+          ],
+          "partial": false
+        },
+        {
+          "title": "the recovery export contains game progress, not the storage cache",
+          "bytes": [
+            1952,
+            3181
+          ],
+          "lines": [
+            46,
+            68
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            1168,
+            1197
+          ],
+          "lines": [
+            29,
+            29
+          ]
+        },
+        {
+          "matcher": "toContainText",
+          "bytes": [
+            1209,
+            1254
+          ],
+          "lines": [
+            30,
+            30
+          ]
+        },
+        {
+          "matcher": "toContainText",
+          "bytes": [
+            1266,
+            1317
+          ],
+          "lines": [
+            31,
+            31
+          ]
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            1405,
+            1461
+          ],
+          "lines": [
+            34,
+            34
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            1473,
+            1521
+          ],
+          "lines": [
+            35,
+            35
+          ]
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            1533,
+            1561
+          ],
+          "lines": [
+            36,
+            36
+          ]
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            1599,
+            1654
+          ],
+          "lines": [
+            38,
+            38
+          ]
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            1666,
+            1715
+          ],
+          "lines": [
+            39,
+            39
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            1798,
+            1826
+          ],
+          "lines": [
+            41,
+            41
+          ]
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            1912,
+            1941
+          ],
+          "lines": [
+            43,
+            43
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2427,
+            2471
+          ],
+          "lines": [
+            54,
+            54
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2477,
+            2518
+          ],
+          "lines": [
+            55,
+            55
+          ]
+        },
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            2657,
+            2728
+          ],
+          "lines": [
+            59,
+            59
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2900,
+            2950
+          ],
+          "lines": [
+            63,
+            63
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2956,
+            3004
+          ],
+          "lines": [
+            64,
+            64
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3010,
+            3072
+          ],
+          "lines": [
+            65,
+            65
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3078,
+            3125
+          ],
+          "lines": [
+            66,
+            66
+          ]
+        },
+        {
+          "matcher": "toHaveProperty",
+          "bytes": [
+            3131,
+            3175
+          ],
+          "lines": [
+            67,
+            67
+          ]
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            213,
+            276
+          ],
+          "lines": [
+            5,
+            5
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/persistence.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 5289,
+      "manifestWholeFileSha256": "010926e62697d8079ebb93d29e8e9fd70ac272d77f717204638bf314d9462924",
+      "wholeFileSha256": "010926e62697d8079ebb93d29e8e9fd70ac272d77f717204638bf314d9462924",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 5289,
+        "sha256": "010926e62697d8079ebb93d29e8e9fd70ac272d77f717204638bf314d9462924",
+        "bytes": 5289
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5289,
+          "bytes": 5289,
+          "sha256": "010926e62697d8079ebb93d29e8e9fd70ac272d77f717204638bf314d9462924",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Healthy and quota/security-failing storage: persistState exception identity, retained warning/reload consequence, session-cache readback and console warning deduplication. Init-script monkeypatch is context-local.",
+      "cases": [
+        {
+          "title": "a healthy page reports ok",
+          "bytes": [
+            2325,
+            2526
+          ],
+          "lines": [
+            51,
+            55
+          ],
+          "partial": false
+        },
+        {
+          "title": "a failing write is recorded, logged, and reported by persistState()",
+          "bytes": [
+            2531,
+            3501
+          ],
+          "lines": [
+            57,
+            76
+          ],
+          "partial": false
+        },
+        {
+          "title": "the exception's own name is reported, not a generic flag",
+          "bytes": [
+            3506,
+            4101
+          ],
+          "lines": [
+            78,
+            90
+          ],
+          "partial": false
+        },
+        {
+          "title": "the session still reads back what it wrote (a lost save is not a lost session)",
+          "bytes": [
+            4106,
+            4488
+          ],
+          "lines": [
+            92,
+            100
+          ],
+          "partial": false
+        },
+        {
+          "title": "the loud warning fires once, not once per write",
+          "bytes": [
+            4493,
+            5282
+          ],
+          "lines": [
+            102,
+            115
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2464,
+            2487
+          ],
+          "lines": [
+            53,
+            53
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2493,
+            2520
+          ],
+          "lines": [
+            54,
+            54
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3119,
+            3149
+          ],
+          "lines": [
+            70,
+            70
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3155,
+            3204
+          ],
+          "lines": [
+            71,
+            71
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3210,
+            3280
+          ],
+          "lines": [
+            72,
+            72
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3440,
+            3495
+          ],
+          "lines": [
+            75,
+            75
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4027,
+            4051
+          ],
+          "lines": [
+            88,
+            88
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4057,
+            4095
+          ],
+          "lines": [
+            89,
+            89
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4457,
+            4482
+          ],
+          "lines": [
+            99,
+            99
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            5043,
+            5087
+          ],
+          "lines": [
+            111,
+            111
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5241,
+            5276
+          ],
+          "lines": [
+            114,
+            114
+          ]
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            1363,
+            1426
+          ],
+          "lines": [
+            28,
+            28
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/phone-recorder.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 2745,
+      "manifestWholeFileSha256": "19d9c47f4eb3c4f3aa3edb0c62aa68e91397defe2e2b1636d4bd295c28f8f29e",
+      "wholeFileSha256": "19d9c47f4eb3c4f3aa3edb0c62aa68e91397defe2e2b1636d4bd295c28f8f29e",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 2745,
+        "sha256": "19d9c47f4eb3c4f3aa3edb0c62aa68e91397defe2e2b1636d4bd295c28f8f29e",
+        "bytes": 2745
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2745,
+          "bytes": 2745,
+          "sha256": "19d9c47f4eb3c4f3aa3edb0c62aa68e91397defe2e2b1636d4bd295c28f8f29e",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Mobile landscape navigator share stub: RECORD starts cadence/badge; SHARE sends one valid phone-soak JSON with 120 cadence frames, positive DPR, valid GL, samples and stop marker, then recorder is off.",
+      "cases": [
+        {
+          "title": "shares one valid JSON soak file and shows the REC badge",
+          "bytes": [
+            396,
+            2739
+          ],
+          "lines": [
+            9,
+            48
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1204,
+            1319
+          ],
+          "lines": [
+            24,
+            24
+          ]
+        },
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            1638,
+            1689
+          ],
+          "lines": [
+            29,
+            29
+          ]
+        },
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            1947,
+            2009
+          ],
+          "lines": [
+            34,
+            34
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2015,
+            2059
+          ],
+          "lines": [
+            35,
+            35
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2106,
+            2152
+          ],
+          "lines": [
+            37,
+            37
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2158,
+            2198
+          ],
+          "lines": [
+            38,
+            38
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2204,
+            2238
+          ],
+          "lines": [
+            39,
+            39
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2244,
+            2280
+          ],
+          "lines": [
+            40,
+            40
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            2286,
+            2338
+          ],
+          "lines": [
+            41,
+            41
+          ]
+        },
+        {
+          "matcher": "toBeNull",
+          "bytes": [
+            2344,
+            2386
+          ],
+          "lines": [
+            42,
+            42
+          ]
+        },
+        {
+          "matcher": "toBeNull",
+          "bytes": [
+            2453,
+            2502
+          ],
+          "lines": [
+            43,
+            43
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2508,
+            2552
+          ],
+          "lines": [
+            44,
+            44
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2558,
+            2622
+          ],
+          "lines": [
+            45,
+            45
+          ]
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            2628,
+            2660
+          ],
+          "lines": [
+            46,
+            46
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2666,
+            2733
+          ],
+          "lines": [
+            47,
+            47
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            308,
+            391
+          ],
+          "lines": [
+            7,
+            7
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            174,
+            237
+          ],
+          "lines": [
+            4,
+            4
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/photo-studio-conditions.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 8668,
+      "manifestWholeFileSha256": "4a93906979182421fcdd34189ab3b6bf42c4afbd9573c61fd7f6f90c6b029cdd",
+      "wholeFileSha256": "4a93906979182421fcdd34189ab3b6bf42c4afbd9573c61fd7f6f90c6b029cdd",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 8668,
+        "sha256": "4a93906979182421fcdd34189ab3b6bf42c4afbd9573c61fd7f6f90c6b029cdd",
+        "bytes": 8668
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "be363ce24221ebd315c9378e3e9c9ca1bcb2da6f3d0208185eeb3858ef1858e8",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8000,
+          "end": 8668,
+          "bytes": 668,
+          "sha256": "07bfa095fd0549e38d789e6ef315947414ee4dac78ae7639beaedbac406c7f7d",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Headless paused Bahrain and Home circuit photos: temporary lighting/time/weather changes resolve live, reset and close restore conditions/physics; phone sheets hit-test and fit controls at >=40px. Garage hides track conditions.",
+      "cases": [
+        {
+          "title": "Paused race photo changes time of day and weather live, resets, and leaves the race untouched",
+          "bytes": [
+            1318,
+            4975
+          ],
+          "lines": [
+            28,
+            98
+          ],
+          "partial": false
+        },
+        {
+          "title": "Time & weather controls fit the phone sheet at 852x393 and 390x844",
+          "bytes": [
+            4978,
+            6975
+          ],
+          "lines": [
+            100,
+            134
+          ],
+          "partial": false
+        },
+        {
+          "title": "Title circuit photo changes time and weather for the shoot and restores Home",
+          "bytes": [
+            6978,
+            8666
+          ],
+          "lines": [
+            136,
+            165
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            1954,
+            1999
+          ],
+          "lines": [
+            41,
+            41
+          ]
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            2009,
+            2058
+          ],
+          "lines": [
+            42,
+            42
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            2062,
+            2162
+          ],
+          "lines": [
+            43,
+            43
+          ]
+        },
+        {
+          "matcher": "toBeDisabled",
+          "bytes": [
+            2172,
+            2225
+          ],
+          "lines": [
+            44,
+            44
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2616,
+            2691
+          ],
+          "lines": [
+            52,
+            52
+          ]
+        },
+        {
+          "matcher": "toBeEnabled",
+          "bytes": [
+            2701,
+            2751
+          ],
+          "lines": [
+            53,
+            53
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2795,
+            2866
+          ],
+          "lines": [
+            55,
+            55
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3106,
+            3172
+          ],
+          "lines": [
+            61,
+            61
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3213,
+            3267
+          ],
+          "lines": [
+            63,
+            63
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            3476,
+            3544
+          ],
+          "lines": [
+            69,
+            69
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3832,
+            3892
+          ],
+          "lines": [
+            76,
+            76
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3898,
+            3964
+          ],
+          "lines": [
+            77,
+            77
+          ]
+        },
+        {
+          "matcher": "toHaveValue",
+          "bytes": [
+            3976,
+            4027
+          ],
+          "lines": [
+            78,
+            78
+          ]
+        },
+        {
+          "matcher": "toBeEnabled",
+          "bytes": [
+            4041,
+            4093
+          ],
+          "lines": [
+            80,
+            80
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            4197,
+            4297
+          ],
+          "lines": [
+            84,
+            84
+          ]
+        },
+        {
+          "matcher": "toHaveValue",
+          "bytes": [
+            4307,
+            4357
+          ],
+          "lines": [
+            85,
+            85
+          ]
+        },
+        {
+          "matcher": "toHaveValue",
+          "bytes": [
+            4367,
+            4421
+          ],
+          "lines": [
+            86,
+            86
+          ]
+        },
+        {
+          "matcher": "toBeDisabled",
+          "bytes": [
+            4431,
+            4484
+          ],
+          "lines": [
+            87,
+            87
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4488,
+            4523
+          ],
+          "lines": [
+            88,
+            88
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            4739,
+            4789
+          ],
+          "lines": [
+            94,
+            94
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            4793,
+            4893
+          ],
+          "lines": [
+            95,
+            95
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            4897,
+            4937
+          ],
+          "lines": [
+            96,
+            96
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            4941,
+            4971
+          ],
+          "lines": [
+            97,
+            97
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            6598,
+            6647
+          ],
+          "lines": [
+            126,
+            126
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            6655,
+            6722
+          ],
+          "lines": [
+            127,
+            127
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            6730,
+            6781
+          ],
+          "lines": [
+            128,
+            128
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            6789,
+            6860
+          ],
+          "lines": [
+            129,
+            129
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            6868,
+            6927
+          ],
+          "lines": [
+            130,
+            130
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            6941,
+            6971
+          ],
+          "lines": [
+            133,
+            133
+          ]
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            7490,
+            7535
+          ],
+          "lines": [
+            144,
+            144
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            7686,
+            7789
+          ],
+          "lines": [
+            148,
+            148
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            7793,
+            7832
+          ],
+          "lines": [
+            149,
+            149
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            7878,
+            7968
+          ],
+          "lines": [
+            151,
+            151
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            8072,
+            8122
+          ],
+          "lines": [
+            154,
+            154
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            8126,
+            8216
+          ],
+          "lines": [
+            155,
+            155
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            8547,
+            8591
+          ],
+          "lines": [
+            162,
+            162
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            8632,
+            8662
+          ],
+          "lines": [
+            164,
+            164
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            561,
+            610
+          ],
+          "lines": [
+            10,
+            10
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            1456,
+            1479
+          ],
+          "lines": [
+            29,
+            29
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            5089,
+            5112
+          ],
+          "lines": [
+            101,
+            101
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            7099,
+            7122
+          ],
+          "lines": [
+            137,
+            137
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            392,
+            466
+          ],
+          "lines": [
+            6,
+            6
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/photo-studio.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 19281,
+      "manifestWholeFileSha256": "f1b4a68ea1ba5cebf418e4f3bce7d0ad4bee4df935feaf7d3b4261fb55883457",
+      "wholeFileSha256": "f1b4a68ea1ba5cebf418e4f3bce7d0ad4bee4df935feaf7d3b4261fb55883457",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 19281,
+        "sha256": "f1b4a68ea1ba5cebf418e4f3bce7d0ad4bee4df935feaf7d3b4261fb55883457",
+        "bytes": 19281
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "cae2a1fbefcf82f13c598663011655a2b4013f4f33cc4da42638717f8753bec8",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "53867270ebac03343ef629f22711d884870037c6c6b2c232e6e2f4758082b462",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 16000,
+          "end": 19281,
+          "bytes": 3281,
+          "sha256": "5054c789867368c48cdf108808527055f2a7af762aeb95af1cb3a3e2aa17ca84",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Photo lifecycles cover placed title car, rotation/200% layout, full-resolution captures despite live renderScale, restored camera/focus, durable garage mood, scrolling isolation and accent keyboard navigation. Two native IndexedDB tabs concurrently retain six JPEG photos; other tab closed in finally; CDP detached in finally.",
+      "cases": [
+        {
+          "title": "Title circuit photo provides a car to place without starting a race",
+          "bytes": [
+            1874,
+            4636
+          ],
+          "lines": [
+            48,
+            96
+          ],
+          "partial": false
+        },
+        {
+          "title": "Home photo retains its shot across rotation at 200%, captures, and returns its camera",
+          "bytes": [
+            4639,
+            7522
+          ],
+          "lines": [
+            98,
+            147
+          ],
+          "partial": false
+        },
+        {
+          "title": "Garage photo offers the Team tab's room, crew and lighting at phone size and saves the pick",
+          "bytes": [
+            7525,
+            9383
+          ],
+          "lines": [
+            149,
+            176
+          ],
+          "partial": false
+        },
+        {
+          "title": "Paused race photo keeps controls reachable at 200% and isolates panel scrolling",
+          "bytes": [
+            9385,
+            12616
+          ],
+          "lines": [
+            177,
+            233
+          ],
+          "partial": false
+        },
+        {
+          "title": "Accent lists receive real keyboard events through menu navigation",
+          "bytes": [
+            12619,
+            14845
+          ],
+          "lines": [
+            235,
+            267
+          ],
+          "partial": false
+        },
+        {
+          "title": "Two tabs atomically retain six durable photos after concurrent saves",
+          "bytes": [
+            14999,
+            19279
+          ],
+          "lines": [
+            271,
+            347
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1191,
+            1245
+          ],
+          "lines": [
+            29,
+            29
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1251,
+            1301
+          ],
+          "lines": [
+            30,
+            30
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2575,
+            2638
+          ],
+          "lines": [
+            60,
+            60
+          ]
+        },
+        {
+          "matcher": "toHaveLength",
+          "bytes": [
+            2868,
+            2900
+          ],
+          "lines": [
+            65,
+            65
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3024,
+            3065
+          ],
+          "lines": [
+            68,
+            68
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3069,
+            3116
+          ],
+          "lines": [
+            69,
+            69
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3184,
+            3231
+          ],
+          "lines": [
+            71,
+            71
+          ]
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            3235,
+            3266
+          ],
+          "lines": [
+            72,
+            72
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3270,
+            3353
+          ],
+          "lines": [
+            73,
+            73
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3357,
+            3397
+          ],
+          "lines": [
+            74,
+            74
+          ]
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            3616,
+            3695
+          ],
+          "lines": [
+            80,
+            80
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4088,
+            4151
+          ],
+          "lines": [
+            87,
+            87
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4371,
+            4434
+          ],
+          "lines": [
+            91,
+            91
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            4481,
+            4531
+          ],
+          "lines": [
+            93,
+            93
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4535,
+            4598
+          ],
+          "lines": [
+            94,
+            94
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            4602,
+            4632
+          ],
+          "lines": [
+            95,
+            95
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5117,
+            5194
+          ],
+          "lines": [
+            107,
+            107
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5465,
+            5499
+          ],
+          "lines": [
+            113,
+            113
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            5791,
+            5829
+          ],
+          "lines": [
+            118,
+            118
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            6841,
+            6883
+          ],
+          "lines": [
+            136,
+            136
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            6887,
+            6991
+          ],
+          "lines": [
+            137,
+            137
+          ]
+        },
+        {
+          "matcher": "toBeCloseTo",
+          "bytes": [
+            6995,
+            7029
+          ],
+          "lines": [
+            138,
+            138
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            7133,
+            7183
+          ],
+          "lines": [
+            141,
+            141
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            7385,
+            7427
+          ],
+          "lines": [
+            144,
+            144
+          ]
+        },
+        {
+          "matcher": "toBeFocused",
+          "bytes": [
+            7437,
+            7484
+          ],
+          "lines": [
+            145,
+            145
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            7488,
+            7518
+          ],
+          "lines": [
+            146,
+            146
+          ]
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            7949,
+            8004
+          ],
+          "lines": [
+            155,
+            155
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            8014,
+            8062
+          ],
+          "lines": [
+            156,
+            156
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            8344,
+            8417
+          ],
+          "lines": [
+            161,
+            161
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            8444,
+            8513
+          ],
+          "lines": [
+            162,
+            162
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            8750,
+            8831
+          ],
+          "lines": [
+            166,
+            166
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            8888,
+            9014
+          ],
+          "lines": [
+            168,
+            168
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            9101,
+            9127
+          ],
+          "lines": [
+            171,
+            171
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            9176,
+            9226
+          ],
+          "lines": [
+            173,
+            173
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            9230,
+            9345
+          ],
+          "lines": [
+            174,
+            174
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            9349,
+            9379
+          ],
+          "lines": [
+            175,
+            175
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            10027,
+            10100
+          ],
+          "lines": [
+            190,
+            190
+          ]
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            10748,
+            10835
+          ],
+          "lines": [
+            200,
+            200
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            10847,
+            11067
+          ],
+          "lines": [
+            201,
+            204
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            11175,
+            11222
+          ],
+          "lines": [
+            206,
+            206
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            11234,
+            11285
+          ],
+          "lines": [
+            207,
+            207
+          ]
+        },
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            11700,
+            11744
+          ],
+          "lines": [
+            217,
+            217
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11748,
+            11782
+          ],
+          "lines": [
+            218,
+            218
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            11867,
+            11960
+          ],
+          "lines": [
+            221,
+            221
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11964,
+            12033
+          ],
+          "lines": [
+            222,
+            222
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            12082,
+            12132
+          ],
+          "lines": [
+            224,
+            224
+          ]
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            12294,
+            12346
+          ],
+          "lines": [
+            227,
+            227
+          ]
+        },
+        {
+          "matcher": "toBeVisible",
+          "bytes": [
+            12397,
+            12445
+          ],
+          "lines": [
+            229,
+            229
+          ]
+        },
+        {
+          "matcher": "toBeHidden",
+          "bytes": [
+            12455,
+            12506
+          ],
+          "lines": [
+            230,
+            230
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            12510,
+            12578
+          ],
+          "lines": [
+            231,
+            231
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            12582,
+            12612
+          ],
+          "lines": [
+            232,
+            232
+          ]
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            13544,
+            13637
+          ],
+          "lines": [
+            248,
+            248
+          ]
+        },
+        {
+          "matcher": "toHaveCount",
+          "bytes": [
+            13649,
+            13702
+          ],
+          "lines": [
+            249,
+            249
+          ]
+        },
+        {
+          "matcher": "toBeFocused",
+          "bytes": [
+            13714,
+            13774
+          ],
+          "lines": [
+            250,
+            250
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            13782,
+            13877
+          ],
+          "lines": [
+            252,
+            252
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            13917,
+            14001
+          ],
+          "lines": [
+            254,
+            254
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            14173,
+            14257
+          ],
+          "lines": [
+            257,
+            257
+          ]
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            14267,
+            14356
+          ],
+          "lines": [
+            258,
+            258
+          ]
+        },
+        {
+          "matcher": "toHaveAttribute",
+          "bytes": [
+            14449,
+            14535
+          ],
+          "lines": [
+            261,
+            261
+          ]
+        },
+        {
+          "matcher": "toHaveCount",
+          "bytes": [
+            14545,
+            14597
+          ],
+          "lines": [
+            262,
+            262
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            14724,
+            14807
+          ],
+          "lines": [
+            265,
+            265
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            14811,
+            14841
+          ],
+          "lines": [
+            266,
+            266
+          ]
+        },
+        {
+          "matcher": "toContainText",
+          "bytes": [
+            15843,
+            15910
+          ],
+          "lines": [
+            285,
+            285
+          ]
+        },
+        {
+          "matcher": "toContainText",
+          "bytes": [
+            16275,
+            16350
+          ],
+          "lines": [
+            291,
+            291
+          ]
+        },
+        {
+          "matcher": "toHaveText",
+          "bytes": [
+            18200,
+            18283
+          ],
+          "lines": [
+            329,
+            329
+          ]
+        },
+        {
+          "matcher": "toBeEnabled",
+          "bytes": [
+            18297,
+            18342
+          ],
+          "lines": [
+            330,
+            330
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            18899,
+            19008
+          ],
+          "lines": [
+            341,
+            341
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            19092,
+            19129
+          ],
+          "lines": [
+            343,
+            343
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            19131,
+            19168
+          ],
+          "lines": [
+            343,
+            343
+          ]
+        },
+        {
+          "matcher": "toMatch",
+          "bytes": [
+            19176,
+            19232
+          ],
+          "lines": [
+            344,
+            344
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            228,
+            277
+          ],
+          "lines": [
+            7,
+            7
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            2152,
+            2175
+          ],
+          "lines": [
+            51,
+            51
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            9748,
+            9771
+          ],
+          "lines": [
+            181,
+            181
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "node:fs/promises",
+          "bytes": [
+            13,
+            58
+          ],
+          "lines": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            59,
+            133
+          ],
+          "lines": [
+            3,
+            3
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/physics-boot.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 4018,
+      "manifestWholeFileSha256": "4fe82db32fa49ed5d32b6f382d24826555808a95fd663d8fa50bf3c8d646028e",
+      "wholeFileSha256": "4fe82db32fa49ed5d32b6f382d24826555808a95fd663d8fa50bf3c8d646028e",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 4018,
+        "sha256": "4fe82db32fa49ed5d32b6f382d24826555808a95fd663d8fa50bf3c8d646028e",
+        "bytes": 4018
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4018,
+          "bytes": 4018,
+          "sha256": "4fe82db32fa49ed5d32b6f382d24826555808a95fd663d8fa50bf3c8d646028e",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Headless Monza short steering drive and braking to standstill: finite combined-slip fields, bounded axFrac/slipFactor, nonzero lateral response and min speed <5. Clears scripted input.",
+      "cases": [
+        {
+          "title": "player forces write finite combined-slip state after a short drive",
+          "bytes": [
+            1481,
+            2874
+          ],
+          "lines": [
+            28,
+            60
+          ],
+          "partial": false
+        },
+        {
+          "title": "brake-to-standstill keeps physState readable (no NaN through dirS blend)",
+          "bytes": [
+            2877,
+            4016
+          ],
+          "lines": [
+            62,
+            90
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2273,
+            2352
+          ],
+          "lines": [
+            49,
+            49
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2356,
+            2390
+          ],
+          "lines": [
+            50,
+            50
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            2478,
+            2520
+          ],
+          "lines": [
+            52,
+            52
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            2524,
+            2563
+          ],
+          "lines": [
+            53,
+            53
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2567,
+            2606
+          ],
+          "lines": [
+            54,
+            54
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            2610,
+            2653
+          ],
+          "lines": [
+            55,
+            55
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            2775,
+            2870
+          ],
+          "lines": [
+            58,
+            59
+          ]
+        },
+        {
+          "matcher": "toBeNull",
+          "bytes": [
+            3771,
+            3873
+          ],
+          "lines": [
+            85,
+            86
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            3877,
+            3911
+          ],
+          "lines": [
+            87,
+            87
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            3915,
+            3963
+          ],
+          "lines": [
+            88,
+            88
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            3967,
+            4012
+          ],
+          "lines": [
+            89,
+            89
+          ]
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            1425,
+            1479
+          ],
+          "lines": [
+            26,
+            26
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/physics-characterization.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 10211,
+      "manifestWholeFileSha256": "dc94edab511dc752a94aa90d585e3e603d4dfb2bb5b9b800014034ef7b3cb5ca",
+      "wholeFileSha256": "dc94edab511dc752a94aa90d585e3e603d4dfb2bb5b9b800014034ef7b3cb5ca",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 10211,
+        "sha256": "dc94edab511dc752a94aa90d585e3e603d4dfb2bb5b9b800014034ef7b3cb5ca",
+        "bytes": 10211
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "7d85b9a8d701b4d2fb7e9caeefa284e93b53cf47674ee5482f94868b36517188",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8000,
+          "end": 10211,
+          "bytes": 2211,
+          "sha256": "4f5fed12bc76238cec73c14f692822110b5742eacfd9ad53c262734ab30f72de",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Factory dry Monza fixed seeds: nine acceleration/corner/braking/off-track/BOOST/X/kerb/AI/wet traces compared after 1e-4 rounding. Soft assertions report all scenario drifts; update mode requires blessed reason. Characterization preserves behavior rather than proving realistic physics.",
+      "cases": [
+        {
+          "title": "the driving model produces the same numbers it did before",
+          "bytes": [
+            6444,
+            10209
+          ],
+          "lines": [
+            107,
+            187
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7743,
+            7815
+          ],
+          "lines": [
+            131,
+            131
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            7819,
+            7901
+          ],
+          "lines": [
+            132,
+            132
+          ]
+        },
+        {
+          "matcher": "toBeDefined",
+          "bytes": [
+            9876,
+            10006
+          ],
+          "lines": [
+            182,
+            183
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            10012,
+            10201
+          ],
+          "lines": [
+            184,
+            185
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            6874,
+            6898
+          ],
+          "lines": [
+            113,
+            113
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "node:fs",
+          "bytes": [
+            2651,
+            2676
+          ],
+          "lines": [
+            45,
+            45
+          ]
+        },
+        {
+          "source": "node:path",
+          "bytes": [
+            2677,
+            2706
+          ],
+          "lines": [
+            46,
+            46
+          ]
+        },
+        {
+          "source": "node:url",
+          "bytes": [
+            2707,
+            2748
+          ],
+          "lines": [
+            47,
+            47
+          ]
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            2749,
+            2803
+          ],
+          "lines": [
+            48,
+            48
+          ]
+        },
+        {
+          "source": "../helpers/factory-seat.js",
+          "bytes": [
+            2804,
+            2864
+          ],
+          "lines": [
+            49,
+            49
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": [
+        "tests/specs/agent-determinism.spec.js:"
+      ]
+    },
+    {
+      "path": "tests/specs/physics-fixes.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 6426,
+      "manifestWholeFileSha256": "dfe2a932767a6e9c7440042ae0da5d15c2d9e3ab8debe2d71507223618d9ccad",
+      "wholeFileSha256": "dfe2a932767a6e9c7440042ae0da5d15c2d9e3ab8debe2d71507223618d9ccad",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 6426,
+        "sha256": "dfe2a932767a6e9c7440042ae0da5d15c2d9e3ab8debe2d71507223618d9ccad",
+        "bytes": 6426
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6426,
+          "bytes": 6426,
+          "sha256": "dfe2a932767a6e9c7440042ae0da5d15c2d9e3ab8debe2d71507223618d9ccad",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Monaco robustness with caution disabled: finite/unwrapped lap distance and backward jump <5m; gentle barrier steering retains >8m/s more than hard steering. Input cleared; timeout 300s.",
+      "cases": [
+        {
+          "title": "lap distance stays continuous driving wide through Monaco",
+          "bytes": [
+            2589,
+            5322
+          ],
+          "lines": [
+            42,
+            88
+          ],
+          "partial": false
+        },
+        {
+          "title": "wall scrub scales with how hard you steer into it (not a flat stop)",
+          "bytes": [
+            5693,
+            6420
+          ],
+          "lines": [
+            95,
+            109
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4831,
+            4858
+          ],
+          "lines": [
+            80,
+            80
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5017,
+            5047
+          ],
+          "lines": [
+            83,
+            83
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5053,
+            5085
+          ],
+          "lines": [
+            84,
+            84
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            5279,
+            5316
+          ],
+          "lines": [
+            87,
+            87
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            6374,
+            6414
+          ],
+          "lines": [
+            108,
+            108
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.describe.configure",
+          "bytes": [
+            2151,
+            2196
+          ],
+          "lines": [
+            36,
+            36
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            534,
+            597
+          ],
+          "lines": [
+            9,
+            9
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": [
+        "docs/notes/TESTING-FIELD-NOTES.md",
+        "docs/notes/DEFECT-LEDGER.md"
+      ]
+    },
+    {
+      "path": "tests/specs/physics-hotpath.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 11692,
+      "manifestWholeFileSha256": "b52f71a9a8e5d08f5ef16eb4b5a515e1dbb0d1d4427de229e9a5daef81d7e4f0",
+      "wholeFileSha256": "b52f71a9a8e5d08f5ef16eb4b5a515e1dbb0d1d4427de229e9a5daef81d7e4f0",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 11692,
+        "sha256": "b52f71a9a8e5d08f5ef16eb4b5a515e1dbb0d1d4427de229e9a5daef81d7e4f0",
+        "bytes": 11692
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "78010a4a74d5428dc94f82b04e299e06e1e3a3aaa203a11c4b4dbb0e1251dabf",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8000,
+          "end": 11692,
+          "bytes": 3692,
+          "sha256": "12b9eb158e8aed3b81200302d7b535ad5d870c79ca5a1656be50ed8f62c3830b",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Classic-script AiDrive helper wrappers prove stable scratch identity, firing/nonvacuity, finite >8-car field and wrapped cost <4x reference +250ms; originals restored. Seeded 22-car Collide buckets match full scan to 1e-9 including lap seam/chaser.",
+      "cases": [
+        {
+          "title": "AiDrive ctx scratches stay reused across physics steps",
+          "bytes": [
+            697,
+            5882
+          ],
+          "lines": [
+            14,
+            118
+          ],
+          "partial": false
+        },
+        {
+          "title": "arc-bucket traffic scan matches full-field on a seeded 22-car pack",
+          "bytes": [
+            5885,
+            11690
+          ],
+          "lines": [
+            120,
+            236
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4785,
+            4835
+          ],
+          "lines": [
+            99,
+            99
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4839,
+            4866
+          ],
+          "lines": [
+            100,
+            100
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            4870,
+            4904
+          ],
+          "lines": [
+            101,
+            101
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4908,
+            4940
+          ],
+          "lines": [
+            102,
+            102
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            4944,
+            5011
+          ],
+          "lines": [
+            103,
+            103
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            5015,
+            5045
+          ],
+          "lines": [
+            104,
+            104
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5561,
+            5595
+          ],
+          "lines": [
+            112,
+            112
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            5599,
+            5643
+          ],
+          "lines": [
+            113,
+            113
+          ]
+        },
+        {
+          "matcher": "toBeUndefined",
+          "bytes": [
+            5834,
+            5874
+          ],
+          "lines": [
+            116,
+            116
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11503,
+            11553
+          ],
+          "lines": [
+            231,
+            231
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            11557,
+            11589
+          ],
+          "lines": [
+            232,
+            232
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11593,
+            11617
+          ],
+          "lines": [
+            233,
+            233
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11621,
+            11651
+          ],
+          "lines": [
+            234,
+            234
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11655,
+            11686
+          ],
+          "lines": [
+            235,
+            235
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            1438,
+            1462
+          ],
+          "lines": [
+            23,
+            23
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            5995,
+            6019
+          ],
+          "lines": [
+            121,
+            121
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            641,
+            695
+          ],
+          "lines": [
+            12,
+            12
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/picker-edit-button.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 4119,
+      "manifestWholeFileSha256": "29c178480c99790376633f70a008aa485ffef0653ff53527a951d52f0c416df5",
+      "wholeFileSha256": "29c178480c99790376633f70a008aa485ffef0653ff53527a951d52f0c416df5",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 4119,
+        "sha256": "29c178480c99790376633f70a008aa485ffef0653ff53527a951d52f0c416df5",
+        "bytes": 4119
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4119,
+          "bytes": 4119,
+          "sha256": "29c178480c99790376633f70a008aa485ffef0653ff53527a951d52f0c416df5",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Four phone/desktop viewports seed/save custom track: EDIT is >=36px and in viewport, absent for built-ins, opens matching origin design and returns picker. Cleans custom storage once per session.",
+      "cases": [
+        {
+          "title": "`EDIT beside CIRCUIT DETAIL on custom circuits only, ${vp.width}x${vp.height}`",
+          "bytes": [
+            606,
+            4115
+          ],
+          "lines": [
+            10,
+            53
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1452,
+            1529
+          ],
+          "lines": [
+            21,
+            21
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1679,
+            1750
+          ],
+          "lines": [
+            23,
+            23
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            2607,
+            2649
+          ],
+          "lines": [
+            34,
+            34
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            2655,
+            2697
+          ],
+          "lines": [
+            35,
+            35
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            2703,
+            2756
+          ],
+          "lines": [
+            36,
+            36
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3540,
+            3621
+          ],
+          "lines": [
+            47,
+            47
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3785,
+            3872
+          ],
+          "lines": [
+            50,
+            50
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3878,
+            4015
+          ],
+          "lines": [
+            51,
+            51
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            4021,
+            4109
+          ],
+          "lines": [
+            52,
+            52
+          ]
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            386,
+            464
+          ],
+          "lines": [
+            7,
+            7
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/picker-tab-inplace.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 3684,
+      "manifestWholeFileSha256": "cd7c577c8ce7ddbf14bc83fded7d49edcaa8a27eb448fe4835aff78f18c9a8ca",
+      "wholeFileSha256": "cd7c577c8ce7ddbf14bc83fded7d49edcaa8a27eb448fe4835aff78f18c9a8ca",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 3684,
+        "sha256": "cd7c577c8ce7ddbf14bc83fded7d49edcaa8a27eb448fe4835aff78f18c9a8ca",
+        "bytes": 3684
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3684,
+          "bytes": 3684,
+          "sha256": "cd7c577c8ce7ddbf14bc83fded7d49edcaa8a27eb448fe4835aff78f18c9a8ca",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Landscape touch seeded custom circuit: switching four filter chips preserves bar/node identity, focus/pressed state and one selected row, with no view transition or child-list mutation. Observer/stub live only within page.",
+      "cases": [
+        {
+          "title": "circuit tabs swap the strip in place: no view transition, same bar, focus kept",
+          "bytes": [
+            439,
+            3682
+          ],
+          "lines": [
+            9,
+            57
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1158,
+            1235
+          ],
+          "lines": [
+            18,
+            18
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1381,
+            1452
+          ],
+          "lines": [
+            20,
+            20
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3265,
+            3315
+          ],
+          "lines": [
+            49,
+            49
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3321,
+            3393
+          ],
+          "lines": [
+            50,
+            50
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3399,
+            3450
+          ],
+          "lines": [
+            51,
+            51
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3456,
+            3487
+          ],
+          "lines": [
+            52,
+            52
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3493,
+            3552
+          ],
+          "lines": [
+            53,
+            53
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3558,
+            3611
+          ],
+          "lines": [
+            54,
+            54
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            3638,
+            3674
+          ],
+          "lines": [
+            55,
+            55
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "bytes": [
+            337,
+            436
+          ],
+          "lines": [
+            7,
+            7
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            257,
+            335
+          ],
+          "lines": [
+            5,
+            5
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/pit-lane.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 25752,
+      "manifestWholeFileSha256": "e40f25aed431a8690da3e6e667d6afa17de30fc6286a3abbe423cd96a39f39d8",
+      "wholeFileSha256": "e40f25aed431a8690da3e6e667d6afa17de30fc6286a3abbe423cd96a39f39d8",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 25752,
+        "sha256": "e40f25aed431a8690da3e6e667d6afa17de30fc6286a3abbe423cd96a39f39d8",
+        "bytes": 25752
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "02dd231a89979cca48e3870625c15c5a7afa735a6e6a850f2a8d1e54bbded467",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "ee255751a662adc4105954ce1e0cdf8865fbe8cb5b278a94beb4101d243d6ff5",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "0e8fec607153c86721044d2917485db8cee0a3df928cf3fc586e8d8bcfba079d",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 24000,
+          "end": 25752,
+          "bytes": 1752,
+          "sha256": "cb1a5d255167988d9a2fcebb2973a37a020fb71aa8d3c790f358c3cbaadfe0b9",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Factory Monza/Bahrain pit integration: unarmed free running, armed lane limiter, fresh timed service, racing-line refusal with actual arrival/standstill, drive-through miss, wear-off disabled model, autonomous AI lane use, six crew people and tyre swap mid-hold submitted in chase/cockpit. Mostly headless stepping; rendered crew leg is explicit.",
+      "cases": [
+        {
+          "title": "the limiter fires only for a car that called a stop",
+          "bytes": [
+            2896,
+            6051
+          ],
+          "lines": [
+            56,
+            118
+          ],
+          "partial": false
+        },
+        {
+          "title": "a stop fits fresh tyres and is held for the box time",
+          "bytes": [
+            6056,
+            10190
+          ],
+          "lines": [
+            120,
+            190
+          ],
+          "partial": false
+        },
+        {
+          "title": "stopping on the racing line is not stopping in the box",
+          "bytes": [
+            10195,
+            13958
+          ],
+          "lines": [
+            192,
+            250
+          ],
+          "partial": false
+        },
+        {
+          "title": "blowing through the box misses the stop",
+          "bytes": [
+            13963,
+            14744
+          ],
+          "lines": [
+            252,
+            269
+          ],
+          "partial": false
+        },
+        {
+          "title": "with TYRE WEAR off there is no pit lane at all",
+          "bytes": [
+            14749,
+            16001
+          ],
+          "lines": [
+            271,
+            296
+          ],
+          "partial": false
+        },
+        {
+          "title": "an AI car serving a stop drives the lane, not the racing line",
+          "bytes": [
+            16006,
+            19123
+          ],
+          "lines": [
+            298,
+            350
+          ],
+          "partial": false
+        },
+        {
+          "title": "during a stop the crew draws and the tyres visibly swap",
+          "bytes": [
+            19128,
+            25746
+          ],
+          "lines": [
+            352,
+            493
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            3073,
+            3144
+          ],
+          "lines": [
+            60,
+            60
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3150,
+            3181
+          ],
+          "lines": [
+            61,
+            61
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3187,
+            3225
+          ],
+          "lines": [
+            62,
+            62
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3231,
+            3272
+          ],
+          "lines": [
+            63,
+            63
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3947,
+            4044
+          ],
+          "lines": [
+            80,
+            80
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            4050,
+            4128
+          ],
+          "lines": [
+            81,
+            81
+          ]
+        },
+        {
+          "matcher": "toBeNull",
+          "bytes": [
+            5711,
+            5800
+          ],
+          "lines": [
+            114,
+            114
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5806,
+            5909
+          ],
+          "lines": [
+            115,
+            115
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            5990,
+            6045
+          ],
+          "lines": [
+            117,
+            117
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            9543,
+            9653
+          ],
+          "lines": [
+            180,
+            180
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            9659,
+            9758
+          ],
+          "lines": [
+            181,
+            181
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            9764,
+            9793
+          ],
+          "lines": [
+            182,
+            182
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            9873,
+            9934
+          ],
+          "lines": [
+            184,
+            184
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            9940,
+            9998
+          ],
+          "lines": [
+            185,
+            185
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            10048,
+            10099
+          ],
+          "lines": [
+            187,
+            187
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            10105,
+            10146
+          ],
+          "lines": [
+            188,
+            188
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            10152,
+            10184
+          ],
+          "lines": [
+            189,
+            189
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            11826,
+            11902
+          ],
+          "lines": [
+            216,
+            216
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            13194,
+            13269
+          ],
+          "lines": [
+            241,
+            241
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            13275,
+            13362
+          ],
+          "lines": [
+            242,
+            242
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            13368,
+            13447
+          ],
+          "lines": [
+            243,
+            243
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            13453,
+            13537
+          ],
+          "lines": [
+            244,
+            244
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            13543,
+            13670
+          ],
+          "lines": [
+            245,
+            245
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            13729,
+            13830
+          ],
+          "lines": [
+            247,
+            247
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            13874,
+            13952
+          ],
+          "lines": [
+            249,
+            249
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            14657,
+            14738
+          ],
+          "lines": [
+            268,
+            268
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            15743,
+            15774
+          ],
+          "lines": [
+            292,
+            292
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            15780,
+            15870
+          ],
+          "lines": [
+            293,
+            293
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            15876,
+            15901
+          ],
+          "lines": [
+            294,
+            294
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            15907,
+            15995
+          ],
+          "lines": [
+            295,
+            295
+          ]
+        },
+        {
+          "matcher": "toBeUndefined",
+          "bytes": [
+            17958,
+            18007
+          ],
+          "lines": [
+            334,
+            334
+          ]
+        },
+        {
+          "matcher": "toContain",
+          "bytes": [
+            18094,
+            18181
+          ],
+          "lines": [
+            336,
+            336
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            18187,
+            18212
+          ],
+          "lines": [
+            337,
+            337
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            18430,
+            18524
+          ],
+          "lines": [
+            341,
+            341
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            18530,
+            18604
+          ],
+          "lines": [
+            342,
+            342
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            18846,
+            18939
+          ],
+          "lines": [
+            346,
+            346
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            18945,
+            19117
+          ],
+          "lines": [
+            347,
+            349
+          ]
+        },
+        {
+          "matcher": "toBeUndefined",
+          "bytes": [
+            24114,
+            24213
+          ],
+          "lines": [
+            471,
+            471
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            24219,
+            24294
+          ],
+          "lines": [
+            472,
+            472
+          ]
+        },
+        {
+          "matcher": "toBeTruthy",
+          "bytes": [
+            24300,
+            24373
+          ],
+          "lines": [
+            473,
+            473
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            24379,
+            24477
+          ],
+          "lines": [
+            474,
+            474
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            24483,
+            24562
+          ],
+          "lines": [
+            475,
+            475
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            24613,
+            24700
+          ],
+          "lines": [
+            477,
+            477
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            24706,
+            24784
+          ],
+          "lines": [
+            478,
+            478
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            24956,
+            25045
+          ],
+          "lines": [
+            481,
+            481
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            25051,
+            25211
+          ],
+          "lines": [
+            482,
+            484
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            25217,
+            25330
+          ],
+          "lines": [
+            485,
+            486
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            25404,
+            25482
+          ],
+          "lines": [
+            488,
+            488
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            25488,
+            25570
+          ],
+          "lines": [
+            489,
+            489
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            25576,
+            25601
+          ],
+          "lines": [
+            490,
+            490
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            25607,
+            25684
+          ],
+          "lines": [
+            491,
+            491
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            25690,
+            25740
+          ],
+          "lines": [
+            492,
+            492
+          ]
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            1553,
+            1633
+          ],
+          "lines": [
+            28,
+            28
+          ]
+        },
+        {
+          "source": "../helpers/factory-seat.js",
+          "bytes": [
+            1634,
+            1694
+          ],
+          "lines": [
+            29,
+            29
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": [
+        "docs/research/TYRE-STRATEGY-DESIGN.md."
+      ]
+    },
+    {
+      "path": "tests/specs/pit-signs.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 2567,
+      "manifestWholeFileSha256": "b64c64cd7c96b7bcff6a0953c47c7e56ece2da143da69f0fee6662c2cdd139e9",
+      "wholeFileSha256": "b64c64cd7c96b7bcff6a0953c47c7e56ece2da143da69f0fee6662c2cdd139e9",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 2567,
+        "sha256": "b64c64cd7c96b7bcff6a0953c47c7e56ece2da143da69f0fee6662c2cdd139e9",
+        "bytes": 2567
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2567,
+          "bytes": 2567,
+          "sha256": "b64c64cd7c96b7bcff6a0953c47c7e56ece2da143da69f0fee6662c2cdd139e9",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Low preset half-scale Albert Park: 12 atlas cells, uploaded mesh/texture; draw counter advances, meshToggle prevents draws despite calls, clearMeshes resumes submission. Geometry numbers remain companion-unit responsibility.",
+      "cases": [
+        {
+          "title": "every bay wears its team's sign as one decal, and meshToggle hides it",
+          "bytes": [
+            504,
+            2561
+          ],
+          "lines": [
+            10,
+            44
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1256,
+            1282
+          ],
+          "lines": [
+            22,
+            22
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1650,
+            1675
+          ],
+          "lines": [
+            31,
+            31
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1681,
+            1707
+          ],
+          "lines": [
+            32,
+            32
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            1713,
+            1738
+          ],
+          "lines": [
+            33,
+            33
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2319,
+            2343
+          ],
+          "lines": [
+            40,
+            40
+          ]
+        }
+      ],
+      "hooks": [],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            375,
+            465
+          ],
+          "lines": [
+            7,
+            7
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/presets.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 6040,
+      "manifestWholeFileSha256": "f23afa02ab1d45b30fec41944aa2ea3d67ec9f5660a5b0e15f2ef0e3e2197601",
+      "wholeFileSha256": "f23afa02ab1d45b30fec41944aa2ea3d67ec9f5660a5b0e15f2ef0e3e2197601",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 6040,
+        "sha256": "f23afa02ab1d45b30fec41944aa2ea3d67ec9f5660a5b0e15f2ef0e3e2197601",
+        "bytes": 6040
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6040,
+          "bytes": 6040,
+          "sha256": "f23afa02ab1d45b30fec41944aa2ea3d67ec9f5660a5b0e15f2ef0e3e2197601",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Named preset relative assistance/steering ordering, active persisted selection, ROOKIE stronger than RELAX and manual lock slider returns custom. No hardcoded tuning values; timeout 300s.",
+      "cases": [
+        {
+          "title": "RELAX is more forgiving than PRO (more help, calmer steering)",
+          "bytes": [
+            2817,
+            3464
+          ],
+          "lines": [
+            47,
+            59
+          ],
+          "partial": false
+        },
+        {
+          "title": "clicking a preset marks it active and persists",
+          "bytes": [
+            3469,
+            3716
+          ],
+          "lines": [
+            61,
+            66
+          ],
+          "partial": false
+        },
+        {
+          "title": "STANDARD sits between RELAX and PRO on every feel axis",
+          "bytes": [
+            3721,
+            5092
+          ],
+          "lines": [
+            68,
+            88
+          ],
+          "partial": false
+        },
+        {
+          "title": "ROOKIE helps at least as much as RELAX and also pulls to the racing line",
+          "bytes": [
+            5097,
+            5556
+          ],
+          "lines": [
+            90,
+            96
+          ],
+          "partial": false
+        },
+        {
+          "title": "a manual slider edit drops the preset back to custom",
+          "bytes": [
+            5561,
+            6034
+          ],
+          "lines": [
+            98,
+            108
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3156,
+            3212
+          ],
+          "lines": [
+            54,
+            54
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3218,
+            3272
+          ],
+          "lines": [
+            55,
+            55
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            3371,
+            3418
+          ],
+          "lines": [
+            57,
+            57
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3424,
+            3458
+          ],
+          "lines": [
+            58,
+            58
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3610,
+            3654
+          ],
+          "lines": [
+            64,
+            64
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            3660,
+            3710
+          ],
+          "lines": [
+            65,
+            65
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            4576,
+            4629
+          ],
+          "lines": [
+            80,
+            80
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            4635,
+            4696
+          ],
+          "lines": [
+            81,
+            81
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            4862,
+            4920
+          ],
+          "lines": [
+            84,
+            84
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            4926,
+            4985
+          ],
+          "lines": [
+            85,
+            85
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5052,
+            5086
+          ],
+          "lines": [
+            87,
+            87
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5373,
+            5432
+          ],
+          "lines": [
+            94,
+            94
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            5462,
+            5529
+          ],
+          "lines": [
+            95,
+            95
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5708,
+            5752
+          ],
+          "lines": [
+            101,
+            101
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5930,
+            5971
+          ],
+          "lines": [
+            106,
+            106
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5977,
+            6028
+          ],
+          "lines": [
+            107,
+            107
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            2789,
+            2813
+          ],
+          "lines": [
+            46,
+            46
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            493,
+            556
+          ],
+          "lines": [
+            8,
+            8
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": [
+        "docs/notes/TESTING-FIELD-NOTES.md:"
+      ]
+    },
+    {
+      "path": "tests/specs/props-over-road.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 12167,
+      "manifestWholeFileSha256": "a99fc39acedbd2e1f906b706b0a3f54e424bd076942282fc111ae8eb19f94333",
+      "wholeFileSha256": "a99fc39acedbd2e1f906b706b0a3f54e424bd076942282fc111ae8eb19f94333",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 12167,
+        "sha256": "a99fc39acedbd2e1f906b706b0a3f54e424bd076942282fc111ae8eb19f94333",
+        "bytes": 12167
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "4b7beeee70da4676f8af78f6f626464febb8ecfc2549613e319e001effef2bed",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8000,
+          "end": 12167,
+          "bytes": 4167,
+          "sha256": "ede904428060af74c6d1f8a4449120aa16bfb8f4d59fbb0d25586702f5898c96",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": false,
+      "semantic": "Per dynamically discovered circuit, captured props/glass triangles sampled at 1200 centerline points x five track-width rungs: height band 0.20–5m, near-vertical triangle rejection and capped max overlap (Miami 4.2, otherwise 0.20). Empty scope rejected; finite discrete samples do not prove continuous clearance.",
+      "cases": [
+        {
+          "title": "`${trk}: no prop geometry on/above the racing line`",
+          "bytes": [
+            11172,
+            12157
+          ],
+          "lines": [
+            184,
+            202
+          ],
+          "partial": false
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBeUndefined",
+          "bytes": [
+            11535,
+            11584
+          ],
+          "lines": [
+            190,
+            190
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            11626,
+            11731
+          ],
+          "lines": [
+            192,
+            192
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            11787,
+            11894
+          ],
+          "lines": [
+            195,
+            195
+          ]
+        },
+        {
+          "matcher": "toBeLessThanOrEqual",
+          "bytes": [
+            11980,
+            12149
+          ],
+          "lines": [
+            198,
+            201
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            11414,
+            11438
+          ],
+          "lines": [
+            187,
+            187
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            1507,
+            1584
+          ],
+          "lines": [
+            23,
+            23
+          ]
+        },
+        {
+          "source": "../helpers/await-track-build.js",
+          "bytes": [
+            1585,
+            1651
+          ],
+          "lines": [
+            24,
+            24
+          ]
+        },
+        {
+          "source": "node:fs",
+          "bytes": [
+            1652,
+            1677
+          ],
+          "lines": [
+            25,
+            25
+          ]
+        },
+        {
+          "source": "node:path",
+          "bytes": [
+            1678,
+            1707
+          ],
+          "lines": [
+            26,
+            26
+          ]
+        },
+        {
+          "source": "node:url",
+          "bytes": [
+            1708,
+            1749
+          ],
+          "lines": [
+            27,
+            27
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    },
+    {
+      "path": "tests/specs/qatar-foundation.spec.js",
+      "kind": "text",
+      "wholeFileBytes": 8828,
+      "manifestWholeFileSha256": "bc380f10a36f91b8c4d81f2f1c6182dff78ec80bf15de3f8382963465f41bf02",
+      "wholeFileSha256": "bc380f10a36f91b8c4d81f2f1c6182dff78ec80bf15de3f8382963465f41bf02",
+      "manifestHashMatches": true,
+      "assigned": {
+        "start": 0,
+        "end": 6178,
+        "sha256": "add21a0ddad266a0f514278606b60ad64c7fb0b13099e48924310b926597bf5c",
+        "bytes": 6178
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6178,
+          "bytes": 6178,
+          "sha256": "add21a0ddad266a0f514278606b60ad64c7fb0b13099e48924310b926597bf5c",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ],
+      "partialFile": true,
+      "semantic": "Qatar prefix only: night/day shared foundation metadata, authored relief >3 and <7.5m, grade <3.5%, finite geometry. Ends inside explanatory geometry-budget comment; subsequent assertions excluded.",
+      "cases": [
+        {
+          "title": "Qatar uses the shared track foundation contracts",
+          "bytes": [
+            173,
+            8826
+          ],
+          "lines": [
+            6,
+            157
+          ],
+          "partial": true
+        }
+      ],
+      "assertions": [
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2623,
+            2673
+          ],
+          "lines": [
+            57,
+            57
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            2677,
+            2716
+          ],
+          "lines": [
+            58,
+            58
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThanOrEqual",
+          "bytes": [
+            2720,
+            2777
+          ],
+          "lines": [
+            59,
+            59
+          ]
+        },
+        {
+          "matcher": "toEqual",
+          "bytes": [
+            2781,
+            2931
+          ],
+          "lines": [
+            60,
+            64
+          ]
+        },
+        {
+          "matcher": "arrayContaining",
+          "bytes": [
+            2830,
+            2927
+          ],
+          "lines": [
+            61,
+            63
+          ]
+        },
+        {
+          "matcher": "objectContaining",
+          "bytes": [
+            2861,
+            2919
+          ],
+          "lines": [
+            62,
+            62
+          ]
+        },
+        {
+          "matcher": "toBeGreaterThan",
+          "bytes": [
+            4656,
+            4763
+          ],
+          "lines": [
+            90,
+            91
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            4769,
+            4868
+          ],
+          "lines": [
+            92,
+            93
+          ]
+        },
+        {
+          "matcher": "toBeLessThan",
+          "bytes": [
+            4938,
+            5027
+          ],
+          "lines": [
+            95,
+            95
+          ]
+        },
+        {
+          "matcher": "toBe",
+          "bytes": [
+            5033,
+            5126
+          ],
+          "lines": [
+            96,
+            96
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "bytes": [
+            254,
+            278
+          ],
+          "lines": [
+            7,
+            7
+          ]
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "bytes": [
+            13,
+            76
+          ],
+          "lines": [
+            2,
+            2
+          ]
+        }
+      ],
+      "sourceContextOutsideAssignment": "AST ranges identify enclosing structure; only assigned bytes credited as read",
+      "historicalReferences": []
+    }
+  ],
+  "lsp": [
+    {
+      "symbol": "PhotoStudio.create",
+      "result": "3 references in 2 files",
+      "productionUse": "js/game.js:8844",
+      "definition": "js/ui/photo-studio.js:85",
+      "limit": "10, full result; all 3 returned"
+    },
+    {
+      "symbol": "PitLane.laneX",
+      "result": "2 references in module; no direct named use",
+      "definition": "js/race/pit-lane.js:1069",
+      "limit": "module-file fallback; caller coverage unverified"
+    },
+    {
+      "symbol": "Collide.forArcNear",
+      "result": "5 references in module",
+      "productionUses": [
+        "js/physics/collide.js:236 scanTraffic",
+        "js/physics/collide.js:252 scanOtAhead",
+        "js/physics/collide.js:268 scanTow"
+      ],
+      "limit": "module-file fallback; export and caller coverage unverified"
+    }
+  ]
+}

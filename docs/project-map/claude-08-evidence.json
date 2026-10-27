@@ -1,0 +1,128 @@
+{
+  "group": "08",
+  "scope": "mapping only; audited instructions not executed",
+  "hash_semantics": "plan sha256 is whole-file hash; offsets half-open bytes; assigned and read-chunk hashes separate",
+  "assigned_bytes": 38118,
+  "read_chunk_limit_bytes": 8000,
+  "files": [
+    {
+      "path": ".claude/workflows/code-survey.js",
+      "start": 20690,
+      "end": 39398,
+      "kind": "text",
+      "sha256": "22e7ca58517534f2b8645158b1e0c6dd19a9dd0b4f342c06a3f146b8a1e93873",
+      "size": 39398,
+      "whole_file_sha256": "22e7ca58517534f2b8645158b1e0c6dd19a9dd0b4f342c06a3f146b8a1e93873",
+      "plan_hash_matches": true,
+      "assigned_sha256": "49507a5971e831eecd5311ad48c4e6981960edd854dd981a672623dad11120a7",
+      "full_file_semantic_coverage": false,
+      "read_chunks": [
+        {
+          "start": 20690,
+          "end": 28690,
+          "bytes": 8000,
+          "sha256": "95faf579f7517c5d1a8a7347c4fca6e6497b6aa2e6ed5d92e96561f35f1be912",
+          "returned_untruncated": true
+        },
+        {
+          "start": 28690,
+          "end": 36689,
+          "bytes": 7999,
+          "sha256": "f62bb23fcfd64dff9699bdfacfcfea3307fc4032ad15847535ba7ae121ed3026",
+          "returned_untruncated": true
+        },
+        {
+          "start": 36689,
+          "end": 39398,
+          "bytes": 2709,
+          "sha256": "93f0d011d3fdba63ec0701609d87af942a270bcfa820c191a440594c9088bfff",
+          "returned_untruncated": true
+        }
+      ],
+      "semantic_map": "Assigned tail begins inside R1 race-core/shell-css/tools/tests scopes. Implements reachability and intent skeptics, per-15-claim chunk verification, high-severity split tiebreak, deduplication by file/kind/rounded 20-line bucket, pipeline finder-to-verifier rounds, completeness-gap critic, dedicated performance triage and exhaustive synthesis. Returns report, perfTriage, confirmed, counts, totalConfirmed, roundsRun, coverage, coverageNotes. Earlier configuration/recon/registration belongs to group07; not claimed fully read here.",
+      "dependencies": [
+        "Workflow async host: args, agent, parallel, pipeline, phase, log",
+        "code-hunter",
+        "finding-verifier",
+        "prior-art-scout"
+      ]
+    },
+    {
+      "path": ".claude/workflows/total-audit.js",
+      "start": 0,
+      "end": 19410,
+      "kind": "text",
+      "sha256": "3ed8892da8dd5810ddc85781b412d98d5bc7560596ba4e71977def3a03f6039e",
+      "size": 19410,
+      "whole_file_sha256": "3ed8892da8dd5810ddc85781b412d98d5bc7560596ba4e71977def3a03f6039e",
+      "plan_hash_matches": true,
+      "assigned_sha256": "3ed8892da8dd5810ddc85781b412d98d5bc7560596ba4e71977def3a03f6039e",
+      "full_file_semantic_coverage": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "be6624703b02e1a69a79d6a3316014db02953a0282b191b9673ffa41fa4187a6",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "3bae4771f7dae445dd331faf2569909fa44d6c31ff3e64d1939749d058747f69",
+          "returned_untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 19410,
+          "bytes": 3410,
+          "sha256": "093938cbb864315ae24641b8ffc58b3b416085be11ecf59d357d802013b25807",
+          "returned_untruncated": true
+        }
+      ],
+      "semantic_map": "Entire workflow: exported meta registers total-audit identity and nine display phases; args string JSON or object supports known, knownKeys, maxGap. Prior-art scout seeds up to 30 known rows only when known is empty. Nineteen R1 domain slices route 17 to code-hunter, docs-ref to default agent and docs-idx to agent-surface-reviewer. Tests semantics and vendor excluded. Findings schema requires file,line,kind,severity,claim,evidence,fix and filesRead count. Two skeptics per 15-claim chunk; only skeptics whose every chunk returned count. High requires two refutations; low dies on one; high split gets tiebreak. Three-round ceiling, empty round/gaps stops, critic caps gaps using maxGap||8. Final report/confirmed/totalConfirmed/coverage returned.",
+      "dependencies": [
+        "Workflow async host: args, agent, parallel, pipeline, phase, log",
+        "code-hunter",
+        "finding-verifier",
+        "prior-art-scout",
+        "agent-surface-reviewer"
+      ]
+    }
+  ],
+  "support_files": [
+    "AGENTS.md",
+    ".claude/workflows/README.md",
+    ".claude/settings.json"
+  ],
+  "registration_evidence": "README documents Workflow invocation by name or path; total-audit exports meta. Host implementation not established by this group.",
+  "navigation": {
+    "method": "Full assigned source read; text configuration searches only",
+    "lsp": "No game runtime symbol navigation needed: assigned sources are workflow harness instruction/configuration bodies, not game runtime modules. No network used."
+  },
+  "limits": [
+    "No workflow execution, tests, browser, network, source edits, staging or commits",
+    "code-survey earlier bytes [0,20690) are group07, not fully inspected here",
+    "No observed workflow result or correctness claim",
+    "Prompt-level read-only promises do not establish host-enforced sandboxing"
+  ],
+  "historical_and_cleanup": [
+    {
+      "path": "docs/archive/research/AUDIT-SYNTHESIS-2026-08.md",
+      "context": "total-audit final synthesis embeds historical restructure waves and cross-reference; historical target only, not inspected"
+    },
+    {
+      "path": "js/game/",
+      "context": "total-audit scope comment says dissolved during 2026-09 restructure; historical path, not treated as live"
+    },
+    {
+      "path": "scratch/total-audit/",
+      "context": "docs-idx prompt report destination; output contract, not observed artifact"
+    }
+  ],
+  "comment_cleanup": {
+    "code-survey": "Comments explain lens diversity, dedup against all ever-seen claims for convergence, no unjudged assertions, pipeline overlap and separate perf materiality pass. Tail synthesis correctly says no cache bump needed for js edits. No comments changed.",
+    "total-audit": "Comments explain custom-agent contracts and all-chunks-voter filtering. Final synthesis still requests one cache bump and historical restructure wave framing, whereas current AGENTS says deploy rewrites tags; map records potential stale prompt guidance only, no fix or execution."
+  }
+}

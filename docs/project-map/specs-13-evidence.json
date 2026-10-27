@@ -1,0 +1,5545 @@
+{
+  "schemaVersion": 1,
+  "group": "13",
+  "rangeConvention": "UTF-8 bytes, half-open; line numbers one-based inclusive",
+  "method": "All assigned text bytes directly read in individually returned bounded chunks. Whole-file AST supplies intersecting case boundaries only; unassigned bytes are not claimed read. Assertion spans are lexical matcher calls, not execution counts.",
+  "files": [
+    {
+      "path": "tests/specs/smoke.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 25715,
+        "sha256": "a236a39785cd4ac09c44b0db9e442f7b9380321782a1794e111eae9ec802b982",
+        "manifestSha256": "a236a39785cd4ac09c44b0db9e442f7b9380321782a1794e111eae9ec802b982",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 18358,
+        "end": 25715,
+        "bytes": 7357,
+        "sha256": "1b520684e4f7bf2a44c5792d508a705629867739aa7fc397ecd050bbe78cbe0b",
+        "partial": true
+      },
+      "chunks": [
+        {
+          "start": 18358,
+          "end": 25715,
+          "bytes": 7357,
+          "sha256": "1b520684e4f7bf2a44c5792d508a705629867739aa7fc397ecd050bbe78cbe0b",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "fa5324"
+        }
+      ],
+      "imports": [],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "the select screen is a circuit picker, and YOUR CAR opens the garage",
+          "start": 16505,
+          "end": 19083,
+          "lineStart": 303,
+          "lineEnd": 345,
+          "partial": true,
+          "intersection": {
+            "start": 18358,
+            "end": 19083
+          },
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "title": "corner approach renders a non-blank frame",
+          "start": 19089,
+          "end": 19543,
+          "lineStart": 348,
+          "lineEnd": 358,
+          "partial": false,
+          "intersection": {
+            "start": 19089,
+            "end": 19543
+          },
+          "assertionIds": [
+            5
+          ]
+        },
+        {
+          "title": "page loads without WebGL error",
+          "start": 19549,
+          "end": 20346,
+          "lineStart": 361,
+          "lineEnd": 383,
+          "partial": false,
+          "intersection": {
+            "start": 19549,
+            "end": 20346
+          },
+          "assertionIds": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ]
+        },
+        {
+          "title": "speed readout updates after jump() at speed",
+          "start": 21474,
+          "end": 24037,
+          "lineStart": 403,
+          "lineEnd": 444,
+          "partial": false,
+          "intersection": {
+            "start": 21474,
+            "end": 24037
+          },
+          "assertionIds": [
+            12,
+            13,
+            14,
+            15,
+            16,
+            17
+          ]
+        },
+        {
+          "title": "minimap canvas has content after race starts",
+          "start": 24042,
+          "end": 25709,
+          "lineStart": 446,
+          "lineEnd": 474,
+          "partial": false,
+          "intersection": {
+            "start": 24042,
+            "end": 25709
+          },
+          "assertionIds": [
+            18
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 18373,
+          "end": 18421,
+          "lineStart": 334,
+          "lineEnd": 334,
+          "matcher": "toBeHidden",
+          "id": 1
+        },
+        {
+          "start": 18577,
+          "end": 18629,
+          "lineStart": 338,
+          "lineEnd": 338,
+          "matcher": "toBeVisible",
+          "id": 2
+        },
+        {
+          "start": 18928,
+          "end": 18978,
+          "lineStart": 343,
+          "lineEnd": 343,
+          "matcher": "toBeVisible",
+          "id": 3
+        },
+        {
+          "start": 18984,
+          "end": 19077,
+          "lineStart": 344,
+          "lineEnd": 344,
+          "matcher": "toContain",
+          "id": 4
+        },
+        {
+          "start": 19497,
+          "end": 19537,
+          "lineStart": 357,
+          "lineEnd": 357,
+          "matcher": "toBeGreaterThan",
+          "id": 5
+        },
+        {
+          "start": 19825,
+          "end": 19871,
+          "lineStart": 370,
+          "lineEnd": 370,
+          "matcher": "toBeVisible",
+          "id": 6
+        },
+        {
+          "start": 19934,
+          "end": 19976,
+          "lineStart": 373,
+          "lineEnd": 373,
+          "matcher": "toBeHidden",
+          "id": 7
+        },
+        {
+          "start": 20111,
+          "end": 20148,
+          "lineStart": 377,
+          "lineEnd": 377,
+          "matcher": "toBeGreaterThan",
+          "id": 8
+        },
+        {
+          "start": 20154,
+          "end": 20192,
+          "lineStart": 378,
+          "lineEnd": 378,
+          "matcher": "toBeGreaterThan",
+          "id": 9
+        },
+        {
+          "start": 20236,
+          "end": 20304,
+          "lineStart": 381,
+          "lineEnd": 381,
+          "matcher": "toHaveLength",
+          "id": 10
+        },
+        {
+          "start": 20310,
+          "end": 20340,
+          "lineStart": 382,
+          "lineEnd": 382,
+          "matcher": "toEqual",
+          "id": 11
+        },
+        {
+          "start": 23124,
+          "end": 23154,
+          "lineStart": 427,
+          "lineEnd": 427,
+          "matcher": "toBeGreaterThan",
+          "id": 12
+        },
+        {
+          "start": 23733,
+          "end": 23803,
+          "lineStart": 439,
+          "lineEnd": 439,
+          "matcher": "toBe",
+          "id": 13
+        },
+        {
+          "start": 23809,
+          "end": 23835,
+          "lineStart": 440,
+          "lineEnd": 440,
+          "matcher": "toBe",
+          "id": 14
+        },
+        {
+          "start": 23841,
+          "end": 23892,
+          "lineStart": 441,
+          "lineEnd": 441,
+          "matcher": "toBeGreaterThan",
+          "id": 15
+        },
+        {
+          "start": 23898,
+          "end": 23948,
+          "lineStart": 442,
+          "lineEnd": 442,
+          "matcher": "toBeLessThan",
+          "id": 16
+        },
+        {
+          "start": 23954,
+          "end": 24031,
+          "lineStart": 443,
+          "lineEnd": 443,
+          "matcher": "toContain",
+          "id": 17
+        },
+        {
+          "start": 25667,
+          "end": 25703,
+          "lineStart": 473,
+          "lineEnd": 473,
+          "matcher": "toBeGreaterThan",
+          "id": 18
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/soak-run.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 2728,
+        "sha256": "e00e25bf38eea7625f58f130a0b97d7996fd7c8aa304229e31279797aa6b6ad1",
+        "manifestSha256": "e00e25bf38eea7625f58f130a0b97d7996fd7c8aa304229e31279797aa6b6ad1",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 2728,
+        "bytes": 2728,
+        "sha256": "e00e25bf38eea7625f58f130a0b97d7996fd7c8aa304229e31279797aa6b6ad1",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2728,
+          "bytes": 2728,
+          "sha256": "e00e25bf38eea7625f58f130a0b97d7996fd7c8aa304229e31279797aa6b6ad1",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "315b58"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 253,
+          "end": 331,
+          "lineStart": 5,
+          "lineEnd": 5
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 399,
+          "end": 482,
+          "lineStart": 8,
+          "lineEnd": 8
+        },
+        {
+          "kind": "test.setTimeout",
+          "start": 593,
+          "end": 632,
+          "lineStart": 11,
+          "lineEnd": 11
+        }
+      ],
+      "cases": [
+        {
+          "title": "drives the player car, records, stops itself and leaves SHARE-able JSON",
+          "start": 487,
+          "end": 2722,
+          "lineStart": 10,
+          "lineEnd": 44,
+          "partial": false,
+          "intersection": {
+            "start": 487,
+            "end": 2722
+          },
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 842,
+          "end": 905,
+          "lineStart": 16,
+          "lineEnd": 16,
+          "matcher": "toBe",
+          "id": 1
+        },
+        {
+          "start": 911,
+          "end": 988,
+          "lineStart": 17,
+          "lineEnd": 17,
+          "matcher": "toBe",
+          "id": 2
+        },
+        {
+          "start": 1258,
+          "end": 1286,
+          "lineStart": 21,
+          "lineEnd": 21,
+          "matcher": "toBe",
+          "id": 3
+        },
+        {
+          "start": 1292,
+          "end": 1323,
+          "lineStart": 22,
+          "lineEnd": 22,
+          "matcher": "toBe",
+          "id": 4
+        },
+        {
+          "start": 1541,
+          "end": 1579,
+          "lineStart": 26,
+          "lineEnd": 26,
+          "matcher": "toBe",
+          "id": 5
+        },
+        {
+          "start": 1623,
+          "end": 1669,
+          "lineStart": 28,
+          "lineEnd": 28,
+          "matcher": "toBe",
+          "id": 6
+        },
+        {
+          "start": 1675,
+          "end": 1727,
+          "lineStart": 29,
+          "lineEnd": 29,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 7
+        },
+        {
+          "start": 1733,
+          "end": 1777,
+          "lineStart": 30,
+          "lineEnd": 30,
+          "matcher": "toBe",
+          "id": 8
+        },
+        {
+          "start": 1783,
+          "end": 1825,
+          "lineStart": 31,
+          "lineEnd": 31,
+          "matcher": "toBe",
+          "id": 9
+        },
+        {
+          "start": 1831,
+          "end": 1895,
+          "lineStart": 32,
+          "lineEnd": 32,
+          "matcher": "toBe",
+          "id": 10
+        },
+        {
+          "start": 2297,
+          "end": 2341,
+          "lineStart": 37,
+          "lineEnd": 37,
+          "matcher": "toBeGreaterThan",
+          "id": 11
+        },
+        {
+          "start": 2347,
+          "end": 2379,
+          "lineStart": 38,
+          "lineEnd": 38,
+          "matcher": "toBeNull",
+          "id": 12
+        },
+        {
+          "start": 2385,
+          "end": 2424,
+          "lineStart": 39,
+          "lineEnd": 39,
+          "matcher": "toBeNull",
+          "id": 13
+        },
+        {
+          "start": 2430,
+          "end": 2460,
+          "lineStart": 40,
+          "lineEnd": 40,
+          "matcher": "toBe",
+          "id": 14
+        },
+        {
+          "start": 2466,
+          "end": 2500,
+          "lineStart": 41,
+          "lineEnd": 41,
+          "matcher": "toBeTruthy",
+          "id": 15
+        },
+        {
+          "start": 2506,
+          "end": 2544,
+          "lineStart": 42,
+          "lineEnd": 42,
+          "matcher": "toBeGreaterThan",
+          "id": 16
+        },
+        {
+          "start": 2602,
+          "end": 2694,
+          "lineStart": 43,
+          "lineEnd": 43,
+          "matcher": "toEqual",
+          "id": 17
+        },
+        {
+          "start": 2648,
+          "end": 2693,
+          "lineStart": 43,
+          "lineEnd": 43,
+          "matcher": "arrayContaining",
+          "id": 18
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/spa-foundation.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 10672,
+        "sha256": "6e0d99d91f2dec2dd8779273f3c3af635a7b17d9e36990ae6ce22c9f46d85bbb",
+        "manifestSha256": "6e0d99d91f2dec2dd8779273f3c3af635a7b17d9e36990ae6ce22c9f46d85bbb",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 10672,
+        "bytes": 10672,
+        "sha256": "6e0d99d91f2dec2dd8779273f3c3af635a7b17d9e36990ae6ce22c9f46d85bbb",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "f61ed0b26449bf8305b186bbcf9dc15107eef545717060cfa022436d731b6038",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "a0e321"
+        },
+        {
+          "start": 8000,
+          "end": 10672,
+          "bytes": 2672,
+          "sha256": "e6f7f8b9e4e392b0b4639a989a873d7e6d3ad64ce98e86022e839e6d31f022c5",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "d5b361"
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "start": 13,
+          "end": 61,
+          "lineStart": 2,
+          "lineEnd": 2
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 62,
+          "end": 111,
+          "lineStart": 3,
+          "lineEnd": 3
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "start": 4146,
+          "end": 4169,
+          "lineStart": 85,
+          "lineEnd": 85
+        }
+      ],
+      "cases": [
+        {
+          "title": "preserves Spa's 102 m relief and Raidillon climb",
+          "start": 634,
+          "end": 3205,
+          "lineStart": 14,
+          "lineEnd": 62,
+          "partial": false,
+          "intersection": {
+            "start": 634,
+            "end": 3205
+          },
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "title": "grounds key terrain feet without weakening road clearance",
+          "start": 3210,
+          "end": 4042,
+          "lineStart": 64,
+          "lineEnd": 82,
+          "partial": false,
+          "intersection": {
+            "start": 3210,
+            "end": 4042
+          },
+          "assertionIds": [
+            9,
+            10
+          ]
+        },
+        {
+          "title": "keeps terrain, shoulders, and props out of Spa's racing corridor",
+          "start": 4047,
+          "end": 8868,
+          "lineStart": 84,
+          "lineEnd": 181,
+          "partial": false,
+          "intersection": {
+            "start": 4047,
+            "end": 8868
+          },
+          "assertionIds": [
+            11,
+            12,
+            13
+          ]
+        },
+        {
+          "title": "emits safe atomic landmarks and overheads by ${time}",
+          "start": 8916,
+          "end": 10662,
+          "lineStart": 184,
+          "lineEnd": 218,
+          "partial": false,
+          "intersection": {
+            "start": 8916,
+            "end": 10662
+          },
+          "assertionIds": [
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1978,
+          "end": 2029,
+          "lineStart": 40,
+          "lineEnd": 40,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 1
+        },
+        {
+          "start": 2035,
+          "end": 2083,
+          "lineStart": 41,
+          "lineEnd": 41,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 2
+        },
+        {
+          "start": 2089,
+          "end": 2154,
+          "lineStart": 42,
+          "lineEnd": 42,
+          "matcher": "toBeGreaterThan",
+          "id": 3
+        },
+        {
+          "start": 2160,
+          "end": 2205,
+          "lineStart": 43,
+          "lineEnd": 43,
+          "matcher": "toBeGreaterThan",
+          "id": 4
+        },
+        {
+          "start": 2211,
+          "end": 2253,
+          "lineStart": 44,
+          "lineEnd": 44,
+          "matcher": "toBeLessThan",
+          "id": 5
+        },
+        {
+          "start": 2897,
+          "end": 2949,
+          "lineStart": 56,
+          "lineEnd": 56,
+          "matcher": "toHaveLength",
+          "id": 6
+        },
+        {
+          "start": 3040,
+          "end": 3132,
+          "lineStart": 59,
+          "lineEnd": 59,
+          "matcher": "toBeLessThan",
+          "id": 7
+        },
+        {
+          "start": 3140,
+          "end": 3191,
+          "lineStart": 60,
+          "lineEnd": 60,
+          "matcher": "toBe",
+          "id": 8
+        },
+        {
+          "start": 3864,
+          "end": 3939,
+          "lineStart": 79,
+          "lineEnd": 79,
+          "matcher": "toBeNull",
+          "id": 9
+        },
+        {
+          "start": 3947,
+          "end": 4030,
+          "lineStart": 80,
+          "lineEnd": 80,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 10
+        },
+        {
+          "start": 8705,
+          "end": 8752,
+          "lineStart": 178,
+          "lineEnd": 178,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 11
+        },
+        {
+          "start": 8758,
+          "end": 8808,
+          "lineStart": 179,
+          "lineEnd": 179,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 12
+        },
+        {
+          "start": 8814,
+          "end": 8862,
+          "lineStart": 180,
+          "lineEnd": 180,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 13
+        },
+        {
+          "start": 9247,
+          "end": 9308,
+          "lineStart": 192,
+          "lineEnd": 192,
+          "matcher": "toBe",
+          "id": 14
+        },
+        {
+          "start": 9316,
+          "end": 9357,
+          "lineStart": 193,
+          "lineEnd": 193,
+          "matcher": "toEqual",
+          "id": 15
+        },
+        {
+          "start": 9365,
+          "end": 9405,
+          "lineStart": 194,
+          "lineEnd": 194,
+          "matcher": "toEqual",
+          "id": 16
+        },
+        {
+          "start": 9569,
+          "end": 9605,
+          "lineStart": 197,
+          "lineEnd": 197,
+          "matcher": "toEqual",
+          "id": 17
+        },
+        {
+          "start": 9964,
+          "end": 10010,
+          "lineStart": 204,
+          "lineEnd": 204,
+          "matcher": "toBe",
+          "id": 18
+        },
+        {
+          "start": 10026,
+          "end": 10103,
+          "lineStart": 206,
+          "lineEnd": 206,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 19
+        },
+        {
+          "start": 10237,
+          "end": 10269,
+          "lineStart": 209,
+          "lineEnd": 209,
+          "matcher": "toEqual",
+          "id": 20
+        },
+        {
+          "start": 10277,
+          "end": 10337,
+          "lineStart": 210,
+          "lineEnd": 210,
+          "matcher": "toBe",
+          "id": 21
+        },
+        {
+          "start": 10418,
+          "end": 10462,
+          "lineStart": 212,
+          "lineEnd": 212,
+          "matcher": "toBe",
+          "id": 22
+        },
+        {
+          "start": 10472,
+          "end": 10534,
+          "lineStart": 213,
+          "lineEnd": 213,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 23
+        },
+        {
+          "start": 10551,
+          "end": 10590,
+          "lineStart": 216,
+          "lineEnd": 216,
+          "matcher": "toBe",
+          "id": 24
+        },
+        {
+          "start": 10598,
+          "end": 10654,
+          "lineStart": 217,
+          "lineEnd": 217,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 25
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/steer-migration.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 13980,
+        "sha256": "e1b7a959d73e5c1ef849910568d16a6a3909c9200cc017608f4f68d883a5e98b",
+        "manifestSha256": "e1b7a959d73e5c1ef849910568d16a6a3909c9200cc017608f4f68d883a5e98b",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 13980,
+        "bytes": 13980,
+        "sha256": "e1b7a959d73e5c1ef849910568d16a6a3909c9200cc017608f4f68d883a5e98b",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "a0c960fad7950439984fa7242455b5cde3f7f16db5b56e8c351f75b309b7dd62",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "261883"
+        },
+        {
+          "start": 8000,
+          "end": 13980,
+          "bytes": 5980,
+          "sha256": "f1f86e9c44417018ce037d3ba5485e4fcf1ba0234317e1f3727984aa6fd2c11a",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "ba6dd2"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 1637,
+          "end": 1700,
+          "lineStart": 28,
+          "lineEnd": 28
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.skip",
+          "start": 5765,
+          "end": 5839,
+          "lineStart": 115,
+          "lineEnd": 115
+        },
+        {
+          "kind": "test.skip",
+          "start": 9877,
+          "end": 9937,
+          "lineStart": 187,
+          "lineEnd": 187
+        },
+        {
+          "kind": "test.slow",
+          "start": 10243,
+          "end": 10254,
+          "lineStart": 192,
+          "lineEnd": 192
+        },
+        {
+          "kind": "test.skip",
+          "start": 12521,
+          "end": 12581,
+          "lineStart": 233,
+          "lineEnd": 233
+        },
+        {
+          "kind": "test.skip",
+          "start": 13324,
+          "end": 13384,
+          "lineStart": 249,
+          "lineEnd": 249
+        }
+      ],
+      "cases": [
+        {
+          "title": "a fresh install lands on the assists-off defaults, in the store AND in the car",
+          "start": 3772,
+          "end": 4605,
+          "lineStart": 77,
+          "lineEnd": 92,
+          "partial": false,
+          "intersection": {
+            "start": 3772,
+            "end": 4605
+          },
+          "assertionIds": [
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "title": "a v1 store's deliberately non-default assist values are reset",
+          "start": 4610,
+          "end": 5330,
+          "lineStart": 94,
+          "lineEnd": 107,
+          "partial": false,
+          "intersection": {
+            "start": 4610,
+            "end": 5330
+          },
+          "assertionIds": [
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "title": "an explicit steerSchema: 1 is migrated exactly like a missing one",
+          "start": 5335,
+          "end": 6092,
+          "lineStart": 109,
+          "lineEnd": 121,
+          "partial": false,
+          "intersection": {
+            "start": 5335,
+            "end": 6092
+          },
+          "assertionIds": [
+            8
+          ]
+        },
+        {
+          "title": "a store already at the current schema is left completely alone",
+          "start": 6097,
+          "end": 7736,
+          "lineStart": 123,
+          "lineEnd": 149,
+          "partial": false,
+          "intersection": {
+            "start": 6097,
+            "end": 7736
+          },
+          "assertionIds": [
+            9,
+            10,
+            11
+          ]
+        },
+        {
+          "title": "the migration touches only the keys it owns",
+          "start": 7741,
+          "end": 9680,
+          "lineStart": 151,
+          "lineEnd": 181,
+          "partial": false,
+          "intersection": {
+            "start": 7741,
+            "end": 9680
+          },
+          "assertionIds": [
+            12,
+            13,
+            14
+          ]
+        },
+        {
+          "title": "v3 regrids every stored RACE PACE notch from the 1..10 grid onto 1..19",
+          "start": 9726,
+          "end": 12362,
+          "lineStart": 185,
+          "lineEnd": 229,
+          "partial": false,
+          "intersection": {
+            "start": 9726,
+            "end": 12362
+          },
+          "assertionIds": [
+            15,
+            16,
+            17
+          ]
+        },
+        {
+          "title": "v3 leaves a store with no RACE PACE key alone, so the new default applies",
+          "start": 12367,
+          "end": 13159,
+          "lineStart": 231,
+          "lineEnd": 245,
+          "partial": false,
+          "intersection": {
+            "start": 12367,
+            "end": 13159
+          },
+          "assertionIds": [
+            18,
+            19
+          ]
+        },
+        {
+          "title": "a store already at v3 keeps its RACE PACE notch \u2014 the regrid cannot run twice",
+          "start": 13164,
+          "end": 13974,
+          "lineStart": 247,
+          "lineEnd": 261,
+          "partial": false,
+          "intersection": {
+            "start": 13164,
+            "end": 13974
+          },
+          "assertionIds": [
+            20,
+            21
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 3064,
+          "end": 3142,
+          "lineStart": 59,
+          "lineEnd": 59,
+          "matcher": "toBeNull",
+          "id": 1
+        },
+        {
+          "start": 4116,
+          "end": 4258,
+          "lineStart": 83,
+          "lineEnd": 84,
+          "matcher": "toEqual",
+          "id": 2
+        },
+        {
+          "start": 4533,
+          "end": 4561,
+          "lineStart": 90,
+          "lineEnd": 90,
+          "matcher": "toBe",
+          "id": 3
+        },
+        {
+          "start": 4567,
+          "end": 4599,
+          "lineStart": 91,
+          "lineEnd": 91,
+          "matcher": "toBe",
+          "id": 4
+        },
+        {
+          "start": 5076,
+          "end": 5218,
+          "lineStart": 102,
+          "lineEnd": 103,
+          "matcher": "toEqual",
+          "id": 5
+        },
+        {
+          "start": 5258,
+          "end": 5286,
+          "lineStart": 105,
+          "lineEnd": 105,
+          "matcher": "toBe",
+          "id": 6
+        },
+        {
+          "start": 5292,
+          "end": 5324,
+          "lineStart": 106,
+          "lineEnd": 106,
+          "matcher": "toBe",
+          "id": 7
+        },
+        {
+          "start": 5944,
+          "end": 6086,
+          "lineStart": 119,
+          "lineEnd": 120,
+          "matcher": "toEqual",
+          "id": 8
+        },
+        {
+          "start": 7181,
+          "end": 7323,
+          "lineStart": 139,
+          "lineEnd": 140,
+          "matcher": "toEqual",
+          "id": 9
+        },
+        {
+          "start": 7642,
+          "end": 7681,
+          "lineStart": 147,
+          "lineEnd": 147,
+          "matcher": "toBeGreaterThan",
+          "id": 10
+        },
+        {
+          "start": 7687,
+          "end": 7730,
+          "lineStart": 148,
+          "lineEnd": 148,
+          "matcher": "toBeGreaterThan",
+          "id": 11
+        },
+        {
+          "start": 8986,
+          "end": 9062,
+          "lineStart": 170,
+          "lineEnd": 170,
+          "matcher": "toEqual",
+          "id": 12
+        },
+        {
+          "start": 9561,
+          "end": 9612,
+          "lineStart": 179,
+          "lineEnd": 179,
+          "matcher": "toBeLessThan",
+          "id": 13
+        },
+        {
+          "start": 9618,
+          "end": 9674,
+          "lineStart": 180,
+          "lineEnd": 180,
+          "matcher": "toBeGreaterThan",
+          "id": 14
+        },
+        {
+          "start": 11020,
+          "end": 11086,
+          "lineStart": 204,
+          "lineEnd": 204,
+          "matcher": "toBe",
+          "id": 15
+        },
+        {
+          "start": 11775,
+          "end": 11821,
+          "lineStart": 219,
+          "lineEnd": 219,
+          "matcher": "toEqual",
+          "id": 16
+        },
+        {
+          "start": 12295,
+          "end": 12356,
+          "lineStart": 228,
+          "lineEnd": 228,
+          "matcher": "toBeCloseTo",
+          "id": 17
+        },
+        {
+          "start": 13002,
+          "end": 13059,
+          "lineStart": 242,
+          "lineEnd": 242,
+          "matcher": "toBeNull",
+          "id": 18
+        },
+        {
+          "start": 13099,
+          "end": 13153,
+          "lineStart": 244,
+          "lineEnd": 244,
+          "matcher": "toBeCloseTo",
+          "id": 19
+        },
+        {
+          "start": 13768,
+          "end": 13874,
+          "lineStart": 257,
+          "lineEnd": 258,
+          "matcher": "toEqual",
+          "id": 20
+        },
+        {
+          "start": 13914,
+          "end": 13968,
+          "lineStart": 260,
+          "lineEnd": 260,
+          "matcher": "toBeCloseTo",
+          "id": 21
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/steering.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 36937,
+        "sha256": "4e3386ab29785bd2a0f0733bcfa88a321a86e28f2406aad63b1bd7f212fac3d8",
+        "manifestSha256": "4e3386ab29785bd2a0f0733bcfa88a321a86e28f2406aad63b1bd7f212fac3d8",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 36937,
+        "bytes": 36937,
+        "sha256": "4e3386ab29785bd2a0f0733bcfa88a321a86e28f2406aad63b1bd7f212fac3d8",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "11fd969b957f0c153aecf6088ee85a13192ceb6de54836fd7d042472ca9471b6",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "6d5d98"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "89cc223cc5935343302e5767494fd742717af23a3dea364fa0bcb62900b8b115",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "d807ff"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "8624485df652b87d7a98c7d43a230c0860090156a495bac51e63585a1324fbc8",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "18e3c1"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "2f8c17c689bd703df751ece19f266b5ddbbdfd84cb5e32b45728218e27caf6ca",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "4a32d0"
+        },
+        {
+          "start": 32000,
+          "end": 36937,
+          "bytes": 4937,
+          "sha256": "d590fa52a782a91f5b9db0b46f573d548449bf13187e0844cbeae41ddaa94abb",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "8dd35a"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 1125,
+          "end": 1219,
+          "lineStart": 19,
+          "lineEnd": 19
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 1220,
+          "end": 1277,
+          "lineStart": 20,
+          "lineEnd": 20
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.describe.configure",
+          "start": 6801,
+          "end": 6846,
+          "lineStart": 118,
+          "lineEnd": 118
+        }
+      ],
+      "cases": [
+        {
+          "title": "shared-page reset restores shipped assist defaults after a deliberate leak",
+          "start": 10965,
+          "end": 11597,
+          "lineStart": 205,
+          "lineEnd": 214,
+          "partial": false,
+          "intersection": {
+            "start": 10965,
+            "end": 11597
+          },
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "title": "road-follow, when switched on, is active and changes the cornering line",
+          "start": 11907,
+          "end": 14051,
+          "lineStart": 220,
+          "lineEnd": 253,
+          "partial": false,
+          "intersection": {
+            "start": 11907,
+            "end": 14051
+          },
+          "assertionIds": [
+            5,
+            6,
+            7,
+            8,
+            9
+          ]
+        },
+        {
+          "title": "by default nothing steers the car: zero input holds a straight world line",
+          "start": 14355,
+          "end": 15690,
+          "lineStart": 259,
+          "lineEnd": 284,
+          "partial": false,
+          "intersection": {
+            "start": 14355,
+            "end": 15690
+          },
+          "assertionIds": [
+            10,
+            11,
+            12,
+            13
+          ]
+        },
+        {
+          "title": "steering has authority to fight the curvature drift",
+          "start": 15695,
+          "end": 18959,
+          "lineStart": 286,
+          "lineEnd": 348,
+          "partial": false,
+          "intersection": {
+            "start": 15695,
+            "end": 18959
+          },
+          "assertionIds": [
+            14,
+            15,
+            16,
+            17,
+            18
+          ]
+        },
+        {
+          "title": "direction: +steer goes right, \u2212steer goes left on a straight",
+          "start": 18964,
+          "end": 19421,
+          "lineStart": 350,
+          "lineEnd": 359,
+          "partial": false,
+          "intersection": {
+            "start": 18964,
+            "end": 19421
+          },
+          "assertionIds": [
+            19,
+            20
+          ]
+        },
+        {
+          "title": "expo response: half input turns the car well under half as fast",
+          "start": 19426,
+          "end": 20449,
+          "lineStart": 361,
+          "lineEnd": 378,
+          "partial": false,
+          "intersection": {
+            "start": 19426,
+            "end": 20449
+          },
+          "assertionIds": [
+            21,
+            22,
+            23
+          ]
+        },
+        {
+          "title": "straight tracking: no input keeps the car on its line",
+          "start": 20454,
+          "end": 20917,
+          "lineStart": 380,
+          "lineEnd": 387,
+          "partial": false,
+          "intersection": {
+            "start": 20454,
+            "end": 20917
+          },
+          "assertionIds": [
+            24,
+            25
+          ]
+        },
+        {
+          "title": "symmetry: opposite inputs turn the heading by opposite, equal amounts",
+          "start": 20922,
+          "end": 23081,
+          "lineStart": 389,
+          "lineEnd": 433,
+          "partial": false,
+          "intersection": {
+            "start": 20922,
+            "end": 23081
+          },
+          "assertionIds": [
+            26,
+            27,
+            28
+          ]
+        },
+        {
+          "title": "racing-line assist off by default",
+          "start": 23086,
+          "end": 26295,
+          "lineStart": 435,
+          "lineEnd": 496,
+          "partial": false,
+          "intersection": {
+            "start": 23086,
+            "end": 26295
+          },
+          "assertionIds": [
+            29,
+            30,
+            31,
+            32
+          ]
+        },
+        {
+          "title": "racing-line assist: PULL eases toward the line, PUSH sends it wider",
+          "start": 26300,
+          "end": 29212,
+          "lineStart": 498,
+          "lineEnd": 551,
+          "partial": false,
+          "intersection": {
+            "start": 26300,
+            "end": 29212
+          },
+          "assertionIds": [
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39
+          ]
+        },
+        {
+          "title": "keyup clears throttle even when focus moved to a non-HUD control",
+          "start": 29834,
+          "end": 31644,
+          "lineStart": 562,
+          "lineEnd": 596,
+          "partial": false,
+          "intersection": {
+            "start": 29834,
+            "end": 31644
+          },
+          "assertionIds": [
+            40,
+            41,
+            42
+          ]
+        },
+        {
+          "title": "on-screen GAS releases when pointer capture is lost mid-hold",
+          "start": 32200,
+          "end": 33689,
+          "lineStart": 605,
+          "lineEnd": 631,
+          "partial": false,
+          "intersection": {
+            "start": 32200,
+            "end": 33689
+          },
+          "assertionIds": [
+            43,
+            44
+          ]
+        },
+        {
+          "title": "hold survives an OS interruption without latching (ghost pointerId)",
+          "start": 34320,
+          "end": 35727,
+          "lineStart": 641,
+          "lineEnd": 666,
+          "partial": false,
+          "intersection": {
+            "start": 34320,
+            "end": 35727
+          },
+          "assertionIds": [
+            45,
+            46,
+            47,
+            48
+          ]
+        },
+        {
+          "title": "a pointerup landing on another element still releases the pedal",
+          "start": 36037,
+          "end": 36931,
+          "lineStart": 672,
+          "lineEnd": 688,
+          "partial": false,
+          "intersection": {
+            "start": 36037,
+            "end": 36931
+          },
+          "assertionIds": [
+            49,
+            50
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 11215,
+          "end": 11293,
+          "lineStart": 209,
+          "lineEnd": 209,
+          "matcher": "toBe",
+          "id": 1
+        },
+        {
+          "start": 11299,
+          "end": 11390,
+          "lineStart": 210,
+          "lineEnd": 210,
+          "matcher": "toBeGreaterThan",
+          "id": 2
+        },
+        {
+          "start": 11429,
+          "end": 11505,
+          "lineStart": 212,
+          "lineEnd": 212,
+          "matcher": "toBe",
+          "id": 3
+        },
+        {
+          "start": 11511,
+          "end": 11591,
+          "lineStart": 213,
+          "lineEnd": 213,
+          "matcher": "toBe",
+          "id": 4
+        },
+        {
+          "start": 12202,
+          "end": 12243,
+          "lineStart": 224,
+          "lineEnd": 224,
+          "matcher": "toBeGreaterThan",
+          "id": 5
+        },
+        {
+          "start": 12961,
+          "end": 13015,
+          "lineStart": 238,
+          "lineEnd": 238,
+          "matcher": "toBe",
+          "id": 6
+        },
+        {
+          "start": 13048,
+          "end": 13092,
+          "lineStart": 239,
+          "lineEnd": 239,
+          "matcher": "toBeGreaterThan",
+          "id": 7
+        },
+        {
+          "start": 13859,
+          "end": 13923,
+          "lineStart": 249,
+          "lineEnd": 249,
+          "matcher": "toBeGreaterThan",
+          "id": 8
+        },
+        {
+          "start": 14011,
+          "end": 14045,
+          "lineStart": 252,
+          "lineEnd": 252,
+          "matcher": "toBeGreaterThan",
+          "id": 9
+        },
+        {
+          "start": 14559,
+          "end": 14635,
+          "lineStart": 262,
+          "lineEnd": 262,
+          "matcher": "toBe",
+          "id": 10
+        },
+        {
+          "start": 14641,
+          "end": 14721,
+          "lineStart": 263,
+          "lineEnd": 263,
+          "matcher": "toBe",
+          "id": 11
+        },
+        {
+          "start": 14777,
+          "end": 14818,
+          "lineStart": 266,
+          "lineEnd": 266,
+          "matcher": "toBeGreaterThan",
+          "id": 12
+        },
+        {
+          "start": 15604,
+          "end": 15635,
+          "lineStart": 283,
+          "lineEnd": 283,
+          "matcher": "toBeLessThan",
+          "id": 13
+        },
+        {
+          "start": 18308,
+          "end": 18338,
+          "lineStart": 338,
+          "lineEnd": 338,
+          "matcher": "toBe",
+          "id": 14
+        },
+        {
+          "start": 18344,
+          "end": 18395,
+          "lineStart": 339,
+          "lineEnd": 339,
+          "matcher": "toBeGreaterThan",
+          "id": 15
+        },
+        {
+          "start": 18584,
+          "end": 18649,
+          "lineStart": 343,
+          "lineEnd": 343,
+          "matcher": "toBeLessThan",
+          "id": 16
+        },
+        {
+          "start": 18673,
+          "end": 18738,
+          "lineStart": 344,
+          "lineEnd": 344,
+          "matcher": "toBeLessThan",
+          "id": 17
+        },
+        {
+          "start": 18899,
+          "end": 18953,
+          "lineStart": 347,
+          "lineEnd": 347,
+          "matcher": "toBeGreaterThan",
+          "id": 18
+        },
+        {
+          "start": 19295,
+          "end": 19354,
+          "lineStart": 357,
+          "lineEnd": 357,
+          "matcher": "toBeGreaterThan",
+          "id": 19
+        },
+        {
+          "start": 19360,
+          "end": 19415,
+          "lineStart": 358,
+          "lineEnd": 358,
+          "matcher": "toBeLessThan",
+          "id": 20
+        },
+        {
+          "start": 20142,
+          "end": 20177,
+          "lineStart": 373,
+          "lineEnd": 373,
+          "matcher": "toBeGreaterThan",
+          "id": 21
+        },
+        {
+          "start": 20354,
+          "end": 20394,
+          "lineStart": 376,
+          "lineEnd": 376,
+          "matcher": "toBeLessThan",
+          "id": 22
+        },
+        {
+          "start": 20400,
+          "end": 20443,
+          "lineStart": 377,
+          "lineEnd": 377,
+          "matcher": "toBeGreaterThan",
+          "id": 23
+        },
+        {
+          "start": 20803,
+          "end": 20857,
+          "lineStart": 385,
+          "lineEnd": 385,
+          "matcher": "toBeLessThan",
+          "id": 24
+        },
+        {
+          "start": 20863,
+          "end": 20911,
+          "lineStart": 386,
+          "lineEnd": 386,
+          "matcher": "toBeLessThan",
+          "id": 25
+        },
+        {
+          "start": 22856,
+          "end": 22894,
+          "lineStart": 429,
+          "lineEnd": 429,
+          "matcher": "toBeGreaterThan",
+          "id": 26
+        },
+        {
+          "start": 22900,
+          "end": 22935,
+          "lineStart": 430,
+          "lineEnd": 430,
+          "matcher": "toBeLessThan",
+          "id": 27
+        },
+        {
+          "start": 22975,
+          "end": 23075,
+          "lineStart": 432,
+          "lineEnd": 432,
+          "matcher": "toBeLessThan",
+          "id": 28
+        },
+        {
+          "start": 24072,
+          "end": 24101,
+          "lineStart": 450,
+          "lineEnd": 450,
+          "matcher": "toBe",
+          "id": 29
+        },
+        {
+          "start": 24300,
+          "end": 24322,
+          "lineStart": 454,
+          "lineEnd": 454,
+          "matcher": "toBe",
+          "id": 30
+        },
+        {
+          "start": 24690,
+          "end": 24731,
+          "lineStart": 460,
+          "lineEnd": 460,
+          "matcher": "toBeGreaterThan",
+          "id": 31
+        },
+        {
+          "start": 26256,
+          "end": 26289,
+          "lineStart": 495,
+          "lineEnd": 495,
+          "matcher": "toBeLessThan",
+          "id": 32
+        },
+        {
+          "start": 26947,
+          "end": 26988,
+          "lineStart": 507,
+          "lineEnd": 507,
+          "matcher": "toBeGreaterThan",
+          "id": 33
+        },
+        {
+          "start": 27433,
+          "end": 27513,
+          "lineStart": 517,
+          "lineEnd": 517,
+          "matcher": "toBe",
+          "id": 34
+        },
+        {
+          "start": 27661,
+          "end": 27741,
+          "lineStart": 521,
+          "lineEnd": 521,
+          "matcher": "toBe",
+          "id": 35
+        },
+        {
+          "start": 27891,
+          "end": 27972,
+          "lineStart": 525,
+          "lineEnd": 525,
+          "matcher": "toBe",
+          "id": 36
+        },
+        {
+          "start": 28869,
+          "end": 28909,
+          "lineStart": 545,
+          "lineEnd": 545,
+          "matcher": "toBeGreaterThan",
+          "id": 37
+        },
+        {
+          "start": 29050,
+          "end": 29104,
+          "lineStart": 548,
+          "lineEnd": 548,
+          "matcher": "toBeGreaterThan",
+          "id": 38
+        },
+        {
+          "start": 29154,
+          "end": 29206,
+          "lineStart": 550,
+          "lineEnd": 550,
+          "matcher": "toBeLessThan",
+          "id": 39
+        },
+        {
+          "start": 31393,
+          "end": 31421,
+          "lineStart": 593,
+          "lineEnd": 593,
+          "matcher": "toBe",
+          "id": 40
+        },
+        {
+          "start": 31471,
+          "end": 31505,
+          "lineStart": 594,
+          "lineEnd": 594,
+          "matcher": "toBe",
+          "id": 41
+        },
+        {
+          "start": 31558,
+          "end": 31598,
+          "lineStart": 595,
+          "lineEnd": 595,
+          "matcher": "toBe",
+          "id": 42
+        },
+        {
+          "start": 33545,
+          "end": 33570,
+          "lineStart": 629,
+          "lineEnd": 629,
+          "matcher": "toBe",
+          "id": 43
+        },
+        {
+          "start": 33606,
+          "end": 33644,
+          "lineStart": 630,
+          "lineEnd": 630,
+          "matcher": "toBe",
+          "id": 44
+        },
+        {
+          "start": 35527,
+          "end": 35563,
+          "lineStart": 662,
+          "lineEnd": 662,
+          "matcher": "toBe",
+          "id": 45
+        },
+        {
+          "start": 35569,
+          "end": 35599,
+          "lineStart": 663,
+          "lineEnd": 663,
+          "matcher": "toBe",
+          "id": 46
+        },
+        {
+          "start": 35605,
+          "end": 35639,
+          "lineStart": 664,
+          "lineEnd": 664,
+          "matcher": "toBe",
+          "id": 47
+        },
+        {
+          "start": 35645,
+          "end": 35681,
+          "lineStart": 665,
+          "lineEnd": 665,
+          "matcher": "toBe",
+          "id": 48
+        },
+        {
+          "start": 36861,
+          "end": 36886,
+          "lineStart": 686,
+          "lineEnd": 686,
+          "matcher": "toBe",
+          "id": 49
+        },
+        {
+          "start": 36892,
+          "end": 36925,
+          "lineStart": 687,
+          "lineEnd": 687,
+          "matcher": "toBe",
+          "id": 50
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/suzuka-foundation.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 4214,
+        "sha256": "0ce48dd743a3578e0861eab3dc5373fb096280e96a14e3708e332b35e22c2972",
+        "manifestSha256": "0ce48dd743a3578e0861eab3dc5373fb096280e96a14e3708e332b35e22c2972",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 4214,
+        "bytes": 4214,
+        "sha256": "0ce48dd743a3578e0861eab3dc5373fb096280e96a14e3708e332b35e22c2972",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4214,
+          "bytes": 4214,
+          "sha256": "0ce48dd743a3578e0861eab3dc5373fb096280e96a14e3708e332b35e22c2972",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "6fe6ff"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 13,
+          "end": 76,
+          "lineStart": 2,
+          "lineEnd": 2
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "start": 192,
+          "end": 216,
+          "lineStart": 5,
+          "lineEnd": 5
+        }
+      ],
+      "cases": [
+        {
+          "title": "Suzuka keeps its elevation, crossover, and track-owned models aligned",
+          "start": 78,
+          "end": 4212,
+          "lineStart": 4,
+          "lineEnd": 90,
+          "partial": false,
+          "intersection": {
+            "start": 78,
+            "end": 4212
+          },
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 2316,
+          "end": 2367,
+          "lineStart": 49,
+          "lineEnd": 49,
+          "matcher": "toBe",
+          "id": 1
+        },
+        {
+          "start": 2371,
+          "end": 2411,
+          "lineStart": 50,
+          "lineEnd": 50,
+          "matcher": "toBe",
+          "id": 2
+        },
+        {
+          "start": 2415,
+          "end": 2466,
+          "lineStart": 51,
+          "lineEnd": 51,
+          "matcher": "toBe",
+          "id": 3
+        },
+        {
+          "start": 2470,
+          "end": 2523,
+          "lineStart": 52,
+          "lineEnd": 52,
+          "matcher": "toBe",
+          "id": 4
+        },
+        {
+          "start": 2527,
+          "end": 2599,
+          "lineStart": 53,
+          "lineEnd": 53,
+          "matcher": "toEqual",
+          "id": 5
+        },
+        {
+          "start": 2702,
+          "end": 2757,
+          "lineStart": 56,
+          "lineEnd": 56,
+          "matcher": "toBeCloseTo",
+          "id": 6
+        },
+        {
+          "start": 2762,
+          "end": 2813,
+          "lineStart": 58,
+          "lineEnd": 58,
+          "matcher": "toBeGreaterThan",
+          "id": 7
+        },
+        {
+          "start": 2817,
+          "end": 2866,
+          "lineStart": 59,
+          "lineEnd": 59,
+          "matcher": "toBeLessThan",
+          "id": 8
+        },
+        {
+          "start": 2870,
+          "end": 2919,
+          "lineStart": 60,
+          "lineEnd": 60,
+          "matcher": "toBeGreaterThan",
+          "id": 9
+        },
+        {
+          "start": 2963,
+          "end": 3111,
+          "lineStart": 62,
+          "lineEnd": 63,
+          "matcher": "toBe",
+          "id": 10
+        },
+        {
+          "start": 3120,
+          "end": 3162,
+          "lineStart": 66,
+          "lineEnd": 66,
+          "matcher": "toBe",
+          "id": 11
+        },
+        {
+          "start": 3166,
+          "end": 3213,
+          "lineStart": 67,
+          "lineEnd": 67,
+          "matcher": "toBeGreaterThan",
+          "id": 12
+        },
+        {
+          "start": 3217,
+          "end": 3262,
+          "lineStart": 68,
+          "lineEnd": 68,
+          "matcher": "toBeLessThan",
+          "id": 13
+        },
+        {
+          "start": 3784,
+          "end": 3835,
+          "lineStart": 84,
+          "lineEnd": 84,
+          "matcher": "toBe",
+          "id": 14
+        },
+        {
+          "start": 3839,
+          "end": 3924,
+          "lineStart": 85,
+          "lineEnd": 85,
+          "matcher": "toEqual",
+          "id": 15
+        },
+        {
+          "start": 3928,
+          "end": 4012,
+          "lineStart": 86,
+          "lineEnd": 86,
+          "matcher": "toEqual",
+          "id": 16
+        },
+        {
+          "start": 4016,
+          "end": 4104,
+          "lineStart": 87,
+          "lineEnd": 87,
+          "matcher": "toEqual",
+          "id": 17
+        },
+        {
+          "start": 4108,
+          "end": 4174,
+          "lineStart": 88,
+          "lineEnd": 88,
+          "matcher": "toBe",
+          "id": 18
+        },
+        {
+          "start": 4178,
+          "end": 4208,
+          "lineStart": 89,
+          "lineEnd": 89,
+          "matcher": "toEqual",
+          "id": 19
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/telemetry-compare.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 9013,
+        "sha256": "1de9e8ca2a87d811f8509dfe147f8862e9a7e73d502adf75ebbd837eb370389f",
+        "manifestSha256": "1de9e8ca2a87d811f8509dfe147f8862e9a7e73d502adf75ebbd837eb370389f",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 9013,
+        "bytes": 9013,
+        "sha256": "1de9e8ca2a87d811f8509dfe147f8862e9a7e73d502adf75ebbd837eb370389f",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "850c104cdc5c3681abf0d0feb6cb7cafa7b58783a66f3d68c71eb173f5eec8ae",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "0d521e"
+        },
+        {
+          "start": 8000,
+          "end": 9013,
+          "bytes": 1013,
+          "sha256": "6a910991b8473b0934b67d8366ceef42107dd6bf783f2309a3babb1256cc6005",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "b7c996"
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "start": 252,
+          "end": 300,
+          "lineStart": 5,
+          "lineEnd": 5
+        },
+        {
+          "source": "node:module",
+          "start": 301,
+          "end": 345,
+          "lineStart": 6,
+          "lineEnd": 6
+        }
+      ],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "more drivers: three lanes load, each with its own colour and map dot",
+          "start": 4748,
+          "end": 6896,
+          "lineStart": 87,
+          "lineEnd": 123,
+          "partial": false,
+          "intersection": {
+            "start": 4748,
+            "end": 6896
+          },
+          "assertionIds": [
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18
+          ]
+        },
+        {
+          "title": "cross-session: one driver's race lap vs qualifying lap",
+          "start": 6899,
+          "end": 8484,
+          "lineStart": 125,
+          "lineEnd": 154,
+          "partial": false,
+          "intersection": {
+            "start": 6899,
+            "end": 8484
+          },
+          "assertionIds": [
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28
+          ]
+        },
+        {
+          "title": "a lane can be removed from the tray before loading",
+          "start": 8487,
+          "end": 9011,
+          "lineStart": 156,
+          "lineEnd": 164,
+          "partial": false,
+          "intersection": {
+            "start": 8487,
+            "end": 9011
+          },
+          "assertionIds": [
+            29,
+            30,
+            31
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1467,
+          "end": 1552,
+          "lineStart": 28,
+          "lineEnd": 28,
+          "matcher": "toEqual",
+          "id": 1
+        },
+        {
+          "start": 1556,
+          "end": 1664,
+          "lineStart": 29,
+          "lineEnd": 29,
+          "matcher": "toBe",
+          "id": 2
+        },
+        {
+          "start": 4688,
+          "end": 4743,
+          "lineStart": 84,
+          "lineEnd": 84,
+          "matcher": "toBeVisible",
+          "id": 3
+        },
+        {
+          "start": 5032,
+          "end": 5091,
+          "lineStart": 93,
+          "lineEnd": 93,
+          "matcher": "toHaveCount",
+          "id": 4
+        },
+        {
+          "start": 5279,
+          "end": 5327,
+          "lineStart": 97,
+          "lineEnd": 97,
+          "matcher": "toBeVisible",
+          "id": 5
+        },
+        {
+          "start": 5337,
+          "end": 5408,
+          "lineStart": 98,
+          "lineEnd": 98,
+          "matcher": "toContainText",
+          "id": 6
+        },
+        {
+          "start": 5418,
+          "end": 5492,
+          "lineStart": 99,
+          "lineEnd": 99,
+          "matcher": "toContainText",
+          "id": 7
+        },
+        {
+          "start": 5502,
+          "end": 5572,
+          "lineStart": 100,
+          "lineEnd": 100,
+          "matcher": "toContainText",
+          "id": 8
+        },
+        {
+          "start": 5659,
+          "end": 5703,
+          "lineStart": 102,
+          "lineEnd": 102,
+          "matcher": "toHaveAttribute",
+          "id": 9
+        },
+        {
+          "start": 5831,
+          "end": 5945,
+          "lineStart": 105,
+          "lineEnd": 105,
+          "matcher": "toContainText",
+          "id": 10
+        },
+        {
+          "start": 5955,
+          "end": 6002,
+          "lineStart": 106,
+          "lineEnd": 106,
+          "matcher": "toContainText",
+          "id": 11
+        },
+        {
+          "start": 6066,
+          "end": 6112,
+          "lineStart": 108,
+          "lineEnd": 108,
+          "matcher": "toContainText",
+          "id": 12
+        },
+        {
+          "start": 6168,
+          "end": 6214,
+          "lineStart": 110,
+          "lineEnd": 110,
+          "matcher": "toContainText",
+          "id": 13
+        },
+        {
+          "start": 6224,
+          "end": 6286,
+          "lineStart": 111,
+          "lineEnd": 111,
+          "matcher": "toHaveCount",
+          "id": 14
+        },
+        {
+          "start": 6296,
+          "end": 6364,
+          "lineStart": 112,
+          "lineEnd": 112,
+          "matcher": "toHaveCount",
+          "id": 15
+        },
+        {
+          "start": 6402,
+          "end": 6458,
+          "lineStart": 113,
+          "lineEnd": 113,
+          "matcher": "toHaveCount",
+          "id": 16
+        },
+        {
+          "start": 6511,
+          "end": 6558,
+          "lineStart": 114,
+          "lineEnd": 114,
+          "matcher": "toBeVisible",
+          "id": 17
+        },
+        {
+          "start": 6866,
+          "end": 6892,
+          "lineStart": 122,
+          "lineEnd": 122,
+          "matcher": "toBe",
+          "id": 18
+        },
+        {
+          "start": 7155,
+          "end": 7214,
+          "lineStart": 131,
+          "lineEnd": 131,
+          "matcher": "toHaveCount",
+          "id": 19
+        },
+        {
+          "start": 7417,
+          "end": 7472,
+          "lineStart": 136,
+          "lineEnd": 136,
+          "matcher": "toBeVisible",
+          "id": 20
+        },
+        {
+          "start": 7482,
+          "end": 7541,
+          "lineStart": 137,
+          "lineEnd": 137,
+          "matcher": "toHaveCount",
+          "id": 21
+        },
+        {
+          "start": 7766,
+          "end": 7793,
+          "lineStart": 142,
+          "lineEnd": 142,
+          "matcher": "toHaveCount",
+          "id": 22
+        },
+        {
+          "start": 7869,
+          "end": 7920,
+          "lineStart": 144,
+          "lineEnd": 144,
+          "matcher": "toHaveCount",
+          "id": 23
+        },
+        {
+          "start": 7995,
+          "end": 8036,
+          "lineStart": 146,
+          "lineEnd": 146,
+          "matcher": "toEqual",
+          "id": 24
+        },
+        {
+          "start": 8123,
+          "end": 8171,
+          "lineStart": 149,
+          "lineEnd": 149,
+          "matcher": "toBeVisible",
+          "id": 25
+        },
+        {
+          "start": 8259,
+          "end": 8325,
+          "lineStart": 151,
+          "lineEnd": 151,
+          "matcher": "toContainText",
+          "id": 26
+        },
+        {
+          "start": 8335,
+          "end": 8401,
+          "lineStart": 152,
+          "lineEnd": 152,
+          "matcher": "toContainText",
+          "id": 27
+        },
+        {
+          "start": 8411,
+          "end": 8480,
+          "lineStart": 153,
+          "lineEnd": 153,
+          "matcher": "toContainText",
+          "id": 28
+        },
+        {
+          "start": 8721,
+          "end": 8780,
+          "lineStart": 160,
+          "lineEnd": 160,
+          "matcher": "toHaveCount",
+          "id": 29
+        },
+        {
+          "start": 8873,
+          "end": 8932,
+          "lineStart": 162,
+          "lineEnd": 162,
+          "matcher": "toHaveCount",
+          "id": 30
+        },
+        {
+          "start": 8942,
+          "end": 9007,
+          "lineStart": 163,
+          "lineEnd": 163,
+          "matcher": "toContainText",
+          "id": 31
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/telemetry-fit.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 7605,
+        "sha256": "182f2af5179e5b5fc2351710299238facde1464d86cbb3efeee2f81284530d86",
+        "manifestSha256": "182f2af5179e5b5fc2351710299238facde1464d86cbb3efeee2f81284530d86",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 7605,
+        "bytes": 7605,
+        "sha256": "182f2af5179e5b5fc2351710299238facde1464d86cbb3efeee2f81284530d86",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7605,
+          "bytes": 7605,
+          "sha256": "182f2af5179e5b5fc2351710299238facde1464d86cbb3efeee2f81284530d86",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "0ff8e3"
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "start": 406,
+          "end": 454,
+          "lineStart": 7,
+          "lineEnd": 7
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 455,
+          "end": 504,
+          "lineStart": 8,
+          "lineEnd": 8
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 7095,
+          "end": 7176,
+          "lineStart": 109,
+          "lineEnd": 109
+        },
+        {
+          "kind": "test.use",
+          "start": 7372,
+          "end": 7453,
+          "lineStart": 113,
+          "lineEnd": 113
+        }
+      ],
+      "cases": [
+        {
+          "title": "telemetry compare view is not clipped, overlapped or narrower than its column",
+          "start": 7180,
+          "end": 7322,
+          "lineStart": 110,
+          "lineEnd": 110,
+          "partial": false,
+          "intersection": {
+            "start": 7180,
+            "end": 7322
+          },
+          "assertionIds": []
+        },
+        {
+          "title": "telemetry compare view is not clipped, overlapped or narrower than its column",
+          "start": 7457,
+          "end": 7599,
+          "lineStart": 114,
+          "lineEnd": 114,
+          "partial": false,
+          "intersection": {
+            "start": 7457,
+            "end": 7599
+          },
+          "assertionIds": []
+        }
+      ],
+      "assertions": [
+        {
+          "start": 3406,
+          "end": 3441,
+          "lineStart": 54,
+          "lineEnd": 54,
+          "matcher": "toBeVisible",
+          "id": 1
+        },
+        {
+          "start": 3645,
+          "end": 3708,
+          "lineStart": 57,
+          "lineEnd": 57,
+          "matcher": "toBeVisible",
+          "id": 2
+        },
+        {
+          "start": 3718,
+          "end": 3786,
+          "lineStart": 58,
+          "lineEnd": 58,
+          "matcher": "toBeVisible",
+          "id": 3
+        },
+        {
+          "start": 5920,
+          "end": 6000,
+          "lineStart": 92,
+          "lineEnd": 92,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 4
+        },
+        {
+          "start": 6008,
+          "end": 6102,
+          "lineStart": 93,
+          "lineEnd": 93,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 5
+        },
+        {
+          "start": 6110,
+          "end": 6160,
+          "lineStart": 94,
+          "lineEnd": 94,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 6
+        },
+        {
+          "start": 6168,
+          "end": 6222,
+          "lineStart": 95,
+          "lineEnd": 95,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 7
+        },
+        {
+          "start": 6230,
+          "end": 6325,
+          "lineStart": 96,
+          "lineEnd": 96,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 8
+        },
+        {
+          "start": 6333,
+          "end": 6387,
+          "lineStart": 97,
+          "lineEnd": 97,
+          "matcher": "toEqual",
+          "id": 9
+        },
+        {
+          "start": 6395,
+          "end": 6450,
+          "lineStart": 98,
+          "lineEnd": 98,
+          "matcher": "toEqual",
+          "id": 10
+        },
+        {
+          "start": 6458,
+          "end": 6525,
+          "lineStart": 99,
+          "lineEnd": 99,
+          "matcher": "toBe",
+          "id": 11
+        },
+        {
+          "start": 6533,
+          "end": 6627,
+          "lineStart": 100,
+          "lineEnd": 100,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 12
+        },
+        {
+          "start": 6635,
+          "end": 6681,
+          "lineStart": 101,
+          "lineEnd": 101,
+          "matcher": "toBeGreaterThan",
+          "id": 13
+        },
+        {
+          "start": 6689,
+          "end": 6793,
+          "lineStart": 102,
+          "lineEnd": 102,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 14
+        },
+        {
+          "start": 6801,
+          "end": 6856,
+          "lineStart": 103,
+          "lineEnd": 103,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 15
+        },
+        {
+          "start": 6864,
+          "end": 6948,
+          "lineStart": 104,
+          "lineEnd": 104,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 16
+        },
+        {
+          "start": 6956,
+          "end": 7039,
+          "lineStart": 105,
+          "lineEnd": 105,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 17
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/terrain-over-road.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 15306,
+        "sha256": "fe9641792fb7e0509902552f04a37d76f38d39b8f1cdbf3174b95095c43e47d9",
+        "manifestSha256": "fe9641792fb7e0509902552f04a37d76f38d39b8f1cdbf3174b95095c43e47d9",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 15306,
+        "bytes": 15306,
+        "sha256": "fe9641792fb7e0509902552f04a37d76f38d39b8f1cdbf3174b95095c43e47d9",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "71341e969ab65ba3a55186ed0732fa60b5185f73f7a112420bcf19e6aacdef8d",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "9d4a60"
+        },
+        {
+          "start": 8000,
+          "end": 15306,
+          "bytes": 7306,
+          "sha256": "96013b815cb1d991751eb219d2e369dc2974e582728d1e6bd971dbd7e35c2f10",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "7e4f67"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 480,
+          "end": 543,
+          "lineStart": 8,
+          "lineEnd": 8
+        },
+        {
+          "source": "../helpers/track-helpers.js",
+          "start": 544,
+          "end": 602,
+          "lineStart": 9,
+          "lineEnd": 9
+        },
+        {
+          "source": "../helpers/circuit-crossovers.js",
+          "start": 603,
+          "end": 667,
+          "lineStart": 10,
+          "lineEnd": 10
+        },
+        {
+          "source": "node:module",
+          "start": 668,
+          "end": 712,
+          "lineStart": 11,
+          "lineEnd": 11
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "start": 9679,
+          "end": 9703,
+          "lineStart": 167,
+          "lineEnd": 167
+        }
+      ],
+      "cases": [
+        {
+          "title": "Hungaroring terrain stays below the racing surface through the T2 basin",
+          "start": 1236,
+          "end": 2613,
+          "lineStart": 24,
+          "lineEnd": 47,
+          "partial": false,
+          "intersection": {
+            "start": 1236,
+            "end": 2613
+          },
+          "assertionIds": [
+            1,
+            2
+          ]
+        },
+        {
+          "title": "Red Bull Ring terrain stays below both nearby road sections",
+          "start": 2616,
+          "end": 3949,
+          "lineStart": 49,
+          "lineEnd": 70,
+          "partial": false,
+          "intersection": {
+            "start": 2616,
+            "end": 3949
+          },
+          "assertionIds": [
+            3,
+            4
+          ]
+        },
+        {
+          "title": "Mexico migration keeps Foro Sol grounded, bounded, and intentionally overhead",
+          "start": 3952,
+          "end": 9561,
+          "lineStart": 72,
+          "lineEnd": 163,
+          "partial": false,
+          "intersection": {
+            "start": 3952,
+            "end": 9561
+          },
+          "assertionIds": [
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27
+          ]
+        },
+        {
+          "title": "${trk}: no terrain/road faces over the racing line",
+          "start": 9594,
+          "end": 15302,
+          "lineStart": 166,
+          "lineEnd": 240,
+          "partial": false,
+          "intersection": {
+            "start": 9594,
+            "end": 15302
+          },
+          "assertionIds": [
+            28,
+            29
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 2530,
+          "end": 2563,
+          "lineStart": 44,
+          "lineEnd": 44,
+          "matcher": "toBe",
+          "id": 1
+        },
+        {
+          "start": 2569,
+          "end": 2605,
+          "lineStart": 45,
+          "lineEnd": 45,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 2
+        },
+        {
+          "start": 3708,
+          "end": 3813,
+          "lineStart": 67,
+          "lineEnd": 67,
+          "matcher": "toBe",
+          "id": 3
+        },
+        {
+          "start": 3819,
+          "end": 3941,
+          "lineStart": 68,
+          "lineEnd": 68,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 4
+        },
+        {
+          "start": 6266,
+          "end": 6313,
+          "lineStart": 113,
+          "lineEnd": 113,
+          "matcher": "toBe",
+          "id": 5
+        },
+        {
+          "start": 6317,
+          "end": 6353,
+          "lineStart": 114,
+          "lineEnd": 114,
+          "matcher": "toBe",
+          "id": 6
+        },
+        {
+          "start": 6357,
+          "end": 6853,
+          "lineStart": 115,
+          "lineEnd": 122,
+          "matcher": "toEqual",
+          "id": 7
+        },
+        {
+          "start": 6398,
+          "end": 6852,
+          "lineStart": 115,
+          "lineEnd": 122,
+          "matcher": "arrayContaining",
+          "id": 8
+        },
+        {
+          "start": 6573,
+          "end": 6634,
+          "lineStart": 118,
+          "lineEnd": 118,
+          "matcher": "objectContaining",
+          "id": 9
+        },
+        {
+          "start": 6700,
+          "end": 6761,
+          "lineStart": 120,
+          "lineEnd": 120,
+          "matcher": "objectContaining",
+          "id": 10
+        },
+        {
+          "start": 6767,
+          "end": 6846,
+          "lineStart": 121,
+          "lineEnd": 121,
+          "matcher": "objectContaining",
+          "id": 11
+        },
+        {
+          "start": 8121,
+          "end": 8221,
+          "lineStart": 142,
+          "lineEnd": 142,
+          "matcher": "toBeGreaterThan",
+          "id": 12
+        },
+        {
+          "start": 8225,
+          "end": 8324,
+          "lineStart": 143,
+          "lineEnd": 143,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 13
+        },
+        {
+          "start": 8328,
+          "end": 8416,
+          "lineStart": 144,
+          "lineEnd": 144,
+          "matcher": "toBeLessThan",
+          "id": 14
+        },
+        {
+          "start": 8420,
+          "end": 8463,
+          "lineStart": 145,
+          "lineEnd": 145,
+          "matcher": "toEqual",
+          "id": 15
+        },
+        {
+          "start": 8467,
+          "end": 8507,
+          "lineStart": 146,
+          "lineEnd": 146,
+          "matcher": "toEqual",
+          "id": 16
+        },
+        {
+          "start": 8511,
+          "end": 8550,
+          "lineStart": 147,
+          "lineEnd": 147,
+          "matcher": "toEqual",
+          "id": 17
+        },
+        {
+          "start": 8554,
+          "end": 8739,
+          "lineStart": 148,
+          "lineEnd": 151,
+          "matcher": "toEqual",
+          "id": 18
+        },
+        {
+          "start": 8655,
+          "end": 8738,
+          "lineStart": 149,
+          "lineEnd": 151,
+          "matcher": "arrayContaining",
+          "id": 19
+        },
+        {
+          "start": 8818,
+          "end": 8899,
+          "lineStart": 153,
+          "lineEnd": 153,
+          "matcher": "toBeGreaterThan",
+          "id": 20
+        },
+        {
+          "start": 8903,
+          "end": 8971,
+          "lineStart": 154,
+          "lineEnd": 154,
+          "matcher": "toBe",
+          "id": 21
+        },
+        {
+          "start": 8975,
+          "end": 9067,
+          "lineStart": 155,
+          "lineEnd": 155,
+          "matcher": "toBe",
+          "id": 22
+        },
+        {
+          "start": 9071,
+          "end": 9109,
+          "lineStart": 156,
+          "lineEnd": 156,
+          "matcher": "toBe",
+          "id": 23
+        },
+        {
+          "start": 9113,
+          "end": 9161,
+          "lineStart": 157,
+          "lineEnd": 157,
+          "matcher": "toBeGreaterThan",
+          "id": 24
+        },
+        {
+          "start": 9165,
+          "end": 9261,
+          "lineStart": 158,
+          "lineEnd": 158,
+          "matcher": "toBeGreaterThan",
+          "id": 25
+        },
+        {
+          "start": 9306,
+          "end": 9418,
+          "lineStart": 160,
+          "lineEnd": 160,
+          "matcher": "toBe",
+          "id": 26
+        },
+        {
+          "start": 9424,
+          "end": 9553,
+          "lineStart": 161,
+          "lineEnd": 161,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 27
+        },
+        {
+          "start": 14718,
+          "end": 14833,
+          "lineStart": 231,
+          "lineEnd": 231,
+          "matcher": "toBeGreaterThan",
+          "id": 28
+        },
+        {
+          "start": 15194,
+          "end": 15296,
+          "lineStart": 239,
+          "lineEnd": 239,
+          "matcher": "toEqual",
+          "id": 29
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/tilt-pipeline.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 23799,
+        "sha256": "daf6cd016b3ef65bcbffb6946d88d0917cf5796520e0fb8136c642be52cf932c",
+        "manifestSha256": "daf6cd016b3ef65bcbffb6946d88d0917cf5796520e0fb8136c642be52cf932c",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 23799,
+        "bytes": 23799,
+        "sha256": "daf6cd016b3ef65bcbffb6946d88d0917cf5796520e0fb8136c642be52cf932c",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "60ac746c62e224a5c8735e8d7c8c9d5ed9559bed7cfef3e7eb5c050309ed6a9e",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "945901"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "80c8754de1ad98895778772ae10a6fa535681ac7d9eac6538e03c5e09e7b2f4b",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "3256ba"
+        },
+        {
+          "start": 16000,
+          "end": 23799,
+          "bytes": 7799,
+          "sha256": "18a033c75836b5ccbf960af972b3a5559d2787230feb2abf77c4b2298172fa73",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "670444"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 2034,
+          "end": 2097,
+          "lineStart": 37,
+          "lineEnd": 37
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.beforeEach",
+          "start": 2099,
+          "end": 4476,
+          "lineStart": 39,
+          "lineEnd": 91
+        }
+      ],
+      "cases": [
+        {
+          "title": "a tilt inside it commands exactly zero, and just outside it does not",
+          "start": 4678,
+          "end": 5329,
+          "lineStart": 98,
+          "lineEnd": 113,
+          "partial": false,
+          "intersection": {
+            "start": 4678,
+            "end": 5329
+          },
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4
+          ]
+        },
+        {
+          "title": "there is NO STEP at the dead-zone edge \u2014 the zone is subtracted, not clamped",
+          "start": 5334,
+          "end": 6596,
+          "lineStart": 115,
+          "lineEnd": 140,
+          "partial": false,
+          "intersection": {
+            "start": 5334,
+            "end": 6596
+          },
+          "assertionIds": [
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "title": "full lock at MAX_TILT, clamped beyond, half-way in between",
+          "start": 6807,
+          "end": 7627,
+          "lineStart": 148,
+          "lineEnd": 170,
+          "partial": false,
+          "intersection": {
+            "start": 6807,
+            "end": 7627
+          },
+          "assertionIds": [
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14
+          ]
+        },
+        {
+          "title": "the RANGE moves with the TILT RANGE setting",
+          "start": 7632,
+          "end": 8435,
+          "lineStart": 172,
+          "lineEnd": 188,
+          "partial": false,
+          "intersection": {
+            "start": 7632,
+            "end": 8435
+          },
+          "assertionIds": [
+            15,
+            16,
+            17
+          ]
+        },
+        {
+          "title": "the setters clamp to their documented ranges and ignore nonsense",
+          "start": 8440,
+          "end": 9442,
+          "lineStart": 190,
+          "lineEnd": 215,
+          "partial": false,
+          "intersection": {
+            "start": 8440,
+            "end": 9442
+          },
+          "assertionIds": [
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ]
+        },
+        {
+          "title": "the dead zone is held below MAX_TILT so the map cannot invert",
+          "start": 9447,
+          "end": 10397,
+          "lineStart": 217,
+          "lineEnd": 232,
+          "partial": false,
+          "intersection": {
+            "start": 9447,
+            "end": 10397
+          },
+          "assertionIds": [
+            24,
+            25,
+            26
+          ]
+        },
+        {
+          "title": "round-trips through the pipeline at any sensitivity or dead zone",
+          "start": 10633,
+          "end": 12400,
+          "lineStart": 240,
+          "lineEnd": 275,
+          "partial": false,
+          "intersection": {
+            "start": 10633,
+            "end": 12400
+          },
+          "assertionIds": [
+            27,
+            28,
+            29,
+            30,
+            31
+          ]
+        },
+        {
+          "title": "releasing is 1.6x faster than tightening",
+          "start": 12614,
+          "end": 14438,
+          "lineStart": 283,
+          "lineEnd": 318,
+          "partial": false,
+          "intersection": {
+            "start": 12614,
+            "end": 14438
+          },
+          "assertionIds": [
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38
+          ]
+        },
+        {
+          "title": "the cap is a rate, so a bigger dt covers proportionally more travel",
+          "start": 14443,
+          "end": 15189,
+          "lineStart": 320,
+          "lineEnd": 332,
+          "partial": false,
+          "intersection": {
+            "start": 14443,
+            "end": 15189
+          },
+          "assertionIds": [
+            39,
+            40,
+            41
+          ]
+        },
+        {
+          "title": "a held offset pulls to one side until calibrate() makes it neutral",
+          "start": 15399,
+          "end": 16754,
+          "lineStart": 340,
+          "lineEnd": 365,
+          "partial": false,
+          "intersection": {
+            "start": 15399,
+            "end": 16754
+          },
+          "assertionIds": [
+            42,
+            43,
+            44,
+            45,
+            46
+          ]
+        },
+        {
+          "title": "calibrate() takes the RAW angle, so it is not fooled by filter lag",
+          "start": 16759,
+          "end": 17548,
+          "lineStart": 367,
+          "lineEnd": 381,
+          "partial": false,
+          "intersection": {
+            "start": 16759,
+            "end": 17548
+          },
+          "assertionIds": [
+            47,
+            48
+          ]
+        },
+        {
+          "title": "a lower min cutoff is visibly laggier \u2014 and changes lag, not gain",
+          "start": 17780,
+          "end": 19573,
+          "lineStart": 389,
+          "lineEnd": 424,
+          "partial": false,
+          "intersection": {
+            "start": 17780,
+            "end": 19573
+          },
+          "assertionIds": [
+            49,
+            50,
+            51,
+            52,
+            53,
+            54
+          ]
+        },
+        {
+          "title": "on a full-lock snap the SLEW binds and smoothing barely shows",
+          "start": 19578,
+          "end": 20908,
+          "lineStart": 426,
+          "lineEnd": 452,
+          "partial": false,
+          "intersection": {
+            "start": 19578,
+            "end": 20908
+          },
+          "assertionIds": [
+            55,
+            56
+          ]
+        },
+        {
+          "title": "a real deviceorientation stream settles on the command simTilt predicts",
+          "start": 21136,
+          "end": 23793,
+          "lineStart": 460,
+          "lineEnd": 510,
+          "partial": false,
+          "intersection": {
+            "start": 21136,
+            "end": 23793
+          },
+          "assertionIds": [
+            57,
+            58,
+            59
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 5084,
+          "end": 5115,
+          "lineStart": 108,
+          "lineEnd": 108,
+          "matcher": "toBeGreaterThan",
+          "id": 1
+        },
+        {
+          "start": 5223,
+          "end": 5240,
+          "lineStart": 110,
+          "lineEnd": 110,
+          "matcher": "toBe",
+          "id": 2
+        },
+        {
+          "start": 5246,
+          "end": 5283,
+          "lineStart": 111,
+          "lineEnd": 111,
+          "matcher": "toBeGreaterThan",
+          "id": 3
+        },
+        {
+          "start": 5289,
+          "end": 5323,
+          "lineStart": 112,
+          "lineEnd": 112,
+          "matcher": "toBeLessThan",
+          "id": 4
+        },
+        {
+          "start": 6277,
+          "end": 6322,
+          "lineStart": 135,
+          "lineEnd": 135,
+          "matcher": "toBeLessThan",
+          "id": 5
+        },
+        {
+          "start": 6475,
+          "end": 6535,
+          "lineStart": 138,
+          "lineEnd": 138,
+          "matcher": "toBeLessThan",
+          "id": 6
+        },
+        {
+          "start": 6541,
+          "end": 6590,
+          "lineStart": 139,
+          "lineEnd": 139,
+          "matcher": "toBeGreaterThan",
+          "id": 7
+        },
+        {
+          "start": 7284,
+          "end": 7316,
+          "lineStart": 162,
+          "lineEnd": 162,
+          "matcher": "toBeCloseTo",
+          "id": 8
+        },
+        {
+          "start": 7322,
+          "end": 7358,
+          "lineStart": 163,
+          "lineEnd": 163,
+          "matcher": "toBeCloseTo",
+          "id": 9
+        },
+        {
+          "start": 7445,
+          "end": 7469,
+          "lineStart": 165,
+          "lineEnd": 165,
+          "matcher": "toBe",
+          "id": 10
+        },
+        {
+          "start": 7475,
+          "end": 7503,
+          "lineStart": 166,
+          "lineEnd": 166,
+          "matcher": "toBe",
+          "id": 11
+        },
+        {
+          "start": 7509,
+          "end": 7537,
+          "lineStart": 167,
+          "lineEnd": 167,
+          "matcher": "toBe",
+          "id": 12
+        },
+        {
+          "start": 7543,
+          "end": 7577,
+          "lineStart": 168,
+          "lineEnd": 168,
+          "matcher": "toBeCloseTo",
+          "id": 13
+        },
+        {
+          "start": 7583,
+          "end": 7621,
+          "lineStart": 169,
+          "lineEnd": 169,
+          "matcher": "toBeCloseTo",
+          "id": 14
+        },
+        {
+          "start": 8189,
+          "end": 8228,
+          "lineStart": 184,
+          "lineEnd": 184,
+          "matcher": "toBeCloseTo",
+          "id": 15
+        },
+        {
+          "start": 8311,
+          "end": 8367,
+          "lineStart": 186,
+          "lineEnd": 186,
+          "matcher": "toBeGreaterThan",
+          "id": 16
+        },
+        {
+          "start": 8373,
+          "end": 8429,
+          "lineStart": 187,
+          "lineEnd": 187,
+          "matcher": "toBeGreaterThan",
+          "id": 17
+        },
+        {
+          "start": 9226,
+          "end": 9248,
+          "lineStart": 209,
+          "lineEnd": 209,
+          "matcher": "toBe",
+          "id": 18
+        },
+        {
+          "start": 9254,
+          "end": 9277,
+          "lineStart": 210,
+          "lineEnd": 210,
+          "matcher": "toBe",
+          "id": 19
+        },
+        {
+          "start": 9283,
+          "end": 9308,
+          "lineStart": 211,
+          "lineEnd": 211,
+          "matcher": "toBe",
+          "id": 20
+        },
+        {
+          "start": 9314,
+          "end": 9337,
+          "lineStart": 212,
+          "lineEnd": 212,
+          "matcher": "toBe",
+          "id": 21
+        },
+        {
+          "start": 9343,
+          "end": 9376,
+          "lineStart": 213,
+          "lineEnd": 213,
+          "matcher": "toEqual",
+          "id": 22
+        },
+        {
+          "start": 9382,
+          "end": 9436,
+          "lineStart": 214,
+          "lineEnd": 214,
+          "matcher": "toBe",
+          "id": 23
+        },
+        {
+          "start": 10239,
+          "end": 10285,
+          "lineStart": 229,
+          "lineEnd": 229,
+          "matcher": "toBeLessThan",
+          "id": 24
+        },
+        {
+          "start": 10291,
+          "end": 10327,
+          "lineStart": 230,
+          "lineEnd": 230,
+          "matcher": "toBeGreaterThan",
+          "id": 25
+        },
+        {
+          "start": 10359,
+          "end": 10391,
+          "lineStart": 231,
+          "lineEnd": 231,
+          "matcher": "toBeLessThan",
+          "id": 26
+        },
+        {
+          "start": 11775,
+          "end": 11897,
+          "lineStart": 264,
+          "lineEnd": 265,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 27
+        },
+        {
+          "start": 11907,
+          "end": 11996,
+          "lineStart": 266,
+          "lineEnd": 266,
+          "matcher": "toBeCloseTo",
+          "id": 28
+        },
+        {
+          "start": 12216,
+          "end": 12275,
+          "lineStart": 271,
+          "lineEnd": 271,
+          "matcher": "toBeGreaterThan",
+          "id": 29
+        },
+        {
+          "start": 12287,
+          "end": 12315,
+          "lineStart": 273,
+          "lineEnd": 273,
+          "matcher": "toBe",
+          "id": 30
+        },
+        {
+          "start": 12346,
+          "end": 12376,
+          "lineStart": 274,
+          "lineEnd": 274,
+          "matcher": "toBeCloseTo",
+          "id": 31
+        },
+        {
+          "start": 13800,
+          "end": 13834,
+          "lineStart": 307,
+          "lineEnd": 307,
+          "matcher": "toBeCloseTo",
+          "id": 32
+        },
+        {
+          "start": 13900,
+          "end": 13948,
+          "lineStart": 309,
+          "lineEnd": 309,
+          "matcher": "toBeCloseTo",
+          "id": 33
+        },
+        {
+          "start": 13954,
+          "end": 14006,
+          "lineStart": 310,
+          "lineEnd": 310,
+          "matcher": "toBeGreaterThan",
+          "id": 34
+        },
+        {
+          "start": 14012,
+          "end": 14061,
+          "lineStart": 311,
+          "lineEnd": 311,
+          "matcher": "toBeLessThan",
+          "id": 35
+        },
+        {
+          "start": 14177,
+          "end": 14210,
+          "lineStart": 314,
+          "lineEnd": 314,
+          "matcher": "toBeLessThan",
+          "id": 36
+        },
+        {
+          "start": 14216,
+          "end": 14265,
+          "lineStart": 315,
+          "lineEnd": 315,
+          "matcher": "toBe",
+          "id": 37
+        },
+        {
+          "start": 14356,
+          "end": 14432,
+          "lineStart": 317,
+          "lineEnd": 317,
+          "matcher": "toBeLessThanOrEqual",
+          "id": 38
+        },
+        {
+          "start": 15045,
+          "end": 15088,
+          "lineStart": 329,
+          "lineEnd": 329,
+          "matcher": "toBeCloseTo",
+          "id": 39
+        },
+        {
+          "start": 15094,
+          "end": 15136,
+          "lineStart": 330,
+          "lineEnd": 330,
+          "matcher": "toBeCloseTo",
+          "id": 40
+        },
+        {
+          "start": 15142,
+          "end": 15183,
+          "lineStart": 331,
+          "lineEnd": 331,
+          "matcher": "toBeCloseTo",
+          "id": 41
+        },
+        {
+          "start": 16436,
+          "end": 16483,
+          "lineStart": 360,
+          "lineEnd": 360,
+          "matcher": "toBeGreaterThan",
+          "id": 42
+        },
+        {
+          "start": 16517,
+          "end": 16559,
+          "lineStart": 361,
+          "lineEnd": 361,
+          "matcher": "toBeCloseTo",
+          "id": 43
+        },
+        {
+          "start": 16565,
+          "end": 16588,
+          "lineStart": 362,
+          "lineEnd": 362,
+          "matcher": "toBe",
+          "id": 44
+        },
+        {
+          "start": 16650,
+          "end": 16692,
+          "lineStart": 363,
+          "lineEnd": 363,
+          "matcher": "toBeCloseTo",
+          "id": 45
+        },
+        {
+          "start": 16698,
+          "end": 16748,
+          "lineStart": 364,
+          "lineEnd": 364,
+          "matcher": "toBeCloseTo",
+          "id": 46
+        },
+        {
+          "start": 17480,
+          "end": 17503,
+          "lineStart": 379,
+          "lineEnd": 379,
+          "matcher": "toBe",
+          "id": 47
+        },
+        {
+          "start": 17509,
+          "end": 17542,
+          "lineStart": 380,
+          "lineEnd": 380,
+          "matcher": "toBeCloseTo",
+          "id": 48
+        },
+        {
+          "start": 19101,
+          "end": 19152,
+          "lineStart": 416,
+          "lineEnd": 416,
+          "matcher": "toBeGreaterThan",
+          "id": 49
+        },
+        {
+          "start": 19158,
+          "end": 19209,
+          "lineStart": 417,
+          "lineEnd": 417,
+          "matcher": "toBeGreaterThan",
+          "id": 50
+        },
+        {
+          "start": 19215,
+          "end": 19275,
+          "lineStart": 418,
+          "lineEnd": 418,
+          "matcher": "toBeGreaterThan",
+          "id": 51
+        },
+        {
+          "start": 19401,
+          "end": 19458,
+          "lineStart": 421,
+          "lineEnd": 421,
+          "matcher": "toBeCloseTo",
+          "id": 52
+        },
+        {
+          "start": 19464,
+          "end": 19518,
+          "lineStart": 422,
+          "lineEnd": 422,
+          "matcher": "toBeCloseTo",
+          "id": 53
+        },
+        {
+          "start": 19524,
+          "end": 19567,
+          "lineStart": 423,
+          "lineEnd": 423,
+          "matcher": "toBeGreaterThan",
+          "id": 54
+        },
+        {
+          "start": 20802,
+          "end": 20844,
+          "lineStart": 450,
+          "lineEnd": 450,
+          "matcher": "toBeGreaterThan",
+          "id": 55
+        },
+        {
+          "start": 20850,
+          "end": 20902,
+          "lineStart": 451,
+          "lineEnd": 451,
+          "matcher": "toBeLessThan",
+          "id": 56
+        },
+        {
+          "start": 23607,
+          "end": 23636,
+          "lineStart": 507,
+          "lineEnd": 507,
+          "matcher": "toBe",
+          "id": 57
+        },
+        {
+          "start": 23642,
+          "end": 23686,
+          "lineStart": 508,
+          "lineEnd": 508,
+          "matcher": "toBeGreaterThan",
+          "id": 58
+        },
+        {
+          "start": 23736,
+          "end": 23787,
+          "lineStart": 509,
+          "lineEnd": 509,
+          "matcher": "toBeLessThan",
+          "id": 59
+        }
+      ]
+    },
+    {
+      "path": "tests/specs/time-trial.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 38152,
+        "sha256": "5752b7eed8961d4b59e908bc5172bd8d1a2edd0d7e7ad1122cdf5181e7a5f03a",
+        "manifestSha256": "5752b7eed8961d4b59e908bc5172bd8d1a2edd0d7e7ad1122cdf5181e7a5f03a",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 28389,
+        "bytes": 28389,
+        "sha256": "2a696424b3a095e8b504124345eff8580ceef1d3cf49e41d26ac6bbb6fb88fc3",
+        "partial": true
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "8050a3d40514ae00ebb29de50fc3a74765725f3db36ddf7a44d05b11d09fc5df",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "63b376"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "bda5e923e9b3c37a03648e96911abf6278c74ff3e0be4d7e4e857a0570b18658",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "45881d"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "5b1a979ffb213a99b137261f181ec6f35d368025b5e5901fb6c7ce37f825d859",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "d5753d"
+        },
+        {
+          "start": 24000,
+          "end": 28389,
+          "bytes": 4389,
+          "sha256": "c5ce26354242a949678f2504097fdd0c80c4bf832c291a2d2750b8ae775aa5a9",
+          "rawRead": "individual exec_command return; <=8000 bytes; untruncated",
+          "toolOutputChunkId": "e4899a"
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "start": 172,
+          "end": 220,
+          "lineStart": 4,
+          "lineEnd": 4
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 221,
+          "end": 291,
+          "lineStart": 5,
+          "lineEnd": 5
+        },
+        {
+          "source": "../helpers/factory-seat.js",
+          "start": 292,
+          "end": 352,
+          "lineStart": 6,
+          "lineEnd": 6
+        },
+        {
+          "source": "../../tools/lib/ui-device-profile.mjs",
+          "start": 353,
+          "end": 423,
+          "lineStart": 7,
+          "lineEnd": 7
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 733,
+          "end": 794,
+          "lineStart": 15,
+          "lineEnd": 15
+        },
+        {
+          "kind": "test.beforeEach",
+          "start": 799,
+          "end": 1415,
+          "lineStart": 17,
+          "lineEnd": 26
+        },
+        {
+          "kind": "test.afterEach",
+          "start": 1420,
+          "end": 1597,
+          "lineStart": 28,
+          "lineEnd": 31
+        },
+        {
+          "kind": "test.use",
+          "start": 8252,
+          "end": 8285,
+          "lineStart": 149,
+          "lineEnd": 149
+        },
+        {
+          "kind": "test.use",
+          "start": 8812,
+          "end": 8845,
+          "lineStart": 166,
+          "lineEnd": 166
+        },
+        {
+          "kind": "test.use",
+          "start": 10911,
+          "end": 10944,
+          "lineStart": 206,
+          "lineEnd": 206
+        },
+        {
+          "kind": "test.use",
+          "start": 15111,
+          "end": 15144,
+          "lineStart": 298,
+          "lineEnd": 298
+        },
+        {
+          "kind": "test.use",
+          "start": 18420,
+          "end": 18453,
+          "lineStart": 378,
+          "lineEnd": 378
+        },
+        {
+          "kind": "test.use",
+          "start": 21062,
+          "end": 21112,
+          "lineStart": 442,
+          "lineEnd": 442
+        },
+        {
+          "kind": "test.use",
+          "start": 27497,
+          "end": 27606,
+          "lineStart": 544,
+          "lineEnd": 544
+        }
+      ],
+      "cases": [
+        {
+          "title": "cancelling Practice twice leaves ordinary TT and Race pickers usable",
+          "start": 1602,
+          "end": 3183,
+          "lineStart": 33,
+          "lineEnd": 62,
+          "partial": false,
+          "intersection": {
+            "start": 1602,
+            "end": 3183
+          },
+          "assertionIds": [
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ]
+        },
+        {
+          "title": "Practice and TT restart and quit require confirmation and reset the session",
+          "start": 3188,
+          "end": 6375,
+          "lineStart": 64,
+          "lineEnd": 114,
+          "partial": false,
+          "intersection": {
+            "start": 3188,
+            "end": 6375
+          },
+          "assertionIds": [
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+            37,
+            38,
+            39
+          ]
+        },
+        {
+          "title": "info() reports timeTrial:true when started via __apex.tt()",
+          "start": 8290,
+          "end": 8554,
+          "lineStart": 151,
+          "lineEnd": 156,
+          "partial": false,
+          "intersection": {
+            "start": 8290,
+            "end": 8554
+          },
+          "assertionIds": [
+            40,
+            41
+          ]
+        },
+        {
+          "title": "HUD shows TT position label",
+          "start": 8559,
+          "end": 8745,
+          "lineStart": 158,
+          "lineEnd": 162,
+          "partial": false,
+          "intersection": {
+            "start": 8559,
+            "end": 8745
+          },
+          "assertionIds": [
+            42
+          ]
+        },
+        {
+          "title": "title DAILY stages its picker without arming a discarded free-play scene",
+          "start": 8850,
+          "end": 9489,
+          "lineStart": 168,
+          "lineEnd": 177,
+          "partial": false,
+          "intersection": {
+            "start": 8850,
+            "end": 9489
+          },
+          "assertionIds": [
+            43,
+            44,
+            45,
+            46,
+            47
+          ]
+        },
+        {
+          "title": "${name} selects the daily plan but leaves NEXT and RACE! in control",
+          "start": 9626,
+          "end": 10637,
+          "lineStart": 183,
+          "lineEnd": 199,
+          "partial": false,
+          "intersection": {
+            "start": 9626,
+            "end": 10637
+          },
+          "assertionIds": [
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56
+          ]
+        },
+        {
+          "title": "gap-behind shows REC placeholder when no record exists yet",
+          "start": 10949,
+          "end": 11254,
+          "lineStart": 208,
+          "lineEnd": 213,
+          "partial": false,
+          "intersection": {
+            "start": 10949,
+            "end": 11254
+          },
+          "assertionIds": [
+            57
+          ]
+        },
+        {
+          "title": "records only one monotonic flying lap in the persisted ghost",
+          "start": 12755,
+          "end": 13974,
+          "lineStart": 242,
+          "lineEnd": 269,
+          "partial": false,
+          "intersection": {
+            "start": 12755,
+            "end": 13974
+          },
+          "assertionIds": [
+            58,
+            59,
+            60
+          ]
+        },
+        {
+          "title": "drops reverse-progress samples from ghost recording and delta lookup",
+          "start": 13979,
+          "end": 14839,
+          "lineStart": 271,
+          "lineEnd": 292,
+          "partial": false,
+          "intersection": {
+            "start": 13979,
+            "end": 14839
+          },
+          "assertionIds": [
+            61,
+            62,
+            63
+          ]
+        },
+        {
+          "title": "initializes sector timing from the player's grid sector",
+          "start": 15149,
+          "end": 15371,
+          "lineStart": 300,
+          "lineEnd": 304,
+          "partial": false,
+          "intersection": {
+            "start": 15149,
+            "end": 15371
+          },
+          "assertionIds": [
+            64
+          ]
+        },
+        {
+          "title": "does not record formation-lap S3 when first crossing the start line",
+          "start": 15376,
+          "end": 16038,
+          "lineStart": 306,
+          "lineEnd": 322,
+          "partial": false,
+          "intersection": {
+            "start": 15376,
+            "end": 16038
+          },
+          "assertionIds": [
+            65,
+            66,
+            67,
+            68
+          ]
+        },
+        {
+          "title": "records S3 before resetting timing at the finish line",
+          "start": 16043,
+          "end": 16734,
+          "lineStart": 324,
+          "lineEnd": 341,
+          "partial": false,
+          "intersection": {
+            "start": 16043,
+            "end": 16734
+          },
+          "assertionIds": [
+            69,
+            70,
+            71,
+            72
+          ]
+        },
+        {
+          "title": "sector strip updates when crossing S1\u2192S2 boundary",
+          "start": 16739,
+          "end": 18154,
+          "lineStart": 343,
+          "lineEnd": 372,
+          "partial": false,
+          "intersection": {
+            "start": 16739,
+            "end": 18154
+          },
+          "assertionIds": [
+            73,
+            74
+          ]
+        },
+        {
+          "title": "results panel appears after finishRace() in TT mode",
+          "start": 18458,
+          "end": 18941,
+          "lineStart": 380,
+          "lineEnd": 390,
+          "partial": false,
+          "intersection": {
+            "start": 18458,
+            "end": 18941
+          },
+          "assertionIds": [
+            75,
+            76
+          ]
+        },
+        {
+          "title": "TRY AGAIN button shown in TT results",
+          "start": 18946,
+          "end": 19372,
+          "lineStart": 392,
+          "lineEnd": 400,
+          "partial": false,
+          "intersection": {
+            "start": 18946,
+            "end": 19372
+          },
+          "assertionIds": [
+            77,
+            78
+          ]
+        },
+        {
+          "title": "clearing the ghost retains the persisted leaderboard record",
+          "start": 19377,
+          "end": 20726,
+          "lineStart": 402,
+          "lineEnd": 431,
+          "partial": false,
+          "intersection": {
+            "start": 19377,
+            "end": 20726
+          },
+          "assertionIds": [
+            79,
+            80
+          ]
+        },
+        {
+          "title": "coach, drills and pit strategy work through their pause doors",
+          "start": 21118,
+          "end": 26703,
+          "lineStart": 443,
+          "lineEnd": 530,
+          "partial": false,
+          "intersection": {
+            "start": 21118,
+            "end": 26703
+          },
+          "assertionIds": [
+            81,
+            82,
+            83,
+            84,
+            85,
+            86,
+            87,
+            88,
+            89,
+            90,
+            91,
+            92,
+            93,
+            94,
+            95,
+            96,
+            97,
+            98,
+            99,
+            100,
+            101,
+            102,
+            103,
+            104,
+            105,
+            106,
+            107,
+            108,
+            109,
+            110,
+            111,
+            112,
+            113,
+            114,
+            115,
+            116,
+            117,
+            118
+          ]
+        },
+        {
+          "title": "settings, help and Back remain readable and reachable",
+          "start": 27610,
+          "end": 38146,
+          "lineStart": 545,
+          "lineEnd": 691,
+          "partial": true,
+          "intersection": {
+            "start": 27610,
+            "end": 28389
+          },
+          "assertionIds": []
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1153,
+          "end": 1183,
+          "lineStart": 22,
+          "lineEnd": 22,
+          "matcher": "toEqual",
+          "id": 1
+        },
+        {
+          "start": 1481,
+          "end": 1511,
+          "lineStart": 29,
+          "lineEnd": 29,
+          "matcher": "toEqual",
+          "id": 2
+        },
+        {
+          "start": 1517,
+          "end": 1591,
+          "lineStart": 30,
+          "lineEnd": 30,
+          "matcher": "toEqual",
+          "id": 3
+        },
+        {
+          "start": 1807,
+          "end": 1867,
+          "lineStart": 36,
+          "lineEnd": 36,
+          "matcher": "toHaveText",
+          "id": 4
+        },
+        {
+          "start": 1881,
+          "end": 1934,
+          "lineStart": 37,
+          "lineEnd": 37,
+          "matcher": "toBeVisible",
+          "id": 5
+        },
+        {
+          "start": 1991,
+          "end": 2050,
+          "lineStart": 39,
+          "lineEnd": 39,
+          "matcher": "toHaveText",
+          "id": 6
+        },
+        {
+          "start": 2110,
+          "end": 2170,
+          "lineStart": 41,
+          "lineEnd": 41,
+          "matcher": "toHaveText",
+          "id": 7
+        },
+        {
+          "start": 2229,
+          "end": 2275,
+          "lineStart": 43,
+          "lineEnd": 43,
+          "matcher": "toBeVisible",
+          "id": 8
+        },
+        {
+          "start": 2515,
+          "end": 2572,
+          "lineStart": 50,
+          "lineEnd": 50,
+          "matcher": "toHaveText",
+          "id": 9
+        },
+        {
+          "start": 2588,
+          "end": 2640,
+          "lineStart": 51,
+          "lineEnd": 51,
+          "matcher": "toBeHidden",
+          "id": 10
+        },
+        {
+          "start": 2650,
+          "end": 2726,
+          "lineStart": 52,
+          "lineEnd": 52,
+          "matcher": "toBe",
+          "id": 11
+        },
+        {
+          "start": 2787,
+          "end": 2835,
+          "lineStart": 54,
+          "lineEnd": 54,
+          "matcher": "toHaveText",
+          "id": 12
+        },
+        {
+          "start": 2845,
+          "end": 2922,
+          "lineStart": 55,
+          "lineEnd": 55,
+          "matcher": "toBe",
+          "id": 13
+        },
+        {
+          "start": 2932,
+          "end": 3006,
+          "lineStart": 56,
+          "lineEnd": 56,
+          "matcher": "toBe",
+          "id": 14
+        },
+        {
+          "start": 3117,
+          "end": 3163,
+          "lineStart": 59,
+          "lineEnd": 59,
+          "matcher": "toBeVisible",
+          "id": 15
+        },
+        {
+          "start": 3491,
+          "end": 3539,
+          "lineStart": 68,
+          "lineEnd": 68,
+          "matcher": "toHaveText",
+          "id": 16
+        },
+        {
+          "start": 3724,
+          "end": 3769,
+          "lineStart": 72,
+          "lineEnd": 72,
+          "matcher": "toBeHidden",
+          "id": 17
+        },
+        {
+          "start": 3828,
+          "end": 3876,
+          "lineStart": 74,
+          "lineEnd": 74,
+          "matcher": "toBeVisible",
+          "id": 18
+        },
+        {
+          "start": 4156,
+          "end": 4227,
+          "lineStart": 80,
+          "lineEnd": 80,
+          "matcher": "toHaveText",
+          "id": 19
+        },
+        {
+          "start": 4235,
+          "end": 4304,
+          "lineStart": 81,
+          "lineEnd": 81,
+          "matcher": "toBe",
+          "id": 20
+        },
+        {
+          "start": 4318,
+          "end": 4366,
+          "lineStart": 82,
+          "lineEnd": 82,
+          "matcher": "toBeVisible",
+          "id": 21
+        },
+        {
+          "start": 4427,
+          "end": 4524,
+          "lineStart": 84,
+          "lineEnd": 84,
+          "matcher": "toBe",
+          "id": 22
+        },
+        {
+          "start": 4427,
+          "end": 4516,
+          "lineStart": 84,
+          "lineEnd": 84,
+          "matcher": "poll",
+          "id": 23
+        },
+        {
+          "start": 4538,
+          "end": 4585,
+          "lineStart": 85,
+          "lineEnd": 85,
+          "matcher": "toBeHidden",
+          "id": 24
+        },
+        {
+          "start": 4593,
+          "end": 4667,
+          "lineStart": 86,
+          "lineEnd": 86,
+          "matcher": "toBe",
+          "id": 25
+        },
+        {
+          "start": 4841,
+          "end": 4886,
+          "lineStart": 89,
+          "lineEnd": 89,
+          "matcher": "toBeHidden",
+          "id": 26
+        },
+        {
+          "start": 5139,
+          "end": 5267,
+          "lineStart": 93,
+          "lineEnd": 94,
+          "matcher": "toBeGreaterThan",
+          "id": 27
+        },
+        {
+          "start": 5139,
+          "end": 5229,
+          "lineStart": 93,
+          "lineEnd": 93,
+          "matcher": "poll",
+          "id": 28
+        },
+        {
+          "start": 5371,
+          "end": 5444,
+          "lineStart": 98,
+          "lineEnd": 98,
+          "matcher": "toHaveText",
+          "id": 29
+        },
+        {
+          "start": 5458,
+          "end": 5506,
+          "lineStart": 99,
+          "lineEnd": 99,
+          "matcher": "toBeVisible",
+          "id": 30
+        },
+        {
+          "start": 5520,
+          "end": 5565,
+          "lineStart": 100,
+          "lineEnd": 100,
+          "matcher": "toBeHidden",
+          "id": 31
+        },
+        {
+          "start": 5623,
+          "end": 5669,
+          "lineStart": 102,
+          "lineEnd": 102,
+          "matcher": "toBeVisible",
+          "id": 32
+        },
+        {
+          "start": 5783,
+          "end": 5826,
+          "lineStart": 104,
+          "lineEnd": 104,
+          "matcher": "toBeHidden",
+          "id": 33
+        },
+        {
+          "start": 5834,
+          "end": 5908,
+          "lineStart": 105,
+          "lineEnd": 105,
+          "matcher": "toBe",
+          "id": 34
+        },
+        {
+          "start": 5916,
+          "end": 5993,
+          "lineStart": 106,
+          "lineEnd": 106,
+          "matcher": "toBe",
+          "id": 35
+        },
+        {
+          "start": 6053,
+          "end": 6115,
+          "lineStart": 109,
+          "lineEnd": 109,
+          "matcher": "toHaveText",
+          "id": 36
+        },
+        {
+          "start": 6127,
+          "end": 6179,
+          "lineStart": 110,
+          "lineEnd": 110,
+          "matcher": "toBeHidden",
+          "id": 37
+        },
+        {
+          "start": 6232,
+          "end": 6287,
+          "lineStart": 112,
+          "lineEnd": 112,
+          "matcher": "toHaveText",
+          "id": 38
+        },
+        {
+          "start": 6293,
+          "end": 6369,
+          "lineStart": 113,
+          "lineEnd": 113,
+          "matcher": "toBe",
+          "id": 39
+        },
+        {
+          "start": 8474,
+          "end": 8507,
+          "lineStart": 154,
+          "lineEnd": 154,
+          "matcher": "toBe",
+          "id": 40
+        },
+        {
+          "start": 8513,
+          "end": 8548,
+          "lineStart": 155,
+          "lineEnd": 155,
+          "matcher": "toBe",
+          "id": 41
+        },
+        {
+          "start": 8690,
+          "end": 8739,
+          "lineStart": 161,
+          "lineEnd": 161,
+          "matcher": "toHaveText",
+          "id": 42
+        },
+        {
+          "start": 9137,
+          "end": 9182,
+          "lineStart": 172,
+          "lineEnd": 172,
+          "matcher": "toBeVisible",
+          "id": 43
+        },
+        {
+          "start": 9188,
+          "end": 9262,
+          "lineStart": 173,
+          "lineEnd": 173,
+          "matcher": "toBe",
+          "id": 44
+        },
+        {
+          "start": 9268,
+          "end": 9340,
+          "lineStart": 174,
+          "lineEnd": 174,
+          "matcher": "toBe",
+          "id": 45
+        },
+        {
+          "start": 9352,
+          "end": 9426,
+          "lineStart": 175,
+          "lineEnd": 175,
+          "matcher": "toHaveAttribute",
+          "id": 46
+        },
+        {
+          "start": 9438,
+          "end": 9483,
+          "lineStart": 176,
+          "lineEnd": 176,
+          "matcher": "toBeVisible",
+          "id": 47
+        },
+        {
+          "start": 9913,
+          "end": 9958,
+          "lineStart": 187,
+          "lineEnd": 187,
+          "matcher": "toBeVisible",
+          "id": 48
+        },
+        {
+          "start": 10016,
+          "end": 10061,
+          "lineStart": 189,
+          "lineEnd": 189,
+          "matcher": "toBeVisible",
+          "id": 49
+        },
+        {
+          "start": 10069,
+          "end": 10143,
+          "lineStart": 190,
+          "lineEnd": 190,
+          "matcher": "toBe",
+          "id": 50
+        },
+        {
+          "start": 10157,
+          "end": 10227,
+          "lineStart": 191,
+          "lineEnd": 191,
+          "matcher": "toHaveAttribute",
+          "id": 51
+        },
+        {
+          "start": 10287,
+          "end": 10339,
+          "lineStart": 194,
+          "lineEnd": 194,
+          "matcher": "toBeVisible",
+          "id": 52
+        },
+        {
+          "start": 10347,
+          "end": 10421,
+          "lineStart": 195,
+          "lineEnd": 195,
+          "matcher": "toBe",
+          "id": 53
+        },
+        {
+          "start": 10435,
+          "end": 10489,
+          "lineStart": 196,
+          "lineEnd": 196,
+          "matcher": "toBeDisabled",
+          "id": 54
+        },
+        {
+          "start": 10503,
+          "end": 10554,
+          "lineStart": 197,
+          "lineEnd": 197,
+          "matcher": "toBeDisabled",
+          "id": 55
+        },
+        {
+          "start": 10568,
+          "end": 10629,
+          "lineStart": 198,
+          "lineEnd": 198,
+          "matcher": "toHaveText",
+          "id": 56
+        },
+        {
+          "start": 11188,
+          "end": 11248,
+          "lineStart": 212,
+          "lineEnd": 212,
+          "matcher": "toContainText",
+          "id": 57
+        },
+        {
+          "start": 13754,
+          "end": 13809,
+          "lineStart": 266,
+          "lineEnd": 266,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 58
+        },
+        {
+          "start": 13815,
+          "end": 13874,
+          "lineStart": 267,
+          "lineEnd": 267,
+          "matcher": "toBeLessThan",
+          "id": 59
+        },
+        {
+          "start": 13880,
+          "end": 13968,
+          "lineStart": 268,
+          "lineEnd": 268,
+          "matcher": "toBe",
+          "id": 60
+        },
+        {
+          "start": 14641,
+          "end": 14684,
+          "lineStart": 289,
+          "lineEnd": 289,
+          "matcher": "toContain",
+          "id": 61
+        },
+        {
+          "start": 14690,
+          "end": 14782,
+          "lineStart": 290,
+          "lineEnd": 290,
+          "matcher": "toBe",
+          "id": 62
+        },
+        {
+          "start": 14788,
+          "end": 14833,
+          "lineStart": 291,
+          "lineEnd": 291,
+          "matcher": "toBeCloseTo",
+          "id": 63
+        },
+        {
+          "start": 15339,
+          "end": 15365,
+          "lineStart": 303,
+          "lineEnd": 303,
+          "matcher": "toBe",
+          "id": 64
+        },
+        {
+          "start": 15771,
+          "end": 15822,
+          "lineStart": 317,
+          "lineEnd": 317,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 65
+        },
+        {
+          "start": 15828,
+          "end": 15862,
+          "lineStart": 318,
+          "lineEnd": 318,
+          "matcher": "toBe",
+          "id": 66
+        },
+        {
+          "start": 15943,
+          "end": 15984,
+          "lineStart": 320,
+          "lineEnd": 320,
+          "matcher": "toBeNull",
+          "id": 67
+        },
+        {
+          "start": 15990,
+          "end": 16032,
+          "lineStart": 321,
+          "lineEnd": 321,
+          "matcher": "toBeNull",
+          "id": 68
+        },
+        {
+          "start": 16531,
+          "end": 16582,
+          "lineStart": 337,
+          "lineEnd": 337,
+          "matcher": "toBeGreaterThanOrEqual",
+          "id": 69
+        },
+        {
+          "start": 16588,
+          "end": 16622,
+          "lineStart": 338,
+          "lineEnd": 338,
+          "matcher": "toBe",
+          "id": 70
+        },
+        {
+          "start": 16628,
+          "end": 16673,
+          "lineStart": 339,
+          "lineEnd": 339,
+          "matcher": "toBeNull",
+          "id": 71
+        },
+        {
+          "start": 16679,
+          "end": 16728,
+          "lineStart": 340,
+          "lineEnd": 340,
+          "matcher": "toBeGreaterThan",
+          "id": 72
+        },
+        {
+          "start": 18076,
+          "end": 18107,
+          "lineStart": 370,
+          "lineEnd": 370,
+          "matcher": "toBeNull",
+          "id": 73
+        },
+        {
+          "start": 18113,
+          "end": 18148,
+          "lineStart": 371,
+          "lineEnd": 371,
+          "matcher": "toBeGreaterThan",
+          "id": 74
+        },
+        {
+          "start": 18761,
+          "end": 18824,
+          "lineStart": 387,
+          "lineEnd": 387,
+          "matcher": "toBeVisible",
+          "id": 75
+        },
+        {
+          "start": 18898,
+          "end": 18935,
+          "lineStart": 389,
+          "lineEnd": 389,
+          "matcher": "toContain",
+          "id": 76
+        },
+        {
+          "start": 19197,
+          "end": 19260,
+          "lineStart": 397,
+          "lineEnd": 397,
+          "matcher": "toBeVisible",
+          "id": 77
+        },
+        {
+          "start": 19332,
+          "end": 19366,
+          "lineStart": 399,
+          "lineEnd": 399,
+          "matcher": "toBe",
+          "id": 78
+        },
+        {
+          "start": 20458,
+          "end": 20539,
+          "lineStart": 427,
+          "lineEnd": 427,
+          "matcher": "toBe",
+          "id": 79
+        },
+        {
+          "start": 20652,
+          "end": 20720,
+          "lineStart": 430,
+          "lineEnd": 430,
+          "matcher": "toContainText",
+          "id": 80
+        },
+        {
+          "start": 21686,
+          "end": 21722,
+          "lineStart": 450,
+          "lineEnd": 450,
+          "matcher": "toHaveTitle",
+          "id": 81
+        },
+        {
+          "start": 22170,
+          "end": 22247,
+          "lineStart": 458,
+          "lineEnd": 458,
+          "matcher": "toHaveText",
+          "id": 82
+        },
+        {
+          "start": 22261,
+          "end": 22308,
+          "lineStart": 459,
+          "lineEnd": 459,
+          "matcher": "toBeHidden",
+          "id": 83
+        },
+        {
+          "start": 22403,
+          "end": 22467,
+          "lineStart": 461,
+          "lineEnd": 461,
+          "matcher": "toHaveCSS",
+          "id": 84
+        },
+        {
+          "start": 22481,
+          "end": 22547,
+          "lineStart": 462,
+          "lineEnd": 462,
+          "matcher": "toContainText",
+          "id": 85
+        },
+        {
+          "start": 22649,
+          "end": 22692,
+          "lineStart": 464,
+          "lineEnd": 464,
+          "matcher": "toBeHidden",
+          "id": 86
+        },
+        {
+          "start": 22706,
+          "end": 22756,
+          "lineStart": 465,
+          "lineEnd": 465,
+          "matcher": "toBeHidden",
+          "id": 87
+        },
+        {
+          "start": 22770,
+          "end": 22825,
+          "lineStart": 466,
+          "lineEnd": 466,
+          "matcher": "toBeHidden",
+          "id": 88
+        },
+        {
+          "start": 22901,
+          "end": 22956,
+          "lineStart": 468,
+          "lineEnd": 468,
+          "matcher": "toHaveValue",
+          "id": 89
+        },
+        {
+          "start": 23059,
+          "end": 23098,
+          "lineStart": 470,
+          "lineEnd": 470,
+          "matcher": "toBe",
+          "id": 90
+        },
+        {
+          "start": 23106,
+          "end": 23147,
+          "lineStart": 471,
+          "lineEnd": 471,
+          "matcher": "toBe",
+          "id": 91
+        },
+        {
+          "start": 23161,
+          "end": 23226,
+          "lineStart": 472,
+          "lineEnd": 472,
+          "matcher": "toContainText",
+          "id": 92
+        },
+        {
+          "start": 23234,
+          "end": 23272,
+          "lineStart": 473,
+          "lineEnd": 473,
+          "matcher": "toBeNull",
+          "id": 93
+        },
+        {
+          "start": 23280,
+          "end": 23314,
+          "lineStart": 474,
+          "lineEnd": 474,
+          "matcher": "toBe",
+          "id": 94
+        },
+        {
+          "start": 23328,
+          "end": 23409,
+          "lineStart": 475,
+          "lineEnd": 475,
+          "matcher": "toContainText",
+          "id": 95
+        },
+        {
+          "start": 23549,
+          "end": 23597,
+          "lineStart": 479,
+          "lineEnd": 479,
+          "matcher": "toBeVisible",
+          "id": 96
+        },
+        {
+          "start": 23646,
+          "end": 23695,
+          "lineStart": 481,
+          "lineEnd": 481,
+          "matcher": "toBeVisible",
+          "id": 97
+        },
+        {
+          "start": 23844,
+          "end": 23891,
+          "lineStart": 483,
+          "lineEnd": 483,
+          "matcher": "toBeVisible",
+          "id": 98
+        },
+        {
+          "start": 23954,
+          "end": 24005,
+          "lineStart": 486,
+          "lineEnd": 486,
+          "matcher": "toBeVisible",
+          "id": 99
+        },
+        {
+          "start": 24085,
+          "end": 24165,
+          "lineStart": 488,
+          "lineEnd": 488,
+          "matcher": "toContainText",
+          "id": 100
+        },
+        {
+          "start": 24284,
+          "end": 24363,
+          "lineStart": 491,
+          "lineEnd": 491,
+          "matcher": "toContainText",
+          "id": 101
+        },
+        {
+          "start": 24377,
+          "end": 24433,
+          "lineStart": 492,
+          "lineEnd": 492,
+          "matcher": "toBeEnabled",
+          "id": 102
+        },
+        {
+          "start": 24488,
+          "end": 24547,
+          "lineStart": 494,
+          "lineEnd": 494,
+          "matcher": "toHaveValue",
+          "id": 103
+        },
+        {
+          "start": 24561,
+          "end": 24641,
+          "lineStart": 495,
+          "lineEnd": 495,
+          "matcher": "toContainText",
+          "id": 104
+        },
+        {
+          "start": 24729,
+          "end": 24764,
+          "lineStart": 497,
+          "lineEnd": 497,
+          "matcher": "toBe",
+          "id": 105
+        },
+        {
+          "start": 24772,
+          "end": 24822,
+          "lineStart": 498,
+          "lineEnd": 498,
+          "matcher": "toBe",
+          "id": 106
+        },
+        {
+          "start": 24877,
+          "end": 24930,
+          "lineStart": 500,
+          "lineEnd": 500,
+          "matcher": "toBeHidden",
+          "id": 107
+        },
+        {
+          "start": 25039,
+          "end": 25067,
+          "lineStart": 503,
+          "lineEnd": 503,
+          "matcher": "toBeEnabled",
+          "id": 108
+        },
+        {
+          "start": 25200,
+          "end": 25233,
+          "lineStart": 506,
+          "lineEnd": 506,
+          "matcher": "toHaveValue",
+          "id": 109
+        },
+        {
+          "start": 25320,
+          "end": 25397,
+          "lineStart": 508,
+          "lineEnd": 508,
+          "matcher": "toContainText",
+          "id": 110
+        },
+        {
+          "start": 25411,
+          "end": 25511,
+          "lineStart": 509,
+          "lineEnd": 509,
+          "matcher": "toContainText",
+          "id": 111
+        },
+        {
+          "start": 25525,
+          "end": 25602,
+          "lineStart": 510,
+          "lineEnd": 510,
+          "matcher": "toContainText",
+          "id": 112
+        },
+        {
+          "start": 26126,
+          "end": 26200,
+          "lineStart": 521,
+          "lineEnd": 521,
+          "matcher": "toContainText",
+          "id": 113
+        },
+        {
+          "start": 26255,
+          "end": 26303,
+          "lineStart": 523,
+          "lineEnd": 523,
+          "matcher": "toBeVisible",
+          "id": 114
+        },
+        {
+          "start": 26423,
+          "end": 26476,
+          "lineStart": 526,
+          "lineEnd": 526,
+          "matcher": "toBeInViewport",
+          "id": 115
+        },
+        {
+          "start": 26490,
+          "end": 26564,
+          "lineStart": 527,
+          "lineEnd": 527,
+          "matcher": "toContainText",
+          "id": 116
+        },
+        {
+          "start": 26578,
+          "end": 26661,
+          "lineStart": 528,
+          "lineEnd": 528,
+          "matcher": "toContainText",
+          "id": 117
+        },
+        {
+          "start": 26669,
+          "end": 26695,
+          "lineStart": 529,
+          "lineEnd": 529,
+          "matcher": "toEqual",
+          "id": 118
+        }
+      ]
+    }
+  ],
+  "productionNavigation": {
+    "tool": "attached apex-lsp lsp_references",
+    "queries": [
+      {
+        "symbol": "Input.simTilt",
+        "result": {
+          "content": [
+            {
+              "type": "text",
+              "text": "3 references in 2 files (query at js/agent/apex.js:1253:30)\njs/agent/apex.js:1253:30  [use] (ApexApi \u203a create)\njs/input/input.js:470:12  [def] (Input)\njs/input/input.js:2562:5  [export] (Input)"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "symbol": "Ghost.finishLap",
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "2 references in 2 files (query at js/car/ghost.js:321:12; text match: js/car/ghost.js ends in module.exports, so the checker scopes Ghost to that file)\njs/car/ghost.js:321:12  [def] (Ghost)\njs/race/session-records.js:113:24  [use] (SessionRecords \u203a create \u203a finish)"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "symbol": "Tracks.banking",
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "30 references in 13 files (query at js/agent/agentview-corners.js:154:25)\njs/agent/agentview-corners.js:154:25  [use] (AgentCorners \u203a create \u203a roadShapeAt)\njs/agent/agentview-corners.js:154:42  [use] (AgentCorners \u203a create \u203a roadShapeAt)\njs/agent/agentview.js:2128:27  [use] (AgentView \u203a create \u203a carWorld)\njs/agent/agentview.js:2128:44  [use] (AgentView \u203a create \u203a carWorld)\njs/agent/apex-cam.js:231:23  [use] (ApexCam \u203a hooks \u203a eyeAt)\njs/agent/apex-cam.js:236:24  [use] (ApexCam \u203a hooks \u203a eyeAt)\njs/agent/apex-track.js:114:25  [use] (ApexTrack \u203a hooks \u203a groundY)\njs/agent/apex-track.js:114:42  [use] (ApexTrack \u203a hooks \u203a groundY)\n\u2026 22 more (offset: 8, or files: true for per-file counts)"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "symbol": "SteerTuning.create",
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "3 references in 2 files (query at js/game.js:4159:42)\njs/game.js:4159:42  [use] (top level)\njs/input/steer-tuning.js:5:10  [def] (SteerTuning)\njs/input/steer-tuning.js:874:10  [export] (SteerTuning)"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "symbol": "SoakRun.start",
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "7 references in 4 files (query at js/perf/bench-run.js:222:49)\njs/perf/bench-run.js:222:49  [use] (BenchRun \u203a legBody \u203a timedEntry() callback)\njs/perf/bench-run.js:253:49  [use] (BenchRun \u203a raceLeg \u203a timedEntry() callback)\njs/perf/bench-run.js:268:49  [use] (BenchRun \u203a lapLeg \u203a timedEntry() callback)\njs/perf/gpu-test-run.js:180:29  [use] (GpuTestRun \u203a start)\njs/perf/phone-recorder.js:442:13  [use] (PhoneRecorder \u203a onAuto \u203a then() callback)\njs/perf/soak-run.js:127:12  [def] (SoakRun)\njs/perf/soak-run.js:159:5  [export] (SoakRun)"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "symbol": "DataHub.open",
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "4 references in 3 files (query at js/game.js:8731:21)\njs/data/hub.js:257:12  [def] (DataHub)\njs/data/hub.js:823:18  [export] (DataHub)\njs/game.js:8731:21  [use] (then() callback)\njs/render/renderer-boot.js:193:47  [use] (RendererBoot \u203a create \u203a graphicsUnavailableOpts)"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      }
+    ],
+    "limits": "Bounded pages only. Ghost.finishLap explicitly reports text-match fallback; Tracks.banking has 22 additional references not fetched. Navigation is static, not runtime verification."
+  }
+}

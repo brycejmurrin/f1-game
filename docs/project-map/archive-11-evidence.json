@@ -1,0 +1,546 @@
+{
+  "group": "11",
+  "assigned_bytes": 160000,
+  "method": "Read-only mapping; every assigned half-open text span returned in individual <=8000-byte calls. No tests, browser, network, runtime or source edits.",
+  "sources": [
+    {
+      "source_id": 1,
+      "path": "docs/archive/notes/TOKEN-TOOL-PROBES-2026-10-18.md",
+      "start": 3128,
+      "end": 10260,
+      "kind": "text",
+      "sha256": "7e8874a42024c844faaaf5bf4220bda87f8aed9158e955f3baada7d0fbcf9bc0",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 10260,
+      "observed_whole_file_sha256": "7e8874a42024c844faaaf5bf4220bda87f8aed9158e955f3baada7d0fbcf9bc0",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "9399307a8f5636de8c97174b8086909882bd20985edd3e66d0deaff472e4cbac",
+      "read_chunks": [
+        {
+          "start": 3128,
+          "end": 10260,
+          "bytes": 7132,
+          "sha256": "9399307a8f5636de8c97174b8086909882bd20985edd3e66d0deaff472e4cbac",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 2,
+      "path": "docs/archive/notes/UI-AUDIT-ALL-2026-10-18.md",
+      "start": 0,
+      "end": 12282,
+      "kind": "text",
+      "sha256": "c0c5330f9fae9bd11cd798acfc7757b80ce21ebefdec6b128d163d287641c199",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 12282,
+      "observed_whole_file_sha256": "c0c5330f9fae9bd11cd798acfc7757b80ce21ebefdec6b128d163d287641c199",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c0c5330f9fae9bd11cd798acfc7757b80ce21ebefdec6b128d163d287641c199",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "eee105566663c30cb15fbc37946053ddd025cd5e21789681a55fc17f111ad3c7",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 12282,
+          "bytes": 4282,
+          "sha256": "e18999ca258ace5ce588fd0c6c3a2134975deef23f0d63993dc039455a474727",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 3,
+      "path": "docs/archive/notes/UI-FIX-D-2026-10-17.md",
+      "start": 0,
+      "end": 1731,
+      "kind": "text",
+      "sha256": "400ec1a6b86a9cfd9ce68ec6f440c65b1ab655b3c00767fb35f8e5d953dca37e",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 1731,
+      "observed_whole_file_sha256": "400ec1a6b86a9cfd9ce68ec6f440c65b1ab655b3c00767fb35f8e5d953dca37e",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "400ec1a6b86a9cfd9ce68ec6f440c65b1ab655b3c00767fb35f8e5d953dca37e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1731,
+          "bytes": 1731,
+          "sha256": "400ec1a6b86a9cfd9ce68ec6f440c65b1ab655b3c00767fb35f8e5d953dca37e",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 4,
+      "path": "docs/archive/notes/UI-FIX-E-2026-10-17.md",
+      "start": 0,
+      "end": 3734,
+      "kind": "text",
+      "sha256": "b7a39ec9611f4d25aa6b6105b2fd1b120e9e906c9401465fc36785a0a62ddcb4",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 3734,
+      "observed_whole_file_sha256": "b7a39ec9611f4d25aa6b6105b2fd1b120e9e906c9401465fc36785a0a62ddcb4",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "b7a39ec9611f4d25aa6b6105b2fd1b120e9e906c9401465fc36785a0a62ddcb4",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3734,
+          "bytes": 3734,
+          "sha256": "b7a39ec9611f4d25aa6b6105b2fd1b120e9e906c9401465fc36785a0a62ddcb4",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 5,
+      "path": "docs/archive/notes/UI-INSPECTOR-SWEEP-2026-10-17.md",
+      "start": 0,
+      "end": 10256,
+      "kind": "text",
+      "sha256": "9e46060069c1d7f754b54871795b048cad6aee673d36bbb330db62ee28891a67",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 10256,
+      "observed_whole_file_sha256": "9e46060069c1d7f754b54871795b048cad6aee673d36bbb330db62ee28891a67",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "9e46060069c1d7f754b54871795b048cad6aee673d36bbb330db62ee28891a67",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "a53c3f70086570f38daea90ec21fee7c30839ec0b14709b979791f0db6eed0a0",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 10256,
+          "bytes": 2256,
+          "sha256": "684115b7a90aa8ec403f9af2ccd5ba40ab1a81af52ab783b6e4759b84ad0c380",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 6,
+      "path": "docs/archive/notes/UI-LANE-A-GARAGE-2026-10-17.md",
+      "start": 0,
+      "end": 2063,
+      "kind": "text",
+      "sha256": "010a8204c5c28aecf155f55518ee26b2e0ec860a1ec65ee9eb5723918292c963",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 2063,
+      "observed_whole_file_sha256": "010a8204c5c28aecf155f55518ee26b2e0ec860a1ec65ee9eb5723918292c963",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "010a8204c5c28aecf155f55518ee26b2e0ec860a1ec65ee9eb5723918292c963",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2063,
+          "bytes": 2063,
+          "sha256": "010a8204c5c28aecf155f55518ee26b2e0ec860a1ec65ee9eb5723918292c963",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 7,
+      "path": "docs/archive/notes/UI-LANE-B-MENUS-2026-10-17-round2.md",
+      "start": 0,
+      "end": 1843,
+      "kind": "text",
+      "sha256": "45da60b0fa7b09adc3860c317ea505bb502335e0f1a63c5ca43db6790e66150f",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 1843,
+      "observed_whole_file_sha256": "45da60b0fa7b09adc3860c317ea505bb502335e0f1a63c5ca43db6790e66150f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "45da60b0fa7b09adc3860c317ea505bb502335e0f1a63c5ca43db6790e66150f",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1843,
+          "bytes": 1843,
+          "sha256": "45da60b0fa7b09adc3860c317ea505bb502335e0f1a63c5ca43db6790e66150f",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 8,
+      "path": "docs/archive/notes/UI-LANE-B-MENUS-2026-10-17.md",
+      "start": 0,
+      "end": 1828,
+      "kind": "text",
+      "sha256": "2cf19f8307d01ded724820a4fd876f897846f73cfee5d260af95dcb69f398220",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 1828,
+      "observed_whole_file_sha256": "2cf19f8307d01ded724820a4fd876f897846f73cfee5d260af95dcb69f398220",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2cf19f8307d01ded724820a4fd876f897846f73cfee5d260af95dcb69f398220",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1828,
+          "bytes": 1828,
+          "sha256": "2cf19f8307d01ded724820a4fd876f897846f73cfee5d260af95dcb69f398220",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 9,
+      "path": "docs/archive/notes/UI-LANE-C-HUD-2026-10-17.md",
+      "start": 0,
+      "end": 2869,
+      "kind": "text",
+      "sha256": "84656d11b0f667451e8f0c3d014e5c7ea293082acd82f5a4fc6036664228e154",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 2869,
+      "observed_whole_file_sha256": "84656d11b0f667451e8f0c3d014e5c7ea293082acd82f5a4fc6036664228e154",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "84656d11b0f667451e8f0c3d014e5c7ea293082acd82f5a4fc6036664228e154",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2869,
+          "bytes": 2869,
+          "sha256": "84656d11b0f667451e8f0c3d014e5c7ea293082acd82f5a4fc6036664228e154",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 10,
+      "path": "docs/archive/notes/UI-LIVERY-CS-OPTIONS-FIT-2026-10-19.md",
+      "start": 0,
+      "end": 1227,
+      "kind": "text",
+      "sha256": "083f70de253b26a1465a31a6d7faf072723db549ab008e8d91993bd0df6994a4",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 1227,
+      "observed_whole_file_sha256": "083f70de253b26a1465a31a6d7faf072723db549ab008e8d91993bd0df6994a4",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "083f70de253b26a1465a31a6d7faf072723db549ab008e8d91993bd0df6994a4",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1227,
+          "bytes": 1227,
+          "sha256": "083f70de253b26a1465a31a6d7faf072723db549ab008e8d91993bd0df6994a4",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 11,
+      "path": "docs/archive/notes/VISOR-SUN-BEHIND-WASH-2026-10-24.md",
+      "start": 0,
+      "end": 3153,
+      "kind": "text",
+      "sha256": "2af0e6a5462d77dddc068af5de070783b9b6c646c0816508b5942561ee38eb41",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 3153,
+      "observed_whole_file_sha256": "2af0e6a5462d77dddc068af5de070783b9b6c646c0816508b5942561ee38eb41",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "2af0e6a5462d77dddc068af5de070783b9b6c646c0816508b5942561ee38eb41",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3153,
+          "bytes": 3153,
+          "sha256": "2af0e6a5462d77dddc068af5de070783b9b6c646c0816508b5942561ee38eb41",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 12,
+      "path": "docs/archive/notes/WX-GRID-TOOL.md",
+      "start": 0,
+      "end": 3441,
+      "kind": "text",
+      "sha256": "10b17af544317aba9f3683fc40a9660efcb6680da2379d4df323114184ccf7a1",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 3441,
+      "observed_whole_file_sha256": "10b17af544317aba9f3683fc40a9660efcb6680da2379d4df323114184ccf7a1",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "10b17af544317aba9f3683fc40a9660efcb6680da2379d4df323114184ccf7a1",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3441,
+          "bytes": 3441,
+          "sha256": "10b17af544317aba9f3683fc40a9660efcb6680da2379d4df323114184ccf7a1",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 13,
+      "path": "docs/archive/notes/career-dsq-clean-rewards.md",
+      "start": 0,
+      "end": 1064,
+      "kind": "text",
+      "sha256": "b632958e9478cf020186b7a3048079224627752bc621b6efb129db4c71d5f2c0",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 1064,
+      "observed_whole_file_sha256": "b632958e9478cf020186b7a3048079224627752bc621b6efb129db4c71d5f2c0",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "b632958e9478cf020186b7a3048079224627752bc621b6efb129db4c71d5f2c0",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1064,
+          "bytes": 1064,
+          "sha256": "b632958e9478cf020186b7a3048079224627752bc621b6efb129db4c71d5f2c0",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 14,
+      "path": "docs/archive/notes/test-review-2026-10-19/PLANS.md",
+      "start": 0,
+      "end": 55152,
+      "kind": "text",
+      "sha256": "75a1b8dc1f96042dc5da147d583fb3991a9d2cc6cd85c3b6a7e9a52c3c2c73ee",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 55152,
+      "observed_whole_file_sha256": "75a1b8dc1f96042dc5da147d583fb3991a9d2cc6cd85c3b6a7e9a52c3c2c73ee",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "75a1b8dc1f96042dc5da147d583fb3991a9d2cc6cd85c3b6a7e9a52c3c2c73ee",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "93d75d4d3e6493d145ee7ca7dfbd332ed73f96267fa8e65d944cf82c32293668",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "fcd7b5020963e1d4a9fc834bd90c0e2294bf1dd570768f92a58b1617d8c316d5",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "55562ff29607b507837e124bfa91db454f3eebea8b133a0094160006795ad320",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "7caedd9183b72f8dbc42a827a3aca1314a2ee2f29ea3ebf4a00f9ea041c4c8a6",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "17572b5be2669b7042b7385ddc5db72bd0214ee33966c5764b6744550de047b5",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "441d47357da825ef54d658bc1008abcccc75ed30b67bc483cb9bed4756c4cca5",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 48000,
+          "end": 55152,
+          "bytes": 7152,
+          "sha256": "3488da44435d27785c453b4cfb214d945e428c7608452124909bcbe716c92f9e",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 15,
+      "path": "docs/archive/notes/test-review-2026-10-19/README.md",
+      "start": 0,
+      "end": 2112,
+      "kind": "text",
+      "sha256": "e2c42a0059d9fc8b91ee19dcc9186a7f89901e0533094840f5b2d21250965c80",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 2112,
+      "observed_whole_file_sha256": "e2c42a0059d9fc8b91ee19dcc9186a7f89901e0533094840f5b2d21250965c80",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "e2c42a0059d9fc8b91ee19dcc9186a7f89901e0533094840f5b2d21250965c80",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2112,
+          "bytes": 2112,
+          "sha256": "e2c42a0059d9fc8b91ee19dcc9186a7f89901e0533094840f5b2d21250965c80",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    },
+    {
+      "source_id": 16,
+      "path": "docs/archive/notes/test-review-2026-10-19/SYNTHESIS.md",
+      "start": 0,
+      "end": 50113,
+      "kind": "text",
+      "sha256": "9d63d1930f22c6ac3b08a0698bcadbf535c57e2be07a08a76dd68bf330ee7306",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 58139,
+      "observed_whole_file_sha256": "9d63d1930f22c6ac3b08a0698bcadbf535c57e2be07a08a76dd68bf330ee7306",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "c735038967ac654555e2943c6e852dd6140775684fb11ee18fe2e27d03ef57f9",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "71386aa64f8c2f98c6dca28edf3e914565595fbc2dcf16b1ae88cfea076aa1c3",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "cd0885b72053c91597bb9ad9a911e0e31b0ed5f65bf273982c34612a370d47b3",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "e0e4eb7c9dfee87d4209e6c2b4de9aa7a9498e410c5f86000681b712c5cedb3e",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "07cfe6284ed0a5f82385a1fd40c98e5124933b15af8fe1009bc63d2b4407e4e9",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "80ef4eda848d435f30d7c4b83921c8bc6a30cfd8bb24d3140e1e8b70ef02119a",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "2b8f99e85317e92afb136c7a9257891f7c1d241a1278a1eaa8d374fa7d49820c",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 48000,
+          "end": 50113,
+          "bytes": 2113,
+          "sha256": "8a8f8cf7b011a8a9c68f266b044bc56f9b77bcff74996b2ba4c984f4c7660a31",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ]
+    }
+  ],
+  "current_path_existence": [
+    {
+      "path": "tools/ci/session-status.mjs",
+      "exists": true
+    },
+    {
+      "path": "docs/VERIFICATION.md",
+      "exists": true
+    },
+    {
+      "path": "docs/agent-output/README.md",
+      "exists": true
+    },
+    {
+      "path": "tools/ui/explorer.mjs",
+      "exists": true
+    },
+    {
+      "path": "tools/ui/layout-audit.mjs",
+      "exists": true
+    },
+    {
+      "path": "tools/ui/menu-screens.mjs",
+      "exists": true
+    },
+    {
+      "path": "tests/specs/watch-transport-layout.spec.js",
+      "exists": true
+    },
+    {
+      "path": "tests/specs/garage-livery-fit.spec.js",
+      "exists": true
+    },
+    {
+      "path": "js/fx/visor-optics.js",
+      "exists": true
+    },
+    {
+      "path": "tools/shot/wx-grid.mjs",
+      "exists": true
+    },
+    {
+      "path": "tools/shot/lib/wx-grid.mjs",
+      "exists": true
+    },
+    {
+      "path": "tests/unit/career-settle.test.mjs",
+      "exists": true
+    },
+    {
+      "path": "tests/unit/season-cal.test.mjs",
+      "exists": true
+    },
+    {
+      "path": "tests/unit/sporting-regs.test.mjs",
+      "exists": true
+    },
+    {
+      "path": "docs/TESTING.md",
+      "exists": true
+    },
+    {
+      "path": "tools/lib/vm-debug-preload.cjs",
+      "exists": true
+    },
+    {
+      "path": "tests/helpers/game-source.mjs",
+      "exists": true
+    },
+    {
+      "path": "tests/helpers/fn-source.mjs",
+      "exists": true
+    }
+  ],
+  "backlink_search": {
+    "scope": "tracked/readable repository text excluding archive and project-map; fixed basename queries",
+    "specific_hit": {
+      "source_id": 2,
+      "path": "docs/notes/LIVE-FRAME-H10-2026-10-20.md",
+      "line": 13
+    },
+    "other_specific_sources": "No matches for source IDs 1,3\u201314,16. Source 15 generic README basename results are not specific evidence."
+  },
+  "coverage_limits": [
+    "Source 1 starts mid-document; preceding provenance is outside group.",
+    "Source 16 ends mid-debugger bullet; remaining 8026 bytes belong to another group.",
+    "Historical commands, fleet/model instructions and verification claims are provenance, not current execution authority.",
+    "Current existence checks establish names only; they do not establish present implementation or resolved status."
+  ]
+}

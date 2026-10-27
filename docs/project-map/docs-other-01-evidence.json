@@ -1,0 +1,544 @@
+{
+  "group": "01",
+  "scope": "All 160000 assigned bytes read; half-open byte intervals; complete index and README, catalog prefix only.",
+  "parts": [
+    {
+      "path": "docs/agent-index.json",
+      "start": 0,
+      "end": 140608,
+      "kind": "text",
+      "sha256": "a0bdb2c74c67111491fb85b2609f4fa184ee2895b234110b1e8cd3bb759c04c6",
+      "sourceBytes": 140608,
+      "actualSourceSha256": "a0bdb2c74c67111491fb85b2609f4fa184ee2895b234110b1e8cd3bb759c04c6",
+      "sourceHashMatchesPlan": true,
+      "assignedSha256": "a0bdb2c74c67111491fb85b2609f4fa184ee2895b234110b1e8cd3bb759c04c6",
+      "fullSourceAssigned": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "2b25948f4cd48a33fdf66f9c7b45b9eebd46ed3aef9d0a42e880c6f583826a3a",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "6ce90c5cdd8fd442ed2c9b2b17ac1f851595616e94c6a49b06ea675209e03ce3",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "7d917160ec5680a21d14fecd850955ea9c2cdfd5e47f164e19fc7a915d1d645c",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "bytes": 8500,
+          "sha256": "5107403be1b69dacc1e3acd2dd4a5fabb4cc991d259605d4ebd983a873984bd1",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 34000,
+          "end": 42500,
+          "bytes": 8500,
+          "sha256": "521ad03185c87e2f14090efb84246aa1d5e7b0854a684074fc6f9822fc6b16c2",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 42500,
+          "end": 51000,
+          "bytes": 8500,
+          "sha256": "c188b0e40dcda64110108ffbd20712525991973042629260cb0550f048a9a5a2",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 51000,
+          "end": 59500,
+          "bytes": 8500,
+          "sha256": "94227833eb252627f9f2466eae118c848742a677c46c1e7083c5fd0497957ee9",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 59500,
+          "end": 68000,
+          "bytes": 8500,
+          "sha256": "89b208fbebd0f039685dcc1171a301863b3adcb7a4453fd16e2e021e14b9f7f0",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 68000,
+          "end": 76500,
+          "bytes": 8500,
+          "sha256": "1faae5c180bb3770cf0b3f9a70254be4e9d5474d571f8622e0bf66b170b1bb41",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 76500,
+          "end": 85000,
+          "bytes": 8500,
+          "sha256": "13c3cec935970ca17848dcf6e4c589cdea4b892c0790fa574502814d3d3a8074",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 85000,
+          "end": 93500,
+          "bytes": 8500,
+          "sha256": "db66614c091b3132e3f33b128870c238205c3d9e5dc04ea35b60b01b2f0f8f34",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 93500,
+          "end": 102000,
+          "bytes": 8500,
+          "sha256": "09d05ede53d202ac8d5ff1b834d57b9cd5a53b30861460f289a0f33050fd8e35",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 102000,
+          "end": 110500,
+          "bytes": 8500,
+          "sha256": "aae0672bd2b890e6d3ed464f0806314d098c66a4124088eb43c2bfeeb22cb3b2",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 110500,
+          "end": 119000,
+          "bytes": 8500,
+          "sha256": "d7995fc5e254f25c11774218c892a1ac44c99fe230553da32cff75dc8a5bdd50",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 119000,
+          "end": 127500,
+          "bytes": 8500,
+          "sha256": "531bac4931db926dbcf39ac18bba8ff327269c32db4686a15b4a158c015f49b9",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 127500,
+          "end": 136000,
+          "bytes": 8500,
+          "sha256": "e981c4f1aa52802c16c448fdacaade8ccf93af6d0e29672552c483991754aaea",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 136000,
+          "end": 140608,
+          "bytes": 4608,
+          "sha256": "6ef9b658f1c7060f13b8bf967f35b2b1f459673cb6bf98d5544d79ea87040282",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ]
+    },
+    {
+      "path": "docs/agent-output/README.md",
+      "start": 0,
+      "end": 12688,
+      "kind": "text",
+      "sha256": "a2c5d50aeab45c4eee1238b5f95bf7e1b660274242da7fdd129534abe0a8a68a",
+      "sourceBytes": 12688,
+      "actualSourceSha256": "a2c5d50aeab45c4eee1238b5f95bf7e1b660274242da7fdd129534abe0a8a68a",
+      "sourceHashMatchesPlan": true,
+      "assignedSha256": "a2c5d50aeab45c4eee1238b5f95bf7e1b660274242da7fdd129534abe0a8a68a",
+      "fullSourceAssigned": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "6df16b4891378898367b61d5ce7648655f0b00d967e704aa7f579f94e7e03a83",
+          "read": "individually returned untruncated exec_command output"
+        },
+        {
+          "start": 8500,
+          "end": 12688,
+          "bytes": 4188,
+          "sha256": "673d65f3a2329d55c315e48978f183b5332badafd39b6b960f58c41034f83675",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ]
+    },
+    {
+      "path": "docs/agent-output/catalog.json",
+      "start": 0,
+      "end": 6704,
+      "kind": "text",
+      "sha256": "9cefaa83f4c7efabeba68e3ad8565b9ad0a2238b075b552a9df38fc64613e57f",
+      "sourceBytes": 149089,
+      "actualSourceSha256": "9cefaa83f4c7efabeba68e3ad8565b9ad0a2238b075b552a9df38fc64613e57f",
+      "sourceHashMatchesPlan": true,
+      "assignedSha256": "01500e171db73b9cd8927295d912fb8dbbf819a86edbcfacb734341b733be40c",
+      "fullSourceAssigned": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6704,
+          "bytes": 6704,
+          "sha256": "01500e171db73b9cd8927295d912fb8dbbf819a86edbcfacb734341b733be40c",
+          "read": "individually returned untruncated exec_command output"
+        }
+      ]
+    }
+  ],
+  "structuredParsing": {
+    "agentIndex": {
+      "status": "parsed complete with Python json.load; every collection traversed",
+      "hooks": {
+        "rows": 79,
+        "fieldsets": [
+          [
+            "group",
+            "name",
+            "signature",
+            "summary"
+          ]
+        ]
+      },
+      "groups": {
+        "rows": 56,
+        "fieldsets": [
+          [
+            "files",
+            "id",
+            "kind",
+            "script",
+            "twinned"
+          ]
+        ]
+      },
+      "circuits": {
+        "rows": 52,
+        "fieldsets": [
+          [
+            "classic",
+            "file",
+            "id",
+            "order"
+          ]
+        ]
+      },
+      "modules": {
+        "rows": 559,
+        "fieldsets": [
+          [
+            "global",
+            "order",
+            "path",
+            "roster"
+          ]
+        ]
+      },
+      "hookGroups": {
+        "perceive": 6,
+        "detail": 2,
+        "know": 5,
+        "act": 3,
+        "fields": 13,
+        "read": 28,
+        "control": 18,
+        "model": 4
+      },
+      "groupKinds": {
+        "browser": 24,
+        "node": 22,
+        "command": 10
+      },
+      "moduleRosters": {
+        "LAZY_AGENT": 10,
+        "LAZY_AUDIO": 19,
+        "tag": 310,
+        "LAZY_CAM_EDITOR": 2,
+        "LAZY_CAREER_UI": 2,
+        "LAZY_CIRCUIT": 52,
+        "LAZY_SCENERY": 52,
+        "LAZY_DATA": 15,
+        "LAZY_EDITOR": 17,
+        "LAZY_NET": 17,
+        "LAZY_RACE": 1,
+        "LAZY_RACE_SESSION": 14,
+        "DEFERRED:webgl2": 10,
+        "DEFERRED:three": 10,
+        "DEFERRED:webgpu": 9,
+        "LAZY_TRACK_BUILD": 13,
+        "LAZY_XR": 6
+      },
+      "missingModulePaths": []
+    },
+    "catalogPrefix": {
+      "status": "partial JSON document; complete header and 25 complete tool objects decoded; next object truncated",
+      "completeToolRows": [
+        {
+          "path": "tools/agent-run.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "job-status",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--limit",
+            "--offset",
+            "--output-level"
+          ]
+        },
+        {
+          "path": "tools/agent/output.mjs",
+          "classification": "ambiguous",
+          "outputPolicy": "no-direct-output"
+        },
+        {
+          "path": "tools/agent/process.mjs",
+          "classification": "ambiguous",
+          "outputPolicy": "no-direct-output"
+        },
+        {
+          "path": "tools/archive/ci/measure-guard-commit.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--json"
+          ]
+        },
+        {
+          "path": "tools/archive/gen/trees/measure-tree-budget.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--json"
+          ]
+        },
+        {
+          "path": "tools/archive/gfx/decal-bake-probe.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "artifact-first",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--json"
+          ]
+        },
+        {
+          "path": "tools/archive/net/rtc-sync-probe.mjs",
+          "classification": "ambiguous",
+          "outputPolicy": "keep-native"
+        },
+        {
+          "path": "tools/archive/perf/devicefarm-boot.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--out"
+          ]
+        },
+        {
+          "path": "tools/archive/perf/ers-deploy-census.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "artifact-first",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--json"
+          ]
+        },
+        {
+          "path": "tools/archive/perf/touch-boost-probe.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "artifact-first",
+          "interpreter": "node"
+        },
+        {
+          "path": "tools/assets/gltf-check.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--out"
+          ]
+        },
+        {
+          "path": "tools/assets/procedural-room.example.json",
+          "classification": "data",
+          "outputPolicy": "keep-native"
+        },
+        {
+          "path": "tools/assets/procedural-room.py",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "python3",
+          "nativeOutputFlagMentions": [
+            "--out"
+          ]
+        },
+        {
+          "path": "tools/car/audit-aero.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node"
+        },
+        {
+          "path": "tools/car/audit-parts.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "artifact-first",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--out"
+          ]
+        },
+        {
+          "path": "tools/car/car-fit-audit.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "targeted-summary",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--format",
+            "--json"
+          ]
+        },
+        {
+          "path": "tools/car/career-economy.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node"
+        },
+        {
+          "path": "tools/car/carshot.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node"
+        },
+        {
+          "path": "tools/car/cockpit-pale-sweep.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "targeted-summary",
+          "interpreter": "node"
+        },
+        {
+          "path": "tools/car/crest-sweep.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "targeted-summary",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--json"
+          ]
+        },
+        {
+          "path": "tools/car/flank-occlusion.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--json"
+          ]
+        },
+        {
+          "path": "tools/car/helmet-sheet.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "keep-native",
+          "interpreter": "node",
+          "nativeOutputFlagMentions": [
+            "--out"
+          ]
+        },
+        {
+          "path": "tools/car/helmet-trace.mjs",
+          "classification": "entrypoint-candidate",
+          "outputPolicy": "page-results",
+          "interpreter": "node"
+        },
+        {
+          "path": "tools/car/lib/carview-capture.mjs",
+          "classification": "ambiguous",
+          "outputPolicy": "no-direct-output"
+        },
+        {
+          "path": "tools/car/lib/customization-plan.mjs",
+          "classification": "ambiguous",
+          "outputPolicy": "no-direct-output"
+        }
+      ],
+      "completeToolRowCount": 25,
+      "partialTail": "{\n      \"path\": \"tools/car/lib/fit-checks.mjs\",\n      \"classification\": \"ambiguous\",\n      \"outpu",
+      "unreadRemainder": [
+        6704,
+        149089
+      ]
+    }
+  },
+  "semanticContracts": {
+    "index": {
+      "producer": "tools/docs/gen-agent-index.mjs",
+      "inputs": [
+        "js/agent/agentview.js agentHelp return object",
+        "tests/groups.json",
+        "tools/manifest.cjs",
+        "module source globals",
+        "twinned-specs metadata"
+      ],
+      "consumers": [
+        "docs/AGENT-HOOKS.md shares same source",
+        "agents query hook/group/circuit/module inventory",
+        "tests/unit/generated-docs.test.mjs drift detection"
+      ],
+      "validity": "Observed source hashes match assignment; generation/check not executed; static inventory is not boot or test evidence.",
+      "ordering": "hook group order fixed then name/signature; groups/circuits by id; modules by path with original roster order retained in order.",
+      "units": "metres, m/s, seconds, radians; centreline right-positive lateral; left-positive curvature; scene side egocentric, trackSide centreline-relative; rival lateral relative to player."
+    },
+    "presentation": {
+      "producer": "tools/gen/gen-output-surface.mjs",
+      "inputs": [
+        "tools file inventory and source text",
+        "package.json scripts",
+        ".mcp.json routes",
+        "docs/agent-output/policies.json reviewed contracts"
+      ],
+      "levels": [
+        "compact",
+        "diagnostic",
+        "full"
+      ],
+      "default": "compact",
+      "invariant": "presentation does not alter action, checks, errors, exit status, approval or cancellation",
+      "retention": "full streams and MCP objects retained before summaries; use receipt retrieval instead of rerunning actions",
+      "cleanup": "local regenerable artifacts only; do not commit raw logs/transcripts; use repository supervisors for owned processes",
+      "limits": {
+        "tinyMcpBytes": 1024,
+        "collectionRows": [
+          1,
+          100
+        ],
+        "collectionPageBytes": 262144,
+        "collectionSourceBytes": 8388608,
+        "originalMcpBytes": 8388608
+      },
+      "scope": "six configured stdio servers only; host tools and unconfigured MCPs excluded; reload required for changed entrypoints",
+      "security": "artifact read confined to artifacts/agent-output; rejects traversal and symlink escape",
+      "catalogLimit": "static flag mentions may be comments/subcommand-only; entrypoint-candidate is not safe/default execution guarantee; this lane does not cover catalog suffix or policy bodies"
+    }
+  },
+  "supportingEvidence": [
+    {
+      "path": "tools/docs/gen-agent-index.mjs",
+      "scope": "lines 1\u2013243 plus text reference search; static source inspection, no generator execution"
+    },
+    {
+      "path": "tools/gen/gen-output-surface.mjs",
+      "scope": "lines 1\u2013126 plus reference search"
+    },
+    {
+      "tool": "apex-lsp lsp_definition",
+      "query": "AgentView.agentHelp",
+      "result": "js/agent/agentview.js:1856:14 function agentHelp; declaration/module-file fallback, no direct use; exports/callers unverified"
+    }
+  ],
+  "notRun": [
+    "tests",
+    "browser",
+    "network",
+    "generators",
+    "runtime probes"
+  ],
+  "historicalInstructions": "Archived catalog records are inventory data, not active instructions."
+}

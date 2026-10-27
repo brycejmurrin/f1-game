@@ -1,0 +1,1135 @@
+{
+  "group": "02",
+  "scope": "Assigned half-open UTF-8 byte spans only; whole-file hashes are identity, not a claim to reading outside assignments.",
+  "assigned_bytes": 160000,
+  "read_method": "Python byte slicing; each chunk returned in its own exec_command result, <=8500 source bytes, output token cap 5000 or 5500; all exit 0 with no truncation.",
+  "read_ledger": [
+    {
+      "path": "docs/tracks/istanbul.md",
+      "start": 1279,
+      "end": 6917,
+      "kind": "text",
+      "sha256": "27b59065ff9c4d75c055097be1f06f547af2a98d1fbe2f124b06691bbdf4d2e8",
+      "whole_file_bytes": 6917,
+      "whole_file_sha256": "27b59065ff9c4d75c055097be1f06f547af2a98d1fbe2f124b06691bbdf4d2e8",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "afe66e855b809c2c84e233f4aaf1ba9b220153883de4fcfe0430b42a5b222c3d",
+      "read_chunks": [
+        {
+          "start": 1279,
+          "end": 6917,
+          "bytes": 5638,
+          "sha256": "afe66e855b809c2c84e233f4aaf1ba9b220153883de4fcfe0430b42a5b222c3d",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "a6372b"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/jacarepagua.md",
+      "start": 0,
+      "end": 6394,
+      "kind": "text",
+      "sha256": "804924ec2de8f1ae8bf05e0ba24a1c8c5480b4a96663641f4c3638c3f1dd435d",
+      "whole_file_bytes": 6394,
+      "whole_file_sha256": "804924ec2de8f1ae8bf05e0ba24a1c8c5480b4a96663641f4c3638c3f1dd435d",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "804924ec2de8f1ae8bf05e0ba24a1c8c5480b4a96663641f4c3638c3f1dd435d",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6394,
+          "bytes": 6394,
+          "sha256": "804924ec2de8f1ae8bf05e0ba24a1c8c5480b4a96663641f4c3638c3f1dd435d",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "8fc551"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/jeddah.md",
+      "start": 0,
+      "end": 6855,
+      "kind": "text",
+      "sha256": "c59605afa45a7c408bbf8ca1858d0878b6540ac7d32148485ff8232b49754a65",
+      "whole_file_bytes": 6855,
+      "whole_file_sha256": "c59605afa45a7c408bbf8ca1858d0878b6540ac7d32148485ff8232b49754a65",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "c59605afa45a7c408bbf8ca1858d0878b6540ac7d32148485ff8232b49754a65",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6855,
+          "bytes": 6855,
+          "sha256": "c59605afa45a7c408bbf8ca1858d0878b6540ac7d32148485ff8232b49754a65",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "1aa4cc"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/jerez.md",
+      "start": 0,
+      "end": 6349,
+      "kind": "text",
+      "sha256": "1e956a1324a85a2113e04ab1edda9fd621d58baeafbadc332f966e00eb1234d4",
+      "whole_file_bytes": 6349,
+      "whole_file_sha256": "1e956a1324a85a2113e04ab1edda9fd621d58baeafbadc332f966e00eb1234d4",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "1e956a1324a85a2113e04ab1edda9fd621d58baeafbadc332f966e00eb1234d4",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6349,
+          "bytes": 6349,
+          "sha256": "1e956a1324a85a2113e04ab1edda9fd621d58baeafbadc332f966e00eb1234d4",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "dbba77"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/korea.md",
+      "start": 0,
+      "end": 4553,
+      "kind": "text",
+      "sha256": "72bebf19b8f115623dccdb110a8e7985da5c27d4a6ea5933ffa6dc0dc975d64e",
+      "whole_file_bytes": 4553,
+      "whole_file_sha256": "72bebf19b8f115623dccdb110a8e7985da5c27d4a6ea5933ffa6dc0dc975d64e",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "72bebf19b8f115623dccdb110a8e7985da5c27d4a6ea5933ffa6dc0dc975d64e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 4553,
+          "bytes": 4553,
+          "sha256": "72bebf19b8f115623dccdb110a8e7985da5c27d4a6ea5933ffa6dc0dc975d64e",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "59c1a3"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/kyalami.md",
+      "start": 0,
+      "end": 7598,
+      "kind": "text",
+      "sha256": "8b058c9061b03fcaad28deb3d27a48cb23ad9040f658c070638831d10d22878b",
+      "whole_file_bytes": 7598,
+      "whole_file_sha256": "8b058c9061b03fcaad28deb3d27a48cb23ad9040f658c070638831d10d22878b",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "8b058c9061b03fcaad28deb3d27a48cb23ad9040f658c070638831d10d22878b",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7598,
+          "bytes": 7598,
+          "sha256": "8b058c9061b03fcaad28deb3d27a48cb23ad9040f658c070638831d10d22878b",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "112bd0"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/madrid.md",
+      "start": 0,
+      "end": 7569,
+      "kind": "text",
+      "sha256": "1aba4190efea09b03ee37c11e7d3457bc19e0a091c1efe04b17b22318047f942",
+      "whole_file_bytes": 7569,
+      "whole_file_sha256": "1aba4190efea09b03ee37c11e7d3457bc19e0a091c1efe04b17b22318047f942",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "1aba4190efea09b03ee37c11e7d3457bc19e0a091c1efe04b17b22318047f942",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7569,
+          "bytes": 7569,
+          "sha256": "1aba4190efea09b03ee37c11e7d3457bc19e0a091c1efe04b17b22318047f942",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "34f42c"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/magny_cours.md",
+      "start": 0,
+      "end": 6519,
+      "kind": "text",
+      "sha256": "9fbf2a4bf82882ae3e1ae4e249628bef389784c78e3e2e2a5f9bfcecd097e220",
+      "whole_file_bytes": 6519,
+      "whole_file_sha256": "9fbf2a4bf82882ae3e1ae4e249628bef389784c78e3e2e2a5f9bfcecd097e220",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "9fbf2a4bf82882ae3e1ae4e249628bef389784c78e3e2e2a5f9bfcecd097e220",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6519,
+          "bytes": 6519,
+          "sha256": "9fbf2a4bf82882ae3e1ae4e249628bef389784c78e3e2e2a5f9bfcecd097e220",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "f9f776"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/mexico.md",
+      "start": 0,
+      "end": 6114,
+      "kind": "text",
+      "sha256": "2619f9b8cfd86ad5f9a0ed7f1a02ba6f0ef495c6ca65805b3f7f48216f8c9f0e",
+      "whole_file_bytes": 6114,
+      "whole_file_sha256": "2619f9b8cfd86ad5f9a0ed7f1a02ba6f0ef495c6ca65805b3f7f48216f8c9f0e",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "2619f9b8cfd86ad5f9a0ed7f1a02ba6f0ef495c6ca65805b3f7f48216f8c9f0e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6114,
+          "bytes": 6114,
+          "sha256": "2619f9b8cfd86ad5f9a0ed7f1a02ba6f0ef495c6ca65805b3f7f48216f8c9f0e",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "4d423f"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/miami.md",
+      "start": 0,
+      "end": 6355,
+      "kind": "text",
+      "sha256": "49d9e28d6979c708c36689e8a6aeaa7a956c2996f3d993cfe2f529f680dd5ef6",
+      "whole_file_bytes": 6355,
+      "whole_file_sha256": "49d9e28d6979c708c36689e8a6aeaa7a956c2996f3d993cfe2f529f680dd5ef6",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "49d9e28d6979c708c36689e8a6aeaa7a956c2996f3d993cfe2f529f680dd5ef6",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6355,
+          "bytes": 6355,
+          "sha256": "49d9e28d6979c708c36689e8a6aeaa7a956c2996f3d993cfe2f529f680dd5ef6",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "217895"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/monaco.md",
+      "start": 0,
+      "end": 6375,
+      "kind": "text",
+      "sha256": "afaf8116c036c120a4cde9a2d242ca5b5095c2404f92be6ee4d1eb04eb159af7",
+      "whole_file_bytes": 6375,
+      "whole_file_sha256": "afaf8116c036c120a4cde9a2d242ca5b5095c2404f92be6ee4d1eb04eb159af7",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "afaf8116c036c120a4cde9a2d242ca5b5095c2404f92be6ee4d1eb04eb159af7",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6375,
+          "bytes": 6375,
+          "sha256": "afaf8116c036c120a4cde9a2d242ca5b5095c2404f92be6ee4d1eb04eb159af7",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "5c026a"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/mont_tremblant.md",
+      "start": 0,
+      "end": 6941,
+      "kind": "text",
+      "sha256": "5923a5ecc02495ec3a9edea328be223c8bc7e6173b27551bb6dea8e86a1ad6f8",
+      "whole_file_bytes": 6941,
+      "whole_file_sha256": "5923a5ecc02495ec3a9edea328be223c8bc7e6173b27551bb6dea8e86a1ad6f8",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "5923a5ecc02495ec3a9edea328be223c8bc7e6173b27551bb6dea8e86a1ad6f8",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6941,
+          "bytes": 6941,
+          "sha256": "5923a5ecc02495ec3a9edea328be223c8bc7e6173b27551bb6dea8e86a1ad6f8",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "099769"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/montreal.md",
+      "start": 0,
+      "end": 11539,
+      "kind": "text",
+      "sha256": "d85e8f36b94dfc0577682f7eb54d1265325d9171f8cafecfa4e982e34bc91b49",
+      "whole_file_bytes": 11539,
+      "whole_file_sha256": "d85e8f36b94dfc0577682f7eb54d1265325d9171f8cafecfa4e982e34bc91b49",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "d85e8f36b94dfc0577682f7eb54d1265325d9171f8cafecfa4e982e34bc91b49",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "c4e671ae391c343eaba90a4f7aa336033af84ed04a4ad114dce3a46ca0ee6215",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "073ee5"
+        },
+        {
+          "start": 8500,
+          "end": 11539,
+          "bytes": 3039,
+          "sha256": "fb80c34692f99c3d77143455c0022310b9cbdaee74291eb30d6882c6f6f8a208",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "e71c16"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/monza.md",
+      "start": 0,
+      "end": 6548,
+      "kind": "text",
+      "sha256": "e229018235a430b4d733b86b12d89fdb7392b50ec623aeede0c7db31839daae7",
+      "whole_file_bytes": 6548,
+      "whole_file_sha256": "e229018235a430b4d733b86b12d89fdb7392b50ec623aeede0c7db31839daae7",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "e229018235a430b4d733b86b12d89fdb7392b50ec623aeede0c7db31839daae7",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6548,
+          "bytes": 6548,
+          "sha256": "e229018235a430b4d733b86b12d89fdb7392b50ec623aeede0c7db31839daae7",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "2e5f82"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/mosport.md",
+      "start": 0,
+      "end": 8234,
+      "kind": "text",
+      "sha256": "d60e3c73ae2127650c175713e5b134ce9291088c130d2446895bfa2525875524",
+      "whole_file_bytes": 8234,
+      "whole_file_sha256": "d60e3c73ae2127650c175713e5b134ce9291088c130d2446895bfa2525875524",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "d60e3c73ae2127650c175713e5b134ce9291088c130d2446895bfa2525875524",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8234,
+          "bytes": 8234,
+          "sha256": "d60e3c73ae2127650c175713e5b134ce9291088c130d2446895bfa2525875524",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "aa65e0"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/mugello.md",
+      "start": 0,
+      "end": 6201,
+      "kind": "text",
+      "sha256": "abd80a8a363bb015c17334ec8a2505bde4198460c4c7f0604848b6051aa51e1e",
+      "whole_file_bytes": 6201,
+      "whole_file_sha256": "abd80a8a363bb015c17334ec8a2505bde4198460c4c7f0604848b6051aa51e1e",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "abd80a8a363bb015c17334ec8a2505bde4198460c4c7f0604848b6051aa51e1e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6201,
+          "bytes": 6201,
+          "sha256": "abd80a8a363bb015c17334ec8a2505bde4198460c4c7f0604848b6051aa51e1e",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "891e16"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/nurburgring.md",
+      "start": 0,
+      "end": 5709,
+      "kind": "text",
+      "sha256": "32a6e76b95aea5ded1433f2c3948970b36e1d6a6320a38dd4c2f0f1b2fa25ec4",
+      "whole_file_bytes": 5709,
+      "whole_file_sha256": "32a6e76b95aea5ded1433f2c3948970b36e1d6a6320a38dd4c2f0f1b2fa25ec4",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "32a6e76b95aea5ded1433f2c3948970b36e1d6a6320a38dd4c2f0f1b2fa25ec4",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 5709,
+          "bytes": 5709,
+          "sha256": "32a6e76b95aea5ded1433f2c3948970b36e1d6a6320a38dd4c2f0f1b2fa25ec4",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "c891c0"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/okayama.md",
+      "start": 0,
+      "end": 6301,
+      "kind": "text",
+      "sha256": "0e585b1c6c22180483e86277bee1332ee5174996e73902bc11a0b44cc7afab6e",
+      "whole_file_bytes": 6301,
+      "whole_file_sha256": "0e585b1c6c22180483e86277bee1332ee5174996e73902bc11a0b44cc7afab6e",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "0e585b1c6c22180483e86277bee1332ee5174996e73902bc11a0b44cc7afab6e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6301,
+          "bytes": 6301,
+          "sha256": "0e585b1c6c22180483e86277bee1332ee5174996e73902bc11a0b44cc7afab6e",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "56a5bf"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/paul_ricard.md",
+      "start": 0,
+      "end": 8152,
+      "kind": "text",
+      "sha256": "d54b7c55fac8cc5088ecba18c31ca89cd169512787e03601ee73e7d039f506a8",
+      "whole_file_bytes": 8152,
+      "whole_file_sha256": "d54b7c55fac8cc5088ecba18c31ca89cd169512787e03601ee73e7d039f506a8",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "d54b7c55fac8cc5088ecba18c31ca89cd169512787e03601ee73e7d039f506a8",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8152,
+          "bytes": 8152,
+          "sha256": "d54b7c55fac8cc5088ecba18c31ca89cd169512787e03601ee73e7d039f506a8",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "33d30d"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/portimao.md",
+      "start": 0,
+      "end": 7934,
+      "kind": "text",
+      "sha256": "703b9bc4a03b22976ded9658c9ccf823987742e93e8d2bf7cfbda7532b253da3",
+      "whole_file_bytes": 7934,
+      "whole_file_sha256": "703b9bc4a03b22976ded9658c9ccf823987742e93e8d2bf7cfbda7532b253da3",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "703b9bc4a03b22976ded9658c9ccf823987742e93e8d2bf7cfbda7532b253da3",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7934,
+          "bytes": 7934,
+          "sha256": "703b9bc4a03b22976ded9658c9ccf823987742e93e8d2bf7cfbda7532b253da3",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "2adb28"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/qatar.md",
+      "start": 0,
+      "end": 10203,
+      "kind": "text",
+      "sha256": "d382d0f92c1f92022fcee7a46bd382ed6e493b09f0ce399965bf456e3efd66e9",
+      "whole_file_bytes": 10203,
+      "whole_file_sha256": "d382d0f92c1f92022fcee7a46bd382ed6e493b09f0ce399965bf456e3efd66e9",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "d382d0f92c1f92022fcee7a46bd382ed6e493b09f0ce399965bf456e3efd66e9",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "a2b4b3caf75f06d37835eb13c97b04589f0883045909eabbe9bd956d20541760",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "48e542"
+        },
+        {
+          "start": 8500,
+          "end": 10203,
+          "bytes": 1703,
+          "sha256": "0491f1e7776e25023ddc8f435ce17de5ad0d1770119dabb5c9b0a30f21106a84",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "fc322b"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/redbull.md",
+      "start": 0,
+      "end": 5631,
+      "kind": "text",
+      "sha256": "427c345bff4b34efaac09fa62f41162b9a769866d81eef8025e826b1d2b34a4e",
+      "whole_file_bytes": 5631,
+      "whole_file_sha256": "427c345bff4b34efaac09fa62f41162b9a769866d81eef8025e826b1d2b34a4e",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "427c345bff4b34efaac09fa62f41162b9a769866d81eef8025e826b1d2b34a4e",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 5631,
+          "bytes": 5631,
+          "sha256": "427c345bff4b34efaac09fa62f41162b9a769866d81eef8025e826b1d2b34a4e",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "12ef8b"
+        }
+      ]
+    },
+    {
+      "path": "docs/tracks/sepang.md",
+      "start": 0,
+      "end": 6288,
+      "kind": "text",
+      "sha256": "a49f958280dd946e7ea8a9423d66a51fa31817972f2d611fe3f2b768266bad94",
+      "whole_file_bytes": 7640,
+      "whole_file_sha256": "a49f958280dd946e7ea8a9423d66a51fa31817972f2d611fe3f2b768266bad94",
+      "whole_file_hash_matches_manifest": true,
+      "assigned_sha256": "53fa209655333e12542154555627412d4c11dedb3d8d92ddbe56d1cea5ffc8bc",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6288,
+          "bytes": 6288,
+          "sha256": "53fa209655333e12542154555627412d4c11dedb3d8d92ddbe56d1cea5ffc8bc",
+          "returned_individually": true,
+          "truncated": false,
+          "returned_tool_chunk_id": "ff27e8"
+        }
+      ]
+    }
+  ],
+  "semantic_map": [
+    {
+      "id": "istanbul",
+      "brief": "docs/tracks/istanbul.md",
+      "geometry": "Valley plunge and climb; Turn 8 7-degree banking and three pinches.",
+      "scenery": "Turn 8 outside amphitheatre, Silver 4, hospitality and huge gravel; inside stays empty, dry sparse pine and one apartment horizon.",
+      "provenance_and_status": "Gold/Silver seating-guide citations and revamp hospitality intent; ceremonial flag rank and VIP towers unsupported.",
+      "constraints_and_cleanup": "2027 geometry unavailable; keep 2011 massing, avoid Bosphorus/city skyline.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/istanbul.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/istanbul.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/istanbul.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "jacarepagua",
+      "brief": "docs/tracks/jacarepagua.md",
+      "geometry": "Flat reclaimed marshland; projection-direction conflict must not trigger reverse changes.",
+      "scenery": "Lagoon cells and restinga shore, period pit/bleacher/timing box, Tijuca and Pedra Branca silhouettes.",
+      "provenance_and_status": "Wikipedia/STATS F1/racetrackworld cited; historic demolished venue, exact peaks and jetty unregistered.",
+      "constraints_and_cleanup": "Removed coplanar crowd banks; city dressing excluded; tall planting restricted to shore and small right pocket.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/jacarepagua.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/jacarepagua.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/jacarepagua.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "jeddah",
+      "brief": "docs/tracks/jeddah.md",
+      "geometry": "Flat reclaimed shore; banked T13 and subsequent/final sweeps, continuous pale canyon.",
+      "scenery": "312 m fountain, mosque, yacht marina, cool LED tunnel; Al-Balad roshan skyline inland.",
+      "provenance_and_status": "Early not-yet-built research superseded by Outcome and October detail claims.",
+      "constraints_and_cleanup": "Sea stays open right early/mid lap; inland town compressed and set back; foundations and closed tower cores repair under-read/open shells.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/jeddah.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/jeddah.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/jeddah.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "jerez",
+      "brief": "docs/tracks/jerez.md",
+      "geometry": "Gentle climb to Dry Sack and descent; preserve shifted scenery frame via sl().",
+      "scenery": "El Ovni, control tower/Tio Pepe silhouette, pale concrete stadium terraces and sparse olive scrub.",
+      "provenance_and_status": "Operator, Wikipedia, Repsol and circuit-history citations; bottle art and marker graphics uncertain.",
+      "constraints_and_cleanup": "Do not move start/frame keys; open dry horizons, no tree wall; residual shift is documented debt.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/jerez.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/jerez.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/jerez.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "korea",
+      "brief": "docs/tracks/korea.md",
+      "geometry": "Flat SRTM/reclaimed land with undulate false; anticlockwise side convention.",
+      "scenery": "Permanent pits, covered main stand, unfinished marina shells and final footbridge; seawall and empty asphalt.",
+      "provenance_and_status": "Wikipedia/RacingCircuits/NYT cited; planned hotels and yachts never delivered.",
+      "constraints_and_cleanup": "No tree line, named hotels or finished yacht village; use bare fill and grey runoff.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/korea.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/korea.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/korea.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "kyalami",
+      "brief": "docs/tracks/kyalami.md",
+      "geometry": "Authored approximately 45 m relief target, not a new DEM; live anticlockwise reverse true.",
+      "scenery": "Straw veld, acacia flat crowns, brick/corrugated pits and clubhouse, headgear, windpump and tailings mesas.",
+      "provenance_and_status": "Official direction and conflicting altitude claims; Grade-1 plan sourced as light-touch barriers/runoff upgrade.",
+      "constraints_and_cleanup": "No invented new Grade-1 architecture or deleted historic layout; preserve hills, low fog and open plateau.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/kyalami.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/kyalami.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/kyalami.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "madrid",
+      "brief": "docs/tracks/madrid.md",
+      "geometry": "Def 5.47 km vs official 5.414 vs built trace about 5.343; preserve length pending registration; Monumental 24 percent banking.",
+      "scenery": "IFEMA halls, two portals, continuous white bowl, flood ring and Barajas aircraft/control tower.",
+      "provenance_and_status": "F1/operator/Dromo and engineering sources; airport bearing corrected to 51 degrees, distance compressed.",
+      "constraints_and_cleanup": "Stand ticket numbering uncertain; roofs seated and coplanar walls split; no Metropolitano skyline.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/madrid.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/madrid.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/madrid.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "magny_cours",
+      "brief": "docs/tracks/magny_cours.md",
+      "geometry": "Modest smooth farmland swells; no wave-6 elevation change.",
+      "scenery": "Blue-trim barrel-vault pits, Technopole, museum, Adelaide stand, poplar rows and one farm.",
+      "provenance_and_status": "Operator/history and circuit references; museum exact footprint, tower survival and stand names uncertain.",
+      "constraints_and_cleanup": "No crests/hills; rows rather than tree clumps, shallow horizon and restrained crowds.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/magny_cours.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/magny_cours.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/magny_cours.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "mexico",
+      "brief": "docs/tracks/mexico.md",
+      "geometry": "Brief claims Peraltada 6 degrees near .97; current definition explicitly corrects this: T15 3.5 degrees .892-.930, none later; near-flat park.",
+      "scenery": "Closed Foro Sol bowl with apertures, Mixhuca greenery, festive paddock, true-bearing twin volcanoes.",
+      "provenance_and_status": "Research reports corrected volcano order/bearings; altitude differs within brief and is atmosphere rather than terrain datum.",
+      "constraints_and_cleanup": "Current definition also excludes generic city whole lap; protect park-first character and distinguish visual banking prose from current tables.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/mexico.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/mexico.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/mexico.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "miami",
+      "brief": "docs/tracks/miami.md",
+      "geometry": "Flat campus except subtle engineered bridge/chicane hump.",
+      "scenery": "Hard Rock bowl, vinyl fake marina, MSC Yacht Club, Beach Club T11-13 and two overpasses.",
+      "provenance_and_status": "Research describes already modelled campus and fake-water detail; October local detail claims.",
+      "constraints_and_cleanup": "Aqua only discrete braking aprons, grey terrain verge; skyline secondary; bridges get abutment pads and stands closed ends.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/miami.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/miami.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/miami.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "monaco",
+      "brief": "docs/tracks/monaco.md",
+      "geometry": "42 m climb to Casino then descent to harbour; this-centreline turn fractions differ from historic naming table.",
+      "scenery": "Casino/Hotel/Cafe trio, Massenet statue, Fairmont, tunnel, yacht harbour and pool.",
+      "provenance_and_status": "Corner-name research is object checklist; October detail documents Tabac and Mirabeau/Fairmont closure.",
+      "constraints_and_cleanup": "Tight Armco and pastel tiers; retain tunnel contrast and harbour openings, avoid treating generic box-era render header as current renderer contract.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/monaco.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/monaco.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/monaco.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "mont_tremblant",
+      "brief": "docs/tracks/mont_tremblant.md",
+      "geometry": "Severe blind historic crests; exact lowered post-2002 Hump height not surveyed.",
+      "scenery": "Minimal club pits/control, close forest, ski hill, Bridge, Namerow and Paddock Bend.",
+      "provenance_and_status": "Wikipedia/circuit guide/Norm Namerow history cited; Hump character preserved rather than certified height.",
+      "constraints_and_cleanup": "Start props use sl(), corner features authored fractions; preserve frame debt, avoid Montreal corner names and oversized paddock.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/mont_tremblant.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/mont_tremblant.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/mont_tremblant.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "montreal",
+      "brief": "docs/tracks/montreal.md",
+      "geometry": "Flat island with existing gentle bumps; no knife-edge changes.",
+      "scenery": "Teal rowing basin/river, casino dry footprint, hairpin stands, Wall of Champions, geodesic Biosphere, Calder and geometric Floralies.",
+      "provenance_and_status": "Casino 44 m is style choice; headless zero-water footprint is reported historical measurement; Biosphere 61/62 m sources retained as approximation.",
+      "constraints_and_cleanup": "Raised sphere/piers are artistic grading, not GPS/foundation survey; explicit superseded casino sizing and opaque-shell cleanup; no new runtime verification.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/montreal.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/montreal.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/montreal.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "monza",
+      "brief": "docs/tracks/monza.md",
+      "geometry": "Flat royal park; FIA sector offsets measured on built arc, gravel margin evidence does not change traction.",
+      "scenery": "Pines, Tribuna/podium, villa/lake, old banking and brick estate wall in three arcs with gateway.",
+      "provenance_and_status": "2024/2025 FIA references; crossing .70-.76 is legacy unverified placement; width/spline need measured registration.",
+      "constraints_and_cleanup": "Do not relocate crossing without aerial registration; preserve sector-key separation; modern baked/PBR renderer explicitly supersedes box-only framing.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/monza.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/monza.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/monza.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "mosport",
+      "brief": "docs/tracks/mosport.md",
+      "geometry": "Measured named-way corner fractions; about 47 m descent first half/climb second; shipped claim remains historical.",
+      "scenery": "Small pits, Moss positive-rake bank, Whites tunnel, Event Centre, mixed outside woodland.",
+      "provenance_and_status": "OSM projection provenance, CTMP/IMSA/history sources; portal geometry approximate.",
+      "constraints_and_cleanup": "Preserve real hills and frames; no active closed oval; motorhomes omitted for verge bury; no modern GP-scale complex.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/mosport.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/mosport.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/mosport.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "mugello",
+      "brief": "docs/tracks/mugello.md",
+      "geometry": "Authored lobes about 40 m are not DEM relief; fast uphill Arrabbiate 5-degree bank.",
+      "scenery": "Cypress ranks, covered Centrale vs uncovered Poggio/Materassi, casale and vineyard quilt.",
+      "provenance_and_status": "Ticket/operator evidence for stand cover; exact Arrabbiata58/Prato footprint uncertain.",
+      "constraints_and_cleanup": "indexSolid reserves buildings; vines world-up and terrain-seated; no new elevation peaks or extra roofed hillside shells.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/mugello.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/mugello.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/mugello.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "nurburgring",
+      "brief": "docs/tracks/nurburgring.md",
+      "geometry": "Modern GP only; SRTM about 50 m, grade cap 5.5 percent; monotonic arc lookup and no stacked ripple.",
+      "scenery": "Masonry/slate pits, glazed control drum, ring boulevard, closed Mercedes Arena and open scaffold forest tribunes.",
+      "provenance_and_status": "Brief describes current bake mechanism; castle cone and layered Eifel scenery are authored visual masses.",
+      "constraints_and_cleanup": "Do not import Nordschleife geography; retain open scaffolds and desaturated fog; bridge fascia above clearance.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/nurburgring.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/nurburgring.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/nurburgring.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "okayama",
+      "brief": "docs/tracks/okayama.md",
+      "geometry": "Gentle wooded hills and tight half-width; def 11 curvature peaks vs real 13 named corners.",
+      "scenery": "Four-floor control, garages/paddock block, Dunlop link and close clay/bamboo/broadleaf.",
+      "provenance_and_status": "Operator facilities and GTWC layouts; seating plan, ENKEI position and gates unavailable.",
+      "constraints_and_cleanup": "Avoid invented stand ranks; engine pits may supersede garages; safeBox replaces buried motorhomes, foliage respects built windows/terrain.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/okayama.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/okayama.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/okayama.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "paul_ricard",
+      "brief": "docs/tracks/paul_ricard.md",
+      "geometry": "Flat graded plateau; base half-width 8 m, widened complexes deliberately have no pinch zones.",
+      "scenery": "Continuous draped blue-near/red-deeper runoff, single-storey pit slab, aerodrome/hangars/aircraft, Beausset hill.",
+      "provenance_and_status": "Operator/RacingCircuits aerodrome and 2009 stand/2019 pit-entry references; stand length and channel dimensions approximate.",
+      "constraints_and_cleanup": "Paint is drape/texture, no redundant stripe modelGroup; sparse scaffold stands and distant scrub; scenic vines/turbines not surveyed furniture.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/paul_ricard.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/paul_ricard.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/paul_ricard.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "portimao",
+      "brief": "docs/tracks/portimao.md",
+      "geometry": "SRTM continuous about 24 m preserves blind hills while removing sparse-bump grade jolts.",
+      "scenery": "Six independent paddock wave-roof blocks, four-bay main stand, Norte, red cut banks, moinho and montado.",
+      "provenance_and_status": "Dimeconsult construction evidence; capacity sources differ and per-block height/GPS stand footprint interpretive.",
+      "constraints_and_cleanup": "Removed buried continuous apron and olive soil pads; crests remain open, no Atlantic for inland setting, no terrain flattening.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/portimao.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/portimao.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/portimao.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "qatar",
+      "brief": "docs/tracks/qatar.md",
+      "geometry": "Near-flat broad swells; flatTerrain retained and Hill is a prop, not road elevation; mixed scenery/racing frames.",
+      "scenery": "402.1 m pit slab, sixteen villas, VVIP branch canopy, Hill, cool Musco ring and green-to-sand bays.",
+      "provenance_and_status": "Tilke/Guinness/operator sources; geography separates real 8.5/16 km landmarks from compressed 720/740 m placements.",
+      "constraints_and_cleanup": "sl() required for pit/T1 and straight ads; midlap table not actual racing anchors; no mosque/Aspire fantasy, pool false and discrete sand bays avoid coplanarity.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/qatar.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/qatar.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/qatar.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "redbull",
+      "brief": "docs/tracks/redbull.md",
+      "geometry": "Header 65 m conflicts with current-described SRTM about 53 m and 5.5 percent cap.",
+      "scenery": "Alpine bowl, bull-under-arch, Lauda outside stand, climb/crest/final stands and layered ridge backdrop.",
+      "provenance_and_status": "Official corner/stand sources; exact sector positions and bull size uncertain.",
+      "constraints_and_cleanup": "Use continuous bake over old bumps; silhouette size is artistic, avoid promoting heading relief to measured current value.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/redbull.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/redbull.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/redbull.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    },
+    {
+      "id": "sepang",
+      "brief": "docs/tracks/sepang.md",
+      "geometry": "Assigned prefix only: gentle lobes; 16 m published minimum, retained T15 13.2 m is unresolved geometry defect.",
+      "scenery": "Hibiscus six-petal canopy opposite engine pits, race control, K1/F stands, drains and regular oil-palm grid.",
+      "provenance_and_status": "Operator/engineer naming and width evidence; unsupported T3/T4/T9 zones removed, local widening still unsurveyed.",
+      "constraints_and_cleanup": "No T15 umbrella canopy or sponsor lettering; hand pit bays superseded; beginning of modelling notes only covered here; 2026 Bahrain-weekend claim not independently checked.",
+      "current_support_paths": [
+        {
+          "path": "js/circuits/sepang.js",
+          "exists": true
+        },
+        {
+          "path": "js/circuits/scenery/sepang.js",
+          "exists": true
+        },
+        {
+          "path": "tests/data/landmarks/sepang.json",
+          "exists": true
+        }
+      ],
+      "performance": "No fresh per-track timing or GPU measurement; sparse planting, placement exclusions and geometry/overdraw constraints are authoring constraints, not measured FPS."
+    }
+  ],
+  "source_reference_inventory": [
+    {
+      "source": "docs/tracks/jeddah.md",
+      "reference": "tests/data/landmarks/jeddah.json",
+      "exists": true
+    },
+    {
+      "source": "docs/tracks/miami.md",
+      "reference": "js/circuits/scenery/miami.js",
+      "exists": true
+    },
+    {
+      "source": "docs/tracks/miami.md",
+      "reference": "tests/data/landmarks/miami.json",
+      "exists": true
+    },
+    {
+      "source": "docs/tracks/mosport.md",
+      "reference": "docs/notes/MOSPORT-PLAN-2026-09-14.md",
+      "exists": true
+    },
+    {
+      "source": "docs/tracks/nurburgring.md",
+      "reference": "js/track/circuit-elevations.js",
+      "exists": true
+    },
+    {
+      "source": "docs/tracks/paul_ricard.md",
+      "reference": "docs/notes/DEFECT-LEDGER.md",
+      "exists": true
+    },
+    {
+      "source": "docs/tracks/portimao.md",
+      "reference": "js/track/circuit-elevations.js",
+      "exists": true
+    },
+    {
+      "source": "docs/tracks/redbull.md",
+      "reference": "js/track/circuit-elevations.js",
+      "exists": true
+    }
+  ],
+  "consumer_evidence": {
+    "lsp": [
+      "Tracks.build definition tracks.js:471; references tracks.js, game.js, build-worker.js",
+      "Tracks.buildCenterline tracks.js:47; query at designer.js:1894",
+      "Tracks.buildPaced tracks.js:493; query at game.js:1994",
+      "TrackBuildProps outline buildSteps:215/build:2284; buildSteps references tracks.js and build-props.js",
+      "TrackDefs resolves separate declarations across circuit definitions; Montreal scenery outline function at line 8"
+    ],
+    "text": [
+      "build-gallery.cjs:262-268 surveyDocPath prefers survey prose then base brief",
+      "lazy-bundles.js:153 and build-props.js:2012 resolve def.scenery override then TrackScenery[id]",
+      "scenery modules explicitly reference assigned briefs for Korea, Jerez, Mont-Tremblant, Mosport, Okayama; Monza and Mugello comments also refer to their briefs",
+      "mexico.js:51-60 explicitly corrects stale brief banking values"
+    ],
+    "limitations": [
+      "CircuitScenery lookup returned symbol not found; no consumer claim based on it.",
+      "Tracks.buildSteps expanded definition compact output omitted middle; not used as fully read source.",
+      "No whole source-file audit, runtime, browser, network, tests or historic commands executed."
+    ]
+  },
+  "cleanup": [
+    "Preserve research/status chronology; annotate obsolete geometry claims before authoring changes.",
+    "No runtime imports of Markdown established; brief consumers are human workflows, gallery links and source comments.",
+    "Keep uncertain bearings, footprints, directions and frame debt visible; do not turn proposals into requirements."
+  ],
+  "limits": [
+    "Istanbul first 1279 bytes owned by group01; Sepang bytes 6288 onward owned by group03.",
+    "External cited sources are provenance reported by prose; not re-fetched.",
+    "Built/verified/shipped and headless measurements in briefs remain dated author claims unless specifically source-crosschecked here."
+  ]
+}

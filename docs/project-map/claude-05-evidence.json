@@ -1,0 +1,4606 @@
+{
+  "schema_version": 1,
+  "batch": "05",
+  "mode": "source-only",
+  "plan": {
+    "path": "docs/project-map/claude-batches.json",
+    "sha256": "44f0950e13b752a315aeb80dd4a3ffc0e7bf0575f45dd0c1105f1cdad65cfb54"
+  },
+  "coverage": {
+    "assigned_bytes": 160000,
+    "parts": 32,
+    "read_chunks": 39,
+    "all_plan_hashes_match": true,
+    "ranges": "half-open UTF-8 file byte offsets",
+    "max_returned_source_chunk_bytes": 8500,
+    "aggregate_truncation_recovered": "The initial read of chunks 14\u201320 was repeated in full with increased aggregate tool output budget."
+  },
+  "instructions": [
+    "AGENTS.md",
+    ".claude/rules/claude-config.md"
+  ],
+  "files": [
+    {
+      "path": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "kind": "text",
+      "whole_file_bytes": 10003,
+      "whole_file_sha256": "a0a8638bea059c28616acac896c4288ad0b5c521f2f73103782d6de9d400bd86",
+      "plan_whole_file_sha256": "a0a8638bea059c28616acac896c4288ad0b5c521f2f73103782d6de9d400bd86",
+      "plan_hash_matches": true,
+      "assigned_start": 7464,
+      "assigned_end": 10003,
+      "assigned_bytes": 2539,
+      "part_sha256": "5bbc975c0c669c9fbd620e3d19d9628869d62ac7fdd7303e24703cab45c8d8c9",
+      "read_chunks": [
+        {
+          "start": 7464,
+          "end": 10003,
+          "bytes": 2539,
+          "sha256": "5bbc975c0c669c9fbd620e3d19d9628869d62ac7fdd7303e24703cab45c8d8c9",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "garage-parts-livery",
+      "headings": [
+        "Colour versus legibility, and mark slots"
+      ],
+      "contract": {
+        "trigger": "Catalog/ERS/signature/livery placement and capture planning",
+        "inputs": [
+          "team",
+          "catalog option",
+          "livery fields",
+          "view/camera matrix"
+        ],
+        "outputs": [
+          "part/paint source guidance",
+          "station/occlusion/raster evidence",
+          "capture plan"
+        ],
+        "consumers": [
+          "garage editor",
+          "Car3D mesh",
+          "career write gates",
+          "parent capture operator"
+        ],
+        "dependencies": [
+          "js/car/parts.js",
+          "js/car/liverytex.js",
+          "js/data/teams.js",
+          "tools/car/spine-station.mjs",
+          "tools/car/flank-occlusion.mjs",
+          "tools/shot/garage-angles.mjs"
+        ],
+        "limits": [
+          "assigned livery-fields tail only",
+          "offline atlas cannot prove lit distance legibility",
+          "cross-run brightness confounder"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/references/placement.md",
+      "kind": "text",
+      "whole_file_bytes": 17578,
+      "whole_file_sha256": "a97e852f67f4d0375d1634e674a0bd8473c03f38d11adaa5967b5ceec233b2c4",
+      "plan_whole_file_sha256": "a97e852f67f4d0375d1634e674a0bd8473c03f38d11adaa5967b5ceec233b2c4",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 17578,
+      "assigned_bytes": 17578,
+      "part_sha256": "a97e852f67f4d0375d1634e674a0bd8473c03f38d11adaa5967b5ceec233b2c4",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "20ed1cd74ed7b9aa1462a48f10a1b050a57490e907c31b46200c0f4d279f859b",
+          "returned_individually": true,
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "4f051ca896a370f00431bfed85ad2bedd08611be623689fc75d42d6a2837eaae",
+          "returned_individually": true,
+          "untruncated": true
+        },
+        {
+          "start": 17000,
+          "end": 17578,
+          "bytes": 578,
+          "sha256": "3be0fe7798c236679ce3c7a06deec76b7325982cbf41782f45106f3410f3508b",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "garage-parts-livery",
+      "headings": [
+        "Seeing a livery design \u2014 which surface answers which question",
+        "Contents",
+        "The colour half is in CI",
+        "Shoot the cheapest surface that can answer the question",
+        "Occlusion is geometry, so it is also offline",
+        "\u2026and then the bull paid for it",
+        "The crease strip was not empty",
+        "What still needs a browser",
+        "Judging garage framing from a capture \u2014 read this before calling it a defect",
+        "garage-angles shots are not reproducible across runs",
+        "Cover-design guards"
+      ],
+      "contract": {
+        "trigger": "Catalog/ERS/signature/livery placement and capture planning",
+        "inputs": [
+          "team",
+          "catalog option",
+          "livery fields",
+          "view/camera matrix"
+        ],
+        "outputs": [
+          "part/paint source guidance",
+          "station/occlusion/raster evidence",
+          "capture plan"
+        ],
+        "consumers": [
+          "garage editor",
+          "Car3D mesh",
+          "career write gates",
+          "parent capture operator"
+        ],
+        "dependencies": [
+          "js/car/parts.js",
+          "js/car/liverytex.js",
+          "js/data/teams.js",
+          "tools/car/spine-station.mjs",
+          "tools/car/flank-occlusion.mjs",
+          "tools/shot/garage-angles.mjs"
+        ],
+        "limits": [
+          "assigned livery-fields tail only",
+          "offline atlas cannot prove lit distance legibility",
+          "cross-run brightness confounder"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+      "kind": "text",
+      "whole_file_bytes": 1543,
+      "whole_file_sha256": "4d9cf987139bba08b0f675be9484ed4a18becc24fdb1ca9f2545d0398f4adf27",
+      "plan_whole_file_sha256": "4d9cf987139bba08b0f675be9484ed4a18becc24fdb1ca9f2545d0398f4adf27",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 1543,
+      "assigned_bytes": 1543,
+      "part_sha256": "4d9cf987139bba08b0f675be9484ed4a18becc24fdb1ca9f2545d0398f4adf27",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1543,
+          "bytes": 1543,
+          "sha256": "4d9cf987139bba08b0f675be9484ed4a18becc24fdb1ca9f2545d0398f4adf27",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "garage-parts-livery",
+      "headings": [
+        "Garage shot command contract",
+        "Before you run",
+        "Offline preflight",
+        "Routing"
+      ],
+      "contract": {
+        "trigger": "Catalog/ERS/signature/livery placement and capture planning",
+        "inputs": [
+          "team",
+          "catalog option",
+          "livery fields",
+          "view/camera matrix"
+        ],
+        "outputs": [
+          "part/paint source guidance",
+          "station/occlusion/raster evidence",
+          "capture plan"
+        ],
+        "consumers": [
+          "garage editor",
+          "Car3D mesh",
+          "career write gates",
+          "parent capture operator"
+        ],
+        "dependencies": [
+          "js/car/parts.js",
+          "js/car/liverytex.js",
+          "js/data/teams.js",
+          "tools/car/spine-station.mjs",
+          "tools/car/flank-occlusion.mjs",
+          "tools/shot/garage-angles.mjs"
+        ],
+        "limits": [
+          "assigned livery-fields tail only",
+          "offline atlas cannot prove lit distance legibility",
+          "cross-run brightness confounder"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "kind": "text",
+      "whole_file_bytes": 7345,
+      "whole_file_sha256": "eadce1a6baeeeb834c3958bba5d3f4668b95ed35323edd5416ca8c7ac5eede43",
+      "plan_whole_file_sha256": "eadce1a6baeeeb834c3958bba5d3f4668b95ed35323edd5416ca8c7ac5eede43",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 7345,
+      "assigned_bytes": 7345,
+      "part_sha256": "eadce1a6baeeeb834c3958bba5d3f4668b95ed35323edd5416ca8c7ac5eede43",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7345,
+          "bytes": 7345,
+          "sha256": "eadce1a6baeeeb834c3958bba5d3f4668b95ed35323edd5416ca8c7ac5eede43",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "garage-parts-livery",
+      "headings": [
+        "Garage workflow, ERS ids, mistakes",
+        "Contents",
+        "ERS is not a low/medium/high tier",
+        "Career ownership is a write/UI gate",
+        "Workflow",
+        "Common mistakes"
+      ],
+      "contract": {
+        "trigger": "Catalog/ERS/signature/livery placement and capture planning",
+        "inputs": [
+          "team",
+          "catalog option",
+          "livery fields",
+          "view/camera matrix"
+        ],
+        "outputs": [
+          "part/paint source guidance",
+          "station/occlusion/raster evidence",
+          "capture plan"
+        ],
+        "consumers": [
+          "garage editor",
+          "Car3D mesh",
+          "career write gates",
+          "parent capture operator"
+        ],
+        "dependencies": [
+          "js/car/parts.js",
+          "js/car/liverytex.js",
+          "js/data/teams.js",
+          "tools/car/spine-station.mjs",
+          "tools/car/flank-occlusion.mjs",
+          "tools/shot/garage-angles.mjs"
+        ],
+        "limits": [
+          "assigned livery-fields tail only",
+          "offline atlas cannot prove lit distance legibility",
+          "cross-run brightness confounder"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/handoff/SKILL.md",
+      "kind": "text",
+      "whole_file_bytes": 2564,
+      "whole_file_sha256": "e006067caf3dcb57647c7c6b80d6a4d16224dbef5a1c0050db0d3b60d3a51f0b",
+      "plan_whole_file_sha256": "e006067caf3dcb57647c7c6b80d6a4d16224dbef5a1c0050db0d3b60d3a51f0b",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 2564,
+      "assigned_bytes": 2564,
+      "part_sha256": "e006067caf3dcb57647c7c6b80d6a4d16224dbef5a1c0050db0d3b60d3a51f0b",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2564,
+          "bytes": 2564,
+          "sha256": "e006067caf3dcb57647c7c6b80d6a4d16224dbef5a1c0050db0d3b60d3a51f0b",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "handoff",
+      "headings": [
+        "/handoff \u2014 a paste-ready cold-start prompt"
+      ],
+      "contract": {
+        "trigger": "Cold-start prompt, long session, context cap",
+        "inputs": [
+          "pushed branch SHA",
+          "PR Plan",
+          "grants",
+          "pending evidence"
+        ],
+        "outputs": [
+          "chat code block under about 25 lines",
+          "updated durable PR handoff"
+        ],
+        "consumers": [
+          "successor session"
+        ],
+        "dependencies": [
+          "tools/ci/session-status.mjs",
+          ".github/pull_request_template.md",
+          "docs/WORKERS.md"
+        ],
+        "limits": [
+          "push-first actions described only",
+          "no root HANDOFF file"
+        ]
+      },
+      "registration": "YAML skill entrypoint"
+    },
+    {
+      "path": ".claude/skills/input-controls/SKILL.md",
+      "kind": "text",
+      "whole_file_bytes": 8034,
+      "whole_file_sha256": "e5c940fc0242aac3566ad644784e079e47c9ec1b942450f8f13506d3cdfbbe66",
+      "plan_whole_file_sha256": "e5c940fc0242aac3566ad644784e079e47c9ec1b942450f8f13506d3cdfbbe66",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 8034,
+      "assigned_bytes": 8034,
+      "part_sha256": "e5c940fc0242aac3566ad644784e079e47c9ec1b942450f8f13506d3cdfbbe66",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8034,
+          "bytes": 8034,
+          "sha256": "e5c940fc0242aac3566ad644784e079e47c9ec1b942450f8f13506d3cdfbbe66",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "input-controls",
+      "headings": [
+        "Driving input \u2014 devices, not forces",
+        "Phone first (Bryce: iPhone, 844\u00d7390 landscape, touch)",
+        "Source priority (`Input.steer()`)",
+        "Where things live (`js/input/`)",
+        "Assists",
+        "Gamepad stick (dead zone / saturation / drift)",
+        "Sharp edges",
+        "a subagent runs the node pins above and reports the spec unverified. The whole group",
+        "(test:input, camera specs too) only when one spec is not enough: remote-group.mjs input, or",
+        "node tools/ci/test-bg.mjs input (background, when Actions is jammed; AGENTS.md rule 4)",
+        "Load on demand"
+      ],
+      "contract": {
+        "trigger": "Device steering/touch/tilt/pad/menu gate or setting migration",
+        "inputs": [
+          "inputState",
+          "device samples",
+          "store schema",
+          "phone landscape profile"
+        ],
+        "outputs": [
+          "scoped input diagnosis",
+          "command shaping/settings guidance"
+        ],
+        "consumers": [
+          "game physics step",
+          "settings UI"
+        ],
+        "dependencies": [
+          "js/input/input.js",
+          "js/input/steer-tuning.js",
+          "js/input/phone-pad.js",
+          "js/ui/key-binds.js",
+          "js/ui/layers.js"
+        ],
+        "limits": [
+          "pairing belongs multiplayer",
+          "forces belong physics",
+          "fresh default differs from stored migration"
+        ]
+      },
+      "registration": "YAML skill entrypoint"
+    },
+    {
+      "path": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "kind": "text",
+      "whole_file_bytes": 3169,
+      "whole_file_sha256": "df19a1e0adbff0714858f9e7fd0345a59a07f8fb07333c04b3aedafc218b7fba",
+      "plan_whole_file_sha256": "df19a1e0adbff0714858f9e7fd0345a59a07f8fb07333c04b3aedafc218b7fba",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 3169,
+      "assigned_bytes": 3169,
+      "part_sha256": "df19a1e0adbff0714858f9e7fd0345a59a07f8fb07333c04b3aedafc218b7fba",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3169,
+          "bytes": 3169,
+          "sha256": "df19a1e0adbff0714858f9e7fd0345a59a07f8fb07333c04b3aedafc218b7fba",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "input-controls",
+      "headings": [
+        "Keyboard leaks, touch and tilt",
+        "Keyboard leaks into a menu (or a menu eats the wheel)",
+        "Touch and tilt (phone)"
+      ],
+      "contract": {
+        "trigger": "Device steering/touch/tilt/pad/menu gate or setting migration",
+        "inputs": [
+          "inputState",
+          "device samples",
+          "store schema",
+          "phone landscape profile"
+        ],
+        "outputs": [
+          "scoped input diagnosis",
+          "command shaping/settings guidance"
+        ],
+        "consumers": [
+          "game physics step",
+          "settings UI"
+        ],
+        "dependencies": [
+          "js/input/input.js",
+          "js/input/steer-tuning.js",
+          "js/input/phone-pad.js",
+          "js/ui/key-binds.js",
+          "js/ui/layers.js"
+        ],
+        "limits": [
+          "pairing belongs multiplayer",
+          "forces belong physics",
+          "fresh default differs from stored migration"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/input-controls/references/pad-drift.md",
+      "kind": "text",
+      "whole_file_bytes": 1607,
+      "whole_file_sha256": "7c3afe4dacc575af429d3fb0b642d1d7d4850d5cc3525bce68a0676b84a17fec",
+      "plan_whole_file_sha256": "7c3afe4dacc575af429d3fb0b642d1d7d4850d5cc3525bce68a0676b84a17fec",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 1607,
+      "assigned_bytes": 1607,
+      "part_sha256": "7c3afe4dacc575af429d3fb0b642d1d7d4850d5cc3525bce68a0676b84a17fec",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1607,
+          "bytes": 1607,
+          "sha256": "7c3afe4dacc575af429d3fb0b642d1d7d4850d5cc3525bce68a0676b84a17fec",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "input-controls",
+      "headings": [
+        "Triage: gamepad stick drifts / creeps when centred"
+      ],
+      "contract": {
+        "trigger": "Device steering/touch/tilt/pad/menu gate or setting migration",
+        "inputs": [
+          "inputState",
+          "device samples",
+          "store schema",
+          "phone landscape profile"
+        ],
+        "outputs": [
+          "scoped input diagnosis",
+          "command shaping/settings guidance"
+        ],
+        "consumers": [
+          "game physics step",
+          "settings UI"
+        ],
+        "dependencies": [
+          "js/input/input.js",
+          "js/input/steer-tuning.js",
+          "js/input/phone-pad.js",
+          "js/ui/key-binds.js",
+          "js/ui/layers.js"
+        ],
+        "limits": [
+          "pairing belongs multiplayer",
+          "forces belong physics",
+          "fresh default differs from stored migration"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/js-debugger/SKILL.md",
+      "kind": "text",
+      "whole_file_bytes": 6430,
+      "whole_file_sha256": "19ee41ab04ff75c682151c689fe466ee69dff63a43af34098b1a9797e9221727",
+      "plan_whole_file_sha256": "19ee41ab04ff75c682151c689fe466ee69dff63a43af34098b1a9797e9221727",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 6430,
+      "assigned_bytes": 6430,
+      "part_sha256": "19ee41ab04ff75c682151c689fe466ee69dff63a43af34098b1a9797e9221727",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6430,
+          "bytes": 6430,
+          "sha256": "19ee41ab04ff75c682151c689fe466ee69dff63a43af34098b1a9797e9221727",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "js-debugger",
+      "headings": [
+        "Source debugging with the separate debugger MCP",
+        "Own one local page",
+        "Get a Chrome to attach to",
+        "Without pausing, long runs, workers",
+        "One call first",
+        "Confirm a bug and finish"
+      ],
+      "contract": {
+        "trigger": "Branch decisions, locals, stepping, exceptions, attached profiling",
+        "inputs": [
+          "owned CDP target",
+          "source URL",
+          "breakpoint condition",
+          "trigger",
+          "current pause token"
+        ],
+        "outputs": [
+          "stack/locals/state",
+          "profiles",
+          "bounded evidence",
+          "cleanup status"
+        ],
+        "consumers": [
+          "parent debugging session"
+        ],
+        "dependencies": [
+          "tools/mcp/js-debugger-mcp.sh",
+          "tools/mcp/debug-chrome.mjs",
+          "docs/research/AGENT-JS-DEBUGGER-MCP.md"
+        ],
+        "limits": [
+          "parent browser only",
+          "timeouts do not cancel JS",
+          "fresh handles on reload",
+          "Node 22+ and Bash"
+        ]
+      },
+      "registration": "YAML skill entrypoint"
+    },
+    {
+      "path": ".claude/skills/js-debugger/references/step-loop.md",
+      "kind": "text",
+      "whole_file_bytes": 3211,
+      "whole_file_sha256": "abbdcd4e757e67d169c10209db5178dddca1cd8336821a0094eac09499bafadc",
+      "plan_whole_file_sha256": "abbdcd4e757e67d169c10209db5178dddca1cd8336821a0094eac09499bafadc",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 3211,
+      "assigned_bytes": 3211,
+      "part_sha256": "abbdcd4e757e67d169c10209db5178dddca1cd8336821a0094eac09499bafadc",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3211,
+          "bytes": 3211,
+          "sha256": "abbdcd4e757e67d169c10209db5178dddca1cd8336821a0094eac09499bafadc",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "js-debugger",
+      "headings": [
+        "Reproduce, pause, inspect, resume",
+        "Reproduce \u2192 pause \u2192 inspect \u2192 resume"
+      ],
+      "contract": {
+        "trigger": "Branch decisions, locals, stepping, exceptions, attached profiling",
+        "inputs": [
+          "owned CDP target",
+          "source URL",
+          "breakpoint condition",
+          "trigger",
+          "current pause token"
+        ],
+        "outputs": [
+          "stack/locals/state",
+          "profiles",
+          "bounded evidence",
+          "cleanup status"
+        ],
+        "consumers": [
+          "parent debugging session"
+        ],
+        "dependencies": [
+          "tools/mcp/js-debugger-mcp.sh",
+          "tools/mcp/debug-chrome.mjs",
+          "docs/research/AGENT-JS-DEBUGGER-MCP.md"
+        ],
+        "limits": [
+          "parent browser only",
+          "timeouts do not cancel JS",
+          "fresh handles on reload",
+          "Node 22+ and Bash"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/js-debugger/references/tools.md",
+      "kind": "text",
+      "whole_file_bytes": 2371,
+      "whole_file_sha256": "a597e982369391be6983e96ae8c59e281505e2a81c9ef32cb6aafb118251fe7a",
+      "plan_whole_file_sha256": "a597e982369391be6983e96ae8c59e281505e2a81c9ef32cb6aafb118251fe7a",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 2371,
+      "assigned_bytes": 2371,
+      "part_sha256": "a597e982369391be6983e96ae8c59e281505e2a81c9ef32cb6aafb118251fe7a",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2371,
+          "bytes": 2371,
+          "sha256": "a597e982369391be6983e96ae8c59e281505e2a81c9ef32cb6aafb118251fe7a",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "js-debugger",
+      "headings": [
+        "js-debugger \u2014 non-pausing tools, long runs, workers",
+        "Without pausing (hot loops, leaks)",
+        "Long runs",
+        "Node tests (one call, parallel)",
+        "Targets and viewport"
+      ],
+      "contract": {
+        "trigger": "Branch decisions, locals, stepping, exceptions, attached profiling",
+        "inputs": [
+          "owned CDP target",
+          "source URL",
+          "breakpoint condition",
+          "trigger",
+          "current pause token"
+        ],
+        "outputs": [
+          "stack/locals/state",
+          "profiles",
+          "bounded evidence",
+          "cleanup status"
+        ],
+        "consumers": [
+          "parent debugging session"
+        ],
+        "dependencies": [
+          "tools/mcp/js-debugger-mcp.sh",
+          "tools/mcp/debug-chrome.mjs",
+          "docs/research/AGENT-JS-DEBUGGER-MCP.md"
+        ],
+        "limits": [
+          "parent browser only",
+          "timeouts do not cancel JS",
+          "fresh handles on reload",
+          "Node 22+ and Bash"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/lighting-tuner/SKILL.md",
+      "kind": "text",
+      "whole_file_bytes": 5272,
+      "whole_file_sha256": "32a0a6076d73ec15c780a7a49717271e6307e0e49f7442428383146db13483cf",
+      "plan_whole_file_sha256": "32a0a6076d73ec15c780a7a49717271e6307e0e49f7442428383146db13483cf",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 5272,
+      "assigned_bytes": 5272,
+      "part_sha256": "32a0a6076d73ec15c780a7a49717271e6307e0e49f7442428383146db13483cf",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 5272,
+          "bytes": 5272,
+          "sha256": "32a0a6076d73ec15c780a7a49717271e6307e0e49f7442428383146db13483cf",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "lighting-tuner",
+      "headings": [
+        "Tune and validate scene lighting via __apex probes",
+        "When NOT to Use",
+        "Visual A/B with slider-effect",
+        "Classify \u2014 no browser, instant",
+        "A/B a single knob \u2014 Playwright, ~20 s",
+        "Full range ramp (5 shots)",
+        "Batch (one park per shared condition bucket)",
+        "Dry-run: print recipes without launching browser",
+        "Load on demand"
+      ],
+      "contract": {
+        "trigger": "Lighting symptom, knob wiring, pasted export",
+        "inputs": [
+          "condition",
+          "live knob registry",
+          "LightEdits delta or LightPresets snapshot"
+        ],
+        "outputs": [
+          "light-state comparisons",
+          "preset assignment",
+          "optional JSON change receipt"
+        ],
+        "consumers": [
+          "js/lighting/profiles.js",
+          "lighting tuner UI",
+          "parent review"
+        ],
+        "dependencies": [
+          "js/lighting/knobs.js",
+          "js/lighting/presets.js",
+          "tools/lighting/preset-validation.mjs"
+        ],
+        "limits": [
+          "localStorage outranks shipped",
+          "no browser executed",
+          "snapshot replacement may delete conditions",
+          "delta/proposal semantics differ"
+        ]
+      },
+      "registration": "YAML skill entrypoint"
+    },
+    {
+      "path": ".claude/skills/lighting-tuner/references/bake.md",
+      "kind": "text",
+      "whole_file_bytes": 6985,
+      "whole_file_sha256": "389722dba5d962ffe06cd7becc7919f8ca7fbce4d9be37c0dd4e940ce9906744",
+      "plan_whole_file_sha256": "389722dba5d962ffe06cd7becc7919f8ca7fbce4d9be37c0dd4e940ce9906744",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 6985,
+      "assigned_bytes": 6985,
+      "part_sha256": "389722dba5d962ffe06cd7becc7919f8ca7fbce4d9be37c0dd4e940ce9906744",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6985,
+          "bytes": 6985,
+          "sha256": "389722dba5d962ffe06cd7becc7919f8ca7fbce4d9be37c0dd4e940ce9906744",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "lighting-tuner",
+      "headings": [
+        "Bake copied LIGHTING TUNER settings and push",
+        "Contents",
+        "CRITICAL \u2014 `bake.mjs` is a FULL REPLACE",
+        "Capture, review, ship",
+        "The merge path (no bake.mjs) \u2014 proposals AND player pastes",
+        "One-key hand-merge (no bake.mjs)",
+        "Input shape",
+        "Steps",
+        "Dry run (no write into js/)",
+        "Notes",
+        "Read-only preflight receipts"
+      ],
+      "contract": {
+        "trigger": "Lighting symptom, knob wiring, pasted export",
+        "inputs": [
+          "condition",
+          "live knob registry",
+          "LightEdits delta or LightPresets snapshot"
+        ],
+        "outputs": [
+          "light-state comparisons",
+          "preset assignment",
+          "optional JSON change receipt"
+        ],
+        "consumers": [
+          "js/lighting/profiles.js",
+          "lighting tuner UI",
+          "parent review"
+        ],
+        "dependencies": [
+          "js/lighting/knobs.js",
+          "js/lighting/presets.js",
+          "tools/lighting/preset-validation.mjs"
+        ],
+        "limits": [
+          "localStorage outranks shipped",
+          "no browser executed",
+          "snapshot replacement may delete conditions",
+          "delta/proposal semantics differ"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/lighting-tuner/references/graphics-atmosphere-playbook.md",
+      "kind": "text",
+      "whole_file_bytes": 958,
+      "whole_file_sha256": "3ba114c60a7cf1e768845871f9c5d8591ccbddfaee0658ed5f33d4ce6b03abae",
+      "plan_whole_file_sha256": "3ba114c60a7cf1e768845871f9c5d8591ccbddfaee0658ed5f33d4ce6b03abae",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 958,
+      "assigned_bytes": 958,
+      "part_sha256": "3ba114c60a7cf1e768845871f9c5d8591ccbddfaee0658ed5f33d4ce6b03abae",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 958,
+          "bytes": 958,
+          "sha256": "3ba114c60a7cf1e768845871f9c5d8591ccbddfaee0658ed5f33d4ce6b03abae",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "lighting-tuner",
+      "headings": [
+        "Atmosphere, grading, shadows (adapted)"
+      ],
+      "contract": {
+        "trigger": "Lighting symptom, knob wiring, pasted export",
+        "inputs": [
+          "condition",
+          "live knob registry",
+          "LightEdits delta or LightPresets snapshot"
+        ],
+        "outputs": [
+          "light-state comparisons",
+          "preset assignment",
+          "optional JSON change receipt"
+        ],
+        "consumers": [
+          "js/lighting/profiles.js",
+          "lighting tuner UI",
+          "parent review"
+        ],
+        "dependencies": [
+          "js/lighting/knobs.js",
+          "js/lighting/presets.js",
+          "tools/lighting/preset-validation.mjs"
+        ],
+        "limits": [
+          "localStorage outranks shipped",
+          "no browser executed",
+          "snapshot replacement may delete conditions",
+          "delta/proposal semantics differ"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "kind": "text",
+      "whole_file_bytes": 6018,
+      "whole_file_sha256": "72d5c68e6d35fc753b6af0a26870c1bdb1311d5259d5487167db318173f992be",
+      "plan_whole_file_sha256": "72d5c68e6d35fc753b6af0a26870c1bdb1311d5259d5487167db318173f992be",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 6018,
+      "assigned_bytes": 6018,
+      "part_sha256": "72d5c68e6d35fc753b6af0a26870c1bdb1311d5259d5487167db318173f992be",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6018,
+          "bytes": 6018,
+          "sha256": "72d5c68e6d35fc753b6af0a26870c1bdb1311d5259d5487167db318173f992be",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "lighting-tuner",
+      "headings": [
+        "Lighting symptoms, A/B capture, contract tests",
+        "lightState() fields \u2192 pipeline",
+        "Before/after a code change",
+        "edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default",
+        "(no cache bump: .claude/rules/game-code.md cache busting); then:",
+        "Symptom \u2192 field \u2192 knob",
+        "Contract tests"
+      ],
+      "contract": {
+        "trigger": "Lighting symptom, knob wiring, pasted export",
+        "inputs": [
+          "condition",
+          "live knob registry",
+          "LightEdits delta or LightPresets snapshot"
+        ],
+        "outputs": [
+          "light-state comparisons",
+          "preset assignment",
+          "optional JSON change receipt"
+        ],
+        "consumers": [
+          "js/lighting/profiles.js",
+          "lighting tuner UI",
+          "parent review"
+        ],
+        "dependencies": [
+          "js/lighting/knobs.js",
+          "js/lighting/presets.js",
+          "tools/lighting/preset-validation.mjs"
+        ],
+        "limits": [
+          "localStorage outranks shipped",
+          "no browser executed",
+          "snapshot replacement may delete conditions",
+          "delta/proposal semantics differ"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/lighting-tuner/scripts/bake.mjs",
+      "kind": "text",
+      "whole_file_bytes": 6575,
+      "whole_file_sha256": "0061c40e0e9b3b111b10311c48ba1182c32abb47793b37a8a666d1078d8660ed",
+      "plan_whole_file_sha256": "0061c40e0e9b3b111b10311c48ba1182c32abb47793b37a8a666d1078d8660ed",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 6575,
+      "assigned_bytes": 6575,
+      "part_sha256": "0061c40e0e9b3b111b10311c48ba1182c32abb47793b37a8a666d1078d8660ed",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 6575,
+          "bytes": 6575,
+          "sha256": "0061c40e0e9b3b111b10311c48ba1182c32abb47793b37a8a666d1078d8660ed",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "lighting-tuner",
+      "headings": [],
+      "contract": {
+        "trigger": "Lighting symptom, knob wiring, pasted export",
+        "inputs": [
+          "condition",
+          "live knob registry",
+          "LightEdits delta or LightPresets snapshot"
+        ],
+        "outputs": [
+          "light-state comparisons",
+          "preset assignment",
+          "optional JSON change receipt"
+        ],
+        "consumers": [
+          "js/lighting/profiles.js",
+          "lighting tuner UI",
+          "parent review"
+        ],
+        "dependencies": [
+          "js/lighting/knobs.js",
+          "js/lighting/presets.js",
+          "tools/lighting/preset-validation.mjs"
+        ],
+        "limits": [
+          "localStorage outranks shipped",
+          "no browser executed",
+          "snapshot replacement may delete conditions",
+          "delta/proposal semantics differ"
+        ]
+      },
+      "registration": "Prose-invoked standalone Node CLI"
+    },
+    {
+      "path": ".claude/skills/lighting-tuner/scripts/merge-proposals.mjs",
+      "kind": "text",
+      "whole_file_bytes": 10416,
+      "whole_file_sha256": "f5118df4ab3b82dc887154cde61c1bb8263f8d4d1018a4f9774563869bbb85d1",
+      "plan_whole_file_sha256": "f5118df4ab3b82dc887154cde61c1bb8263f8d4d1018a4f9774563869bbb85d1",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 10416,
+      "assigned_bytes": 10416,
+      "part_sha256": "f5118df4ab3b82dc887154cde61c1bb8263f8d4d1018a4f9774563869bbb85d1",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "eef51e065579785d1e3b4a16049abd279139a1c761de992c9723ce473a300e0a",
+          "returned_individually": true,
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 10416,
+          "bytes": 1916,
+          "sha256": "ccd74aa67e05ede4264092540e3019d09b6c2c9d8d5fbbb405117dd2b2699a26",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "lighting-tuner",
+      "headings": [],
+      "contract": {
+        "trigger": "Lighting symptom, knob wiring, pasted export",
+        "inputs": [
+          "condition",
+          "live knob registry",
+          "LightEdits delta or LightPresets snapshot"
+        ],
+        "outputs": [
+          "light-state comparisons",
+          "preset assignment",
+          "optional JSON change receipt"
+        ],
+        "consumers": [
+          "js/lighting/profiles.js",
+          "lighting tuner UI",
+          "parent review"
+        ],
+        "dependencies": [
+          "js/lighting/knobs.js",
+          "js/lighting/presets.js",
+          "tools/lighting/preset-validation.mjs"
+        ],
+        "limits": [
+          "localStorage outranks shipped",
+          "no browser executed",
+          "snapshot replacement may delete conditions",
+          "delta/proposal semantics differ"
+        ]
+      },
+      "registration": "Prose-invoked standalone Node CLI"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/SKILL.md",
+      "kind": "text",
+      "whole_file_bytes": 7304,
+      "whole_file_sha256": "4f171afd8643731ac3d468be8c6897c6dbcaea2a74f023da8060189ae442d166",
+      "plan_whole_file_sha256": "4f171afd8643731ac3d468be8c6897c6dbcaea2a74f023da8060189ae442d166",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 7304,
+      "assigned_bytes": 7304,
+      "part_sha256": "4f171afd8643731ac3d468be8c6897c6dbcaea2a74f023da8060189ae442d166",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7304,
+          "bytes": 7304,
+          "sha256": "4f171afd8643731ac3d468be8c6897c6dbcaea2a74f023da8060189ae442d166",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "Probing the live game with the Chrome MCP",
+        "Entry",
+        "\"Bin: missing\" alone is not a blocker: the wrapper uses its pinned npm fallback.",
+        "Checkout dependencies and Chromium are required; an uncached npm fallback needs egress.",
+        "Clone/build is optional server-development work, not routine probe setup.",
+        "Hard rules (always)",
+        "Load on demand",
+        "Private chat attachment"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "YAML skill entrypoint"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/chrome.md",
+      "kind": "text",
+      "whole_file_bytes": 9603,
+      "whole_file_sha256": "5bfd54e955d4a816cb87796a967c9633a2f6eb62aa3887dfb8389e9df5b7f4f2",
+      "plan_whole_file_sha256": "5bfd54e955d4a816cb87796a967c9633a2f6eb62aa3887dfb8389e9df5b7f4f2",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 9603,
+      "assigned_bytes": 9603,
+      "part_sha256": "5bfd54e955d4a816cb87796a967c9633a2f6eb62aa3887dfb8389e9df5b7f4f2",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "5f4c6ec4a49ac5b9f9e51269f5306cc633abdd72e7f4ec400180c0ca712121a1",
+          "returned_individually": true,
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 9603,
+          "bytes": 1103,
+          "sha256": "51ec682dea2cc8a7f4942cee464a969d8cf63191419c9f46c8eb2db003b38a54",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "Chrome DevTools MCP recipes",
+        "Contents",
+        "Chrome DevTools MCP \u2014 live 3D / __apex debugging",
+        "Setup (canvas visible \u2014 you WANT the render here)",
+        "1. serve the working tree yourself (Playwright's own server uses a random port)",
+        "Background Chromium measure (logged)",
+        "watcher: until grep -qE \"= run (passed|failed|timedout|interrupted)\" artifacts/logs/cdmcp-measure.log",
+        "When this beats a scratch script",
+        "Heap leak across N races (browser-only; tool names are `mcp__chrome-devtools__<name>`, `chrome_*` in prose)",
+        "A/B two trees on two ports \u2014 the strongest evidence this setup can give",
+        "Reproducing the post-death path on purpose (WebGPU + SwiftShader)",
+        "File writes and roots (measured 2026-08-12)",
+        "When NOT to use it"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/device-report.md",
+      "kind": "text",
+      "whole_file_bytes": 1972,
+      "whole_file_sha256": "bdfa9aea0dbf66524c1f53bb39ca3eb5beee3bed129484b0c7e168d7722bbf81",
+      "plan_whole_file_sha256": "bdfa9aea0dbf66524c1f53bb39ca3eb5beee3bed129484b0c7e168d7722bbf81",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 1972,
+      "assigned_bytes": 1972,
+      "part_sha256": "bdfa9aea0dbf66524c1f53bb39ca3eb5beee3bed129484b0c7e168d7722bbf81",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1972,
+          "bytes": 1972,
+          "sha256": "bdfa9aea0dbf66524c1f53bb39ca3eb5beee3bed129484b0c7e168d7722bbf81",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "Real-device report recipes",
+        "Getting a report off a REAL device (a phone with the bug)"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/hud-freeze.md",
+      "kind": "text",
+      "whole_file_bytes": 1152,
+      "whole_file_sha256": "3fdf8e7ce0adf2a5440c7140c5546d75ca657a23515a7af794da0cf3ae9188ad",
+      "plan_whole_file_sha256": "3fdf8e7ce0adf2a5440c7140c5546d75ca657a23515a7af794da0cf3ae9188ad",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 1152,
+      "assigned_bytes": 1152,
+      "part_sha256": "3fdf8e7ce0adf2a5440c7140c5546d75ca657a23515a7af794da0cf3ae9188ad",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1152,
+          "bytes": 1152,
+          "sha256": "3fdf8e7ce0adf2a5440c7140c5546d75ca657a23515a7af794da0cf3ae9188ad",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "HUD / DOM freeze repro (pit stop, lap change, any HUD that stops updating)"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/offline.md",
+      "kind": "text",
+      "whole_file_bytes": 3203,
+      "whole_file_sha256": "387090ccda4fc1c8f1e1f5463598220e05758c189a5e86a05b0e3ad60934f956",
+      "plan_whole_file_sha256": "387090ccda4fc1c8f1e1f5463598220e05758c189a5e86a05b0e3ad60934f956",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 3203,
+      "assigned_bytes": 3203,
+      "part_sha256": "387090ccda4fc1c8f1e1f5463598220e05758c189a5e86a05b0e3ad60934f956",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3203,
+          "bytes": 3203,
+          "sha256": "387090ccda4fc1c8f1e1f5463598220e05758c189a5e86a05b0e3ad60934f956",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "Offline capability preflight",
+        "Offline capability preflight",
+        "Persistent calls without tmux"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/recipes.md",
+      "kind": "text",
+      "whole_file_bytes": 1583,
+      "whole_file_sha256": "dffd6d2a0a6af8a05745696f5a90c2043710ff85c76bb0c4264c0b26d66300d7",
+      "plan_whole_file_sha256": "dffd6d2a0a6af8a05745696f5a90c2043710ff85c76bb0c4264c0b26d66300d7",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 1583,
+      "assigned_bytes": 1583,
+      "part_sha256": "dffd6d2a0a6af8a05745696f5a90c2043710ff85c76bb0c4264c0b26d66300d7",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1583,
+          "bytes": 1583,
+          "sha256": "dffd6d2a0a6af8a05745696f5a90c2043710ff85c76bb0c4264c0b26d66300d7",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "MCP probe recipes (load on demand)",
+        "Contents"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/renderer.md",
+      "kind": "text",
+      "whole_file_bytes": 4312,
+      "whole_file_sha256": "2ca5519f6e81f9ab9f0f4e52d7f1569bfa9f943ebcd04e52e1548a907ad439d1",
+      "plan_whole_file_sha256": "2ca5519f6e81f9ab9f0f4e52d7f1569bfa9f943ebcd04e52e1548a907ad439d1",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 4312,
+      "assigned_bytes": 4312,
+      "part_sha256": "2ca5519f6e81f9ab9f0f4e52d7f1569bfa9f943ebcd04e52e1548a907ad439d1",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 4312,
+          "bytes": 4312,
+          "sha256": "2ca5519f6e81f9ab9f0f4e52d7f1569bfa9f943ebcd04e52e1548a907ad439d1",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "Renderer probe recipes",
+        "Probing a specific renderer"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/research.md",
+      "kind": "text",
+      "whole_file_bytes": 1755,
+      "whole_file_sha256": "ac1c2af0f710ec5295dc419b5aae83d1fba31de4e9b18950d78f22064bf3cb83",
+      "plan_whole_file_sha256": "ac1c2af0f710ec5295dc419b5aae83d1fba31de4e9b18950d78f22064bf3cb83",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 1755,
+      "assigned_bytes": 1755,
+      "part_sha256": "ac1c2af0f710ec5295dc419b5aae83d1fba31de4e9b18950d78f22064bf3cb83",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 1755,
+          "bytes": 1755,
+          "sha256": "ac1c2af0f710ec5295dc419b5aae83d1fba31de4e9b18950d78f22064bf3cb83",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "Public-web research recipes",
+        "Research recipes (public web \u2014 no Chrome)"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/traps-camera.md",
+      "kind": "text",
+      "whole_file_bytes": 10568,
+      "whole_file_sha256": "08539e1a6cdb222417bda04945418c76d53a3ec7635eb390da4e32e22826cf7a",
+      "plan_whole_file_sha256": "08539e1a6cdb222417bda04945418c76d53a3ec7635eb390da4e32e22826cf7a",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 10568,
+      "assigned_bytes": 10568,
+      "part_sha256": "08539e1a6cdb222417bda04945418c76d53a3ec7635eb390da4e32e22826cf7a",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "db9c788be7b8c731e3f6c14d5f893facecd5d8b66aa5e03e7ad602c0730abf7e",
+          "returned_individually": true,
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 10568,
+          "bytes": 2068,
+          "sha256": "96cc067cf307158b933b3c315cb22967a60a199e1eacc44c36f17ad13f02724a",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "MCP probe traps \u2014 camera",
+        "Contents",
+        "A SECOND trap: `snapCam()` after a free-cam call cancels the free-cam",
+        "A FIFTH trap: only `chase` (and other player-relative modes) hold still for a frozen before/after pair \u2014 broadcast-cut cameras and the debug free-cam don't",
+        "A SEVENTH trap: the chase cam auto-cuts to a broadcast angle after ~2 s idle",
+        "A TWELFTH trap: the CAMERA only advances on real rAF frames \u2014 not on step()",
+        "A TENTH trap: camera `lat` and circuit `gap` are different spaces"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/traps-chrome.md",
+      "kind": "text",
+      "whole_file_bytes": 8541,
+      "whole_file_sha256": "3efe0b0d9cdb8008dc4ae1aef476ab0f642bcaa6d01245e1b87279281fee76c3",
+      "plan_whole_file_sha256": "3efe0b0d9cdb8008dc4ae1aef476ab0f642bcaa6d01245e1b87279281fee76c3",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 8541,
+      "assigned_bytes": 8541,
+      "part_sha256": "3efe0b0d9cdb8008dc4ae1aef476ab0f642bcaa6d01245e1b87279281fee76c3",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "53a129643cf748db33a747dd4228ef5c79eb6f3e09a440662be2a085f0741f70",
+          "returned_individually": true,
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8541,
+          "bytes": 41,
+          "sha256": "d1bb12217404331d804b5b5b97e20253524edf5b14a819a7a7b9e023676d4084",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "MCP probe traps \u2014 chrome",
+        "Contents",
+        "THE trap: never render in the MCP browser while Playwright is running",
+        "A trap (measured 2026-09-15): Garage tab clicks and the black-canvas trap combine",
+        "A SIXTH trap (FIXED 2026-08-13): `jump()`/`park()` used to render the car mid-air"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/traps-scene.md",
+      "kind": "text",
+      "whole_file_bytes": 8773,
+      "whole_file_sha256": "ee005e9561c1e2a8f6998472dd56a34953855c66ddf3cf7734802b52f1a72e05",
+      "plan_whole_file_sha256": "ee005e9561c1e2a8f6998472dd56a34953855c66ddf3cf7734802b52f1a72e05",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 8773,
+      "assigned_bytes": 8773,
+      "part_sha256": "ee005e9561c1e2a8f6998472dd56a34953855c66ddf3cf7734802b52f1a72e05",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "af5b16e46c00fbe955b162793b157bf696249a1f4a98ae1cea07c230bc8b0084",
+          "returned_individually": true,
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8773,
+          "bytes": 273,
+          "sha256": "a13e958676b14e919cb2dc136179fcab648a67453cf79cb56b88df62b10c0086",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "MCP probe traps \u2014 scene",
+        "Contents",
+        "A THIRD trap: verify TUNE_DEFS by grep, not by memory",
+        "A FOURTH trap: two same-value screenshots must diff near-zero before you trust any pair",
+        "An ELEVENTH trap: a screenshot cannot tell you WHICH mesh is hiding another",
+        "An EIGHTH trap: `lightState().numLights` reads 0 until enough frames render",
+        "A NINTH trap: `scene()` lists what the circuit ASKED for, not what got drawn"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/traps.md",
+      "kind": "text",
+      "whole_file_bytes": 613,
+      "whole_file_sha256": "57733addc5d13a003ce4291a72dd46210c72184a1b62dd9e5285d6d6f011e7af",
+      "plan_whole_file_sha256": "57733addc5d13a003ce4291a72dd46210c72184a1b62dd9e5285d6d6f011e7af",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 613,
+      "assigned_bytes": 613,
+      "part_sha256": "57733addc5d13a003ce4291a72dd46210c72184a1b62dd9e5285d6d6f011e7af",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 613,
+          "bytes": 613,
+          "sha256": "57733addc5d13a003ce4291a72dd46210c72184a1b62dd9e5285d6d6f011e7af",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "MCP probe traps (load on demand)"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/web-egress.md",
+      "kind": "text",
+      "whole_file_bytes": 736,
+      "whole_file_sha256": "59e0287ac9e96d569ca3bea33d1e95f9e29c01d4627319e479a6acac5744ddd2",
+      "plan_whole_file_sha256": "59e0287ac9e96d569ca3bea33d1e95f9e29c01d4627319e479a6acac5744ddd2",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 736,
+      "assigned_bytes": 736,
+      "part_sha256": "59e0287ac9e96d569ca3bea33d1e95f9e29c01d4627319e479a6acac5744ddd2",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 736,
+          "bytes": 736,
+          "sha256": "59e0287ac9e96d569ca3bea33d1e95f9e29c01d4627319e479a6acac5744ddd2",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "mcp-probe",
+      "headings": [
+        "Why a container browser cannot read the deployed site (measured)"
+      ],
+      "contract": {
+        "trigger": "Live local canvas/DOM/console/heap/perf or attachment readiness",
+        "inputs": [
+          "local URL",
+          "backend",
+          "exact hook/signal",
+          "owned browser/daemon identity"
+        ],
+        "outputs": [
+          "probe values",
+          "DOM snapshot",
+          "presented capture",
+          "bounded census/report evidence"
+        ],
+        "consumers": [
+          "parent diagnostic session",
+          "bug/PR evidence"
+        ],
+        "dependencies": [
+          "tools/mcp/probe-mcp.py",
+          "tools/mcp/mcp-cli.mjs",
+          "tools/mcp/cdmcp-cli.py",
+          "tools/lib/webgpu-chrome-args.cjs",
+          "docs/DEBUG-HOOKS.md"
+        ],
+        "limits": [
+          "serialize browser ownership",
+          "local versus live distinction",
+          "software versus physical GPU distinction",
+          "positive boot signal required"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    },
+    {
+      "path": ".claude/skills/multiplayer-debug/SKILL.md",
+      "kind": "text",
+      "whole_file_bytes": 5160,
+      "whole_file_sha256": "1d1253494599bc2a8293e8f5a74f871eade2ba024b8c7c2ae19aebe89f3d5f22",
+      "plan_whole_file_sha256": "1d1253494599bc2a8293e8f5a74f871eade2ba024b8c7c2ae19aebe89f3d5f22",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 5160,
+      "assigned_bytes": 5160,
+      "part_sha256": "1d1253494599bc2a8293e8f5a74f871eade2ba024b8c7c2ae19aebe89f3d5f22",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 5160,
+          "bytes": 5160,
+          "sha256": "1d1253494599bc2a8293e8f5a74f871eade2ba024b8c7c2ae19aebe89f3d5f22",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "multiplayer-debug",
+      "headings": [
+        "Overview",
+        "When to Use",
+        "Quick Reference",
+        "Room-code / relay diagnosis (not a package.json dep \u2014 install on demand):",
+        "Load on demand"
+      ],
+      "contract": {
+        "trigger": "VS FRIEND, phone pairing, WebRTC/ICE/TURN, QR, room/Nostr, build mismatch",
+        "inputs": [
+          "role",
+          "invite/room code",
+          "handshake identity",
+          "candidate pairs",
+          "loopback state"
+        ],
+        "outputs": [
+          "layer diagnosis",
+          "net state evidence",
+          "focused net verification plan"
+        ],
+        "consumers": [
+          "game host/guest",
+          "controller.html joiner"
+        ],
+        "dependencies": [
+          "js/net/transport.js",
+          "js/net/handshake.js",
+          "js/net/session.js",
+          "js/net/netplay.js",
+          "js/net/nostr.js",
+          "js/input/phone-pad.js",
+          "docs/MULTIPLAYER.md"
+        ],
+        "limits": [
+          "own player local authority",
+          "real network and phone unverified",
+          "paired tilt response owned input-controls"
+        ]
+      },
+      "registration": "YAML skill entrypoint"
+    },
+    {
+      "path": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "kind": "text",
+      "whole_file_bytes": 2214,
+      "whole_file_sha256": "0f5a9cd3359744cc1a3d8e7b28b6a1f1df16c25ecb9f4392ed63943e81905b1d",
+      "plan_whole_file_sha256": "0f5a9cd3359744cc1a3d8e7b28b6a1f1df16c25ecb9f4392ed63943e81905b1d",
+      "plan_hash_matches": true,
+      "assigned_start": 0,
+      "assigned_end": 2110,
+      "assigned_bytes": 2110,
+      "part_sha256": "0318f05db08b472309c5e8dabb0c9d6b24e323c4fe5dbfeb043750f04ae054f8",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2110,
+          "bytes": 2110,
+          "sha256": "0318f05db08b472309c5e8dabb0c9d6b24e323c4fe5dbfeb043750f04ae054f8",
+          "returned_individually": true,
+          "untruncated": true
+        }
+      ],
+      "read_complete": true,
+      "semantic_family": "multiplayer-debug",
+      "headings": [
+        "Phone as controller / restrictive NAT"
+      ],
+      "contract": {
+        "trigger": "VS FRIEND, phone pairing, WebRTC/ICE/TURN, QR, room/Nostr, build mismatch",
+        "inputs": [
+          "role",
+          "invite/room code",
+          "handshake identity",
+          "candidate pairs",
+          "loopback state"
+        ],
+        "outputs": [
+          "layer diagnosis",
+          "net state evidence",
+          "focused net verification plan"
+        ],
+        "consumers": [
+          "game host/guest",
+          "controller.html joiner"
+        ],
+        "dependencies": [
+          "js/net/transport.js",
+          "js/net/handshake.js",
+          "js/net/session.js",
+          "js/net/netplay.js",
+          "js/net/nostr.js",
+          "js/input/phone-pad.js",
+          "docs/MULTIPLAYER.md"
+        ],
+        "limits": [
+          "own player local authority",
+          "real network and phone unverified",
+          "paired tilt response owned input-controls"
+        ]
+      },
+      "registration": "Load-on-demand reference from owning skill"
+    }
+  ],
+  "reference_inventory": [
+    {
+      "source": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "raw": "js/data/teams.js",
+      "resolved_candidate": "js/data/teams.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "raw": "cover-legibility.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/cover-legibility.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "raw": "crest-marks.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/crest-marks.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "raw": "fill-gating.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/fill-gating.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "raw": "js/car/liverytex.js",
+      "resolved_candidate": "js/car/liverytex.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "tests/unit/cover-legibility.test.mjs",
+      "resolved_candidate": "tests/unit/cover-legibility.test.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "node tools/car/spine-station.mjs --team=redbull",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/node tools/car/spine-station.mjs --team=redbull",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "flank-occlusion.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/flank-occlusion.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "--png=artifacts/spine",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/--png=artifacts/spine",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "node tools/shot/garage-angles.mjs --preset=flank --team=redbull --spineSide=logo",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/node tools/shot/garage-angles.mjs --preset=flank --team=redbull --spineSide=logo",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "spine-station.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/spine-station.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "fin-design.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/fin-design.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "logo/number",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/logo/number",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "flank-occlusion.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/flank-occlusion.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "js/car/car-draw.js",
+      "resolved_candidate": "js/car/car-draw.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "liverytex.js",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/liverytex.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "fin-design.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/fin-design.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "artifacts/occl-check/",
+      "resolved_candidate": "artifacts/occl-check",
+      "exists": false,
+      "classification": "archive_or_historical"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "car3d.js",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/car3d.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "fin-design.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/fin-design.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "garage-angles.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/garage-angles.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "js/garage/setup-camera.js",
+      "resolved_candidate": "js/garage/setup-camera.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "js/garage/setup-camera.js",
+      "resolved_candidate": "js/garage/setup-camera.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "x = +/-2.6",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/x = +/-2.6",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "js/garage/setup-camera.js",
+      "resolved_candidate": "js/garage/setup-camera.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "cover-legibility.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/cover-legibility.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "node tools/car/spine-station.mjs --team=redbull",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/node tools/car/spine-station.mjs --team=redbull",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "tools/shot/garage-angles.mjs",
+      "resolved_candidate": "tools/shot/garage-angles.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "fin-design.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/fin-design.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "crest-marks.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/crest-marks.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "liverytex.js",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/liverytex.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "tools/car/livery-contrast.mjs",
+      "resolved_candidate": "tools/car/livery-contrast.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "js/data/teams.js",
+      "resolved_candidate": "js/data/teams.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "liverytex.js",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/liverytex.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/placement.md",
+      "raw": "parts-livery-contrast.spec.js",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/parts-livery-contrast.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+      "raw": "garage-angles.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/garage-angles.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+      "raw": "artifacts/",
+      "resolved_candidate": "artifacts",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+      "raw": "/proc/loadavg",
+      "resolved_candidate": "/proc/loadavg",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+      "raw": "xvfb-run -a node tools/shot/garage-angles.mjs \u2026",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/xvfb-run -a node tools/shot/garage-angles.mjs \u2026",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+      "raw": "spine-station.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/spine-station.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+      "raw": "render-car.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/render-car.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "js/car/parts.js",
+      "resolved_candidate": "js/car/parts.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "js/car/parts.js",
+      "resolved_candidate": "js/car/parts.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "js/game.js",
+      "resolved_candidate": "js/game.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "references/state.md",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/references/state.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "../../../../docs/CAREER.md",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/../../../../docs/CAREER.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "../../../../docs/CAREER.md",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/../../../../docs/CAREER.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "js/car/parts.js",
+      "resolved_candidate": "js/car/parts.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "js/car/liveries.js",
+      "resolved_candidate": "js/car/liveries.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "references/car-studio.md",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/references/car-studio.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "tools/carview.html?team=mclaren&aero=extreme",
+      "resolved_candidate": "tools/carview.html?team=mclaren&aero=extreme",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "js/car/car3d.js",
+      "resolved_candidate": "js/car/car3d.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "car-mesh.js",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/car-mesh.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "node tools/car/render-car.mjs --team=mclaren --preset=wing",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/node tools/car/render-car.mjs --team=mclaren --preset=wing",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "node --test tests/unit/parts-distinct-mesh.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/node --test tests/unit/parts-distinct-mesh.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "parts-ladder.test.mjs",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/parts-ladder.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "tests/specs/parts-catalog.spec.js",
+      "resolved_candidate": "tests/specs/parts-catalog.spec.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "parts-physics.spec.js",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/parts-physics.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "node tools/ci/test-bg.mjs car",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/node tools/ci/test-bg.mjs car",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "node tools/ci/test-bg.mjs modes",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/node tools/ci/test-bg.mjs modes",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "node tools/gen/gen-shell.mjs --check",
+      "resolved_candidate": ".claude/skills/garage-parts-livery/references/node tools/gen/gen-shell.mjs --check",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "raw": "tests/specs/parts-physics.spec.js",
+      "resolved_candidate": "tests/specs/parts-physics.spec.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": "context-cap.py",
+      "resolved_candidate": ".claude/skills/handoff/context-cap.py",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": "node tools/ci/session-status.mjs --pr",
+      "resolved_candidate": ".claude/skills/handoff/node tools/ci/session-status.mjs --pr",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": "/ship",
+      "resolved_candidate": "/ship",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": "brycejmurrin/f1-game",
+      "resolved_candidate": ".claude/skills/handoff/brycejmurrin/f1-game",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": "artifacts/",
+      "resolved_candidate": "artifacts",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": "scratch/",
+      "resolved_candidate": "scratch",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": "node tools/ci/session-status.mjs --pr",
+      "resolved_candidate": ".claude/skills/handoff/node tools/ci/session-status.mjs --pr",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": ".claude/skills/README.md",
+      "resolved_candidate": ".claude/skills/README.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/handoff/SKILL.md",
+      "raw": "artifacts/logs/<group>.log",
+      "resolved_candidate": "artifacts/logs/<group>.log",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/input/input.js",
+      "resolved_candidate": "js/input/input.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "hold-buttons.js",
+      "resolved_candidate": ".claude/skills/input-controls/hold-buttons.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "references/menu-leak-touch.md",
+      "resolved_candidate": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "input.js",
+      "resolved_candidate": ".claude/skills/input-controls/input.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/input/phone-pad.js",
+      "resolved_candidate": "js/input/phone-pad.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/input/tilt-roll.js",
+      "resolved_candidate": "js/input/tilt-roll.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "controller.html",
+      "resolved_candidate": "controller.html",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/input/",
+      "resolved_candidate": "js/input",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "input.js",
+      "resolved_candidate": ".claude/skills/input-controls/input.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "bindings.js",
+      "resolved_candidate": ".claude/skills/input-controls/bindings.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "key-binds.js",
+      "resolved_candidate": ".claude/skills/input-controls/key-binds.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "steer-tuning.js",
+      "resolved_candidate": ".claude/skills/input-controls/steer-tuning.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "pad-menu.js",
+      "resolved_candidate": ".claude/skills/input-controls/pad-menu.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "tilt-roll.js",
+      "resolved_candidate": ".claude/skills/input-controls/tilt-roll.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "controller.html",
+      "resolved_candidate": "controller.html",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "phone-pad.js",
+      "resolved_candidate": ".claude/skills/input-controls/phone-pad.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "phone-pad.test.mjs",
+      "resolved_candidate": ".claude/skills/input-controls/phone-pad.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "phone-touch-surface.test.mjs",
+      "resolved_candidate": ".claude/skills/input-controls/phone-touch-surface.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "phone-pad-netplay-vm.test.mjs",
+      "resolved_candidate": ".claude/skills/input-controls/phone-pad-netplay-vm.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "controller.html",
+      "resolved_candidate": "controller.html",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "tilt-roll.js",
+      "resolved_candidate": ".claude/skills/input-controls/tilt-roll.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "controller-profiles.js",
+      "resolved_candidate": ".claude/skills/input-controls/controller-profiles.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "controller-profiles.test.mjs",
+      "resolved_candidate": ".claude/skills/input-controls/controller-profiles.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "hold-buttons.js",
+      "resolved_candidate": ".claude/skills/input-controls/hold-buttons.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "haptics.js",
+      "resolved_candidate": ".claude/skills/input-controls/haptics.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "game.js",
+      "resolved_candidate": ".claude/skills/input-controls/game.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/physics/grip-steer.js",
+      "resolved_candidate": "js/physics/grip-steer.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/ui/key-binds.js",
+      "resolved_candidate": "js/ui/key-binds.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/ui/settings-export.js",
+      "resolved_candidate": "js/ui/settings-export.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "G.raceLineAssist = raceLine / 5",
+      "resolved_candidate": ".claude/skills/input-controls/G.raceLineAssist = raceLine / 5",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "steer-tuning.js",
+      "resolved_candidate": ".claude/skills/input-controls/steer-tuning.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "docs/PHYSICS.md",
+      "resolved_candidate": "docs/PHYSICS.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "tests/specs/steer-migration.spec.js",
+      "resolved_candidate": "tests/specs/steer-migration.spec.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/input/steer-tuning.js",
+      "resolved_candidate": "js/input/steer-tuning.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/input/input.js",
+      "resolved_candidate": "js/input/input.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/ui/key-binds.js",
+      "resolved_candidate": "js/ui/key-binds.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "js/input/pad-menu.js",
+      "resolved_candidate": "js/input/pad-menu.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "tests/unit/ui-improve-pass.test.mjs",
+      "resolved_candidate": "tests/unit/ui-improve-pass.test.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "tests/unit/key-binds.test.mjs",
+      "resolved_candidate": "tests/unit/key-binds.test.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "tests/specs/gamepad.spec.js",
+      "resolved_candidate": "tests/specs/gamepad.spec.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "sliders.spec.js",
+      "resolved_candidate": ".claude/skills/input-controls/sliders.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "references/pad-drift.md",
+      "resolved_candidate": ".claude/skills/input-controls/references/pad-drift.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "docs/MULTIPLAYER.md",
+      "resolved_candidate": "docs/MULTIPLAYER.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "docs/research/PLATFORM-INPUT-NOTES.md",
+      "resolved_candidate": "docs/research/PLATFORM-INPUT-NOTES.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "docs/research/PLATFORM-INPUT-NOTES.md",
+      "resolved_candidate": "docs/research/PLATFORM-INPUT-NOTES.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/SKILL.md",
+      "raw": "docs/research/DRIVING-CONTROLS-RESEARCH.md",
+      "resolved_candidate": "docs/research/DRIVING-CONTROLS-RESEARCH.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "SKILL.md",
+      "resolved_candidate": ".claude/skills/input-controls/references/SKILL.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "js/input/input.js",
+      "resolved_candidate": "js/input/input.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "js/ui/layers.js",
+      "resolved_candidate": "js/ui/layers.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "js/ui/menu-nav.js",
+      "resolved_candidate": "js/ui/menu-nav.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "js/input/pad-menu.js",
+      "resolved_candidate": "js/input/pad-menu.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "js/ui/modal.js",
+      "resolved_candidate": "js/ui/modal.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "tests/unit/key-binds.test.mjs",
+      "resolved_candidate": "tests/unit/key-binds.test.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "menu-a11y-audit.test.mjs",
+      "resolved_candidate": ".claude/skills/input-controls/references/menu-a11y-audit.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "menu-keyboard.spec.js",
+      "resolved_candidate": ".claude/skills/input-controls/references/menu-keyboard.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "steering.spec.js",
+      "resolved_candidate": ".claude/skills/input-controls/references/steering.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "js/input/hold-buttons.js",
+      "resolved_candidate": "js/input/hold-buttons.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "touch-buttons.spec.js",
+      "resolved_candidate": ".claude/skills/input-controls/references/touch-buttons.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "touch-steer.spec.js",
+      "resolved_candidate": ".claude/skills/input-controls/references/touch-steer.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "touch-pedals.spec.js",
+      "resolved_candidate": ".claude/skills/input-controls/references/touch-pedals.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "input.js",
+      "resolved_candidate": ".claude/skills/input-controls/references/input.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "tilt-pipeline.spec.js",
+      "resolved_candidate": ".claude/skills/input-controls/references/tilt-pipeline.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "js/render/shared/driving-line.js",
+      "resolved_candidate": "js/render/shared/driving-line.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "js/ui/driving-line-opts.js",
+      "resolved_candidate": "js/ui/driving-line-opts.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/menu-leak-touch.md",
+      "raw": "tests/unit/driving-line*.test.mjs",
+      "resolved_candidate": "tests/unit/driving-line*.test.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/pad-drift.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "resolved_candidate": "docs/DEBUG-HOOKS.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/pad-drift.md",
+      "raw": "tests/specs/gamepad.spec.js",
+      "resolved_candidate": "tests/specs/gamepad.spec.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/input-controls/references/pad-drift.md",
+      "raw": "input.js",
+      "resolved_candidate": ".claude/skills/input-controls/references/input.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "docs/AGENT-SURFACE.md",
+      "resolved_candidate": "docs/AGENT-SURFACE.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "mcp-browser-guard.sh",
+      "resolved_candidate": ".claude/skills/js-debugger/mcp-browser-guard.sh",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "bash tools/mcp/js-debugger-mcp.sh serve-http",
+      "resolved_candidate": ".claude/skills/js-debugger/bash tools/mcp/js-debugger-mcp.sh serve-http",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "tools/mcp/js-debugger-*.mjs",
+      "resolved_candidate": "tools/mcp/js-debugger-*.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "/mcp",
+      "resolved_candidate": "/mcp",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "sw.js",
+      "resolved_candidate": ".claude/skills/js-debugger/sw.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "docs/TESTING.md",
+      "resolved_candidate": "docs/TESTING.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "bash tools/mcp/js-debugger-mcp.sh call debugger_detach '{}'",
+      "resolved_candidate": ".claude/skills/js-debugger/bash tools/mcp/js-debugger-mcp.sh call debugger_detach '{}'",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "node tools/mcp/debug-chrome.mjs stop",
+      "resolved_candidate": ".claude/skills/js-debugger/node tools/mcp/debug-chrome.mjs stop",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "node tools/mcp/debug-chrome.mjs status",
+      "resolved_candidate": ".claude/skills/js-debugger/node tools/mcp/debug-chrome.mjs status",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "artifacts/",
+      "resolved_candidate": "artifacts",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "node tools/check/skill-smoke.mjs --skill js-debugger --check",
+      "resolved_candidate": ".claude/skills/js-debugger/node tools/check/skill-smoke.mjs --skill js-debugger --check",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/SKILL.md",
+      "raw": "bash tools/mcp/js-debugger-mcp.sh smoke",
+      "resolved_candidate": ".claude/skills/js-debugger/bash tools/mcp/js-debugger-mcp.sh smoke",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/references/step-loop.md",
+      "raw": "bash tools/mcp/lsp-mcp.sh def Ghost.snapshot --body",
+      "resolved_candidate": ".claude/skills/js-debugger/references/bash tools/mcp/lsp-mcp.sh def Ghost.snapshot --body",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/references/step-loop.md",
+      "raw": "js/agent/apex.js",
+      "resolved_candidate": "js/agent/apex.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/js-debugger/references/tools.md",
+      "raw": "js/",
+      "resolved_candidate": "js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/js-debugger/references/tools.md",
+      "raw": "js/physics/brake-cue.js",
+      "resolved_candidate": "js/physics/brake-cue.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/js-debugger/references/tools.md",
+      "raw": "http://127.0.0.1:9229",
+      "resolved_candidate": ".claude/skills/js-debugger/references/http:/127.0.0.1:9229",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/references/tools.md",
+      "raw": "sw.js",
+      "resolved_candidate": ".claude/skills/js-debugger/references/sw.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/js-debugger/references/tools.md",
+      "raw": "node tools/mcp/debug-chrome.mjs start --device phone-landscape|desktop",
+      "resolved_candidate": ".claude/skills/js-debugger/references/node tools/mcp/debug-chrome.mjs start --device phone-landscape|desktop",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "js/lighting/knobs.js",
+      "resolved_candidate": "js/lighting/knobs.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "js/lighting/presets.js",
+      "resolved_candidate": "js/lighting/presets.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "js/lighting/presets.js",
+      "resolved_candidate": "js/lighting/presets.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "references/car-studio.md",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/car-studio.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "js/lighting/",
+      "resolved_candidate": "js/lighting",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "presets.js",
+      "resolved_candidate": ".claude/skills/lighting-tuner/presets.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "node tools/ci/remote-group.mjs gfx",
+      "resolved_candidate": ".claude/skills/lighting-tuner/node tools/ci/remote-group.mjs gfx",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "references/cameras.md",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/cameras.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "result.json",
+      "resolved_candidate": ".claude/skills/lighting-tuner/result.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "tools/mcp/cdmcp-cli.py look-survey",
+      "resolved_candidate": "tools/mcp/cdmcp-cli.py look-survey",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "tools/lighting/lighting-tuner-sweep.mjs",
+      "resolved_candidate": "tools/lighting/lighting-tuner-sweep.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "tools/lighting/ab-lighting.mjs run all",
+      "resolved_candidate": "tools/lighting/ab-lighting.mjs run all",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "docs/LIGHTING-TUNER-SLIDERS.md",
+      "resolved_candidate": "docs/LIGHTING-TUNER-SLIDERS.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "scripts/bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/scripts/bake.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/SKILL.md",
+      "raw": "scripts/merge-proposals.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/scripts/merge-proposals.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "merge-proposals.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/merge-proposals.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "js/lighting/presets.js",
+      "resolved_candidate": "js/lighting/presets.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "SKILL.md",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/SKILL.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "artifacts/lighting/proposals/<id>.json",
+      "resolved_candidate": "artifacts/lighting/proposals/<id>.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/node .claude/skills/lighting-tuner/scripts/merge-proposals.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "js/lighting/presets.js",
+      "resolved_candidate": "js/lighting/presets.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "js/lighting/presets.js",
+      "resolved_candidate": "js/lighting/presets.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "merge-proposals.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/merge-proposals.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "artifacts/lighting/proposals/<id>.json",
+      "resolved_candidate": "artifacts/lighting/proposals/<id>.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "../../../../docs/LIGHTING.md",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/../../../../docs/LIGHTING.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "//",
+      "resolved_candidate": "//",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "js/lighting/presets.js",
+      "resolved_candidate": "js/lighting/presets.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "node tools/gen/gen-shell.mjs --check",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/node tools/gen/gen-shell.mjs --check",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "merge-proposals.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/merge-proposals.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "node tools/ci/test-bg.mjs smoke",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/node tools/ci/test-bg.mjs smoke",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "//",
+      "resolved_candidate": "//",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "js/lighting/presets.js",
+      "resolved_candidate": "js/lighting/presets.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/bake.md",
+      "raw": "tools/lighting/preset-validation.mjs",
+      "resolved_candidate": "tools/lighting/preset-validation.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/graphics-atmosphere-playbook.md",
+      "raw": "js/lighting/",
+      "resolved_candidate": "js/lighting",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/graphics-atmosphere-playbook.md",
+      "raw": "presets.js",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/presets.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/graphics-atmosphere-playbook.md",
+      "raw": "js/render/glx/shadow.js",
+      "resolved_candidate": "js/render/glx/shadow.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/graphics-atmosphere-playbook.md",
+      "raw": "js/render/three/tlx-shadow.js",
+      "resolved_candidate": "js/render/three/tlx-shadow.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/graphics-atmosphere-playbook.md",
+      "raw": "scripts/bake.mjs",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/scripts/bake.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/graphics-atmosphere-playbook.md",
+      "raw": "references/bake.md",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/references/bake.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "tools/shot/apex-eval.mjs",
+      "resolved_candidate": "tools/shot/apex-eval.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "tools/shot/apex-capture.mjs",
+      "resolved_candidate": "tools/shot/apex-capture.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "node tools/shot/apex-eval.mjs singapore \"(a.setTimeOfDay('night'), a.lightState())\" --raw",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/node tools/shot/apex-eval.mjs singapore \"(a.setTimeOfDay('night'), a.lightState())\" --raw",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "tools/shot/probe-page.mjs",
+      "resolved_candidate": "tools/shot/probe-page.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "ambientSky/Ground",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/ambientSky/Ground",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "node tools/lighting/slider-effect.mjs --gate night",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/node tools/lighting/slider-effect.mjs --gate night",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "js/lighting/presets.js",
+      "resolved_candidate": "js/lighting/presets.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "npm test -- tests/specs/lighting-ab.spec.js",
+      "resolved_candidate": ".claude/skills/lighting-tuner/references/npm test -- tests/specs/lighting-ab.spec.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/references/symptoms.md",
+      "raw": "tests/specs/lighting-tuner-grade.spec.js",
+      "resolved_candidate": "tests/specs/lighting-tuner-grade.spec.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/scripts/bake.mjs",
+      "raw": "//   window.LightPresets = {\u2026}",
+      "resolved_candidate": "//   window.LightPresets = {\u2026}",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/scripts/bake.mjs",
+      "raw": "//",
+      "resolved_candidate": "//",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/scripts/bake.mjs",
+      "raw": "WARNING: this blob has ${newKeys} profile(s) vs ${oldKeys} already in js/lighting/presets.js.",
+      "resolved_candidate": ".claude/skills/lighting-tuner/scripts/WARNING: this blob has ${newKeys} profile(s) vs ${oldKeys} already in js/lighting/presets.js.",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/lighting-tuner/scripts/merge-proposals.mjs",
+      "raw": "${file}: ${key}.wetness must not be baked \u2014 leave AUTO; use ssrDryNight/ssrDryDay for dry sheen",
+      "resolved_candidate": ".claude/skills/lighting-tuner/scripts/${file}: ${key}.wetness must not be baked \u2014 leave AUTO; use ssrDryNight/ssrDryDay for dry sheen",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "tools/lib/webgpu-chrome-args.cjs",
+      "resolved_candidate": "tools/lib/webgpu-chrome-args.cjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "tools/mcp/probe-mcp.py",
+      "resolved_candidate": "tools/mcp/probe-mcp.py",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "version.json",
+      "resolved_candidate": ".claude/skills/mcp-probe/version.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "http://127.0.0.1:3456/",
+      "resolved_candidate": ".claude/skills/mcp-probe/http:/127.0.0.1:3456",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "node tools/lib/webgpu-chrome-args.cjs [mcp|json]",
+      "resolved_candidate": ".claude/skills/mcp-probe/node tools/lib/webgpu-chrome-args.cjs [mcp|json]",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "node tools/perf/runtime-memory.mjs",
+      "resolved_candidate": ".claude/skills/mcp-probe/node tools/perf/runtime-memory.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "tools/perf/vm-leak-census.mjs",
+      "resolved_candidate": "tools/perf/vm-leak-census.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "tools/perf/mesh-census.mjs",
+      "resolved_candidate": "tools/perf/mesh-census.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "tools/perf/garage-census.mjs",
+      "resolved_candidate": "tools/perf/garage-census.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "tools/perf/profile.mjs",
+      "resolved_candidate": "tools/perf/profile.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "query.mjs",
+      "resolved_candidate": ".claude/skills/mcp-probe/query.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "./tools/mcp/apex-tools-mcp.sh call",
+      "resolved_candidate": ".claude/skills/mcp-probe/tools/mcp/apex-tools-mcp.sh call",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "docs/AGENT-SURFACE.md",
+      "resolved_candidate": "docs/AGENT-SURFACE.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "docs/AGENT-SURFACE.md",
+      "resolved_candidate": "docs/AGENT-SURFACE.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "resolved_candidate": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "test-bg.mjs",
+      "resolved_candidate": ".claude/skills/mcp-probe/test-bg.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/traps.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/traps.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "node tools/gfx/gfx-probe.mjs --backend webgpu <track>",
+      "resolved_candidate": ".claude/skills/mcp-probe/node tools/gfx/gfx-probe.mjs --backend webgpu <track>",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/renderer.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/renderer.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "tools/mcp/cdmcp-cli.py",
+      "resolved_candidate": "tools/mcp/cdmcp-cli.py",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "tools/ui/layout-audit.mjs",
+      "resolved_candidate": "tools/ui/layout-audit.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "ui-readable-survey-mcp.py",
+      "resolved_candidate": ".claude/skills/mcp-probe/ui-readable-survey-mcp.py",
+      "exists": false,
+      "classification": "archive_or_historical"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/traps.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/traps.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/hud-freeze.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/hud-freeze.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/chrome.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/chrome.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/research.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/research.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/device-report.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/device-report.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/offline.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/offline.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/recipes.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/recipes.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "docs/ARCHITECTURE.md",
+      "resolved_candidate": "docs/ARCHITECTURE.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/SKILL.md",
+      "raw": "references/renderer.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/renderer.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "resolved_candidate": "docs/DEBUG-HOOKS.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "references/traps-chrome.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/references/traps-chrome.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "scratch/",
+      "resolved_candidate": "scratch",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "artifacts/",
+      "resolved_candidate": "artifacts",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "artifacts/logs/cdmcp-measure.json",
+      "resolved_candidate": "artifacts/logs/cdmcp-measure.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "resolved_candidate": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "models.js",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/models.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "references/perf-profile.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/references/perf-profile.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "/tmp/...",
+      "resolved_candidate": "/tmp/...",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "http://127.0.0.1:3456/",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/http:/127.0.0.1:3456",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "resolved_candidate": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "js/render/three/tlx.js",
+      "resolved_candidate": "js/render/three/tlx.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "roots/list",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/roots/list",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "/tmp",
+      "resolved_candidate": "/tmp",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "/workspace/scratch/...",
+      "resolved_candidate": "/workspace/scratch/...",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "roots/list",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/roots/list",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "file:///workspace",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/file:/workspace",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "/tmp",
+      "resolved_candidate": "/tmp",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "resolved_candidate": "docs/research/CHROME-DEVTOOLS-MCP.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/chrome.md",
+      "raw": "tools/ci/test-bg.mjs",
+      "resolved_candidate": "tools/ci/test-bg.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/device-report.md",
+      "raw": "tools/mcp/apex-report.js",
+      "resolved_candidate": "tools/mcp/apex-report.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/device-report.md",
+      "raw": "node tools/mcp/report-server.mjs",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/node tools/mcp/report-server.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/device-report.md",
+      "raw": "artifacts/reports/",
+      "resolved_candidate": "artifacts/reports",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/device-report.md",
+      "raw": "fetch(\"/tools/mcp/apex-report.js\").then(r=>r.text()).then(s=>(0,eval)(s))",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/fetch(\"/tools/mcp/apex-report.js\").then(r=>r.text()).then(s=>(0,eval)(s))",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/device-report.md",
+      "raw": "https://raw.githubusercontent.com/brycejmurrin/f1-game/claude/f1-game-project-26h3ng/tools/mcp/apex-report.js",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/https:/raw.githubusercontent.com/brycejmurrin/f1-game/claude/f1-game-project-26h3ng/tools/mcp/apex-report.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/device-report.md",
+      "raw": "tools/",
+      "resolved_candidate": "tools",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/hud-freeze.md",
+      "raw": "chrome.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/chrome.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/hud-freeze.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "resolved_candidate": "docs/DEBUG-HOOKS.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/hud-freeze.md",
+      "raw": "index.html",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/index.html",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/offline.md",
+      "raw": "node tools/check/doctor.mjs --json",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/node tools/check/doctor.mjs --json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/offline.md",
+      "raw": "node tools/ci/test-bg.mjs --status",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/node tools/ci/test-bg.mjs --status",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/recipes.md",
+      "raw": "http://127.0.0.1:3456/",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/http:/127.0.0.1:3456",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/recipes.md",
+      "raw": "docs/ARCHITECTURE.md",
+      "resolved_candidate": "docs/ARCHITECTURE.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/recipes.md",
+      "raw": "node tools/mcp/debug-chrome.mjs start",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/node tools/mcp/debug-chrome.mjs start",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/renderer.md",
+      "raw": "node tools/mcp/mcp-cli.mjs probe",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/node tools/mcp/mcp-cli.mjs probe",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/renderer.md",
+      "raw": "http://127.0.0.1",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/http:/127.0.0.1",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/renderer.md",
+      "raw": "js/*.js",
+      "resolved_candidate": "js/*.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/renderer.md",
+      "raw": "tests/specs/tlx-probes.spec.js",
+      "resolved_candidate": "tests/specs/tlx-probes.spec.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/renderer.md",
+      "raw": "/usr/share/vulkan/icd.d/lvp_icd.json",
+      "resolved_candidate": "/usr/share/vulkan/icd.d/lvp_icd.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/renderer.md",
+      "raw": "AGENTS.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/AGENTS.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/research.md",
+      "raw": ".claude/agents/deploy-research.md",
+      "resolved_candidate": ".claude/agents/deploy-research.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/research.md",
+      "raw": "version.json",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/version.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/research.md",
+      "raw": "git show origin/<deploy>:version.json",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/git show origin/<deploy>:version.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/research.md",
+      "raw": "js/<path>.js?v=<live hash>",
+      "resolved_candidate": "js/<path>.js?v=<live hash>",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/research.md",
+      "raw": "./tools/mcp/tinyfish-mcp.sh deploy-check --tip",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/tools/mcp/tinyfish-mcp.sh deploy-check --tip",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/research.md",
+      "raw": "deploy-js --marker RE js/<path>.js",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/deploy-js --marker RE js/<path>.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-camera.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "resolved_candidate": "docs/DEBUG-HOOKS.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-camera.md",
+      "raw": "game.js",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/game.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-camera.md",
+      "raw": "POS -/22, TIME -",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/POS -/22, TIME -",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-camera.md",
+      "raw": "step(1/60, 30)",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/step(1/60, 30)",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-camera.md",
+      "raw": "POS 1/22, TIME 0:00.50",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/POS 1/22, TIME 0:00.50",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-chrome.md",
+      "raw": "node tools/ci/test-bg.mjs --status",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/node tools/ci/test-bg.mjs --status",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-chrome.md",
+      "raw": "test-bg.mjs",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/test-bg.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-chrome.md",
+      "raw": "AGENTS.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/AGENTS.md",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-chrome.md",
+      "raw": "js/agent/apex.js",
+      "resolved_candidate": "js/agent/apex.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-chrome.md",
+      "raw": "physState().px/pz",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/physState().px/pz",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-scene.md",
+      "raw": "grep -n 'id: \"<knobId>\"' js/lighting/knobs.js",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/grep -n 'id: \"<knobId>\"' js/lighting/knobs.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-scene.md",
+      "raw": "js/render/glx/shaders/glsl-sky.js",
+      "resolved_candidate": "js/render/glx/shaders/glsl-sky.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-scene.md",
+      "raw": "dir.xz / up * 0.42",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/dir.xz / up * 0.42",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-scene.md",
+      "raw": "../../../../docs/notes/OCCLUSION-PROBE.md",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/../../../../docs/notes/OCCLUSION-PROBE.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps-scene.md",
+      "raw": "node tools/track/verify-track.cjs <id>",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/node tools/track/verify-track.cjs <id>",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/traps.md",
+      "raw": "node tools/ci/test-bg.mjs --status",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/node tools/ci/test-bg.mjs --status",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/web-egress.md",
+      "raw": "https://example.com",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/https:/example.com",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/mcp-probe/references/web-egress.md",
+      "raw": "version.json",
+      "resolved_candidate": ".claude/skills/mcp-probe/references/version.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "controller.html",
+      "resolved_candidate": "controller.html",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "docs/MULTIPLAYER.md",
+      "resolved_candidate": "docs/MULTIPLAYER.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "tests/unit/phone-pad.test.mjs",
+      "resolved_candidate": "tests/unit/phone-pad.test.mjs",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/transport.js",
+      "resolved_candidate": "js/net/transport.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/sdp.js",
+      "resolved_candidate": "js/net/sdp.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/handshake.js",
+      "resolved_candidate": "js/net/handshake.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "version.json",
+      "resolved_candidate": ".claude/skills/multiplayer-debug/version.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/nostr.js",
+      "resolved_candidate": "js/net/nostr.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/rendezvous.js",
+      "resolved_candidate": "js/net/rendezvous.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/snapshot.js",
+      "resolved_candidate": "js/net/snapshot.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/session.js",
+      "resolved_candidate": "js/net/session.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/netplay.js",
+      "resolved_candidate": "js/net/netplay.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/lobby.js",
+      "resolved_candidate": "js/net/lobby.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/lobby-codes.js",
+      "resolved_candidate": "js/net/lobby-codes.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/lobby-roster.js",
+      "resolved_candidate": "js/net/lobby-roster.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/qr.js",
+      "resolved_candidate": "js/net/qr.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/scan.js",
+      "resolved_candidate": "js/net/scan.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/spectate.js",
+      "resolved_candidate": "js/net/spectate.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "js/net/bytes.js",
+      "resolved_candidate": "js/net/bytes.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "docs/MULTIPLAYER.md",
+      "resolved_candidate": "docs/MULTIPLAYER.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/SKILL.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "resolved_candidate": "docs/DEBUG-HOOKS.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "docs/MULTIPLAYER.md",
+      "resolved_candidate": "docs/MULTIPLAYER.md",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "js/input/phone-pad.js",
+      "resolved_candidate": "js/input/phone-pad.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "controller.html",
+      "resolved_candidate": "controller.html",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "controller.html",
+      "resolved_candidate": "controller.html",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "js/net/transport.js",
+      "resolved_candidate": "js/net/transport.js",
+      "exists": true,
+      "classification": "present"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "transport.js",
+      "resolved_candidate": ".claude/skills/multiplayer-debug/references/transport.js",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass",
+      "resolved_candidate": ".claude/skills/multiplayer-debug/references/node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "npm i --no-save ws @noble/curves",
+      "resolved_candidate": ".claude/skills/multiplayer-debug/references/npm i --no-save ws @noble/curves",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "package.json",
+      "resolved_candidate": ".claude/skills/multiplayer-debug/references/package.json",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "node tools/net/nostr-probe.mjs",
+      "resolved_candidate": ".claude/skills/multiplayer-debug/references/node tools/net/nostr-probe.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "rtc-e2e-room.mjs",
+      "resolved_candidate": ".claude/skills/multiplayer-debug/references/rtc-e2e-room.mjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "nostr-local.cjs",
+      "resolved_candidate": ".claude/skills/multiplayer-debug/references/nostr-local.cjs",
+      "exists": false,
+      "classification": "missing_or_command_or_dynamic"
+    },
+    {
+      "source": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "raw": "js/input/phone-pad.js",
+      "resolved_candidate": "js/input/phone-pad.js",
+      "exists": true,
+      "classification": "present"
+    }
+  ],
+  "registration_evidence": [
+    {
+      "path": ".claude/skills/README.md",
+      "lines": [
+        40,
+        45,
+        46,
+        48,
+        49,
+        50,
+        51
+      ]
+    },
+    {
+      "path": ".claude/hooks/skill-hint.py",
+      "line": 49,
+      "relationship": "handoff prompt regex"
+    },
+    {
+      "path": ".claude/settings.json",
+      "line": 271,
+      "relationship": "browser/debugger MCP PreToolUse matcher invokes mcp-browser-guard"
+    },
+    {
+      "path": ".mcp.json",
+      "line": 43,
+      "relationship": "js-debugger MCP registration; Chrome earlier at 28"
+    },
+    {
+      "path": ".codex/config.toml",
+      "line": 28,
+      "relationship": "debugger MCP mirror; Chrome at 22"
+    },
+    {
+      "path": ".agents/skills/",
+      "relationship": "six skill-name symlinks inspected, target ../../.claude/skills/<name>"
+    }
+  ],
+  "lsp": [
+    {
+      "query": "Input.steer",
+      "definition": "js/input/input.js:1813:12",
+      "export": "js/input/input.js:2540:5",
+      "query_anchor": "js/game.js:5693:44"
+    },
+    {
+      "query": "LightStore.set",
+      "definition": "js/lighting/profiles.js:257:14",
+      "limitation": "module-file fallback; export and direct caller coverage unverified"
+    },
+    {
+      "query": "LiveryTex.markSlots",
+      "definition": "js/car/liverytex.js:904:12",
+      "export": "js/car/liverytex.js:2668:58",
+      "query_anchor": "js/career/custom-team.js:178:68"
+    },
+    {
+      "query": "NetTransport",
+      "definition": "js/net/transport.js:4:7"
+    }
+  ],
+  "cleanup_candidates": [
+    {
+      "path": ".claude/skills/lighting-tuner/scripts/bake.mjs",
+      "issue": "Header and shrink comments still say current COPY VALUES emits full file+local snapshot; delta guard and prose establish LightEdits instead."
+    },
+    {
+      "path": ".claude/skills/lighting-tuner/scripts/merge-proposals.mjs",
+      "issue": "Header implies universal within-key merging, but proposal path replaces whole condition. LIGHTING constant unused."
+    },
+    {
+      "path": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+      "issue": "Dangling numbered item 8."
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/chrome.md",
+      "issue": "Read-only ownership label needs source/page/artifact distinction; dated /tmp fallback conflicts with current artifact-location convention unless copied out."
+    },
+    {
+      "path": ".claude/skills/mcp-probe/references/traps-camera.md",
+      "issue": "Player-relative A/B recommendation has later idle-cut caveat; consolidation must retain both conditions."
+    }
+  ],
+  "limitations": [
+    "No tests/browser/network/runtime/source changes/staging/commits",
+    "No claim of host tool attachment, hardware or deployed behavior",
+    "No standalone hook or agent definitions in assigned group",
+    "Livery-fields prefix outside assignment not semantically covered",
+    "Text config links inspected selectively; runtime implementation beyond LSP anchors not audited"
+  ]
+}

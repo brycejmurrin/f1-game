@@ -1,0 +1,721 @@
+{
+  "group": "02",
+  "assignedBytes": 160000,
+  "method": "All assigned text read via individual <=8000-byte calls. Whole file hash establishes identity; assigned-range and chunk hashes establish coverage independently. Earlier aggregate response truncation recovered by re-reading affected workflow/browser chunks. No binary assigned.",
+  "instructionReads": [
+    "AGENTS.md",
+    ".claude/skills/code-nav/SKILL.md"
+  ],
+  "scope": "Static documentation only; no tests, browser, network, runtime probes, source changes, stage or commit. Audited instructions treated as content.",
+  "symbolEvidence": [
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "query": "CamTune.exportPack",
+      "result": "js/camera/offsets.js:339 definition; :710 export; static navigation only"
+    }
+  ],
+  "textConsumerSearch": {
+    "roots": [
+      ".github",
+      "tools",
+      "tests",
+      "package.json"
+    ],
+    "consumers": [
+      ".github/workflows/gpu-census.yml:439,444,495,657,753-754",
+      "tests/unit/f1-dev-tools.test.mjs:11,15,212,224-225,257,311-313",
+      "tests/unit/pick-tests.test.mjs:45-47"
+    ],
+    "limit": "Scoped text search, not exhaustive proof of absent consumers."
+  },
+  "files": [
+    {
+      "path": "design-preview/concept-bodies/measure.mjs",
+      "start": 358,
+      "end": 3000,
+      "kind": "text",
+      "sha256": "436c59345e8453ae4b350bf04037b17842b7d0961b00ab219a7f9e25a6c7c397",
+      "actualBytes": 3000,
+      "wholeSourceSha256": "436c59345e8453ae4b350bf04037b17842b7d0961b00ab219a7f9e25a6c7c397",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "ab8851054a40b3fbaca0bbd9f2d9a86192d19bfc233d707de29b5f1948f8cf56",
+      "coverage": "assigned partial source",
+      "reads": [
+        {
+          "start": 358,
+          "end": 3000,
+          "bytes": 2642,
+          "sha256": "ab8851054a40b3fbaca0bbd9f2d9a86192d19bfc233d707de29b5f1948f8cf56",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "concept measurement tail",
+        "contract": "dims samples chassis nose sections, sidepod shoulders and engine cover; table compares shipped/new IDs in millimetres; CLI accepts team, IDS and --json. Head/import ownership belongs to group01."
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/overlay.mjs",
+      "start": 0,
+      "end": 3827,
+      "kind": "text",
+      "sha256": "442fd85d9cc5a18b18eb4d10fb385e81ddcf5cc38ff59dd53f93351a37d81bb5",
+      "actualBytes": 3827,
+      "wholeSourceSha256": "442fd85d9cc5a18b18eb4d10fb385e81ddcf5cc38ff59dd53f93351a37d81bb5",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "442fd85d9cc5a18b18eb4d10fb385e81ddcf5cc38ff59dd53f93351a37d81bb5",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 3827,
+          "bytes": 3827,
+          "sha256": "442fd85d9cc5a18b18eb4d10fb385e81ddcf5cc38ff59dd53f93351a37d81bb5",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "concept overlay",
+        "contract": "Imports fit-probe build and sharp; projects indexed triangles into hardcoded front/rear solved cameras, z-buffers part IDs and composites colored edges over a concept reference image; writes caller output PNG."
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/p75-3160.json",
+      "start": 0,
+      "end": 238,
+      "kind": "text",
+      "sha256": "81668a78f75bb674a3a393e59d4064049c9af5a65e44310bf8bfc3b3e3e9b28f",
+      "actualBytes": 238,
+      "wholeSourceSha256": "81668a78f75bb674a3a393e59d4064049c9af5a65e44310bf8bfc3b3e3e9b28f",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "81668a78f75bb674a3a393e59d4064049c9af5a65e44310bf8bfc3b3e3e9b28f",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 238,
+          "bytes": 238,
+          "sha256": "81668a78f75bb674a3a393e59d4064049c9af5a65e44310bf8bfc3b3e3e9b28f",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "measurement fixture",
+        "contract": "Named p75 geometry dimensions in millimetres, consumed as comparison/reference data; no executable behavior."
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/solve-cam.mjs",
+      "start": 0,
+      "end": 3505,
+      "kind": "text",
+      "sha256": "f040c0ea1cda8436ffe07d184b6aa8682c8cec9366eb1b0a3a65e332a874e6d4",
+      "actualBytes": 3505,
+      "wholeSourceSha256": "f040c0ea1cda8436ffe07d184b6aa8682c8cec9366eb1b0a3a65e332a874e6d4",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "f040c0ea1cda8436ffe07d184b6aa8682c8cec9366eb1b0a3a65e332a874e6d4",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 3505,
+          "bytes": 3505,
+          "sha256": "f040c0ea1cda8436ffe07d184b6aa8682c8cec9366eb1b0a3a65e332a874e6d4",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "camera optimizer",
+        "contract": "JSON landmark CLI and optional fixed principal point; BEHIND changes starting grid/constraints; Nelder-Mead weighted reprojection minimization prints eye/direction/focal/principal point/RMS/residuals/look target."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/README.md",
+      "start": 0,
+      "end": 5487,
+      "kind": "text",
+      "sha256": "94b66f496c74bc7c2f8ad6b198e14b5912a49c83c0f6b262b3fb9d2d6199a3bd",
+      "actualBytes": 5487,
+      "wholeSourceSha256": "94b66f496c74bc7c2f8ad6b198e14b5912a49c83c0f6b262b3fb9d2d6199a3bd",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "94b66f496c74bc7c2f8ad6b198e14b5912a49c83c0f6b262b3fb9d2d6199a3bd",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 5487,
+          "bytes": 5487,
+          "sha256": "94b66f496c74bc7c2f8ad6b198e14b5912a49c83c0f6b262b3fb9d2d6199a3bd",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "plugin overview",
+        "contract": "Skills-only private source package 0.4.1; six existing MCP servers and CLI fallbacks; bootstrap and VM test documented, account publication separate."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/plugin.json",
+      "start": 0,
+      "end": 1676,
+      "kind": "text",
+      "sha256": "a219ff8cfd4cf908810e41d346f2460583e8cbb161df80d8e2946d01801a91db",
+      "actualBytes": 1676,
+      "wholeSourceSha256": "a219ff8cfd4cf908810e41d346f2460583e8cbb161df80d8e2946d01801a91db",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "a219ff8cfd4cf908810e41d346f2460583e8cbb161df80d8e2946d01801a91db",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 1676,
+          "bytes": 1676,
+          "sha256": "a219ff8cfd4cf908810e41d346f2460583e8cbb161df80d8e2946d01801a91db",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "plugin manifest",
+        "contract": "OpenAI interface metadata, author, description, default prompt and six capability routing names; no server definitions or credentials."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/skills/f1-dev-tools/SKILL.md",
+      "start": 0,
+      "end": 7589,
+      "kind": "text",
+      "sha256": "10f3f3a9ec404c17fa7417ca462da0b6f59a8d64be67f1c53690858ee52aeea4",
+      "actualBytes": 7589,
+      "wholeSourceSha256": "10f3f3a9ec404c17fa7417ca462da0b6f59a8d64be67f1c53690858ee52aeea4",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "10f3f3a9ec404c17fa7417ca462da0b6f59a8d64be67f1c53690858ee52aeea4",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 7589,
+          "bytes": 7589,
+          "sha256": "10f3f3a9ec404c17fa7417ca462da0b6f59a8d64be67f1c53690858ee52aeea4",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "plugin routing instructions",
+        "contract": "Current-source workflow entrypoint: capability discovery, owner bootstrap, serialized local browser, diagnostics, artifact provenance, focused reference routes and finish reporting."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/skills/f1-dev-tools/references/garage-parts.md",
+      "start": 0,
+      "end": 4345,
+      "kind": "text",
+      "sha256": "dae06b804c0b92861f11fba6f91f0ed3b7dfbbaf74b5d616f90033e9965b5a4a",
+      "actualBytes": 4345,
+      "wholeSourceSha256": "dae06b804c0b92861f11fba6f91f0ed3b7dfbbaf74b5d616f90033e9965b5a4a",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "dae06b804c0b92861f11fba6f91f0ed3b7dfbbaf74b5d616f90033e9965b5a4a",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 4345,
+          "bytes": 4345,
+          "sha256": "dae06b804c0b92861f11fba6f91f0ed3b7dfbbaf74b5d616f90033e9965b5a4a",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "garage workflow reference",
+        "contract": "Catalog pagination and canonical IDs; persistent garage open/frame/shot/diff/sheet/close lifecycle; bounded audit/sweep and matrix plans; entitlement and hardware limits."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/skills/f1-dev-tools/references/profiling.md",
+      "start": 0,
+      "end": 10189,
+      "kind": "text",
+      "sha256": "6a67220b3fac09f81dd49e65946173c96451b6ac13abd2910b4a6fa73031d8ad",
+      "actualBytes": 10189,
+      "wholeSourceSha256": "6a67220b3fac09f81dd49e65946173c96451b6ac13abd2910b4a6fa73031d8ad",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "6a67220b3fac09f81dd49e65946173c96451b6ac13abd2910b4a6fa73031d8ad",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "4cf1defbd3a02c870a74c6f489c971e71f7baf1e3eb6c1c7c32cb6fddc6ac209",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 8000,
+          "end": 10189,
+          "bytes": 2189,
+          "sha256": "7b1815fffc7464d51178d4f570ee3f7e4c0971a0a4c2b54b64e5c6c0165f32f1",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "profiling reference",
+        "contract": "Bounded diagnostic jobs and saved queries; CPU/heap/GL/WebGPU accounting distinctions, cleanup/disposal and debugger attach/token/resume/detach; hardware evidence limitations."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/skills/f1-dev-tools/references/ui-inspection.md",
+      "start": 0,
+      "end": 3157,
+      "kind": "text",
+      "sha256": "7439ee084f641af3804825e95adbfb70c3a52d1361f20a1223c347de36c417eb",
+      "actualBytes": 3157,
+      "wholeSourceSha256": "7439ee084f641af3804825e95adbfb70c3a52d1361f20a1223c347de36c417eb",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "7439ee084f641af3804825e95adbfb70c3a52d1361f20a1223c347de36c417eb",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 3157,
+          "bytes": 3157,
+          "sha256": "7439ee084f641af3804825e95adbfb70c3a52d1361f20a1223c347de36c417eb",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "UI workflow reference",
+        "contract": "Capability-detected local UI inspection/diff, geometry/semantics and saved-setting inspection, matched viewport/phase and bounded mission planning."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/skills/f1-dev-tools/references/workflows.md",
+      "start": 0,
+      "end": 9601,
+      "kind": "text",
+      "sha256": "cd5af797c51fbdc38a6a45fae9cee40f1de634f462b985befd32ca1b0f069e75",
+      "actualBytes": 9601,
+      "wholeSourceSha256": "cd5af797c51fbdc38a6a45fae9cee40f1de634f462b985befd32ca1b0f069e75",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "cd5af797c51fbdc38a6a45fae9cee40f1de634f462b985befd32ca1b0f069e75",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "eb1996c955d9422ba9714d7e85ded0acae3e02a3885df5f729b22828c475ab35",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 8000,
+          "end": 9601,
+          "bytes": 1601,
+          "sha256": "98a301a1600429ed991e863a440f8ccd0d179d4b73d56e43abe4e70d8c9e82c7",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "camera/replay workflow reference",
+        "contract": "Defines scene restore, diagnostic/asset/storage documents, real-render traces, comparison identity, replay action budgeting and temporary preset export; frozen cockpit caveat."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js",
+      "start": 0,
+      "end": 15324,
+      "kind": "text",
+      "sha256": "1330ca94ac118b80afc8035b5c9f4fd3e4a9cdb479692e2afb20fdde4021cd3a",
+      "actualBytes": 15324,
+      "wholeSourceSha256": "1330ca94ac118b80afc8035b5c9f4fd3e4a9cdb479692e2afb20fdde4021cd3a",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "1330ca94ac118b80afc8035b5c9f4fd3e4a9cdb479692e2afb20fdde4021cd3a",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "e00d50e9cee22612de825a4fd9a20acba7b778574767c17b97a6be1ef316e761",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 8000,
+          "end": 15324,
+          "bytes": 7324,
+          "sha256": "813ecfd1a1c5dcda0d4c0c63e26ed2fe27bb5a04d1cbb12a7491d56866c0fcc4",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "browser helper",
+        "contract": "IIFE installs frozen global F1Dev. diagnose/inspect/capture read production hooks; checkAssets performs sequential no-store fetch/hash with abort; storageReport reads key sizes only. restore validates whole recipe before native world placement and static view; trace observes 2..240 distinct rendered frames with 100..120000ms deadline; replayCheck validates 1..12 actions and restores transport in finally; previewPreset restores raw CamTune pack/view in finally without save."
+      }
+    },
+    {
+      "path": "plugins/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs",
+      "start": 0,
+      "end": 6262,
+      "kind": "text",
+      "sha256": "f0894c499542676cd1d612f754ad3c245926f23cb6460e4021ed26a95489e1b6",
+      "actualBytes": 6262,
+      "wholeSourceSha256": "f0894c499542676cd1d612f754ad3c245926f23cb6460e4021ed26a95489e1b6",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "f0894c499542676cd1d612f754ad3c245926f23cb6460e4021ed26a95489e1b6",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 6262,
+          "bytes": 6262,
+          "sha256": "f0894c499542676cd1d612f754ad3c245926f23cb6460e4021ed26a95489e1b6",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "comparison CLI",
+        "contract": "ESM summarize validates finite camera samples and advancing frames/timestamps; compare gates matching scenario metadata, reports maximum movement/frame interval and deltas. gallery embeds two <=20MiB PNGs as HTML. Outputs restricted to artifact roots with realpath/symlink/input-alias guards; exit 2 noncomparable, 1 error."
+      }
+    },
+    {
+      "path": "scratch/analyze-garage-retry.mjs",
+      "start": 0,
+      "end": 27764,
+      "kind": "text",
+      "sha256": "8098cfb87ae03be4656a43d1d774cc554aa19ff433cdb838740efd5183a0fbec",
+      "actualBytes": 27764,
+      "wholeSourceSha256": "8098cfb87ae03be4656a43d1d774cc554aa19ff433cdb838740efd5183a0fbec",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "8098cfb87ae03be4656a43d1d774cc554aa19ff433cdb838740efd5183a0fbec",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "ce7ceb8d51115733fafb7dbe38dfc495b97fa0953460e79b4852ad7db8ba42db",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "cf3e32781c13943f2869e07ff5fec891af46b4794059dc60a12155a37f4daaee",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "3814a4bf3e88e1f7da5921ea770fbd5ceeeda521dc27fe273fd82c8c7911cc9d",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 24000,
+          "end": 27764,
+          "bytes": 3764,
+          "sha256": "c0cd9eca292b0d20eb13b8d5cf2e0bf02688442c911d7f88269ec3b9eda13700",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "offline garage analyzer",
+        "contract": "Reads exact-revision garage report and adjacent CPU profiles; validates native vs software arm counts/order/camera/quality/edits/allocation/errors; normalizes signed profile deltas by stable sorting timestamp+sample, preserves hashes and tail; writes analysis.json/report.md, fails invalid captures. Entry parity separate from warmed edits."
+      }
+    },
+    {
+      "path": "scratch/garage-livery-census.mjs",
+      "start": 0,
+      "end": 15902,
+      "kind": "text",
+      "sha256": "2d3ad95c7eb0eefe4650be0e99b070f5643cbe9414c262d20152d9882615fe5e",
+      "actualBytes": 15902,
+      "wholeSourceSha256": "2d3ad95c7eb0eefe4650be0e99b070f5643cbe9414c262d20152d9882615fe5e",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "2d3ad95c7eb0eefe4650be0e99b070f5643cbe9414c262d20152d9882615fe5e",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "7848e45bdbbcfcd496d7d90d9772e5f489c9bd191b08091ccfb728c319408b81",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 8000,
+          "end": 15902,
+          "bytes": 7902,
+          "sha256": "569b889959fa6f5e942bea9831a6229d4ff04cda31610f7067073471f7a368dd",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "livery census runner",
+        "contract": "CI-referenced browser harness compares TLX WebGPU/WebGL2 arms through live editor controls; request knobs shape edit/part/window budget. Init prototype counters, long tasks/rAF, allocation probe and page Car3D/LiveryTex wrappers; writes JSON/screenshots and shuts down; captured function references can evade counters."
+      }
+    },
+    {
+      "path": "scratch/garage-retry-ab.mjs",
+      "start": 0,
+      "end": 12480,
+      "kind": "text",
+      "sha256": "2717aeb8b7422253cd5e71d16ca84f79d1078f9998954b80e08e727bdd9652d6",
+      "actualBytes": 12480,
+      "wholeSourceSha256": "2717aeb8b7422253cd5e71d16ca84f79d1078f9998954b80e08e727bdd9652d6",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "2717aeb8b7422253cd5e71d16ca84f79d1078f9998954b80e08e727bdd9652d6",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "e9867ecf8392e8940e3351dca72ca605272f952fb1142e50722864c479a82330",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 8000,
+          "end": 12480,
+          "bytes": 4480,
+          "sha256": "f4e656e8e1ef8168ddf89a5f7a66d09e2abce6d853e2d450e42bfd2c6be4b03b",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "exact garage retry runner",
+        "contract": "CI-referenced pinned baseline/candidate A/B; may fetch missing revisions and archive/extract baseline. Counterbalanced native 3-pair or software 1-pair experiments separate timed/profiled edits, stock idle and entry; holds camera/scale/tier; writes JSON/profiles/PNGs; closes contexts/shutdown."
+      }
+    },
+    {
+      "path": "scratch/garage-webgpu-allocation-init.mjs",
+      "start": 0,
+      "end": 4690,
+      "kind": "text",
+      "sha256": "8993316fe0dd68220dd335ff632989b6738ebe719db5a6a2d8eacdf14754def2",
+      "actualBytes": 4690,
+      "wholeSourceSha256": "8993316fe0dd68220dd335ff632989b6738ebe719db5a6a2d8eacdf14754def2",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "8993316fe0dd68220dd335ff632989b6738ebe719db5a6a2d8eacdf14754def2",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 4690,
+          "bytes": 4690,
+          "sha256": "8993316fe0dd68220dd335ff632989b6738ebe719db5a6a2d8eacdf14754def2",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "allocation probe",
+        "contract": "Exported browser init function wraps GPU device/queue/buffer/texture prototypes; WeakMap object lookup plus metadata owner sets count descriptor buffer bytes, explicit destroy, texture/pipeline/module/submits. No strong GPU-object retention; not resident VRAM or GC reclamation."
+      }
+    },
+    {
+      "path": "scratch/h10-pixdiff.mjs",
+      "start": 0,
+      "end": 753,
+      "kind": "text",
+      "sha256": "79a6844a635fc2b383b321fe0fbcbdaf73ce253fffc8318d7683bf719f6628dc",
+      "actualBytes": 753,
+      "wholeSourceSha256": "79a6844a635fc2b383b321fe0fbcbdaf73ce253fffc8318d7683bf719f6628dc",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "79a6844a635fc2b383b321fe0fbcbdaf73ce253fffc8318d7683bf719f6628dc",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 753,
+          "bytes": 753,
+          "sha256": "79a6844a635fc2b383b321fe0fbcbdaf73ce253fffc8318d7683bf719f6628dc",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "historical PNG comparator",
+        "contract": "Sharp raw RGB per-pixel changed count/max delta; matches filenames, skips missing candidate; dimensions/channels assumed equal; logs only."
+      }
+    },
+    {
+      "path": "scratch/h10-split-ab-run1.log",
+      "start": 0,
+      "end": 5126,
+      "kind": "text",
+      "sha256": "c85cc2b8b37c64db86fbac7e8f20aee80944bf12561aaa04ae649146c087a3da",
+      "actualBytes": 5126,
+      "wholeSourceSha256": "c85cc2b8b37c64db86fbac7e8f20aee80944bf12561aaa04ae649146c087a3da",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "c85cc2b8b37c64db86fbac7e8f20aee80944bf12561aaa04ae649146c087a3da",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 5126,
+          "bytes": 5126,
+          "sha256": "c85cc2b8b37c64db86fbac7e8f20aee80944bf12561aaa04ae649146c087a3da",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "historical road-split log",
+        "contract": "Retained mixed JSON/text execution result with five track/time configs and before/after pass counts, null GPU errors and completion marker; some rows absent counters; not current validation."
+      }
+    },
+    {
+      "path": "scratch/h10-split-ab.mjs",
+      "start": 0,
+      "end": 3943,
+      "kind": "text",
+      "sha256": "e416ed9e193780c930067eb514ef8d560a4fc1424cb86332af7c41a6e9b5e90f",
+      "actualBytes": 3943,
+      "wholeSourceSha256": "e416ed9e193780c930067eb514ef8d560a4fc1424cb86332af7c41a6e9b5e90f",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "e416ed9e193780c930067eb514ef8d560a4fc1424cb86332af7c41a6e9b5e90f",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 3943,
+          "bytes": 3943,
+          "sha256": "e416ed9e193780c930067eb514ef8d560a4fc1424cb86332af7c41a6e9b5e90f",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "historical split A/B capture",
+        "contract": "Root/tag/track/time CLI; fixed phone/tier/helmet clock; wraps backend draw to count pass widths/drawRange triangles and retries synchronous snaps, restores hook, writes PNG and logs rows; software rAF limitation recorded."
+      }
+    },
+    {
+      "path": "scratch/h15/drawcount.mjs",
+      "start": 0,
+      "end": 2561,
+      "kind": "text",
+      "sha256": "09b8073d9c31138326279e94744d7e37ec5ac38d0faacc0163b1275b1cfa374b",
+      "actualBytes": 2561,
+      "wholeSourceSha256": "09b8073d9c31138326279e94744d7e37ec5ac38d0faacc0163b1275b1cfa374b",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "09b8073d9c31138326279e94744d7e37ec5ac38d0faacc0163b1275b1cfa374b",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 2561,
+          "bytes": 2561,
+          "sha256": "09b8073d9c31138326279e94744d7e37ec5ac38d0faacc0163b1275b1cfa374b",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "historical draw diagnostic",
+        "contract": "Counts backend.draw and renderer.render across synchronous snap and rAF after race gate; restores wrappers, logs renderer/backend identity; closes browser."
+      }
+    },
+    {
+      "path": "scratch/h15/run-matrix.sh",
+      "start": 0,
+      "end": 423,
+      "kind": "text",
+      "sha256": "910617096c117bb980e76e02a3b1334cff90319781303db5df64358f9db4d31c",
+      "actualBytes": 423,
+      "wholeSourceSha256": "910617096c117bb980e76e02a3b1334cff90319781303db5df64358f9db4d31c",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "910617096c117bb980e76e02a3b1334cff90319781303db5df64358f9db4d31c",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 423,
+          "bytes": 423,
+          "sha256": "910617096c117bb980e76e02a3b1334cff90319781303db5df64358f9db4d31c",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "historical matrix shell",
+        "contract": "Hardcoded checkout/base paths; sequential before/after/before2 per track/time; no fail-fast shell policy; stdout completion is not a pass verdict."
+      }
+    },
+    {
+      "path": "scratch/h15/run-pix.sh",
+      "start": 0,
+      "end": 173,
+      "kind": "text",
+      "sha256": "bbb66e5f796bd4bce617536af69f1dfcf13bbcd18eb2a02a0beb0b8a30276182",
+      "actualBytes": 173,
+      "wholeSourceSha256": "bbb66e5f796bd4bce617536af69f1dfcf13bbcd18eb2a02a0beb0b8a30276182",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "bbb66e5f796bd4bce617536af69f1dfcf13bbcd18eb2a02a0beb0b8a30276182",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 173,
+          "bytes": 173,
+          "sha256": "bbb66e5f796bd4bce617536af69f1dfcf13bbcd18eb2a02a0beb0b8a30276182",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "historical pixel shell",
+        "contract": "Hardcoded checkout path; sequential fixed track/time pixel scripts; no fail-fast policy."
+      }
+    },
+    {
+      "path": "scratch/h15/split-pix.mjs",
+      "start": 0,
+      "end": 3419,
+      "kind": "text",
+      "sha256": "6035f1567bfb2edac4b4ed59ffc0823483c2990e51b951fe1514f7637b5c884b",
+      "actualBytes": 3419,
+      "wholeSourceSha256": "6035f1567bfb2edac4b4ed59ffc0823483c2990e51b951fe1514f7637b5c884b",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "6035f1567bfb2edac4b4ed59ffc0823483c2990e51b951fe1514f7637b5c884b",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 3419,
+          "bytes": 3419,
+          "sha256": "6035f1567bfb2edac4b4ed59ffc0823483c2990e51b951fe1514f7637b5c884b",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "historical same-frame pixel control",
+        "contract": "One page frozen frame switches roadSplit ON/OFF/ON, records split/all draw counts and RGB pixel/control diffs, writes ON/OFF PNGs; restores draw hook and closes browser."
+      }
+    },
+    {
+      "path": "scratch/h23/ab.mjs",
+      "start": 0,
+      "end": 8924,
+      "kind": "text",
+      "sha256": "3a06517f44f727786f75192d2eaad8708d1c1a4cf9d2d962d720adb956a8ef0e",
+      "actualBytes": 15300,
+      "wholeSourceSha256": "3a06517f44f727786f75192d2eaad8708d1c1a4cf9d2d962d720adb956a8ef0e",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "b782a870a1f47f85b2a5f7cb652a0e6f6deedd1426dd3e44ed7b116c7fbedd72",
+      "coverage": "assigned partial source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "4d933f5390834a09f817dfeafcc2cf4fc420f69f0255ddd13be4d593da5e9d60",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        },
+        {
+          "start": 8000,
+          "end": 8924,
+          "bytes": 924,
+          "sha256": "2ac509d6ce5d8a8ddac711aa8cd8872f7c79efb44363c8b0e628b75744bfcd32",
+          "method": "individual exec_command Python read_bytes byte slice; returned untruncated; 8000-byte maximum"
+        }
+      ],
+      "semanticMap": {
+        "role": "phone renderer harness prefix",
+        "contract": "Assigned prefix defines CLI flags, SwiftShader phone DPR3 profile/UA, reduced-motion interception, environment snapshot and still scene matrix/capture lifecycle; begins forced-GC/CDP memory sampler. Remaining memory/perf/dispatch implementation belongs to group03; no whole-file read claim."
+      }
+    }
+  ]
+}

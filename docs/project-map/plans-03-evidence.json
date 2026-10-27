@@ -1,0 +1,2943 @@
+{
+  "group": "03",
+  "range_semantics": "half-open byte offsets into original file, not Unicode character offsets",
+  "assigned_bytes": 160000,
+  "files": [
+    {
+      "path": "docs/plans/2026-10-04-colourblind-captions.md",
+      "start": 5770,
+      "end": 26643,
+      "kind": "text",
+      "sha256": "4622a10dc858282a88ea5492cb5b25e680b6e327ec6a2c58ad66fe7c0466cc44",
+      "file_bytes": 26643,
+      "whole_file_sha256": "4622a10dc858282a88ea5492cb5b25e680b6e327ec6a2c58ad66fe7c0466cc44",
+      "hash_matches_batch": true,
+      "assigned_part_sha256": "31c8ad013e30c21e637ea5ac5e1a30170e04d2cb5f16cb989d4a3f3a3c68f67e",
+      "whole_file_fully_read": false,
+      "supportname": "colourblind-captions",
+      "problem": "Presentation accessibility: eliminate hue-only meanings and give spoken/cued state labelled captions.",
+      "architecture": "Semantic palette IIFE feeding CSS/canvas/shaders; redundant glyphs; caption ring and settings; optional cue glyphs.",
+      "work_items": "Five slices: palette validation, all colour consumers, redundant cues, spotter/announcer captions/settings, optional cue visualiser.",
+      "implementation": "PARTLY SHIPPED; palette and caption APIs exist. LSP palette references only appearance options and itself; complete canvas/shader adoption not established. Caption consumers include announcer, spotter, announce-banner and appearance settings.",
+      "measurement_provenance": "22-semantics/9-colour-only inventory and contrast, shader, layout budgets are dated 2026-10-04 evidence, not measurements repeated here.",
+      "relationships": "Extends deferred accessibility brainstorm item 13 and player accessibility slice 5; preserves separate physics contracts.",
+      "whole_file_fully_read_with_extra_context": true
+    },
+    {
+      "path": "docs/plans/2026-10-04-feature-roadmap.md",
+      "start": 0,
+      "end": 9522,
+      "kind": "text",
+      "sha256": "91998dbe19514347e3d27a4d6329a366e959b737b96b0c6ec9d673a8db4c0ace",
+      "file_bytes": 9522,
+      "whole_file_sha256": "91998dbe19514347e3d27a4d6329a366e959b737b96b0c6ec9d673a8db4c0ace",
+      "hash_matches_batch": true,
+      "assigned_part_sha256": "91998dbe19514347e3d27a4d6329a366e959b737b96b0c6ec9d673a8db4c0ace",
+      "whole_file_fully_read": true,
+      "supportname": "feature-roadmap",
+      "problem": "Rank missing product capabilities across six research angles.",
+      "architecture": "Tier 1 six individual plans, Tier 2 deeper racing, Tier 3 risky larger bets.",
+      "work_items": "Suggested share cards then overlay then reel; PWA/accessibility independent; localisation serialised against large UI work.",
+      "implementation": "OPEN ranking; partly or fully shipped child status labels require per-plan scope checking.",
+      "measurement_provenance": "Research provenance explicitly mixed: repo inventory with two corrected errors; several search snippets and background support claims; no new market measurements.",
+      "relationships": "Coordinates six October 4 plans; links older mechanics/AI/strategy work and later fair-play plan. Deferred serverless leaderboard depends on determinism evidence."
+    },
+    {
+      "path": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "start": 0,
+      "end": 25196,
+      "kind": "text",
+      "sha256": "96b2132e6b8477e18725a3346e2cc7406b53b0f7b09729fa1b5d0cd1cd8652fe",
+      "file_bytes": 25196,
+      "whole_file_sha256": "96b2132e6b8477e18725a3346e2cc7406b53b0f7b09729fa1b5d0cd1cd8652fe",
+      "hash_matches_batch": true,
+      "assigned_part_sha256": "96b2132e6b8477e18725a3346e2cc7406b53b0f7b09729fa1b5d0cd1cd8652fe",
+      "whole_file_fully_read": true,
+      "supportname": "highlight-reel-clip-export",
+      "problem": "Twenty-second pose ring cannot retain a whole race highlight story or export video.",
+      "architecture": "Read-only event journal taps RaceFacts through RaceRadio; scored capped clip vault; pure scorer/planner; reel player; feature-detected WebCodecs plus muxer or MediaRecorder fallback.",
+      "work_items": "Three slices: in-game reel, encoding/audio/vendor/backend resize, sharing polish; manual device gates.",
+      "implementation": "OPEN; no matching reel/vault/encoder files found in static JS filename inventory. Historical unused journal stub was deleted per status.",
+      "measurement_provenance": "Historical pose sizes, memory estimates, support research and licensing claims are source assertions; encoder throughput, OBS/device behavior and music redistribution remain unverified.",
+      "relationships": "Extends broadcast-feel results-highlight slice C, reuses camera kit and replay discontinuity contract; constrained by memory plan and share-card delivery precedent."
+    },
+    {
+      "path": "docs/plans/2026-10-04-localisation.md",
+      "start": 0,
+      "end": 31075,
+      "kind": "text",
+      "sha256": "cef293842c8d6b55c8e649d33e0e58168625b488212254e63e74ee32eed1a21f",
+      "file_bytes": 31075,
+      "whole_file_sha256": "cef293842c8d6b55c8e649d33e0e58168625b488212254e63e74ee32eed1a21f",
+      "hash_matches_batch": true,
+      "assigned_part_sha256": "cef293842c8d6b55c8e649d33e0e58168625b488212254e63e74ee32eed1a21f",
+      "whole_file_fully_read": true,
+      "supportname": "localisation",
+      "problem": "English text is scattered through DOM, JS sinks and template concatenations.",
+      "architecture": "Gettext-style inline English fallback, lazy hashed JSON, ICU-lite plurals and Intl helpers; DOM applier; pseudo locale; lint and migrated-surface guard.",
+      "work_items": "Ten slices: foundation/picker/cache, lint, pseudo matrix, menus, HUD/results, Garage, Career/Data, captions, voice fallback, reviewed locale waves.",
+      "implementation": "PARTLY SHIPPED: I18n APIs and DOM applier exist; locale manifest contains only English with two keys. LSP consumers establish DOM applier; no full screen migration or picker claim.",
+      "measurement_provenance": "Historical counts (422 JS files, 427 concatenations, etc.) and language-market ranking are dated, heuristic provenance; no fresh full inventory.",
+      "relationships": "Uses UI-MAP screen inventory, accessibility settings seam and radio template/voice-latency research. RTL and multilingual Kokoro deferred."
+    },
+    {
+      "path": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "start": 0,
+      "end": 25414,
+      "kind": "text",
+      "sha256": "fd63f989f2efb285247d6fc39ea69aa91df612cf2786e79940b53fea25f69b2d",
+      "file_bytes": 25414,
+      "whole_file_sha256": "fd63f989f2efb285247d6fc39ea69aa91df612cf2786e79940b53fea25f69b2d",
+      "hash_matches_batch": true,
+      "assigned_part_sha256": "fd63f989f2efb285247d6fc39ea69aa91df612cf2786e79940b53fea25f69b2d",
+      "whole_file_fully_read": true,
+      "supportname": "pwa-shortcuts-calendar",
+      "problem": "Installed app lacks direct doors and external calendar reminders.",
+      "architecture": "Manifest shortcuts and allowlisted deep-link consumer; cached schedule countdown; proposed UTC RFC5545 builder, optional static CI feed and install capability evaluations.",
+      "work_items": "Four slices: shortcuts, countdown/sessions, client-side calendar, optional feed or launch/share handling.",
+      "implementation": "PARTLY SHIPPED: manifest has five shortcuts including controller; DeepLink stages existing title buttons and retries while gates block title. Schedule countdown has visibility/disconnect cleanup. Calendar export not established.",
+      "measurement_provenance": "Historical feed response, TTL/rate/terms and calendar-client UID/VALARM behavior remain dated external assertions; no network or client import performed.",
+      "relationships": "Reuses Data Hub schedule/cache and ghost-file conventions; distinguishes real calendar from in-game season; optional feed depends on deployment staging and attribution."
+    },
+    {
+      "path": "docs/plans/2026-10-04-share-cards.md",
+      "start": 0,
+      "end": 18790,
+      "kind": "text",
+      "sha256": "35d2a63d664c95381896daab36637040107f4d12b4ccca5db98b40050e0d18ce",
+      "file_bytes": 18790,
+      "whole_file_sha256": "35d2a63d664c95381896daab36637040107f4d12b4ccca5db98b40050e0d18ce",
+      "hash_matches_batch": true,
+      "assigned_part_sha256": "35d2a63d664c95381896daab36637040107f4d12b4ccca5db98b40050e0d18ce",
+      "whole_file_fully_read": true,
+      "supportname": "share-cards",
+      "problem": "Text shares lack portable result images and compact staging links.",
+      "architecture": "Pure serialisable card model and layout ops; shared PNG painter/font/QR/delivery layer; proposed short card-link envelope.",
+      "work_items": "Four slices: daily/shared renderer, race/season/career, ghost chart/staging, preview/sizes/a11y.",
+      "implementation": "Status says SHIPPED; static files and ShareCard rendering support infrastructure. LSP only identifies DailyChallenge as external ShareCard consumer; all five planned card integrations not substantiated. Actual module home is share directory, diverging from proposed UI home.",
+      "measurement_provenance": "Historical budgets and canvas/API compatibility are plan evidence; no image rendering/device sharing performed.",
+      "relationships": "Builds on player-accessibility text share envelopes, designer PNG precedent, Photo Studio and GhostShare; ghost samples deliberately remain outside QR card links."
+    },
+    {
+      "path": "docs/plans/2026-10-04-stream-overlay.md",
+      "start": 0,
+      "end": 19605,
+      "kind": "text",
+      "sha256": "d6965e51fd626f563ccb97fc7f9af82a0020a5bdbc48383ed60cdcf76c5d3922",
+      "file_bytes": 19605,
+      "whole_file_sha256": "d6965e51fd626f563ccb97fc7f9af82a0020a5bdbc48383ed60cdcf76c5d3922",
+      "hash_matches_batch": true,
+      "assigned_part_sha256": "d6965e51fd626f563ccb97fc7f9af82a0020a5bdbc48383ed60cdcf76c5d3922",
+      "whole_file_fully_read": true,
+      "supportname": "stream-overlay",
+      "problem": "Creators need transparent graphics composited over gameplay from a separate OBS page.",
+      "architecture": "Transport-blind pure feed schema and DOM painter; proposed 4Hz publisher, same-browser BroadcastChannel fallback and passive WebRTC/Nostr bridge.",
+      "work_items": "Four slices: demo/schema/painter, same-browser publisher, passive peer transport, polish/docs.",
+      "implementation": "Status says SHIPPED but static page loads feed/render/broadcast/TV graphics only. Non-demo boot paints waiting frame and returns; demo uses a 250ms interval. No overlay publisher/bridge files in inventory. Thus shipped demo infrastructure is narrower than complete live OBS goal.",
+      "measurement_provenance": "OBS profile separation and WebRTC support were explicitly unproven; 3% CPU target is a proposed acceptance criterion, not a measurement.",
+      "relationships": "Separate surface from broadcast camera plan; passive PhonePad-style side-channel proposal must not occupy netplay grid seats."
+    },
+    {
+      "path": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "start": 0,
+      "end": 9525,
+      "kind": "text",
+      "sha256": "8de1c509a00c031cd1a11de56ada91779a250df1254ae43376e9f376883f5d8a",
+      "file_bytes": 47156,
+      "whole_file_sha256": "8de1c509a00c031cd1a11de56ada91779a250df1254ae43376e9f376883f5d8a",
+      "hash_matches_batch": true,
+      "assigned_part_sha256": "84a06a8a1a8825ad9b25f2348a5c0a58cb39a770651bf8a2dce8b131e104c263",
+      "whole_file_fully_read": false,
+      "supportname": "bug-hunt-plan",
+      "problem": "Read-only 13-reviewer audit at 64dd7a8 found lifecycle/input/per-frame defects.",
+      "architecture": "Subsystem batches each paired with targeted unit/VM pin and verification plan; first four prioritised, performance batch later, product decisions isolated.",
+      "work_items": "Assigned prefix covers persistence/Garage batch 1 and lazy-boot batch 2 through partial row 2.6; remainder belongs to group04.",
+      "implementation": "Status says SHIPPED via next-day fix-all plan; source explicitly says rows not reverified 2026-10-26. This map makes no per-row fix correctness claim.",
+      "measurement_provenance": "Historical verified/repro labels distinguish coordinator source reread from Node/VM reproductions. Fuzz query counts and clean-subsystem conclusions are inherited audit claims, not rerun.",
+      "relationships": "Subsequent fix-all plan is implementation handoff/superseding execution register; BUGS and defect ledger were dedupe inputs. Historical scratch reproducer references are preserved in JSON only."
+    }
+  ],
+  "read_ledger": [
+    {
+      "path": "docs/plans/2026-10-04-colourblind-captions.md",
+      "start": 5770,
+      "end": 13770,
+      "bytes": 8000,
+      "sha256": "6433900385339bae8bf000472b6e5b3206b792d11de9a3d1c7ac2dc7e2e4a3b7",
+      "tool_chunk_id": "a82795",
+      "untruncated": true,
+      "max_output_tokens": 4000,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-colourblind-captions.md",
+      "start": 13770,
+      "end": 21770,
+      "bytes": 8000,
+      "sha256": "13d568f24cfea8f1068adc7ed651a31445fcf86dd4fc9479f42dd125b8dd8987",
+      "tool_chunk_id": "08e382",
+      "untruncated": true,
+      "max_output_tokens": 4000,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-colourblind-captions.md",
+      "start": 21770,
+      "end": 26643,
+      "bytes": 4873,
+      "sha256": "22a0432db9b7c704aceaef4ec9156537438fa2152bf1e338a123f53d08d4daea",
+      "tool_chunk_id": "0fcd35",
+      "untruncated": true,
+      "max_output_tokens": 4000,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-feature-roadmap.md",
+      "start": 0,
+      "end": 8000,
+      "bytes": 8000,
+      "sha256": "de6f708a5ab1b090dd4c03beb33a3bd9d44b46ef1267a9905640bc6cadcf822c",
+      "tool_chunk_id": "05be1c",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-feature-roadmap.md",
+      "start": 8000,
+      "end": 9522,
+      "bytes": 1522,
+      "sha256": "e1944301fc39245160883fdc0f71c668fae1468f5fec7cc3669c099b363a4ee2",
+      "tool_chunk_id": "252eca",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "start": 0,
+      "end": 8000,
+      "bytes": 8000,
+      "sha256": "60ed4e1549990dc0f63593a975d26b0d97a1521f4ec139bbadb02b374dacd857",
+      "tool_chunk_id": "ca74ab",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "start": 8000,
+      "end": 16000,
+      "bytes": 8000,
+      "sha256": "c2a4f634b3f9f0376f35c45adda92615293dbcde9114e0f80bebdf5bfbbd5121",
+      "tool_chunk_id": "3cb161",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "start": 16000,
+      "end": 24000,
+      "bytes": 8000,
+      "sha256": "0d060aaaab88651457d63474828faebe3dc9d3fb865fb9be3dac19ff1803c850",
+      "tool_chunk_id": "e13ba0",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "start": 24000,
+      "end": 25196,
+      "bytes": 1196,
+      "sha256": "6a8dd2120369d55ea8ad1b6c49b7a08b796a8b3ba865554bc18a6ccd55f4dacf",
+      "tool_chunk_id": "19f601",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-localisation.md",
+      "start": 0,
+      "end": 8000,
+      "bytes": 8000,
+      "sha256": "748cd5a1f74d71f64df097cf6df65182d4e85e0066cc597faea5c5fa27d35344",
+      "tool_chunk_id": "cde363",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-localisation.md",
+      "start": 8000,
+      "end": 16000,
+      "bytes": 8000,
+      "sha256": "de813b078ac6d8ac8a05210841a977db669646c105986750a470c658cdbae904",
+      "tool_chunk_id": "1ef031",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-localisation.md",
+      "start": 16000,
+      "end": 24000,
+      "bytes": 8000,
+      "sha256": "14ed7a23434939a6ed0d1ec84705b050a0115549063c1d1c0ec90427062e01b8",
+      "tool_chunk_id": "c44ab2",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-localisation.md",
+      "start": 24000,
+      "end": 31075,
+      "bytes": 7075,
+      "sha256": "654bc4fe6aea93880225bc46b8c8a35aba49c0f9695e4b250f6d9838b7a9f9c3",
+      "tool_chunk_id": "b5c799",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "start": 0,
+      "end": 8000,
+      "bytes": 8000,
+      "sha256": "edbd60ed2ed743aa8ceee21a8c9578052f7d1a016c1a7d74a1e78998dfa1c66a",
+      "tool_chunk_id": "f5cda1",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "start": 8000,
+      "end": 16000,
+      "bytes": 8000,
+      "sha256": "d96e26d4143033df8d58491c22d746da038e4600f713aedd91b84e179cece275",
+      "tool_chunk_id": "6b4500",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "start": 16000,
+      "end": 24000,
+      "bytes": 8000,
+      "sha256": "07f1b2d3342f002fc55bc5d26072f143c43a6e12c7c6ed63f09702105821532a",
+      "tool_chunk_id": "a479e0",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "start": 24000,
+      "end": 25414,
+      "bytes": 1414,
+      "sha256": "603a2ca3bfd69b138e9a025b72b86fadbb0282a42ba3355cbf3e816a18af5b65",
+      "tool_chunk_id": "190220",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-share-cards.md",
+      "start": 0,
+      "end": 8000,
+      "bytes": 8000,
+      "sha256": "83c890cc0045eff5caf89c1f95028525b22956f0b5409dac55eaaf3cffb8a655",
+      "tool_chunk_id": "f96ef8",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-share-cards.md",
+      "start": 8000,
+      "end": 16000,
+      "bytes": 8000,
+      "sha256": "c07ac765da29850c9921c928b0635153abf7fbfd39817bd13f922a09302ae98a",
+      "tool_chunk_id": "cbe6e5",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-share-cards.md",
+      "start": 16000,
+      "end": 18790,
+      "bytes": 2790,
+      "sha256": "82fdea59119cf72738f2fd572c1feadce83b3f4d326fb5c02a24763c17b8488f",
+      "tool_chunk_id": "c5cfee",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-stream-overlay.md",
+      "start": 0,
+      "end": 8000,
+      "bytes": 8000,
+      "sha256": "69c4e2d11b00bff488e92afb33118c83ffbefe99de52150e282d7ae431d97d65",
+      "tool_chunk_id": "20497e",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-stream-overlay.md",
+      "start": 8000,
+      "end": 16000,
+      "bytes": 8000,
+      "sha256": "90098f3087137e95990d50b5faafbdf92b29f650e6e703757f168d7adb2461dc",
+      "tool_chunk_id": "37aad1",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-04-stream-overlay.md",
+      "start": 16000,
+      "end": 19605,
+      "bytes": 3605,
+      "sha256": "4f768eadffb65dbd40ebbdf1ae9c9a031f0046ea7a23e95047313a5710e80417",
+      "tool_chunk_id": "dbb9c4",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "start": 0,
+      "end": 8000,
+      "bytes": 8000,
+      "sha256": "8397323140ce029fbfa61d0fceeac662094825b803818f604e2d704298436df9",
+      "tool_chunk_id": "24fac0",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    },
+    {
+      "path": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "start": 8000,
+      "end": 9525,
+      "bytes": 1525,
+      "sha256": "cd467a3ed2baac5b2d0855210fa82366442b9190a6335ff91adcd44b3773bc09",
+      "tool_chunk_id": "10bd09",
+      "untruncated": true,
+      "max_output_tokens": 4200,
+      "method": "Python read_bytes half-open slice decoded with replacement for display; original bytes hashed"
+    }
+  ],
+  "extra_context_reads": [
+    {
+      "path": "docs/plans/2026-10-04-colourblind-captions.md",
+      "start": 0,
+      "end": 5770,
+      "sha256": "461ea8f51a952ca5315a16582d4123346142a4b078136f2b1635f3a84c9e68e1",
+      "tool_chunk_id": "71e24c",
+      "untruncated": true,
+      "purpose": "Header and provenance for split first plan"
+    }
+  ],
+  "corroboration": {
+    "lsp": "Local checkout bash tools/mcp/lsp-mcp.sh outline and refs --files; source navigation only, no application runtime. Limited outline pages explicitly not exhaustive.",
+    "references": {
+      "CvdPalette": {
+        "js/ui/appearance-opts.js": 6,
+        "js/ui/cvd-palette.js": 2
+      },
+      "Captions": {
+        "js/audio/announcer.js": 6,
+        "js/race/announce-banner.js": 6,
+        "js/race/spotter.js": 3,
+        "js/ui/appearance-opts.js": 3,
+        "js/ui/captions.js": 2
+      },
+      "I18n": {
+        "js/core/dom-apply.js": 8,
+        "js/core/i18n.js": 2
+      },
+      "ShareCard": {
+        "js/race/daily-challenge.js": 3,
+        "js/share/share-card.js": 2
+      },
+      "OverlayFeed": {
+        "js/overlay/feed.js": 2,
+        "js/overlay/render.js": 2,
+        "js/race/broadcast.js": 2,
+        "js/race/tv-graphics.js": 1
+      },
+      "DeepLink": {
+        "js/ui/deep-link.js": 2,
+        "js/ui/title-flow.js": 1
+      }
+    },
+    "static_reads": [
+      "manifest.json",
+      "locales/manifest.json",
+      "js/ui/deep-link.js:1-53",
+      "js/share/share-card.js:1-100",
+      "overlay.html:1-78",
+      "js/core/i18n.js:1-80",
+      "js/data/schedule.js:95-156",
+      "js/overlay/render.js:163-181"
+    ],
+    "negative_evidence": "Filename inventory only for missing reel/vault/encoder and overlay publisher/bridge; does not prove absence of semantically equivalent differently named code.",
+    "source_identity": [
+      {
+        "path": "AGENTS.md",
+        "bytes": 22722,
+        "sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": ".claude/skills/code-nav/SKILL.md",
+        "bytes": 5246,
+        "sha256": "ec73c911fa39f0d724037ee74bb963ac6208232a86a3ba33057d28eaa2da1353",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "docs/project-map/plans-batches.json",
+        "bytes": 12901,
+        "sha256": "1a40789e71e6969e810294fe72ac8c4be3ca103efdff7a18cb2d2a50e6bc2eeb",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "manifest.json",
+        "bytes": 2914,
+        "sha256": "0b28d9325192787412a077fa8a0aec609b33eaff011e0711711298a31d9aa2bc",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "locales/manifest.json",
+        "bytes": 123,
+        "sha256": "73451103edb2eaf39a55c9aa1cdc1c112049836f4b10af3a7025724b19c95433",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "tools/manifest.cjs",
+        "bytes": 101567,
+        "sha256": "bc6440de131fd98aa6f8eb7df5a6ba09b9796d256b01379869e37389f31abbeb",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "js/ui/deep-link.js",
+        "bytes": 2575,
+        "sha256": "b09a08c0c00b5614ce55fa6c69bfb7fd5edaee77bb88f65601370888f220b391",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "js/share/share-card.js",
+        "bytes": 6269,
+        "sha256": "ce15b38d173788a78a4b55fa321dabb52a3c84baddd4e7ee1aa67d89144426f7",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "overlay.html",
+        "bytes": 5196,
+        "sha256": "898fa551d3adc9ee123faaa11339daf037b9b934b8b41eecf7c68f034df8f790",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "js/core/i18n.js",
+        "bytes": 9353,
+        "sha256": "9f6058bcf0c6686628174c57bdb195694c027f5132625b8a1162d19f09c44719",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "js/ui/captions.js",
+        "bytes": 9098,
+        "sha256": "c8b4970b575bbddaffff02f917f639c24c59ff9eebb43616ec3fb1f5d548b4ec",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "js/ui/cvd-palette.js",
+        "bytes": 8745,
+        "sha256": "819f5a3a053b76b25832b372dab63f0cff9bdd365ae20941271bed339afddd36",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "js/overlay/feed.js",
+        "bytes": 9468,
+        "sha256": "8beb0aeeb127cfa0bd7bbc302d64b6ab84c225011b98066a086e8f76bf75360f",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "js/overlay/render.js",
+        "bytes": 8946,
+        "sha256": "966303d8f7b3c9bdf4c60470b9a1747674eef80cd2cb8672b80d7f63fc199565",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      },
+      {
+        "path": "js/data/schedule.js",
+        "bytes": 11549,
+        "sha256": "472f8674fe1ad82212c28bbc3e17cc63961be43a962a4b7c6cef453a3f762aea",
+        "coverage": "bounded static excerpts or LSP, not full byte read unless read ledger states so"
+      }
+    ]
+  },
+  "raw_references": [
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "--cmp-s/m/h/i/w",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "--faster/--slower/--sec-*/--you",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": ".claude/rules/render-wgx.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "/dont-rely-on-colour-alone...",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "css/hud.css",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "css/tokens.css",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "docs/PHYSICS.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "docs/UI-MAP.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/<new>/ui/captions.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/<new>/ui/cue-glyphs.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/<new>/ui/cvd-palette.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/audio/announcer-recorded.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/audio/announcer.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/audio/driving-cues.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/audio/engine.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/audio/rivals.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/audio/voice-pack.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/game.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/physics/tyre-model.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/race/driving-coach.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/race/race-settings.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/race/real-replay.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/race/spotter.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/render/glx/shaders/glsl-fx.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/render/shared/driving-line.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/ui/appearance-opts.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/ui/driving-line-opts.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/ui/hud.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/ui/results-sheet.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/ui/settings-export.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "js/ui/track-maps.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "node tools/gen/gen-shell.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "node tools/ui/layout-audit.mjs --list",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "tests/groups.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "tests/unit/<new>/cvd-palette.test.mjs",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "tests/unit/nontext-contrast.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "tests/unit/settings-defaults.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-colourblind-captions.md",
+      "raw_reference": "tools/manifest.cjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-feature-roadmap.md",
+      "raw_reference": "assets/music/CREDITS.txt",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-feature-roadmap.md",
+      "raw_reference": "docs/CAREER.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-feature-roadmap.md",
+      "raw_reference": "docs/TRACK-DESIGNER.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-feature-roadmap.md",
+      "raw_reference": "js/car/ghost-share.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-feature-roadmap.md",
+      "raw_reference": "js/car/ghost.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-feature-roadmap.md",
+      "raw_reference": "js/game.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-feature-roadmap.md",
+      "raw_reference": "js/race/daily-challenge.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": ".claude/rules/render-tlx.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": ".claude/rules/render-wgx.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": ".claude/skills/replay-camera/SKILL.md",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "assets/music/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "assets/music/CREDITS.txt",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "claude/f1-game-project-26h3ng",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "docs/TESTING.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "docs/notes/CAMERA-BROADCAST-KIT-2026-10-01.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "docs/plans/2026-09-30-broadcast-feel.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "docs/plans/2026-10-03-perf-memory.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/camera/clip-vault.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/camera/reel-planner.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/export/clip-audio.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/export/clip-encoder.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/export/clip-share.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/name.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/race/event-journal.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/race/reel-score.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/<new>/ui/reel-player.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/audio/announcer.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/audio/engine.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/audio/music-lib.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/audio/radio-fx.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/audio/soundtrack.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/audio/spotify.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/camera/director.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/camera/replay-buf.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/camera/results-cam.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/data/real-race-tab.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/editor/designer.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/game.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/perf/governor.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/physics/incident-sim.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/race/broadcast.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/race/race-facts.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/race/race-insights.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/race/race-radio.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/race/real-replay.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/render/gfx.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/render/glx/glx.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/render/three/tlx.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "js/ui/photo-studio.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "node tools/check/ratchets.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "node tools/ci/pick-tests.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "node tools/ci/tooling-fast.mjs --jobs=3",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "node tools/gen/gen-shell.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "tests/data/ratchets.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "tests/groups.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "tests/unit/replay-buf.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "tests/unit/results-cam.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "tools/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "tools/manifest.cjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "vendor/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "vendor/jsqr-1.4.0/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "vendor/three-0.186.0/",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+      "raw_reference": "vendor/trystero-0.25.4/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": ".claude/skills/garage-parts-livery",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": ".claude/skills/pwa-cache-service-worker",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": ".claude/skills/slim-bloat/references/carves.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": ".claude/skills/survey-ui-matrix",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": ".claude/skills/ui-menu-a11y",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": ".github/pull_request_template.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": ".github/workflows/pages.yml",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "<new>/",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "assets/fonts",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "assets/voice/*.bin|json",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "claude/f1-game-project-26h3ng",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "css/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "css/menus.css",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "docs/TESTING.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "docs/notes/VOICE-LAG-IPHONE-2026-10-01.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "docs/plans/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "inline-start/end",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/<new>/dom-apply.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/<new>/i18n.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/<new>/pseudo.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/<new>/\u2026",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/agent",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/audio/announcer.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/audio/panel.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/audio/radio-voice.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/audio/voice-pack.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/camera",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/car/car3d.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/car/parts.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/career/badges.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/career/career-ui.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/career/season-ui.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/circuits/*.js",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/core/lazy-bundles.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/core/store.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/circuit-lore.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/hub.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/legends.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/live.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/schedule.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/settings-defaults.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/standings.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/data/teams.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/editor",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/editor/designer.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/editor/fixes.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/game.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/garage/setup-sheet.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/garage/setup-tune.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/input/phone-pad.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race js/audio js/ui js/career js/data js/garage",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race/driving-coach.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race/engineer.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race/race-facts.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race/race-insights.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race/race-radio.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race/radio-lines.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race/real-replay.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/race/spotter.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/dom.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/hud-readouts.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/hud.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/modal.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/pause-opts.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/quali-sheet.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/results-sheet.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/setting-row.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/settings-export.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/settings-tabs.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "js/ui/title-menu.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/<lang>.json",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/de.json",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/en.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/es.json",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/glossary.json",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/it.json",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/manifest.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/pt-BR.json",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "locales/\u2026",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "margin/padding-left/right/left:/right:",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node --test tests/unit/race-radio.test.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node tools/<new>/i18n-lint.mjs",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node tools/check/ratchets.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node tools/ci/pick-tests.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node tools/ci/remote-group.mjs ui",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node tools/gen/gen-shell.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node tools/gen/gen-shell.mjs --check",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node tools/track/verify-track.cjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "node tools/ui/layout-audit.mjs --list",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "npm test -- tests/specs/<file>.spec.js",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "setAttribute(\"aria-label\"/\"title\"/\"placeholder\")",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/<new>\u2026",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/data/<new>-i18n-migrated.json",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/data/html-sink-allowlist.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/groups.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/specs/physics-characterization.spec.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/unit/<new>-i18n-guard.test.mjs",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/unit/<new>-i18n.test.mjs",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/unit/menu-a11y-audit.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tests/unit/race-radio.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/<new>/gen-locales.mjs",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/<new>/i18n-lint.mjs",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/<new>/i18n-lint.mjs --guard",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/<new>/\u2026",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/check/html-sink-lint.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/check/offline-precache-check.cjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/gen/gen-shell.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/gen/voicepack.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/manifest.cjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/ui/layout-audit.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-localisation.md",
+      "raw_reference": "tools/ui/layout-audit.mjs --list",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "./",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "./?go=daily",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "./?go=garage",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "./?go=nextgp",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "./?go=race",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": ".claude/skills/data-hub/SKILL.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": ".claude/skills/pwa-cache-service-worker/SKILL.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": ".claude/skills/season-mode/SKILL.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": ".github/workflows/pages.yml",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "PRODID:-//Apex 26//Race Weekend//EN",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "claude/<topic>",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "css/data.css",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "docs/PLATFORM.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "docs/notes/INPUT-GHOSTS-2026-10-01.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "docs/notes/REAL-RACE-2026-09-27.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "docs/notes/REPO-SIZE-2026-10.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "docs/notes/TRACK-SWITCH-LEAKS-2026-10-02.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "https://brycejmurrin.github.io/f1-game/<file>.ics",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "icons/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "icons/icon-180.png",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/<new>/data/ics.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/<new>/ui/deep-link.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/car/ghost-share.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/core/lazy-bundles.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/data/api-transport.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/data/api.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/data/hub.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/data/schedule.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/editor/custom-tracks.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/game.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/roster.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/ui/settings-export.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "js/ui/title-flow.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "node --test tests/unit/data-schedule-tz.test.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "node tools/check/offline-precache-check.cjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "node tools/ci/deploy.mjs --gate-only",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "node tools/ci/test-solo.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "node tools/desktop/stage.mjs --out _site",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "node tools/gen/gen-shell.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "node tools/gen/gen-shell.mjs --check",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "node tools/shot/agent.mjs <track> <cmd>",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tests/data/ratchets.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tests/groups.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tests/helpers/f1-api-mock.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tests/specs/data-lifecycle.spec.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tests/specs/title-menu-rotation.spec.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tests/unit/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tests/unit/a11y-pwa-pass.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tests/unit/data-schedule-tz.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "text/calendar",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tools/ci/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tools/desktop/stage-files.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+      "raw_reference": "tools/manifest.cjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": " (speed = ds/dt over ",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "--gold/--silver/--bronze",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "<new>/",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "assets/fonts/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "claude/f1-game-project-26h3ng",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "css/tokens.css",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "docs/PLATFORM.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "docs/TESTING.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "docs/notes/CI-RENDERING-PERFORMANCE.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "docs/notes/PRODUCT-BRAINSTORM-2026-09-16.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "docs/plans/2026-09-30-player-a11y.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "https://brycejmurrin.github.io/f1-game/",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/<new>/ui/share-card-data.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/<new>/ui/share-card-layout.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/<new>/ui/share-card.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/<new>/ui/share-link.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/<new>/\u2026",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/camera/results-cam.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/car/ghost-share.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/career/career-ui.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/career/career.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/career/season-cal.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/core/native-download.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/data/export.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/editor/designer.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/game.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/net/lobby-codes.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/net/qr.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/race/daily-challenge.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/ui/photo-studio.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/ui/results-sheet.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/ui/results-story.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "js/ui/title-flow.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "node tools/ci/remote-group.mjs ui",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "tests/data/ratchets.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "tests/groups.json",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "tests/unit/<new>share-card-layout.test.mjs",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "tests/unit/daily-challenge.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "tests/unit/ghost-share.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "tests/unit/net-qr.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-share-cards.md",
+      "raw_reference": "tools/manifest.cjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "(a.prog - b.prog) / max(speed, 20)",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "claude/f1-game-project-26h3ng",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "claude/stream-overlay-<slice>",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "css/tokens.css",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "css/touch-controls.css",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "docs/DEBUG-HOOKS.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "docs/MULTIPLAYER.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/<new>/name.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/<new>/overlay/bridge.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/<new>/overlay/feed.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/<new>/overlay/publisher.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/<new>/overlay/render.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/agent/agentview.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/agent/apex.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/core/log.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/game.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/input/phone-pad.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/net/handshake.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/net/lobby.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/net/netplay.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/net/nostr.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/net/rendezvous.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/net/transport.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/perf/gfx-debug-overlay.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/race/broadcast.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/race/race-radio.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/render/three/tlx.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/ui/hud.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "js/ui/setting-row.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "node tools/ci/deploy.mjs --gate-only",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "npm test -- tests/specs/<new>.spec.js",
+      "exists_exact": false,
+      "classification": "proposed"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "tests/unit/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "tests/unit/deploy-staging.test.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "tools/check/ratchets.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "tools/ci/test-bg.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "tools/desktop/stage-files.mjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "tools/manifest.cjs",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "ws://",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-04-stream-overlay.md",
+      "raw_reference": "ws://localhost",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "cursor/<topic>-<hash>",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "docs/BUGS.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "docs/notes/DEFECT-LEDGER.md",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/career-backup.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/career-ui.js:161,871",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/career.js:517,977-979",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/career.js:679,1242,1496",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/save-migrate.js:141",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/save-migrate.js:155-168",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/save-migrate.js:65-98",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/season-cal.js:311-326",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/career/season-cal.js:519-534",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/core/lazy-bundles.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/core/lazy-bundles.js:19-39,301-326",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/core/lazy-bundles.js:301-328",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/core/lazy-bundles.js:385-396",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/core/lazy-bundles.js:70-82",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/core/store.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/core/store.js:107,115",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/core/store.js:36-41",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/data",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/data/driver-ratings.js:75",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/data/garage-defaults.js:87-93",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/game.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/game.js:239",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/game.js:2623",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/garage/setup-sheet.js:378-398,591-602",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/race/session-stub.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/render/renderer-boot.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/ui/select-screen.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/ui/select-screen.js:881-889",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/ui/settings-export.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/ui/settings-export.js:466-468,516-533",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/ui/settings-tabs.js",
+      "exists_exact": true,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/ui/settings-tabs.js:78-82,162-165",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "js/ui/title-menu.js:21",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "node tools/ci/pick-tests.mjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    },
+    {
+      "source": "docs/plans/2026-10-09-bug-hunt-plan.md",
+      "raw_reference": "scratchpad/alias.cjs",
+      "exists_exact": false,
+      "classification": "historical/raw reference; existence is exact-string only, may include symbol/line syntax"
+    }
+  ],
+  "limits": [
+    "No tests, browser, network, game runtime, plan commands, staging or commits executed.",
+    "No per-row bug-fix revalidation; assigned bug-hunt range ends mid-row.",
+    "Historical URLs, metrics and support/license assertions not refreshed.",
+    "Source existence and LSP wiring establish static structure, not working or measured player behavior."
+  ],
+  "cleanup": {
+    "scratch_created": [
+      "scratch/plans03-chunks.json",
+      "scratch/write-plans03.py"
+    ],
+    "action": "removed after output generation",
+    "source_edits": false,
+    "generated_assets": false
+  },
+  "read_ledger_policy": "Every assigned chunk returned separately as an exec_command result; all results had exit_code 0 and no truncation marker. max_output_tokens was 4000 for chunks 0..2 and 4200 thereafter."
+}

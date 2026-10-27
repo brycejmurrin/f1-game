@@ -1,0 +1,3944 @@
+{
+  "group": "04",
+  "assigned_bytes": 160000,
+  "coverage": "complete assigned half-open text ranges; first source suffix and last source prefix only",
+  "plan": {
+    "path": "docs/project-map/claude-batches.json",
+    "sha256": "44f0950e13b752a315aeb80dd4a3ffc0e7bf0575f45dd0c1105f1cdad65cfb54",
+    "hash_semantics": "Each plan part sha256 is the full source file hash, including unassigned bytes. Assigned part and individually read chunk hashes are separate."
+  },
+  "sources": [
+    {
+      "path": ".claude/skills/audio-debug/references/diagnose.md",
+      "start": 1928,
+      "end": 11166,
+      "kind": "text",
+      "sha256": "a08ead0a40b1daf2c19d67bc3e3235f47dcb8883ae7c20e05422d70e8273889c",
+      "actual_whole_bytes": 11166,
+      "actual_whole_sha256": "a08ead0a40b1daf2c19d67bc3e3235f47dcb8883ae7c20e05422d70e8273889c",
+      "plan_hash_matches": true,
+      "part_sha256": "f4926b59c67e32003f21291ad357854553dd476620bcc605c1d9479fce2b4a0a",
+      "chunks": [
+        {
+          "start": 1928,
+          "end": 10428,
+          "bytes": 8500,
+          "sha256": "4c3e07300d28b21944b3b619ca35732c86a9755003f56ad09ae05b4d7712a033",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 10428,
+          "end": 11166,
+          "bytes": 738,
+          "sha256": "1bb1770a12fd08aa7a1538be39c0a97455fbd276d759efecadf67520713e66aa",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "diagnostic reference suffix",
+        "trigger_inputs": "Silence, flat pitch, shift or music recovery; activation/bus/debug/rate/trim state",
+        "outputs_consumers": "Audio bus graph, trusted activation/lazy bundle, limiter, shift trigger/trim/flare and visibility/duck traces; parent audio diagnosis",
+        "dependencies": "GameAudio, lazy-bundles, engine and soundtrack; audio-tune/audio-recovery units",
+        "limits": "Prefix excluded; private context and live playback unverified"
+      }
+    },
+    {
+      "path": ".claude/skills/career-mode/SKILL.md",
+      "start": 0,
+      "end": 5298,
+      "kind": "text",
+      "sha256": "793ce886f4bfba685c4c5d1ebf42fed5599344bbb7fb60fe8647473bbac90b5d",
+      "actual_whole_bytes": 5298,
+      "actual_whole_sha256": "793ce886f4bfba685c4c5d1ebf42fed5599344bbb7fb60fe8647473bbac90b5d",
+      "plan_hash_matches": true,
+      "part_sha256": "793ce886f4bfba685c4c5d1ebf42fed5599344bbb7fb60fe8647473bbac90b5d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5298,
+          "bytes": 5298,
+          "sha256": "793ce886f4bfba685c4c5d1ebf42fed5599344bbb7fb60fe8647473bbac90b5d",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "skill registration",
+        "trigger_inputs": "Driver/My Team saves, contracts, economy, career weekends and hooks",
+        "outputs_consumers": "Active-career and deterministic economy/slot contract; dispatch to persistence/workflow",
+        "dependencies": "Career, Parts, Regulations, DriverRatings; modes and VM units",
+        "limits": "No standalone Season; careerSim requires track/grid"
+      }
+    },
+    {
+      "path": ".claude/skills/career-mode/references/persistence.md",
+      "start": 0,
+      "end": 1829,
+      "kind": "text",
+      "sha256": "f1cd528ff8d05217a8a2eab09ceddfeb4b4a1de1de3adc74348befb8681fbafa",
+      "actual_whole_bytes": 1829,
+      "actual_whole_sha256": "f1cd528ff8d05217a8a2eab09ceddfeb4b4a1de1de3adc74348befb8681fbafa",
+      "plan_hash_matches": true,
+      "part_sha256": "f1cd528ff8d05217a8a2eab09ceddfeb4b4a1de1de3adc74348befb8681fbafa",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1829,
+          "bytes": 1829,
+          "sha256": "f1cd528ff8d05217a8a2eab09ceddfeb4b4a1de1de3adc74348befb8681fbafa",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Lost upgrades/save after reload; flavour/slot and owned list",
+        "outputs_consumers": "Durability, asynchronous mirror, migration, seat reseed, stale-tab and backup diagnosis",
+        "dependencies": "store, SaveMigrate, career-backup; persistence-focused units",
+        "limits": "Reload reproduction parent-only; session-only durability is explicit"
+      }
+    },
+    {
+      "path": ".claude/skills/career-mode/references/workflow.md",
+      "start": 0,
+      "end": 8738,
+      "kind": "text",
+      "sha256": "4a21af7c0bdf6dfd842fbd797ee3cbebc03f9e56032b5893df2ffa75db62de8b",
+      "actual_whole_bytes": 8738,
+      "actual_whole_sha256": "4a21af7c0bdf6dfd842fbd797ee3cbebc03f9e56032b5893df2ffa75db62de8b",
+      "plan_hash_matches": true,
+      "part_sha256": "4a21af7c0bdf6dfd842fbd797ee3cbebc03f9e56032b5893df2ffa75db62de8b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "986c5c26e0eb424b14a40285f77e4f3f3d1917b9b36a151f31674b0c2b151a95",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8738,
+          "bytes": 238,
+          "sha256": "18b4ed305f5443e033ee4c11c74055676b23c6b9c447d893d77c9a5b47506af8",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Career flow, weekend, sponsor duplicate payment, money discrepancy",
+        "outputs_consumers": "Flow/session separation; slot ownership; stamped calendar; spend versus settle and paidSponsors trace",
+        "dependencies": "Career.settleRound, settleSponsor, researchCost, charge, SeasonCal; career units",
+        "limits": "No just-paid sponsor hook; DNF-containing sponsor-window unit gap declared"
+      }
+    },
+    {
+      "path": ".claude/skills/check-changes/SKILL.md",
+      "start": 0,
+      "end": 5783,
+      "kind": "text",
+      "sha256": "ee95002c2c741b48fe1278c458950c154e8c936e46a9304ac4b347c0878dafe3",
+      "actual_whole_bytes": 5783,
+      "actual_whole_sha256": "ee95002c2c741b48fe1278c458950c154e8c936e46a9304ac4b347c0878dafe3",
+      "plan_hash_matches": true,
+      "part_sha256": "ee95002c2c741b48fe1278c458950c154e8c936e46a9304ac4b347c0878dafe3",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5783,
+          "bytes": 5783,
+          "sha256": "ee95002c2c741b48fe1278c458950c154e8c936e46a9304ac4b347c0878dafe3",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "skill registration",
+        "trigger_inputs": "Changed paths, test selection, pre-push validation, timeout or shell policy",
+        "outputs_consumers": "Plan/fast JSON plus verdict, not-run groups and logs; routes verify-agent and parent",
+        "dependencies": "VERIFICATION, verify-change, pick-tests, tooling-fast, test-bg, deploy",
+        "limits": "Dynamic shell injection is Claude-only contract and was not expanded; partial/pending is not pass"
+      }
+    },
+    {
+      "path": ".claude/skills/check-changes/references/bump.md",
+      "start": 0,
+      "end": 1962,
+      "kind": "text",
+      "sha256": "b0bc2b6d121e16d2132cd1e30f974f0990bdc09611b6714b6fe66077ff1e3343",
+      "actual_whole_bytes": 1962,
+      "actual_whole_sha256": "b0bc2b6d121e16d2132cd1e30f974f0990bdc09611b6714b6fe66077ff1e3343",
+      "plan_hash_matches": true,
+      "part_sha256": "b0bc2b6d121e16d2132cd1e30f974f0990bdc09611b6714b6fe66077ff1e3343",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1962,
+          "bytes": 1962,
+          "sha256": "b0bc2b6d121e16d2132cd1e30f974f0990bdc09611b6714b6fe66077ff1e3343",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "JS/CSS or manifest/shell edit",
+        "outputs_consumers": "Dev-token versus staged content-address hash ownership",
+        "dependencies": "manifest, gen-shell, bump-cache, pages workflow, deploy-stamp units",
+        "limits": "No repo-side apply or generated-file hand edit"
+      }
+    },
+    {
+      "path": ".claude/skills/check-changes/references/deploy.md",
+      "start": 0,
+      "end": 5486,
+      "kind": "text",
+      "sha256": "842819ac26e32084c4a21bc6d6fb14a4ac0e3212668f14625e06c157ae2acf7a",
+      "actual_whole_bytes": 5486,
+      "actual_whole_sha256": "842819ac26e32084c4a21bc6d6fb14a4ac0e3212668f14625e06c157ae2acf7a",
+      "plan_hash_matches": true,
+      "part_sha256": "842819ac26e32084c4a21bc6d6fb14a4ac0e3212668f14625e06c157ae2acf7a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5486,
+          "bytes": 5486,
+          "sha256": "842819ac26e32084c4a21bc6d6fb14a4ac0e3212668f14625e06c157ae2acf7a",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Merge/push/deploy protocol and union verification",
+        "outputs_consumers": "PR gate, geometry-union sweeps, generated shell handling and live provenance",
+        "dependencies": "deploy, pages workflow, geometry-paths, verify-track, deploy-research",
+        "limits": "Contains older protected-branch check narrative; no deployment/live checks executed"
+      }
+    },
+    {
+      "path": ".claude/skills/check-changes/references/engine-physics.md",
+      "start": 0,
+      "end": 1382,
+      "kind": "text",
+      "sha256": "466dc024bb860b0b63c7d4fb5adebe3ebb2294d5b49ff566494f721b76170ed0",
+      "actual_whole_bytes": 1382,
+      "actual_whole_sha256": "466dc024bb860b0b63c7d4fb5adebe3ebb2294d5b49ff566494f721b76170ed0",
+      "plan_hash_matches": true,
+      "part_sha256": "466dc024bb860b0b63c7d4fb5adebe3ebb2294d5b49ff566494f721b76170ed0",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1382,
+          "bytes": 1382,
+          "sha256": "466dc024bb860b0b63c7d4fb5adebe3ebb2294d5b49ff566494f721b76170ed0",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Engine/physics/game change paths",
+        "outputs_consumers": "Two specific browser groups, master spec, ratchets and speed-unit lint",
+        "dependencies": "verify-change, physics-core/collisions, ready-gate",
+        "limits": "Remaining planned groups explicitly not-run"
+      }
+    },
+    {
+      "path": ".claude/skills/check-changes/references/guards.md",
+      "start": 0,
+      "end": 4327,
+      "kind": "text",
+      "sha256": "0cfdfe7e35792708c5a6904292a686da68911d00a4f6f72d1a8051b95d2676a2",
+      "actual_whole_bytes": 4327,
+      "actual_whole_sha256": "0cfdfe7e35792708c5a6904292a686da68911d00a4f6f72d1a8051b95d2676a2",
+      "plan_hash_matches": true,
+      "part_sha256": "0cfdfe7e35792708c5a6904292a686da68911d00a4f6f72d1a8051b95d2676a2",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4327,
+          "bytes": 4327,
+          "sha256": "0cfdfe7e35792708c5a6904292a686da68911d00a4f6f72d1a8051b95d2676a2",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Pre-push, track/graph/shell edits, failed spec or selector coverage",
+        "outputs_consumers": "Build/parity/generated-shell/structural checks; failure interpretation and requested-path coverage",
+        "dependencies": "verify-track, graph-parity, tooling-fast, bump-cache, gen-shell",
+        "limits": "Unknown flags fail; transport success independent of domain verification"
+      }
+    },
+    {
+      "path": ".claude/skills/check-changes/references/sync-pr.md",
+      "start": 0,
+      "end": 2318,
+      "kind": "text",
+      "sha256": "6578da0dc49d793dd942d1f23ad19a6b85d02d379b412c75b24f04ed195e767a",
+      "actual_whole_bytes": 2318,
+      "actual_whole_sha256": "6578da0dc49d793dd942d1f23ad19a6b85d02d379b412c75b24f04ed195e767a",
+      "plan_hash_matches": true,
+      "part_sha256": "6578da0dc49d793dd942d1f23ad19a6b85d02d379b412c75b24f04ed195e767a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2318,
+          "bytes": 2318,
+          "sha256": "6578da0dc49d793dd942d1f23ad19a6b85d02d379b412c75b24f04ed195e767a",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "After sync result or hand-authored conflict",
+        "outputs_consumers": "Temp-branch ownership, resume/verify semantics, explicit branch restoration and manual conflict process",
+        "dependencies": "sync-pr, node-plan, pr-board, generated source ownership",
+        "limits": "Unchecked conflicts remain unknown; existing temp branch preserved"
+      }
+    },
+    {
+      "path": ".claude/skills/check-changes/references/triage.md",
+      "start": 0,
+      "end": 5939,
+      "kind": "text",
+      "sha256": "f31b949625ecd53349238b4f47e8886c8bdcf0bbdd20ee599f642c460291eb4b",
+      "actual_whole_bytes": 5939,
+      "actual_whole_sha256": "f31b949625ecd53349238b4f47e8886c8bdcf0bbdd20ee599f642c460291eb4b",
+      "plan_hash_matches": true,
+      "part_sha256": "f31b949625ecd53349238b4f47e8886c8bdcf0bbdd20ee599f642c460291eb4b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5939,
+          "bytes": 5939,
+          "sha256": "f31b949625ecd53349238b4f47e8886c8bdcf0bbdd20ee599f642c460291eb4b",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Timeout/hang, waiter 124, loaded versus solo, generated drift or red shard",
+        "outputs_consumers": "Log/load timeline decision tree; rAF polling, unreachable predicate, budget and shared-state distinctions",
+        "dependencies": "test-bg, test-solo, verify-change, wait-polling, CI triage",
+        "limits": "Waiter exit is not run verdict; retries still reported red"
+      }
+    },
+    {
+      "path": ".claude/skills/check-changes/references/vm-twin.md",
+      "start": 0,
+      "end": 2656,
+      "kind": "text",
+      "sha256": "0387bf46a7d4fa66bad813765f4f6c5d1ec7d805076eab42ba121ade63d7f784",
+      "actual_whole_bytes": 2656,
+      "actual_whole_sha256": "0387bf46a7d4fa66bad813765f4f6c5d1ec7d805076eab42ba121ade63d7f784",
+      "plan_hash_matches": true,
+      "part_sha256": "0387bf46a7d4fa66bad813765f4f6c5d1ec7d805076eab42ba121ade63d7f784",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2656,
+          "bytes": 2656,
+          "sha256": "0387bf46a7d4fa66bad813765f4f6c5d1ec7d805076eab42ba121ade63d7f784",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Browser spec with pure hooks eligible for VM",
+        "outputs_consumers": "Static scan, unchanged adapter run, ADAPTED/TWINNED registry, mutant fidelity, shrink-only debt",
+        "dependencies": "vm-portable, vm-page, twinned-specs, mutants, twin-fidelity, ratchets",
+        "limits": "Eligibility is not execution pass; real mechanism-specific mutant required"
+      }
+    },
+    {
+      "path": ".claude/skills/check/SKILL.md",
+      "start": 0,
+      "end": 2422,
+      "kind": "text",
+      "sha256": "dc7b46cee67382519103ef1fcb9b59f84ed7379a8a6b1e9202c72e508204486b",
+      "actual_whole_bytes": 2422,
+      "actual_whole_sha256": "dc7b46cee67382519103ef1fcb9b59f84ed7379a8a6b1e9202c72e508204486b",
+      "plan_hash_matches": true,
+      "part_sha256": "dc7b46cee67382519103ef1fcb9b59f84ed7379a8a6b1e9202c72e508204486b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2422,
+          "bytes": 2422,
+          "sha256": "dc7b46cee67382519103ef1fcb9b59f84ed7379a8a6b1e9202c72e508204486b",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "user-invocable skill registration",
+        "trigger_inputs": "Check/status/green/live/running request",
+        "outputs_consumers": "At most five-line branch/PR/head/CI/run/live answer",
+        "dependencies": "session-status, ci-watch, test-bg status, pages-live-sha, git ancestry",
+        "limits": "Never starts/retries/pushes; missing/shallow ancestry unknown"
+      }
+    },
+    {
+      "path": ".claude/skills/code-nav/SKILL.md",
+      "start": 0,
+      "end": 5246,
+      "kind": "text",
+      "sha256": "ec73c911fa39f0d724037ee74bb963ac6208232a86a3ba33057d28eaa2da1353",
+      "actual_whole_bytes": 5246,
+      "actual_whole_sha256": "ec73c911fa39f0d724037ee74bb963ac6208232a86a3ba33057d28eaa2da1353",
+      "plan_hash_matches": true,
+      "part_sha256": "ec73c911fa39f0d724037ee74bb963ac6208232a86a3ba33057d28eaa2da1353",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5246,
+          "bytes": 5246,
+          "sha256": "ec73c911fa39f0d724037ee74bb963ac6208232a86a3ba33057d28eaa2da1353",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "skill registration",
+        "trigger_inputs": "JS symbol definition/use/callers/outline/type/errors",
+        "outputs_consumers": "Attached LSP or shell adapter tagged bounded output and diagnostics",
+        "dependencies": "apex-lsp over TS7; output_read and agent-run; lsp-hint",
+        "limits": "Attachment separate from configuration; dependencies required; no global host reconfiguration"
+      }
+    },
+    {
+      "path": ".claude/skills/code-nav/references/output-and-limits.md",
+      "start": 0,
+      "end": 3125,
+      "kind": "text",
+      "sha256": "9dbbf5d380f28bc1f0ff9d6d05215aafc0375e7b3fc5ee3c97fc7d077ff7f447",
+      "actual_whole_bytes": 3125,
+      "actual_whole_sha256": "9dbbf5d380f28bc1f0ff9d6d05215aafc0375e7b3fc5ee3c97fc7d077ff7f447",
+      "plan_hash_matches": true,
+      "part_sha256": "9dbbf5d380f28bc1f0ff9d6d05215aafc0375e7b3fc5ee3c97fc7d077ff7f447",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3125,
+          "bytes": 3125,
+          "sha256": "9dbbf5d380f28bc1f0ff9d6d05215aafc0375e7b3fc5ee3c97fc7d077ff7f447",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Interpreting definitions/references/aliases, paging and diagnostics",
+        "outputs_consumers": "Tags, ambiguity refusal, text fallback and bounded coverage rules",
+        "dependencies": "LSP MCP TypeScript project; code-investigation guide",
+        "limits": "First page not exhaustive; facade alias/JS typing/runtime callback limits"
+      }
+    },
+    {
+      "path": ".claude/skills/css-play/SKILL.md",
+      "start": 0,
+      "end": 5042,
+      "kind": "text",
+      "sha256": "57b9cf650ba230bdcb91fa87bd1dca39a0338ef73e572fdb107637aa1f7c84db",
+      "actual_whole_bytes": 5042,
+      "actual_whole_sha256": "57b9cf650ba230bdcb91fa87bd1dca39a0338ef73e572fdb107637aa1f7c84db",
+      "plan_hash_matches": true,
+      "part_sha256": "57b9cf650ba230bdcb91fa87bd1dca39a0338ef73e572fdb107637aa1f7c84db",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5042,
+          "bytes": 5042,
+          "sha256": "57b9cf650ba230bdcb91fa87bd1dca39a0338ef73e572fdb107637aa1f7c84db",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "skill registration",
+        "trigger_inputs": "One screen stylesheet or measured DOM/CSS restructure",
+        "outputs_consumers": "Hot-swap screenshot/DOM/meta/token review; routes fit/a11y and matrix elsewhere",
+        "dependencies": "css-play, playwright shell, menu-screens, menu-baseline, review-captures",
+        "limits": "Parent browser only; hide canvas; typography change needs reviewed pixel golden"
+      }
+    },
+    {
+      "path": ".claude/skills/css-play/references/loop.md",
+      "start": 0,
+      "end": 5997,
+      "kind": "text",
+      "sha256": "27aebdd7e7271365920a6bc1f61bfb6373ed8b1e2a199ba55720076afacfd8d9",
+      "actual_whole_bytes": 5997,
+      "actual_whole_sha256": "27aebdd7e7271365920a6bc1f61bfb6373ed8b1e2a199ba55720076afacfd8d9",
+      "plan_hash_matches": true,
+      "part_sha256": "27aebdd7e7271365920a6bc1f61bfb6373ed8b1e2a199ba55720076afacfd8d9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5997,
+          "bytes": 5997,
+          "sha256": "27aebdd7e7271365920a6bc1f61bfb6373ed8b1e2a199ba55720076afacfd8d9",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Custom screen, DOM dump or invisible swap",
+        "outputs_consumers": "Catalog/aliases, body tokens, zoom-normalized boxes, stylesheet swap and bounded waits",
+        "dependencies": "harness, menu-screens, MANIFEST.CSS, token capture",
+        "limits": "Early click replacement wording differs from appended catalog clicks described later"
+      }
+    },
+    {
+      "path": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "start": 0,
+      "end": 10582,
+      "kind": "text",
+      "sha256": "e35bdb0ab2df58c08e0dc17f4ad42eaea72002eae3c2385126b2cb092b0dff89",
+      "actual_whole_bytes": 10582,
+      "actual_whole_sha256": "e35bdb0ab2df58c08e0dc17f4ad42eaea72002eae3c2385126b2cb092b0dff89",
+      "plan_hash_matches": true,
+      "part_sha256": "e35bdb0ab2df58c08e0dc17f4ad42eaea72002eae3c2385126b2cb092b0dff89",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "7f6bd49806556c38beec67803175046da9ac74d6428010474403be5a7faf4d0c",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 10582,
+          "bytes": 2082,
+          "sha256": "1838382c726d932762e566113826607e6b650cd4afa7cc010459ef95c46d9618",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Screens/layers, class variation, DOM/height or methodology restructure",
+        "outputs_consumers": "15 measurable rules: registry, modal layer/focus, custom props, counts, density, container size boundary",
+        "dependencies": "UiLayers, CSS layers/tokens, components inventory, tree-counts",
+        "limits": "Dated counts are historical; no count is fresh evidence; no live-run source edits"
+      }
+    },
+    {
+      "path": ".claude/skills/css-play/references/restructure.md",
+      "start": 0,
+      "end": 3197,
+      "kind": "text",
+      "sha256": "dc60a7f230d55901fd72246a804bfdc6dd3a1ae09715e570c463673c85182ae3",
+      "actual_whole_bytes": 3197,
+      "actual_whole_sha256": "dc60a7f230d55901fd72246a804bfdc6dd3a1ae09715e570c463673c85182ae3",
+      "plan_hash_matches": true,
+      "part_sha256": "dc60a7f230d55901fd72246a804bfdc6dd3a1ae09715e570c463673c85182ae3",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3197,
+          "bytes": 3197,
+          "sha256": "dc60a7f230d55901fd72246a804bfdc6dd3a1ae09715e570c463673c85182ae3",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Before a measured restructure or component consolidation",
+        "outputs_consumers": "Before/after class/node/threshold counts, adopt/reject/partial PR recommendation and lower ratchet",
+        "dependencies": "layout-audit once, tree-counts, ratchets, class-usage, component inventory",
+        "limits": "Shell grep and ratchet count different nodes; typography baseline explicit"
+      }
+    },
+    {
+      "path": ".claude/skills/data-hub/SKILL.md",
+      "start": 0,
+      "end": 4338,
+      "kind": "text",
+      "sha256": "46738969d2ad05fd8eba7568a8b827de5207bdaa8efcb72110aa61805cddc874",
+      "actual_whole_bytes": 4338,
+      "actual_whole_sha256": "46738969d2ad05fd8eba7568a8b827de5207bdaa8efcb72110aa61805cddc874",
+      "plan_hash_matches": true,
+      "part_sha256": "46738969d2ad05fd8eba7568a8b827de5207bdaa8efcb72110aa61805cddc874",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4338,
+          "bytes": 4338,
+          "sha256": "46738969d2ad05fd8eba7568a8b827de5207bdaa8efcb72110aa61805cddc874",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "skill registration",
+        "trigger_inputs": "Data tabs, API wiring, stale/wrong year, wrong WATCH race/driver",
+        "outputs_consumers": "Loader/node-age/API TTL routing, RealRace.launch boundary and safe API DOM contract",
+        "dependencies": "hub, split loaders, api, OpenF1 traces/IndexedDB, data units/specs",
+        "limits": "Mock misses fail open; direct init references can TDZ; camera snaps routed elsewhere"
+      }
+    },
+    {
+      "path": ".claude/skills/data-hub/references/export.md",
+      "start": 0,
+      "end": 1041,
+      "kind": "text",
+      "sha256": "662b35831748f0f04092670992f59344008cf54c28d5510ce02ae99d6e577775",
+      "actual_whole_bytes": 1041,
+      "actual_whole_sha256": "662b35831748f0f04092670992f59344008cf54c28d5510ce02ae99d6e577775",
+      "plan_hash_matches": true,
+      "part_sha256": "662b35831748f0f04092670992f59344008cf54c28d5510ce02ae99d6e577775",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1041,
+          "bytes": 1041,
+          "sha256": "662b35831748f0f04092670992f59344008cf54c28d5510ce02ae99d6e577775",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Export Gather/download empty or ZIP questions",
+        "outputs_consumers": "OpenF1 gather -> circuits trace/startline -> ZIP JSON/PNG, CRC/size/shape pins",
+        "dependencies": "export, f1-api-mock, data-export units",
+        "limits": "Gather prerequisite, delayed/rate-limited data and toBlob null distinguish empty output"
+      }
+    },
+    {
+      "path": ".claude/skills/data-hub/references/season-year.md",
+      "start": 0,
+      "end": 1783,
+      "kind": "text",
+      "sha256": "309055893cc9656bd0a5e90f5492ba683f46a77f786db244b5cc395d88eab7fb",
+      "actual_whole_bytes": 1783,
+      "actual_whole_sha256": "309055893cc9656bd0a5e90f5492ba683f46a77f786db244b5cc395d88eab7fb",
+      "plan_hash_matches": true,
+      "part_sha256": "309055893cc9656bd0a5e90f5492ba683f46a77f786db244b5cc395d88eab7fb",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1783,
+          "bytes": 1783,
+          "sha256": "309055893cc9656bd0a5e90f5492ba683f46a77f786db244b5cc395d88eab7fb",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Standings previous year, picker mismatch or stale cache",
+        "outputs_consumers": "Clock-derived Jolpica year, intended final-table fallback, picker ownership and cache isolation",
+        "dependencies": "api, standings, api-transport, f1-api-mock",
+        "limits": "Clock/cache/node age/mock all distinct; live fetch/browser not performed"
+      }
+    },
+    {
+      "path": ".claude/skills/f1-animation-cameras/SKILL.md",
+      "start": 0,
+      "end": 1810,
+      "kind": "text",
+      "sha256": "c40f06b4fa94399dfac4cf151399d66d33398a2893a56b76c701221ce7a0bfe8",
+      "actual_whole_bytes": 1810,
+      "actual_whole_sha256": "c40f06b4fa94399dfac4cf151399d66d33398a2893a56b76c701221ce7a0bfe8",
+      "plan_hash_matches": true,
+      "part_sha256": "c40f06b4fa94399dfac4cf151399d66d33398a2893a56b76c701221ce7a0bfe8",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1810,
+          "bytes": 1810,
+          "sha256": "c40f06b4fa94399dfac4cf151399d66d33398a2893a56b76c701221ce7a0bfe8",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "skill registration",
+        "trigger_inputs": "Changing camera/animation lag, cuts, replay anchors or garage arrivals",
+        "outputs_consumers": "Deterministic owner tracing, pure fixtures then parent motion evidence",
+        "dependencies": "Camera files, frame-report, replay probe, doctor",
+        "limits": "Measurement/stills route elsewhere; browser parent-only"
+      }
+    },
+    {
+      "path": ".claude/skills/f1-animation-cameras/references/cut-jump.md",
+      "start": 0,
+      "end": 2841,
+      "kind": "text",
+      "sha256": "b551957804874507679f74ae4f1c4e46e4a5092d3bf905542e45eda68a0651c7",
+      "actual_whole_bytes": 2841,
+      "actual_whole_sha256": "b551957804874507679f74ae4f1c4e46e4a5092d3bf905542e45eda68a0651c7",
+      "plan_hash_matches": true,
+      "part_sha256": "b551957804874507679f74ae4f1c4e46e4a5092d3bf905542e45eda68a0651c7",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2841,
+          "bytes": 2841,
+          "sha256": "b551957804874507679f74ae4f1c4e46e4a5092d3bf905542e45eda68a0651c7",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Camera mode cut jumps and owner discovery",
+        "outputs_consumers": "File-to-owner registry and cut-time/sample fixture recipe",
+        "dependencies": "mode-switch, vantage, director, lens/rig/tuner/Flyby/photo modules",
+        "limits": "No compensating snap; fixture unit math is not full visual evidence"
+      }
+    },
+    {
+      "path": ".claude/skills/f1-animation-cameras/references/game.md",
+      "start": 0,
+      "end": 2360,
+      "kind": "text",
+      "sha256": "f9f01d4569972296a606f23d71cbf17973f238d4319755f7f5bb986432426849",
+      "actual_whole_bytes": 2360,
+      "actual_whole_sha256": "f9f01d4569972296a606f23d71cbf17973f238d4319755f7f5bb986432426849",
+      "plan_hash_matches": true,
+      "part_sha256": "f9f01d4569972296a606f23d71cbf17973f238d4319755f7f5bb986432426849",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2360,
+          "bytes": 2360,
+          "sha256": "f9f01d4569972296a606f23d71cbf17973f238d4319755f7f5bb986432426849",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Local camera and garage arrival/drive-out bug",
+        "outputs_consumers": "Pure pose terminal-delta invariant, deterministic A/B staging and still/transition distinction",
+        "dependencies": "GarageArrival.pose/poseOut, setup-camera, camera-ride units",
+        "limits": "Contains old symbol-rg advice; no still snap after orbit; backend/hardware recorded"
+      }
+    },
+    {
+      "path": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "start": 0,
+      "end": 1797,
+      "kind": "text",
+      "sha256": "068328c937aa041755ce4495ea61b503004504e1345c27cb311032aa84ebfd9c",
+      "actual_whole_bytes": 1797,
+      "actual_whole_sha256": "068328c937aa041755ce4495ea61b503004504e1345c27cb311032aa84ebfd9c",
+      "plan_hash_matches": true,
+      "part_sha256": "068328c937aa041755ce4495ea61b503004504e1345c27cb311032aa84ebfd9c",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1797,
+          "bytes": 1797,
+          "sha256": "068328c937aa041755ce4495ea61b503004504e1345c27cb311032aa84ebfd9c",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Old follow anchor after seek or missing probe prerequisite",
+        "outputs_consumers": "Follow/lock ownership, phase deltas/preferences, non-Baku fixture and ffmpeg route",
+        "dependencies": "real-replay, Broadcast, watch-transport, cameraDampingState",
+        "limits": "Locked picture skips auto-refollow; private state not inferred"
+      }
+    },
+    {
+      "path": ".claude/skills/f1-animation-cameras/references/replay-workflow.md",
+      "start": 0,
+      "end": 2126,
+      "kind": "text",
+      "sha256": "68d90d8a1640d5344dfc28f33562fcee1ee0030e358d186b3cd251e095d23548",
+      "actual_whole_bytes": 2126,
+      "actual_whole_sha256": "68d90d8a1640d5344dfc28f33562fcee1ee0030e358d186b3cd251e095d23548",
+      "plan_hash_matches": true,
+      "part_sha256": "68d90d8a1640d5344dfc28f33562fcee1ee0030e358d186b3cd251e095d23548",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2126,
+          "bytes": 2126,
+          "sha256": "68d90d8a1640d5344dfc28f33562fcee1ee0030e358d186b3cd251e095d23548",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Bounded replay fixture/capture evidence",
+        "outputs_consumers": "Entry/seek/follow/exit/reentry frame/anchor/preference/clocks receipt with explicit failures",
+        "dependencies": "replay-camera-probe, presented-canvas helper, wait-polling lint",
+        "limits": "frames 1..120; seed uint32; timeout 1000..900000; no outputs in plan; no live API smoke fixture"
+      }
+    },
+    {
+      "path": ".claude/skills/f1-animation-cameras/references/replay.md",
+      "start": 0,
+      "end": 1696,
+      "kind": "text",
+      "sha256": "af50ea5387590304ad25063a6e56d25e2e2e7ec1f8add7206a5432c573099dc9",
+      "actual_whole_bytes": 1696,
+      "actual_whole_sha256": "af50ea5387590304ad25063a6e56d25e2e2e7ec1f8add7206a5432c573099dc9",
+      "plan_hash_matches": true,
+      "part_sha256": "af50ea5387590304ad25063a6e56d25e2e2e7ec1f8add7206a5432c573099dc9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1696,
+          "bytes": 1696,
+          "sha256": "af50ea5387590304ad25063a6e56d25e2e2e7ec1f8add7206a5432c573099dc9",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Replay lifecycle snap/stale follow",
+        "outputs_consumers": "Offline fixture gate then serialized parent probe and phone run",
+        "dependencies": "capture-tools-regressions, replay-camera-probe, diagnosis/workflow",
+        "limits": "No camera reset between phases; software capture limited to session device/backend"
+      }
+    },
+    {
+      "path": ".claude/skills/game-feel/SKILL.md",
+      "start": 0,
+      "end": 3058,
+      "kind": "text",
+      "sha256": "87038ec455e5ae1da84bd9a3480c12c72d9bf4a56add63484796cdb387f62e62",
+      "actual_whole_bytes": 3058,
+      "actual_whole_sha256": "87038ec455e5ae1da84bd9a3480c12c72d9bf4a56add63484796cdb387f62e62",
+      "plan_hash_matches": true,
+      "part_sha256": "87038ec455e5ae1da84bd9a3480c12c72d9bf4a56add63484796cdb387f62e62",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3058,
+          "bytes": 3058,
+          "sha256": "87038ec455e5ae1da84bd9a3480c12c72d9bf4a56add63484796cdb387f62e62",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "skill registration",
+        "trigger_inputs": "Weak impact/kerb/shift/collision feedback",
+        "outputs_consumers": "Render/audio event layer plus player and race determinism checks",
+        "dependencies": "shake, particles, audio, skidmarks, body-attitude, PerfGov",
+        "limits": "No physics/clock/AI state changes; measuring/fixing camera lag routed separately"
+      }
+    },
+    {
+      "path": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "start": 0,
+      "end": 4264,
+      "kind": "text",
+      "sha256": "c6823178b852e3a6aa84452b36b833a4835d7769799035c7e673ce4e952505b7",
+      "actual_whole_bytes": 4264,
+      "actual_whole_sha256": "c6823178b852e3a6aa84452b36b833a4835d7769799035c7e673ce4e952505b7",
+      "plan_hash_matches": true,
+      "part_sha256": "c6823178b852e3a6aa84452b36b833a4835d7769799035c7e673ce4e952505b7",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4264,
+          "bytes": 4264,
+          "sha256": "c6823178b852e3a6aa84452b36b833a4835d7769799035c7e673ce4e952505b7",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Feedback channels/trauma/easing/tier/accessibility choices",
+        "outputs_consumers": "Decaying trauma-squared deterministic camera noise and bounded tier examples",
+        "dependencies": "Existing feel accumulator, particles governor, audio, motionReduced/camComfort",
+        "limits": "No per-frame sim RNG; iOS vibration absent; recipes not measured settings"
+      }
+    },
+    {
+      "path": ".claude/skills/game-feel/references/workflow.md",
+      "start": 0,
+      "end": 3334,
+      "kind": "text",
+      "sha256": "2a8a343a014197c6da81f0d094e9a9457d110b60a6070d5a24f2d0157e8a22f7",
+      "actual_whole_bytes": 3334,
+      "actual_whole_sha256": "2a8a343a014197c6da81f0d094e9a9457d110b60a6070d5a24f2d0157e8a22f7",
+      "plan_hash_matches": true,
+      "part_sha256": "2a8a343a014197c6da81f0d094e9a9457d110b60a6070d5a24f2d0157e8a22f7",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3334,
+          "bytes": 3334,
+          "sha256": "2a8a343a014197c6da81f0d094e9a9457d110b60a6070d5a24f2d0157e8a22f7",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Kerb/wall/shift feel channel and hit-stop caveat",
+        "outputs_consumers": "Channel ownership, kerb versus kickup distinction, render-only new hold and clocks comparison",
+        "dependencies": "game cue block, physics consts/wall-clamp, audio rumble, input haptics",
+        "limits": "Existing car-contact sim slowdown explicitly exceptional; equal sim/wall time separate"
+      }
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/SKILL.md",
+      "start": 0,
+      "end": 6898,
+      "kind": "text",
+      "sha256": "1e410cfe637fcf0fc99ce4b8216aeb48073f8454f9530823075a14c58d3f42b8",
+      "actual_whole_bytes": 6898,
+      "actual_whole_sha256": "1e410cfe637fcf0fc99ce4b8216aeb48073f8454f9530823075a14c58d3f42b8",
+      "plan_hash_matches": true,
+      "part_sha256": "1e410cfe637fcf0fc99ce4b8216aeb48073f8454f9530823075a14c58d3f42b8",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6898,
+          "bytes": 6898,
+          "sha256": "1e410cfe637fcf0fc99ce4b8216aeb48073f8454f9530823075a14c58d3f42b8",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "skill registration",
+        "trigger_inputs": "Parts/ownership/mesh/paint/finish/legibility edit",
+        "outputs_consumers": "Garage UI/scene/camera/geometry/paint ownership map and lockstep workflow",
+        "dependencies": "Parts, Car3D, Liveries, LiveryTex, Gfx, apex garage hooks",
+        "limits": "Garage CSS outside ownership; screenshots/studio elsewhere; ordered catalog"
+      }
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/references/before-pack.md",
+      "start": 0,
+      "end": 1118,
+      "kind": "text",
+      "sha256": "833aca3a797e2e5c7ae99f8e7f416971a9a5f86d5689eef2c96871dbcebcd9c9",
+      "actual_whole_bytes": 1118,
+      "actual_whole_sha256": "833aca3a797e2e5c7ae99f8e7f416971a9a5f86d5689eef2c96871dbcebcd9c9",
+      "plan_hash_matches": true,
+      "part_sha256": "833aca3a797e2e5c7ae99f8e7f416971a9a5f86d5689eef2c96871dbcebcd9c9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1118,
+          "bytes": 1118,
+          "sha256": "833aca3a797e2e5c7ae99f8e7f416971a9a5f86d5689eef2c96871dbcebcd9c9",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Need eleven-team before evidence",
+        "outputs_consumers": "Fetched ancestor pack with MANIFEST and staleness; changed-angle after comparison",
+        "dependencies": "garage-angles-fetch and garage-before workflow",
+        "limits": "No self-captured full before grid; car studio lacks garage room"
+      }
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/references/design-loop.md",
+      "start": 0,
+      "end": 1236,
+      "kind": "text",
+      "sha256": "34b0c8cb441cbded935a177399f8b67d9d8767b4c8780fa0bec9589096226212",
+      "actual_whole_bytes": 1236,
+      "actual_whole_sha256": "34b0c8cb441cbded935a177399f8b67d9d8767b4c8780fa0bec9589096226212",
+      "plan_hash_matches": true,
+      "part_sha256": "34b0c8cb441cbded935a177399f8b67d9d8767b4c8780fa0bec9589096226212",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1236,
+          "bytes": 1236,
+          "sha256": "34b0c8cb441cbded935a177399f8b67d9d8767b4c8780fa0bec9589096226212",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "reference",
+        "trigger_inputs": "Paint placement/legibility choice",
+        "outputs_consumers": "Flat placement -> lit subject station -> hot reload -> paired design -> paint guards",
+        "dependencies": "spine-station, garage-angles, persistent apex_garage",
+        "limits": "Preserve flat versus lit evidence boundary"
+      }
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+      "start": 0,
+      "end": 22269,
+      "kind": "text",
+      "sha256": "b8cf214259c80e7049ef35fecb20cbf9ba4cb01af41b4978eeeb1eb905300591",
+      "actual_whole_bytes": 22269,
+      "actual_whole_sha256": "b8cf214259c80e7049ef35fecb20cbf9ba4cb01af41b4978eeeb1eb905300591",
+      "plan_hash_matches": true,
+      "part_sha256": "b8cf214259c80e7049ef35fecb20cbf9ba4cb01af41b4978eeeb1eb905300591",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "86f4174cb02a082034857d1a32dd0ac44d46f2ec4006b2437a32a6808380d239",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "b96369b2e756a84c927d601c76544d838702fe6451f39adead06865ca9399dd6",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 17000,
+          "end": 22269,
+          "bytes": 5269,
+          "sha256": "a9245162549e9d7563bb97d7e6b88398202f53c0b6fe90ffbe69d1dc43835d52",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "capture contract reference",
+        "trigger_inputs": "Subject/team/parts/design/camera/viewport/DPR matrix, baseline or live session",
+        "outputs_consumers": "Validated plan then parent captures, sidecars, requested/actual camera, PNG/sheets/diff/oracle/flat/path outputs",
+        "dependencies": "garageFrame, garageParts, garageTeam, lightTune, canonical stations/catalog, persistent apex_garage server",
+        "limits": "Plan before reset; budget refusal; one browser; strict present barrier; fast stale-frame risk; native DPR needs hardware"
+      }
+    },
+    {
+      "path": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "start": 0,
+      "end": 7464,
+      "kind": "text",
+      "sha256": "a0a8638bea059c28616acac896c4288ad0b5c521f2f73103782d6de9d400bd86",
+      "actual_whole_bytes": 10003,
+      "actual_whole_sha256": "a0a8638bea059c28616acac896c4288ad0b5c521f2f73103782d6de9d400bd86",
+      "plan_hash_matches": true,
+      "part_sha256": "96c24f02e7106023383ff496a40dfeac00bd68d1f281d1d7b8399e9e55a4eafa",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7464,
+          "bytes": 7464,
+          "sha256": "96c24f02e7106023383ff496a40dfeac00bd68d1f281d1d7b8399e9e55a4eafa",
+          "method": "exec_command Python Path.read_bytes half-open slice; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "catalog reference prefix",
+        "trigger_inputs": "Parts/signature/finish and fin/spine/cover/lower/draft field changes",
+        "outputs_consumers": "Ordered stats/visual catalog, separate flank atlas, geometry helper alignment, draft/preview/store lockstep",
+        "dependencies": "Parts, Car3D, Liveries, LiveryTex, CarShade, setup-sheet draft tables, team-livery units",
+        "limits": "Ends mid garage-file validation paragraph; no claim about unread remainder"
+      }
+    }
+  ],
+  "read_summary": {
+    "parts": 36,
+    "chunks": 41,
+    "maximum_chunk_bytes": 8500,
+    "all_individual_results_untruncated": true,
+    "decoding": "UTF-8 replacement only at any chunk-split codepoint; hashes use exact raw bytes"
+  },
+  "instructions": {
+    "read": [
+      "AGENTS.md",
+      ".claude/rules/claude-config.md"
+    ],
+    "nested_agents_under_claude": [],
+    "audited_skill_commands_executed": false
+  },
+  "registration": {
+    "frontmatter": "name/description on each complete SKILL; check additionally user-invocable true",
+    "textual_consumers": [
+      ".claude/skills/README.md",
+      "AGENTS.md"
+    ],
+    "config_separation": "No hook/config/agent implementation is assigned in this group; references to those are declarative dependencies, not executable registration verification."
+  },
+  "supplemental_text_reads": [
+    {
+      "path": ".claude/skills/README.md",
+      "scope": "first 35 lines and targeted routing rg matches"
+    },
+    {
+      "paths": [
+        ".claude/settings.json",
+        ".mcp.json",
+        ".codex/config.toml",
+        ".claude/rules/claude-config.md"
+      ],
+      "scope": "targeted skill-name config search; no name matches in config files, not full registration audit"
+    }
+  ],
+  "lsp": {
+    "method": "attached lsp_definition body false outputLevel full",
+    "queries": [
+      {
+        "symbol": "Career.settleRound",
+        "definition": "js/career/career.js:1235:10",
+        "result": "1 definition; module-file fallback; no direct qualified use; export/caller coverage unverified"
+      },
+      {
+        "symbol": "GameAudio.shift",
+        "definitions": [
+          "js/audio/engine.js:2397:12",
+          "js/audio/stub.js:13:12"
+        ],
+        "result": "2 candidates; text match repeated reinjected browser global; runtime load order may determine winner"
+      },
+      {
+        "symbol": "GarageArrival.pose",
+        "definition": "js/garage/arrival.js:171:12",
+        "export": "js/garage/arrival.js:278:34",
+        "query_at": "js/garage/setup-camera.js:247:79"
+      },
+      {
+        "symbol": "RealRace.launch",
+        "definition": "js/race/real-race.js:963:9",
+        "export": "js/race/real-race.js:968:20",
+        "query_at": "js/data/real-race-tab.js:921:70"
+      },
+      {
+        "symbol": "Liveries.forTeam",
+        "definition": "js/car/liveries.js:652:12",
+        "export": "js/car/liveries.js:667:40"
+      },
+      {
+        "symbol": "Parts.getMods",
+        "definition": "js/car/parts.js:956:12",
+        "export": "js/car/parts.js:1039:5"
+      }
+    ],
+    "limits": "Definitions only; no full references/callgraph/runtime claims. Attached service workspace may diverge from local hash snapshot; source plan hashes are local."
+  },
+  "reference_observations": [
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "../../check-changes/references/bump.md",
+      "resolved": ".claude/skills/check-changes/references/bump.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "references/persistence.md",
+      "resolved": ".claude/skills/career-mode/references/persistence.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "references/workflow.md",
+      "resolved": ".claude/skills/career-mode/references/workflow.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "references/workflow.md",
+      "resolved": ".claude/skills/career-mode/references/workflow.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "references/workflow.md",
+      "resolved": ".claude/skills/career-mode/references/workflow.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "references/persistence.md",
+      "resolved": ".claude/skills/career-mode/references/persistence.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "../../check-changes/references/bump.md",
+      "resolved": ".claude/skills/check-changes/references/bump.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "../../../docs/VERIFICATION.md",
+      "resolved": "docs/VERIFICATION.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "../../../docs/notes/DEFECT-LEDGER.md",
+      "resolved": "docs/notes/DEFECT-LEDGER.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "references/vm-twin.md",
+      "resolved": ".claude/skills/check-changes/references/vm-twin.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "../../../docs/VERIFICATION.md#docs-and-skill-changes",
+      "resolved": "docs/VERIFICATION.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "references/guards.md",
+      "resolved": ".claude/skills/check-changes/references/guards.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "references/triage.md",
+      "resolved": ".claude/skills/check-changes/references/triage.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "references/bump.md",
+      "resolved": ".claude/skills/check-changes/references/bump.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "references/engine-physics.md",
+      "resolved": ".claude/skills/check-changes/references/engine-physics.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "references/sync-pr.md",
+      "resolved": ".claude/skills/check-changes/references/sync-pr.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "references/deploy.md",
+      "resolved": ".claude/skills/check-changes/references/deploy.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "../../../docs/notes/LSP-MCP-2026-10-18.md",
+      "resolved": "docs/notes/LSP-MCP-2026-10-18.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "../../../docs/AGENT-SURFACE.md#bootstrap-auto-setup",
+      "resolved": "docs/AGENT-SURFACE.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "references/output-and-limits.md",
+      "resolved": ".claude/skills/code-nav/references/output-and-limits.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/code-nav/references/output-and-limits.md",
+      "raw": "../../../../docs/research/AGENT-CODE-INVESTIGATIONS.md",
+      "resolved": "docs/research/AGENT-CODE-INVESTIGATIONS.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "references/restructure.md",
+      "resolved": ".claude/skills/css-play/references/restructure.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "references/loop.md#who-owns-a-row",
+      "resolved": ".claude/skills/css-play/references/loop.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "../mcp-probe/references/traps-chrome.md",
+      "resolved": ".claude/skills/mcp-probe/references/traps-chrome.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "references/loop.md",
+      "resolved": ".claude/skills/css-play/references/loop.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "references/restructure.md",
+      "resolved": ".claude/skills/css-play/references/restructure.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "references/restructure-screens-css-rules.md",
+      "resolved": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "../../../docs/DESIGN-TOOLS.md",
+      "resolved": "docs/DESIGN-TOOLS.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "../../check-changes/references/bump.md",
+      "resolved": ".claude/skills/check-changes/references/bump.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "../../check-changes/references/bump.md",
+      "resolved": ".claude/skills/check-changes/references/bump.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "../../../../docs/DESIGN-TOOLS.md",
+      "resolved": "docs/DESIGN-TOOLS.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "../../check-changes/references/bump.md",
+      "resolved": ".claude/skills/check-changes/references/bump.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md",
+      "status": "historical_or_archive_text"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "docs/archive/research/UI-REDESIGN-2026-08.md",
+      "status": "historical_or_archive_text"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "restructure-screens-css-rules.md",
+      "resolved": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/SKILL.md",
+      "raw": "references/game.md",
+      "resolved": ".claude/skills/f1-animation-cameras/references/game.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/SKILL.md",
+      "raw": "references/replay.md",
+      "resolved": ".claude/skills/f1-animation-cameras/references/replay.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/SKILL.md",
+      "raw": "references/cut-jump.md",
+      "resolved": ".claude/skills/f1-animation-cameras/references/cut-jump.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/game.md",
+      "raw": "replay.md",
+      "resolved": ".claude/skills/f1-animation-cameras/references/replay.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay.md",
+      "raw": "replay-diagnosis.md",
+      "resolved": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay.md",
+      "raw": "replay-diagnosis.md",
+      "resolved": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay.md",
+      "raw": "replay-workflow.md",
+      "resolved": ".claude/skills/f1-animation-cameras/references/replay-workflow.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "references/workflow.md",
+      "resolved": ".claude/skills/game-feel/references/workflow.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "references/workflow.md",
+      "resolved": ".claude/skills/game-feel/references/workflow.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "references/feedback-recipes.md",
+      "resolved": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "raw": "../SKILL.md",
+      "resolved": ".claude/skills/game-feel/SKILL.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "feedback-recipes.md",
+      "resolved": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "../SKILL.md",
+      "resolved": ".claude/skills/game-feel/SKILL.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/livery-fields.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/shot-cli.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "../check-changes/references/bump.md",
+      "resolved": ".claude/skills/check-changes/references/bump.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "../mcp-probe/references/chrome.md",
+      "resolved": ".claude/skills/mcp-probe/references/chrome.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "../mcp-probe/references/traps-chrome.md",
+      "resolved": ".claude/skills/mcp-probe/references/traps-chrome.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/placement.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/placement.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/before-pack.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/before-pack.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/design-loop.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/design-loop.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/livery-fields.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/workflow.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/workflow.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/placement.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/placement.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "references/garage-angles.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/design-loop.md",
+      "raw": "placement.md",
+      "resolved": ".claude/skills/garage-parts-livery/references/placement.md",
+      "status": "existing_path",
+      "contents_read": false
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "tests/unit/audio-tune.test.mjs",
+      "resolved": "tests/unit/audio-tune.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "js/audio/engine.js",
+      "resolved": "js/audio/engine.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "js/core/lazy-bundles.js",
+      "resolved": "js/core/lazy-bundles.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "js/race/pace-math.js",
+      "resolved": "js/race/pace-math.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "js/physics/consts.js",
+      "resolved": "js/physics/consts.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "js/game.js",
+      "resolved": "js/game.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "tests/unit/audio-recovery.test.mjs",
+      "resolved": "tests/unit/audio-recovery.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "js/career/career.js",
+      "resolved": "js/career/career.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "docs/CAREER.md",
+      "resolved": "docs/CAREER.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "resolved": "docs/DEBUG-HOOKS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "tools/car/career-economy.mjs",
+      "resolved": "tools/car/career-economy.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "tools/ci/test-bg.mjs",
+      "resolved": "tools/ci/test-bg.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "tests/unit/season-cal.test.mjs",
+      "resolved": "tests/unit/season-cal.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/SKILL.md",
+      "raw": "tests/unit/career-settle.test.mjs",
+      "resolved": "tests/unit/career-settle.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/persistence.md",
+      "raw": "docs/CAREER.md",
+      "resolved": "docs/CAREER.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/persistence.md",
+      "raw": "js/career/career.js",
+      "resolved": "js/career/career.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/persistence.md",
+      "raw": "js/core/store.js",
+      "resolved": "js/core/store.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/persistence.md",
+      "raw": "js/career/save-migrate.js",
+      "resolved": "js/career/save-migrate.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/persistence.md",
+      "raw": "js/career/career-backup.js",
+      "resolved": "js/career/career-backup.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/persistence.md",
+      "raw": "tests/unit/career-backup.test.mjs",
+      "resolved": "tests/unit/career-backup.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tools/car/career-economy.mjs",
+      "resolved": "tools/car/career-economy.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tests/unit/career-determinism.test.mjs",
+      "resolved": "tests/unit/career-determinism.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tests/specs/career.spec.js",
+      "resolved": "tests/specs/career.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tests/specs/quali.spec.js",
+      "resolved": "tests/specs/quali.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tools/ci/test-bg.mjs",
+      "resolved": "tools/ci/test-bg.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "js/race/quali-model.js",
+      "resolved": "js/race/quali-model.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "js/race/reliability.js",
+      "resolved": "js/race/reliability.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "css/career.css",
+      "resolved": "css/career.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tools/gen/gen-shell.mjs",
+      "resolved": "tools/gen/gen-shell.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "js/career/season-cal.js",
+      "resolved": "js/career/season-cal.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "js/game.js",
+      "resolved": "js/game.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tests/unit/season-cal.test.mjs",
+      "resolved": "tests/unit/season-cal.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "js/career/career.js",
+      "resolved": "js/career/career.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "js/ui/results-sheet.js",
+      "resolved": "js/ui/results-sheet.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tests/specs/career-hub.spec.js",
+      "resolved": "tests/specs/career-hub.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "docs/CAREER.md",
+      "resolved": "docs/CAREER.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/career-mode/references/workflow.md",
+      "raw": "tests/unit/career-settle.test.mjs",
+      "resolved": "tests/unit/career-settle.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "docs/VERIFICATION.md",
+      "resolved": "docs/VERIFICATION.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "../../../docs/VERIFICATION.md",
+      "resolved": "docs/VERIFICATION.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "docs/notes/DEFECT-LEDGER.md",
+      "resolved": "docs/notes/DEFECT-LEDGER.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "../../../docs/notes/DEFECT-LEDGER.md",
+      "resolved": "docs/notes/DEFECT-LEDGER.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "tools/ci/pick-tests.mjs",
+      "resolved": "tools/ci/pick-tests.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "tools/env/cloud-agent-install.sh",
+      "resolved": "tools/env/cloud-agent-install.sh",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "tools/ci/verify-change.mjs",
+      "resolved": "tools/ci/verify-change.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "js/circuits/monza.js",
+      "resolved": "js/circuits/monza.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": ".claude/skills/x/SKILL.md",
+      "resolved": ".claude/skills/x/SKILL.md",
+      "status": "missing_or_shorthand_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "tools/ci/deploy.mjs",
+      "resolved": "tools/ci/deploy.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "docs/AGENT-SURFACE.md",
+      "resolved": "docs/AGENT-SURFACE.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "../../../docs/agent-output/README.md",
+      "resolved": "docs/agent-output/README.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "tools/agent-run.mjs",
+      "resolved": "tools/agent-run.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "tools/ci/session-status.mjs",
+      "resolved": "tools/ci/session-status.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "tools/check/doctor.mjs",
+      "resolved": "tools/check/doctor.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "./tools/mcp/apex-tools-mcp.sh",
+      "resolved": "./tools/mcp/apex-tools-mcp.sh",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "tools/track/verify-track.cjs",
+      "resolved": "tools/track/verify-track.cjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/SKILL.md",
+      "raw": "js/game.js",
+      "resolved": "js/game.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/bump.md",
+      "raw": "tools/gen/gen-shell.mjs",
+      "resolved": "tools/gen/gen-shell.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/bump.md",
+      "raw": "js/roster.js",
+      "resolved": "js/roster.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/bump.md",
+      "raw": "tools/manifest.cjs",
+      "resolved": "tools/manifest.cjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/bump.md",
+      "raw": "tools/ci/bump-cache.mjs",
+      "resolved": "tools/ci/bump-cache.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/bump.md",
+      "raw": "tests/unit/deploy-stamp.test.mjs",
+      "resolved": "tests/unit/deploy-stamp.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/bump.md",
+      "raw": "tests/unit/load-order.test.mjs",
+      "resolved": "tests/unit/load-order.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/deploy.md",
+      "raw": "tools/ci/deploy.mjs",
+      "resolved": "tools/ci/deploy.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/deploy.md",
+      "raw": "tests/unit/deploy-stamp.test.mjs",
+      "resolved": "tests/unit/deploy-stamp.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/deploy.md",
+      "raw": "docs/WORKERS.md",
+      "resolved": "docs/WORKERS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/deploy.md",
+      "raw": "tools/ci/geometry-paths.mjs",
+      "resolved": "tools/ci/geometry-paths.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/deploy.md",
+      "raw": "tools/track/coplanar-audit.cjs",
+      "resolved": "tools/track/coplanar-audit.cjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/deploy.md",
+      "raw": "docs/TESTING.md",
+      "resolved": "docs/TESTING.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "js/game.js",
+      "resolved": "js/game.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "tools/ci/pr-board.mjs",
+      "resolved": "tools/ci/pr-board.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "docs/WORKERS.md",
+      "resolved": "docs/WORKERS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "tools/ci/verify-change.mjs",
+      "resolved": "tools/ci/verify-change.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "js/physics/consts.js",
+      "resolved": "js/physics/consts.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "tools/ci/test-bg.mjs",
+      "resolved": "tools/ci/test-bg.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "tests/specs/physics-characterization.spec.js",
+      "resolved": "tests/specs/physics-characterization.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "tools/check/ratchets.mjs",
+      "resolved": "tools/check/ratchets.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "tools/check/vstd-lint.mjs",
+      "resolved": "tools/check/vstd-lint.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "tools/ci/deploy.mjs",
+      "resolved": "tools/ci/deploy.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/engine-physics.md",
+      "raw": "tools/ci/ready-gate.mjs",
+      "resolved": "tools/ci/ready-gate.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "docs/VERIFICATION.md",
+      "resolved": "docs/VERIFICATION.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/track/verify-track.cjs",
+      "resolved": "tools/track/verify-track.cjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/ci/verify-change.mjs",
+      "resolved": "tools/ci/verify-change.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "js/track/scenery/graph.js",
+      "resolved": "js/track/scenery/graph.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/track/graph-parity.cjs",
+      "resolved": "tools/track/graph-parity.cjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/ci/bump-cache.mjs",
+      "resolved": "tools/ci/bump-cache.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/gen/gen-shell.mjs",
+      "resolved": "tools/gen/gen-shell.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/manifest.cjs",
+      "resolved": "tools/manifest.cjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/ci/tooling-fast.mjs",
+      "resolved": "tools/ci/tooling-fast.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/ci/test-bg.mjs",
+      "resolved": "tools/ci/test-bg.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tests/manual/blank-scan.spec.js",
+      "resolved": "tests/manual/blank-scan.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "raw": "tools/ci/test-solo.mjs",
+      "resolved": "tools/ci/test-solo.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/sync-pr.md",
+      "raw": "tools/ci/sync-pr.mjs",
+      "resolved": "tools/ci/sync-pr.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/triage.md",
+      "raw": "tools/ci/test-bg.mjs",
+      "resolved": "tools/ci/test-bg.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/triage.md",
+      "raw": "tools/ci/test-solo.mjs",
+      "resolved": "tools/ci/test-solo.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/triage.md",
+      "raw": "tests/unit/wait-polling.test.mjs",
+      "resolved": "tests/unit/wait-polling.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/triage.md",
+      "raw": "docs/notes/TESTING-FIELD-NOTES.md",
+      "resolved": "docs/notes/TESTING-FIELD-NOTES.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/triage.md",
+      "raw": "docs/agent-index.js",
+      "resolved": "docs/agent-index.js",
+      "status": "missing_or_shorthand_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/triage.md",
+      "raw": "tools/ci/ci-rerun.mjs",
+      "resolved": "tools/ci/ci-rerun.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/triage.md",
+      "raw": "tools/ci/verify-change.mjs",
+      "resolved": "tools/ci/verify-change.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tools/ci/twinned-specs.mjs",
+      "resolved": "tools/ci/twinned-specs.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "docs/TESTING.md",
+      "resolved": "docs/TESTING.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tools/check/vm-portable.mjs",
+      "resolved": "tools/check/vm-portable.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tests/helpers/fixtures.js",
+      "resolved": "tests/helpers/fixtures.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tests/helpers/vm-page.js",
+      "resolved": "tests/helpers/vm-page.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tests/unit/adapted-specs.test.mjs",
+      "resolved": "tests/unit/adapted-specs.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tests/data/mutants.js",
+      "resolved": "tests/data/mutants.js",
+      "status": "missing_or_shorthand_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tools/check/twin-fidelity.mjs",
+      "resolved": "tools/check/twin-fidelity.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tests/unit/twin-fidelity.test.mjs",
+      "resolved": "tests/unit/twin-fidelity.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tests/data/ratchets.js",
+      "resolved": "tests/data/ratchets.js",
+      "status": "missing_or_shorthand_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tools/check/tree-counts.mjs",
+      "resolved": "tools/check/tree-counts.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tools/check/ratchets.mjs",
+      "resolved": "tools/check/ratchets.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tests/unit/twinned-specs.test.mjs",
+      "resolved": "tests/unit/twinned-specs.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/vm-twin.md",
+      "raw": "tools/ci/pick-tests.mjs",
+      "resolved": "tools/ci/pick-tests.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check/SKILL.md",
+      "raw": "tools/ci/session-status.mjs",
+      "resolved": "tools/ci/session-status.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check/SKILL.md",
+      "raw": "tools/ci/ci-watch.mjs",
+      "resolved": "tools/ci/ci-watch.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check/SKILL.md",
+      "raw": "tools/ci/test-bg.mjs",
+      "resolved": "tools/ci/test-bg.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check/SKILL.md",
+      "raw": "tools/ci/pages-live-sha.sh",
+      "resolved": "tools/ci/pages-live-sha.sh",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/check/SKILL.md",
+      "raw": "tools/ci/pr-board.mjs",
+      "resolved": "tools/ci/pr-board.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "tools/mcp/lsp-mcp.mjs",
+      "resolved": "tools/mcp/lsp-mcp.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "docs/notes/LSP-MCP-2026-10-18.md",
+      "resolved": "docs/notes/LSP-MCP-2026-10-18.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "../../../docs/notes/LSP-MCP-2026-10-18.md",
+      "resolved": "docs/notes/LSP-MCP-2026-10-18.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "../../../docs/AGENT-SURFACE.md",
+      "resolved": "docs/AGENT-SURFACE.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "tools/mcp/lsp-mcp.sh",
+      "resolved": "tools/mcp/lsp-mcp.sh",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "tools/agent-run.mjs",
+      "resolved": "tools/agent-run.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "js/physics/consts.js",
+      "resolved": "js/physics/consts.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "js/ui/hud.js",
+      "resolved": "js/ui/hud.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "types/game-ctx.d.ts",
+      "resolved": "types/game-ctx.d.ts",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "tests/unit/lsp-mcp.test.mjs",
+      "resolved": "tests/unit/lsp-mcp.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "tests/unit/lsp-mcp-fixture.test.mjs",
+      "resolved": "tests/unit/lsp-mcp-fixture.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/SKILL.md",
+      "raw": "tools/mcp/lsp-eval.mjs",
+      "resolved": "tools/mcp/lsp-eval.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/references/output-and-limits.md",
+      "raw": "docs/notes/LSP-MCP-2026-10-18.md",
+      "resolved": "docs/notes/LSP-MCP-2026-10-18.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/code-nav/references/output-and-limits.md",
+      "raw": "../../../../docs/research/AGENT-CODE-INVESTIGATIONS.md",
+      "resolved": "docs/research/AGENT-CODE-INVESTIGATIONS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "tools/ui/css-play.mjs",
+      "resolved": "tools/ui/css-play.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "css/carsetup.css",
+      "resolved": "css/carsetup.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "./tools/mcp/playwright-mcp.sh",
+      "resolved": "./tools/mcp/playwright-mcp.sh",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "css/menus.css",
+      "resolved": "css/menus.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "tools/ui/menu-screens.mjs",
+      "resolved": "tools/ui/menu-screens.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "tests/specs/menu-baseline.spec.js",
+      "resolved": "tests/specs/menu-baseline.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "tools/ci/pick-tests.mjs",
+      "resolved": "tools/ci/pick-tests.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "tools/ui/review-captures.mjs",
+      "resolved": "tools/ui/review-captures.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/SKILL.md",
+      "raw": "../../../docs/DESIGN-TOOLS.md",
+      "resolved": "docs/DESIGN-TOOLS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "tools/ui/css-play.mjs",
+      "resolved": "tools/ui/css-play.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "tools/ui/menu-screens.mjs",
+      "resolved": "tools/ui/menu-screens.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "css/tuner.css",
+      "resolved": "css/tuner.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "css/settings.css",
+      "resolved": "css/settings.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "css/settings-controls.css",
+      "resolved": "css/settings-controls.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "css/tokens.css",
+      "resolved": "css/tokens.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "css/dialogs.css",
+      "resolved": "css/dialogs.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "css/menus.css",
+      "resolved": "css/menus.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "tools/gen/gen-shell.mjs",
+      "resolved": "tools/gen/gen-shell.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/loop.md",
+      "raw": "../../../../docs/DESIGN-TOOLS.md",
+      "resolved": "docs/DESIGN-TOOLS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "js/ui/layers.js",
+      "resolved": "js/ui/layers.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "css/dialogs.css",
+      "resolved": "css/dialogs.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "css/components.css",
+      "resolved": "css/components.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "tools/check/tree-counts.mjs",
+      "resolved": "tools/check/tree-counts.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "tests/data/ratchets.js",
+      "resolved": "tests/data/ratchets.js",
+      "status": "missing_or_shorthand_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "css/tokens.css",
+      "resolved": "css/tokens.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "css/menus.css",
+      "resolved": "css/menus.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "css/track-detail.css",
+      "resolved": "css/track-detail.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "css/data.css",
+      "resolved": "css/data.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "css/responsive.css",
+      "resolved": "css/responsive.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "css/tuner.css",
+      "resolved": "css/tuner.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "js/ui/sheet-shape.js",
+      "resolved": "js/ui/sheet-shape.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "../../../../docs/notes/PARALLEL-WORK.md",
+      "resolved": "docs/notes/PARALLEL-WORK.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "tools/gen/gen-shell.mjs",
+      "resolved": "tools/gen/gen-shell.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "docs/COMPONENTS.md",
+      "resolved": "docs/COMPONENTS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "tests/unit/component-inventory.test.mjs",
+      "resolved": "tests/unit/component-inventory.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "tests/unit/css-tokens.test.mjs",
+      "resolved": "tests/unit/css-tokens.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md",
+      "resolved": "docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md",
+      "status": "archive_reference",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "docs/archive/research/UI-REDESIGN-2026-08.md",
+      "resolved": "docs/archive/research/UI-REDESIGN-2026-08.md",
+      "status": "archive_reference",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "raw": "../../../../docs/COMPONENTS.md",
+      "resolved": "docs/COMPONENTS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "tools/ui/layout-audit.mjs",
+      "resolved": "tools/ui/layout-audit.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "tools/ci/pick-tests.mjs",
+      "resolved": "tools/ci/pick-tests.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "tools/ci/tooling-fast.mjs",
+      "resolved": "tools/ci/tooling-fast.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "tools/check/tree-counts.mjs",
+      "resolved": "tools/check/tree-counts.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "tests/data/ratchets.js",
+      "resolved": "tests/data/ratchets.js",
+      "status": "missing_or_shorthand_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "tools/check/ratchets.mjs",
+      "resolved": "tools/check/ratchets.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "tools/check/class-usage.mjs",
+      "resolved": "tools/check/class-usage.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "tests/unit/component-inventory.test.mjs",
+      "resolved": "tests/unit/component-inventory.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/css-play/references/restructure.md",
+      "raw": "docs/COMPONENTS.md",
+      "resolved": "docs/COMPONENTS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "js/data/hub.js",
+      "resolved": "js/data/hub.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "css/data.css",
+      "resolved": "css/data.css",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "js/data/api.js",
+      "resolved": "js/data/api.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "js/data/standings.js",
+      "resolved": "js/data/standings.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "js/data/real-race-tab.js",
+      "resolved": "js/data/real-race-tab.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "js/race/real-race.js",
+      "resolved": "js/race/real-race.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "js/race/real-replay.js",
+      "resolved": "js/race/real-replay.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "docs/notes/REAL-RACE-2026-09-27.md",
+      "resolved": "docs/notes/REAL-RACE-2026-09-27.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tools/check/html-sink-lint.mjs",
+      "resolved": "tools/check/html-sink-lint.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tests/helpers/f1-api-mock.js",
+      "resolved": "tests/helpers/f1-api-mock.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tests/unit/data-export.test.mjs",
+      "resolved": "tests/unit/data-export.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tests/specs/data-lifecycle.spec.js",
+      "resolved": "tests/specs/data-lifecycle.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tests/specs/telemetry-compare.spec.js",
+      "resolved": "tests/specs/telemetry-compare.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tools/ci/test-solo.mjs",
+      "resolved": "tools/ci/test-solo.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tests/unit/data-api-status.test.mjs",
+      "resolved": "tests/unit/data-api-status.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tests/groups.js",
+      "resolved": "tests/groups.js",
+      "status": "missing_or_shorthand_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/SKILL.md",
+      "raw": "tools/ci/pick-tests.mjs",
+      "resolved": "tools/ci/pick-tests.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/references/export.md",
+      "raw": "js/data/export.js",
+      "resolved": "js/data/export.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/references/export.md",
+      "raw": "tests/unit/data-export.test.mjs",
+      "resolved": "tests/unit/data-export.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/references/export.md",
+      "raw": "tests/helpers/f1-api-mock.js",
+      "resolved": "tests/helpers/f1-api-mock.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/references/season-year.md",
+      "raw": "js/data/api.js",
+      "resolved": "js/data/api.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/references/season-year.md",
+      "raw": "tests/unit/data-standings.test.mjs",
+      "resolved": "tests/unit/data-standings.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/references/season-year.md",
+      "raw": "tests/helpers/f1-api-mock.js",
+      "resolved": "tests/helpers/f1-api-mock.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/data-hub/references/season-year.md",
+      "raw": "js/data/api-transport.js",
+      "resolved": "js/data/api-transport.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/SKILL.md",
+      "raw": "tools/check/skill-smoke.mjs",
+      "resolved": "tools/check/skill-smoke.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/SKILL.md",
+      "raw": "tools/shot/frame-report.mjs",
+      "resolved": "tools/shot/frame-report.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/SKILL.md",
+      "raw": "tools/check/doctor.mjs",
+      "resolved": "tools/check/doctor.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/cut-jump.md",
+      "raw": "tests/unit/director.test.mjs",
+      "resolved": "tests/unit/director.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/game.md",
+      "raw": "js/race/real-replay.js",
+      "resolved": "js/race/real-replay.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/game.md",
+      "raw": "js/garage/arrival.js",
+      "resolved": "js/garage/arrival.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/game.md",
+      "raw": "js/garage/setup-camera.js",
+      "resolved": "js/garage/setup-camera.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/game.md",
+      "raw": "js/race/pit-lane.js",
+      "resolved": "js/race/pit-lane.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/game.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "resolved": "docs/DEBUG-HOOKS.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/game.md",
+      "raw": "tests/unit/garage-arrival.test.mjs",
+      "resolved": "tests/unit/garage-arrival.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/game.md",
+      "raw": "tests/unit/camera-ride.test.mjs",
+      "resolved": "tests/unit/camera-ride.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "raw": "js/race/real-replay.js",
+      "resolved": "js/race/real-replay.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "raw": "js/race/broadcast.js",
+      "resolved": "js/race/broadcast.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "raw": "js/ui/watch-transport.js",
+      "resolved": "js/ui/watch-transport.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "raw": "js/camera/director.js",
+      "resolved": "js/camera/director.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "raw": "js/camera/replay-buf.js",
+      "resolved": "js/camera/replay-buf.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "raw": "js/game.js",
+      "resolved": "js/game.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+      "raw": "tools/lib/chromium-path.mjs",
+      "resolved": "tools/lib/chromium-path.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay-workflow.md",
+      "raw": "tools/check/wait-polling-lint.mjs",
+      "resolved": "tools/check/wait-polling-lint.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay.md",
+      "raw": "tests/unit/capture-tools-regressions.test.mjs",
+      "resolved": "tests/unit/capture-tools-regressions.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/f1-animation-cameras/references/replay.md",
+      "raw": "tools/shot/replay-camera-probe.mjs",
+      "resolved": "tools/shot/replay-camera-probe.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "js/game.js",
+      "resolved": "js/game.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "js/camera/vantage.js",
+      "resolved": "js/camera/vantage.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "js/fx/particles.js",
+      "resolved": "js/fx/particles.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "js/audio/engine.js",
+      "resolved": "js/audio/engine.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "js/fx/skidmarks.js",
+      "resolved": "js/fx/skidmarks.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "js/physics/body-attitude.js",
+      "resolved": "js/physics/body-attitude.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "js/perf/governor.js",
+      "resolved": "js/perf/governor.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "tests/unit/physics-characterization-vm.test.mjs",
+      "resolved": "tests/unit/physics-characterization-vm.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "tests/unit/player-dynamics-vm.test.mjs",
+      "resolved": "tests/unit/player-dynamics-vm.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "tests/unit/determinism-replay-vm.test.mjs",
+      "resolved": "tests/unit/determinism-replay-vm.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "tests/data/physics-baseline.js",
+      "resolved": "tests/data/physics-baseline.js",
+      "status": "missing_or_shorthand_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "tests/specs/physics-characterization.spec.js",
+      "resolved": "tests/specs/physics-characterization.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/SKILL.md",
+      "raw": "tests/specs/agent-determinism.spec.js",
+      "resolved": "tests/specs/agent-determinism.spec.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "raw": "js/game.js",
+      "resolved": "js/game.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "raw": "js/fx/particles.js",
+      "resolved": "js/fx/particles.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "raw": "js/perf/governor.js",
+      "resolved": "js/perf/governor.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "raw": "js/audio/engine.js",
+      "resolved": "js/audio/engine.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/feedback-recipes.md",
+      "raw": "js/input/haptics.js",
+      "resolved": "js/input/haptics.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/game.js",
+      "resolved": "js/game.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/physics/wall-clamp.js",
+      "resolved": "js/physics/wall-clamp.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/physics/consts.js",
+      "resolved": "js/physics/consts.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/audio/engine.js",
+      "resolved": "js/audio/engine.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/fx/skidmarks.js",
+      "resolved": "js/fx/skidmarks.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/physics/body-attitude.js",
+      "resolved": "js/physics/body-attitude.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/ui/hud.js",
+      "resolved": "js/ui/hud.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/ui/select-screen.js",
+      "resolved": "js/ui/select-screen.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/perf/governor.js",
+      "resolved": "js/perf/governor.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/game-feel/references/workflow.md",
+      "raw": "js/camera/vantage.js",
+      "resolved": "js/camera/vantage.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/garage/setup-sheet.js",
+      "resolved": "js/garage/setup-sheet.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/car/parts.js",
+      "resolved": "js/car/parts.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/car/liveries.js",
+      "resolved": "js/car/liveries.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/car/liverytex.js",
+      "resolved": "js/car/liverytex.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/car/car3d.js",
+      "resolved": "js/car/car3d.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/garage/scene.js",
+      "resolved": "js/garage/scene.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/garage/setup-camera.js",
+      "resolved": "js/garage/setup-camera.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/garage/arrival.js",
+      "resolved": "js/garage/arrival.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/garage/prebuild.js",
+      "resolved": "js/garage/prebuild.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/render/gfx.js",
+      "resolved": "js/render/gfx.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/car/car-draw.js",
+      "resolved": "js/car/car-draw.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/car/car-body-geom.js",
+      "resolved": "js/car/car-body-geom.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/car/car-materials.js",
+      "resolved": "js/car/car-materials.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/garage/livery-design-editor.js",
+      "resolved": "js/garage/livery-design-editor.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/car/livery-design.js",
+      "resolved": "js/car/livery-design.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/garage/setup-presets.js",
+      "resolved": "js/garage/setup-presets.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/agent/apex.js",
+      "resolved": "js/agent/apex.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "tools/gen/gen-shell.mjs",
+      "resolved": "tools/gen/gen-shell.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "tools/ci/test-bg.mjs",
+      "resolved": "tools/ci/test-bg.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "tools/car/audit-parts.mjs",
+      "resolved": "tools/car/audit-parts.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "tools/car/spine-station.mjs",
+      "resolved": "tools/car/spine-station.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "tools/car/render-car.mjs",
+      "resolved": "tools/car/render-car.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "tools/shot/shot.mjs",
+      "resolved": "tools/shot/shot.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "tests/unit/crest-marks.test.mjs",
+      "resolved": "tests/unit/crest-marks.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "js/data/teams.js",
+      "resolved": "js/data/teams.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "../../../docs/CAREER.md",
+      "resolved": "docs/CAREER.md",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/SKILL.md",
+      "raw": "tools/garage-angles-fetch.mjs",
+      "resolved": "tools/garage-angles-fetch.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/before-pack.md",
+      "raw": "tools/garage-angles-fetch.mjs",
+      "resolved": "tools/garage-angles-fetch.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/before-pack.md",
+      "raw": ".github/workflows/garage-before.yml",
+      "resolved": ".github/workflows/garage-before.yml",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/design-loop.md",
+      "raw": "tools/car/spine-station.mjs",
+      "resolved": "tools/car/spine-station.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/design-loop.md",
+      "raw": "js/car/liverytex.js",
+      "resolved": "js/car/liverytex.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+      "raw": "tools/shot/garage-angles.mjs",
+      "resolved": "tools/shot/garage-angles.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+      "raw": "js/garage/setup-camera.js",
+      "resolved": "js/garage/setup-camera.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+      "raw": "js/car/liverytex.js",
+      "resolved": "js/car/liverytex.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+      "raw": "js/data/teams.js",
+      "resolved": "js/data/teams.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+      "raw": "tools/garage-angles-fetch.mjs",
+      "resolved": "tools/garage-angles-fetch.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+      "raw": ".github/workflows/garage-before.yml",
+      "resolved": ".github/workflows/garage-before.yml",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "raw": "js/garage/setup-sheet.js",
+      "resolved": "js/garage/setup-sheet.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "raw": "tests/unit/team-livery.test.mjs",
+      "resolved": "tests/unit/team-livery.test.mjs",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    },
+    {
+      "source": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+      "raw": "js/ui/settings-export.js",
+      "resolved": "js/ui/settings-export.js",
+      "status": "existing_path",
+      "contents_read": false,
+      "method": "textual path existence check only"
+    }
+  ],
+  "historical_raw_notes": [
+    {
+      "source": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+      "paths": [
+        "docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md",
+        "docs/archive/research/UI-REDESIGN-2026-08.md"
+      ],
+      "status": "archive/historical; not read"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/guards.md",
+      "paths": [
+        "tests/manual/blank-scan.spec.js"
+      ],
+      "status": "legacy reference; not read"
+    },
+    {
+      "source": ".claude/skills/check-changes/references/triage.md",
+      "names": [
+        "test-timeout-triage",
+        "gen-regen",
+        "flake-rerun"
+      ],
+      "status": "historical folds, not standalone active workflow assertions"
+    }
+  ],
+  "cleanup_candidates": [
+    "Canonicalize verification-ladder repetitions and reconcile older deploy required-check narrative",
+    "Replace old symbol grep advice with LSP routing in camera references",
+    "Consolidate conflicting early CSS click wording with explicit root versus catalog input contract",
+    "Defer mutable garage station coordinates to canonical discovery; preserve overrides/readback/presentation contract",
+    "Replace drifting dated UI counts with measurement references; retain causal invariants and uncertainty"
+  ],
+  "not_run": [
+    "tests",
+    "browser",
+    "network research or live API fetches",
+    "game runtime",
+    "workflow commands",
+    "full dependency contents",
+    "full callers/references",
+    "cleanup changes",
+    "git stage/commit/push"
+  ]
+}

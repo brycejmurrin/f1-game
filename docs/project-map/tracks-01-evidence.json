@@ -1,0 +1,1257 @@
+{
+  "group": "01",
+  "scope_bytes": 160000,
+  "range_convention": "half-open bytes; plan sha256 is whole-file, not chunk or assigned-range hash",
+  "source_ledger": [
+    {
+      "path": "docs/tracks/START-LINES.md",
+      "start": 0,
+      "end": 25195,
+      "kind": "text",
+      "sha256": "074777852d54f4bdbc3445ebfd4509f235d58ab98930c7559acf605dada29bfe",
+      "whole_file_bytes": 25195,
+      "actual_whole_file_sha256": "074777852d54f4bdbc3445ebfd4509f235d58ab98930c7559acf605dada29bfe",
+      "plan_hash_matches": true,
+      "assigned_bytes": 25195,
+      "assigned_sha256": "074777852d54f4bdbc3445ebfd4509f235d58ab98930c7559acf605dada29bfe",
+      "chunks": [
+        {
+          "path": "docs/tracks/START-LINES.md",
+          "start": 0,
+          "end": 8500,
+          "sha256": "2c5c4a1838936b013a20f3f9555ec748c9e5be966551e54df835cb2e2688da53",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "0f1790"
+        },
+        {
+          "path": "docs/tracks/START-LINES.md",
+          "start": 8500,
+          "end": 17000,
+          "sha256": "d2333cddb7a457cafa54779ce2c13e0d7c0cbfc9853b1898f113a35854751abe",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "82f114"
+        },
+        {
+          "path": "docs/tracks/START-LINES.md",
+          "start": 17000,
+          "end": 25195,
+          "sha256": "b1908ef8375b52ff0d45388c2500ddc65dacdd7ae8ad8771affb8286d08a6fd7",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "8669bf"
+        }
+      ],
+      "provenance_urls": [],
+      "mentioned_repo_paths": [
+        "docs/notes/JEDDAH-START-2201-2026-10-18.md",
+        "js/circuits/paul_ricard.js",
+        "js/physics/aero-zones.js",
+        "tests/unit/aero-zones-turns.test.mjs",
+        "tests/unit/shared-track-foundation-characterization.test.cjs",
+        "tools/track/aero-zone-turns.cjs",
+        "tools/track/clip-baseline.json",
+        "tools/track/coplanar-audit.cjs",
+        "tools/track/coplanar-baseline.json",
+        "tools/track/float-audit.cjs",
+        "tools/track/float-baseline.json",
+        "tools/track/rotate-markings.cjs",
+        "tools/track/startline-probe.cjs",
+        "tools/track/startline-snap.cjs",
+        "tools/track/stitch-osm-ring.mjs",
+        "tools/track/track-verts.cjs"
+      ]
+    },
+    {
+      "path": "docs/tracks/abudhabi.md",
+      "start": 0,
+      "end": 5071,
+      "kind": "text",
+      "sha256": "4b7dcde69168bdc960d09882884e6869cea737f71219682365962df8b2064e0c",
+      "whole_file_bytes": 5071,
+      "actual_whole_file_sha256": "4b7dcde69168bdc960d09882884e6869cea737f71219682365962df8b2064e0c",
+      "plan_hash_matches": true,
+      "assigned_bytes": 5071,
+      "assigned_sha256": "4b7dcde69168bdc960d09882884e6869cea737f71219682365962df8b2064e0c",
+      "chunks": [
+        {
+          "path": "docs/tracks/abudhabi.md",
+          "start": 0,
+          "end": 5071,
+          "sha256": "4b7dcde69168bdc960d09882884e6869cea737f71219682365962df8b2064e0c",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "eb21fd"
+        }
+      ],
+      "provenance_urls": [],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/albert_park.md",
+      "start": 0,
+      "end": 5908,
+      "kind": "text",
+      "sha256": "f7cf0ecd52016ad664ad5843f1f0d2e8a30982ec925bd88d024982e731faf1e3",
+      "whole_file_bytes": 5908,
+      "actual_whole_file_sha256": "f7cf0ecd52016ad664ad5843f1f0d2e8a30982ec925bd88d024982e731faf1e3",
+      "plan_hash_matches": true,
+      "assigned_bytes": 5908,
+      "assigned_sha256": "f7cf0ecd52016ad664ad5843f1f0d2e8a30982ec925bd88d024982e731faf1e3",
+      "chunks": [
+        {
+          "path": "docs/tracks/albert_park.md",
+          "start": 0,
+          "end": 5908,
+          "sha256": "f7cf0ecd52016ad664ad5843f1f0d2e8a30982ec925bd88d024982e731faf1e3",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "15ddef"
+        }
+      ],
+      "provenance_urls": [
+        "https://www.formula1.com/en/latest/article/circuit-guide-2026-australian-grand-prix-albert-park.19zPlhKhMbTaVNFIPKAAMa",
+        "https://en.wikipedia.org/wiki/Albert_Park_Circuit",
+        "https://www.grandprix.com.au/fan-zone/news/piastri-grandstand-to-debut-at-albert-park-in-2026",
+        "https://oversteer48.com/piastri-grandstand-australian-grand-prix/",
+        "https://oversteer48.com/fangio-grandstand/",
+        "https://www.fia.com/sites/default/files/gp26_press_kit.pdf",
+        "https://en.wikipedia.org/wiki/Albert_Park_Circuit"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/anderstorp.md",
+      "start": 0,
+      "end": 4823,
+      "kind": "text",
+      "sha256": "5310b3e2f32b60ba981d487c801352ab38ef7c3e27ceff35c64255e3c0e12f11",
+      "whole_file_bytes": 4823,
+      "actual_whole_file_sha256": "5310b3e2f32b60ba981d487c801352ab38ef7c3e27ceff35c64255e3c0e12f11",
+      "plan_hash_matches": true,
+      "assigned_bytes": 4823,
+      "assigned_sha256": "5310b3e2f32b60ba981d487c801352ab38ef7c3e27ceff35c64255e3c0e12f11",
+      "chunks": [
+        {
+          "path": "docs/tracks/anderstorp.md",
+          "start": 0,
+          "end": 4823,
+          "sha256": "5310b3e2f32b60ba981d487c801352ab38ef7c3e27ceff35c64255e3c0e12f11",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "c982f9"
+        }
+      ],
+      "provenance_urls": [
+        "https://en.wikipedia.org/wiki/Scandinavian_Raceway",
+        "https://www.racingcircuits.info/europe/sweden/anderstorp.html",
+        "https://www.scandinavianraceway.se/en/anderstorp-airfield/",
+        "https://jonkopingslansmuseum.se/wp-content/uploads/2017/12/2017-10-1.pdf"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/bahrain.md",
+      "start": 0,
+      "end": 9472,
+      "kind": "text",
+      "sha256": "97e392a7d2190080eafd1ef7b56f8777eaaed2001cb4b7e8f8b672f6d74a84a4",
+      "whole_file_bytes": 9472,
+      "actual_whole_file_sha256": "97e392a7d2190080eafd1ef7b56f8777eaaed2001cb4b7e8f8b672f6d74a84a4",
+      "plan_hash_matches": true,
+      "assigned_bytes": 9472,
+      "assigned_sha256": "97e392a7d2190080eafd1ef7b56f8777eaaed2001cb4b7e8f8b672f6d74a84a4",
+      "chunks": [
+        {
+          "path": "docs/tracks/bahrain.md",
+          "start": 0,
+          "end": 8500,
+          "sha256": "cca472ddc8482b723be009e9642a2ccf43283405105bd458b521b742a3540814",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "a4c7fc"
+        },
+        {
+          "path": "docs/tracks/bahrain.md",
+          "start": 8500,
+          "end": 9472,
+          "sha256": "88e0694c4ae8c97961f8564c3f091befd8b73976375a39c593396582f06f2499",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "9f6ef1"
+        }
+      ],
+      "provenance_urls": [
+        "https://www.formula1.com/en/racing/2025/bahrain"
+      ],
+      "mentioned_repo_paths": [
+        "js/circuits/scenery/bahrain.js"
+      ]
+    },
+    {
+      "path": "docs/tracks/baku.md",
+      "start": 0,
+      "end": 6088,
+      "kind": "text",
+      "sha256": "3817e90afcee3f5a806d98d127d59e4c26036595ba0e0ec1bb6dfda480fea5c2",
+      "whole_file_bytes": 6088,
+      "actual_whole_file_sha256": "3817e90afcee3f5a806d98d127d59e4c26036595ba0e0ec1bb6dfda480fea5c2",
+      "plan_hash_matches": true,
+      "assigned_bytes": 6088,
+      "assigned_sha256": "3817e90afcee3f5a806d98d127d59e4c26036595ba0e0ec1bb6dfda480fea5c2",
+      "chunks": [
+        {
+          "path": "docs/tracks/baku.md",
+          "start": 0,
+          "end": 6088,
+          "sha256": "3817e90afcee3f5a806d98d127d59e4c26036595ba0e0ec1bb6dfda480fea5c2",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "94c56c"
+        }
+      ],
+      "provenance_urls": [
+        "https://en.wikipedia.org/wiki/Palace_of_the_Shirvanshahs",
+        "https://en.wikipedia.org/wiki/Shirvanshah's_Palace_Mausoleum",
+        "https://whc.unesco.org/en/list/958",
+        "https://www.grandprixgrandtours.com/baku-circuit-guide/",
+        "https://grandprixguides.com/circuit/azerbaijan",
+        "https://en.wikipedia.org/wiki/Maiden_Tower_(Baku"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/brands_hatch.md",
+      "start": 0,
+      "end": 7619,
+      "kind": "text",
+      "sha256": "dae4e4d3913f20c85d2381903236665a359be2eb21da12ff397a9629e2ff0a4c",
+      "whole_file_bytes": 7619,
+      "actual_whole_file_sha256": "dae4e4d3913f20c85d2381903236665a359be2eb21da12ff397a9629e2ff0a4c",
+      "plan_hash_matches": true,
+      "assigned_bytes": 7619,
+      "assigned_sha256": "dae4e4d3913f20c85d2381903236665a359be2eb21da12ff397a9629e2ff0a4c",
+      "chunks": [
+        {
+          "path": "docs/tracks/brands_hatch.md",
+          "start": 0,
+          "end": 7619,
+          "sha256": "dae4e4d3913f20c85d2381903236665a359be2eb21da12ff397a9629e2ff0a4c",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "51f0bf"
+        }
+      ],
+      "provenance_urls": [
+        "https://oversteer48.com/brands-hatch-grandstands/",
+        "https://www.racingcircuits.info/europe/united-kingdom/brands-hatch.html",
+        "https://en.wikipedia.org/wiki/Brands_Hatch",
+        "https://oversteer48.com/brands-hatch-grandstands/",
+        "https://en.wikipedia.org/wiki/Desir%C3%A9_Wilson"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/buddh.md",
+      "start": 0,
+      "end": 5462,
+      "kind": "text",
+      "sha256": "9bef6230bead2d4bddf81dac7ea104795cc14f098e7a51145e36962c3c35c15c",
+      "whole_file_bytes": 5462,
+      "actual_whole_file_sha256": "9bef6230bead2d4bddf81dac7ea104795cc14f098e7a51145e36962c3c35c15c",
+      "plan_hash_matches": true,
+      "assigned_bytes": 5462,
+      "assigned_sha256": "9bef6230bead2d4bddf81dac7ea104795cc14f098e7a51145e36962c3c35c15c",
+      "chunks": [
+        {
+          "path": "docs/tracks/buddh.md",
+          "start": 0,
+          "end": 5462,
+          "sha256": "9bef6230bead2d4bddf81dac7ea104795cc14f098e7a51145e36962c3c35c15c",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "33d162"
+        }
+      ],
+      "provenance_urls": [
+        "https://en.wikipedia.org/wiki/Buddh_International_Circuit",
+        "https://www.racingcircuits.info/asia/india/buddh-international-circuit.html",
+        "https://www.enr.com/articles/5043-india-speeding-to-the-finish-on-its-first-formula-one-racetrack",
+        "https://www.eurosafeuk.com/knowledge/case-studies/buddh-int-circuit-new-delhi"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/buenos_aires.md",
+      "start": 0,
+      "end": 6725,
+      "kind": "text",
+      "sha256": "ba5d10bcd4b0350f425bcd31a519b7c269039d48fa2fb8348147a60f2bcdec9d",
+      "whole_file_bytes": 6725,
+      "actual_whole_file_sha256": "ba5d10bcd4b0350f425bcd31a519b7c269039d48fa2fb8348147a60f2bcdec9d",
+      "plan_hash_matches": true,
+      "assigned_bytes": 6725,
+      "assigned_sha256": "ba5d10bcd4b0350f425bcd31a519b7c269039d48fa2fb8348147a60f2bcdec9d",
+      "chunks": [
+        {
+          "path": "docs/tracks/buenos_aires.md",
+          "start": 0,
+          "end": 6725,
+          "sha256": "ba5d10bcd4b0350f425bcd31a519b7c269039d48fa2fb8348147a60f2bcdec9d",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "e41976"
+        }
+      ],
+      "provenance_urls": [
+        "https://en.wikipedia.org/wiki/Aut%C3%B3dromo_Juan_y_%C3%93scar_G%C3%A1lvez",
+        "https://buenosaires.gob.ar/gcaba_historico/noticias/avanza-la-transformacion-del-autodromo-galvez-nuevas-tribunas-accesos-y",
+        "https://www.lanacion.com.ar/autos/asi-fueron-las-obras-en-el-galvez-para-que-argentina-reciba-al-moto-gp-nid25092026/",
+        "https://automundo.com.ar/obras-autodromo-galvez-motogp-formula-1/"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/catalunya.md",
+      "start": 0,
+      "end": 5818,
+      "kind": "text",
+      "sha256": "161b8d48639bc8ca7975831e408b2d7436e62219de3d692da51f09025ba71445",
+      "whole_file_bytes": 5818,
+      "actual_whole_file_sha256": "161b8d48639bc8ca7975831e408b2d7436e62219de3d692da51f09025ba71445",
+      "plan_hash_matches": true,
+      "assigned_bytes": 5818,
+      "assigned_sha256": "161b8d48639bc8ca7975831e408b2d7436e62219de3d692da51f09025ba71445",
+      "chunks": [
+        {
+          "path": "docs/tracks/catalunya.md",
+          "start": 0,
+          "end": 5818,
+          "sha256": "161b8d48639bc8ca7975831e408b2d7436e62219de3d692da51f09025ba71445",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "59de5a"
+        }
+      ],
+      "provenance_urls": [
+        "https://tilke.de/portfolio/circuit-de-barcelona-catalunya/",
+        "https://www.racingcircuits.info/europe/spain/circuit-de-barcelona-catalunya.html",
+        "https://oversteer48.com/main-granstand-circuit-de-catalunya-barcelona/",
+        "https://oversteer48.com/grandstand-j-circuit-de-catalunya-barcelona/",
+        "https://oversteer48.com/grandstand-b-circuit-de-catalunya-barcelona/",
+        "https://www.p1travel.com/en-GB/blog/what-are-the-best-grandstands-at-the-barcelona-gp",
+        "https://en.wikipedia.org/wiki/Circuit_de_Barcelona-Catalunya"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/cota.md",
+      "start": 0,
+      "end": 6264,
+      "kind": "text",
+      "sha256": "6a73414ac04d0ed92eeb2455813c1a874fbd06cd81aa075eaf9b7939bd3187bc",
+      "whole_file_bytes": 6264,
+      "actual_whole_file_sha256": "6a73414ac04d0ed92eeb2455813c1a874fbd06cd81aa075eaf9b7939bd3187bc",
+      "plan_hash_matches": true,
+      "assigned_bytes": 6264,
+      "assigned_sha256": "6a73414ac04d0ed92eeb2455813c1a874fbd06cd81aa075eaf9b7939bd3187bc",
+      "chunks": [
+        {
+          "path": "docs/tracks/cota.md",
+          "start": 0,
+          "end": 6264,
+          "sha256": "6a73414ac04d0ed92eeb2455813c1a874fbd06cd81aa075eaf9b7939bd3187bc",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "0bfaa2"
+        }
+      ],
+      "provenance_urls": [],
+      "mentioned_repo_paths": [
+        "js/track/circuit-elevations.js",
+        "tools/gen/bake-elevation.mjs"
+      ]
+    },
+    {
+      "path": "docs/tracks/dijon.md",
+      "start": 0,
+      "end": 4831,
+      "kind": "text",
+      "sha256": "4a2f1f28a5e9a6492c4f30e46fda042c462dca94e3b294d6bf889f6c6d2f3a8e",
+      "whole_file_bytes": 4831,
+      "actual_whole_file_sha256": "4a2f1f28a5e9a6492c4f30e46fda042c462dca94e3b294d6bf889f6c6d2f3a8e",
+      "plan_hash_matches": true,
+      "assigned_bytes": 4831,
+      "assigned_sha256": "4a2f1f28a5e9a6492c4f30e46fda042c462dca94e3b294d6bf889f6c6d2f3a8e",
+      "chunks": [
+        {
+          "path": "docs/tracks/dijon.md",
+          "start": 0,
+          "end": 4831,
+          "sha256": "4a2f1f28a5e9a6492c4f30e46fda042c462dca94e3b294d6bf889f6c6d2f3a8e",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "56b47f"
+        }
+      ],
+      "provenance_urls": [
+        "https://en.wikipedia.org/wiki/Dijon-Prenois",
+        "https://www.circuit-dijon-prenois.com/en/history-of-the-racetrack-en/",
+        "https://www.racingcircuits.info/europe/france/dijon-prenois.html"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/donington.md",
+      "start": 0,
+      "end": 8425,
+      "kind": "text",
+      "sha256": "8697fc75029c9a40ea11a055825bd46d8e2b506953938aecc2c480fec12828e1",
+      "whole_file_bytes": 8425,
+      "actual_whole_file_sha256": "8697fc75029c9a40ea11a055825bd46d8e2b506953938aecc2c480fec12828e1",
+      "plan_hash_matches": true,
+      "assigned_bytes": 8425,
+      "assigned_sha256": "8697fc75029c9a40ea11a055825bd46d8e2b506953938aecc2c480fec12828e1",
+      "chunks": [
+        {
+          "path": "docs/tracks/donington.md",
+          "start": 0,
+          "end": 8425,
+          "sha256": "8697fc75029c9a40ea11a055825bd46d8e2b506953938aecc2c480fec12828e1",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "c7f116"
+        }
+      ],
+      "provenance_urls": [
+        "https://en.wikipedia.org/wiki/Donington_Park",
+        "https://www.uniper.energy/united-kingdom/news/uniper-signs-up-erith-for-demolition-contract-at-ratcliffe-on-soar-power-station/",
+        "https://msvstatic.blob.core.windows.net/documents/DP%20Map_GP%20Circuit.pdf",
+        "https://en.wikipedia.org/wiki/Donington_Park",
+        "https://en.wikipedia.org/wiki/Donington_Park",
+        "https://www.openstreetmap.org/#map=14/52.8305/-1.3700",
+        "https://www.donington-park.co.uk/airport-guidelines"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/estoril.md",
+      "start": 0,
+      "end": 5852,
+      "kind": "text",
+      "sha256": "bbfd258f600f8666c92399b064154a18858630d961bde22ca764852b9359da79",
+      "whole_file_bytes": 5852,
+      "actual_whole_file_sha256": "bbfd258f600f8666c92399b064154a18858630d961bde22ca764852b9359da79",
+      "plan_hash_matches": true,
+      "assigned_bytes": 5852,
+      "assigned_sha256": "bbfd258f600f8666c92399b064154a18858630d961bde22ca764852b9359da79",
+      "chunks": [
+        {
+          "path": "docs/tracks/estoril.md",
+          "start": 0,
+          "end": 5852,
+          "sha256": "bbfd258f600f8666c92399b064154a18858630d961bde22ca764852b9359da79",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "ae9f13"
+        }
+      ],
+      "provenance_urls": [
+        "https://www.circuito-estoril.pt/en/technical-data/",
+        "https://en.wikipedia.org/wiki/Circuito_do_Estoril",
+        "https://www.circuito-estoril.pt/en/technical-data/"
+      ],
+      "mentioned_repo_paths": [
+        "docs/BUGS.md"
+      ]
+    },
+    {
+      "path": "docs/tracks/fuji.md",
+      "start": 0,
+      "end": 5739,
+      "kind": "text",
+      "sha256": "73575f46a80589975ca167a83bce972aac3785b66f17bba4341b01b2f436e40b",
+      "whole_file_bytes": 5739,
+      "actual_whole_file_sha256": "73575f46a80589975ca167a83bce972aac3785b66f17bba4341b01b2f436e40b",
+      "plan_hash_matches": true,
+      "assigned_bytes": 5739,
+      "assigned_sha256": "73575f46a80589975ca167a83bce972aac3785b66f17bba4341b01b2f436e40b",
+      "chunks": [
+        {
+          "path": "docs/tracks/fuji.md",
+          "start": 0,
+          "end": 5739,
+          "sha256": "73575f46a80589975ca167a83bce972aac3785b66f17bba4341b01b2f436e40b",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "1fdc5d"
+        }
+      ],
+      "provenance_urls": [
+        "https://global.toyota/en/newsroom/corporate/37094898.html",
+        "https://newsroom.hyatt.com/news-releases?item=124297",
+        "https://www.toyotafudosan.com/new2024/wp-content/uploads/2024/06/10ec98e489446127b278fb35e7e173e7-1.pdf",
+        "https://en.wikipedia.org/wiki/Fuji_Motorsports_Museum"
+      ],
+      "mentioned_repo_paths": [
+        "tests/data/landmarks/fuji.json"
+      ]
+    },
+    {
+      "path": "docs/tracks/hockenheim.md",
+      "start": 0,
+      "end": 6410,
+      "kind": "text",
+      "sha256": "11de2bc9624b0ad4c42b129fe38a5fc4a20ac6f383ed3cea72d16817f7b71dd2",
+      "whole_file_bytes": 6410,
+      "actual_whole_file_sha256": "11de2bc9624b0ad4c42b129fe38a5fc4a20ac6f383ed3cea72d16817f7b71dd2",
+      "plan_hash_matches": true,
+      "assigned_bytes": 6410,
+      "assigned_sha256": "11de2bc9624b0ad4c42b129fe38a5fc4a20ac6f383ed3cea72d16817f7b71dd2",
+      "chunks": [
+        {
+          "path": "docs/tracks/hockenheim.md",
+          "start": 0,
+          "end": 6410,
+          "sha256": "11de2bc9624b0ad4c42b129fe38a5fc4a20ac6f383ed3cea72d16817f7b71dd2",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "ac8346"
+        }
+      ],
+      "provenance_urls": [
+        "https://www.hockenheimring.de/en/info/hockenheimring/data-facts/",
+        "https://www.hockenheimring.de/en/track-map/",
+        "https://www.thef1spectator.com/hockenheim-f1-travel-guide/where-to-watch/",
+        "https://en.wikipedia.org/wiki/Hockenheimring",
+        "https://www.hockenheimring.de/en/info/hockenheimring/data-facts/"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/hungaroring.md",
+      "start": 0,
+      "end": 13100,
+      "kind": "text",
+      "sha256": "a6e99d01c1bf684d4f8170091b5a0866236a6e8abd992125d23670b5e397af86",
+      "whole_file_bytes": 13100,
+      "actual_whole_file_sha256": "a6e99d01c1bf684d4f8170091b5a0866236a6e8abd992125d23670b5e397af86",
+      "plan_hash_matches": true,
+      "assigned_bytes": 13100,
+      "assigned_sha256": "a6e99d01c1bf684d4f8170091b5a0866236a6e8abd992125d23670b5e397af86",
+      "chunks": [
+        {
+          "path": "docs/tracks/hungaroring.md",
+          "start": 0,
+          "end": 8500,
+          "sha256": "fbea3ed705e627ff0022055d4d4056e1db6bccaedaacbe87a5c7d54a2ee6e162",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "bcf299"
+        },
+        {
+          "path": "docs/tracks/hungaroring.md",
+          "start": 8500,
+          "end": 13100,
+          "sha256": "43b7b3ddf26b84e8310d7ec9dc08ddf8b7adb72514f8a38f375352669a474ada",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "acc75d"
+        }
+      ],
+      "provenance_urls": [
+        "https://en.wikipedia.org/wiki/Hungaroring",
+        "https://dvmgroup.com/en/references/projects/hungaroring",
+        "https://ad-c.org/winner/hungaroring-gold-winner-mixed-use-development-design-iada-2026/",
+        "https://www.motorsport.com/f1/news/huge-renovation-work-almost-complete-at-hungaroring-ahead-of-f1-hungarian-gp/10734732/",
+        "https://oversteer48.com/hungaroring-pit-exit-1-grandstand/",
+        "https://www.tracktitan.io/post/hungaroring-track-guide",
+        "https://www.f1technical.net/news/25005",
+        "https://driver61.com/circuit-guide/hungaroring/",
+        "https://www.fia.com/news/f1-2025-hungarian-grand-prix-preview",
+        "https://www.fia.com/system/files/decision-document/2025_hungarian_grand_prix_-_race_directors_event_notes_v2.pdf",
+        "https://f1i.com/news/514518-fia-replaces-turn-5-grass-strip-with-gravel-after-tsunoda-crash.html",
+        "https://www.fia.com/system/files/decision-document/2025_hungarian_grand_prix_-_event_notes_-_circuit_map_pit_lane_emergency_exits_map_quarantine_zone_and_red_zones.pdf",
+        "https://gpdestinations.com/exploring-the-new-look-hungaroring/",
+        "https://www.dvmgroup.com/en/references/projects/hungaroring",
+        "https://hungaroring.hu/site/en/media/news/hungaroring-the-future-has-begun"
+      ],
+      "mentioned_repo_paths": [
+        "js/track/circuit-elevations.js"
+      ]
+    },
+    {
+      "path": "docs/tracks/imola.md",
+      "start": 0,
+      "end": 11623,
+      "kind": "text",
+      "sha256": "b11c87633ea3a69b188d9f3e5ac6a75799e1e6cb3280954f756d1ace4c46f0ec",
+      "whole_file_bytes": 11623,
+      "actual_whole_file_sha256": "b11c87633ea3a69b188d9f3e5ac6a75799e1e6cb3280954f756d1ace4c46f0ec",
+      "plan_hash_matches": true,
+      "assigned_bytes": 11623,
+      "assigned_sha256": "b11c87633ea3a69b188d9f3e5ac6a75799e1e6cb3280954f756d1ace4c46f0ec",
+      "chunks": [
+        {
+          "path": "docs/tracks/imola.md",
+          "start": 0,
+          "end": 8500,
+          "sha256": "45a25bb69a14517cc93288906aca13a709e8331283b4598c2e22a42b0ee4738d",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "51f7c9"
+        },
+        {
+          "path": "docs/tracks/imola.md",
+          "start": 8500,
+          "end": 11623,
+          "sha256": "51b2324e1079ce18d4e3cd92edc392fba27fb10e10ff791e97ff16ca488f6bb7",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "6605e1"
+        }
+      ],
+      "provenance_urls": [
+        "https://www.fia.com/system/files/decision-document/2025_imola_event_-_circuit_map_-_imola_2025.pdf",
+        "https://www.autodromoimola.it/tracciato/",
+        "https://www.autodromoimola.it/en/business/the-tower/",
+        "https://en.wikipedia.org/wiki/Imola_Circuit",
+        "https://autodromoimola.it/wp-content/uploads/2024/04/WEC-2024-IMOLA-Grandstand-Map-v.4-Spectators.pdf",
+        "https://www.imola.gp/en/map-of-the-grandstands-50",
+        "https://turismoimolese.cittametropolitana.bo.it/en/places/squares-streets-monuments/ayrton-senna-monument",
+        "https://www.autodromoimola.it/tracciato/"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/indianapolis.md",
+      "start": 0,
+      "end": 7672,
+      "kind": "text",
+      "sha256": "e86528ab211a035adf1634a44883b2e89ae94d1f0d21ea5229753639f521ff98",
+      "whole_file_bytes": 7672,
+      "actual_whole_file_sha256": "e86528ab211a035adf1634a44883b2e89ae94d1f0d21ea5229753639f521ff98",
+      "plan_hash_matches": true,
+      "assigned_bytes": 7672,
+      "assigned_sha256": "e86528ab211a035adf1634a44883b2e89ae94d1f0d21ea5229753639f521ff98",
+      "chunks": [
+        {
+          "path": "docs/tracks/indianapolis.md",
+          "start": 0,
+          "end": 7672,
+          "sha256": "e86528ab211a035adf1634a44883b2e89ae94d1f0d21ea5229753639f521ff98",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "d72362"
+        }
+      ],
+      "provenance_urls": [
+        "https://www.indymotorspeedway.com/idx-usgp.html",
+        "https://en.wikipedia.org/wiki/Indianapolis_Motor_Speedway",
+        "https://www.firstsuperspeedway.com/articles/ims-pagoda-history",
+        "http://a.espncdn.com/rpm/irl/2002/0522/1385623.html",
+        "https://www.performanceracing.com/magazine/industry-news/07-23-2014/ims-introduces-new-high-tech-scoring-pylon",
+        "https://www.wrtv.com/lifestyle/history/the-history-of-the-scoring-pylon-at-the-indianapolis-motor-speedway",
+        "https://www.indianapolismotorspeedway.com/~/media/ims/pdf/track-maps/ims_facilitymap.pdf",
+        "http://www.indymotorspeedway.com/500sit-f1.html"
+      ],
+      "mentioned_repo_paths": []
+    },
+    {
+      "path": "docs/tracks/interlagos.md",
+      "start": 0,
+      "end": 6624,
+      "kind": "text",
+      "sha256": "7a98349ea9a277dbcdb9fe2b5e52e62cac72c063584f9da7871ab5e49f9640ea",
+      "whole_file_bytes": 6624,
+      "actual_whole_file_sha256": "7a98349ea9a277dbcdb9fe2b5e52e62cac72c063584f9da7871ab5e49f9640ea",
+      "plan_hash_matches": true,
+      "assigned_bytes": 6624,
+      "assigned_sha256": "7a98349ea9a277dbcdb9fe2b5e52e62cac72c063584f9da7871ab5e49f9640ea",
+      "chunks": [
+        {
+          "path": "docs/tracks/interlagos.md",
+          "start": 0,
+          "end": 6624,
+          "sha256": "7a98349ea9a277dbcdb9fe2b5e52e62cac72c063584f9da7871ab5e49f9640ea",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "9c56dd"
+        }
+      ],
+      "provenance_urls": [],
+      "mentioned_repo_paths": [
+        "js/track/circuit-elevations.js"
+      ]
+    },
+    {
+      "path": "docs/tracks/istanbul.md",
+      "start": 0,
+      "end": 1279,
+      "kind": "text",
+      "sha256": "27b59065ff9c4d75c055097be1f06f547af2a98d1fbe2f124b06691bbdf4d2e8",
+      "whole_file_bytes": 6917,
+      "actual_whole_file_sha256": "27b59065ff9c4d75c055097be1f06f547af2a98d1fbe2f124b06691bbdf4d2e8",
+      "plan_hash_matches": true,
+      "assigned_bytes": 1279,
+      "assigned_sha256": "4130644e02cd2de32fefbb5f06034b87a208a83380529eacd7b8d0e894bdb675",
+      "chunks": [
+        {
+          "path": "docs/tracks/istanbul.md",
+          "start": 0,
+          "end": 1279,
+          "sha256": "4130644e02cd2de32fefbb5f06034b87a208a83380529eacd7b8d0e894bdb675",
+          "read_status": "fully returned and read",
+          "response_untruncated": true,
+          "exec_command_chunk_id": "358cd4"
+        }
+      ],
+      "provenance_urls": [
+        "https://www.the-race.com/formula-1/inside-turkeys-massive-f1-return-revamp/",
+        "https://www.formula1.com/en/latest/article/formula-1-returns-to-turkeys-istanbul-park-from-2027-as-part-of-new-five-year-agreement.1I7OZGeDPoC6Vysv3iqadY"
+      ],
+      "mentioned_repo_paths": []
+    }
+  ],
+  "semantic_map": [
+    {
+      "id": "abudhabi",
+      "purpose": "Desert marina dusk/night art brief",
+      "geometry": "Near-flat island with gentle north-loop relief; T9/Marsa camber suggestions",
+      "scenery": "Required Yas twin towers and LED gridshell/underpass, yacht marina, Ferrari World; sparse skyline",
+      "provenance_status_constraints": "R4 reports rebuilt hotel, moved runoff/poles and leveled Marsa stand; Commons aerial/photos and architect notes. Artistic palette/anchors, no surveyed dimensions.",
+      "current_paths": [
+        {
+          "path": "js/circuits/abudhabi.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/abudhabi.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/abudhabi.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "albert_park",
+      "purpose": "Day parkland visual and 2026 grandstand map",
+      "geometry": "Flat post-2022 14-corner layout; intro incorrectly says anticlockwise",
+      "scenery": "Lake/CBD across water, eucalyptus not pine, Piastri opposite pits, MSAC and stadium",
+      "provenance_status_constraints": "F1/FIA/operator and stand guides; Prost location disputed, Piastri 72 m and tower bearings approximate. Old no-textures rule conflicts with current baked-pack architecture.",
+      "current_paths": [
+        {
+          "path": "js/circuits/albert_park.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/albert_park.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/albert_park.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "anderstorp",
+      "purpose": "Day Smaland forest/working airfield brief",
+      "geometry": "Flat clockwise runway circuit; runway width change identifies venue",
+      "scenery": "Museum-sourced press stand, speaker tower, 1968 clubhouse and flight hangars; falu sheds and pine",
+      "provenance_status_constraints": "Museum report, official ESMP and circuit history; modern S/F paddock retained rather than historical mid-lap F1 pits. Seat runway paint rather than sinking thin slabs.",
+      "current_paths": [
+        {
+          "path": "js/circuits/anderstorp.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/anderstorp.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/anderstorp.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "bahrain",
+      "purpose": "Night rocky-desert setting plus corrected GP numbering evidence",
+      "geometry": "Racing start 0 versus authored 0.225; turns are racing arc fractions, never scenery-shifted; near-flat/camber prose is unmeasured",
+      "scenery": "Sakhir LED tower at T1, main/University/Beyon stands, right/east drag strip and palm grove, limestone shelves",
+      "provenance_status_constraints": "F1 2025 guide, OSM/Esri placement and venue guides. Lean Beyon mesh avoids props-tris excess; old table positions explicitly obsolete. Numbering does not certify length, banking or elevation.",
+      "current_paths": [
+        {
+          "path": "js/circuits/bahrain.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/bahrain.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/bahrain.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "baku",
+      "purpose": "Art-directed dusk street brief, explicitly different from daytime real race",
+      "geometry": "Castle half-width 3.8 m, uphill squeeze and flat seafront",
+      "scenery": "UNESCO palace/wall, Flame Towers LED facade, Maiden Tower, Caspian void",
+      "provenance_status_constraints": "UNESCO/Wikipedia/stand guides; seat mappings only ranges, lighting uncertain, 51 m scenic Maiden Tower retained versus real 29.5 m pending rendered comparison. City rows removed for burial/coplanarity.",
+      "current_paths": [
+        {
+          "path": "js/circuits/baku.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/baku.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/baku.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "brands_hatch",
+      "purpose": "Modern GP amphitheatre brief with historical-layout caveat",
+      "geometry": "Modern 3.908 km differs from F1 4.207 km; Paddock drop cannot flatten; start 0.1226 and scenery 0 carry residual shift",
+      "scenery": "Brabham, Desire Wilson, Paddock Hill, Hailwoods required stands and Kentagon; open bowl versus wooded GP loop",
+      "provenance_status_constraints": "MSV/BTCC/maps and histories; exact seat subdivisions and Kentagon identity uncertain. Positive seating rake; pit/line props use sl while bowl retains authoring frame.",
+      "current_paths": [
+        {
+          "path": "js/circuits/brands_hatch.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/brands_hatch.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/brands_hatch.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "buddh",
+      "purpose": "Day Greater Noida farmland and engineered-earthworks brief",
+      "geometry": "Authored 5.138 km close to sourced 5.137; constructed T3 climb and T10-12 drop",
+      "scenery": "Sea-wave aluminium main canopy, closed saffron/green pit, farmland haze, temple silhouette",
+      "provenance_status_constraints": "ENR/Eurosafe support roof form; detailed truss counts/heights conflict. Game-scale roof, invented temple explicitly not surveyed; locally closed stand ends.",
+      "current_paths": [
+        {
+          "path": "js/circuits/buddh.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/buddh.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/buddh.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "buenos_aires",
+      "purpose": "Classic No.6 municipal parkland identity",
+      "geometry": "Classic 4.26 km; keep nearly flat, do not import 2027 F1 hairpin/tunnel",
+      "scenery": "1950s concrete terraces, plain pit/tower, plane avenues, Confiteria, talud gate, portico",
+      "provenance_status_constraints": "City 2026 renovation news plus history; old pit survival and cafe station uncertain, formal flag avenue unsupported. Classic choice overrides new renovation silhouettes.",
+      "current_paths": [
+        {
+          "path": "js/circuits/buenos_aires.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/buenos_aires.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/buenos_aires.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "catalunya",
+      "purpose": "Day dry Mediterranean hills and stand-specific brief",
+      "geometry": "Modern no-chicane 14-turn lap; retain hillside crest/descent and zero residual scenery shift",
+      "scenery": "White pit terrace, main/J stands, pit scoreboard, low railway, stadium B/G/C/H",
+      "provenance_status_constraints": "Tilke/circuit histories/stand guides; no named Montseny claim, no train, no removed T12 stands. Main roof and J uncovered form distinct; sparse planting.",
+      "current_paths": [
+        {
+          "path": "js/circuits/catalunya.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/catalunya.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/catalunya.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "cota",
+      "purpose": "Day Hill Country landmark and elevation research",
+      "geometry": "SRTM current-section claim ~31 m, override 1 pass/kink .06/grade .08; older outcome still discusses rise 18 untouched",
+      "scenery": "251 ft tower at T16-18, red tube veil/amphitheatre, Big Red T1 crowd, sparse skyline",
+      "provenance_status_constraints": "Venue height supports corrected tip 76.5 m; raw SRTM ~37 m differs from published relief. Physics elevation requires separate validation; older outcome superseded by bake section.",
+      "current_paths": [
+        {
+          "path": "js/circuits/cota.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/cota.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/cota.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "dijon",
+      "purpose": "Day open Burgundy hillside brief",
+      "geometry": "Official 3.801 km versus authored 3.727; 14% Parabolique source, preserve blind crests",
+      "scenery": "Required pit/control, limestone Combe cut, generic ferme, Parabolique bank",
+      "provenance_status_constraints": "Official history and circuit guides; no modern seating/FIA plan found, two modest stands only. Motorhomes omitted for burial/clip; farm identity approximate.",
+      "current_paths": [
+        {
+          "path": "js/circuits/dijon.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/dijon.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/dijon.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "donington",
+      "purpose": "Day cool English parkland, modern club venue",
+      "geometry": "Craner drop essential; start .9072 residual .10 means line props use sl; preserve corner authoring frame",
+      "scenery": "Hollywood/Garage39, disused Collection hall, Starkeys bridge, distant EMA airliner, true-bearing Ratcliffe towers",
+      "provenance_status_constraints": "MSV maps/history, airport guidance and Uniper demolition timing; footprint/seat sizes uncertain, hall survival uncertain. Probe rejects some stands; no removed Dunlop bridge. Distant scale compressed for fog.",
+      "current_paths": [
+        {
+          "path": "js/circuits/donington.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/donington.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/donington.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "estoril",
+      "purpose": "Day classic inland Alcabideche plateau identity",
+      "geometry": "Undulating, 4.182 km official; never restore sceneryStartFrac or flatten hills",
+      "scenery": "30-bay pantile pit terrace, timing tower, stone pines, aldeia, water tank, Sintra ridge",
+      "provenance_status_constraints": "Official technical data; no coastal ocean/lighthouse fiction. Required windmill kept solely for continuity, on-site presence uncertain. Motorhomes removed and house/church overlap separated.",
+      "current_paths": [
+        {
+          "path": "js/circuits/estoril.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/estoril.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/estoril.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "fuji",
+      "purpose": "Day cedar plateau and westward volcano brief",
+      "geometry": "Authored 4.554 versus real 4.563 km; main straight occupies first quarter, T1 .2502",
+      "scenery": "Mount Fuji true bearing 266.1 degrees, snow cone compressed distance; Speedway Hotel includes museum floors 1-2",
+      "provenance_status_constraints": "Official Toyota/Hyatt/Fujitec sources, museum facts; hotel 9 storeys plus basement, footprint approximate. Legacy section contradicts updated named corners; no invented Hilton.",
+      "current_paths": [
+        {
+          "path": "js/circuits/fuji.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/fuji.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/fuji.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "hockenheim",
+      "purpose": "Day forest versus Motodrom bowl identity",
+      "geometry": "Modern 4.574 km yet opening forest description overstates old-loop character; near-flat; stadium width/camber notes artistic",
+      "scenery": "Continuous stadium rake, named Main/North/South/Inner, forest canopy, sloped pit roof",
+      "provenance_status_constraints": "Official stands/maps and spectator guides; Mercedes identity/location and East mapping uncertain. Avoid prism/canopy clips, keep hoardings low, gap crowd/riser faces to avoid coplanarity.",
+      "current_paths": [
+        {
+          "path": "js/circuits/hockenheim.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/hockenheim.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/hockenheim.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "hungaroring",
+      "purpose": "Dusty basin brief with modern paddock, 2025 surface detail and frame audit",
+      "geometry": "SRTM ~30 m; curated 14 corners; T5 gravel at racing .447 is estimated 48x3 m, not surveyed; preserve aero intervals",
+      "scenery": "340 m five-storey pit mass, grandstand/tunnels, poplar rows and airy black locust, rekeyed corner stands/village",
+      "provenance_status_constraints": "FIA 2025 documents, DVM/operator photographs; side conflict retained, T14 bridge endpoints unlocated, sculpture unsourced. Footing 0.15-5.11 m artistic grading; vertex budget omits separate Pit Exit2; T1 stands still suppressed.",
+      "current_paths": [
+        {
+          "path": "js/circuits/hungaroring.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/hungaroring.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/hungaroring.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "imola",
+      "purpose": "Modern/legacy parkland brief plus FIA timing and physical numbering",
+      "geometry": "4,871.2493 m built versus FIA 4,909; S1 .33451582 115 m before Tosa and S2 .65393488 190 m before T14; scenery frame .495 preserved",
+      "scenery": "Santerno river, Tilke pits/Racetrack Tower, Partenza, Senna memorial, Prato hills/vineyards",
+      "provenance_status_constraints": "FIA event map governs 19 corners versus operator 21; nominal anchors, not surveyed apexes. Tosa midpoint sensitivity under .11 m is algorithm-only; gameplay aero T13/14 preserves old interval, not FIA DRS reconstruction. Unsupported kerb height retired.",
+      "current_paths": [
+        {
+          "path": "js/circuits/imola.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/imola.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/imola.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "indianapolis",
+      "purpose": "Clockwise F1 road course identity, distinct from oval race",
+      "geometry": "Near-flat, oval 9-degree and final 6-degree banking notes; official 4.192 versus built ~4.075 km",
+      "scenery": "Continuous grandstand wall, required Pagoda/main stands/pit stalls/pylon/museum, yard of bricks",
+      "provenance_status_constraints": "IMS maps/history and pylon sources; pagoda height/storey claims disagree, stand bay mapping approximate. Keep open-front stalls with closed ends, no horizon hills; continuous wall critical.",
+      "current_paths": [
+        {
+          "path": "js/circuits/indianapolis.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/indianapolis.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/indianapolis.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "interlagos",
+      "purpose": "Day tropical urban motor-park visual brief",
+      "geometry": "SRTM ~40 m grade-capped 5.5%; rolling relief replaces sparse cosine description",
+      "scenery": "Favela blockwork/screed/paint mix, rooftop tanks/dishes/rebar, lake shore/pier, yellow-green stands",
+      "provenance_status_constraints": "Research findings labelled not-yet-built are followed by implemented outcomes and dated detail; external citations absent here. New cores close old open meshes; no current performance benchmark; older no-textures statement stale.",
+      "current_paths": [
+        {
+          "path": "js/circuits/interlagos.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/interlagos.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/interlagos.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    },
+    {
+      "id": "istanbul",
+      "purpose": "Partial opening of dry Thracian valley brief",
+      "geometry": "5.34 km 14-turn anticlockwise, T8 four-apex banked left; 2011 geometry retained",
+      "scenery": "Open T8 infield, crowd amphitheatre, sparse pine/brush, one-horizon apartments",
+      "provenance_status_constraints": "Opening cites F1 and The Race 2027-31 return, planned doubled paddock/coverage/hospitality; not implemented evidence. Only bytes 0-1279 assigned, rest mapped by group02.",
+      "current_paths": [
+        {
+          "path": "js/circuits/istanbul.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "js/circuits/scenery/istanbul.js",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        },
+        {
+          "path": "tests/data/landmarks/istanbul.json",
+          "exists": true,
+          "verification": "existence only; source body not exhaustively audited"
+        }
+      ]
+    }
+  ],
+  "read_method": "Python byte slices, each source chunk <=8500 bytes individually returned via exec_command; all initially aggregated chunks were reread with untruncated presentation. No source commands executed.",
+  "current_consumer_evidence": [
+    {
+      "tool": "apex-lsp lsp_definition",
+      "symbol": "TrackSpace.sceneryOriginDelta",
+      "result": "js/track/core/space.js:91 returns def._sceneryShift or 0"
+    },
+    {
+      "tool": "apex-lsp lsp_references files",
+      "symbol": "TrackSpace.sceneryFrac",
+      "result": "4 references: core/space.js 2, race/overtake-mode.js 1, scenery/build-props.js 1"
+    },
+    {
+      "tool": "apex-lsp lsp_outline",
+      "file": "js/circuits/bahrain.js",
+      "result": "anonymous IIFE 27 members"
+    },
+    {
+      "tool": "apex-lsp lsp_outline",
+      "file": "js/track/tracks.js",
+      "result": "registry/build APIs: buildCenterline, buildSteps, build, buildPaced, hydrate, free"
+    },
+    {
+      "tool": "apex-lsp lsp_definition",
+      "symbol": "Tracks.hydrate",
+      "result": "tracks.js:650 fromRaw conversion, forces points, mutates LIST and TrackDefs in place, invalidates map and preview cache"
+    },
+    {
+      "tool": "apex-lsp lsp_definition",
+      "symbol": "Tracks.buildCenterline",
+      "result": "tracks.js:47 optional preview cache wraps buildCenterlineFresh"
+    },
+    {
+      "tool": "apex-lsp lsp_references files",
+      "symbol": "Tracks.buildCenterline",
+      "result": "8 references in tracks.js, editor/designer.js, editor/followup-tools.js, editor/insight.js, editor/validate.js, track/build-worker.js, ui/track-maps.js"
+    },
+    {
+      "tool": "apex-lsp attempted definition",
+      "symbol": "Tracks.resolve / TrackDef.resolve",
+      "result": "both names not checker-visible members; no fallback text-symbol search; unresolved historical resolve routing"
+    }
+  ],
+  "cleanup": {
+    "delete_candidates": [],
+    "recommendations": [
+      "Reconcile stale START-LINES Jeddah/Bahrain paragraphs and 40-circuit-era counts with later dated corrections; preserve historical measurement labels.",
+      "Merge older outcomes with newer geometry/frame facts only after source/runtime verification.",
+      "Keep circuit briefs as art/provenance records; do not use visual estimates as geometry surveys."
+    ],
+    "limits": [
+      "No tests, browser, runtime, network or historical doc commands run.",
+      "No present-day GPU/performance/geometry conclusions derived from historical metrics.",
+      "Current consumer evidence is bounded LSP navigation and path existence, not full source audit.",
+      "Istanbul only assigned initial 1279 bytes.",
+      "Provenance URLs recorded from text, not externally revalidated."
+    ]
+  }
+}

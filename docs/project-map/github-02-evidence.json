@@ -1,0 +1,635 @@
+{
+  "schema_version": 1,
+  "group": "02",
+  "method": "Static text inspection only; individually returned untruncated reads <=8500 bytes for assigned source. No tests, browser, network, workflow execution, stage or commit.",
+  "byte_convention": "half-open [start,end); SHA-256 over raw bytes",
+  "assigned_bytes": 160000,
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "whole_file_bytes": 213506,
+      "whole_file_sha256": "d615b39496e01177025a6dde9dbdd6edd5d8314942a9adaca3cb8ead2bf0f1d6",
+      "plan_whole_file_sha256": "d615b39496e01177025a6dde9dbdd6edd5d8314942a9adaca3cb8ead2bf0f1d6",
+      "plan_hash_matches_whole_file": true,
+      "assigned_start": 109490,
+      "assigned_end": 213506,
+      "assigned_sha256": "ca265ebbd60290c5321b90baef5488dd36eaff5e22d7aab304ef70085fbae19f",
+      "start_line": 1616,
+      "end_line": 3144,
+      "complete_file": false,
+      "read_chunks": [
+        {
+          "start": 109490,
+          "end": 117990,
+          "bytes": 8500,
+          "sha256": "a707eb0dfda3a0560c42f6171e6aa0f84cba81a3a02cbd18e72863f8f8eed397"
+        },
+        {
+          "start": 117990,
+          "end": 126490,
+          "bytes": 8500,
+          "sha256": "c339ed361370b9ababc2a8341479776e136076cc00626382dc1f9cb6f15aba63"
+        },
+        {
+          "start": 126490,
+          "end": 134990,
+          "bytes": 8500,
+          "sha256": "28e73bd8d977f978e9b3da2556ec68e2ece5d538e7e4bebe6df9e88f47a59df1"
+        },
+        {
+          "start": 134990,
+          "end": 143490,
+          "bytes": 8500,
+          "sha256": "50db8c3e041ddaa852b7491fc347255e823613024ebec75dc401d0cf9ad84da3"
+        },
+        {
+          "start": 143490,
+          "end": 151990,
+          "bytes": 8500,
+          "sha256": "67c4eb9a83a58810a73547e6a81b3c719e3f6d467319afd4102847bea77b5ac0"
+        },
+        {
+          "start": 151990,
+          "end": 160490,
+          "bytes": 8500,
+          "sha256": "58c709df1d0163763190a68b1b4e36345b6322e1a43dda48a6b5bc147cdfe921"
+        },
+        {
+          "start": 160490,
+          "end": 168990,
+          "bytes": 8500,
+          "sha256": "6eb32d0e8940e91d684fdb04f087eae5ad1fd6a0ca51554d5852d3090e248561"
+        },
+        {
+          "start": 168990,
+          "end": 177490,
+          "bytes": 8500,
+          "sha256": "75d03ee264790de0a5a55f0a1294fff2520081274bd7c915068853ac705b52c4"
+        },
+        {
+          "start": 177490,
+          "end": 185990,
+          "bytes": 8500,
+          "sha256": "2aac1c17472e74b42a782d83aec8700920d2fdbee4c5eda3b644528cec80762b"
+        },
+        {
+          "start": 185990,
+          "end": 194490,
+          "bytes": 8500,
+          "sha256": "a8dc20ffacbd0fb252f593d63155dbd3f1b718a42ea6be5c3f7a1f3809545615"
+        },
+        {
+          "start": 194490,
+          "end": 202990,
+          "bytes": 8500,
+          "sha256": "c0dd6924292995c8fcd961427392b33e05d4fb2c8a88a4d95edd787d25f85e80"
+        },
+        {
+          "start": 202990,
+          "end": 211490,
+          "bytes": 8500,
+          "sha256": "2795b3ffe1237595df9bc936a7f1a384ca2fd00328184d1b0ce11bc60bb5db90"
+        },
+        {
+          "start": 211490,
+          "end": 213506,
+          "bytes": 2016,
+          "sha256": "f108d5939e05575553c2bc0d2adcb6f3e29bf7b04d5298444c8c6be5d312d540"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/desktop.yml",
+      "whole_file_bytes": 10007,
+      "whole_file_sha256": "8458ecbc83fba37bd05e68e8abf8b2ccd54fa25e724204037c38d0641c31b1b0",
+      "plan_whole_file_sha256": "8458ecbc83fba37bd05e68e8abf8b2ccd54fa25e724204037c38d0641c31b1b0",
+      "plan_hash_matches_whole_file": true,
+      "assigned_start": 0,
+      "assigned_end": 10007,
+      "assigned_sha256": "8458ecbc83fba37bd05e68e8abf8b2ccd54fa25e724204037c38d0641c31b1b0",
+      "start_line": 1,
+      "end_line": 252,
+      "complete_file": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "9f5ea0761fbe7bb5e795f249b1ca64bb8ed065e3cd53b933aa89c842a2e8efd3"
+        },
+        {
+          "start": 8500,
+          "end": 10007,
+          "bytes": 1507,
+          "sha256": "6257832e204ccaba407bfd84a66668b7b0cd432a2c6de146335d30f0117377ab"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/flake-tally.yml",
+      "whole_file_bytes": 3167,
+      "whole_file_sha256": "be845ada2c906bb771b393c735ee55320c1dfd26509d0c30431afdf07103ec42",
+      "plan_whole_file_sha256": "be845ada2c906bb771b393c735ee55320c1dfd26509d0c30431afdf07103ec42",
+      "plan_hash_matches_whole_file": true,
+      "assigned_start": 0,
+      "assigned_end": 3167,
+      "assigned_sha256": "be845ada2c906bb771b393c735ee55320c1dfd26509d0c30431afdf07103ec42",
+      "start_line": 1,
+      "end_line": 75,
+      "complete_file": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 3167,
+          "bytes": 3167,
+          "sha256": "be845ada2c906bb771b393c735ee55320c1dfd26509d0c30431afdf07103ec42"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/garage-before.yml",
+      "whole_file_bytes": 7086,
+      "whole_file_sha256": "09b860fc0b6a14a8b62e77b25bc2e09884a5ab15d5171a0e89f4eb451d79a97b",
+      "plan_whole_file_sha256": "09b860fc0b6a14a8b62e77b25bc2e09884a5ab15d5171a0e89f4eb451d79a97b",
+      "plan_hash_matches_whole_file": true,
+      "assigned_start": 0,
+      "assigned_end": 7086,
+      "assigned_sha256": "09b860fc0b6a14a8b62e77b25bc2e09884a5ab15d5171a0e89f4eb451d79a97b",
+      "start_line": 1,
+      "end_line": 160,
+      "complete_file": true,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7086,
+          "bytes": 7086,
+          "sha256": "09b860fc0b6a14a8b62e77b25bc2e09884a5ab15d5171a0e89f4eb451d79a97b"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/gpu-census.yml",
+      "whole_file_bytes": 43050,
+      "whole_file_sha256": "5232dc24b199167f2bfcf902d6847c939b0ef78c9516c47b6b7d483ecbf4cf41",
+      "plan_whole_file_sha256": "5232dc24b199167f2bfcf902d6847c939b0ef78c9516c47b6b7d483ecbf4cf41",
+      "plan_hash_matches_whole_file": true,
+      "assigned_start": 0,
+      "assigned_end": 35724,
+      "assigned_sha256": "19a268afacf1a56188721cb641c164486a68cfb13445bfcb2f234ce8ec6efdfd",
+      "start_line": 1,
+      "end_line": 627,
+      "complete_file": false,
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "8b6097e624298138a7e99baffa6b180ee0bbaf05e37dda12dcbba89fac4bbf3c"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "548b80bfc38c031ff9de1edd6f6a86b088b5abfc86ab313fd2a9f0041ea32826"
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "14c16ceb8993bd9dc84ad36d0814a39ec6bd2bc2a2570e65632800a1763e5384"
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "bytes": 8500,
+          "sha256": "0ab50ca5fdb790d57c16f13c23d6ad92df961197edae1baef822d93afdf02673"
+        },
+        {
+          "start": 34000,
+          "end": 35724,
+          "bytes": 1724,
+          "sha256": "691583645fd7a5057c3f21fbd84cc494fd820b3f5acb0bd85ad3a3b35e3591fd"
+        }
+      ]
+    }
+  ],
+  "support_reads": [
+    {
+      "path": "AGENTS.md",
+      "start": 0,
+      "end": 22722,
+      "range_sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+      "whole_file_sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+      "whole_file_bytes": 22722,
+      "complete_file": true,
+      "purpose": "current instructions"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "start": 11606,
+      "end": 20106,
+      "range_sha256": "5871d4c622b95c9abb3c750aa11916ee91ecac733c768fa7c660a82e1d56184f",
+      "whole_file_sha256": "d615b39496e01177025a6dde9dbdd6edd5d8314942a9adaca3cb8ead2bf0f1d6",
+      "whole_file_bytes": 213506,
+      "complete_file": false,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "start": 20106,
+      "end": 25803,
+      "range_sha256": "325a3a2bad47cfead4a0521fa1b43614a0827d36037d02da882b90c8161a7cb0",
+      "whole_file_sha256": "d615b39496e01177025a6dde9dbdd6edd5d8314942a9adaca3cb8ead2bf0f1d6",
+      "whole_file_bytes": 213506,
+      "complete_file": false,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/ci/selected-gate-verdict.mjs",
+      "start": 0,
+      "end": 8681,
+      "range_sha256": "d5923aaefc609e9864d062d1570ecd1c1c6ac7a4bbec18faa9e4f4bb3ba90ba4",
+      "whole_file_sha256": "d5923aaefc609e9864d062d1570ecd1c1c6ac7a4bbec18faa9e4f4bb3ba90ba4",
+      "whole_file_bytes": 8681,
+      "complete_file": true,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/ci/ci-verdict.mjs",
+      "start": 0,
+      "end": 6351,
+      "range_sha256": "3c8fc59d6a6e80ae0073622c1747926ba5838ec2a2518513f8769a68dd37379b",
+      "whole_file_sha256": "3c8fc59d6a6e80ae0073622c1747926ba5838ec2a2518513f8769a68dd37379b",
+      "whole_file_bytes": 6351,
+      "complete_file": true,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/ci/ci-select-specs-step.sh",
+      "start": 0,
+      "end": 6883,
+      "range_sha256": "1a1ca0896dad122b9eb2ea05490e2311984e9553bd40fd495fa45f0b39368e54",
+      "whole_file_sha256": "1a1ca0896dad122b9eb2ea05490e2311984e9553bd40fd495fa45f0b39368e54",
+      "whole_file_bytes": 6883,
+      "complete_file": true,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/shot/garage-before.mjs",
+      "start": 0,
+      "end": 3000,
+      "range_sha256": "f88d1878eb5ca98d9f4820b33235331d40dd9de0f551ec0b2dd5dac403be71ec",
+      "whole_file_sha256": "e4fdfae4f57c97f909b7e60f7ea26f34e7b5143ea7b1b565f81aed065bc51d58",
+      "whole_file_bytes": 21345,
+      "complete_file": false,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/ci/flake-tally.mjs",
+      "start": 0,
+      "end": 3000,
+      "range_sha256": "a2505d997bdfb604c31f6cfa1e3229768aa06bf36ee976bad31c7189537db0a6",
+      "whole_file_sha256": "015286807ce9365496ac7b4e55227f85adc719c1fab7cac4ac00f9ba3a62eaa5",
+      "whole_file_bytes": 41680,
+      "complete_file": false,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/desktop/stage-files.mjs",
+      "start": 0,
+      "end": 1932,
+      "range_sha256": "dabeb7c1bdf954617aae14bca69af51b1adb9da459dec5c816df81f7ea9362f5",
+      "whole_file_sha256": "dabeb7c1bdf954617aae14bca69af51b1adb9da459dec5c816df81f7ea9362f5",
+      "whole_file_bytes": 1932,
+      "complete_file": true,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/gfx/gpu-game-check.mjs",
+      "start": 0,
+      "end": 3000,
+      "range_sha256": "2e5b2aba51b7e969b87b3f700cbb95c7f26aed9e8fc5e92839783ccd7997e0ff",
+      "whole_file_sha256": "77f91e8296df186063f0946c11a99cbc5c8cc21725284efc003a92e8c47143bd",
+      "whole_file_bytes": 110884,
+      "complete_file": false,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/gfx/gpu-census.mjs",
+      "start": 0,
+      "end": 3000,
+      "range_sha256": "65c5250d94d22708373ff19e21ee4f1efe780d7ef688fc4c2937d8dcef1236aa",
+      "whole_file_sha256": "23c77d2846ec82b284b378a618c43b8babb11a5b2d94569097741412161bb907",
+      "whole_file_bytes": 9803,
+      "complete_file": false,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/ci/flake-tally.mjs",
+      "start": 17053,
+      "end": 18320,
+      "range_sha256": "8eac0727af54636acfffa2d9f44c79c782070865a5148be127fe879002259419",
+      "whole_file_sha256": "015286807ce9365496ac7b4e55227f85adc719c1fab7cac4ac00f9ba3a62eaa5",
+      "whole_file_bytes": 41680,
+      "complete_file": false,
+      "purpose": "static invocation/consumer contract"
+    },
+    {
+      "path": "tools/ci/flake-tally.mjs",
+      "start": 23099,
+      "end": 24353,
+      "range_sha256": "1009ca8c0007b1ed4f1b03e6215d6b53cbe0a4c7e6aab7b0c3b47fa01c37db76",
+      "whole_file_sha256": "015286807ce9365496ac7b4e55227f85adc719c1fab7cac4ac00f9ba3a62eaa5",
+      "whole_file_bytes": 41680,
+      "complete_file": false,
+      "purpose": "static invocation/consumer contract"
+    }
+  ],
+  "limits": [
+    "ci.yml assigned span begins inside smoke step and reaches EOF; preceding job definitions are group01, except supplemental trigger/input/concurrency header read.",
+    "gpu-census.yml assigned span ends inside GLX run command; remaining GLX arguments, WGX leg, verdict and upload are group03 and are not claimed here.",
+    "Invoked tool contracts are static callsite contracts plus listed support reads; no runner, secret availability, remote artifact, API behavior or successful execution was established.",
+    "YAML inspected as text; no runtime game symbol navigation required.",
+    "Comments are provenance and may disagree with executable conditions; implementation takes precedence."
+  ],
+  "referenced_tool_inventory": [
+    {
+      "path": "scratch/analyze-garage-retry.mjs",
+      "exists": true,
+      "bytes": 27764,
+      "authority": "historical experiment callsite only"
+    },
+    {
+      "path": "scratch/garage-livery-census.mjs",
+      "exists": true,
+      "bytes": 15902,
+      "authority": "historical experiment callsite only"
+    },
+    {
+      "path": "scratch/garage-retry-ab.mjs",
+      "exists": true,
+      "bytes": 12480,
+      "authority": "historical experiment callsite only"
+    },
+    {
+      "path": "scratch/summarize-livery-census.mjs",
+      "exists": true,
+      "bytes": 2144,
+      "authority": "historical experiment callsite only"
+    },
+    {
+      "path": "tools/ci/base-green.sh",
+      "exists": true,
+      "bytes": 2719,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/base-verdict.sh",
+      "exists": true,
+      "bytes": 5826,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/ci-pr-base.sh",
+      "exists": true,
+      "bytes": 1714,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/ci-resolve-before.sh",
+      "exists": true,
+      "bytes": 3392,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/ci-select-specs-step.sh",
+      "exists": true,
+      "bytes": 6883,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/ci-verdict.mjs",
+      "exists": true,
+      "bytes": 6351,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/deploy.mjs",
+      "exists": true,
+      "bytes": 69758,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/flake-tally.mjs",
+      "exists": true,
+      "bytes": 41680,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/geometry-paths.mjs",
+      "exists": true,
+      "bytes": 15351,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/junit-failed.mjs",
+      "exists": true,
+      "bytes": 3916,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/pages-reuse-verdict.sh",
+      "exists": true,
+      "bytes": 8837,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/pick-unit-slices.mjs",
+      "exists": true,
+      "bytes": 19735,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/remote-group.mjs",
+      "exists": true,
+      "bytes": 27139,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/reuse-draft-fast.sh",
+      "exists": true,
+      "bytes": 4288,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/run-playwright.mjs",
+      "exists": true,
+      "bytes": 14330,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/select-budget.mjs",
+      "exists": true,
+      "bytes": 21996,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/select-specs.mjs",
+      "exists": true,
+      "bytes": 92061,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/selected-gate-verdict.mjs",
+      "exists": true,
+      "bytes": 8681,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/spec-timings.mjs",
+      "exists": true,
+      "bytes": 23340,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/ci/twinned-specs.mjs",
+      "exists": true,
+      "bytes": 30949,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/desktop/minify.mjs",
+      "exists": true,
+      "bytes": 7230,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/desktop/stage-files.mjs",
+      "exists": true,
+      "bytes": 1932,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/desktop/stage.mjs",
+      "exists": true,
+      "bytes": 12566,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/garage-angles-fetch.mjs",
+      "exists": true,
+      "bytes": 9377,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/gfx/census-verdict.mjs",
+      "exists": true,
+      "bytes": 33939,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/gfx/gpu-census.mjs",
+      "exists": true,
+      "bytes": 9803,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/gfx/gpu-game-check.mjs",
+      "exists": true,
+      "bytes": 110884,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/gfx/live-frame-census.mjs",
+      "exists": true,
+      "bytes": 24138,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/gfx/mem-cycles-lib.mjs",
+      "exists": true,
+      "bytes": 4147,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/lib/cli-args.mjs",
+      "exists": true,
+      "bytes": 8186,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/perf/live-render-matrix.mjs",
+      "exists": true,
+      "bytes": 23262,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/shot/garage-angles.mjs",
+      "exists": true,
+      "bytes": 114248,
+      "authority": "callsite; implementation coverage only in support_reads"
+    },
+    {
+      "path": "tools/shot/garage-before.mjs",
+      "exists": true,
+      "bytes": 21345,
+      "authority": "callsite; implementation coverage only in support_reads"
+    }
+  ],
+  "semantic_map": {
+    "ci": {
+      "triggers": "PR opened/synchronize/reopened/ready_for_review/labeled/edited targeting deploy branch; nightly 04:17 UTC; dispatch group/renderer_macos/gl; reusable call before_sha/concurrency_key/fast_tier_run. Header supplemental scope listed.",
+      "permissions": "default contents:read; select and driving-model explicitly add actions:read; train-twins contents:read",
+      "concurrency": "workflow ci-{caller key|noise run key|schedule/dispatch run ID|PR head ref|ref}; cancel only PR; selected PR legs selected-lane-{matrix.lane} queue:max, other legs unique per run/index",
+      "jobs": {
+        "driving-model": "select -> driving boolean, not Pages/fast-tier reuse; draft reuse script -> characterization traces; always junit telemetry and failure/cancel report",
+        "renderer-macos": "select.renderer true plus Pages/nightly/forced dispatch/ready PR; hardware census anyHardware===true -> single-worker gfx; always diagnostic artifact",
+        "xr": "select.xr true and no caller key; IWER browser suite; failure/cancel artifact",
+        "train-twins": "Pages only, successful select with twins/adapted outputs -> node tests; adapted uses APEX_VM_PAGE=1, circuits propagated",
+        "select": "geometry + node slices + cached failures + selected shards + train twin plan + gaps + ship/renderer/XR filters + advisory base verdict",
+        "selected": "select.any true, no draft -> dynamic matrix, marker artifact -> browser run -> always junit + failure/cancel diagnostics",
+        "selected-verdict": "needs select,selected,guards; not cancelled push/PR/Pages; collects all junit and run markers, gaps fail except warn on train; script judges selected/dropped; persists one merged failure cache",
+        "baseline-trial": "nightly/direct dispatch only, no Pages; test:baseline then always 14-day diagnostic upload; job name/prose says nonblocking but executable job/step lacks continue-on-error on test so failure remains blocking via ci-verdict",
+        "staged-boot": "full-tier stage/minify/stamp -> assert SHA -> dedicated _site server -> smoke; no ship filter; failure/cancel report",
+        "ci-verdict": "needs every preceding major job including baseline-trial; !cancelled; evaluated alternate names for noise/draft; NEEDS JSON + strict REQUIRE_SUCCESS on ready PR -> ci-verdict.mjs"
+      },
+      "consumers": "Pages reusable gate and required CI check; timing workflow consumes junit artifact prefixes; selected-verdict consumes selected junit/marker prefixes and select outputs; next select restores merged failed-spec cache",
+      "cleanup": "No PR comment producer/cleanup in assigned CI span; artifact retention 7d except baseline 14d; merged failure cache written once per run"
+    },
+    "desktop": {
+      "triggers": "ready non-draft packaging-path PR; dispatch signed_verify=true; desktop-v* tags",
+      "permissions": "contents:read",
+      "concurrency": "per workflow/head ref or ref; cancel-in-progress:true",
+      "graph": "independent pack-smoke/release-build/auto-update-plan, no needs dependencies",
+      "inputs": "signed_verify declared but unused by step conditions; CSC_LINK presence controls optional verification",
+      "outputs": "pack-smoke 7d desktop-pw OS/run artifacts; release OS installers+metadata 14d; update plan job summary",
+      "contracts": "desktop npm ci; pack:test enables inspect fuse and asserts it; _electron soft GL with Linux xvfb; release dist:linux/win/mac; no publish/release action"
+    },
+    "flake_tally": {
+      "triggers": "06:19 daily, minute17 every2h base-red; dispatch days/mode",
+      "permissions": "contents:read actions:read issues:write",
+      "concurrency": "flake-tally; no active cancellation",
+      "graph": "single tally on deploy branch, Node22, no npm install",
+      "io": "failed ci/pages runs+failed browser logs -> proposals and one marked flaky issue; base-red reads 3h and creates/refreshes/closes marked issue",
+      "cleanup": "updates issue body/title; no comment producer/deletion; base-red closes clean-window issue; daily upsert does not close clean issue or remove duplicate issues; never edits quarantine"
+    },
+    "garage_before": {
+      "triggers": "10:23 daily or dispatch ref (deploy branch default)",
+      "permissions": "contents:read actions:read",
+      "concurrency": "workflow per requested ref noncancelling; capture max-parallel2 no concurrency group; pack per SHA noncancelling",
+      "graph": "plan outputs capture/SHA/reason/matrix/views -> conditional macOS capture -> successful capture required pack",
+      "io": "four team shards x seven views; exact resolved SHA captured; shard prefix retained5d -> merge and MANIFEST -> SHA pack retained30d; fetch script consumes final pack",
+      "cleanup": "artifact expiry only, no comment producer; advisory non-gate"
+    },
+    "gpu_census_partial": {
+      "triggers": "05:47 nightly, dispatch, request-file push on cursor/** or claude/**",
+      "permissions": "contents:read default; plan actions:read",
+      "concurrency": "push ref+runID; nightly separate and cancelling; dispatch per-ref noncancelling (single pending replacement applies)",
+      "graph": "plan gate+normalize outputs -> image census matrix unless run=false; no later jobs within assigned span",
+      "gate": "topic pushes require own nonmerge first-parent request edit; ship push runs; nightly compares last green nightly renderer paths, unknown runs; dispatch always runs",
+      "normalization": "runner allowlist/fallback macOS; newline flatten strings; clock0..23; TOD enum; mem_cycles0..16; cam/entry enums; request-only experiment switches; LRM rows/leg/scale clamps",
+      "io": "adapter census JSON+job summary; ordinary native-present three/WebGPU and three/WebGL2 JSON/PNG; GLX command only partial; relaunch persistent profile and fixed origin; opt-in memcycles and request experiments upload artifacts with7/14d retention",
+      "limits": "Game checks continue-on-error and capped6m; final verdict/upload outside assigned span; do not infer workflow success from measurement-step outcome"
+    }
+  }
+}

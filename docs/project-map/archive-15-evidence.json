@@ -1,0 +1,518 @@
+{
+  "group": "15",
+  "assigned_bytes": 160000,
+  "method": "All assigned half-open text spans fully returned in 25 individual calls, each at most 8000 bytes. Plan hashes checked against whole original files; assigned-span and chunk hashes are separate. No tests/browser/network/runtime/source edits/staging/commits.",
+  "sources": [
+    {
+      "source_id": 1,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/car-2.part-1ofn.md",
+      "start": 9412,
+      "end": 13618,
+      "kind": "text",
+      "sha256": "6ceea5d9f250f4251462e8735ca60a8df0723504c91d8e661213ea5a00410ff8",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 13618,
+      "observed_whole_file_sha256": "6ceea5d9f250f4251462e8735ca60a8df0723504c91d8e661213ea5a00410ff8",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "39166c9471a6bfea93148327279cf2e680fac1a992a8f3c76ea530428fa32d0f",
+      "read_chunks": [
+        {
+          "start": 9412,
+          "end": 13618,
+          "bytes": 4206,
+          "sha256": "39166c9471a6bfea93148327279cf2e680fac1a992a8f3c76ea530428fa32d0f",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261047255"
+      ],
+      "posted_utc": [
+        "2026-10-19T06:22:29Z"
+      ],
+      "header_outside_assigned_span": true
+    },
+    {
+      "source_id": 2,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/car-2.part-2of2.md",
+      "start": 0,
+      "end": 7930,
+      "kind": "text",
+      "sha256": "30f2dfe481811d8d6679c0216a8972a9ec2ee5902be9d39186cd59c344f234e1",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 7930,
+      "observed_whole_file_sha256": "30f2dfe481811d8d6679c0216a8972a9ec2ee5902be9d39186cd59c344f234e1",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "30f2dfe481811d8d6679c0216a8972a9ec2ee5902be9d39186cd59c344f234e1",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7930,
+          "bytes": 7930,
+          "sha256": "30f2dfe481811d8d6679c0216a8972a9ec2ee5902be9d39186cd59c344f234e1",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261492542"
+      ],
+      "posted_utc": [
+        "2026-10-19T06:53:13Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 3,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/modes-1.md",
+      "start": 0,
+      "end": 20336,
+      "kind": "text",
+      "sha256": "4bfd0d351f1a28a67fc16b28fda01494095936d7970d44c7e28a9d388782e706",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 20336,
+      "observed_whole_file_sha256": "4bfd0d351f1a28a67fc16b28fda01494095936d7970d44c7e28a9d388782e706",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "4bfd0d351f1a28a67fc16b28fda01494095936d7970d44c7e28a9d388782e706",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "36ed321c19bb676a9f761b7e64b60504779c16f9c04fbe92898fbc1312d1f663",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "15d1eb572d48a82c186e1699e99726924fcb00937e3335f481633aff78f23ac4",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 20336,
+          "bytes": 4336,
+          "sha256": "139d6ee1b3b1276fb7d1a35382d203a1d7fcb334f22962c18ecab734ab5b8d2f",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261061793"
+      ],
+      "posted_utc": [
+        "2026-10-19T06:23:32Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 4,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/net.md",
+      "start": 0,
+      "end": 22034,
+      "kind": "text",
+      "sha256": "1867f297b089a91485237f860e5db0c9780e4e65d8afd16080770c12b08090a6",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 22034,
+      "observed_whole_file_sha256": "1867f297b089a91485237f860e5db0c9780e4e65d8afd16080770c12b08090a6",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "1867f297b089a91485237f860e5db0c9780e4e65d8afd16080770c12b08090a6",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "7d9ad7898cccfe69dd406242406f052995d991f955def358fb4082a3ff6dbdaf",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "ab90aca055438f2c872d90f1315a538c7ee6a0867cf747df2a7c5d55a97bda12",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 22034,
+          "bytes": 6034,
+          "sha256": "3c90a016400ba71882b1f3a3f349e72703b03ce0722b1b293cbf6531c040c0a5",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261099563"
+      ],
+      "posted_utc": [
+        "2026-10-19T06:26:11Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 5,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-1.addendum-debugger.md",
+      "start": 0,
+      "end": 8214,
+      "kind": "text",
+      "sha256": "d3040a1a226a947c95dde6f7fa29b068f7c3b5e88baad63b853ee81ecf79850f",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 8214,
+      "observed_whole_file_sha256": "d3040a1a226a947c95dde6f7fa29b068f7c3b5e88baad63b853ee81ecf79850f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "d3040a1a226a947c95dde6f7fa29b068f7c3b5e88baad63b853ee81ecf79850f",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "1d13cb03e16b2a82d8a527793f677060e4d14c0bbb6d2f4346f1b20c7d93961e",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 8214,
+          "bytes": 214,
+          "sha256": "518d96a58f718818c3bd5c3792141a5f6c70cae367339c6ef56b7e5f69f704a2",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260210052",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260119034"
+      ],
+      "posted_utc": [
+        "2026-10-19T05:15:28Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 6,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-1.md",
+      "start": 0,
+      "end": 23869,
+      "kind": "text",
+      "sha256": "60aad7803c35be7138427d6312075eec7bdf062fee0ebccf5500862b4fa34de1",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 23869,
+      "observed_whole_file_sha256": "60aad7803c35be7138427d6312075eec7bdf062fee0ebccf5500862b4fa34de1",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "60aad7803c35be7138427d6312075eec7bdf062fee0ebccf5500862b4fa34de1",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "d6de09567bf0024eff03c075f63fe146501e11f1ba68b6e51a1cd12a0dc318ab",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "7bd81ea452818d3e289bb7394bf57085ca3670d22931f5fbcc146f0835e9f40a",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 23869,
+          "bytes": 7869,
+          "sha256": "a8fc657ea8977be41fa63697e008752a5401e67fd1df10e6149c164f21df01e7",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260119034"
+      ],
+      "posted_utc": [
+        "2026-10-19T05:07:49Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 7,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-1of2.md",
+      "start": 0,
+      "end": 30401,
+      "kind": "text",
+      "sha256": "668f42bb1c79b356a8584780e33ae6ca466b57220f06384736577575dcebec3f",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 30401,
+      "observed_whole_file_sha256": "668f42bb1c79b356a8584780e33ae6ca466b57220f06384736577575dcebec3f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "668f42bb1c79b356a8584780e33ae6ca466b57220f06384736577575dcebec3f",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "69bfa4052ac00e54b97f05142e043cf33b241da9c4a86bb2b352d4ddcbad5a5a",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "272a8c7836517300402579a26817e19d901052513841055b91d7091e3bc263f5",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "0eb02639aeda0fb44c05f521778c073a38c42455181404e9d08f50ef106373e2",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 24000,
+          "end": 30401,
+          "bytes": 6401,
+          "sha256": "d24482ca8bf9d288d8e6da24be537434b8044968f03e185b19ea9a051acc5ee6",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260073941"
+      ],
+      "posted_utc": [
+        "2026-10-19T05:03:59Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 8,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-2of2.md",
+      "start": 0,
+      "end": 2486,
+      "kind": "text",
+      "sha256": "622a14e17fba6b4de58ef936dd54680cb60ecca99a23286b536cc40379af424f",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 2486,
+      "observed_whole_file_sha256": "622a14e17fba6b4de58ef936dd54680cb60ecca99a23286b536cc40379af424f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "622a14e17fba6b4de58ef936dd54680cb60ecca99a23286b536cc40379af424f",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2486,
+          "bytes": 2486,
+          "sha256": "622a14e17fba6b4de58ef936dd54680cb60ecca99a23286b536cc40379af424f",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260077911"
+      ],
+      "posted_utc": [
+        "2026-10-19T05:04:19Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 9,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-3aof3.md",
+      "start": 0,
+      "end": 7517,
+      "kind": "text",
+      "sha256": "fd592f263b89c922f8907d5a05baa275fd0f5933b653c4c3bba428783e5f167d",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 7517,
+      "observed_whole_file_sha256": "fd592f263b89c922f8907d5a05baa275fd0f5933b653c4c3bba428783e5f167d",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "fd592f263b89c922f8907d5a05baa275fd0f5933b653c4c3bba428783e5f167d",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7517,
+          "bytes": 7517,
+          "sha256": "fd592f263b89c922f8907d5a05baa275fd0f5933b653c4c3bba428783e5f167d",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260874560"
+      ],
+      "posted_utc": [
+        "2026-10-19T06:10:11Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 10,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-3bof3.md",
+      "start": 0,
+      "end": 7627,
+      "kind": "text",
+      "sha256": "615ea0f3645de91110f031e299d731d7915f43bc9a67a1b149004cef127f2b19",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 7627,
+      "observed_whole_file_sha256": "615ea0f3645de91110f031e299d731d7915f43bc9a67a1b149004cef127f2b19",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "615ea0f3645de91110f031e299d731d7915f43bc9a67a1b149004cef127f2b19",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7627,
+          "bytes": 7627,
+          "sha256": "615ea0f3645de91110f031e299d731d7915f43bc9a67a1b149004cef127f2b19",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261683714",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260874560"
+      ],
+      "posted_utc": [
+        "2026-10-19T07:06:36Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 11,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-3cof3.md",
+      "start": 0,
+      "end": 4715,
+      "kind": "text",
+      "sha256": "56f7bb391981f3046b3ba2795c1ce01abdc1c2c5ce9aedf5f6def8948f8dc06d",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 4715,
+      "observed_whole_file_sha256": "56f7bb391981f3046b3ba2795c1ce01abdc1c2c5ce9aedf5f6def8948f8dc06d",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "56f7bb391981f3046b3ba2795c1ce01abdc1c2c5ce9aedf5f6def8948f8dc06d",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 4715,
+          "bytes": 4715,
+          "sha256": "56f7bb391981f3046b3ba2795c1ce01abdc1c2c5ce9aedf5f6def8948f8dc06d",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6262452032"
+      ],
+      "posted_utc": [
+        "2026-10-19T07:55:55Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 12,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/platform.part-1ofn.md",
+      "start": 0,
+      "end": 10975,
+      "kind": "text",
+      "sha256": "d9c89886366c8ce593ff6eac9614874d60b31313b56825840b9297173202556a",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 10975,
+      "observed_whole_file_sha256": "d9c89886366c8ce593ff6eac9614874d60b31313b56825840b9297173202556a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "d9c89886366c8ce593ff6eac9614874d60b31313b56825840b9297173202556a",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "c07a980a6d3712a82e25957258d9c038f476f67d41937717ddb6e4e2b97e77cf",
+          "read_status": "fully returned individually; untruncated"
+        },
+        {
+          "start": 8000,
+          "end": 10975,
+          "bytes": 2975,
+          "sha256": "2d5641363f3979007c46acfc3dcbed64d27e1aa37f0f78070aac4a9a6c1bd50a",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261348439"
+      ],
+      "posted_utc": [
+        "2026-10-19T06:43:02Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 13,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/platform.part-2of2.md",
+      "start": 0,
+      "end": 7131,
+      "kind": "text",
+      "sha256": "108b3be8a4e4c0e822ee2a1a139e9ed30b17d1543b70b49a4ddf544061557654",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 7131,
+      "observed_whole_file_sha256": "108b3be8a4e4c0e822ee2a1a139e9ed30b17d1543b70b49a4ddf544061557654",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "108b3be8a4e4c0e822ee2a1a139e9ed30b17d1543b70b49a4ddf544061557654",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 7131,
+          "bytes": 7131,
+          "sha256": "108b3be8a4e4c0e822ee2a1a139e9ed30b17d1543b70b49a4ddf544061557654",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6263765590",
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6261348439"
+      ],
+      "posted_utc": [
+        "2026-10-19T09:12:48Z"
+      ],
+      "header_outside_assigned_span": false
+    },
+    {
+      "source_id": 14,
+      "path": "docs/archive/notes/test-review-2026-10-19/reports/race-1.part-1ofn.md",
+      "start": 0,
+      "end": 2559,
+      "kind": "text",
+      "sha256": "50280605fc5b00e81affe88348c21d55313537c26015d2516b0b1b46f2771c34",
+      "plan_sha256_scope": "whole-file",
+      "whole_file_bytes": 18793,
+      "observed_whole_file_sha256": "50280605fc5b00e81affe88348c21d55313537c26015d2516b0b1b46f2771c34",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "35f8b8b258bacb4db6e89c9820b3fa82bec242e00275ac5aa9c0ed7f85cb3ba4",
+      "read_chunks": [
+        {
+          "start": 0,
+          "end": 2559,
+          "bytes": 2559,
+          "sha256": "35f8b8b258bacb4db6e89c9820b3fa82bec242e00275ac5aa9c0ed7f85cb3ba4",
+          "read_status": "fully returned individually; untruncated"
+        }
+      ],
+      "issue_comment_urls": [
+        "https://github.com/brycejmurrin/f1-game/issues/2952#issuecomment-6260865509"
+      ],
+      "posted_utc": [
+        "2026-10-19T06:09:32Z"
+      ],
+      "header_outside_assigned_span": false
+    }
+  ],
+  "backlinks": [
+    {
+      "path": "docs/NOTES-INDEX.md",
+      "line": 198,
+      "relationship": "archive index; provenance-only designation"
+    },
+    {
+      "path": "docs/notes/system-audit-4/anchors.md",
+      "line": 36,
+      "source_id": 4,
+      "relationship": "live anchor inventory"
+    },
+    {
+      "path": "docs/notes/system-audit-4/anchors.md",
+      "line": 38,
+      "source_id": 9,
+      "relationship": "live anchor inventory"
+    }
+  ],
+  "limits": [
+    "Source 1 assigned tail only; source 14 assigned prefix only",
+    "Source 5 supersedes source 6 debugger sampling; sources 9-11 continue and correct sources 7-8",
+    "Historical reports not revalidated against current source or runtime",
+    "Report helper branches and scratch locators not checked for existence"
+  ]
+}

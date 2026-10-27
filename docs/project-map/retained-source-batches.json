@@ -1,0 +1,299 @@
+{
+  "goal": "Full read of novel retained source/evidence outside original tracked paths and historical snapshot. Inspection only; generated shaders/type projection/old recovery and deployment programs are not current runtime authority.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "artifacts/gctx/usage.ts",
+          "start": 0,
+          "end": 103123,
+          "kind": "text",
+          "sha256": "2964284b27c8f049a13bb89ea7df6d4dc749780af1c7e85d2ad4c6dd38a69b38"
+        },
+        {
+          "path": "artifacts/merge-3894/deploy-install.sh",
+          "start": 0,
+          "end": 4338,
+          "kind": "text",
+          "sha256": "57c52d0930a0d26c109dc81defe6547f8d566674f0aadb3fe239bdcdb7acbdf6"
+        },
+        {
+          "path": "artifacts/merge-3894/select-deploy.sh",
+          "start": 0,
+          "end": 1532,
+          "kind": "text",
+          "sha256": "3192628b531828b452cfbed8028319c64c3de5717244f7f0faa2edb2c21041a0"
+        },
+        {
+          "path": "artifacts/merge-3894/test-select-deploy.py",
+          "start": 0,
+          "end": 3236,
+          "kind": "text",
+          "sha256": "abb5fd7fea7ec0df323b65ace62c863781a54e40adf33da75af119b9af31cd41"
+        },
+        {
+          "path": "artifacts/safety-bans-stub/sitecustomize.py",
+          "start": 0,
+          "end": 90,
+          "kind": "text",
+          "sha256": "80c599c8eaebd3dad9e7b2f18621514e77d2ddbd68fd1d97ff8d59925036e12b"
+        },
+        {
+          "path": "artifacts/shader-validate/BLOCKER_FS.frag",
+          "start": 0,
+          "end": 470,
+          "kind": "text",
+          "sha256": "84a383aeaa574908022ad96fdf8fd64a3f499030f674760467e001f2b48e04f9"
+        },
+        {
+          "path": "artifacts/shader-validate/BLUR_FS.frag",
+          "start": 0,
+          "end": 476,
+          "kind": "text",
+          "sha256": "fb058b70b0f963036a2900722daf6d83efd2cf5e5df65bff70a260cdfba8179b"
+        },
+        {
+          "path": "artifacts/shader-validate/BRIGHT_FS.frag",
+          "start": 0,
+          "end": 824,
+          "kind": "text",
+          "sha256": "ef6511f71c0c1a030b1a1c880b23808ba837d09d801a9c8ea5beb06e441ad364"
+        },
+        {
+          "path": "artifacts/shader-validate/COMPOSITE_FS.frag",
+          "start": 0,
+          "end": 45911,
+          "kind": "text",
+          "sha256": "f5b193f2455fcee0743d65fcb86597bdcd7521159345b3122f9bfbfbf880d569"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "artifacts/shader-validate/COMPOSITE_FS.frag",
+          "start": 45911,
+          "end": 55426,
+          "kind": "text",
+          "sha256": "f5b193f2455fcee0743d65fcb86597bdcd7521159345b3122f9bfbfbf880d569"
+        },
+        {
+          "path": "artifacts/shader-validate/DECAL_FS.frag",
+          "start": 0,
+          "end": 3106,
+          "kind": "text",
+          "sha256": "42b4146aee4f2a86c7c8a23c3857d35307e471d6abc6475c1b09c21433379104"
+        },
+        {
+          "path": "artifacts/shader-validate/DEPTH_FS.frag",
+          "start": 0,
+          "end": 30,
+          "kind": "text",
+          "sha256": "0bc8ff5f2d22ebcbe630c863825b3d0581ede266b6a6c94891b8f22bcf5ea3e7"
+        },
+        {
+          "path": "artifacts/shader-validate/DOWN_FS.frag",
+          "start": 0,
+          "end": 2274,
+          "kind": "text",
+          "sha256": "cbcb9bf2e1b405416e84e19cabaed0484dae5fe18e12c1542430033819f146d1"
+        },
+        {
+          "path": "artifacts/shader-validate/FXAA_FS.frag",
+          "start": 0,
+          "end": 3055,
+          "kind": "text",
+          "sha256": "c704b8456b0ccf309c06ebd39e808edf033840bc8dec8447a3ff78da3ff481e7"
+        },
+        {
+          "path": "artifacts/shader-validate/GLOW_FS.frag",
+          "start": 0,
+          "end": 455,
+          "kind": "text",
+          "sha256": "36d6428d72f44a63cf74168567a41eb856ce92bb70e9ab0689a754c1809ca402"
+        },
+        {
+          "path": "artifacts/shader-validate/GODRAY_FS.frag",
+          "start": 0,
+          "end": 10634,
+          "kind": "text",
+          "sha256": "bc2d9e99dd7831d3ab23d101fd92a2300b6fa04618ab275cd8ea5f5f9b97def5"
+        },
+        {
+          "path": "artifacts/shader-validate/LINE_FS.frag",
+          "start": 0,
+          "end": 3070,
+          "kind": "text",
+          "sha256": "96368e906b81b96cd8c592d9b577bf6e0478c1e7301b07e66db01d123a22229d"
+        },
+        {
+          "path": "artifacts/shader-validate/LIT_FS.frag",
+          "start": 0,
+          "end": 127861,
+          "kind": "text",
+          "sha256": "01d432ea7ca5aafc1fb060aac4345977e8db23ae5da598b66ea856a12e621414"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "artifacts/shader-validate/LIT_FS.frag",
+          "start": 127861,
+          "end": 141892,
+          "kind": "text",
+          "sha256": "01d432ea7ca5aafc1fb060aac4345977e8db23ae5da598b66ea856a12e621414"
+        },
+        {
+          "path": "artifacts/shader-validate/MARK_FS.frag",
+          "start": 0,
+          "end": 213,
+          "kind": "text",
+          "sha256": "1b71c473e22539de13182900dc13002c1c76e3af0a82ddea0cbca7651c32bc42"
+        },
+        {
+          "path": "artifacts/shader-validate/MIRROR_FS.frag",
+          "start": 0,
+          "end": 4724,
+          "kind": "text",
+          "sha256": "8395c367ad82491927c0200349d2658a0179d63ade5589f6246321092c2ff50e"
+        },
+        {
+          "path": "artifacts/shader-validate/MIRROR_GLASS_FS.frag",
+          "start": 0,
+          "end": 158,
+          "kind": "text",
+          "sha256": "a52a5663327184a047a3e97fb87d358a669306037c09737a3493fb3676c66e9f"
+        },
+        {
+          "path": "artifacts/shader-validate/PARTICLE_FS.frag",
+          "start": 0,
+          "end": 2025,
+          "kind": "text",
+          "sha256": "490ee2163c1fbe4ff22152a4e72feb5ffc9474cb0806b3263b19f29bd77ca17d"
+        },
+        {
+          "path": "artifacts/shader-validate/SGSR_FS.frag",
+          "start": 0,
+          "end": 3470,
+          "kind": "text",
+          "sha256": "21ac8a211ea7ea09ee09bc81eee4beeb5e3d695573471ea04764d239fdfc8b4c"
+        },
+        {
+          "path": "artifacts/shader-validate/SHADOW_FS.frag",
+          "start": 0,
+          "end": 442,
+          "kind": "text",
+          "sha256": "90e4b8dd1e5c44b20e3d92eea3b331f45c03458d6a9b460ddc4bf4d83c61984e"
+        },
+        {
+          "path": "artifacts/shader-validate/SKY_FS.frag",
+          "start": 0,
+          "end": 27210,
+          "kind": "text",
+          "sha256": "785a5d1ead78df1db21830a364838c8f85cc63f2449610a259d1426ba5d8178c"
+        },
+        {
+          "path": "artifacts/shader-validate/SSAO_FS.frag",
+          "start": 0,
+          "end": 5870,
+          "kind": "text",
+          "sha256": "4cd45dce04db5c765b92c5de53421698d7ba88f44aa5ffc762a5de957ad55e01"
+        },
+        {
+          "path": "artifacts/shader-validate/UP_FS.frag",
+          "start": 0,
+          "end": 781,
+          "kind": "text",
+          "sha256": "169cad5c92c9dec514cc9a37ae140cb1eadf706ded5360cb6696eb81971fbcb9"
+        },
+        {
+          "path": "artifacts/shader-validate/chunked.js_OCC_FS.frag",
+          "start": 0,
+          "end": 73,
+          "kind": "text",
+          "sha256": "3c4ab989cbbf3357fbcba10cb5c1ac15289ca022becfc9ed01c28f5882508289"
+        },
+        {
+          "path": "artifacts/shader-validate/environment-negative-control.frag",
+          "start": 0,
+          "end": 37,
+          "kind": "text",
+          "sha256": "4541607806c9632a6b7a429a0b0634f7bf147d00a7f468abf94f0bb5c7783403"
+        },
+        {
+          "path": "scratch/consolidate-f1.py",
+          "start": 0,
+          "end": 6722,
+          "kind": "text",
+          "sha256": "99887ee470092220c5b081f698d72b0d03a90043fc85bb0f9fc72f8d42be7115"
+        },
+        {
+          "path": "scratch/finish-consolidation.py",
+          "start": 0,
+          "end": 8361,
+          "kind": "text",
+          "sha256": "9890cb2843c6580ad2dd401d3cdfc03d3fdb2d2f7ab1f748bc2687f3cdabcfe0"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/install-environment.sh",
+          "start": 0,
+          "end": 1816,
+          "kind": "text",
+          "sha256": "40a504efe6d26179e7d2a3b9fb842b730f7439d8eb77f519f63f6e855daa9c3f"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/environment/preflight.sh",
+          "start": 0,
+          "end": 1701,
+          "kind": "text",
+          "sha256": "ac11c0ee2ab44e3dff2d2d0ca7f87984e7989eb1220bd61f6db45ec4bd69c5ed"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/environment/verify.sh",
+          "start": 0,
+          "end": 987,
+          "kind": "text",
+          "sha256": "d2bf5742ce7030f9707baed183aa0a89420f4d5bdd12dc16f6d750c7854ebb23"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/chat-gateway.mjs",
+          "start": 0,
+          "end": 6391,
+          "kind": "text",
+          "sha256": "2e7ca0fa4f50d30978c0980e74a068f40c3a4b9974120804a7fc6f0ac57229ac"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/check-doctor-catalog.mjs",
+          "start": 0,
+          "end": 1442,
+          "kind": "text",
+          "sha256": "bf425c90ca08f34b397ca4fbf661b6a6ba0f2adb68d63d60c61d42383fbdc5f6"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/doctor-catalog.mjs",
+          "start": 0,
+          "end": 1849,
+          "kind": "text",
+          "sha256": "02e08c14a9034613fcb6e0b25c09b22cb16b01eef7b43a65d2aa6cf7fa332d17"
+        },
+        {
+          "path": "scratch/f1-repair-handoff/f1-toolchain/runtime/doctor-catalog.test.mjs",
+          "start": 0,
+          "end": 1939,
+          "kind": "text",
+          "sha256": "56522e47a5dfdaad14ddf550e914c47509acfd275479185face4d870d3c3ce6e"
+        }
+      ],
+      "bytes": 90242,
+      "status": "unassigned"
+    }
+  ]
+}

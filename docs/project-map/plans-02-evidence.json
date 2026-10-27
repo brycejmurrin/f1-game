@@ -1,0 +1,455 @@
+{
+  "schema": 1,
+  "group": "02",
+  "scope": "Assigned half-open byte ranges only; whole-file hashes do not imply whole-file reading for split plans.",
+  "instructions": [
+    "AGENTS.md"
+  ],
+  "read_method": "Each 8000-byte maximum span returned individually by exec_command; no source plans executed. One combined presentation truncated; perf-memory 0:8000 reread individually.",
+  "plans": [
+    {
+      "support_name": "Barrier runoff teleports",
+      "problem_goal": "Remove lateral snaps at barrier termini without retuning debris severity.",
+      "proposed_architecture": "Feather barrier tables, add along-track end-face collision response, retain wallAt min semantics unless residuals demand lerp.",
+      "work_items": "Probe helper; open-circuit feathering; residual clamp module; optional interpolation and lower-only fleet caps.",
+      "provenance_supersessions": "Defect ledger and track-build baseline; carve-headroom supplies clamp ownership.",
+      "implementation_distinction": "Assigned tail reports completion without optional lerp; class caps remain 7.9/9.75 m, unlike aspirational <3 m off-pit target.",
+      "consumers": "Player clamp, debris impact severity, AI clearance and pit boundaries.",
+      "measurement_distinction": "Historical measured cliff 7.9 m; Monaco 8.96 m. No fresh measurement.",
+      "path": "docs/plans/2026-09-30-barrier-runoff-teleports.md",
+      "whole_file_sha256": "466b5856fd6d057ae0fc90ef33abc8d7e08d39e04560e69f6a9d46e90f2aadf2",
+      "expected_sha256": "466b5856fd6d057ae0fc90ef33abc8d7e08d39e04560e69f6a9d46e90f2aadf2",
+      "hash_matches": true,
+      "whole_file_bytes": 13297,
+      "assigned_range": {
+        "start": 1426,
+        "end": 13297
+      },
+      "read_ledger": [
+        {
+          "start": 1426,
+          "end": 9426,
+          "bytes": 8000,
+          "sha256": "3476db53a3b793906035354910db4a737aa6a7b7de8aedfaf259e2c75f205315",
+          "returned_untruncated": true
+        },
+        {
+          "start": 9426,
+          "end": 13297,
+          "bytes": 3871,
+          "sha256": "3fb0c966bdb4f911373bc3af4e535510840e941a94f86e18cec81cfdcddd8b2c",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Broadcast feel",
+      "problem_goal": "Expose existing RealReplay broadcast policy to live solo races, replay and results.",
+      "proposed_architecture": "Shared Broadcast policy plus Director, RAM-only bounded ReplayBuf, results orbit/highlight montage; solo authority and settlement guards.",
+      "work_items": "A live TV director; B 20 s replay and scrub restore; C results orbit/highlights.",
+      "provenance_supersessions": "Flyby improvements and racing-depth result highlights; export deliberately deferred.",
+      "implementation_distinction": "Header says shipped; static Director and ReplayBuf definitions corroborated, no behavioral claim.",
+      "consumers": "Live race cameras, pause replay, results presentation, career settlement guards.",
+      "measurement_distinction": "0.7 MB is planned ring budget; dwell/heap measurements requested, not reproduced.",
+      "path": "docs/plans/2026-09-30-broadcast-feel.md",
+      "whole_file_sha256": "b75d9695273786895dfc388eac745140c3c743b5c81b0e20f368cd025c48645a",
+      "expected_sha256": "b75d9695273786895dfc388eac745140c3c743b5c81b0e20f368cd025c48645a",
+      "hash_matches": true,
+      "whole_file_bytes": 15495,
+      "assigned_range": {
+        "start": 0,
+        "end": 15495
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "0665eab18a73122156f141dbeab82c35038717b9222e1e413c7b429cf732e395",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 15495,
+          "bytes": 7495,
+          "sha256": "37734ff3d8c6969047b4e2fdf329a1a08f99a4af0cf7ab8c8b468708cfd5cb62",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Carve headroom",
+      "problem_goal": "Free saturated game size ratchets through behavior-identical extracts.",
+      "proposed_architecture": "Pure domain IIFEs with explicit arguments; thin integration calls and no expanded G facade.",
+      "work_items": "A player forces; B wall clamp; C weather grip ownership; D rubber band; E camera leftovers.",
+      "provenance_supersessions": "Narrows refactor-readability and cleanup roadmap; extraction recipe and architecture boundaries.",
+      "implementation_distinction": "Header partly shipped; PlayerForces and WallClamp definitions and game consumer corroborated. C-E not audited.",
+      "consumers": "Physics feature authors, barrier response, weather and camera workstreams.",
+      "measurement_distinction": "2026-09-30 tip 40d137f41 historical zero-slack table; no current ratchet run.",
+      "path": "docs/plans/2026-09-30-carve-headroom.md",
+      "whole_file_sha256": "c721bee6f8c17edec5b3a13cb6661aee406598746bc2d44a7a2c109f7f6a3a52",
+      "expected_sha256": "c721bee6f8c17edec5b3a13cb6661aee406598746bc2d44a7a2c109f7f6a3a52",
+      "hash_matches": true,
+      "whole_file_bytes": 12021,
+      "assigned_range": {
+        "start": 0,
+        "end": 12021
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "b592ce77ef1206a4046a31c4099b26f919339ea0795e96b39b8627405a280d0d",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 12021,
+          "bytes": 4021,
+          "sha256": "e7353f5a549e4200b9c9f7956f962a9132de7228c13fbc8d936580b503592f4d",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Load and download weight",
+      "problem_goal": "Reduce race-entry blocking and service-worker install wait.",
+      "proposed_architecture": "Attribute long tasks first; warm first present under handoff; install-critical backend/scenery and safely background optional tail.",
+      "work_items": "1 attribution; 2 warm-under-handoff; 3 SW trim; 4 real-GPU upscaler decision deferred.",
+      "provenance_supersessions": "PERF-OPTIONS Apple/Metal baseline; prior loading-screen PRs; SGSR1 research.",
+      "implementation_distinction": "Header partly shipped conflicts with final report marking slices 1-3 shipped (#571/#575/#584). Keep final report and current SW marker evidence separate from unverified timing benefit.",
+      "consumers": "Loading handoff, renderer first present, offline install and backend switching.",
+      "measurement_distinction": "2193 ms contiguous and 4856 ms total baseline; final report explicitly says historical comparison is not matched A/B and install-critical byte/count result deferred.",
+      "path": "docs/plans/2026-09-30-load-download-weight.md",
+      "whole_file_sha256": "68c73479be3152039f2f7ad089f7373edd98baaaf82e2516d9384e41bd878cdd",
+      "expected_sha256": "68c73479be3152039f2f7ad089f7373edd98baaaf82e2516d9384e41bd878cdd",
+      "hash_matches": true,
+      "whole_file_bytes": 15566,
+      "assigned_range": {
+        "start": 0,
+        "end": 15566
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "ed705d50109a799414527ba996b1fed49314592d9fa23a5abaec4020358dd54d",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 15566,
+          "bytes": 7566,
+          "sha256": "fc7ebc828efb669c9cf46957c159d32401411918528f621a78fab26ee08211d1",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Player features and accessibility",
+      "problem_goal": "Add own-state steering help, touch layout, cues, sharing/Continue and comfort.",
+      "proposed_architecture": "Separate physics/audio/UI modules; steering schema ladder; assist-gated curvature; deep links stage sheets only.",
+      "work_items": "Grip steer; per-scheme dock reposition; audio cues; APXS/APXL/APXD share codes and Continue; comfort.",
+      "provenance_supersessions": "Tier-2 physics, controls research and product brainstorm; colourblind palette deferred to later plan.",
+      "implementation_distinction": "Header shipped; comfort progress explicitly defers per-track/car overrides and blur/speed-line FX. Static named modules present.",
+      "consumers": "Touch HUD, steering presets/export, assist audio, title/garage/results, camera tuner.",
+      "measurement_distinction": "Flick/skidpad, shell counts and cue rates are requested validations, not new measurements.",
+      "path": "docs/plans/2026-09-30-player-a11y.md",
+      "whole_file_sha256": "854b0339ed5c88bf8d035c66d47b951879d77964490927764213da7660c7a1d4",
+      "expected_sha256": "854b0339ed5c88bf8d035c66d47b951879d77964490927764213da7660c7a1d4",
+      "hash_matches": true,
+      "whole_file_bytes": 18979,
+      "assigned_range": {
+        "start": 0,
+        "end": 18979
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "7670f3cb56d4786d7b915036f21e565e5e3bf059f5fb4779f8769029a15bdf06",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "3ea749269a86a29dfa6f77d63fd272b01514a6b948c8b40571d69238e1c452a5",
+          "returned_untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 18979,
+          "bytes": 2979,
+          "sha256": "430f28c8a9771653cd25e443dc2ac999fbe4a17faedf692c454b46281b20090e",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Strategy and career depth",
+      "problem_goal": "Close tyre severity coverage, misleading stop advice, factory-only AI development and save backup gaps.",
+      "proposed_architecture": "Migrate six career slots; sourced severity with wear-OFF identity; estimated cheaper-stop presentation; legal one-step winter AI catalogs.",
+      "work_items": "Order D backup, A sourced circuits in two batches, B copy, C AI catalogs.",
+      "provenance_supersessions": "Tyre strategy design; career brainstorm and ceiling-fix notes.",
+      "implementation_distinction": "Header partly shipped; current career references aiParts and engineer cheaper-stop text exceed its unverified B/C status, without proving complete development behavior.",
+      "consumers": "Career save migration, tyre life, engineer/HUD plan, career race build resolution.",
+      "measurement_distinction": "Seven historical severity anchors and fleet normalization; economy and all-52 coverage not measured here.",
+      "path": "docs/plans/2026-09-30-strategy-career-depth.md",
+      "whole_file_sha256": "b96d23d0c1aab979512bfe064f384b47f8cc5cd72670bf23f2a7f0aa4884b11e",
+      "expected_sha256": "b96d23d0c1aab979512bfe064f384b47f8cc5cd72670bf23f2a7f0aa4884b11e",
+      "hash_matches": true,
+      "whole_file_bytes": 14532,
+      "assigned_range": {
+        "start": 0,
+        "end": 14532
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "3be05c428957ae443e6fdba7c9ab278999454db7d257991353f57621b1172f05",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 14532,
+          "bytes": 6532,
+          "sha256": "a163dea0b748f663805681f360e1c6a6d1e51a4c6c5909b31a82f6fe534b12e9",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Test and CI health",
+      "problem_goal": "Restore honest selected-gate coverage and remove duplicate/browser-heavy test cost.",
+      "proposed_architecture": "Reset shared assist state, diagnose road-follow before quarantine exit/retime; shard fleet browser audit; evidence-backed VM adaptation; condition waits and PR planner deduplication.",
+      "work_items": "1a isolation, 1b fix/quarantine exit, 1c retime; 2 props shards/findings; 3 twin debt; 4 waits/planner.",
+      "provenance_supersessions": "Defect ledger and CI-capacity note, testing adapter contract.",
+      "implementation_distinction": "Header partly shipped; polling lint and twin planner files present; slice success not re-audited.",
+      "consumers": "CI selection budgets, fixtures, portability/mutants, UI tests, topical node planning.",
+      "measurement_distinction": "Historical 480/170 s and twinDebt 7 / waits149 / overlap49 are dated claims, not current counts.",
+      "path": "docs/plans/2026-09-30-test-ci-health.md",
+      "whole_file_sha256": "79c40ba1a059a23dc4b2fe1bd1251615e53dde0dfaaf8ffa59ebc702c24dfba9",
+      "expected_sha256": "79c40ba1a059a23dc4b2fe1bd1251615e53dde0dfaaf8ffa59ebc702c24dfba9",
+      "hash_matches": true,
+      "whole_file_bytes": 14677,
+      "assigned_range": {
+        "start": 0,
+        "end": 14677
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "3318b59873b27320e462a67bebbf86e237cc10781e99f95ea3f2ad0b7ccb3280",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 14677,
+          "bytes": 6677,
+          "sha256": "ef61532ca642c5bbb70de8c2fbbe4da43ce60ad21fdc3a8abfc920a3e2b05dff",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Wetness and lighting",
+      "problem_goal": "Unify road look and grip and fill twelve missing preset grids.",
+      "proposed_architecture": "Shared continuous track wetness consumed by physics/AI/render; baked presets omit wetness diagnostic override; donor-based small grid batches.",
+      "work_items": "A1 contract and pin strip; A2 enum consumers; A3 explicit weather fixtures; B1-B3 twelve grids.",
+      "provenance_supersessions": "Mechanics coherence and racing-depth wetness register; lamp-popping plan; already-shipped SSR explicitly excluded.",
+      "implementation_distinction": "OPEN header is stale relative to static WeatherArc wetness/wetnessAt/syncWetness and engineer trackWetness consumer. Preset text search yields no wetness lines; full A/B and grid completion not established.",
+      "consumers": "Tyres, engineer/pits, weather FX, all renderer uniforms and wet lamp floor.",
+      "measurement_distinction": "Historical 80 dry +40 wet preset pins and 40/52 grids; no fresh runtime equality or visual sign-off.",
+      "path": "docs/plans/2026-09-30-wetness-lighting.md",
+      "whole_file_sha256": "97b969d4e34af755d485e804d0e4ef6c46a00d477e6354367896c9275a728a09",
+      "expected_sha256": "97b969d4e34af755d485e804d0e4ef6c46a00d477e6354367896c9275a728a09",
+      "hash_matches": true,
+      "whole_file_bytes": 17097,
+      "assigned_range": {
+        "start": 0,
+        "end": 17097
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "aeaae2ffb129e8b6782475969f14ecd74a8930c0c073dff4ce0a9e1d2be26d09",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "879dbbec8e5c68460058f50978afea674294e5cf839ab2435526b61d86f6e289",
+          "returned_untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 17097,
+          "bytes": 1097,
+          "sha256": "60299d9009dbafb23054cd74bc3d3d73646df79989074d9e1a636596c70181b1",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Models and life",
+      "problem_goal": "Replace synthetic props and scale scenery variety while controlling model/download/triangle budgets.",
+      "proposed_architecture": "AX26 compact geometry, referenced-vertex import, existing graph batches for baked instances; sway stream format for budgeted trees; separate crowd VAT plan.",
+      "work_items": "A kit import; B UV proposal withdrawn; C swaps; D instancing done; E per-circuit placements; F trees; G wind; H crowds.",
+      "provenance_supersessions": "Graphics survey 2, Kenney/Quaternius/ez-tree/GPU Gems; crowd VAT follow-up supersedes H detail.",
+      "implementation_distinction": "A/C first step/D recorded merged. B explicitly NOT NEEDED due triplanar UV. F decision 2026-10-19 rejects VM batch stub and keeps procedural triangle caps.",
+      "consumers": "Scenery builders, AX26 readers/writers, graph instancing, renderer shadow batches, geometry audits.",
+      "measurement_distinction": "Kit 3.4x unused vertex duplication, size/orientation survey and batched examples are historical measurements; software TLX instancing invisibility is an explicit limit.",
+      "path": "docs/plans/2026-10-01-models-life.md",
+      "whole_file_sha256": "79e735309f2ad9b09087ce8037ad9bc230fc9e2f5c5d3121bb69aecd9fc8a1fb",
+      "expected_sha256": "79e735309f2ad9b09087ce8037ad9bc230fc9e2f5c5d3121bb69aecd9fc8a1fb",
+      "hash_matches": true,
+      "whole_file_bytes": 15345,
+      "assigned_range": {
+        "start": 0,
+        "end": 15345
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "c2fd184f4576dcf46823d7e2515adb1adb5eebde1388f9becf5441b9d9510549",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 15345,
+          "bytes": 7345,
+          "sha256": "5871b057d106f72f8267f9d3473c8320d01f7802881ef00c4fba77daab5f7f70",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Performance and memory",
+      "problem_goal": "Prevent phone jetsam and prioritize resident/external memory over misleading software frame rates.",
+      "proposed_architecture": "First ship census/leak instruments; then bounded audio/geometry/cache/target optimizations with allocation evidence and real-GPU gates.",
+      "work_items": "I1-I5 instruments; M1-M12 memory (including audio and garage subitems); C1-C10 hot allocations; Phase III real-GPU guarded releases.",
+      "provenance_supersessions": "Track-switch leak #773, hot path #779, field LOD #810 and performance findings.",
+      "implementation_distinction": "Header partly shipped instruments corroborated; Phase II/III deliberately not inferred from this plan.",
+      "consumers": "Track lifetime, audio PCM, car/garage meshes, TLX targets, governor, HUD, CI census.",
+      "measurement_distinction": "2026-10-03 TLX Monza heap159\u2192161 MB, garbage0.4MB/s; memory savings are expected estimates unless explicitly measured baseline.",
+      "path": "docs/plans/2026-10-03-perf-memory.md",
+      "whole_file_sha256": "122a8021248d4df8ad987b6dd5f0f570eac2baf055607587eb201d6b0c004387",
+      "expected_sha256": "122a8021248d4df8ad987b6dd5f0f570eac2baf055607587eb201d6b0c004387",
+      "hash_matches": true,
+      "whole_file_bytes": 18647,
+      "assigned_range": {
+        "start": 0,
+        "end": 18647
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "967de9ca6d9bab71472e76a4af5949379e92e0640e454256690685ca4a66cbb9",
+          "returned_untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "e004069e18243da265f572bb63f46bec323864914be2e0773a4652c6f45c2b68",
+          "returned_untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 18647,
+          "bytes": 2647,
+          "sha256": "100f94f6625f2faeb3426e6c067cc3f975866fcd7a7546f3be47e5c429a151a9",
+          "returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "support_name": "Colourblind and captions (opening span)",
+      "problem_goal": "Unify semantic colour and redundant cues; caption all spoken/state-bearing audio.",
+      "proposed_architecture": "One JS palette, CSS/canvas/shader/vertex consumers and validated CVD simulation; source-text captions with speaker/size/position/opacity.",
+      "work_items": "Opening introduces five PRs but assigned span ends inside colour inventory; later work items belong to group03.",
+      "provenance_supersessions": "Product brainstorm item13, player-a11y explicit deferral, driving-line research; existing cvdMode and CSS remap must be extended.",
+      "implementation_distinction": "Header partly shipped; captions module present; single-palette goal explicitly unverified.",
+      "consumers": "HUD timing/tyres/flags, minimap, results, driving line, audio driving cues and announcements.",
+      "measurement_distinction": "Opening inventory identifies redundant cues and missing touch-visible text; no fresh contrast/CVD/audio coverage validation.",
+      "path": "docs/plans/2026-10-04-colourblind-captions.md",
+      "whole_file_sha256": "4622a10dc858282a88ea5492cb5b25e680b6e327ec6a2c58ad66fe7c0466cc44",
+      "expected_sha256": "4622a10dc858282a88ea5492cb5b25e680b6e327ec6a2c58ad66fe7c0466cc44",
+      "hash_matches": true,
+      "whole_file_bytes": 26643,
+      "assigned_range": {
+        "start": 0,
+        "end": 5770
+      },
+      "read_ledger": [
+        {
+          "start": 0,
+          "end": 5770,
+          "bytes": 5770,
+          "sha256": "461ea8f51a952ca5315a16582d4123346142a4b078136f2b1635f3a84c9e68e1",
+          "returned_untruncated": true
+        }
+      ]
+    }
+  ],
+  "corroboration": {
+    "lsp_definitions": {
+      "WallClamp": "js/physics/wall-clamp.js:13",
+      "Director": "js/camera/director.js:10",
+      "ReplayBuf": "js/camera/replay-buf.js:11",
+      "PlayerForces": "js/physics/player-forces.js:13",
+      "GripSteer": "js/physics/grip-steer.js:10",
+      "TyreModel.wetness": "js/physics/tyre-model.js:594"
+    },
+    "lsp_consumers": {
+      "WallClamp": [
+        "js/game.js"
+      ],
+      "ReplayBuf": [
+        "js/game.js",
+        "js/audio/rivals.js"
+      ]
+    },
+    "static": [
+      "js/race/weather-arc.js:317 wetness; 355 wetnessAt; 498-514 syncWetness/render contract",
+      "js/race/engineer.js:167 cheaper stop; 291 trackWetness",
+      "js/career/career.js:1743,1816 aiParts change report",
+      "sw.js:38,788 install-settled marker",
+      "js/perf/race-entry-profile.js exists",
+      "js/ui/captions.js exists",
+      "tools/gen/trees/bake-trees.mjs and caps.mjs exist"
+    ],
+    "missing": [
+      "docs/plans/README.md"
+    ]
+  },
+  "limits": [
+    "No tests, browser, network, runtime, plan execution, source edits, staging or commits.",
+    "Static existence and symbol references corroborate integration only, not measured success or all slices.",
+    "No new Markdown links; historic/proposed/missing raw paths retained only in this JSON."
+  ],
+  "comment_cleanup": {
+    "action": "none; mapping only",
+    "findings": [
+      "Plan historical merge-worker/claim/verification instructions are provenance, not current agent policy.",
+      "Load-weight header contradicts later final report.",
+      "Wetness OPEN header understates current static contract.",
+      "Models obsolete UV slice explicitly withdrawn; old E-H wait note qualified by later F decision."
+    ]
+  }
+}

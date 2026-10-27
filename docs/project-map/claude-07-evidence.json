@@ -1,0 +1,896 @@
+{
+  "group": "07",
+  "mode": "mapping-only; audited instructions not executed",
+  "byteConvention": "half-open",
+  "assignedBytes": 160000,
+  "readChunkMaxBytes": 8000,
+  "parts": [
+    {
+      "path": ".claude/skills/renderer-debug/references/xr.md",
+      "start": 824,
+      "end": 3353,
+      "kind": "text",
+      "sha256": "a686dbda7543ee38c55595884a6541377ab516f0a0b79cf633167ef56a206c36",
+      "wholeFileBytes": 3353,
+      "wholeFileSha256": "a686dbda7543ee38c55595884a6541377ab516f0a0b79cf633167ef56a206c36",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "8580454ebce9e4b188868346d2b6c6b8e91b8331a06cef7ed0fe7362b8a3b7c9",
+      "readChunks": [
+        {
+          "start": 824,
+          "end": 3353,
+          "sha256": "8580454ebce9e4b188868346d2b6c6b8e91b8331a06cef7ed0fe7362b8a3b7c9",
+          "startLine": 19,
+          "endLineInclusive": 52
+        }
+      ],
+      "title": "XR reference tail",
+      "semanticMap": "Backend/session/plan/rig/input/options/UI division; bind before start; diag returns frame and layer state. Emulated checks cannot establish Quest performance, multiview, MSAA, foveation or XRGPUBinding.",
+      "coverage": "assigned part only",
+      "startLine": 19,
+      "endLineInclusive": 52
+    },
+    {
+      "path": ".claude/skills/scenery-dress/SKILL.md",
+      "start": 0,
+      "end": 4243,
+      "kind": "text",
+      "sha256": "5248187ef92738bb4aa2479837e246a52c802b08860e43375d314fdb07a62ef3",
+      "wholeFileBytes": 4243,
+      "wholeFileSha256": "5248187ef92738bb4aa2479837e246a52c802b08860e43375d314fdb07a62ef3",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "5248187ef92738bb4aa2479837e246a52c802b08860e43375d314fdb07a62ef3",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 4243,
+          "sha256": "5248187ef92738bb4aa2479837e246a52c802b08860e43375d314fdb07a62ef3",
+          "startLine": 1,
+          "endLineInclusive": 73
+        }
+      ],
+      "title": "Scenery authoring entry",
+      "semanticMap": "Trigger scenery edits or missing/floating props; input circuit scenery(api), authored nodes/sides/distances; output grounded guarded merged props. Frozen API changes require contract lockstep; survey realism routes survey-track; light firing routes lighting-tuner.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 73
+    },
+    {
+      "path": ".claude/skills/scenery-dress/references/float-fix.md",
+      "start": 0,
+      "end": 1380,
+      "kind": "text",
+      "sha256": "625deacfceddb5ec0d5121732e299676693b5ad98e6b6df62fc592b8b4011859",
+      "wholeFileBytes": 1380,
+      "wholeFileSha256": "625deacfceddb5ec0d5121732e299676693b5ad98e6b6df62fc592b8b4011859",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "625deacfceddb5ec0d5121732e299676693b5ad98e6b6df62fc592b8b4011859",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 1380,
+          "sha256": "625deacfceddb5ec0d5121732e299676693b5ad98e6b6df62fc592b8b4011859",
+          "startLine": 1,
+          "endLineInclusive": 16
+        }
+      ],
+      "title": "Floating prop diagnosis",
+      "semanticMap": "Input unsupported clusters and emitter locations; float threshold 1.2m misses small hover; distinguish primitive centre/base anchors; circuit fixes use local audit deltas, shared helper fixes need fleet audit.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 16
+    },
+    {
+      "path": ".claude/skills/scenery-dress/references/instancing.md",
+      "start": 0,
+      "end": 5360,
+      "kind": "text",
+      "sha256": "00a8dabee6698c42d80c3cef8cc1cc69303a04b62066e430e6af5a45dc39dccd",
+      "wholeFileBytes": 5360,
+      "wholeFileSha256": "00a8dabee6698c42d80c3cef8cc1cc69303a04b62066e430e6af5a45dc39dccd",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "00a8dabee6698c42d80c3cef8cc1cc69303a04b62066e430e6af5a45dc39dccd",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 5360,
+          "sha256": "00a8dabee6698c42d80c3cef8cc1cc69303a04b62066e430e6af5a45dc39dccd",
+          "startLine": 1,
+          "endLineInclusive": 110
+        }
+      ],
+      "title": "Scene graph migration",
+      "semanticMap": "Input one engine emitter, stable model key, placement and meta.kind; ctx.instance wraps graph and guarded replay. Output canonical recipes and batches; bakeOnly requires baking. Exact indices/materials and position tolerance 1e-6; explicit pre-migration BASE; reuse matters.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 110
+    },
+    {
+      "path": ".claude/skills/scenery-dress/references/rules.md",
+      "start": 0,
+      "end": 5003,
+      "kind": "text",
+      "sha256": "41def4946b310446da4e5615c0ef19143eb8d1b602282118c7039b974146ae3d",
+      "wholeFileBytes": 5003,
+      "wholeFileSha256": "41def4946b310446da4e5615c0ef19143eb8d1b602282118c7039b974146ae3d",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "41def4946b310446da4e5615c0ef19143eb8d1b602282118c7039b974146ae3d",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 5003,
+          "sha256": "41def4946b310446da4e5615c0ef19143eb8d1b602282118c7039b974146ae3d",
+          "startLine": 1,
+          "endLineInclusive": 90
+        }
+      ],
+      "title": "Scenery constraints",
+      "semanticMap": "Authored and racing frames differ by _sceneryShift applied once; along callbacks authored; full oriented footprint rejection drops whole primitive; RAW bypasses guards. Terrain anchoring, reverse sides, triangle delta budget; trees/lamps never shrink driving boundary.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 90
+    },
+    {
+      "path": ".claude/skills/season-mode/SKILL.md",
+      "start": 0,
+      "end": 6696,
+      "kind": "text",
+      "sha256": "2a5e9408bb99f093bfdcf1796b3ddd4c65f5be2a28bc0effeeb38e37500900b2",
+      "wholeFileBytes": 6696,
+      "wholeFileSha256": "2a5e9408bb99f093bfdcf1796b3ddd4c65f5be2a28bc0effeeb38e37500900b2",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "2a5e9408bb99f093bfdcf1796b3ddd4c65f5be2a28bc0effeeb38e37500900b2",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 6696,
+          "sha256": "2a5e9408bb99f093bfdcf1796b3ddd4c65f5be2a28bc0effeeb38e37500900b2",
+          "startLine": 1,
+          "endLineInclusive": 110
+        }
+      ],
+      "title": "Standalone season entry",
+      "semanticMap": "Trigger setup calendar/format/scoring changes. Calendar applies outside career; format only season. Input normalized prefs frozen into active season; applyConfig returns season/ok/durable/reason, conflicts refuse apply and quota may be session-only. Career stays Tracks.SEASON.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 110
+    },
+    {
+      "path": ".claude/skills/season-mode/references/sprint-scoring.md",
+      "start": 0,
+      "end": 1482,
+      "kind": "text",
+      "sha256": "735e267dfe020b9f972512f5892ff4593ff49efe67a8c5435be283fe5543d171",
+      "wholeFileBytes": 1482,
+      "wholeFileSha256": "735e267dfe020b9f972512f5892ff4593ff49efe67a8c5435be283fe5543d171",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "735e267dfe020b9f972512f5892ff4593ff49efe67a8c5435be283fe5543d171",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 1482,
+          "sha256": "735e267dfe020b9f972512f5892ff4593ff49efe67a8c5435be283fe5543d171",
+          "startLine": 1,
+          "endLineInclusive": 18
+        }
+      ],
+      "title": "Sprint scoring checklist",
+      "semanticMap": "award -> stage/payTable; sprint under 50% pays zero, GP-only shortened scale; fastest lap GP/top ten/half-distance only. endRace saves sprint flag before award advances; conflict can leave stale result fallback; reset/reload must not double-pay.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 18
+    },
+    {
+      "path": ".claude/skills/ship/SKILL.md",
+      "start": 0,
+      "end": 1991,
+      "kind": "text",
+      "sha256": "45433a53c05d9f3208d780905b00baec72e37d2c7be396f72dd2d17759fdc697",
+      "wholeFileBytes": 1991,
+      "wholeFileSha256": "45433a53c05d9f3208d780905b00baec72e37d2c7be396f72dd2d17759fdc697",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "45433a53c05d9f3208d780905b00baec72e37d2c7be396f72dd2d17759fdc697",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 1991,
+          "sha256": "45433a53c05d9f3208d780905b00baec72e37d2c7be396f72dd2d17759fdc697",
+          "startLine": 1,
+          "endLineInclusive": 32
+        }
+      ],
+      "title": "Shipping entry",
+      "semanticMap": "User-invocable ship/push trigger; consumes branch, changes, verification and PR. Produces draft then ready PR and land label; ready-gate same-head check; GitHub lands. Explicit skipped verification belongs in Not run with grant time.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 32
+    },
+    {
+      "path": ".claude/skills/slim-bloat/SKILL.md",
+      "start": 0,
+      "end": 3968,
+      "kind": "text",
+      "sha256": "675b2eeb3f028f78c77f7c4e3d3a1f4d91a2f3d0b9edd0c658925aafdf470bbb",
+      "wholeFileBytes": 3968,
+      "wholeFileSha256": "675b2eeb3f028f78c77f7c4e3d3a1f4d91a2f3d0b9edd0c658925aafdf470bbb",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "675b2eeb3f028f78c77f7c4e3d3a1f4d91a2f3d0b9edd0c658925aafdf470bbb",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 3968,
+          "sha256": "675b2eeb3f028f78c77f7c4e3d3a1f4d91a2f3d0b9edd0c658925aafdf470bbb",
+          "startLine": 1,
+          "endLineInclusive": 65
+        }
+      ],
+      "title": "Bloat entry",
+      "semanticMap": "Trigger saturated ratchet/dead duplicates/stale comments. Auditor names scoped cohesive blocks and COVERED line; prior art and finding verification precede one parent carve; lower ceilings in same change. No safe boundary means stop with crossing counts; fat skills route agent-config.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 65
+    },
+    {
+      "path": ".claude/skills/slim-bloat/references/carves.md",
+      "start": 0,
+      "end": 3613,
+      "kind": "text",
+      "sha256": "e0e7a33b4178465b18af715eec5330785063c5338d931c8e69608132630e216c",
+      "wholeFileBytes": 3613,
+      "wholeFileSha256": "e0e7a33b4178465b18af715eec5330785063c5338d931c8e69608132630e216c",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "e0e7a33b4178465b18af715eec5330785063c5338d931c8e69608132630e216c",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 3613,
+          "sha256": "e0e7a33b4178465b18af715eec5330785063c5338d931c8e69608132630e216c",
+          "startLine": 1,
+          "endLineInclusive": 79
+        }
+      ],
+      "title": "Carve recipes",
+      "semanticMap": "Whole-statement free-reference analysis -> IIFE Module.create(G), manifest/HARD_EDGES/gen lockstep; tool does not write module itself. Dead code needs no reads plus no contract/allowlist; CSS dynamic stems and runtime hook proof matter. Remove restatement/expired TODO/commented code, keep bug-at-site, physics-column, silent-catch and symbol-mirror explanations.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 79
+    },
+    {
+      "path": ".claude/skills/slim-bloat/references/do-not.md",
+      "start": 0,
+      "end": 3083,
+      "kind": "text",
+      "sha256": "6542d7217df6a28d2d6a0fdf39a9798b2a60a95e062e0e822e6fd2104d6ca4db",
+      "wholeFileBytes": 3083,
+      "wholeFileSha256": "6542d7217df6a28d2d6a0fdf39a9798b2a60a95e062e0e822e6fd2104d6ca4db",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "6542d7217df6a28d2d6a0fdf39a9798b2a60a95e062e0e822e6fd2104d6ca4db",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 3083,
+          "sha256": "6542d7217df6a28d2d6a0fdf39a9798b2a60a95e062e0e822e6fd2104d6ca4db",
+          "startLine": 1,
+          "endLineInclusive": 33
+        }
+      ],
+      "title": "Measured preservation constraints",
+      "semanticMap": "Speed scale, curvature isolation, timestep/clamp/interpolation, updateCar/render continuity, G crossings, IIFE/load-order, seeded networking, bare-catch reasons and bug comments are load-bearing. Symbol citations replace line-number citations; no upward ratchet or copied constants.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 33
+    },
+    {
+      "path": ".claude/skills/steward/SKILL.md",
+      "start": 0,
+      "end": 9395,
+      "kind": "text",
+      "sha256": "c68fecd115e4996c453d807e034f198f620bc10929a224cb497f262a44cf24e5",
+      "wholeFileBytes": 9395,
+      "wholeFileSha256": "c68fecd115e4996c453d807e034f198f620bc10929a224cb497f262a44cf24e5",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "c68fecd115e4996c453d807e034f198f620bc10929a224cb497f262a44cf24e5",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "4e93731feb12bab3b13375cfbfb07617248f563fc2277335d0a82c8b00454f03",
+          "startLine": 1,
+          "endLineInclusive": 138
+        },
+        {
+          "start": 8000,
+          "end": 9395,
+          "sha256": "64c1a28fba904f5c15ae5fd8e36c6721a15c23f59d63ab5ff2bb265754a0078c",
+          "startLine": 138,
+          "endLineInclusive": 157
+        }
+      ],
+      "title": "PR stewardship entry",
+      "semanticMap": "Consumes current PR head/checks/ownership and failing logs. Loop triage-fix-gate-one push-refresh Plan; sync only conflict/stale-red via needs-sync/sync-pr. cancelled needs job-level analysis, retry pass is red, current running/none/hollow/unknown never pass. Live is ancestry of published apex-sha; lane ends at ready-gate plus land, GitHub merges.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 157
+    },
+    {
+      "path": ".claude/skills/steward/references/host-watch.md",
+      "start": 0,
+      "end": 987,
+      "kind": "text",
+      "sha256": "09733a13016aff63d2e1373232dd35f3b85506ce73d9246a7c01b46aac990eff",
+      "wholeFileBytes": 987,
+      "wholeFileSha256": "09733a13016aff63d2e1373232dd35f3b85506ce73d9246a7c01b46aac990eff",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "09733a13016aff63d2e1373232dd35f3b85506ce73d9246a7c01b46aac990eff",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 987,
+          "sha256": "09733a13016aff63d2e1373232dd35f3b85506ce73d9246a7c01b46aac990eff",
+          "startLine": 1,
+          "endLineInclusive": 14
+        }
+      ],
+      "title": "Host watch fallback",
+      "semanticMap": "Absent subscriptions/Monitor: one owned finite background ci-watch log, one checkpoint read, no shell poll; preserve missing capability as unverified and inspect tool catalog.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 14
+    },
+    {
+      "path": ".claude/skills/survey-track/SKILL.md",
+      "start": 0,
+      "end": 7002,
+      "kind": "text",
+      "sha256": "c2feaf3d57ea0b206996e738e740970b4131231b8323a1a97594b592d5c08533",
+      "wholeFileBytes": 7002,
+      "wholeFileSha256": "c2feaf3d57ea0b206996e738e740970b4131231b8323a1a97594b592d5c08533",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "c2feaf3d57ea0b206996e738e740970b4131231b8323a1a97594b592d5c08533",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 7002,
+          "sha256": "c2feaf3d57ea0b206996e738e740970b4131231b8323a1a97594b592d5c08533",
+          "startLine": 1,
+          "endLineInclusive": 122
+        }
+      ],
+      "title": "Track survey entry",
+      "semanticMap": "Consumes circuit ids/year, briefs/source pair and parent evidence. Parent owns browser/research/shared engine/integration; isolated circuit authors own definition+scenery only, stop at offline verification. Scope-check branch then merge sequentially, remove worktree, regenerate shared locations once. Output measured improvements/evidence/uncertainty and parent verification.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 122
+    },
+    {
+      "path": ".claude/skills/survey-track/ground-profile.mjs",
+      "start": 0,
+      "end": 4648,
+      "kind": "text",
+      "sha256": "55191589632859ce6757238ec60e7a46784ba1b5a70d26c1382cea32d26c2b5f",
+      "wholeFileBytes": 4648,
+      "wholeFileSha256": "55191589632859ce6757238ec60e7a46784ba1b5a70d26c1382cea32d26c2b5f",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "55191589632859ce6757238ec60e7a46784ba1b5a70d26c1382cea32d26c2b5f",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 4648,
+          "sha256": "55191589632859ce6757238ec60e7a46784ba1b5a70d26c1382cea32d26c2b5f",
+          "startLine": 1,
+          "endLineInclusive": 92
+        }
+      ],
+      "title": "Ground profile CLI",
+      "semanticMap": "Top-level Node browser probe: defaults montreal, six fractions and seven positive lateral offsets; validates safe token, <=3 args, <=32 finite fractions in 0..1 and lats in (0,1000]. Imports harness/output-paths/probe-page; starts static server and three backend browser, races then samples groundY on both sides. Prints terrain table and first five page errors; catch sets exitCode1, finally shutdown.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 92
+    },
+    {
+      "path": ".claude/skills/survey-track/references/campaign-workflow.md",
+      "start": 0,
+      "end": 8908,
+      "kind": "text",
+      "sha256": "8ed369c7023c6588fdcaa7390ac77adcff0070241b3a5a451d62e9f31f786bbb",
+      "wholeFileBytes": 8908,
+      "wholeFileSha256": "8ed369c7023c6588fdcaa7390ac77adcff0070241b3a5a451d62e9f31f786bbb",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "8ed369c7023c6588fdcaa7390ac77adcff0070241b3a5a451d62e9f31f786bbb",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "b087357564763577973a9620408a20dee9470a2876694f59e56a7fff3cb9fa02",
+          "startLine": 1,
+          "endLineInclusive": 137
+        },
+        {
+          "start": 8000,
+          "end": 8908,
+          "sha256": "26e47656a2cfbea78f9710f48c368ce8c25350cbf781f033d3a78a47a0f4790b",
+          "startLine": 137,
+          "endLineInclusive": 149
+        }
+      ],
+      "title": "Campaign research/authoring contract",
+      "semanticMap": "Input dated era/layout and built geometry baseline; sources retain publisher/date/URL/image/artifact/claim confidence. Exclusive circuit pairs plus named shared owners; prerequisite fields and corner dependent intervals integrated centrally. Match cameras/readiness/settings; bound fused/live/asset budgets independently; output 3-5 observable criteria and integrated evidence.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 149
+    },
+    {
+      "path": ".claude/skills/survey-track/references/campaign.md",
+      "start": 0,
+      "end": 2394,
+      "kind": "text",
+      "sha256": "628a191d3d1375b09a30a543cb3ead42ad1f4110c2c11d2ba3ce20131db786fb",
+      "wholeFileBytes": 2394,
+      "wholeFileSha256": "628a191d3d1375b09a30a543cb3ead42ad1f4110c2c11d2ba3ce20131db786fb",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "628a191d3d1375b09a30a543cb3ead42ad1f4110c2c11d2ba3ce20131db786fb",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 2394,
+          "sha256": "628a191d3d1375b09a30a543cb3ead42ad1f4110c2c11d2ba3ce20131db786fb",
+          "startLine": 1,
+          "endLineInclusive": 37
+        }
+      ],
+      "title": "Campaign orchestration",
+      "semanticMap": "Arguments circuit ids plus optional era; pilot then batches 2-3. Evidence packet -> circuit authors -> named shared dependencies -> matched capture -> targeted gates and handoff. Empty ids or unknown era need clarification in the workflow being mapped.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 37
+    },
+    {
+      "path": ".claude/skills/survey-track/references/delegation.md",
+      "start": 0,
+      "end": 1083,
+      "kind": "text",
+      "sha256": "175f5fcaf4db0a0bfa903ce8204362e1c1743a841edec424aa121049e43c3a0f",
+      "wholeFileBytes": 1083,
+      "wholeFileSha256": "175f5fcaf4db0a0bfa903ce8204362e1c1743a841edec424aa121049e43c3a0f",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "175f5fcaf4db0a0bfa903ce8204362e1c1743a841edec424aa121049e43c3a0f",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 1083,
+          "sha256": "175f5fcaf4db0a0bfa903ce8204362e1c1743a841edec424aa121049e43c3a0f",
+          "startLine": 1,
+          "endLineInclusive": 16
+        }
+      ],
+      "title": "Circuit delegation template",
+      "semanticMap": "Consumes filled id/year/SHA/evidence/objectives. Own only circuit pair and scratch/artifacts; no engine/renderer/assets/tests/docs/generated writes. Output geometry cost, offline result, gaps; shared need returns to parent; parent updates brief.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 16
+    },
+    {
+      "path": ".claude/skills/survey-track/references/evidence-template.json",
+      "start": 0,
+      "end": 1799,
+      "kind": "text",
+      "sha256": "a603fd5d6e1b273e758c4fea9d28dce39f0624ba85cfa08415495e136fc8bf8b",
+      "wholeFileBytes": 1799,
+      "wholeFileSha256": "a603fd5d6e1b273e758c4fea9d28dce39f0624ba85cfa08415495e136fc8bf8b",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "a603fd5d6e1b273e758c4fea9d28dce39f0624ba85cfa08415495e136fc8bf8b",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 1799,
+          "sha256": "a603fd5d6e1b273e758c4fea9d28dce39f0624ba85cfa08415495e136fc8bf8b",
+          "startLine": 1,
+          "endLineInclusive": 71
+        }
+      ],
+      "title": "Evidence packet schema",
+      "semanticMap": "Template object for circuit/SHA/era/owner/paths/objectives; source provenance and doesNotProve; geometry/frame/fused/live baseline; captures readiness/camera/viewport; findings evidence/remedy/risk/acceptance; proposed/measured budgets; implementation/shared requests and verification/notRun/unresolved.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 71
+    },
+    {
+      "path": ".claude/skills/survey-track/references/loop.md",
+      "start": 0,
+      "end": 6262,
+      "kind": "text",
+      "sha256": "b0d97e4f6e8f27dbcd985122846ae18efc971e81d42900dcc022606bf6951d58",
+      "wholeFileBytes": 6262,
+      "wholeFileSha256": "b0d97e4f6e8f27dbcd985122846ae18efc971e81d42900dcc022606bf6951d58",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "b0d97e4f6e8f27dbcd985122846ae18efc971e81d42900dcc022606bf6951d58",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 6262,
+          "sha256": "b0d97e4f6e8f27dbcd985122846ae18efc971e81d42900dcc022606bf6951d58",
+          "startLine": 1,
+          "endLineInclusive": 133
+        }
+      ],
+      "title": "Survey diagnosis loop",
+      "semanticMap": "Built length/apex/width/sector/elevation vs dated evidence; raw OSM normalization cannot certify scale. Parent before/after capture and ground sampling; lat0 raycast and blank pre-present frame are artifacts requiring confirmation. Terrain flag must be copied by TrackDef and mirrored in grounding; historical Montreal fix is example, not new authority.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 133
+    },
+    {
+      "path": ".claude/skills/survey-ui-matrix/SKILL.md",
+      "start": 0,
+      "end": 8621,
+      "kind": "text",
+      "sha256": "d658de42fcb6fb52a8cead9866bbb67174d77b971fb3eb477c722653c56752f6",
+      "wholeFileBytes": 8621,
+      "wholeFileSha256": "d658de42fcb6fb52a8cead9866bbb67174d77b971fb3eb477c722653c56752f6",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "d658de42fcb6fb52a8cead9866bbb67174d77b971fb3eb477c722653c56752f6",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "8740ad27763b6b39bce4b837fa89ae98c1a8a87b09220b728484b6820578a4dd",
+          "startLine": 1,
+          "endLineInclusive": 120
+        },
+        {
+          "start": 8000,
+          "end": 8621,
+          "sha256": "a2ee11975d6e8caf22e2b725fe4f379987e2cfabbd53f81e88244d61f46b3e3f",
+          "startLine": 120,
+          "endLineInclusive": 128
+        }
+      ],
+      "title": "Whole UI matrix entry",
+      "semanticMap": "Trigger all-screen review across viewport/scale/pointer. Parent owns layout-audit/menu-mock including read-only modes; artifact-only reviewers. First 844x390 touch/shipped settings then explicit stress. Plan cells, enumerate source, preserve baseline before merged rerun; output measured defect table/diff verdict/unmeasured cells. Capture identity records engine and actual zoom.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 128
+    },
+    {
+      "path": ".claude/skills/survey-ui-matrix/references/hud-mock.md",
+      "start": 0,
+      "end": 1151,
+      "kind": "text",
+      "sha256": "4490845fd478e6809adcf90cc5b132f46036f6be21cfa5d02ff6c6a11551f777",
+      "wholeFileBytes": 1151,
+      "wholeFileSha256": "4490845fd478e6809adcf90cc5b132f46036f6be21cfa5d02ff6c6a11551f777",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "4490845fd478e6809adcf90cc5b132f46036f6be21cfa5d02ff6c6a11551f777",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 1151,
+          "sha256": "4490845fd478e6809adcf90cc5b132f46036f6be21cfa5d02ff6c6a11551f777",
+          "startLine": 1,
+          "endLineInclusive": 15
+        }
+      ],
+      "title": "HUD mock look-fast",
+      "semanticMap": "Input devices/cameras/HUD scale or matrix; mocked DOM on black, output report/index/contact sheet and labeled overlap boxes. Content-hash cache can avoid recapture; missing rendered mirror is an approximation; use survey for occlusion.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 15
+    },
+    {
+      "path": ".claude/skills/survey-ui-matrix/references/hud-survey.md",
+      "start": 0,
+      "end": 1801,
+      "kind": "text",
+      "sha256": "b8279db7e3518c5db06273a1908a624593ea7c2019dcbecbc3622e5481ffebcc",
+      "wholeFileBytes": 1801,
+      "wholeFileSha256": "b8279db7e3518c5db06273a1908a624593ea7c2019dcbecbc3622e5481ffebcc",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "b8279db7e3518c5db06273a1908a624593ea7c2019dcbecbc3622e5481ffebcc",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 1801,
+          "sha256": "b8279db7e3518c5db06273a1908a624593ea7c2019dcbecbc3622e5481ffebcc",
+          "startLine": 1,
+          "endLineInclusive": 26
+        }
+      ],
+      "title": "HUD survey measurement",
+      "semanticMap": "Input devices/cameras/preferences/theme/night/track matrix; output box findings, JSON/HTML/contact sheets. Browser-free list/self-test precede capture; shard/merge supported. MCP shot returns structured findings plus resource link; shared browser lock/status required; promised-but-hidden widgets are findings.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 26
+    },
+    {
+      "path": ".claude/skills/survey-ui-matrix/references/probes.md",
+      "start": 0,
+      "end": 14532,
+      "kind": "text",
+      "sha256": "b405443572f921603c2a2fb0291c1543f0a064955eaa0d9aca4577739f3ef118",
+      "wholeFileBytes": 14532,
+      "wholeFileSha256": "b405443572f921603c2a2fb0291c1543f0a064955eaa0d9aca4577739f3ef118",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "b405443572f921603c2a2fb0291c1543f0a064955eaa0d9aca4577739f3ef118",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "82ecbfcf03bd10ba845dc553b9b28acaa3ce7801a518ae7da63b821cae03063c",
+          "startLine": 1,
+          "endLineInclusive": 144
+        },
+        {
+          "start": 8000,
+          "end": 14532,
+          "sha256": "118b014ccaf547ce893b1df5e8f911ffd444d869f3e8a27ecb8e1198cdfda67f",
+          "startLine": 144,
+          "endLineInclusive": 274
+        }
+      ],
+      "title": "UI diagnostic probes",
+      "semanticMap": "clippedIn respects scroll absorption, truncIn examines text leaves, tapsIn reads body ladder and wrapping labels then divides zoom; WCAG both-axis floor differs from house chip height. Wait transitions; routes/reset enumerate SCREENS/OVERLAY_IDS. CSSOM proves actual rules before cascade diagnosis. Output defects by failure mode; skipped/incomplete cells never pass.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 274
+    },
+    {
+      "path": ".claude/skills/survey-ui-matrix/references/setup.md",
+      "start": 0,
+      "end": 4060,
+      "kind": "text",
+      "sha256": "5080ec7f840d06cef5bc2121e8cff1a66fa59b0cb9e7b916a07824b4d416aea7",
+      "wholeFileBytes": 4060,
+      "wholeFileSha256": "5080ec7f840d06cef5bc2121e8cff1a66fa59b0cb9e7b916a07824b4d416aea7",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "5080ec7f840d06cef5bc2121e8cff1a66fa59b0cb9e7b916a07824b4d416aea7",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 4060,
+          "sha256": "5080ec7f840d06cef5bc2121e8cff1a66fa59b0cb9e7b916a07824b4d416aea7",
+          "startLine": 1,
+          "endLineInclusive": 96
+        }
+      ],
+      "title": "UI setup/calibration",
+      "semanticMap": "Headless plus hidden canvas, fresh CSS, park browser before tests; verify viewport/DPR/coarse/body tap/root tap/uiScale/build. Enumerate dialog/subview inventory against SCREENS. A11y snapshots and console are separate evidence; UA does not prove native browser.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 96
+    },
+    {
+      "path": ".claude/skills/tune-physics/SKILL.md",
+      "start": 0,
+      "end": 5590,
+      "kind": "text",
+      "sha256": "6ecbb9d223c0016dcdda5529f7aa3a68018034f1926544bf5c8c99400fd60a4b",
+      "wholeFileBytes": 5590,
+      "wholeFileSha256": "6ecbb9d223c0016dcdda5529f7aa3a68018034f1926544bf5c8c99400fd60a4b",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "6ecbb9d223c0016dcdda5529f7aa3a68018034f1926544bf5c8c99400fd60a4b",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 5590,
+          "sha256": "6ecbb9d223c0016dcdda5529f7aa3a68018034f1926544bf5c8c99400fd60a4b",
+          "startLine": 1,
+          "endLineInclusive": 86
+        }
+      ],
+      "title": "Physics tuning entry",
+      "semanticMap": "Trigger understeer/yaw/grip/pace or A-B. Map live setPhysics knobs vs fixed PhysicsConsts; effective slider defaults from steer-tuning/settings-export. Curvature never reaches unassisted player; GripSteer consumes shaped lock. VM pin/shipped seat stated separately; relative deterministic comparisons precede parent browser proof.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 86
+    },
+    {
+      "path": ".claude/skills/tune-physics/references/harness.md",
+      "start": 0,
+      "end": 3254,
+      "kind": "text",
+      "sha256": "77210242e1c7fbd882236e3fc1090bac880ed8bbcf7323993837b4dcc2e1d329",
+      "wholeFileBytes": 3254,
+      "wholeFileSha256": "77210242e1c7fbd882236e3fc1090bac880ed8bbcf7323993837b4dcc2e1d329",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "77210242e1c7fbd882236e3fc1090bac880ed8bbcf7323993837b4dcc2e1d329",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 3254,
+          "sha256": "77210242e1c7fbd882236e3fc1090bac880ed8bbcf7323993837b4dcc2e1d329",
+          "startLine": 1,
+          "endLineInclusive": 85
+        }
+      ],
+      "title": "Physics A-B harness",
+      "semanticMap": "Consumes same seeded pose/config, initialize player before obs/physState; seed before race, reset each config. Output directional x/speed/slip/yaw observations and setter results. LONG_GRIP source constant; serialized VM first, browser fallback closes resources; no brittle absolute assertions.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 85
+    },
+    {
+      "path": ".claude/skills/tune-physics/references/understeer-recipe.md",
+      "start": 0,
+      "end": 2684,
+      "kind": "text",
+      "sha256": "2877093d34f41d7804bfbe9dab71ed1af6b03eb0a3920c8acfdb840d5677a236",
+      "wholeFileBytes": 2684,
+      "wholeFileSha256": "2877093d34f41d7804bfbe9dab71ed1af6b03eb0a3920c8acfdb840d5677a236",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "2877093d34f41d7804bfbe9dab71ed1af6b03eb0a3920c8acfdb840d5677a236",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 2684,
+          "sha256": "2877093d34f41d7804bfbe9dab71ed1af6b03eb0a3920c8acfdb840d5677a236",
+          "startLine": 1,
+          "endLineInclusive": 36
+        }
+      ],
+      "title": "Understeer worked recipe",
+      "semanticMap": "Slow skidpad 20/30m/s tests taper blend; fresh VM per value -> same-speed/steer uF/uR/yaw comparisons, rear below saturation. 50m/s stepSteer does not prove slow transient rise. setPhysics experiments do not persist defaults; slider defaults and constants have separate owners.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 36
+    },
+    {
+      "path": ".claude/skills/ui-menu-a11y/SKILL.md",
+      "start": 0,
+      "end": 3906,
+      "kind": "text",
+      "sha256": "b8585d65275eecd1314ce3dabd08ef330be90f73c12f68213f0530b1c0a0a22a",
+      "wholeFileBytes": 3906,
+      "wholeFileSha256": "b8585d65275eecd1314ce3dabd08ef330be90f73c12f68213f0530b1c0a0a22a",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "b8585d65275eecd1314ce3dabd08ef330be90f73c12f68213f0530b1c0a0a22a",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 3906,
+          "sha256": "b8585d65275eecd1314ce3dabd08ef330be90f73c12f68213f0530b1c0a0a22a",
+          "startLine": 1,
+          "endLineInclusive": 65
+        }
+      ],
+      "title": "Menu accessibility entry",
+      "semanticMap": "Trigger one cramped screen, back/Escape/keyboard/announcement/scale. UiLayers owns top query; declared close door shares visible action. GameHud consumes G player/cars; layout preferences invalidate fit. Output focused geometry/a11y evidence; axe incomplete/manual checks retained, screenshot harness pass alone asserts nothing.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 65
+    },
+    {
+      "path": ".claude/skills/ui-menu-a11y/references/workflow.md",
+      "start": 0,
+      "end": 8762,
+      "kind": "text",
+      "sha256": "37e06c92ce4512978eb6bea6dde014caf826f32a077b4624e914becc5425f6e7",
+      "wholeFileBytes": 8762,
+      "wholeFileSha256": "37e06c92ce4512978eb6bea6dde014caf826f32a077b4624e914becc5425f6e7",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "37e06c92ce4512978eb6bea6dde014caf826f32a077b4624e914becc5425f6e7",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "9fa4a642cedd061b0a314a5c89310dbbce0b09d524818fe127f247331c0f8a40",
+          "startLine": 1,
+          "endLineInclusive": 137
+        },
+        {
+          "start": 8000,
+          "end": 8762,
+          "sha256": "0959102e5dbf0707d2c9a1a2e6f3bec540693d2542a01cf6c9b1751c8ba40115",
+          "startLine": 137,
+          "endLineInclusive": 149
+        }
+      ],
+      "title": "Menu implementation contract",
+      "semanticMap": "New overlays register internal DEFS, exported LAYER_IDS only; TopModal mirrors hidden, data-esc-close names real action, :modal outranks z-index. MenuNav owns local key/wheel; SheetShape uses actual sheet geometry; AriaState handles unclaimed class groups. Escape repeat/nested dialog/settings back/rebind capture/native close chain mapped; reduced motion needs OS+game and native evidence.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 149
+    },
+    {
+      "path": ".claude/workflows/README.md",
+      "start": 0,
+      "end": 3123,
+      "kind": "text",
+      "sha256": "4a696666b7cbf294dade2fad553c44363553b26d3535410416fc634c92ee9c48",
+      "wholeFileBytes": 3123,
+      "wholeFileSha256": "4a696666b7cbf294dade2fad553c44363553b26d3535410416fc634c92ee9c48",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "4a696666b7cbf294dade2fad553c44363553b26d3535410416fc634c92ee9c48",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 3123,
+          "sha256": "4a696666b7cbf294dade2fad553c44363553b26d3535410416fc634c92ee9c48",
+          "startLine": 1,
+          "endLineInclusive": 33
+        }
+      ],
+      "title": "Workflow registry",
+      "semanticMap": "Text catalog registers Workflow name/path and async-harness grammar (top-level return legal). code-survey complements total-audit; agent definitions own readonly limits/schema. Registry claims full pipelines; historical moved scripts are provenance only.",
+      "coverage": "whole file",
+      "startLine": 1,
+      "endLineInclusive": 33
+    },
+    {
+      "path": ".claude/workflows/code-survey.js",
+      "start": 0,
+      "end": 20690,
+      "kind": "text",
+      "sha256": "22e7ca58517534f2b8645158b1e0c6dd19a9dd0b4f342c06a3f146b8a1e93873",
+      "wholeFileBytes": 39398,
+      "wholeFileSha256": "22e7ca58517534f2b8645158b1e0c6dd19a9dd0b4f342c06a3f146b8a1e93873",
+      "manifestHashMatches": true,
+      "assignedSpanSha256": "e48e184122c4ee7b1f799ef0771a47327955900fc888a432e57c183291a88842",
+      "readChunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "0e8f76e97fdd53fb369f93834faf2f85305f96fa36422c109610803dab9e1135",
+          "startLine": 1,
+          "endLineInclusive": 122
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "8a02d62d24598a894a1043bb491c7c1e6ef2f11f008a5f9131c53adc7813cd3e",
+          "startLine": 122,
+          "endLineInclusive": 176
+        },
+        {
+          "start": 16000,
+          "end": 20690,
+          "sha256": "d3f6406c67ec7d4e3f5bee70b4bec2e7cdd262396be2a39a90ce626dc3956fe7",
+          "startLine": 176,
+          "endLineInclusive": 187
+        }
+      ],
+      "title": "Code survey partial implementation",
+      "semanticMap": "meta registers code-survey and phases; args object/JSON provides known,knownKeys,maxGap,rounds,focus (knownKeys only metadata in this span). Prior-art scout starts concurrently with three mechanical recon agents; supplied known skips scout, otherwise cap30; recon text injected into common prompt. Schemas define findings/file/line/kind/severity/hotness/claim/evidence/fix and verdict index/refuted/reason. TIER_MODEL maps effort; R1 defines domain slices through partial lighting-data. This assigned part ends mid-string; verification/critic/perf/synthesis execution is outside coverage.",
+      "coverage": "assigned part only",
+      "startLine": 1,
+      "endLineInclusive": 187
+    }
+  ],
+  "lsp": [
+    {
+      "symbol": "SeasonCal",
+      "definition": "js/career/season-cal.js:2:7"
+    },
+    {
+      "symbol": "TrackGraph",
+      "definition": "js/track/scenery/graph.js:2:7"
+    },
+    {
+      "symbol": "UiLayers",
+      "definition": "js/ui/layers.js:5:8"
+    },
+    {
+      "symbol": "GripSteer",
+      "definition": "js/physics/grip-steer.js:10:7"
+    },
+    {
+      "symbol": "XrBoot",
+      "definition": "js/xr/xr-boot.js:9:7"
+    }
+  ],
+  "limits": [
+    "No tests/browser/network/runtime execution, source edits, stage or commit.",
+    "Runtime symbol anchors are LSP definitions, not proof of runtime semantics.",
+    "code-survey implementation is partial; xr reference begins at byte824."
+  ],
+  "provenancePaths": [
+    "docs/archive/research/UI-SCALE-AND-ZOOM.md",
+    "docs/archive/research/workflows/",
+    "docs/archive/research/"
+  ],
+  "supportFiles": [
+    "AGENTS.md",
+    ".claude/skills/README.md",
+    ".claude/hooks/skill-hint.py",
+    ".claude/settings.json"
+  ]
+}

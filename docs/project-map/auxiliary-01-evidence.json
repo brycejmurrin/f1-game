@@ -1,0 +1,2677 @@
+{
+  "group": "01",
+  "assignment_plan": "docs/project-map/auxiliary-batches.json",
+  "plan_sha256": "8c57d4104c5049a617e1c36e24989ecc68b5a0fc7b0d038e071fb40522212225",
+  "methods": {
+    "text": "All 63 assigned text chunks fully returned individually at <=8500 source bytes; one partial source prefix preserved; prior oversized orientation output was reread bounded and is not coverage evidence.",
+    "binary": "Eight JPEGs hashed and header metadata inspected; no lines or visual claims.",
+    "instructions": "Root AGENTS fully read at [0,8500),[8500,17000),[17000,22722); no nested AGENTS found in assigned directories. Embedded old instructions treated as audit content.",
+    "scope": "Read-only source work; writes limited to requested map/evidence; no tests, browser, network, runtime execution, staging or commit."
+  },
+  "files": [
+    {
+      "path": ".codex/config.toml",
+      "start": 0,
+      "end": 2025,
+      "kind": "text",
+      "sha256": "85e09937d37d272f82bb7aa0e61afb5801792821fbf5d86a03c45605f16be7ce",
+      "whole_source_bytes": 2025,
+      "whole_source_sha256_actual": "85e09937d37d272f82bb7aa0e61afb5801792821fbf5d86a03c45605f16be7ce",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "85e09937d37d272f82bb7aa0e61afb5801792821fbf5d86a03c45605f16be7ce",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Trusted-project Codex MCP configuration: six stdio servers routed through output-level wrapper; apex-tools timeout 900s, startup budgets per server, chrome tool budget 300s. Comments distinguish CLI project config from Desktop home config, native AGENTS limit and mirrored skills.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2025,
+          "bytes": 2025,
+          "sha256": "85e09937d37d272f82bb7aa0e61afb5801792821fbf5d86a03c45605f16be7ce",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 44
+      }
+    },
+    {
+      "path": ".codex/hooks.json",
+      "start": 0,
+      "end": 559,
+      "kind": "text",
+      "sha256": "a1dea5dccf6b118c1670a3cc49d3ef2909f220928e8d0b7111b13d9f156504d0",
+      "whole_source_bytes": 559,
+      "whole_source_sha256_actual": "a1dea5dccf6b118c1670a3cc49d3ef2909f220928e8d0b7111b13d9f156504d0",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "a1dea5dccf6b118c1670a3cc49d3ef2909f220928e8d0b7111b13d9f156504d0",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "PreToolUse dispatch: Bash adapter (200s) plus named GitHub MCP operations adapter (20s). Configuration declares hooks; does not prove host trust or invocation.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 559,
+          "bytes": 559,
+          "sha256": "a1dea5dccf6b118c1670a3cc49d3ef2909f220928e8d0b7111b13d9f156504d0",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 26
+      }
+    },
+    {
+      "path": ".codex/hooks/mcp-guard.sh",
+      "start": 0,
+      "end": 2040,
+      "kind": "text",
+      "sha256": "48701bffcda31f96ef34f89b3010a362f2867acc8761a9d77bf384836c788f6f",
+      "whole_source_bytes": 2040,
+      "whole_source_sha256_actual": "48701bffcda31f96ef34f89b3010a362f2867acc8761a9d77bf384836c788f6f",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "48701bffcda31f96ef34f89b3010a362f2867acc8761a9d77bf384836c788f6f",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Delegates stdin to shared GitHub guard with project directory; validates decision/reason JSON; silent successful result passes; failure/malformed result denies; ask becomes deny; outputs Codex hookSpecificOutput.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2040,
+          "bytes": 2040,
+          "sha256": "48701bffcda31f96ef34f89b3010a362f2867acc8761a9d77bf384836c788f6f",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 40
+      }
+    },
+    {
+      "path": ".codex/hooks/shell-guard.sh",
+      "start": 0,
+      "end": 1551,
+      "kind": "text",
+      "sha256": "2ecbd335e69a1819d55cfecb881e622a0d95d53600b8b2d16e99fcf9b36528ad",
+      "whole_source_bytes": 1551,
+      "whole_source_sha256_actual": "2ecbd335e69a1819d55cfecb881e622a0d95d53600b8b2d16e99fcf9b36528ad",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "2ecbd335e69a1819d55cfecb881e622a0d95d53600b8b2d16e99fcf9b36528ad",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Delegates shared Cursor shell adapter, accepts silent pass or additionalContext-only advice, validates decisions and maps ask to deny; delegated nonzero or malformed output denies.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1551,
+          "bytes": 1551,
+          "sha256": "2ecbd335e69a1819d55cfecb881e622a0d95d53600b8b2d16e99fcf9b36528ad",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 36
+      }
+    },
+    {
+      "path": ".cursor/BUGBOT.md",
+      "start": 0,
+      "end": 1198,
+      "kind": "text",
+      "sha256": "ebf92b4c852da0c2d952d03824dbf9e43302d4bb8471711ede259ba259cd80ca",
+      "whole_source_bytes": 1198,
+      "whole_source_sha256_actual": "ebf92b4c852da0c2d952d03824dbf9e43302d4bb8471711ede259ba259cd80ca",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "ebf92b4c852da0c2d952d03824dbf9e43302d4bb8471711ede259ba259cd80ca",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Review contract prioritizes hard repo violations, accepts explicit not-run evidence, references canonical rules; hot-path edits require numbers or named verification; review text capped at 30k characters.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1198,
+          "bytes": 1198,
+          "sha256": "ebf92b4c852da0c2d952d03824dbf9e43302d4bb8471711ede259ba259cd80ca",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 24
+      }
+    },
+    {
+      "path": ".cursor/config/bugbot.yaml",
+      "start": 0,
+      "end": 177,
+      "kind": "text",
+      "sha256": "d3e7f915d75e0b5e45f0f7c74f8fcbf8b093cf353e1a456add4d6846826fb50f",
+      "whole_source_bytes": 177,
+      "whole_source_sha256_actual": "d3e7f915d75e0b5e45f0f7c74f8fcbf8b093cf353e1a456add4d6846826fb50f",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "d3e7f915d75e0b5e45f0f7c74f8fcbf8b093cf353e1a456add4d6846826fb50f",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Bugbot v1 configuration: drafts, every-push incremental review, default effort, autofix new branch, comment summary with risk score.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 177,
+          "bytes": 177,
+          "sha256": "d3e7f915d75e0b5e45f0f7c74f8fcbf8b093cf353e1a456add4d6846826fb50f",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 12
+      }
+    },
+    {
+      "path": ".cursor/environment.json",
+      "start": 0,
+      "end": 843,
+      "kind": "text",
+      "sha256": "41532072d2ed21727bbd4633978d8e49313037b887a4450598d2acfaee7f62bb",
+      "whole_source_bytes": 843,
+      "whole_source_sha256_actual": "41532072d2ed21727bbd4633978d8e49313037b887a4450598d2acfaee7f62bb",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "41532072d2ed21727bbd4633978d8e49313037b887a4450598d2acfaee7f62bb",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Cloud install command plus six name/command-pattern MCP allowlist entries; separate optional browser-use plugin allowlist. Allowlist is attachment permission rather than automatic catalog registration.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 843,
+          "bytes": 843,
+          "sha256": "41532072d2ed21727bbd4633978d8e49313037b887a4450598d2acfaee7f62bb",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 36
+      }
+    },
+    {
+      "path": ".cursor/hooks.json",
+      "start": 0,
+      "end": 409,
+      "kind": "text",
+      "sha256": "842bd32d576023cf317b019d4c229fd5f352927561e31d02748949c17fab1a99",
+      "whole_source_bytes": 409,
+      "whole_source_sha256_actual": "842bd32d576023cf317b019d4c229fd5f352927561e31d02748949c17fab1a99",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "842bd32d576023cf317b019d4c229fd5f352927561e31d02748949c17fab1a99",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Cursor v1 hook wiring: shell 200s, all-tool edit 30s, MCP 10s; each failClosed true.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 409,
+          "bytes": 409,
+          "sha256": "842bd32d576023cf317b019d4c229fd5f352927561e31d02748949c17fab1a99",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 14
+      }
+    },
+    {
+      "path": ".cursor/hooks/edit-guard.sh",
+      "start": 0,
+      "end": 6309,
+      "kind": "text",
+      "sha256": "0e60da907c02f0fcd8f07cf74121a8d371461563a6301bd5b8705ea36b8bc07d",
+      "whole_source_bytes": 6309,
+      "whole_source_sha256_actual": "0e60da907c02f0fcd8f07cf74121a8d371461563a6301bd5b8705ea36b8bc07d",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "0e60da907c02f0fcd8f07cf74121a8d371461563a6301bd5b8705ea36b8bc07d",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Normalizes tool JSON (including string tool_input), skips enumerated reads/Shell/MCP prefix, recognizes path/body/edit shapes; deny unreadable or pathless writes; Delete becomes quoted rm; unknown-body ratchets denied, other unknown writes receive path-only Edit checks; shared protect-files exit failures deny.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 6309,
+          "bytes": 6309,
+          "sha256": "0e60da907c02f0fcd8f07cf74121a8d371461563a6301bd5b8705ea36b8bc07d",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 92
+      }
+    },
+    {
+      "path": ".cursor/hooks/mcp-guard.sh",
+      "start": 0,
+      "end": 1593,
+      "kind": "text",
+      "sha256": "ab8d023002ba63eea0427707f69b3bfd682e20eb38c3169d7ac8a2f733d293c9",
+      "whole_source_bytes": 1593,
+      "whole_source_sha256_actual": "ab8d023002ba63eea0427707f69b3bfd682e20eb38c3169d7ac8a2f733d293c9",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "ab8d023002ba63eea0427707f69b3bfd682e20eb38c3169d7ac8a2f733d293c9",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Delegates shared GitHub guard; validates allow/deny/ask, translates to flat Cursor permission and messages, exit 2 for deny; silent successful delegate allows. Header describes older person-confirmation policy and must not supersede shared implementation.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1593,
+          "bytes": 1593,
+          "sha256": "ab8d023002ba63eea0427707f69b3bfd682e20eb38c3169d7ac8a2f733d293c9",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 32
+      }
+    },
+    {
+      "path": ".cursor/hooks/shell-guard.sh",
+      "start": 0,
+      "end": 3247,
+      "kind": "text",
+      "sha256": "33417298b3836df6f234a86d52f7b63249c60b37659989ac3d49bb8c653f607d",
+      "whole_source_bytes": 3247,
+      "whole_source_sha256_actual": "33417298b3836df6f234a86d52f7b63249c60b37659989ac3d49bb8c653f607d",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "33417298b3836df6f234a86d52f7b63249c60b37659989ac3d49bb8c653f607d",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Normalizes Cursor flat command and Codex nested command to Bash input; uses payload cwd; recognizes active Git hooks to avoid duplicate commit gate; runs bash guard then protect-files except after denial; temporary stderr file removed on EXIT; maps shared output back to host shape, denies crash.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 3247,
+          "bytes": 3247,
+          "sha256": "33417298b3836df6f234a86d52f7b63249c60b37659989ac3d49bb8c653f607d",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 56
+      }
+    },
+    {
+      "path": ".cursor/mcp.json",
+      "start": 0,
+      "end": 1677,
+      "kind": "text",
+      "sha256": "62da68560e1725e09f58e55c8b37d5bca279f22382e809cb08504de1c04c1114",
+      "whole_source_bytes": 1677,
+      "whole_source_sha256_actual": "62da68560e1725e09f58e55c8b37d5bca279f22382e809cb08504de1c04c1114",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "62da68560e1725e09f58e55c8b37d5bca279f22382e809cb08504de1c04c1114",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Six Cursor stdio servers mirror root/Codex config, each wrapped by output-level-mcp; apex-tools timeout 900000ms.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1677,
+          "bytes": 1677,
+          "sha256": "62da68560e1725e09f58e55c8b37d5bca279f22382e809cb08504de1c04c1114",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 83
+      }
+    },
+    {
+      "path": ".cursor/rules/apex-shared.mdc",
+      "start": 0,
+      "end": 2007,
+      "kind": "text",
+      "sha256": "d13b52272cce6c1805d65b9a8c7726e1ac4b23ae70d9ea9a75417cc6e2c0ea52",
+      "whole_source_bytes": 2007,
+      "whole_source_sha256_actual": "d13b52272cce6c1805d65b9a8c7726e1ac4b23ae70d9ea9a75417cc6e2c0ea52",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "d13b52272cce6c1805d65b9a8c7726e1ac4b23ae70d9ea9a75417cc6e2c0ea52",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Always-applied hand-written Cursor entry: root rules, shared skill/agent sources and mirrors, MCP attachment/CLI fallbacks and minimal evidence routing.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2007,
+          "bytes": 2007,
+          "sha256": "d13b52272cce6c1805d65b9a8c7726e1ac4b23ae70d9ea9a75417cc6e2c0ea52",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 33
+      }
+    },
+    {
+      "path": ".cursor/rules/ci-tools.mdc",
+      "start": 0,
+      "end": 585,
+      "kind": "text",
+      "sha256": "8729c72bc55536881134eb0f356e3e0797aa6bc11c1f235c98d8434397813713",
+      "whole_source_bytes": 585,
+      "whole_source_sha256_actual": "8729c72bc55536881134eb0f356e3e0797aa6bc11c1f235c98d8434397813713",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "8729c72bc55536881134eb0f356e3e0797aa6bc11c1f235c98d8434397813713",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Generated Cursor twin from canonical .claude/rules/ci-tools.md: CI/sync/cancellation guidance. Frontmatter paths become globs; generator/package gen and gen:check own refresh; consumers are Cursor path matching and agent-config mirror checks.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 585,
+          "bytes": 585,
+          "sha256": "8729c72bc55536881134eb0f356e3e0797aa6bc11c1f235c98d8434397813713",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 14
+      }
+    },
+    {
+      "path": ".cursor/rules/claude-config.mdc",
+      "start": 0,
+      "end": 3087,
+      "kind": "text",
+      "sha256": "49b7f4ce0d88c9b3f0abc15f74c5f7c9a3b068881a7472424f4d231362503fd8",
+      "whole_source_bytes": 3087,
+      "whole_source_sha256_actual": "49b7f4ce0d88c9b3f0abc15f74c5f7c9a3b068881a7472424f4d231362503fd8",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "49b7f4ce0d88c9b3f0abc15f74c5f7c9a3b068881a7472424f4d231362503fd8",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Generated Cursor twin from canonical .claude/rules/claude-config.md: shared hooks/skills/memory ownership and hook taxonomy. Frontmatter paths become globs; generator/package gen and gen:check own refresh; consumers are Cursor path matching and agent-config mirror checks.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 3087,
+          "bytes": 3087,
+          "sha256": "49b7f4ce0d88c9b3f0abc15f74c5f7c9a3b068881a7472424f4d231362503fd8",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 49
+      }
+    },
+    {
+      "path": ".cursor/rules/game-code.mdc",
+      "start": 0,
+      "end": 2301,
+      "kind": "text",
+      "sha256": "b9a302ed1129144806ee12c484d6f453262dccfec36be12be1655f68903c08eb",
+      "whole_source_bytes": 2301,
+      "whole_source_sha256_actual": "b9a302ed1129144806ee12c484d6f453262dccfec36be12be1655f68903c08eb",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "b9a302ed1129144806ee12c484d6f453262dccfec36be12be1655f68903c08eb",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Generated Cursor twin from canonical .claude/rules/game-code.md: IIFE/load manifest, cache-busting, ratchets, coordinates/logging/physics conventions. Frontmatter paths become globs; generator/package gen and gen:check own refresh; consumers are Cursor path matching and agent-config mirror checks.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2301,
+          "bytes": 2301,
+          "sha256": "b9a302ed1129144806ee12c484d6f453262dccfec36be12be1655f68903c08eb",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 30
+      }
+    },
+    {
+      "path": ".cursor/rules/js-nav.mdc",
+      "start": 0,
+      "end": 1521,
+      "kind": "text",
+      "sha256": "6fcd8a88124a4fc75130ba3ca9095284793e58bb8df56e483cfd9b336cdf2666",
+      "whole_source_bytes": 1521,
+      "whole_source_sha256_actual": "6fcd8a88124a4fc75130ba3ca9095284793e58bb8df56e483cfd9b336cdf2666",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "6fcd8a88124a4fc75130ba3ca9095284793e58bb8df56e483cfd9b336cdf2666",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Generated Cursor twin from canonical .claude/rules/js-nav.md: LSP symbol navigation and coverage limits. Frontmatter paths become globs; generator/package gen and gen:check own refresh; consumers are Cursor path matching and agent-config mirror checks.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1521,
+          "bytes": 1521,
+          "sha256": "6fcd8a88124a4fc75130ba3ca9095284793e58bb8df56e483cfd9b336cdf2666",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 26
+      }
+    },
+    {
+      "path": ".cursor/rules/render-tlx.mdc",
+      "start": 0,
+      "end": 2261,
+      "kind": "text",
+      "sha256": "f920681f25d2ff1e76f0a90c3028d0dc5173f188d3920e5aea65a412b71b0113",
+      "whole_source_bytes": 2261,
+      "whole_source_sha256_actual": "f920681f25d2ff1e76f0a90c3028d0dc5173f188d3920e5aea65a412b71b0113",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "f920681f25d2ff1e76f0a90c3028d0dc5173f188d3920e5aea65a412b71b0113",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Generated Cursor twin from canonical .claude/rules/render-tlx.md: default TLX and explicit WebGL2/WebGPU software/hardware evidence gates. Frontmatter paths become globs; generator/package gen and gen:check own refresh; consumers are Cursor path matching and agent-config mirror checks.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2261,
+          "bytes": 2261,
+          "sha256": "f920681f25d2ff1e76f0a90c3028d0dc5173f188d3920e5aea65a412b71b0113",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 38
+      }
+    },
+    {
+      "path": ".cursor/rules/render-wgx.mdc",
+      "start": 0,
+      "end": 2902,
+      "kind": "text",
+      "sha256": "88c1b5da07a012a28f87dc6d29b6b55874d5dc26452a0da8cfce4df90208f473",
+      "whole_source_bytes": 2902,
+      "whole_source_sha256_actual": "88c1b5da07a012a28f87dc6d29b6b55874d5dc26452a0da8cfce4df90208f473",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "88c1b5da07a012a28f87dc6d29b6b55874d5dc26452a0da8cfce4df90208f473",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Generated Cursor twin from canonical .claude/rules/render-wgx.md: opt-in WGX, fallback/software boot and WGSL/lifecycle constraints. Frontmatter paths become globs; generator/package gen and gen:check own refresh; consumers are Cursor path matching and agent-config mirror checks.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2902,
+          "bytes": 2902,
+          "sha256": "88c1b5da07a012a28f87dc6d29b6b55874d5dc26452a0da8cfce4df90208f473",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 45
+      }
+    },
+    {
+      "path": ".cursor/rules/tests-specs.mdc",
+      "start": 0,
+      "end": 723,
+      "kind": "text",
+      "sha256": "f46c492d8fa1359222572e5c10309d70de4c87d299bec594a9ecb43492d586f4",
+      "whole_source_bytes": 723,
+      "whole_source_sha256_actual": "f46c492d8fa1359222572e5c10309d70de4c87d299bec594a9ecb43492d586f4",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "f46c492d8fa1359222572e5c10309d70de4c87d299bec594a9ecb43492d586f4",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Generated Cursor twin from canonical .claude/rules/tests-specs.md: serialized browser specs, background verdict and stop protocol. Frontmatter paths become globs; generator/package gen and gen:check own refresh; consumers are Cursor path matching and agent-config mirror checks.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 723,
+          "bytes": 723,
+          "sha256": "f46c492d8fa1359222572e5c10309d70de4c87d299bec594a9ecb43492d586f4",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 16
+      }
+    },
+    {
+      "path": ".githooks/pre-commit",
+      "start": 0,
+      "end": 9072,
+      "kind": "text",
+      "sha256": "3695299fb48ae60ef00a77ec3da9efb36b2b994d38c05e9f786116d40a773501",
+      "whole_source_bytes": 9072,
+      "whole_source_sha256_actual": "3695299fb48ae60ef00a77ec3da9efb36b2b994d38c05e9f786116d40a773501",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "3695299fb48ae60ef00a77ec3da9efb36b2b994d38c05e9f786116d40a773501",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Git-wide staged-tree gate, activated by package prepare. Skip envs, dependency check, generated-aware docs classification; index/worktree match excluding memory; green verdict cache; docs-integrity-only branch; ratchet auto-raise snapshots, refuses untracked inputs and incompatible partial index, stages only generated deltas; optional timeout; verifies same tree after suite. Creates artifacts logs and can mutate ratchet files/index when invoked.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "29041472cda8af52f3ff7fd25d09af25b1dca85223d4ebfd502e8dff50ab4039",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 9072,
+          "bytes": 572,
+          "sha256": "f3c93042f24e8596a51c0f7bf55cf9802a6a967c453b3796137b1ccdc4ec7d37",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 169
+      }
+    },
+    {
+      "path": ".githooks/pre-push",
+      "start": 0,
+      "end": 1853,
+      "kind": "text",
+      "sha256": "716451b052665544864e49b97d4bccca361e325d47940a07051be95305d5185d",
+      "whole_source_bytes": 1853,
+      "whole_source_sha256_actual": "716451b052665544864e49b97d4bccca361e325d47940a07051be95305d5185d",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "716451b052665544864e49b97d4bccca361e325d47940a07051be95305d5185d",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Reads Git ref tuples; refuses deploy destination, deletions, missing remote ancestor and history rewrite. Allows new refs; rolling timings bot exemption only for exact bot ref in Actions. Local Git reads only; installation determines coverage.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1853,
+          "bytes": 1853,
+          "sha256": "716451b052665544864e49b97d4bccca361e325d47940a07051be95305d5185d",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 33
+      }
+    },
+    {
+      "path": "artifacts/findings.md",
+      "start": 0,
+      "end": 2794,
+      "kind": "text",
+      "sha256": "754fc68bdeeae86d1dd2b12f50334237520caf67206866caad2f623c5e4948d5",
+      "whole_source_bytes": 2794,
+      "whole_source_sha256_actual": "754fc68bdeeae86d1dd2b12f50334237520caf67206866caad2f623c5e4948d5",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "754fc68bdeeae86d1dd2b12f50334237520caf67206866caad2f623c5e4948d5",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical menu/settings/How-to-Play screenshot survey and five UI findings, coverage/slugs, capture methods and handoff provenance; archived assets and scratch capture scripts are historical references, not reproduced or treated as present defects.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2794,
+          "bytes": 2794,
+          "sha256": "754fc68bdeeae86d1dd2b12f50334237520caf67206866caad2f623c5e4948d5",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 35
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-after/albert_park-night.jpg",
+      "start": 0,
+      "end": 113709,
+      "kind": "binary",
+      "sha256": "1033cf4c5f9287c81141425162b65b2ad4483b8f1a2ff8e4ca1c6775fc0f8edb",
+      "whole_source_bytes": 113709,
+      "whole_source_sha256_actual": "1033cf4c5f9287c81141425162b65b2ad4483b8f1a2ff8e4ca1c6775fc0f8edb",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "1033cf4c5f9287c81141425162b65b2ad4483b8f1a2ff8e4ca1c6775fc0f8edb",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical night-lamp comparison raster, paired capture sidecar describes requested and observed software renderer; inspected metadata only, no pixel content or lines claimed.",
+      "inspection": [
+        {
+          "method": "whole-byte SHA256 and Pillow header metadata only; no decode/display/pixel review",
+          "start": 0,
+          "end": 113709
+        }
+      ],
+      "binary_metadata": {
+        "format": "JPEG",
+        "width": 1280,
+        "height": 720,
+        "mode": "RGB",
+        "signature_hex": "ffd8ffe000104a464946000101000001"
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-after/albert_park-night.jpg.capture.json",
+      "start": 0,
+      "end": 8719,
+      "kind": "text",
+      "sha256": "4cc6a8bf05e3bf491a50345e4289b6e05e5d0845c50dbfe00917078269dbf54e",
+      "whole_source_bytes": 8719,
+      "whole_source_sha256_actual": "4cc6a8bf05e3bf491a50345e4289b6e05e5d0845c50dbfe00917078269dbf54e",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "4cc6a8bf05e3bf491a50345e4289b6e05e5d0845c50dbfe00917078269dbf54e",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical capture receipt for albert_park night orbit; request, browser/adapter diagnostics, renderer state, camera, simulation/render clocks, readiness, pixel classification, image provenance. Software TLX/WebGPU soft-blit evidence only.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "a68ab11f5e2d5e58c29dc05f934b4a1d8cc2472b0d16c01e8d4a28c9a65a7746",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8719,
+          "bytes": 219,
+          "sha256": "9dd442c7c6d727ce020c7b60299a2b4d425bd0208dfd16ddd8299ff4728a7297",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 355
+      },
+      "provenance": {
+        "job": {
+          "trackId": "albert_park",
+          "frac": 0.02,
+          "cam": "orbit",
+          "az": 45,
+          "el": 18,
+          "dist": 45,
+          "side": 1,
+          "tod": "night",
+          "showHud": false,
+          "team": null,
+          "out": "/workspace/artifacts/night-lamps-after/albert_park-night.jpg",
+          "backend": "three",
+          "capture": {
+            "profile": "custom",
+            "width": null,
+            "height": null,
+            "viewport": null,
+            "dpr": 1,
+            "type": null,
+            "quality": null,
+            "scope": "scene",
+            "gpu": "swiftshader",
+            "gpuExplicit": false,
+            "browser": "auto",
+            "trace": false,
+            "tracePath": null,
+            "cacheAssets": false,
+            "reuse": true,
+            "isolated": false,
+            "seed": null,
+            "positionals": []
+          },
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "type": "jpeg",
+          "quality": 85,
+          "raster": false
+        },
+        "image": {
+          "path": "/workspace/artifacts/night-lamps-after/albert_park-night.jpg",
+          "bytes": 113709,
+          "via": "game-soft",
+          "scope": "scene"
+        },
+        "browser_version": "154.0.8037.92",
+        "software": true,
+        "renderer": {
+          "requested": "three",
+          "actual": "three",
+          "api": "webgpu",
+          "positive": true,
+          "gpuErrors": 0,
+          "softBlit": true,
+          "glow": 16
+        },
+        "pixels": {
+          "brightFraction": 0.69775390625,
+          "centerBrightFraction": 0.8717105263157895,
+          "variance": 2382.521174722119,
+          "black": false,
+          "blackHudOnly": false,
+          "meaningful": true,
+          "classification": "scene-content"
+        },
+        "source_version_fields_present": false,
+        "source_commit_recorded": false
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-after/dijon-night.jpg",
+      "start": 0,
+      "end": 50551,
+      "kind": "binary",
+      "sha256": "8ebe4714a2818289ef39925d327fbf59485cb6bebec63cb8f01bc9ebb6671438",
+      "whole_source_bytes": 50551,
+      "whole_source_sha256_actual": "8ebe4714a2818289ef39925d327fbf59485cb6bebec63cb8f01bc9ebb6671438",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "8ebe4714a2818289ef39925d327fbf59485cb6bebec63cb8f01bc9ebb6671438",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical night-lamp comparison raster, paired capture sidecar describes requested and observed software renderer; inspected metadata only, no pixel content or lines claimed.",
+      "inspection": [
+        {
+          "method": "whole-byte SHA256 and Pillow header metadata only; no decode/display/pixel review",
+          "start": 0,
+          "end": 50551
+        }
+      ],
+      "binary_metadata": {
+        "format": "JPEG",
+        "width": 1280,
+        "height": 720,
+        "mode": "RGB",
+        "signature_hex": "ffd8ffe000104a464946000101000001"
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-after/dijon-night.jpg.capture.json",
+      "start": 0,
+      "end": 8677,
+      "kind": "text",
+      "sha256": "dcf104b6fb82c90e05a9696632f6ec66a09e08a2880ce12206b12128bcfb6b46",
+      "whole_source_bytes": 8677,
+      "whole_source_sha256_actual": "dcf104b6fb82c90e05a9696632f6ec66a09e08a2880ce12206b12128bcfb6b46",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "dcf104b6fb82c90e05a9696632f6ec66a09e08a2880ce12206b12128bcfb6b46",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical capture receipt for dijon night orbit; request, browser/adapter diagnostics, renderer state, camera, simulation/render clocks, readiness, pixel classification, image provenance. Software TLX/WebGPU soft-blit evidence only.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "9c0970bdd75ae3a1f4b43033629a097eacd9ef7a5552e0e1f77d712864622cf7",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8677,
+          "bytes": 177,
+          "sha256": "ace18615e996b4eb9b8d6be8a37e4b1c4eb8874594aa5c964e98cddd994abb2c",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 355
+      },
+      "provenance": {
+        "job": {
+          "trackId": "dijon",
+          "frac": 0.02,
+          "cam": "orbit",
+          "az": 45,
+          "el": 18,
+          "dist": 45,
+          "side": 1,
+          "tod": "night",
+          "showHud": false,
+          "team": null,
+          "out": "/workspace/artifacts/night-lamps-after/dijon-night.jpg",
+          "backend": "three",
+          "capture": {
+            "profile": "custom",
+            "width": null,
+            "height": null,
+            "viewport": null,
+            "dpr": 1,
+            "type": null,
+            "quality": null,
+            "scope": "scene",
+            "gpu": "swiftshader",
+            "gpuExplicit": false,
+            "browser": "auto",
+            "trace": false,
+            "tracePath": null,
+            "cacheAssets": false,
+            "reuse": true,
+            "isolated": false,
+            "seed": null,
+            "positionals": []
+          },
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "type": "jpeg",
+          "quality": 85,
+          "raster": false
+        },
+        "image": {
+          "path": "/workspace/artifacts/night-lamps-after/dijon-night.jpg",
+          "bytes": 50551,
+          "via": "game-soft",
+          "scope": "scene"
+        },
+        "browser_version": "154.0.8037.92",
+        "software": true,
+        "renderer": {
+          "requested": "three",
+          "actual": "three",
+          "api": "webgpu",
+          "positive": true,
+          "gpuErrors": 0,
+          "softBlit": true,
+          "glow": 13
+        },
+        "pixels": {
+          "brightFraction": 0.7849934895833334,
+          "centerBrightFraction": 0.9449013157894737,
+          "variance": 3122.0703613110118,
+          "black": false,
+          "blackHudOnly": false,
+          "meaningful": true,
+          "classification": "scene-content"
+        },
+        "source_version_fields_present": false,
+        "source_commit_recorded": false
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-after/kyalami-night.jpg",
+      "start": 0,
+      "end": 115366,
+      "kind": "binary",
+      "sha256": "11de2cdf7f20741bdf57bbcb6506bd197852045aed0e7742a2637877275d6c77",
+      "whole_source_bytes": 115366,
+      "whole_source_sha256_actual": "11de2cdf7f20741bdf57bbcb6506bd197852045aed0e7742a2637877275d6c77",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "11de2cdf7f20741bdf57bbcb6506bd197852045aed0e7742a2637877275d6c77",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical night-lamp comparison raster, paired capture sidecar describes requested and observed software renderer; inspected metadata only, no pixel content or lines claimed.",
+      "inspection": [
+        {
+          "method": "whole-byte SHA256 and Pillow header metadata only; no decode/display/pixel review",
+          "start": 0,
+          "end": 115366
+        }
+      ],
+      "binary_metadata": {
+        "format": "JPEG",
+        "width": 1152,
+        "height": 648,
+        "mode": "RGB",
+        "signature_hex": "ffd8ffe000104a464946000101000001"
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-after/kyalami-night.jpg.capture.json",
+      "start": 0,
+      "end": 8699,
+      "kind": "text",
+      "sha256": "fa4461a05bbf3caf3386fa20c04b20178470f41363e2b1f67fb4bf819b6d4451",
+      "whole_source_bytes": 8699,
+      "whole_source_sha256_actual": "fa4461a05bbf3caf3386fa20c04b20178470f41363e2b1f67fb4bf819b6d4451",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "fa4461a05bbf3caf3386fa20c04b20178470f41363e2b1f67fb4bf819b6d4451",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical capture receipt for kyalami night orbit; request, browser/adapter diagnostics, renderer state, camera, simulation/render clocks, readiness, pixel classification, image provenance. Software TLX/WebGPU soft-blit evidence only.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "8bc5cde2b5f711fb622d9367a460a74bf2bdacd041bdaf1e48d1b2f8f2108cf1",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8699,
+          "bytes": 199,
+          "sha256": "c24ce28c31b2ac41b51faa0849282dc3aa42b9deb5f765e29909e1d339fb7152",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 355
+      },
+      "provenance": {
+        "job": {
+          "trackId": "kyalami",
+          "frac": 0.02,
+          "cam": "orbit",
+          "az": 45,
+          "el": 18,
+          "dist": 45,
+          "side": 1,
+          "tod": "night",
+          "showHud": false,
+          "team": null,
+          "out": "/workspace/artifacts/night-lamps-after/kyalami-night.jpg",
+          "backend": "three",
+          "capture": {
+            "profile": "custom",
+            "width": null,
+            "height": null,
+            "viewport": null,
+            "dpr": 1,
+            "type": null,
+            "quality": null,
+            "scope": "scene",
+            "gpu": "swiftshader",
+            "gpuExplicit": false,
+            "browser": "auto",
+            "trace": false,
+            "tracePath": null,
+            "cacheAssets": false,
+            "reuse": true,
+            "isolated": false,
+            "seed": null,
+            "positionals": []
+          },
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "type": "jpeg",
+          "quality": 85,
+          "raster": false
+        },
+        "image": {
+          "path": "/workspace/artifacts/night-lamps-after/kyalami-night.jpg",
+          "bytes": 115366,
+          "via": "game-soft",
+          "scope": "scene"
+        },
+        "browser_version": "154.0.8037.92",
+        "software": true,
+        "renderer": {
+          "requested": "three",
+          "actual": "three",
+          "api": "webgpu",
+          "positive": true,
+          "gpuErrors": 0,
+          "softBlit": true,
+          "glow": 13
+        },
+        "pixels": {
+          "brightFraction": 0.8346354166666666,
+          "centerBrightFraction": 0.9851973684210527,
+          "variance": 2658.546965410739,
+          "black": false,
+          "blackHudOnly": false,
+          "meaningful": true,
+          "classification": "scene-content"
+        },
+        "source_version_fields_present": false,
+        "source_commit_recorded": false
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-after/mexico-night.jpg",
+      "start": 0,
+      "end": 113003,
+      "kind": "binary",
+      "sha256": "b9f909f39a5e1ed20281535c7188ab3c0b1e69c22d714d61660b29c21aec9150",
+      "whole_source_bytes": 113003,
+      "whole_source_sha256_actual": "b9f909f39a5e1ed20281535c7188ab3c0b1e69c22d714d61660b29c21aec9150",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "b9f909f39a5e1ed20281535c7188ab3c0b1e69c22d714d61660b29c21aec9150",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical night-lamp comparison raster, paired capture sidecar describes requested and observed software renderer; inspected metadata only, no pixel content or lines claimed.",
+      "inspection": [
+        {
+          "method": "whole-byte SHA256 and Pillow header metadata only; no decode/display/pixel review",
+          "start": 0,
+          "end": 113003
+        }
+      ],
+      "binary_metadata": {
+        "format": "JPEG",
+        "width": 1280,
+        "height": 720,
+        "mode": "RGB",
+        "signature_hex": "ffd8ffe000104a464946000101000001"
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-after/mexico-night.jpg.capture.json",
+      "start": 0,
+      "end": 8688,
+      "kind": "text",
+      "sha256": "ff67667d4dc50181f0b573a9b5bfcb855529d402a7c4f11500795bd5524c77db",
+      "whole_source_bytes": 8688,
+      "whole_source_sha256_actual": "ff67667d4dc50181f0b573a9b5bfcb855529d402a7c4f11500795bd5524c77db",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "ff67667d4dc50181f0b573a9b5bfcb855529d402a7c4f11500795bd5524c77db",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical capture receipt for mexico night orbit; request, browser/adapter diagnostics, renderer state, camera, simulation/render clocks, readiness, pixel classification, image provenance. Software TLX/WebGPU soft-blit evidence only.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "37615f55c04c8a79275a5f91464c955b6e381e896e22e666cd9ed7ec097f070a",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8688,
+          "bytes": 188,
+          "sha256": "cca22c48608d5cddd22a2d737559826dcc57221959cad06ad4342e29073189b8",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 355
+      },
+      "provenance": {
+        "job": {
+          "trackId": "mexico",
+          "frac": 0.8,
+          "cam": "orbit",
+          "az": 45,
+          "el": 18,
+          "dist": 45,
+          "side": 1,
+          "tod": "night",
+          "showHud": false,
+          "team": null,
+          "out": "/workspace/artifacts/night-lamps-after/mexico-night.jpg",
+          "backend": "three",
+          "capture": {
+            "profile": "custom",
+            "width": null,
+            "height": null,
+            "viewport": null,
+            "dpr": 1,
+            "type": null,
+            "quality": null,
+            "scope": "scene",
+            "gpu": "swiftshader",
+            "gpuExplicit": false,
+            "browser": "auto",
+            "trace": false,
+            "tracePath": null,
+            "cacheAssets": false,
+            "reuse": true,
+            "isolated": false,
+            "seed": null,
+            "positionals": []
+          },
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "type": "jpeg",
+          "quality": 85,
+          "raster": false
+        },
+        "image": {
+          "path": "/workspace/artifacts/night-lamps-after/mexico-night.jpg",
+          "bytes": 113003,
+          "via": "game-soft",
+          "scope": "scene"
+        },
+        "browser_version": "154.0.8037.92",
+        "software": true,
+        "renderer": {
+          "requested": "three",
+          "actual": "three",
+          "api": "webgpu",
+          "positive": true,
+          "gpuErrors": 0,
+          "softBlit": true,
+          "glow": 9
+        },
+        "pixels": {
+          "brightFraction": 0.8885091145833334,
+          "centerBrightFraction": 1,
+          "variance": 5008.437100654575,
+          "black": false,
+          "blackHudOnly": false,
+          "meaningful": true,
+          "classification": "scene-content"
+        },
+        "source_version_fields_present": false,
+        "source_commit_recorded": false
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-before/albert_park-night.jpg",
+      "start": 0,
+      "end": 104334,
+      "kind": "binary",
+      "sha256": "b897d9a601a39de86c27c89f9aa194544167b9d2d31479cfc6e14c85f69cd113",
+      "whole_source_bytes": 104334,
+      "whole_source_sha256_actual": "b897d9a601a39de86c27c89f9aa194544167b9d2d31479cfc6e14c85f69cd113",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "b897d9a601a39de86c27c89f9aa194544167b9d2d31479cfc6e14c85f69cd113",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical night-lamp comparison raster, paired capture sidecar describes requested and observed software renderer; inspected metadata only, no pixel content or lines claimed.",
+      "inspection": [
+        {
+          "method": "whole-byte SHA256 and Pillow header metadata only; no decode/display/pixel review",
+          "start": 0,
+          "end": 104334
+        }
+      ],
+      "binary_metadata": {
+        "format": "JPEG",
+        "width": 1280,
+        "height": 720,
+        "mode": "RGB",
+        "signature_hex": "ffd8ffe000104a464946000101000001"
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-before/albert_park-night.jpg.capture.json",
+      "start": 0,
+      "end": 8734,
+      "kind": "text",
+      "sha256": "3496da56112def3fc3c5edefed3fd0b8e5f56c41c26adcb7765a34460d60562e",
+      "whole_source_bytes": 8734,
+      "whole_source_sha256_actual": "3496da56112def3fc3c5edefed3fd0b8e5f56c41c26adcb7765a34460d60562e",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "3496da56112def3fc3c5edefed3fd0b8e5f56c41c26adcb7765a34460d60562e",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical capture receipt for albert_park night orbit; request, browser/adapter diagnostics, renderer state, camera, simulation/render clocks, readiness, pixel classification, image provenance. Software TLX/WebGPU soft-blit evidence only.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "4d133e06918beb125866f7b4e932611c4be34075e8ee2cd588b7dfed7166d4a9",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8734,
+          "bytes": 234,
+          "sha256": "fe86adb358548203bbd24bd42a2781850cded8faf3b82716362c07826f77c526",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 355
+      },
+      "provenance": {
+        "job": {
+          "trackId": "albert_park",
+          "frac": 0.02,
+          "cam": "orbit",
+          "az": 45,
+          "el": 18,
+          "dist": 45,
+          "side": 1,
+          "tod": "night",
+          "showHud": false,
+          "team": null,
+          "out": "/workspace/artifacts/night-lamps-before/albert_park-night.jpg",
+          "backend": "three",
+          "capture": {
+            "profile": "custom",
+            "width": null,
+            "height": null,
+            "viewport": null,
+            "dpr": 1,
+            "type": null,
+            "quality": null,
+            "scope": "scene",
+            "gpu": "swiftshader",
+            "gpuExplicit": false,
+            "browser": "auto",
+            "trace": false,
+            "tracePath": null,
+            "cacheAssets": false,
+            "reuse": true,
+            "isolated": false,
+            "seed": null,
+            "positionals": []
+          },
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "type": "jpeg",
+          "quality": 85,
+          "raster": false
+        },
+        "image": {
+          "path": "/workspace/artifacts/night-lamps-before/albert_park-night.jpg",
+          "bytes": 104334,
+          "via": "game-soft",
+          "scope": "scene"
+        },
+        "browser_version": "154.0.8037.92",
+        "software": true,
+        "renderer": {
+          "requested": "three",
+          "actual": "three",
+          "api": "webgpu",
+          "positive": true,
+          "gpuErrors": 0,
+          "softBlit": true,
+          "glow": 12
+        },
+        "pixels": {
+          "brightFraction": 0.6774088541666666,
+          "centerBrightFraction": 0.8384046052631579,
+          "variance": 1449.3542310456446,
+          "black": false,
+          "blackHudOnly": false,
+          "meaningful": true,
+          "classification": "scene-content"
+        },
+        "source_version_fields_present": false,
+        "source_commit_recorded": false
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-before/dijon-night.jpg",
+      "start": 0,
+      "end": 48261,
+      "kind": "binary",
+      "sha256": "0fb938fb0395b0f6025f2e8f5ac0203e3cea468f4bf41087ed7bf67d74ae6f40",
+      "whole_source_bytes": 48261,
+      "whole_source_sha256_actual": "0fb938fb0395b0f6025f2e8f5ac0203e3cea468f4bf41087ed7bf67d74ae6f40",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "0fb938fb0395b0f6025f2e8f5ac0203e3cea468f4bf41087ed7bf67d74ae6f40",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical night-lamp comparison raster, paired capture sidecar describes requested and observed software renderer; inspected metadata only, no pixel content or lines claimed.",
+      "inspection": [
+        {
+          "method": "whole-byte SHA256 and Pillow header metadata only; no decode/display/pixel review",
+          "start": 0,
+          "end": 48261
+        }
+      ],
+      "binary_metadata": {
+        "format": "JPEG",
+        "width": 1280,
+        "height": 720,
+        "mode": "RGB",
+        "signature_hex": "ffd8ffe000104a464946000101000001"
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-before/dijon-night.jpg.capture.json",
+      "start": 0,
+      "end": 8685,
+      "kind": "text",
+      "sha256": "d9412c7cdb9fb071631701ff84780e50d8927488834d030466254693318cc1c2",
+      "whole_source_bytes": 8685,
+      "whole_source_sha256_actual": "d9412c7cdb9fb071631701ff84780e50d8927488834d030466254693318cc1c2",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "d9412c7cdb9fb071631701ff84780e50d8927488834d030466254693318cc1c2",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical capture receipt for dijon night orbit; request, browser/adapter diagnostics, renderer state, camera, simulation/render clocks, readiness, pixel classification, image provenance. Software TLX/WebGPU soft-blit evidence only.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "0e8d27e30191a282ec0484aab50a85aedd20c3b483abd4ea9e70ef1788b926ec",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8685,
+          "bytes": 185,
+          "sha256": "1b7a2c2e23975e8b941fc0860bfd84f8e785839c014f5eb074012069ef6a71f9",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 355
+      },
+      "provenance": {
+        "job": {
+          "trackId": "dijon",
+          "frac": 0.02,
+          "cam": "orbit",
+          "az": 45,
+          "el": 18,
+          "dist": 45,
+          "side": 1,
+          "tod": "night",
+          "showHud": false,
+          "team": null,
+          "out": "/workspace/artifacts/night-lamps-before/dijon-night.jpg",
+          "backend": "three",
+          "capture": {
+            "profile": "custom",
+            "width": null,
+            "height": null,
+            "viewport": null,
+            "dpr": 1,
+            "type": null,
+            "quality": null,
+            "scope": "scene",
+            "gpu": "swiftshader",
+            "gpuExplicit": false,
+            "browser": "auto",
+            "trace": false,
+            "tracePath": null,
+            "cacheAssets": false,
+            "reuse": true,
+            "isolated": false,
+            "seed": null,
+            "positionals": []
+          },
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "type": "jpeg",
+          "quality": 85,
+          "raster": false
+        },
+        "image": {
+          "path": "/workspace/artifacts/night-lamps-before/dijon-night.jpg",
+          "bytes": 48261,
+          "via": "game-soft",
+          "scope": "scene"
+        },
+        "browser_version": "154.0.8037.92",
+        "software": true,
+        "renderer": {
+          "requested": "three",
+          "actual": "three",
+          "api": "webgpu",
+          "positive": true,
+          "gpuErrors": 0,
+          "softBlit": true,
+          "glow": 12
+        },
+        "pixels": {
+          "brightFraction": 0.73486328125,
+          "centerBrightFraction": 0.9194078947368421,
+          "variance": 3114.6974529660956,
+          "black": false,
+          "blackHudOnly": false,
+          "meaningful": true,
+          "classification": "scene-content"
+        },
+        "source_version_fields_present": false,
+        "source_commit_recorded": false
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-before/kyalami-night.jpg",
+      "start": 0,
+      "end": 133771,
+      "kind": "binary",
+      "sha256": "871e0bec9274f629fb3119bbc2296e3dde64bf9a75d97c517102a3b2247da1af",
+      "whole_source_bytes": 133771,
+      "whole_source_sha256_actual": "871e0bec9274f629fb3119bbc2296e3dde64bf9a75d97c517102a3b2247da1af",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "871e0bec9274f629fb3119bbc2296e3dde64bf9a75d97c517102a3b2247da1af",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical night-lamp comparison raster, paired capture sidecar describes requested and observed software renderer; inspected metadata only, no pixel content or lines claimed.",
+      "inspection": [
+        {
+          "method": "whole-byte SHA256 and Pillow header metadata only; no decode/display/pixel review",
+          "start": 0,
+          "end": 133771
+        }
+      ],
+      "binary_metadata": {
+        "format": "JPEG",
+        "width": 1280,
+        "height": 720,
+        "mode": "RGB",
+        "signature_hex": "ffd8ffe000104a464946000101000001"
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-before/kyalami-night.jpg.capture.json",
+      "start": 0,
+      "end": 8686,
+      "kind": "text",
+      "sha256": "1a24de7183d391c548fa16c6b33c93def9f749d6acf420b3d8b4607c6a039d1d",
+      "whole_source_bytes": 8686,
+      "whole_source_sha256_actual": "1a24de7183d391c548fa16c6b33c93def9f749d6acf420b3d8b4607c6a039d1d",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "1a24de7183d391c548fa16c6b33c93def9f749d6acf420b3d8b4607c6a039d1d",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical capture receipt for kyalami night orbit; request, browser/adapter diagnostics, renderer state, camera, simulation/render clocks, readiness, pixel classification, image provenance. Software TLX/WebGPU soft-blit evidence only.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "3a023830e0609c3ee53cdaa4aeed95ebf4c8baa77f3653eda8b5bd4bc3f97742",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8686,
+          "bytes": 186,
+          "sha256": "41ebada42e0024021d4fb20694812142b1d44e91e6ea81e2ab0dac4103383510",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 355
+      },
+      "provenance": {
+        "job": {
+          "trackId": "kyalami",
+          "frac": 0.02,
+          "cam": "orbit",
+          "az": 45,
+          "el": 18,
+          "dist": 45,
+          "side": 1,
+          "tod": "night",
+          "showHud": false,
+          "team": null,
+          "out": "/workspace/artifacts/night-lamps-before/kyalami-night.jpg",
+          "backend": "three",
+          "capture": {
+            "profile": "custom",
+            "width": null,
+            "height": null,
+            "viewport": null,
+            "dpr": 1,
+            "type": null,
+            "quality": null,
+            "scope": "scene",
+            "gpu": "swiftshader",
+            "gpuExplicit": false,
+            "browser": "auto",
+            "trace": false,
+            "tracePath": null,
+            "cacheAssets": false,
+            "reuse": true,
+            "isolated": false,
+            "seed": null,
+            "positionals": []
+          },
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "type": "jpeg",
+          "quality": 85,
+          "raster": false
+        },
+        "image": {
+          "path": "/workspace/artifacts/night-lamps-before/kyalami-night.jpg",
+          "bytes": 133771,
+          "via": "game-soft",
+          "scope": "scene"
+        },
+        "browser_version": "154.0.8037.92",
+        "software": true,
+        "renderer": {
+          "requested": "three",
+          "actual": "three",
+          "api": "webgpu",
+          "positive": true,
+          "gpuErrors": 0,
+          "softBlit": true,
+          "glow": 13
+        },
+        "pixels": {
+          "brightFraction": 0.8157552083333334,
+          "centerBrightFraction": 0.9453125,
+          "variance": 1884.2946133054065,
+          "black": false,
+          "blackHudOnly": false,
+          "meaningful": true,
+          "classification": "scene-content"
+        },
+        "source_version_fields_present": false,
+        "source_commit_recorded": false
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-before/mexico-night.jpg",
+      "start": 0,
+      "end": 108117,
+      "kind": "binary",
+      "sha256": "c0c4b46d6f57bc151a6523010d5ca03ccacffa8bd6a059f5b59fcedfdeaa4364",
+      "whole_source_bytes": 108117,
+      "whole_source_sha256_actual": "c0c4b46d6f57bc151a6523010d5ca03ccacffa8bd6a059f5b59fcedfdeaa4364",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "c0c4b46d6f57bc151a6523010d5ca03ccacffa8bd6a059f5b59fcedfdeaa4364",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical night-lamp comparison raster, paired capture sidecar describes requested and observed software renderer; inspected metadata only, no pixel content or lines claimed.",
+      "inspection": [
+        {
+          "method": "whole-byte SHA256 and Pillow header metadata only; no decode/display/pixel review",
+          "start": 0,
+          "end": 108117
+        }
+      ],
+      "binary_metadata": {
+        "format": "JPEG",
+        "width": 1280,
+        "height": 720,
+        "mode": "RGB",
+        "signature_hex": "ffd8ffe000104a464946000101000001"
+      }
+    },
+    {
+      "path": "artifacts/night-lamps-before/mexico-night.jpg.capture.json",
+      "start": 0,
+      "end": 8697,
+      "kind": "text",
+      "sha256": "4c639be51db7e0dca25799afae0fc9a3927e84e978eda113dc4321d7a457f2b2",
+      "whole_source_bytes": 8697,
+      "whole_source_sha256_actual": "4c639be51db7e0dca25799afae0fc9a3927e84e978eda113dc4321d7a457f2b2",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "4c639be51db7e0dca25799afae0fc9a3927e84e978eda113dc4321d7a457f2b2",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Historical capture receipt for mexico night orbit; request, browser/adapter diagnostics, renderer state, camera, simulation/render clocks, readiness, pixel classification, image provenance. Software TLX/WebGPU soft-blit evidence only.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "fd9d53815299bac98e30effed66404d5ab4ff573d6ae888ed8203f62329ea1e1",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8697,
+          "bytes": 197,
+          "sha256": "ec9f0d0dec37e074d9e689924e07f0ab41209fe8bc5bc23d578370bc9da405a7",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 355
+      },
+      "provenance": {
+        "job": {
+          "trackId": "mexico",
+          "frac": 0.8,
+          "cam": "orbit",
+          "az": 45,
+          "el": 18,
+          "dist": 45,
+          "side": 1,
+          "tod": "night",
+          "showHud": false,
+          "team": null,
+          "out": "/workspace/artifacts/night-lamps-before/mexico-night.jpg",
+          "backend": "three",
+          "capture": {
+            "profile": "custom",
+            "width": null,
+            "height": null,
+            "viewport": null,
+            "dpr": 1,
+            "type": null,
+            "quality": null,
+            "scope": "scene",
+            "gpu": "swiftshader",
+            "gpuExplicit": false,
+            "browser": "auto",
+            "trace": false,
+            "tracePath": null,
+            "cacheAssets": false,
+            "reuse": true,
+            "isolated": false,
+            "seed": null,
+            "positionals": []
+          },
+          "viewport": {
+            "width": 1280,
+            "height": 720
+          },
+          "type": "jpeg",
+          "quality": 85,
+          "raster": false
+        },
+        "image": {
+          "path": "/workspace/artifacts/night-lamps-before/mexico-night.jpg",
+          "bytes": 108117,
+          "via": "game-soft",
+          "scope": "scene"
+        },
+        "browser_version": "154.0.8037.92",
+        "software": true,
+        "renderer": {
+          "requested": "three",
+          "actual": "three",
+          "api": "webgpu",
+          "positive": true,
+          "gpuErrors": 0,
+          "softBlit": true,
+          "glow": 5
+        },
+        "pixels": {
+          "brightFraction": 0.8575846354166666,
+          "centerBrightFraction": 0.9654605263157895,
+          "variance": 3135.181320367343,
+          "black": false,
+          "blackHudOnly": false,
+          "meaningful": true,
+          "classification": "scene-content"
+        },
+        "source_version_fields_present": false,
+        "source_commit_recorded": false
+      }
+    },
+    {
+      "path": "cursor-plugins/README.md",
+      "start": 0,
+      "end": 1437,
+      "kind": "text",
+      "sha256": "d735f02a5ccb1630243ade9e31b667225c87350341f1fabd5cd0b205be5d7199",
+      "whole_source_bytes": 1437,
+      "whole_source_sha256_actual": "d735f02a5ccb1630243ade9e31b667225c87350341f1fabd5cd0b205be5d7199",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "d735f02a5ccb1630243ade9e31b667225c87350341f1fabd5cd0b205be5d7199",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Team-only local Cursor packaging and manual copy/symlink/reload discovery instructions; warns outside-directory symlink may be skipped, aligns process rules to repository.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1437,
+          "bytes": 1437,
+          "sha256": "d735f02a5ccb1630243ade9e31b667225c87350341f1fabd5cd0b205be5d7199",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 41
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/.cursor-plugin/plugin.json",
+      "start": 0,
+      "end": 338,
+      "kind": "text",
+      "sha256": "fa9fa86cb20af6ff957eea6093efadcfd130dd9fdad55259cb472b2bb4bb7be5",
+      "whole_source_bytes": 338,
+      "whole_source_sha256_actual": "fa9fa86cb20af6ff957eea6093efadcfd130dd9fdad55259cb472b2bb4bb7be5",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "fa9fa86cb20af6ff957eea6093efadcfd130dd9fdad55259cb472b2bb4bb7be5",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Plugin identity apex-f1-game v0.1.0, author/license/keywords/description; declarative metadata only, no MCP executable.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 338,
+          "bytes": 338,
+          "sha256": "fa9fa86cb20af6ff957eea6093efadcfd130dd9fdad55259cb472b2bb4bb7be5",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 8
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/LICENSE",
+      "start": 0,
+      "end": 1069,
+      "kind": "text",
+      "sha256": "392aebb02cc192a9b9dd3353daa8579f5972fa19eba4eab59b7b9f462a67af41",
+      "whole_source_bytes": 1069,
+      "whole_source_sha256_actual": "392aebb02cc192a9b9dd3353daa8579f5972fa19eba4eab59b7b9f462a67af41",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "392aebb02cc192a9b9dd3353daa8579f5972fa19eba4eab59b7b9f462a67af41",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "MIT copyright, permission/notice inclusion requirement and warranty/liability disclaimer.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1069,
+          "bytes": 1069,
+          "sha256": "392aebb02cc192a9b9dd3353daa8579f5972fa19eba4eab59b7b9f462a67af41",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 21
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/README.md",
+      "start": 0,
+      "end": 940,
+      "kind": "text",
+      "sha256": "b591a1b42a11c6c860a14d8e06967a71f851f10d757ca96f1f00b5aa416be273",
+      "whole_source_bytes": 940,
+      "whole_source_sha256_actual": "b591a1b42a11c6c860a14d8e06967a71f851f10d757ca96f1f00b5aa416be273",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "b591a1b42a11c6c860a14d8e06967a71f851f10d757ca96f1f00b5aa416be273",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Seven packaged team skills and discovery defaults; names repository/branch/model conventions and canonical coordination authority; local install claim is prose rather than observed installation.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 940,
+          "bytes": 940,
+          "sha256": "b591a1b42a11c6c860a14d8e06967a71f851f10d757ca96f1f00b5aa416be273",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 20
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/commands/apex-insights.md",
+      "start": 0,
+      "end": 259,
+      "kind": "text",
+      "sha256": "8c8dce0e6b1d1eeb02c190bd9799f7d0f74a1e16c6da034e711a8fa12d6a25e8",
+      "whole_source_bytes": 259,
+      "whole_source_sha256_actual": "8c8dce0e6b1d1eeb02c190bd9799f7d0f74a1e16c6da034e711a8fa12d6a25e8",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "8c8dce0e6b1d1eeb02c190bd9799f7d0f74a1e16c6da034e711a8fa12d6a25e8",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Command metadata routes to insights digest skill; requests digest path and five bullets including handoff gaps.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 259,
+          "bytes": 259,
+          "sha256": "8c8dce0e6b1d1eeb02c190bd9799f7d0f74a1e16c6da034e711a8fa12d6a25e8",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 5
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/commands/apex-pr-status.md",
+      "start": 0,
+      "end": 233,
+      "kind": "text",
+      "sha256": "6b724a9a1305645593cd5a8e4077fec7a0f5411b9ced22bb37908911c3ecf5d5",
+      "whole_source_bytes": 233,
+      "whole_source_sha256_actual": "6b724a9a1305645593cd5a8e4077fec7a0f5411b9ced22bb37908911c3ecf5d5",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "6b724a9a1305645593cd5a8e4077fec7a0f5411b9ced22bb37908911c3ecf5d5",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Command metadata routes to open-PR matrix skill; returns green/red/pending status; no merge/arm authorization.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 233,
+          "bytes": 233,
+          "sha256": "6b724a9a1305645593cd5a8e4077fec7a0f5411b9ced22bb37908911c3ecf5d5",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 5
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/rules/apex-lanes.mdc",
+      "start": 0,
+      "end": 773,
+      "kind": "text",
+      "sha256": "456d188bf298f1042c9ba5de7d052ac771594b3d76b9b21bd0717ee1adcfa2d0",
+      "whole_source_bytes": 773,
+      "whole_source_sha256_actual": "456d188bf298f1042c9ba5de7d052ac771594b3d76b9b21bd0717ee1adcfa2d0",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "456d188bf298f1042c9ba5de7d052ac771594b3d76b9b21bd0717ee1adcfa2d0",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Agent-requested rule defines specialty ownership lanes, read-only watcher and required handoff fields; references canonical GitHub landing policy.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 773,
+          "bytes": 773,
+          "sha256": "456d188bf298f1042c9ba5de7d052ac771594b3d76b9b21bd0717ee1adcfa2d0",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 15
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/skills/apex-ci-and-pages-watch/SKILL.md",
+      "start": 0,
+      "end": 5527,
+      "kind": "text",
+      "sha256": "74f24d7ede31e28335e06f03d73759d40a1e638bb3eb7934b40482cad7a8455a",
+      "whole_source_bytes": 5527,
+      "whole_source_sha256_actual": "74f24d7ede31e28335e06f03d73759d40a1e638bb3eb7934b40482cad7a8455a",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "74f24d7ede31e28335e06f03d73759d40a1e638bb3eb7934b40482cad7a8455a",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Read/report CI versus Pages versus live-site evidence; failures require exact logs/assertions, watcher by SHA, named deploy protocol; contains historical example failures and workflow id. No grant to execute these actions during mapping.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 5527,
+          "bytes": 5527,
+          "sha256": "74f24d7ede31e28335e06f03d73759d40a1e638bb3eb7934b40482cad7a8455a",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 66
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/skills/apex-cloud-agent-launch/SKILL.md",
+      "start": 0,
+      "end": 3839,
+      "kind": "text",
+      "sha256": "1c8c3a56a5a0a0ccdd8f5e3f4b58bb713618611c18b48ca440e19a3662ed6bb7",
+      "whole_source_bytes": 3839,
+      "whole_source_sha256_actual": "1c8c3a56a5a0a0ccdd8f5e3f4b58bb713618611c18b48ca440e19a3662ed6bb7",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "1c8c3a56a5a0a0ccdd8f5e3f4b58bb713618611c18b48ca440e19a3662ed6bb7",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Cloud launch prerequisites, environment/MCP selection, default model, prompt ownership/handoff, quotas and stall recovery; contains historical checkpoint-freeze and specialist FYI guidance.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 3839,
+          "bytes": 3839,
+          "sha256": "1c8c3a56a5a0a0ccdd8f5e3f4b58bb713618611c18b48ca440e19a3662ed6bb7",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 37
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/skills/apex-garage-collision-guard/SKILL.md",
+      "start": 0,
+      "end": 1245,
+      "kind": "text",
+      "sha256": "3472386850a701549f13d8367b823463baba170ca6ddc519524dc202affa6856",
+      "whole_source_bytes": 1245,
+      "whole_source_sha256_actual": "3472386850a701549f13d8367b823463baba170ca6ddc519524dc202affa6856",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "3472386850a701549f13d8367b823463baba170ca6ddc519524dc202affa6856",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Garage UI versus mesh/defaults ownership, inspect open PR collisions and avoid duplicate launches; Cars cap and historical defaults lane.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1245,
+          "bytes": 1245,
+          "sha256": "3472386850a701549f13d8367b823463baba170ca6ddc519524dc202affa6856",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 25
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/skills/apex-insights-digest/SKILL.md",
+      "start": 0,
+      "end": 1077,
+      "kind": "text",
+      "sha256": "1c6765f58652ed953a8be30df802bd8387d4b58d8c1fff092bb0e0daf2591d0c",
+      "whole_source_bytes": 1077,
+      "whole_source_sha256_actual": "1c6765f58652ed953a8be30df802bd8387d4b58d8c1fff092bb0e0daf2591d0c",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "1c6765f58652ed953a8be30df802bd8387d4b58d8c1fff092bb0e0daf2591d0c",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Read transcript/survey/status sources, write dated digest with ranked issues and five bullets; no automatic fleet launch.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1077,
+          "bytes": 1077,
+          "sha256": "1c6765f58652ed953a8be30df802bd8387d4b58d8c1fff092bb0e0daf2591d0c",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 25
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/skills/apex-open-pr-status-matrix/SKILL.md",
+      "start": 0,
+      "end": 1194,
+      "kind": "text",
+      "sha256": "717f901274fb76e07a97b3315c37ddd9605cb2d5217c65c7f9df99bcb9d3f33e",
+      "whole_source_bytes": 1194,
+      "whole_source_sha256_actual": "717f901274fb76e07a97b3315c37ddd9605cb2d5217c65c7f9df99bcb9d3f33e",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "717f901274fb76e07a97b3315c37ddd9605cb2d5217c65c7f9df99bcb9d3f33e",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Read open PR metadata/checks, write JSON/table and classify green/pending/red; read/report, no merge/arm.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1194,
+          "bytes": 1194,
+          "sha256": "717f901274fb76e07a97b3315c37ddd9605cb2d5217c65c7f9df99bcb9d3f33e",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 22
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/skills/apex-specialty-handoff/SKILL.md",
+      "start": 0,
+      "end": 1558,
+      "kind": "text",
+      "sha256": "9b120a88828b705a54f791fd2ed1f83aea06fadc8e66380c06b084408639cfb7",
+      "whole_source_bytes": 1558,
+      "whole_source_sha256_actual": "9b120a88828b705a54f791fd2ed1f83aea06fadc8e66380c06b084408639cfb7",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "9b120a88828b705a54f791fd2ed1f83aea06fadc8e66380c06b084408639cfb7",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Specialty lanes, paths/PR/session/owned/next/blocker handoff, priority message conventions; no fanout grant.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1558,
+          "bytes": 1558,
+          "sha256": "9b120a88828b705a54f791fd2ed1f83aea06fadc8e66380c06b084408639cfb7",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 36
+      }
+    },
+    {
+      "path": "cursor-plugins/apex-f1-game/skills/apex-ui-screenshot-runbook/SKILL.md",
+      "start": 0,
+      "end": 1289,
+      "kind": "text",
+      "sha256": "9488056919529281c8caa016b9a8ed8fa182d9915adb74cc507ef375c12393a0",
+      "whole_source_bytes": 1289,
+      "whole_source_sha256_actual": "9488056919529281c8caa016b9a8ed8fa182d9915adb74cc507ef375c12393a0",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "9488056919529281c8caa016b9a8ed8fa182d9915adb74cc507ef375c12393a0",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Ordered menu/garage/race/mode/career/net/tuner/edge capture checklist, one desktop agent, stop unsupported GPU race capture, stable slugs.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1289,
+          "bytes": 1289,
+          "sha256": "9488056919529281c8caa016b9a8ed8fa182d9915adb74cc507ef375c12393a0",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 31
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/README.md",
+      "start": 0,
+      "end": 1958,
+      "kind": "text",
+      "sha256": "31fc710af1cfe1916679ce8d3df0601c09f9bacd5ccf3cc6d02d0d83632045e6",
+      "whole_source_bytes": 1958,
+      "whole_source_sha256_actual": "31fc710af1cfe1916679ce8d3df0601c09f9bacd5ccf3cc6d02d0d83632045e6",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "31fc710af1cfe1916679ce8d3df0601c09f9bacd5ccf3cc6d02d0d83632045e6",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Concept-body measurement/camera review recipes and historical baselines; distinguishes factory fit and probe baseline; camera coordinates, crop and garage framing guidance. Referenced tools/data availability must be checked separately.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1958,
+          "bytes": 1958,
+          "sha256": "31fc710af1cfe1916679ce8d3df0601c09f9bacd5ccf3cc6d02d0d83632045e6",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 27
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/build-gallery.mjs",
+      "start": 0,
+      "end": 6441,
+      "kind": "text",
+      "sha256": "85f6612703549bfb21cdc865aeb496001ada9317520d04dac173d769ec9898dc",
+      "whole_source_bytes": 6441,
+      "whole_source_sha256_actual": "85f6612703549bfb21cdc865aeb496001ada9317520d04dac173d769ec9898dc",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "85f6612703549bfb21cdc865aeb496001ada9317520d04dac173d769ec9898dc",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Reads envelope JSON and source JPEGs, applies lowerEnvelope; GAL/ROUND/SHA/FIT/SIDE/SBS/STATE configure four-body static HTML with embedded JPEG data and external font stylesheet; overwrites scratch HTML, prints approximate KB. Input strings interpolated without HTML escaping; presentation authoring utility, no runtime registration.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 6441,
+          "bytes": 6441,
+          "sha256": "85f6612703549bfb21cdc865aeb496001ada9317520d04dac173d769ec9898dc",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 57
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/cmp.mjs",
+      "start": 0,
+      "end": 2018,
+      "kind": "text",
+      "sha256": "3d673c09758d2667ec9c1350d8e36754c6abf79ce3c6c41346b1feccf42bd55a",
+      "whole_source_bytes": 2018,
+      "whole_source_sha256_actual": "3d673c09758d2667ec9c1350d8e36754c6abf79ce3c6c41346b1feccf42bd55a",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "3d673c09758d2667ec9c1350d8e36754c6abf79ce3c6c41346b1feccf42bd55a",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "CLI shot, front|rear, optional crop/output; sharp extracts fixed concept-sheet crop and resizes shot into stacked comparison JPEG. Validates output directory lexical and canonical paths, refuses symlink output and source-image alias by realpath/device/inode; creates output directory. CWD-relative inputs vs repository-root-relative output.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2018,
+          "bytes": 2018,
+          "sha256": "3d673c09758d2667ec9c1350d8e36754c6abf79ce3c6c41346b1feccf42bd55a",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 27
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/envelope-limits.mjs",
+      "start": 0,
+      "end": 522,
+      "kind": "text",
+      "sha256": "177751031ce2b9e516cf9e86224a74c5a55c4950f67f7c4764d4d82db27df46c",
+      "whole_source_bytes": 522,
+      "whole_source_sha256_actual": "177751031ce2b9e516cf9e86224a74c5a55c4950f67f7c4764d4d82db27df46c",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "177751031ce2b9e516cf9e86224a74c5a55c4950f67f7c4764d4d82db27df46c",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Imports frozen JSON at module evaluation; lowerEnvelope maps current dimensions to min(current,frozen), rejecting any nonfinite/missing counterpart; exports frozen and helper. Iterates current keys, so extra frozen-only keys are not independently required.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 522,
+          "bytes": 522,
+          "sha256": "177751031ce2b9e516cf9e86224a74c5a55c4950f67f7c4764d4d82db27df46c",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 10
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/envelope.mjs",
+      "start": 0,
+      "end": 1917,
+      "kind": "text",
+      "sha256": "f3e638843b11da8eb7c4757c0b8cb7715de6e917240aff737336fcd6895088f0",
+      "whole_source_bytes": 1917,
+      "whole_source_sha256_actual": "f3e638843b11da8eb7c4757c0b8cb7715de6e917240aff737336fcd6895088f0",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "f3e638843b11da8eb7c4757c0b8cb7715de6e917240aff737336fcd6895088f0",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Loads offline parts and dims; NEW names excluded from shipped population and compared if registered; mclaren style dimension population yields rounded linear-interpolated p25/p75; lowerEnvelope enforces frozen ceiling; --json or text report. Overages are reported, no explicit nonzero exit for overage.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1917,
+          "bytes": 1917,
+          "sha256": "f3e638843b11da8eb7c4757c0b8cb7715de6e917240aff737336fcd6895088f0",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 25
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/fit-diff.mjs",
+      "start": 0,
+      "end": 1833,
+      "kind": "text",
+      "sha256": "5a1fbb7af7bb7f0c2a23a4a96d4fd8858900099caaec65e7b4c6af76c6c7daef",
+      "whole_source_bytes": 1833,
+      "whole_source_sha256_actual": "5a1fbb7af7bb7f0c2a23a4a96d4fd8858900099caaec65e7b4c6af76c6c7daef",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "5a1fbb7af7bb7f0c2a23a4a96d4fd8858900099caaec65e7b4c6af76c6c7daef",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "CLI reads audit JSON; optional BASE_JSON extends baseline rows for BASE default factory; pairs unordered check/a/b by team; NEW thresholds plus noise, WORSE value increment or count increase >=25% and >=3; skips factory/probe styles; prints totals and first 14 findings per style. Assumes matching baseline team exists; report has no failing exit status.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1833,
+          "bytes": 1833,
+          "sha256": "5a1fbb7af7bb7f0c2a23a4a96d4fd8858900099caaec65e7b4c6af76c6c7daef",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 17
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/fit-probe.mjs",
+      "start": 0,
+      "end": 2329,
+      "kind": "text",
+      "sha256": "40043317b5ae066d8fb4b9bcada1d571199232e3d2d7d9aa84c251a290e874b4",
+      "whole_source_bytes": 2329,
+      "whole_source_sha256_actual": "40043317b5ae066d8fb4b9bcada1d571199232e3d2d7d9aa84c251a290e874b4",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "40043317b5ae066d8fb4b9bcada1d571199232e3d2d7d9aa84c251a290e874b4",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "On import monkeypatches process-global fs.readFileSync to expose part from/to in car3d source, then loads VM parts with ROUND truthiness selecting shade. build uses team factory visual tiers, requested style, number 4 and measure mode. cast projects triangles for x/y/z rays, barycentric intersections with epsilon, assigns first-index section, rounds crossings to 4 decimals and deduplicates. Patch is not restored.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 2329,
+          "bytes": 2329,
+          "sha256": "40043317b5ae066d8fb4b9bcada1d571199232e3d2d7d9aa84c251a290e874b4",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 35
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/identical.mjs",
+      "start": 0,
+      "end": 1527,
+      "kind": "text",
+      "sha256": "42a8e13e72daa408c30219490f94c5175d976cfe0bb1ec7e87a09ed9c2331705",
+      "whole_source_bytes": 1527,
+      "whole_source_sha256_actual": "42a8e13e72daa408c30219490f94c5175d976cfe0bb1ec7e87a09ed9c2331705",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "42a8e13e72daa408c30219490f94c5175d976cfe0bb1ec7e87a09ed9c2331705",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Offline SHA1 regression signature across teams/styles, square+rounded and field variants, hashing Float32 positions/colors and Uint32 indices. SKIP omits styles; HEAD_REF installs global readFileSync override that executes git show for JS files, silently falls back on failure. Ref is shell-interpolated; trusted author utility. Prints build count/hash, does not compare baseline or exit on mismatch.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 1527,
+          "bytes": 1527,
+          "sha256": "42a8e13e72daa408c30219490f94c5175d976cfe0bb1ec7e87a09ed9c2331705",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 16
+      }
+    },
+    {
+      "path": "design-preview/concept-bodies/measure.mjs",
+      "start": 0,
+      "end": 358,
+      "kind": "text",
+      "sha256": "436c59345e8453ae4b350bf04037b17842b7d0961b00ab219a7f9e25a6c7c397",
+      "whole_source_bytes": 3000,
+      "whole_source_sha256_actual": "436c59345e8453ae4b350bf04037b17842b7d0961b00ab219a7f9e25a6c7c397",
+      "plan_hash_scope": "whole source, not part",
+      "plan_hash_matches": true,
+      "part_sha256": "fb6b6be03b8c90cd93bb92b407a96ae0d5384008b9100cbc599ce0e72a01e749",
+      "range_semantics": "half-open byte offsets",
+      "semantic_map": "Assigned prefix only: Round-4 millimetre measurement commentary and build/cast/Teams import; starts mm rounding helper and ends mid-expression. Remaining implementation belongs to next batch; no claim that this prefix defines dims.",
+      "inspection": [
+        {
+          "start": 0,
+          "end": 358,
+          "bytes": 358,
+          "sha256": "fb6b6be03b8c90cd93bb92b407a96ae0d5384008b9100cbc599ce0e72a01e749",
+          "method": "Python Path.read_bytes slice decoded UTF-8; individually returned exec_command result, max_output_tokens 4000 or 5000; complete output",
+          "untruncated": true
+        }
+      ],
+      "line_span": {
+        "first": 1,
+        "last": 5
+      }
+    }
+  ],
+  "cross_checks": [
+    {
+      "method": "apex-lsp lsp_definition",
+      "query": "Car3D.buildComplete",
+      "result": "js/car/car3d.js:2867 definition; module-file fallback, export/caller coverage explicitly unverified"
+    },
+    {
+      "method": "apex-lsp lsp_references files:true",
+      "query": "Car3D.buildComplete",
+      "result": "2 references in js/car/car3d.js only; fallback does not cover auxiliary Node scripts"
+    },
+    {
+      "method": "apex-lsp lsp_definition",
+      "query": "Parts.getVisualTiers",
+      "result": "js/car/parts.js:1026 definition, 1039 export"
+    },
+    {
+      "method": "apex-lsp lsp_definition",
+      "query": "Teams.LIST",
+      "result": "js/data/teams.js:31 definition,393 export"
+    },
+    {
+      "method": "bounded supporting source read",
+      "path": "tools/car/parts-sweep.mjs",
+      "lines": [
+        95,
+        123
+      ],
+      "finding": "loadParts builds VM from actual runtime files, optional shade; lexical bindings returned via VM evaluation, allowing Node script consumers outside js LSP scope"
+    },
+    {
+      "method": "bounded supporting source read",
+      "path": "tools/shot/shot.mjs",
+      "lines": [
+        190,
+        226
+      ],
+      "finding": "Current shot writes capture sidecar after pixel/renderer diagnostics, includes version/source/frame/viewport; assigned older receipts lack these stronger provenance fields."
+    },
+    {
+      "method": "text reference search",
+      "path": "package.json",
+      "lines": [
+        46,
+        47,
+        75
+      ],
+      "finding": "gen/gen:check own Cursor mirrors; prepare activates Git hooks"
+    },
+    {
+      "method": "text reference search and bounded read",
+      "path": "tests/unit/cross-tool-guards.test.mjs",
+      "lines": [
+        38,
+        90
+      ],
+      "finding": "Direct consumers exercise config adapters and fail-closed translation; deterministic fixture checks do not establish host trust/invocation"
+    },
+    {
+      "method": "text reference search",
+      "path": "tests/unit/agent-config.test.mjs",
+      "lines": [
+        203,
+        217
+      ],
+      "finding": "Generated Cursor twins checked for drift"
+    },
+    {
+      "method": "text reference search",
+      "path": "tests/unit/f1-dev-tools.test.mjs",
+      "lines": [
+        10,
+        330
+      ],
+      "finding": "Imports lowerEnvelope; tests frozen cap/nonfinite key plus cmp input-output safety, without executing any tests during this audit"
+    }
+  ],
+  "cleanup_candidates": [
+    {
+      "location": ".cursor/hooks/mcp-guard.sh header",
+      "reason": "Person-confirmation wording is older than canonical no-session-merge/arm policy; adapter delegates current shared guard. Align comment without changing permission behavior."
+    },
+    {
+      "location": "AGENTS.md hook summary and .githooks/pre-push header",
+      "reason": "Claims that Codex/other hosts never load shell hooks conflict with tracked Codex/Cursor adapters; distinguish host trust/invocation from configuration."
+    },
+    {
+      "location": "design-preview/concept-bodies/envelope.mjs, fit-diff.mjs, fit-probe.mjs, measure.mjs comments; build-gallery footer",
+      "reason": "Old scratch and sibling prototype usage paths remain; raw old paths retained in JSON references below."
+    },
+    {
+      "location": "cursor-plugins packaged runbooks",
+      "reason": "Historical freeze, quota caps, workflow numeric id, defaults issue and local install claim require revalidation against canonical coordination before reuse; mapping did not execute them."
+    }
+  ],
+  "historical_or_external_references": [
+    {
+      "source": ".codex/hooks/mcp-guard.sh",
+      "references": [
+        "https://learn.chatgpt.com/docs/hooks,"
+      ]
+    },
+    {
+      "source": ".cursor/hooks/edit-guard.sh",
+      "references": [
+        "https://cursor.com/docs/agent/hooks",
+        "https://cursor.com/docs/reference/third-party-hooks"
+      ]
+    },
+    {
+      "source": ".cursor/hooks/mcp-guard.sh",
+      "references": [
+        "https://cursor.com/docs/agent/hooks"
+      ]
+    },
+    {
+      "source": ".cursor/hooks/shell-guard.sh",
+      "references": [
+        "https://cursor.com/docs/agent/hooks"
+      ]
+    },
+    {
+      "source": ".cursor/rules/claude-config.mdc",
+      "references": [
+        "artifacts/."
+      ]
+    },
+    {
+      "source": ".githooks/pre-commit",
+      "references": [
+        "artifacts/pre-commit-guards.log",
+        "artifacts/pre-commit-guards.ok,",
+        "artifacts/pre-commit-ratchets.log",
+        "https://git-scm.com/docs/githooks#_description"
+      ]
+    },
+    {
+      "source": "artifacts/findings.md",
+      "references": [
+        "artifacts/findings.md",
+        "artifacts/shots/menus-settings-htp/",
+        "artifacts/shots/menus-settings-htp/*.png",
+        "artifacts/shots/menus-settings-htp/manifest.json",
+        "https://brycejmurrin.github.io/f1-game/`",
+        "https://github.com/brycejmurrin/f1-game/tree/cb0cb2c386dbda6f45d4984cfb4c297a520556b0/artifacts/shots/menus-settings-htp",
+        "scratch/shots-menus/capture-live.mjs"
+      ]
+    },
+    {
+      "source": "artifacts/night-lamps-after/albert_park-night.jpg.capture.json",
+      "references": [
+        "/workspace/artifacts/night-lamps-after/albert_park-night.jpg"
+      ]
+    },
+    {
+      "source": "artifacts/night-lamps-after/dijon-night.jpg.capture.json",
+      "references": [
+        "/workspace/artifacts/night-lamps-after/dijon-night.jpg"
+      ]
+    },
+    {
+      "source": "artifacts/night-lamps-after/kyalami-night.jpg.capture.json",
+      "references": [
+        "/workspace/artifacts/night-lamps-after/kyalami-night.jpg"
+      ]
+    },
+    {
+      "source": "artifacts/night-lamps-after/mexico-night.jpg.capture.json",
+      "references": [
+        "/workspace/artifacts/night-lamps-after/mexico-night.jpg"
+      ]
+    },
+    {
+      "source": "artifacts/night-lamps-before/albert_park-night.jpg.capture.json",
+      "references": [
+        "/workspace/artifacts/night-lamps-before/albert_park-night.jpg"
+      ]
+    },
+    {
+      "source": "artifacts/night-lamps-before/dijon-night.jpg.capture.json",
+      "references": [
+        "/workspace/artifacts/night-lamps-before/dijon-night.jpg"
+      ]
+    },
+    {
+      "source": "artifacts/night-lamps-before/kyalami-night.jpg.capture.json",
+      "references": [
+        "/workspace/artifacts/night-lamps-before/kyalami-night.jpg"
+      ]
+    },
+    {
+      "source": "artifacts/night-lamps-before/mexico-night.jpg.capture.json",
+      "references": [
+        "/workspace/artifacts/night-lamps-before/mexico-night.jpg"
+      ]
+    },
+    {
+      "source": "cursor-plugins/README.md",
+      "references": [
+        "https://cursor.com/docs/plugins"
+      ]
+    },
+    {
+      "source": "cursor-plugins/apex-f1-game/README.md",
+      "references": [
+        "https://github.com/brycejmurrin/f1-game`."
+      ]
+    },
+    {
+      "source": "cursor-plugins/apex-f1-game/skills/apex-ci-and-pages-watch/SKILL.md",
+      "references": [
+        "https://brycejmurrin.github.io/f1-game/"
+      ]
+    },
+    {
+      "source": "cursor-plugins/apex-f1-game/skills/apex-cloud-agent-launch/SKILL.md",
+      "references": [
+        "https://cursor.com/agents",
+        "https://cursor.com/dashboard/cloud-agents/environments/e/819b740b-ac05-11f1-b532-320a589b8025",
+        "https://github.com/brycejmurrin/f1-game`"
+      ]
+    },
+    {
+      "source": "cursor-plugins/apex-f1-game/skills/apex-insights-digest/SKILL.md",
+      "references": [
+        "/workspace/apex-*/**/*.md",
+        "/workspace/apex-insights/digest-YYYY-MM-DD.md",
+        "/workspace/apex-status-*/",
+        "/workspace/cloud-agent-transcripts/"
+      ]
+    },
+    {
+      "source": "cursor-plugins/apex-f1-game/skills/apex-open-pr-status-matrix/SKILL.md",
+      "references": [
+        "/workspace/apex-status-YYYY-MM-DD/open-prs.json"
+      ]
+    },
+    {
+      "source": "cursor-plugins/apex-f1-game/skills/apex-ui-screenshot-runbook/SKILL.md",
+      "references": [
+        "/workspace/apex-shots/",
+        "https://brycejmurrin.github.io/f1-game/`"
+      ]
+    },
+    {
+      "source": "design-preview/concept-bodies/README.md",
+      "references": [
+        "https://claude.ai/artifact/UkMYBoXeRp59rtT2pTTk38"
+      ]
+    },
+    {
+      "source": "design-preview/concept-bodies/build-gallery.mjs",
+      "references": [
+        "https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400&display=swap\"",
+        "scratch/d1d/concept-bodies.html",
+        "scratch/d1d/env.json",
+        "scratch/d1d/gal/"
+      ]
+    },
+    {
+      "source": "design-preview/concept-bodies/cmp.mjs",
+      "references": [
+        "scratch/d1d-ref.png",
+        "scratch/d1d/cmp.jpg"
+      ]
+    },
+    {
+      "source": "design-preview/concept-bodies/envelope.mjs",
+      "references": [
+        "scratch/d1d/envelope.mjs"
+      ]
+    },
+    {
+      "source": "design-preview/concept-bodies/fit-diff.mjs",
+      "references": [
+        "artifacts/logs/d1d-fit-new.json",
+        "scratch/d1d/fit-diff.mjs"
+      ]
+    }
+  ],
+  "limits": [
+    "No installed plugin or host hook activation verified.",
+    "LSP runtime query explicitly fallback-limited; auxiliary calls established from fully read scripts and VM loader supporting span.",
+    "No binaries displayed; night visual quality and current regressions unverified.",
+    "Capture receipts carry no source SHA, and Kyalami after raster is 1152x648 versus 1280x720 before despite same requested viewport; no pixel comparison claim.",
+    "measure.mjs only assigned [0,358) of 3000 bytes; remainder not credited here.",
+    "No tests or runtime actions performed."
+  ]
+}

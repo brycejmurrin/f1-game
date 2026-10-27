@@ -1,0 +1,392 @@
+{
+  "group": "03",
+  "assignedBytes": 160000,
+  "method": "Whole-file SHA-256 identifies each snapshot independently of assigned byte-range/chunk SHA-256 coverage. All assigned text returned in individual <=9000-byte untruncated tool calls; no binary assigned. Initial aggregate batch/root instruction reads were truncated and are not coverage evidence: root instructions reread in <=8500-byte slices; assigned group extracted independently.",
+  "scope": "Static map only; no tests/browser/network/runtime/source edits/stage/commit. Historical instructions and recommendations treated as content.",
+  "instructionReads": [
+    "AGENTS.md",
+    ".claude/skills/code-nav/SKILL.md"
+  ],
+  "nestedInstructions": "Checked docs, docs/project-map, scratch, scratch/h23 and scratch/h23/census: no nested AGENTS.md.",
+  "symbolEvidence": [
+    {
+      "method": "attached apex-lsp lsp_outline",
+      "query": "GLX",
+      "result": "js/render/shared/glx-facade.js:5; exports install:21,isMobile:12,mobileTier:18; facade runtime backend members are dynamically installed."
+    },
+    {
+      "method": "attached apex-lsp lsp_definition",
+      "queries": [
+        "ApexAgent.race",
+        "__apex.race",
+        "GLX.api"
+      ],
+      "result": "Not resolved: first global absent, checker sees no race/api member. No fabricated current definition; audited harness calls mapped from source only."
+    }
+  ],
+  "textConsumerSearch": {
+    "roots": [
+      "docs",
+      "tools",
+      ".github",
+      "package.json",
+      "scratch/h23",
+      ".gitignore"
+    ],
+    "consumers": [
+      "docs/notes/PHONE-RENDERER-AB-2026-10-21.md:11,51,85,102",
+      "scratch/h23/facts.json:209",
+      "scratch/h23/diff.py:4",
+      ".github/workflows/gpu-census.yml:604-608,626-629"
+    ],
+    "limit": "Scoped textual reference search identifies historical note/facts and producer filename pattern; not proof of no other consumers. No shipped manifest reference established."
+  },
+  "supportReads": [
+    {
+      "path": "scratch/h23/ab.mjs",
+      "range": [
+        0,
+        4000
+      ],
+      "purpose": "CLI/import/browser-profile context only"
+    },
+    {
+      "path": "docs/notes/PHONE-RENDERER-AB-2026-10-21.md",
+      "ranges": [
+        [
+          0,
+          8000
+        ],
+        [
+          8000,
+          9122
+        ]
+      ],
+      "purpose": "Contemporary consumer, provenance, owner decision and corrected sky interpretation"
+    },
+    {
+      "path": "tools/diag/gpu-game-check.mjs",
+      "status": "missing guessed path; no source claim; workflow identifies tools/gfx/gpu-game-check.mjs"
+    }
+  ],
+  "provenance": {
+    "run": "39549012663",
+    "captureBuild": 1695,
+    "ciRoot": "/Users/runner/work/f1-game/f1-game",
+    "historicalLocalRoot": "/home/user/f1-game",
+    "interpretation": "Existing text provenance only; no network verification performed."
+  },
+  "files": [
+    {
+      "path": "scratch/h23/ab.mjs",
+      "start": 8924,
+      "end": 15300,
+      "kind": "text",
+      "sha256": "3a06517f44f727786f75192d2eaad8708d1c1a4cf9d2d962d720adb956a8ef0e",
+      "actualBytes": 15300,
+      "wholeSourceSha256": "3a06517f44f727786f75192d2eaad8708d1c1a4cf9d2d962d720adb956a8ef0e",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "05fa94f41024e2c4fa549e8387516ca73bf4951e41df4e89aeb3f12ab84576df",
+      "coverage": "assigned partial source",
+      "reads": [
+        {
+          "start": 8924,
+          "end": 15300,
+          "bytes": 6376,
+          "sha256": "05fa94f41024e2c4fa549e8387516ca73bf4951e41df4e89aeb3f12ab84576df",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        }
+      ],
+      "semanticMap": {
+        "supportname": "phone renderer A/B harness tail",
+        "role": "Retained one-off diagnostic CLI, not a shipped runtime module",
+        "contracts": [
+          "Assigned tail continues memory sample return, then raceTo, toMenu, mem, perf, installDriver and top-level mode dispatch. Head/import setup belongs to group02; 0:4000 was additionally read for dependency context.",
+          "raceTo stops previous driver, freezes, awaits race(track, day, dry, grid tier), waits for any truthy info().track, unfreezes; three attempts with 3-second sleeps, then throws. Does not verify the requested track equals returned track.",
+          "mem samples menu after 6 seconds then monza/monaco/spa in one browser, go plus 10-second settling per race; emits backend/tier/env/rows/errors JSON in finally.",
+          "perf accepts --tracks (monza,monaco), --secs (30), --throttle (4), allows 4-second track settle and 3-second driving warm-up, applies CDP CPU throttle, marks measurement, stops driver, resets throttle to 1 and emits rows in finally.",
+          "Driver uses probe and scan over 5..160m step6; curvature speed targets bounded 11..94, lateral acceleration13/braking24, steering gain2.4, acceleration hold ramp30; clamps steering and stalled recovery, records requestAnimationFrame intervals and positive progress deltas below50m.",
+          "Driver start calls freeze(false), go(), hud(true); mark clears intervals/distance but retains prior timing/progress state. Stop returns frame quantiles/fps/metres and governor snapshot. Empty samples can serialize nonfinite fps as null."
+        ],
+        "dependencies": [
+          "node fs/path/url",
+          "tools/lib/harness.mjs launchChromium/shutdown/sleep/startStaticServer",
+          "tools/shot/probe-page.mjs awaitPresentedFrame/openGarage",
+          "window.__apex debugging surface",
+          "CDP Emulation/Runtime/HeapProfiler"
+        ],
+        "sideEffects": [
+          "Creates output directory and overwrites per-mode backend JSON; logs samples/retries; launches local server/browser via boot; changes page localStorage, race/input/HUD/freeze and CDP throttling; browser/server close in finally and outer shutdown.",
+          "Memory/perf finally obtains env with caught errors then writes before closing: a write failure can bypass browser.close/srv.close; outer shutdown is still invoked."
+        ],
+        "cleanup": [
+          "raceTo comment says retry once but implementation makes three total attempts; clarify before reuse.",
+          "Output comment advertises nested per-mode directories although memory/perf write flat named JSON.",
+          "Unused toMenu and unused driver state s0 are retained scratch code; no deletion performed."
+        ],
+        "limits": [
+          "Historical run code read only, never executed.",
+          "Truthiness gate is weaker than track identity or race start commitment; pre-measurement settle delays do not prove asynchronous start completion.",
+          "Local SwiftShader plus CPU throttle measurements cannot establish real phone performance."
+        ]
+      }
+    },
+    {
+      "path": "scratch/h23/build_gallery.py",
+      "start": 0,
+      "end": 10059,
+      "kind": "text",
+      "sha256": "ebc1349e3c01ded842c4adb390e8f66f086ae80897a22b2b2ab48c70a867b694",
+      "actualBytes": 10059,
+      "wholeSourceSha256": "ebc1349e3c01ded842c4adb390e8f66f086ae80897a22b2b2ab48c70a867b694",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "ebc1349e3c01ded842c4adb390e8f66f086ae80897a22b2b2ab48c70a867b694",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "b35b1a5f6e3f2e693751d0a3859c7cfd20ad54d585b07cac9baca349a11d2426",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 8500,
+          "end": 10059,
+          "bytes": 1559,
+          "sha256": "82632b5c0a495a74f9fbfe3ca7bdeff4673e444fa3f66371b11ebad575282dc3",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        }
+      ],
+      "semanticMap": {
+        "supportname": "phone renderer gallery builder",
+        "role": "Offline Python stdlib HTML report generator",
+        "contracts": [
+          "Loads gallery pairs keyed by pair and hand-assembled facts; ORDER fixes twelve scene cards, silently skips missing pairs, and captions override notes.",
+          "Pairs require pctDiff/mad/lumTLX/lumGLX; pctDiff severity is high >=15, mid >=5, otherwise low. Generates paired JPGs, crop-flip JPGs and heatmap paths by key.",
+          "Facts requires date/round/setup/recommendation/tiles/memRows/perfRows/perfHead/gapRows and notes/footer. Documentation claims mem/perf/census input but implementation directly reads only pairs and facts.",
+          "Escapes headings/text/notes; table cell values and recommendation are deliberately interpolated HTML from trusted local facts.",
+          "Generated report includes responsive duo/crop layouts, system dark mode and data-theme selectors, font stylesheet, native keyboard Enter/space and click crop switching."
+        ],
+        "dependencies": [
+          "Python json/os/html stdlib",
+          "sibling pairs/facts JSON and generated JPG assets",
+          "Google Fonts URLs referenced in generated output; builder itself makes no network request"
+        ],
+        "sideEffects": [
+          "Overwrites gallery index.html using default text encoding and reports path/character count; requires existing gallery directory and valid schema.",
+          "Generated webpage may request Google Fonts when opened; lazy-loads sibling images."
+        ],
+        "cleanup": [
+          "Update docstring to state actual two JSON inputs; census and mem/perf influence facts indirectly.",
+          "Keep recommendation visibly historical: contemporary note records owner chose TLX default and corrected sky differences as software fallback artifacts."
+        ],
+        "limits": [
+          "No schema validation or missing-input recovery. Local facts are HTML-trusted; not appropriate for untrusted table cells/recommendation.",
+          "Gallery HTML/JPG output not assigned, not generated or visually inspected."
+        ]
+      }
+    },
+    {
+      "path": "scratch/h23/census/game-glx-macos-latest.json",
+      "start": 0,
+      "end": 60972,
+      "kind": "text",
+      "sha256": "315c9b5e1c76e5bdc0a08083bf0d4073fabd6dfb3c634e84cd6e11b4e1522608",
+      "actualBytes": 60972,
+      "wholeSourceSha256": "315c9b5e1c76e5bdc0a08083bf0d4073fabd6dfb3c634e84cd6e11b4e1522608",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "315c9b5e1c76e5bdc0a08083bf0d4073fabd6dfb3c634e84cd6e11b4e1522608",
+      "coverage": "whole-source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "ef730770b8516185450bde816be691b0a54dcc0a3095e475848cdbe2e1c328c4",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "5a0ff1ea42cd0cb8cebd778a5780322f40a48212834bdcc0d0ef8b8466150486",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 18000,
+          "end": 27000,
+          "bytes": 9000,
+          "sha256": "0186a8c487e6b95cb58b8d8d5daa81b90116fae9e38c2d7a96c0e2269cda54f1",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 27000,
+          "end": 36000,
+          "bytes": 9000,
+          "sha256": "92d6736cb48df2b01820dcebc431629713cca6eb1125a6437f7fa06fcdf65a1a",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 36000,
+          "end": 45000,
+          "bytes": 9000,
+          "sha256": "8cb0c8efcb60e9d0711b67d8f6000098948959c2125e7c93fdfe928f0193d26a",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 45000,
+          "end": 54000,
+          "bytes": 9000,
+          "sha256": "c592ff2c331ba173bad0a514c53d1a1806abcb4f2cf912e96f9ad2d1fdad9b71",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 54000,
+          "end": 60972,
+          "bytes": 6972,
+          "sha256": "aa4588aa2b022f417397257ff8b9bc4588a200f9cd23f34b8d7550a3e8ed3068",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        }
+      ],
+      "semanticMap": {
+        "supportname": "macOS GLX census capture",
+        "role": "Retained static diagnostic result, not executable configuration",
+        "contracts": [
+          "darwin arm64 Apple adapter; backend webgl2, path webgpu label is a generic argument and does not establish WGX; gfx.api and overlay confirm live GLX WebGL2.",
+          "Monza dry default time-of-day, helmet camera, API race entry, twenty beats, 547 driven frames /824m /42.2 mean speed /zero offroad frames; phase done and ok true.",
+          "Data groups include raceEntryProfile marks/legs, beats, mirror, CPU samples, driven-window intervals, gap/LoAF attribution, build/race profile, GPU work, hitch, occlusion and multiDraw off/off2/on image comparisons, graphics/governor state and teardown flags.",
+          "Window 24.9fps, p50 33.4ms, p95 78ms, max1394.5ms; raceEntry5916.2ms, longest1439ms; GPU median12.9ms at scale0.9 canvas1152x648, main+post span explicitly excludes other passes.",
+          "Occlusion image delta73.774% above floor0.608%, GPU paired delta+6.1% and noise-15.7%; multiDraw delta0.297% versus floor0.285%, aboveFloor false, paired delta-0.1%. These are recorded observations, no recommendation inferred."
+        ],
+        "dependencies": [
+          "Produced by GPU census workflow/game-check tool family; retained copy associated with run39549012663 in contemporary note",
+          "Named PNG captures are provenance references, not inspected assets"
+        ],
+        "sideEffects": [
+          "Reading JSON has none; file records native presentation, zero GPU errors and browser/page closure."
+        ],
+        "cleanup": [
+          "Preserve failed submeasurement fields even when top-level ok true: passes drewFrames0, too-few-rendering-frames; spikeCpu coverage0 and failed clock join."
+        ],
+        "limits": [
+          "Single historical CI Mac paravirtual Apple GPU run with phone tier; not an iPhone Safari measurement.",
+          "Dynamic governor settings and GPU timer scope differ from TLX leg; GPU medians do not measure equal frame composition.",
+          "Snapshot source line numbers and loopback URLs are historical provenance, not current navigation targets."
+        ]
+      }
+    },
+    {
+      "path": "scratch/h23/census/game-webgl2-macos-latest.json",
+      "start": 0,
+      "end": 82593,
+      "kind": "text",
+      "sha256": "52dbbe98b1013187ccea45e6ef44a817e73c4353c92aa2d9e310add3531fae66",
+      "actualBytes": 82788,
+      "wholeSourceSha256": "52dbbe98b1013187ccea45e6ef44a817e73c4353c92aa2d9e310add3531fae66",
+      "expectedHashMatches": true,
+      "assignedRangeSha256": "c22b6284b4f83fb44cb4f31d5c0a98410e72613a128e5cddcd0beffd30ab6bcf",
+      "coverage": "assigned partial source",
+      "reads": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "5097c3018583fbaf5225aa04dc5440e76b98aaf9e2f62499b6cc848e8b5f624b",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "f2229c9e9fad82846ff5d1d8cdbd74fcc5901c3e81faecae53d4fc8b152c0591",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 18000,
+          "end": 27000,
+          "bytes": 9000,
+          "sha256": "88aeed85293e2eba4fc24a629c049e0aa89530a7c450e17eff657dadc42e193a",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 27000,
+          "end": 36000,
+          "bytes": 9000,
+          "sha256": "03eda26b4007ce6804a9108d7167a9d18ab7c361312292fe4604ae99191056db",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 36000,
+          "end": 45000,
+          "bytes": 9000,
+          "sha256": "ac06b0c967e29e5b4db0c34695c6405e1faa4bb4724c66c660830dc3871db17f",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 45000,
+          "end": 54000,
+          "bytes": 9000,
+          "sha256": "a30aee8f6c532f0e1691f27ab69f4af2882784948407e902343ab5034a5ec083",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 54000,
+          "end": 63000,
+          "bytes": 9000,
+          "sha256": "8b1e64dda5144e8e25d6ea7c9b07a2a57e2e861cc6c13f1bcf133c78a1126bea",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 63000,
+          "end": 72000,
+          "bytes": 9000,
+          "sha256": "08fcdebd958cc2858bb5afcebcaa5ef5ec8d36569fb25c564bfde9117d717ca8",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 72000,
+          "end": 81000,
+          "bytes": 9000,
+          "sha256": "ac1ec522a6925aa514ab126bec3436c662a4404b498cb59b5b49fa5eb75eace4",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        },
+        {
+          "start": 81000,
+          "end": 82593,
+          "bytes": 1593,
+          "sha256": "36e5cab5a9bdc6afca7ea8a5f8a79ff4763375c163c92c676615c6f0733d421d",
+          "method": "individual exec_command Python read_bytes half-open byte slice; output returned untruncated; <=9000 bytes"
+        }
+      ],
+      "semanticMap": {
+        "supportname": "macOS TLX WebGL2 census capture",
+        "role": "Retained static diagnostic result; group03 covers all but final195 bytes",
+        "contracts": [
+          "darwin arm64 Apple adapter; backend three and path webgl2 distinguish this from GLX despite filename webgl2; mobileTier true, forceWebGL true, native presentation.",
+          "Monza dry default time-of-day helmet API race; 544 driven frames/809m/42.6 mean speed/zero offroad; warm requested and done after14951ms, no failed attempts.",
+          "Repeated beat records expose governor scale/tier, UBO uploads, material pool/program/cache keys and cumulative frame intervals; remainder has same diagnostic families as GLX plus warm phases, depth and TLX backend/env/sky/line state.",
+          "Window25.9fps, p50 36.4ms,p95 74.2ms,max342.7ms; raceEntry19146.1ms,longest502ms. GPU median9.23ms at scale0.8 canvas1024x576 is three summed render-pass timestamps.",
+          "Depth retained last frame with zero window discards; occlusionCull and multiDraw report unsupported, their A/B sections explicitly skipped.",
+          "Assigned tail reaches console warning fragment; final closure/platform provenance fields in last195 bytes belong to group04."
+        ],
+        "dependencies": [
+          "GPU census workflow/game-check tool family and contemporary note run39549012663",
+          "Vendor source URLs identify three0.186.1 while engine stamp reports r185; retain both observed labels without assuming version equivalence"
+        ],
+        "sideEffects": [
+          "JSON reading has none. Captured backend state reflects original probe; does not activate toggles in current game."
+        ],
+        "cleanup": [
+          "passes drewFrames0 invalidates composition comparison; spikeCpu clock join failed; preserve explicit failures rather than treating top-level ok as every measurement passing.",
+          "Historical warning and geometry-memory narrative are evidence of that snapshot; no current renderer default change authorized."
+        ],
+        "limits": [
+          "Last195 bytes unassigned/unread; complete-file hash verifies identity but does not claim whole-file read.",
+          "Single historical Mac CI GPU with mobile caps; cannot establish actual phone behavior or fair identical-quality GPU timing comparison.",
+          "Top-level success is observed in assigned bytes but file termination metadata is outside this span."
+        ]
+      }
+    }
+  ]
+}
