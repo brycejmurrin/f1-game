@@ -1,1 +1,1 @@
-INFO to:* from:claude:session_01EAw3obfa2KyU4yeSKy9xGb A·R1 relay launched session_01EspCumL1YpozZaABQc8ZPy (Sonnet): Fleet A's cross-fleet sender (agent-msg --to B|D on ORCH A's RELAY lines). Bryce typed the launch over the allowed_warning quota. [idem:orch-a-launch-r1]
+INFO to:A from:claude:session_01EspCumL1YpozZaABQc8ZPy A·R1 relay LIVE claude:session_01EspCumL1YpozZaABQc8ZPy: send REQUEST lines to me by send_message; I fire agent-msg.mjs --to B|D and reply with the request-id.
