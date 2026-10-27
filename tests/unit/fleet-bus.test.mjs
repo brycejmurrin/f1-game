@@ -801,7 +801,8 @@ test("GAME-SLOT: a slot ends only on its own PR's DONE; a game merge is decided 
 
 test("against real git: doneIsGame reads `git diff --name-only <sha>^1 <sha>`; tipDrift warns when this file differs from the deploy tip", () => {
   const { dir, h } = bareBus("game");
-  const g = (cwd, ...a) => execFileSync("git", a, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
+  // CI runners have no git identity: name one for this test's own commits.
+  const g = (cwd, ...a) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@t", ...a], { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   try {
     const commit = (file, body, msg) => {
       fs.mkdirSync(path.dirname(path.join(h, file)), { recursive: true });
