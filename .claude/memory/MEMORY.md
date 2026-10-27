@@ -13,7 +13,7 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [User plays on a phone](user-plays-on-phone.md) — phone landscape and touch are the owner’s actual play setup
 - [User timezone: Pacific](user-timezone-pacific.md) — the owner’s time zone is America/Los_Angeles
 - [Parallel survey and review](parallel-survey-and-review.md) — UI/HUD reports: background apex survey job + ≤2 read-only review agents in parallel; plan as a docs/notes file on the PR branch
-- [Ask via AskUserQuestion](ask-via-askuserquestion.md) — Bryce-attended sessions only; unattended fleet sessions post BLOCKED to their orchestrator
+- [Ask via AskUserQuestion](ask-via-askuserquestion.md) — Bryce-attended sessions only; unattended worker sessions use `needs-decision`
 - [Preview must look different](preview-must-look-different.md) — design sheets must differ in the picture (pixel-diff, close-up framing), not just in mm metrics; Bryce: "they all look the same"
 - [Synced plugins in child sessions](synced-plugins-not-in-child-sessions.md) — 2026-10-18 limitation; re-verified 2026-10-26 that child sessions list plugin skills
 - [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it

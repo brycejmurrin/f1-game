@@ -22,7 +22,7 @@ the worker cost cap is in docs/WORKERS.md) or when the user asks.
    read the current PR body separately for its Plan and Next step (the status
    command does not retrieve them). If no PR exists yet, open a DRAFT PR (`draft: true`, template body —
    `/ship` step 1's draft route, not `deploy.mjs --pr`, which opens it READY):
-   the body is the durable log. Refresh its Plan and Status with
+   the body is the durable log. Refresh its Plan and Hand-off block with
    `update_pull_request` (no second push needed).
 3. **The prompt**, in this order:
    - repo `brycejmurrin/f1-game`, branch, pushed head sha, PR number and URL

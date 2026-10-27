@@ -9,8 +9,7 @@ description: "Use when you own, pick up or are handed a PR, or a PR or the deplo
 are right about most things and wrong about the specifics below, each of
 which has cost a session before. Everything not listed here: `AGENTS.md`.
 
-Routes: the worker contract (claim, draft PR, land) → `docs/WORKERS.md`.
-the status line). Pre-push validation → `check-changes`. Live `version.json` or
+Routes: the worker contract (claim, draft PR, land) → `docs/WORKERS.md`. Failed-CI triage → agent `ci-red-triage`. Pre-push validation → `check-changes`. Live `version.json` or
 anything on github.io → agent `deploy-research` (the only thing here that reaches it).
 Review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any of them.
 
@@ -21,7 +20,7 @@ Review, hunt or survey findings on the PR → agent `finding-verifier` before yo
 3. Triage a red: agent `ci-red-triage` names the job, test and assertion.
 4. Fix on the branch; sync only when §2 says you must.
 5. Gate: `node tools/ci/deploy.mjs --gate-only` (§6).
-6. ONE push per verified batch; refresh the PR body's Plan and Status.
+6. ONE push per verified batch; refresh the PR body's Plan and Hand-off block.
 7. Draft → ready → `land`: §12.
 8. Watch (§7, §9) until `= ci passed` on your head; the lane ends when `land` is on.
 
@@ -113,8 +112,8 @@ the **current** tip — not the notification commit (two commands):
 
 - `= ci failed` → triage → fix → push → re-subscribe (never "stale" because the
   notif SHA ≠ tip).
-- `= ci running` → do **not** claim stale or fixed; stay subscribed and keep the
-  AGENTS.md rule 13 timer. **"0 failed" while running is not green.**
+- `= ci running` → do **not** claim stale or fixed; stay subscribed (no timer,
+  AGENTS.md rule 13). **"0 failed" while running is not green.**
 - `= ci hollow` → only the draft skip skeleton ran, not verification; report
   it and use the authorized draft CI route when actual CI is needed.
 - `= ci none` / `unknown` → no run observed / API evidence unavailable,

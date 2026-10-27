@@ -313,7 +313,7 @@ scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) an
 `apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
 saved report queries). Browser diagnostics use the existing job lock; planning
 and report comparison do not launch Chromium.
-`apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) and `apex_who_is_on_it` (the claims/branches board) are in the table below. The table is the count's source: 40 rows on 2026-10-26, equal to the live server's tool list (an earlier revision of this line said "40 → 42"; that sum did not match the table).
+`apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) and `apex_who_is_on_it` (retired 2026-10-27 with the claims board) are in the table below. The table is the count's source: 40 rows on 2026-10-26, equal to the live server's tool list (an earlier revision of this line said "40 → 42"; that sum did not match the table).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
