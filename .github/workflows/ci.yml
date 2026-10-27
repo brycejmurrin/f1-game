@@ -171,7 +171,7 @@ on:
     # LABELS (#2184, 2026-10-15). `labeled` is here for ONE label: run-ci on a
     # DRAFT opts it into the fast tier. `on:` cannot filter a label by name
     # (only types, branches and paths), so every other label event — `bug`,
-    # `area:*`, `claimed` from fleet.yml, or run-ci on a PR already ready —
+    # `area:*`, `claimed` from a worker's claim, or run-ci on a PR already ready —
     # used to start a run in this PR's group and CANCEL its live fast or full
     # tier. Such an event now lands in its own `label-<run_id>` group (the
     # concurrency block), every job skips on the shared label gate
@@ -1778,7 +1778,7 @@ jobs:
   # ubuntu-latest, whose only WebGPU/WebGL adapter is SwiftShader, and the
   # renderer group (`gfx`: 240-480 s budgets under software rasterisation) has
   # never been in CI at all — the header's "deliberately NOT here" clause.
-  # docs/research/CI-RENDERING-PERFORMANCE.md §"There IS a real GPU" measured
+  # docs/notes/CI-RENDERING-PERFORMANCE.md §"There IS a real GPU" measured
   # the runner images: macos-latest (Apple silicon) reports a HARDWARE Metal
   # adapter on STOCK flags, and the two defects that real GPU has found so far
   # were invisible to every software test. So the renderer specs get their own

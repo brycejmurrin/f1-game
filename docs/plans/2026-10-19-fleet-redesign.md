@@ -1,6 +1,6 @@
 # Fleet redesign: authority by rule, roles by name, one coordinator per fleet
 
-Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the authority-by-rule model is live (AGENTS.md STANDING AUTHORITY, tools/ci/merge-gate.mjs, ready-gate.mjs, .claude/rules/fleet-core.md); the 2026-10-26 audits amend parts of it.
+Status: **SUPERSEDED** by [the 2026-10-27 orchestration redesign](2026-10-27-orchestration-redesign.md) (shipped in #3895): the authority-by-rule model, the `fleet-core` rule file, the orchestrator and merge receipts below are retired; `land.yml` and the dispatcher replace them (docs/WORKERS.md). History only.
 
 Proposal, 2026-10-19 ~19:45Z, from a read-only study of the live fleet (this account's 50 sessions, the bus, 28 open PRs,
 the ORCH12→ORCH13 transcripts, every fleet note since 2026-10-05) and the current platform docs

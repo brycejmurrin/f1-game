@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // prune-branches.mjs — delete remote branches that are already merged into the deploy branch.
 // @doc Lists or deletes merged/absorbed branches with no open PR; --also verdicts are archived to refs/archive/* first.
-// Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head) or absorbed (branch-audit.mjs: a dry merge changes nothing), or whose audit verdict is opted into with --also (archived first to refs/archive/<branch>), that has no open pull request and has been quiet for --min-age-days, plus claude/claims/* markers quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. Writes the branch-audit report. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
+// Full description: Lists, or with --apply deletes, every remote branch that is merged (an ancestor of the deploy branch, or exactly a merged PR's head) or absorbed (branch-audit.mjs: a dry merge changes nothing), or whose audit verdict is opted into with --also (archived first to refs/archive/<branch>), that has no open pull request and has been quiet for --min-age-days, plus legacy claude/claims/* markers (the claims board, retired 2026-10-27) quiet for a day; the deploy and default branches, gh-pages and --keep patterns are never touched. Writes the branch-audit report. The workflow .github/workflows/prune-branches.yml runs it with the repo token.
 // @skill check-changes
 //
 // WHY A WORKFLOW AND NOT AN AGENT. The remote containers' git proxy refuses
 // ref deletion over both git and the REST API (403, measured 2026-09-22 and
-// again 2026-10-01; see who-is-on-it.mjs), and 475 branches had piled up. The
+// again 2026-10-01; recorded in the retired who-is-on-it.mjs), and 475 branches had piled up. The
 // Actions token can delete a ref with `contents: write`
 // (https://docs.github.com/en/rest/git/refs#delete-a-reference), so the
 // deletion runs there and an agent dispatches it.
@@ -36,8 +36,9 @@
 //   * its last commit is at least --min-age-days old (a just-merged branch
 //     someone is still about to push a follow-up to is left alone);
 //   * it is not the deploy branch, the default branch, gh-pages or a --keep match.
-// CLAIMS BRANCHES (claude/claims/*, who-is-on-it.mjs) are never merged — they
-// are empty-tree markers — and are pruned on age alone: who-is-on-it calls a
+// CLAIMS BRANCHES (claude/claims/*, left by who-is-on-it.mjs, retired 2026-10-27 with
+// the claims board; claims are now an issue comment + the `claimed` label) are never
+// merged — they are empty-tree markers — and are pruned on age alone: who-is-on-it called a
 // claim stale after STALE_MIN (2 h), so one quiet for a day (or --min-age-days,
 // if longer) is either released or abandoned. 182 had piled up by 2026-10-01.
 // Dry run by default: the list is the output, and --apply is the only path
@@ -106,7 +107,7 @@ export function archiveRefs(prune, reasons, shaOf) {
 }
 
 export const DEPLOY = "claude/f1-game-project-26h3ng";
-// gh-pages, and the claims board (who-is-on-it.mjs): coordination state that
+// gh-pages, and the claims board branch (retired 2026-10-27, kept as history): coordination state that
 // is never merged and must never be audited away.
 const ALWAYS_KEEP = [/^gh-pages$/, /^claude\/claims-board$/];
 export const CLAIMS = /^claude\/claims\//;

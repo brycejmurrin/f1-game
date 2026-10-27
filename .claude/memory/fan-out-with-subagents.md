@@ -1,6 +1,6 @@
 ---
 name: fan-out-with-subagents
-description: "Bryce 2026-10-26 — multi-part fleet tasks (PR trains, fixes): fan out to worker subagents in worktrees, not one serial session"
+description: "Bryce 2026-10-26 — multi-part tasks (several independent fixes or PRs): fan out to worker subagents in worktrees, not one serial session"
 metadata:
   node_type: memory
   type: feedback
@@ -10,6 +10,6 @@ metadata:
 
 Bryce (2026-10-26 ~10:50 PT, while building PR trains and testing relays): "Use subagents and worktrees as needed" — and rejected a slow serial board query.
 
-**Why:** serial investigation of 65 PRs was slow; independent trains and fixes can run in parallel.
+**Why:** serial investigation of 65 PRs was slow; independent fixes can run in parallel.
 
-**How to apply:** after a short survey, split independent work (one train, one fix each) across `worker` subagents with `isolation: "worktree"`; keep the coordinator on messaging and decisions. Respect AGENTS.md rule 4/5 load limits (no browser run in a subagent). Related: idle lanes doing parallel work.
+**How to apply:** after a short survey, split independent work (one fix or one PR each) across `worker` subagents with `isolation: "worktree"`; the parent session keeps the decisions and merges their branches or reads their PRs. Respect AGENTS.md rule 4/5 load limits (no browser run in a subagent). Each subagent PR follows docs/WORKERS.md like any worker (the PR is the report; `land` lands it). PR trains and orchestrators were retired 2026-10-27.
