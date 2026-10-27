@@ -1,6 +1,6 @@
 ---
 name: pwa-cache-service-worker
-description: "Use when editing sw.js, version.json or the PWA manifest, or when an installed PWA / iPhone home-screen app still shows an old build after a deploy (UPDATE READY chip, UpdateCheck): offline play, stale shell, cache invalidation, shell version guard, DEFERRED backend precache, or Playwright reloads from a mid-run version.json bump. Live sha → deploy-research."
+description: "Use when editing sw.js, version.json or PWA manifest: an installed PWA on an old build (UpdateCheck), offline play, stale shell, shell version guard, DEFERRED precache, or Playwright reloads on a mid-run version.json bump."
 ---
 
 # PWA cache and service worker
