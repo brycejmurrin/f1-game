@@ -310,6 +310,14 @@ for (const dy of [-8, 8]) {
   });
 }
 
+test("cosine-hill shims are gone (elevation is per-node heights only)", () => {
+  const h = boot();
+  assert.equal("hill" in h.ctx.DesignerProfile, false);
+  assert.equal("ADD" in h.ctx.DesignerProfile, false);
+  assert.equal(typeof h.pr.setBumps, "undefined");
+  assert.equal(typeof h.pr.setHeights, "function");
+});
+
 test("dense polygon: idle grips shrink to the point spacing instead of a solid band of circles", () => {
   const h = boot();
   const tr = h.tr, n = 300, pts = [];

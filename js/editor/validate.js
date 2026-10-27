@@ -201,9 +201,12 @@ const TrackValidate = (function () {
         if (sep >= LIMITS.bridgeSep) add("bridge", "info", "Crossing bridged (" + sep.toFixed(1) + " m clearance)", { s: c.i * ds, s2: c.j * ds, x: c.x, z: c.z });
         else add("crossing", "red", "The road crosses itself at grade — add a bridge", { s: c.i * ds, s2: c.j * ds, x: c.x, z: c.z, fix: "bridge" });
       }
-      // Both roads of a bridge must not rise together.
+      // Both roads of a bridge must not rise together. Authored bridge fracs are
+      // pre-rotation racing space — the same `_sceneryShift` buildCenterline uses
+      // when it raises the deck (tracks.js), or the window lands elsewhere.
+      const dress = (def && def._sceneryShift) || 0;
       for (const b of bridges) for (const c of xs) {
-        const sb = ((b.s % 1) + 1) % 1 * tr.total;
+        const sb = (((b.s + dress) % 1) + 1) % 1 * tr.total;
         const near = (s) => { let d = Math.abs(s - sb); d = Math.min(d, tr.total - d); return d < b.halfM; };
         if (near(c.i * ds) && near(c.j * ds)) { add("bridge", "red", "Both roads rise under this bridge — shorten it or move it", { s: sb }); break; }
       }

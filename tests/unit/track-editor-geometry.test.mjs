@@ -153,6 +153,26 @@ test("validate: the rules read the engine's centreline (length, radius, start st
   const bridged = V.check(design({ pts: eight, bridges: [{ s: cross.s / x.stats.lengthM, halfM: 160, rise: 8 }] }));
   assert.ok(!bridged.issues.some((i) => i.code === "crossing"), "bridged: " + JSON.stringify(bridged.issues.map((i) => i.code + ":" + i.level)));
   assert.ok(bridged.issues.some((i) => i.code === "bridge" && i.level === "info"));
+  // "Both roads rise" uses def._sceneryShift like buildCenterline: a forged dress
+  // moves the authored window, so the RED's reported `s` lands on the dressed metre.
+  {
+    const built = V.build(design({ pts: eight }));
+    const tr = built.tr, L = tr.total, shift = 0.22;
+    built.def._sceneryShift = shift;
+    // Place a wide bridge so both crossing nodes sit inside its window after dress.
+    const xs = S.crossings(tr.px, tr.pz, tr.n, 3);
+    assert.ok(xs.length, "figure-eight still crosses");
+    const c0 = xs[0], mid = ((c0.i + c0.j) / 2 / tr.n);
+    const span = Math.min(Math.abs(c0.i - c0.j), tr.n - Math.abs(c0.i - c0.j)) * (L / tr.n);
+    const halfM = Math.max(200, span / 2 + 40);
+    const authored = ((mid - shift) % 1 + 1) % 1;
+    const reds = V.judge(tr, { bridges: [{ s: authored, halfM, rise: 8 }] }, built.def)
+      .issues.filter((i) => i.code === "bridge" && i.level === "red");
+    assert.ok(reds.length >= 1, "dressed window covers both roads: " + JSON.stringify(reds.map((i) => i.msg)));
+    const expect = (((authored + shift) % 1 + 1) % 1) * L;
+    assert.ok(Math.abs(reds[0].s - expect) < 1 || Math.abs(Math.abs(reds[0].s - expect) - L) < 1,
+      "issue.s is the dressed centre (" + reds[0].s + " vs " + expect + ")");
+  }
   // A steep bump reds the grade; the sanitiser's cap keeps a stored one legal.
   const steep = V.check(design({ elevations: [{ s: 0.5, halfM: 60, rise: 8 }] }));
   assert.ok(steep.issues.some((i) => i.code === "grade" && i.level === "red") || C.sanitize(design({ elevations: [{ s: 0.5, halfM: 60, rise: 8 }] })).elevations[0].rise < 8,

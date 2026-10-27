@@ -13,7 +13,7 @@ const TrackStamps = (function () {
   "use strict";
   const S = TrackShape;
   const DEG = Math.PI / 180;
-  const R_MIN = 15;           // the hairpin floor the validator reds below (built radius)
+  const R_MIN = 15;           // stamp floor = TrackValidate.LIMITS.rAmber (RED is rMin 9 m)
   const SPACING = 8;          // control points never closer than this
   const CHORD_MAX = 25;       // …nor further apart on an arc than the 25 m straights beside it
   // The Dubins rejoin: straights every ≤ 60 m, arcs on 8-25 m chords at the

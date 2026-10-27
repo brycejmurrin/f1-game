@@ -204,6 +204,11 @@ const CustomTracks = (function () {
     // Before anything walks this design: a loop thousands of km long is refused here.
     if (perimeter > (loose ? LIMITS.loopMaxLoose : LIMITS.loopMax)) return null;
     const heights = sanitizeHeights(pts, raw.heights);
+    // Node heights and cosine elevations both raise the built road. The designer
+    // clears elevations whenever it writes heights (elev:node / elev:span /
+    // presets); enforce the same on load / share so a mixed record cannot stack
+    // both and launch the car over a wall the strip never showed.
+    const elevations = heightsFlat(heights) ? sanitizeZones(raw.elevations, BUMP) : null;
     const it = {
       name: sanitizeName(raw.name),
       seed: Number.isFinite(raw.seed) ? (Math.floor(raw.seed) >>> 0) : 1,
@@ -213,7 +218,7 @@ const CustomTracks = (function () {
       heights,
       hwZones: sanitizeZones(raw.hwZones, HWZ),
       bankZones: sanitizeZones(raw.bankZones, BANK),
-      elevations: sanitizeZones(raw.elevations, BUMP),
+      elevations,
       bridges: sanitizeZones(raw.bridges, BUMP),
       turns: Array.isArray(raw.turns) ? raw.turns.map(frac).filter((v) => v != null).slice(0, 40) : [],
       // The record's lengthM is the designer's BUILT lap, a few per cent off the
@@ -304,7 +309,10 @@ const CustomTracks = (function () {
       baseHW: it.baseHW,
       path: { len: it.lengthM, pts: pathPts },
       turns: it.turns && it.turns.length ? it.turns.slice() : null, sectors: null,
-      bankZones: it.bankZones, elevations: it.elevations, bridges: it.bridges,
+      bankZones: it.bankZones,
+      // Prefer node heights when both exist (sanitize already drops the other).
+      elevations: (it.heights && !heightsFlat(it.heights)) ? null : it.elevations,
+      bridges: it.bridges,
     }, theme);
     // applyHwZones keys its windows on the CONTROL INDEX fraction (i / N); the
     // designer authors arc fractions, so map each end through the polygon's
