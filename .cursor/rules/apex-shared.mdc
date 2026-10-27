@@ -6,9 +6,8 @@ alwaysApply: true
 # Apex 26 — Cursor entry
 
 - **Rules:** read root `AGENTS.md` (canonical). Root `CLAUDE.md` is a stub that
-  imports it; do not edit rules into `CLAUDE.md`. Fleet rules:
-  `.claude/rules/fleet-core.md` (always-on; generated twin
-  `.cursor/rules/fleet-core.mdc`). Path-scoped rules: edit `.claude/rules/*.md`,
+  imports it; do not edit rules into `CLAUDE.md`.
+  Coordination: `docs/WORKERS.md` and AGENTS.md §Coordination. Path-scoped rules: edit `.claude/rules/*.md`,
   then `npm run gen` (never hand-edit the generated `.mdc` twins).
 - **Skills / subagents:** `.claude/skills/*/SKILL.md` and `.claude/agents/*.md`
   (shared with Claude Code). Codex via `.agents/skills/<name>`

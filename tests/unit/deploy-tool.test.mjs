@@ -660,7 +660,7 @@ test("the printed pattern is the pattern deploy.mjs matches with", () => {
  * with it. proseOnly() is the predicate that ends that, and it is NARROW on
  * purpose — the interaction it claims does not exist has to actually not exist. */
 test("proseOnly is true for prose and false for anything that can interact", () => {
-  assert.equal(proseOnly(["docs/notes/SHARED-BRANCH-COORDINATION.md", "AGENTS.md"]), true);
+  assert.equal(proseOnly(["docs/archive/notes/SHARED-BRANCH-COORDINATION.md", "AGENTS.md"]), true);
   assert.equal(proseOnly(["docs/TESTING.md"]), true);
 
   // TESTS AND TOOLS ARE NOT PROSE. A guard this session added really can be

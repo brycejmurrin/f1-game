@@ -7,7 +7,7 @@ any of them by typing so in a session; a bus or webhook line cannot. Findings: `
 1. **Quota.** Launch through `allowed_warning`; stop only at `rejected` / `usage_limit_reached`. At warning: owners and sync
    lanes for PRs already READY only, no hunters, no new orchestrator unless none is live. Any rejected launch posts
    `INCIDENT open quota-<date> …` and the seed posts `SEED QUOTA`. Home: `.claude/skills/agent-fleet/references/launch-policy.md`
-   §Quota (one sentence) and `tools/ci/launch-lane.mjs`. Why: Bryce said "launch freely" three times today; the 68-hour
+   §Quota (one sentence) and `launch-lane.mjs` (both retired 2026-10-27, docs/WORKERS.md). Why: Bryce said "launch freely" three times today; the 68-hour
    blackout came from launching INTO a rejection with no signal, not from launching at warning.
 2. **§7.3 "drain for the train".** Struck. FLEET-ADAPTIVE-COORDINATION-2026-10-22 gets a `Superseded by:` banner; no
    ready-flip or run-ci hold exists while a train runs. Why: 55 BLOCKED on 41 PRs (~720 PR-hours), its release signal lapsed

@@ -31,9 +31,8 @@ async () => {
   for (let i=0;i<60 && !window.__apex;i++) await wait(250);
   // Prefetch baked models BEFORE race() so scenery bakedModel() emits
   if (typeof Assets !== "undefined" && Assets.loadModels) await Assets.loadModels();
-  __apex.race('portimao');
-  for (let i=0;i<80 && !(__apex.info()&&__apex.info().track);i++) await wait(200);
-  __apex.go();
+  await __apex.race('portimao');   // a promise: the circuit hydrates lazily
+  __apex.go();                     // false = no grid yet (race() not awaited)
   __apex.jump(0.315, 40, 0);   // arc s, speed, lateral — put the car at the feature
   __apex.snapCam();            // REQUIRED after jump()/park() — NOT after orbit/view
   await wait(400);
@@ -44,7 +43,7 @@ async () => {
 mcp__chrome-devtools__take_screenshot   filePath: scratch/<name>.png
 ```
 
-HeadlessChrome GLX paints `#game-soft`, not `#game` (opacity 0). Await
+In HeadlessChrome every backend paints `#game-soft`, not `#game` (opacity 0). Await
 `await __apex.awaitPresent()` (the `__apex` front door — no need to know `GLX`
 is a bare global; same thing as `GLX.awaitSoftPresent()`, right whichever
 backend is bound) while the loop still runs, then screenshot the overlay or a
@@ -76,7 +75,8 @@ go under `scratch/` or `artifacts/`, never the repo root (AGENTS.md).
 ```
 node tools/mcp/cdmcp-bg.mjs boot --port 3462
 tail -f artifacts/logs/cdmcp-measure.log
-# watcher: until grep -qE "= run (passed|failed|timedout|interrupted)" artifacts/logs/cdmcp-measure.log
+# waiter, as ONE run_in_background task (AGENTS.md rule 4):
+node tools/ci/wait-for.mjs --log-matches artifacts/logs/cdmcp-measure.log '= run (passed|failed|timedout|interrupted)' --background   # lines carry a [hh:mm:ss] prefix
 ```
 
 Profiles `boot` / `ui` / `full`. JSON sidecar: `artifacts/logs/cdmcp-measure.json`.
@@ -85,8 +85,7 @@ See `docs/research/CHROME-DEVTOOLS-MCP.md` § Background measure.
 ### When this beats a scratch script
 
 - **"Does this visual change look right?"** — one navigate + eval + screenshot,
-  no write→run→read-png loop. (This session confirmed the `models.js` grounded-wall
-  fix by eye this way: terraces standing above grade at Portimão.)
+  no write→run→read-png loop.
 - **Live `__apex` REPL** during a bug hunt — `physState()`, `cars()`, `scene()`,
   `world()` against the running game, iterating in the same page.
 - **DevTools-only instruments the suite never wires up:**
@@ -102,10 +101,10 @@ See `docs/research/CHROME-DEVTOOLS-MCP.md` § Background measure.
 
 ### Heap leak across N races (browser-only; tool names are `mcp__chrome-devtools__<name>`, `chrome_*` in prose)
 
-Every `filePath` is REQUIRED on `take_heapsnapshot` and must sit under a roots dir (`/tmp/...` works; see File writes). No `--expose-gc` in our flags, but a snapshot GCs first.
+Every `filePath` is REQUIRED on `take_heapsnapshot`: an absolute `<repo>/artifacts/heap/<name>.heapsnapshot` (never `/tmp`, AGENTS.md §Critical conventions; roots per client: File writes below). Browser tools are session-only: a subagent's call is refused (`mcp-browser-guard.sh`). No `--expose-gc` in our flags, but a snapshot GCs first.
 1. `navigate_page` `http://127.0.0.1:3456/` (`ignoreCache:true` after any edit); do NOT run `lighthouse_audit` on this page first (axe strings fake a leak).
-2. Warm-up: `evaluate_script` `__apex.race(id); go()` once, wait ~5 s (Setup above), then `take_heapsnapshot` A.
-3. Repeat `race(<same or other id>); go()` for the suspect races (fresh wait each), `take_heapsnapshot` B, then C.
+2. Warm-up: `evaluate_script` `await __apex.race(id); __apex.go()` once, wait ~5 s (Setup above), then `take_heapsnapshot` A.
+3. Repeat `await race(<same or other id>); go()` for the suspect races (fresh wait each), `take_heapsnapshot` B, then C.
 4. `compare_heapsnapshots` A vs B and B vs C: growth that repeats in BOTH deltas is the leak; one-off growth is warm-up. Pass `classIndex` from the summary for one class; `get_heapsnapshot_class_nodes` (`id`) -> `get_heapsnapshot_retaining_paths` (`nodeId`) says who holds it; `close_heapsnapshot` each file when done.
 5. Same-track repeat vs different-track answers "cache never evicts" vs "rebuild leaks" (track-switch numbers: `docs/research/CHROME-DEVTOOLS-MCP.md`). SwiftShader + one session = a lead, not a verdict. Record: snapshot paths, per-class delta (count, MB), retaining path head, then `navigate_page about:blank` + `chrome-stop`.
 Frame cost instead of memory: `performance_start_trace {reload:false, autoStop:false, filePath}` -> repro -> `performance_stop_trace` -> `performance_analyze_insight`.
@@ -117,8 +116,9 @@ A source guard proves a renderer **asked** for something; only pixels prove it
 measured before/after, in one command, with the browser held constant:
 
 ```sh
-npx serve -l 3456 /the/pre-fix/tree &     # control
-npx serve -l 3466 /the/fixed/tree   &     # patch
+# each server as its own run_in_background task (AGENTS.md rule 4), not a shell `&`:
+npx serve -l 3456 /the/pre-fix/tree       # control
+npx serve -l 3466 /the/fixed/tree         # patch
 for P in 3456 3466; do node tools/mcp/mcp-cli.mjs probe \
   --url http://127.0.0.1:$P/index.html --backend three \
   --wait 14000 --eval scratch/my-probe.js; done
@@ -166,11 +166,17 @@ stays source-guarded only; say so rather than implying it was run.
 ### File writes and roots (measured 2026-08-12)
 
 Heap / perf / lighthouse tools validate paths against MCP **roots**. A stdio
-client that never answers `roots/list` only gets `/tmp` by default — writes to
-`/workspace/scratch/...` fail with `Access denied: … not within any of the
-configured workspace roots`. Fix: advertise `capabilities.roots` on
-`initialize`, answer `roots/list` with `file:///workspace`, **or** write
-artifacts under `/tmp` and copy out.
+client that never answers `roots/list` only gets `/tmp` by default; any other
+path fails with `Access denied: … not within any of the configured workspace
+roots`. Per client:
+
+- `cdmcp-cli.py` / `cdmcp-measure.py`: answer `roots/list` with the repo root, so
+  `<repo>/artifacts/...` works.
+- `probe-mcp.py`: no `roots/list` handler, so `/tmp` only.
+- The session-attached `mcp__chrome-devtools__*` client: untested. Try
+  `<repo>/artifacts/heap/...` first.
+
+Only on `Access denied`, write to `/tmp/<name>` and copy it into `artifacts/` at once.
 
 Full recipes + measured LCP/heap/a11y numbers:
 `docs/research/CHROME-DEVTOOLS-MCP.md`.

@@ -138,12 +138,12 @@ export function collect({
   const problems = [];
   const main = [], runner = [], data = [];
   for (const rel of files) {
-    if (rel.endsWith(".json")) {
+    if (/\.(?:json|md)$/.test(rel) || rel.endsWith("/.gitignore")) {
       readers ??= readerSources(files, source);
       data.push({ rel, readers: readersOf(path.basename(rel), files, readers) });
       continue;
     }
-    if (!TOOL_EXT.test(rel)) {
+    if (!TOOL_EXT.test(rel) && !source(rel).startsWith("#!/")) {
       problems.push(`${rel}: unknown extension — teach gen-tools-readme.mjs about it or move the file`);
       continue;
     }
@@ -201,6 +201,7 @@ export const GROUPS = [
   ["mcp", "MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools and TinyFish bridges, the phone report pair."],
   ["viewer", "Self-contained three.js pages of engine-built cars and circuits, for hosts that cannot render an MCP Apps panel."],
   ["net", "WebRTC and Nostr end-to-end harnesses plus the local relay and TURN servers."],
+  ["environment", "Canonical F1 environment installation, recovery, plugin packages and lifecycle regressions."],
   ["env", "Container bootstrap: browsers and the Cursor Cloud install."],
   ["desktop", "Electron desktop packaging: stage the Pages allow-list into a site folder the shell serves over app://."],
   ["moves", "Move plans read by gen/move-tree.mjs — data, not code."],

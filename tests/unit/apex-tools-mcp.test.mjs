@@ -254,7 +254,6 @@ test("initialize → serverInfo.name === apex-tools-mcp; tools are apex_* only",
     "apex_unit_test",
     "apex_verify_change_fast",
     "apex_viewer",
-    "apex_who_is_on_it",
   ]);
   for (const n of names) {
     assert.match(n, /^apex_/);
@@ -989,9 +988,9 @@ test("every tool carries title and honest MCP annotations; tool-specific outputS
   }
   assert.deepEqual(withSchema.sort(), ["apex_bump_cache_check", "apex_car_audit", "apex_catalog", "apex_doctor", "apex_help", "apex_hud_mock",
     "apex_hud_shot", "apex_hud_survey", "apex_job_status", "apex_locations", "apex_pick_tests", "apex_select_specs",
-    "apex_status", "apex_track_audit", "apex_viewer", "apex_who_is_on_it"], "exactly the tools with a measured result shape");
+    "apex_status", "apex_track_audit", "apex_viewer"], "exactly the tools with a measured result shape");
   assert.deepEqual(destructive, ["apex_cursor_agents", "apex_job_cancel"]);
-  assert.deepEqual(openWorld.sort(), ["apex_cursor_agents", "apex_who_is_on_it"]);
+  assert.deepEqual(openWorld.sort(), ["apex_cursor_agents"]);
   for (const n of ["apex_status", "apex_doctor", "apex_pick_tests", "apex_select_specs", "apex_bump_cache_check", "apex_job_status", "apex_frame_report", "apex_car_audit", "apex_track_audit", "apex_unit_test"]) assert.ok(readOnly.includes(n), `${n} is read-only`);
   for (const n of ["apex_job_start", "apex_job_cancel", "apex_verify_change_fast", "apex_viewer", "apex_cursor_agents"]) assert.ok(!readOnly.includes(n), `${n} is not read-only`);
   const call = rpc([{ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "apex_status", arguments: { dryRun: true } } }])[0].result;
@@ -1324,30 +1323,6 @@ test("splitOut returns the JSON once: in out, and only the text before it in res
   assert.deepEqual(splitOut(""), { out: null, rest: "" });
 });
 
-test("session-check wraps are read-only and pinned", () => {
-  const body = (r) => JSON.parse(r.stdout);
-  const who = callCli("apex_who_is_on_it", { dryRun: true, hours: 12, noFetch: true, paths: ["js/game.js"] });
-  assert.equal(who.status, 0, who.stderr);
-  assert.match(body(who).argv.join(" "), /ci\/who-is-on-it\.mjs --json --hours 12 --no-fetch js\/game\.js$/);
-  for (const [args, re] of [
-    [{ paths: ["--claim"] }, /not flags/],
-    [{ paths: ["-x"] }, /not flags/],
-    [{ paths: "js/game.js" }, /array/],
-    [{ hours: 0 }, /hours must be/],
-    [{ hours: 999 }, /hours must be/],
-  ]) {
-    const r = callCli("apex_who_is_on_it", args);
-    assert.equal(body(r).error, "bad_args", JSON.stringify(args));
-    assert.match(body(r).message, re);
-  }
-  const src = fs.readFileSync(MCP, "utf8");
-  assert.match(src, /name: "apex_who_is_on_it",\s*week: 6,\s*kind: "tree"/, "apex_who_is_on_it takes no browser lock");
-  // 2026-10-26 (system audit §7): the two pass-throughs left; the CLIs print the same thing.
-  for (const gone of ["apex_session_status", "apex_ci_status"]) {
-    assert.doesNotMatch(src, new RegExp(`name: "${gone}"`), `${gone} is a plain CLI now`);
-    assert.equal(body(callCli(gone, { dryRun: true })).error, "unknown_tool", `${gone} is not callable`);
-  }
-});
 
 test("runSpawn never blocks, and a cancel or timeout kills the child's process group", async () => {
   const { runSpawn } = await import("../../tools/mcp/apex-tools-mcp.mjs");
@@ -2281,16 +2256,6 @@ test("slimBody (#2672): doctor keeps failures + pass count, unit_test keeps coun
   assert.deepEqual(sel.out.shards, [{ name: "s1", specCount: 2 }]);
 });
 
-test("slimBody: eval scope hint, profile_query ENOENT hint, who_is_on_it drops stale and released claims", async () => {
-  const { slimBody } = await import("../../tools/mcp/apex-tools-mcp.mjs");
-  assert.match(slimBody("apex_eval", { ok: false, out: { err: "info is not defined" } }).fix, /a\.info\(\)/);
-  const browserThrow = slimBody("apex_eval", { ok: true, exit: 0, out: { err: "boom" } });
-  assert.equal(browserThrow.ok, false); assert.equal(browserThrow.fix, undefined);
-  assert.equal(slimBody("apex_eval", { ok: true, out: { v: 1 } }).ok, true);
-  assert.match(slimBody("apex_profile_query", { ok: false, stderr: "ENOENT: no such file" }).fix, /apex_job_start/);
-  const w = slimBody("apex_who_is_on_it", { out: { claims: [{ slug: "a" }, { slug: "b", stale: true }, { slug: "c", released: true }] } });
-  assert.deepEqual(w.out.claims, [{ slug: "a" }]); assert.equal(w.out.hiddenClaims, 2);
-});
 
 test("hudEstimateMs (#2673): tracks measured cost and scales with cells; the kill budget is not the estimate", async () => {
   const { hudEstimateMs } = await import("../../tools/mcp/apex-tools-mcp.mjs");

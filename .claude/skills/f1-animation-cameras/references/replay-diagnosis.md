@@ -1,6 +1,6 @@
 # Diagnosis and prerequisites
 
-## Anchor owners (grep these first)
+## Anchor owners (symbols via apex-lsp, skill code-nav)
 - `js/race/real-replay.js` — replay `follow` / `setLocked` / seek state (the followed car id);
   `setLocked` delegates to the Broadcast object built by `Broadcast.create` (`js/race/broadcast.js`),
   which holds the lock and the auto-cut shots; `reposition()` skips `setFollow` while the picture is locked.
@@ -9,6 +9,12 @@
 - `js/game.js` `cameraDampingState()` (`__apex.cameraState()`): eye, target, fov,
   `previousAnchor`/`nextAnchor` (car-frame damping), `renderFrame`, `simulationTime`.
 
+## Seek is a designed discontinuity
+`seekTo` → `reposition(T, highlight, paint=true)` → `G.snapGameCam(paint)`: the camera snaps on
+every non-continuous seek, and a HIGHLIGHTS scrub also cuts to the reel item ahead (`HOLD_S`,
+#2196) and calls `bc.onCut`. A snap at seek is not the bug; the subject after it, or the blend
+after it, may be.
+
 ## Likely causes of "old car after a seek"
 - FOLLOW LOCK is on (`setLocked(true)`): `reposition()` in `real-replay.js` skips the auto re-follow (`setFollow`) while `picture.locked`/`manual`.
 - The follow id was not re-pointed on seek (`setFollow` not called for the new car).
@@ -16,7 +22,9 @@
 ## Fields to diff per phase (probe JSON on stdout)
 `samples[].phase`, `samples[].frame.camera`, `samples[].eyeDeltaMetres` (jump between
 consecutive samples), `samples[].replay`, `preferences.restored`, `exit.replay.active`,
-top-level `ok`. A stale anchor shows as a large `eyeDeltaMetres` at seek/follow/reentry.
+top-level `ok` (which ignores `eyeDeltaMetres`). A large delta AT seek is expected (the snap
+onto the new position); a stale anchor shows as seek frame 1..N drifting from frame 0, or as
+`previousAnchor`/`nextAnchor` not matching the followed car (needs `--frames` > 1).
 
 ## Non-Baku circuit
 `--fixture default` requires `--track baku`. For another circuit pass `--fixture FILE`

@@ -31,8 +31,8 @@ dance entirely when you already intend to publish.
 `(moved to <path>)` tag = re-apply their edit there) and returns you to the
 branch you started on; `sync-pr-<branch>` is left as an unmerged copy of the
 PR head, so inspect it before removing or renaming it. Then, in order:
-`who-is-on-it.mjs` if the base file is not yours → `git checkout <branch> &&
+`pr-board.mjs` if the base file is not yours → `git checkout <branch> &&
 git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides' intent in
 each hand-written file → generated leftovers at the source + `npm run gen`
-(AGENTS.md rule 11) → `git add` / commit → `deploy.mjs --gate-only` → plain
+(AGENTS.md rule 11) → `git add` / commit → `tooling-fast --changed` → plain
 `git push` (never force).

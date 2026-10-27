@@ -25,7 +25,8 @@ A WGX `supported: false` is a device/feature miss, not "WGX has no pack."
 
 **Agents cannot bake.** `.claude/settings.json` denies `node tools/gen/assets.mjs bake*`
 (every `bake-*` subcommand); only `verify` runs. A regenerate step is a hand-off:
-write the exact command into the PR body for Bryce, or ask him for a grant.
+write the exact command into the PR body for Bryce, or ask him for a grant (in a worker:
+`needs-decision` plus one comment, docs/WORKERS.md §7).
 
 ## When to Use
 

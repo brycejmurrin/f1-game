@@ -933,7 +933,7 @@ export class Lsp {
       const m = row.exec(lines[i]);
       if (m) { p = { file, line0: i, col0: m.index + m[0].indexOf(member) }; break; }
     }
-    if (!p) throw Error(`${iface} (the ${h} façade, ${file}) has no member ${member}`);
+    if (!p) throw Error(`${iface} (the ${h} façade, ${file}) has no member ${member}; a local (e.g. a js/game.js IIFE function) answers to the bare name: try lsp_symbols ${member} or lsp_definition ${member}`);
     const def = { uri: this.uriOf(file), range: { start: { line: p.line0, character: p.col0 } } }, note = `${h} is the ${iface} façade; contract row in ${file}`;
     if (method === "textDocument/references") return { p, result: await this.textRefs([h, member], def, extra.context?.includeDeclaration !== false), note: `${note}; uses are text matches of ${h}.${member}` };
     if (method === "textDocument/definition") return { p, result: [def], note };

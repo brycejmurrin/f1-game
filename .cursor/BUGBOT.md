@@ -6,12 +6,11 @@ can still ship with an explicit "not run" note.
 
 ## Repo rules live elsewhere
 
-Review against the canonical rules, not a copy here: merge authority, MERGE-HOLD, ready and sync
-rules are in `.claude/rules/fleet-core.md` (and `AGENTS.md` §Concurrent PRs); coding conventions,
+Review against the canonical rules, not a copy here: merge authority, the `hold` label, ready and sync
+rules are in `AGENTS.md` §Coordination and `docs/WORKERS.md`; coding conventions,
 the generated-file list (AGENTS.md rule 11), the zero-dependency IIFE module layout and the size
 ratchets are in `.claude/rules/game-code.md` and `AGENTS.md`. Do not restate or invent merge
 strategies, branch names, deploy steps or model ids that those files do not contain.
-
 ## Hot-path evidence (blocking when absent)
 
 Flag WebGL / physics / hot-path edits under `js/physics/`, `js/game.js`, or

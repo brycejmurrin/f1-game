@@ -151,8 +151,9 @@ test("storage health and lazy restore history survive denied getters and recover
 test("restore history is bounded per slot, captures only explicit boundaries and never fills primary storage", async () => {
   const h = boot(); await h.store.mirror.ready; const p = points(h); const before = h.disk.size;
   assert.equal((await p.capture("driver", 0, save(), { reason: "autosave" })).ok, false);
+  assert.equal((await p.capture("driver", 0, save(), { reason: "import" })).reason, "explicit-boundary-required", "no caller passes the bare import boundary");
   for (let r = 0; r < 5; r++) assert.equal((await p.capture("driver", 0, save(r), { reason: "round" })).durable, true);
-  await p.capture("myteam", 1, save(9, "myteam"), { reason: "import" });
+  await p.capture("myteam", 1, save(9, "myteam"), { reason: "before-import" });
   assert.deepEqual(Array.from((await p.list("driver", 0)).items, (x) => x.summary.round), [4, 3, 2]);
   assert.equal((await p.list("myteam", 1)).items.length, 1); assert.equal(h.disk.size, before);
   assert.equal((await p.capture("driver", 0, { ...save(), large: "x".repeat(70000) }, { reason: "round" })).ok, false);

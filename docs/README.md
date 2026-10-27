@@ -6,19 +6,20 @@ notes, research, archive and plans tables live in [NOTES-INDEX.md](NOTES-INDEX.m
 
 ## Read in this order
 
-**If you are an agent:** `AGENTS.md` → `VERIFICATION.md` → `ARCHITECTURE-MAP.md` →
+**If you are an agent:** `AGENTS.md` → `WORKERS.md` → `VERIFICATION.md` → `ARCHITECTURE-MAP.md` →
 `ARCHITECTURE.md` (the section you edit) → `TESTING.md` §1-2 → the one area doc
 your change touches → the skill that drives it.
 
 | # | Read | Why |
 |---|---|---|
 | 1 | [`../AGENTS.md`](../AGENTS.md) | The rules; every flat prohibition lives there. Read all of it. |
-| 2 | [VERIFICATION.md](VERIFICATION.md) | Edit-loop, pre-push, docs-only, CI and Pages commands and what each proves. |
-| 3 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Boot path, layer map, data flow, where to edit what. Ten minutes. |
-| 4 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module contract, the `G` façade, the loop, the three renderers. Read your directory's section. |
-| 5 | [TESTING.md](TESTING.md) §1-2 | Which GROUP a change needs and how to run it. Per-file table: [TESTING-COVERAGE.md](TESTING-COVERAGE.md); one hook: [AGENT-HOOKS.md](AGENT-HOOKS.md). |
-| 6 | the area doc | One row below, only when the task touches it. |
-| 7 | the skill | `.claude/skills/README.md` picks it. |
+| 2 | [WORKERS.md](WORKERS.md) | The worker contract: find and claim work, draft PR, local floor, `land`, cost cap, takeover, labels, the dispatcher. |
+| 3 | [VERIFICATION.md](VERIFICATION.md) | Edit-loop, pre-push, docs-only, CI and Pages commands and what each proves. |
+| 4 | [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) | Boot path, layer map, data flow, where to edit what. Ten minutes. |
+| 5 | [ARCHITECTURE.md](ARCHITECTURE.md) | The module contract, the `G` façade, the loop, the three renderers. Read your directory's section. |
+| 6 | [TESTING.md](TESTING.md) §1-2 | Which GROUP a change needs and how to run it. Per-file table: [TESTING-COVERAGE.md](TESTING-COVERAGE.md); one hook: [AGENT-HOOKS.md](AGENT-HOOKS.md). |
+| 7 | the area doc | One row below, only when the task touches it. |
+| 8 | the skill | `.claude/skills/README.md` picks it. |
 
 **If you are a person:** [`../README.md`](../README.md) → [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md)
 → [ARCHITECTURE.md](ARCHITECTURE.md) → [PHYSICS.md](PHYSICS.md) or [CAREER.md](CAREER.md) → [TESTING.md](TESTING.md) §1.

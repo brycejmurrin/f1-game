@@ -521,9 +521,12 @@ const PATH_PIN_RE = /["'`]((?:js|css|tools|types|desktop|docs|tests\/|index\.htm
 // on every CI run, and a docs-only change cannot touch .cursor/environment.json.
 const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|comment-citations|agent-surface)\.test\.mjs$/;
 
+// Relative import specifiers ("../../tools/ci/x.mjs"): resolved against the importing file, indexed by exact path (#3907).
+const REL_PIN_RE = /["'`](\.{1,2}\/[^"'`\s]+)["'`]/g;
+
 let _pinIndex = null;
 
-function indexPathKey(map, key, testFile) {
+function indexPathKey(map, key, testFile, exact = false) {
   const norm = key.replace(/\\/g, "/");
   let cur = norm;
   while (cur) {
@@ -532,11 +535,12 @@ function indexPathKey(map, key, testFile) {
     const slash = cur.lastIndexOf("/");
     if (slash < 0) break;
     cur = cur.slice(0, slash);
+    if (exact) break;
   }
 }
 
 /** Map repo-relative paths → tooling-fast unit files that pin them in source. */
-function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
+export function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
   const map = new Map();
   for (const f of files) {
     if (f.startsWith("//")) continue;
@@ -546,6 +550,11 @@ function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
     PATH_PIN_RE.lastIndex = 0;
     let m;
     while ((m = PATH_PIN_RE.exec(src))) indexPathKey(map, m[1], f);
+    REL_PIN_RE.lastIndex = 0;
+    while ((m = REL_PIN_RE.exec(src))) {
+      const rel = path.posix.normalize(path.posix.join(path.posix.dirname(f.replace(/\\/g, "/")), m[1]));
+      if (!rel.startsWith("../")) indexPathKey(map, rel, f, true);
+    }
   }
   return map;
 }
@@ -858,7 +867,6 @@ export function selectToolingFastChanged(changed, opts = {}) {
       cur = cur.slice(0, slash);
     }
     if (/^tools\/ci\/tooling-fast\.mjs$/.test(norm)) selected.add("tests/unit/tooling-fast-runner.test.mjs");
-    if (/^tools\/ci\/test-bg\.mjs$/.test(norm)) selected.add("tests/unit/test-bg-outcome.test.mjs");
   }
 
   if (!selected.size) return full("no-pin-match");

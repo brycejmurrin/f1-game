@@ -114,16 +114,9 @@ def foreign_commits(where, remote, branch):
             if r[1].lower() != me or (mine and _sid(r[4]) and _sid(r[4]) != mine)]
 
 
-QUEUE_BRANCH = re.compile(r"^cursor/[^/]*queue-[0-9a-z]+$")
-
-
 def check(where, remote, branch):
-    """The refusal text for a push of `branch`, or None to let it through."""
-    # An orchestrator queue/state branch (cursor/orchb-queue-b7f2 …) is written by
-    # successive orchestrator sessions by design, so a predecessor's commit is not
-    # a foreign push there (2026-10-26: the block stopped a successor's first push).
-    if branch and QUEUE_BRANCH.match(branch):
-        return None
+    """The refusal text for a push of `branch`, or None to let it through. (The orchestrator queue-branch
+    exemption, cursor/*queue-*, went with the orchestrators: WP-D1, 2026-10-27.)"""
     try:
         found = foreign_commits(where, remote, branch)
     except Exception as e:                          # fail open, loudly
@@ -136,8 +129,8 @@ def check(where, remote, branch):
     more = f"  … and {len(found) - 5} more\n" if len(found) > 5 else ""
     return (f"BLOCKED: {branch} gained {len(found)} commit(s) on the remote from another author since this "
             f"checkout last pushed it (shared safety ban 3, the #3517 foreign pusher):\n{lines}{more}"
-            "Another session or a person is pushing to your branch. Do not push over it: stand down and tell your "
-            "orchestrator (skill agent-fleet, worker.md: a sibling that pushed to your PR branch is live). When the "
+            "Another session or a person is pushing to your branch. Do not push over it: stand down and say so in one PR "
+            "comment (docs/WORKERS.md: comments are the only inter-agent message; a takeover worker may own it now). When the "
             "branch is confirmed yours again, fetch and merge it, then push once with APEX_FOREIGN_PUSH_OK=1; that "
             "push moves the baseline.\n")
 

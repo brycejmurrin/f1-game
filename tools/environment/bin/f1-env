@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# @doc F1 env: canonical F1 environment and plugin support.
+set -euo pipefail
+root=/workspace/f1-game/tools/environment
+if [[ $# -gt 1 ]]; then echo 'Expected one command. Use f1-env help.' >&2; exit 2; fi
+case "${1:-help}" in
+  install) exec bash "$root/install-environment.sh" ;;
+  resume) exec bash "$root/environment/resume.sh" ;;
+  start) exec bash "$root/boot-chat-mcp.sh" ;;
+  doctor) exec bash "$root/environment/preflight.sh" ;;
+  verify) exec bash "$root/environment/verify.sh" ;;
+  shaders) source "$root/activate.sh"; exec node "$root/environment/validate-shaders.mjs" ;;
+  plugin-install) exec bash "$root/environment/plugin-install.sh" ;;
+  plugins) exec python3 "$root/build-plugins.py" ;;
+  help|--help|-h)
+    echo 'f1-env install | resume | start | doctor | verify | shaders | plugins | plugin-install'
+    echo 'install: locked dependencies and tooling; no service startup'
+    echo 'resume: restore existing MCP service and validate readiness; no installs'
+    echo 'start: reuse/start existing MCP service and verify live readiness; no installs'
+    echo 'doctor: offline dependencies, browser and runtime prerequisites; no startup'
+    echo 'verify: developer tooling and retained plugin validation; no startup'
+    echo 'shaders: compile all extracted GLSL and WGSL with glslang and real Chromium/Dawn'
+    echo 'plugins: build private plugin archives independently of live MCP'
+    ;;
+  *) echo "Unknown command: $1. Use f1-env help." >&2; exit 2 ;;
+esac
