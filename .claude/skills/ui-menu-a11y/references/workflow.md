@@ -5,6 +5,10 @@ geometry bug.
 
 ## Contents
 - Workflow
+  - Escape path / Escape does nothing
+  - Pause settings overlay (back-stack: Escape closes too much)
+  - A selected chip is not announced
+  - Cramped single screen
 - Common mistakes
 - Reduced motion
 
@@ -15,16 +19,20 @@ geometry bug.
    individual modules. New full-screen overlays must be added to the internal
    `DEFS` array in `js/ui/layers.js` (only `LAYER_IDS` is exported — do
    not assign `UiLayers.DEFS`). Modal rank comes from managed opening order,
-   never `querySelectorAll` document order. Cost: `top()` / `anyOpen()` are layer
-   queries, not per-frame state — called from a rAF or pad tick they must be cached
-   and invalidated on open/close (as `navOpen()` is).
+   never `querySelectorAll` document order. Cost: `top()`, `anyOpen()` and `navOpen()`
+   are all memoised behind `navDirty` (`NAV_MEMO_MS`, `js/ui/layers.js`); a new caller
+   reads through them and never re-queries. A `top()` read can be up to one memo window
+   stale when no observer has fired. Live read (parent only, AGENTS.md rule 10):
+   `__apex.inputState()` (gate + focus) or chrome-devtools `UiLayers.top().id`.
 
 2. **Use the declared close door.** For real dialogs, let `TopModal` mirror
    `hidden` to `showModal()`/`close()`. Add
    `data-esc-close="<button-id>"` to name the same action the visible back
    button uses; that id must EXIST (in `index.html`, or built by a declared
    dynamic owner) — `menu-a11y-audit` fails a door that names nothing. Use
-   `data-esc="none"` only for screens that must refuse Escape.
+   `data-esc="none"` only for screens that must refuse Escape. A named door that is
+   missing or `disabled` STILL OWNS Escape: `onEscape` swallows the key with no click
+   (so a screen that disables its back button while busy silently eats Escape).
 
 3. **Respect the platform top layer.** A modal dialog has `z-index: auto`;
    do not sort it with `parseInt(zIndex)`. `UiLayers` treats `:modal` as
@@ -53,18 +61,41 @@ geometry bug.
    pointer only; use `any-pointer` when the question is "does any attached
    input exist?"
 
-8. **Verify.** `npm run test:tooling-fast`, then the one spec for the surface, backgrounded (AGENTS.md rule 4):
-   `npm test -- tests/specs/<menu-keyboard|ui-button-touch|ui-scale>.spec.js`, or `remote-group.mjs ui` on the
-   pushed branch (AGENTS.md verification table). Shell/cache: [bump.md](../../check-changes/references/bump.md).
+8. **Verify.** `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet`, then the one spec for the surface:
+   `node tools/ci/test-bg.mjs --spec tests/specs/<menu-keyboard|ui-button-touch|ui-scale>.spec.js`, or
+   `remote-group.mjs ui` on the pushed branch (AGENTS.md verification table). Shell/cache:
+   [bump.md](../../check-changes/references/bump.md).
+
+### Escape path / Escape does nothing
+
+Where Escape goes, in order: inner-disclosure handlers on `document` CAPTURE registered first
+(`js/game.js`, e.g. the GARAGE camera panel; `js/ui/key-binds.js` `onKey` on `window` capture while
+a rebind is armed) -> `TopModal`'s `onEscape` (`js/ui/modal.js`, `document` capture, runs BEFORE the
+native `cancel`) -> `door.click()` -> only when no screen claimed it: the pause switch in
+`js/input/input.js` (`window`, BUBBLE). `onEscape`'s `stopPropagation` is what keeps the key from
+toggling pause behind a sheet: "Escape toggles pause instead" starts in `modal.js`, not `input.js`.
+
+"Escape does nothing" — suspects in `onEscape` order:
+1. `e.defaultPrevented`: an earlier capture listener took it (armed key-bind, a game.js inner disclosure).
+2. Alt/Ctrl/Meta held: `onEscape` returns without acting.
+3. `UiLayers.top()` is null, or names another layer than the one on screen (step 1).
+4. A nested `:modal` inside the layer stands aside (`topModalInside`); its own `cancel` must close it.
+5. The door is missing or `disabled`: swallowed, no click (step 2). Native `cancel` (`wire()`) clicks a
+   disabled door, which does nothing either.
+6. On a Settings sub-page, BACK pops to `home` and does not close — by design (`SettingsNav.back()`).
+`menu-a11y-audit.test.mjs` pins these statically only (door existence, the onEscape -> click shape);
+behaviour needs `menu-keyboard` / `ui-button-touch`.
 
 ### Pause settings overlay
 
+Two settings dialogs: `#pmsettings` (title + pause, door `pm-settings-close`) and
+`#race-settings` (door `rs-cancel`); read `UiLayers.top().id` before picking one. This section is `#pmsettings`.
 Opening pause settings hides `#pausemenu` so only `#pmsettings` is visible.
 Escape routes through `data-esc-close="pm-settings-close"` (browser ladder in
 `tests/specs/ui-button-touch.spec.js`). Scroll region:
 `#pmsettings-inner .sheet-body.pane`.
 
-Back-stack (Escape/BACK goes to the wrong screen or closes too much). Suspects in order:
+Back-stack (Escape/BACK goes to the wrong screen or closes TOO MUCH; does nothing → the list above). Suspects in order:
 1. Held key: `onEscape` (`js/ui/modal.js`) swallows `e.repeat`, and `Input` ignores
    repeats for the pause switch, so a held Escape is one press. A repeat that got
    through walks BACK -> close -> RESUME.
@@ -121,9 +152,9 @@ should add a source-regex pin to that unit file.
 Static route: `SheetShape` writes `data-density="compact"` on the sheet
 (`#sel-inner`); `css/select.css` `#sel-inner[data-density="compact"] ...` drops
 row names, elevation, and the `.track-row` `min-height` (deliberately below the
-`--tap` rung, flags-only strip). Rungs live in `css/tokens.css`: `--tap` 44 /
-`--chip-h` 40 on a mouse pointer, 52 / 46 on `body:not(.desktop)`, each
-`max(N, 24px / --ui-scale)`. Pins: `menu-a11y-audit.test.mjs` (tap/chip rungs
+`--tap` rung, flags-only strip). Rungs live in `css/tokens.css`: `--tap` and
+`--chip-h`, one value for a mouse pointer and a larger one on `body:not(.desktop)`
+(read the file; the touch `--chip-h` is scale-clamped). Pins: `menu-a11y-audit.test.mjs` (tap/chip rungs
 and the `.sel-chip` boxes), `ui-improve-pass.test.mjs` ("compact catalogue
 keeps a pannable toolbar"), `sheetshape-density-scale.test.mjs` (zoom-aware
 density). Measured fit is BROWSER-only (`tools/ui/layout-audit.mjs`;
