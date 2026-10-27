@@ -1,0 +1,46 @@
+# Concept body fit rows on the deploy tip (#3156)
+
+Measured 2026-10-27 on `c4a1c688` (includes #3118's conceptNose pin):
+`node tools/car/car-fit-audit.mjs --all-bodies --json` — 7 min wall, 11 cars x (factory + 30 body looks;
+the issue counted six, `--all-bodies` now covers 30).
+
+## Method
+The issue's base (71ca7a4a) predates the pin, so `--base` against it no longer measures the work. This run
+compares each of the six original bodies (needle, brick, anteater, arched, wedge, barge) with the FACTORY
+build of the same team: a failing row is NEW if factory has no failing row for that pair, WORSE if its value
+is more than 1.25x + 3 mm of factory's. Rows below are counts over 6 bodies x 11 cars (max 66 per row).
+
+## Ranked rows (n, worst mm / cm2, where, bodies)
+```
+ZFIGHT engineCover~sidepods NEW n=60 max=331.84 [-0.704,0.174,0.033] {"needle":10,"brick":11,"anteater":11,"arched":9,"wedge":11,"barge":8}
+PENETRATION frontWing~chassis NEW n=55 max=46 [-0.027,0.266,2.234] {"brick":11,"anteater":11,"arched":11,"wedge":11,"barge":11}
+OPEN engineCover~- NEW n=51 max=3792 [0.493,0.395,-0.34] {"needle":11,"brick":11,"anteater":5,"arched":11,"wedge":11,"barge":2}
+ZFIGHT livery~livery WORSE n=34 max=105.6 [0.008,0.524,2.097] {"brick":11,"barge":11,"arched":5,"anteater":3,"wedge":3,"needle":1}
+GAP suspension~suspension WORSE n=33 max=14.6 [-0.211,0.344,-1.569] {"needle":5,"brick":5,"anteater":6,"arched":6,"wedge":6,"barge":5}
+PENETRATION chassis~bolsters NEW n=31 max=32.4 [-0.272,0.47,0.05] {"anteater":11,"wedge":11,"barge":9}
+OPEN livery~- NEW n=30 max=543 [-0.594,0.594,-0.025] {"needle":9,"brick":11,"arched":8,"barge":2}
+PENETRATION mirrors~sidepods NEW n=27 max=58.9 [-0.404,0.604,0.347] {"needle":10,"brick":9,"arched":8}
+ZFIGHT engineCover~livery NEW n=25 max=73.72 [-0.744,0.245,0.138] {"anteater":11,"wedge":11,"barge":2,"needle":1}
+OPEN chassis~- WORSE n=22 max=4659.3 [0.193,0.513,1.05] {"needle":11,"anteater":11}
+GAP livery~chassis NEW n=22 max=6 [-0.224,0.313,2.126] {"brick":11,"barge":11}
+GAP bodyDetail~bodyDetail NEW n=21 max=20.5 [-0.863,0.088,0.5] {"needle":7,"brick":7,"wedge":7}
+GAP livery~engineCover NEW n=20 max=4.5 [-0.025,0.957,-0.66] {"brick":5,"arched":7,"barge":8}
+PENETRATION aeroFlaps~chassis NEW n=18 max=48.7 [-0.188,0.272,1.98] {"brick":7,"wedge":8,"barge":3}
+```
+Per-body totals: needle 122, brick 145, wedge 118, anteater 111, arched 110, barge 117.
+
+## Reading
+- The issue's named rows are still present but are NOT the biggest: engineCover~sidepods ZFIGHT (60),
+  frontWing~chassis PENETRATION (55, brick/anteater/arched/wedge/barge on every car, 46 mm near z 2.23),
+  engineCover OPEN (51) and chassis~bolsters (31, anteater/wedge/barge) lead.
+- hood~chassis and halo~hood fail at 57-59 mm on FACTORY too, so they are not concept-specific; the nose-root
+  blend (extra station near z 1.20) cannot clear them as a NEW row.
+- frontWing~chassis is new for every non-needle body: the wing mounts were not re-derived from the concept
+  nose bottom.
+
+## Next steps (not done here)
+1. frontWing mount from the concept nose underside (conceptNose floor), then re-run `--bodies=brick`.
+2. bolsters / cockpit rim from `bodyAnchors().podAt/coverAt` (chassis~bolsters, bolsters~sidepods, cockpit~engineCover).
+3. engineCover vs sidepods ZFIGHT: the cover/pod shoulder overlap at z -0.7.
+4. Gate once per fix: `--bodies=<id>` with a saved `--write-baseline` from this tip (~1 min per body).
+   Coordinate with Codex car-design-expansion-84b2 on the same recipes.
