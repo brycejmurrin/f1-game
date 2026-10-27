@@ -29,7 +29,7 @@ shim. Existing profile contents and credential references are preserved.
 ```sh
 f1-env install        # explicit dependency/tool repair; does not start services
 f1-env plugins       # deterministic archives with preserved app identities
-f1-env plugin-install # local Codex registration only; new session may be needed
+f1-env plugin-install # optional: supported CLI with a writable configured home
 f1-env verify        # environment, lifecycle, package and developer checks
 f1-env shaders       # separate serialized Chromium/Dawn compilation
 ```
@@ -71,3 +71,10 @@ References consulted during consolidation:
 https://developers.openai.com/plugins/build/mcp-server
 https://modelcontextprotocol.io/specification/2025-03-26/basic/lifecycle
 https://docs.npmjs.com/cli/v11/commands/npm-ci/
+
+Local registration is optional for these hosted-first packages. The saved install
+script builds packages through the canonical installer; it does not require
+mutating the host-managed Codex configuration. Use plugin-install only when the
+host supports it and the configured home is writable. An isolated Codex home is
+packaging evidence, not active installation; never switch active credential
+bindings to make a local installation test pass.

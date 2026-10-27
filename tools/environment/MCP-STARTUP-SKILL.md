@@ -11,9 +11,12 @@ explicitly run f1-env install if needed, then retry resume. Missing sources must
 be restored from the repository; missing profiles or credentials require restoring
 the existing bindings. Never create replacement apps/tunnels or print credentials.
 
-For missing local Codex plugin registration, run f1-env plugins and
-f1-env plugin-install. Local registration is separate from account package
-publication and hosted attachment. Discover supported management tools first.
+Canonical installation builds both packages. Local Codex registration is optional:
+run f1-env plugin-install only when that host supports local plugins and its
+configured Codex home is writable. A read-only active configuration is a host
+limitation; do not change credential bindings or switch the active Codex home.
+An isolated writable Codex home can test packaging but does not update the active
+host or account. Discover supported account management tools separately.
 Use canonical sources in tools/environment, tools/env/chat-mcp-service.mjs and
 tools/mcp; never run a retained duplicate runtime. Compatibility binding is
 bash /workspace/f1-game/tools/environment/bind-canonical.sh.

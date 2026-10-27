@@ -67,3 +67,9 @@ health regression, two initialization-shim protocol tests, five package-builder
 regressions and 24 package tests. Static GLSL compiled all 33 variants; naga WGSL
 and static TLX checks remain explicit skips. No rendered/gameplay change is
 claimed. Browser smoke helper was consolidated but not run for this repair.
+
+The final saved install script invokes only the canonical environment installer,
+which builds and verifies packages. Local Codex registration is optional and
+requires a supported writable configured home. The restored active configuration
+is read-only, so mandatory registration would have made image setup fail. This
+does not change the configured home, account state or credential bindings.
