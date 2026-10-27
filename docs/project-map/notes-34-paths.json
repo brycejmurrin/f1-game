@@ -1,0 +1,19 @@
+{
+  "group": "34",
+  "purpose": "Historical ephemeral source references and archived backlink locations; no execution authority or existence guarantee.",
+  "paths": [
+    "scratch/shadow-pass-count.mjs",
+    "scratch/ab-frames.mjs",
+    "scratch/compile-attrib-probe.mjs",
+    "scratch/lamp-ab.mjs",
+    "scratch/tlx-gpu-cost.mjs",
+    "scratch/h7-tex.mjs",
+    "scratch/tlxperf.mjs",
+    "artifacts/minimap-before-after.png",
+    "docs/archive/notes/IPHONE-TLX-WEBGPU-2026-10-23.md",
+    "docs/archive/notes/PASS-CENSUS-2026-10-17.md",
+    "docs/archive/notes/PERF-HUNT-P7-2026-10-17.md",
+    "docs/archive/notes/PERF-HUNT-TLX-2026-10-17-R3.md",
+    "docs/archive/notes/MESH-EFFICIENCY-RESEARCH-2026-10-17.md"
+  ]
+}

@@ -1,3 +1,5 @@
+> Coverage update: Initial bounded snapshot. CSS A/B, root-shell, root-metadata and platform reports close the source/metadata scope. Use coverage.tsv for current status.
+
 # Shell, presentation, and native packaging map
 
 ## Goal

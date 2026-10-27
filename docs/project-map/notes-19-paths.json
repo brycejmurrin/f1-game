@@ -1,0 +1,62 @@
+{
+  "batch": "19",
+  "purpose": "Historical paths and references; not commands or present authority",
+  "parts": [
+    {
+      "path": "docs/notes/NIGHT-MAST-POOLS-2026-10-05.md",
+      "start": 3875,
+      "end": 6604,
+      "kind": "text",
+      "sha256": "6c79688c4f67c77c3bdaeb64e79b1760a45d3a0ecab60125aee898a54599db78"
+    },
+    {
+      "path": "docs/notes/NODE-DEBUGGING-2026-10-19.md",
+      "start": 0,
+      "end": 30507,
+      "kind": "text",
+      "sha256": "270d2d79e29219a9e37b46fa364d23671eeacf7340800ac1031bf71225422f94"
+    },
+    {
+      "path": "docs/notes/OCCLUSION-PROBE.md",
+      "start": 0,
+      "end": 11924,
+      "kind": "text",
+      "sha256": "d14b9ea21d467181dd281e7f1f2d3ecf8559b1d2e4e85445e6e59062d50dab64"
+    },
+    {
+      "path": "docs/notes/PACK-CACHE-CONTENT-ADDRESS-2026-10-25.md",
+      "start": 0,
+      "end": 2176,
+      "kind": "text",
+      "sha256": "796dcbfecdf7ac1fd22ef67fd303f6844a90d8bbec0f67f0c8994777b14c1818"
+    },
+    {
+      "path": "docs/notes/PARALLEL-HUNT-2026-10-24.md",
+      "start": 0,
+      "end": 14379,
+      "kind": "text",
+      "sha256": "2fb16199a7a6679d3bb4ea8ba0108e5426d6766960fcc8c65cc073738e6d485a"
+    },
+    {
+      "path": "docs/notes/PARALLEL-WORK.md",
+      "start": 0,
+      "end": 7491,
+      "kind": "text",
+      "sha256": "95456357fd760b446953657fd1cbd8ffd7a0bd7e845bb603fc36c3426052e9da"
+    },
+    {
+      "path": "docs/notes/PERF-ALLOC-HUNT-2026-10-17.md",
+      "start": 0,
+      "end": 3986,
+      "kind": "text",
+      "sha256": "e87eb3ecc196515d671195155ce18ffd552902d4938f70ec2d8190a3b5fac07e"
+    },
+    {
+      "path": "docs/notes/PERF-FINDINGS.md",
+      "start": 0,
+      "end": 26808,
+      "kind": "text",
+      "sha256": "42609863766b91d5e8e4358bdb2a8c8abc0e001b057a739ad441af28f26c0cdb"
+    }
+  ]
+}

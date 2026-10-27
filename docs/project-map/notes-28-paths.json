@@ -1,0 +1,716 @@
+{
+  "group": "28",
+  "policy": "Historical references only; no commands executed; absent literal paths do not establish obsolescence.",
+  "references": [
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-PLAN-TIER2-2026-09.md",
+      "reference": "FyF/muF < 0.3",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "tools/check/player-dyn.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "docs/research/DRIVING-CONTROLS-RESEARCH.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "docs/research/CONTROLS-AUDIT-2026-09.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "-mu\u00b7tanh(cs\u00b7a/mu)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "ACCEL\u00b7(1 \u2212 v/vmax)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "-mu\u00b7tanh(cs\u00b7a/mu)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "(af\u00b7Fyf\u00b7cos\u03b4 \u2212 ar\u00b7Fyr)/kz2 \u2212 YAW_DAMP\u00b7brakeYawDamp\u00b7r",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "loadF/loadR",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "ACCEL\u00b7PACE\u00b7(1 \u2212 v/vmax)\u00b7gearMult",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "slipFactor = sqrt(1 \u2212 (axUsed/LONG_GRIP)\u00b2)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "js/physics/tyre-model.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "js/physics/body-attitude.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "tools/check/player-dyn.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "tools/lib/game-vm.cjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "\u03c1 = hypot(\u03b1/\u03b1peak, \u03ba/\u03bapeak)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "P/v",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "\u0394Fz = m\u00b7a\u00b7h/L",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "x = cs\u00b7\u03b1/mu",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "x = \u03c0/2",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "min(THR_CAP, THR_K / vStd) \u00b7 throttleLvl",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "tools/check/player-dyn.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "tests/unit/player-dynamics-vm.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "tests/data/physics-baseline.json",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "docs/PHYSICS.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "hypot(\u03b1/\u03b1peak, \u03ba/\u03bapeak)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "ACCEL\u00b7(1 \u2212 v/vmax)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "px/pz/s/x/psi",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "node tools/check/player-dyn.mjs",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+      "reference": "(\u03c0/2)\u00b7muR/CS_REAR",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PREPUSH-GATE-LADDER.md",
+      "reference": "node tools/gen/gen-ladder-figures.mjs --table",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PREPUSH-GATE-LADDER.md",
+      "reference": "tests/groups.json",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PREPUSH-GATE-LADDER.md",
+      "reference": "tests/unit/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PREPUSH-GATE-LADDER.md",
+      "reference": "tests/unit/docs-integrity.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PREPUSH-GATE-LADDER.md",
+      "reference": "tests/unit/prepush-gate-coverage.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PREPUSH-GATE-LADDER.md",
+      "reference": "tests/unit/quali-persist.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PREPUSH-GATE-LADDER.md",
+      "reference": "tests/unit/prepush-gate-coverage.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PREPUSH-GATE-LADDER.md",
+      "reference": "node tools/gen/gen-ladder-figures.mjs",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "artifacts/logs/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tools/ci/ci-coverage.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "import { BOOT_MS } from \"../helpers/fixtures.js\"",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/car/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tools/lighting/slider-effect.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tests/data/physics-baseline.json",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tools/lib/track-build-vm.cjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tests/unit/ai-drive.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/game/*",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/game.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tools/lib/game-vm.cjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tests/unit/<spec>-vm.test.mjs",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "docs/TESTING.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "docs/TESTING.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/render/**",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/render/**",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/game/lighting*.js",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/lighting/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tests/unit/ci-coverage.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "docs/TESTING.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "docs/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "docs/README.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "research/",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/agent/agentview.js:1986",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tools/README.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "../ARCHITECTURE.md",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tools/mcp/tinyfish-mcp.sh:41",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "../ARCHITECTURE.md",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "node tools/ci/bump-cache.mjs --apply",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "_site/",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tools/ci/deploy.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/game.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tests/data/ratchets.json",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/game.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tests/data/ratchets.json",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/game.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "js/game.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "docs/notes/CEILING-HISTORY.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "+14/-0",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "+17/-0",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "+11/-0",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "+19/-0",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tests/data/ratchets.json",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+      "reference": "tests/unit/deploy-tool.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PRODUCT-BRAINSTORM-2026-09-16.md",
+      "reference": "css/hud.css",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PRODUCT-BRAINSTORM-2026-09-16.md",
+      "reference": "tools/ui/menu-screens.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PRODUCT-BRAINSTORM-2026-09-16.md",
+      "reference": "js/ui/settings-export.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PRODUCT-BRAINSTORM-2026-09-16.md",
+      "reference": "js/ui/settings-export.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "tools/shot/profile-gameloop.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "tools/gfx/frame-hitch.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "tools/gfx/mem-census.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "js/perf/race-entry-profile.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "js/perf/spans.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "begin(name)/end(name)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "tools/perf/profile.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "tools/perf/lib.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "vendor/three-0.186.1/three.webgpu.min.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "addons/",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "artifacts/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "scratch/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": ".claude/settings.json",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "--base origin/claude/f1-game-project-26h3ng",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "cursor/three-inspector-*",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+      "reference": "docs/notes/THREE-INSPECTOR-2026-10-16.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "js/core/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "tests/helpers/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "tools/perf/profile.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "tools/perf/race-entry-timer.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "artifacts/perf/race-entry-<sha>.cpuprofile",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "tools/perf/cpuprofile-summary.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "tools/ci/spec-timings.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "bot/spec-timings",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "docs/BUGS.md:356",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "node tools/ci/spec-timings.mjs --steps",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "docs/BUGS.md:356",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "tools/ci/spec-timings.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": ".github/workflows/spec-timings.yml",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "tests/data/spec-timings.json",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "js/perf/race-entry-profile.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "docs/BUGS.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+      "reference": "artifacts/logs/h14-*.log",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "docs/notes/DRIVING-LINE-RESEARCH.md",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "js/track/core/line.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "js/game.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "js/game.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "js/render/shared/driving-line.js",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "\u03c1 = (a\u00b2+b\u00b2\u22122ab\u00b7cos\u03b8)/(2(b\u2212a\u00b7cos\u03b8))",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "sqrt(LAT_MAX\u00b7grip/|k|)",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tools/track/line-audit.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "scratch/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tools/track/verify-track.cjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "|\u0394x|/\u0394s",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "|\u0394x|/\u0394s \u2264 0.25",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "TrackLine.at/pathK/attackAt",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tests/unit/track-line.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "w = 0.5 + 0.5 (v/vmax)\u00b2",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "scratch/relax-proto.mjs",
+      "exists_as_literal_path": false
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tools/track/line-audit.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tools/",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tools/track/line-audit.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tests/unit/track-line.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tests/unit/track-line-circuits.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "tests/unit/ai-racecraft-vm.test.mjs",
+      "exists_as_literal_path": true
+    },
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "reference": "atan(k\u00b7e/v)",
+      "exists_as_literal_path": false
+    }
+  ]
+}

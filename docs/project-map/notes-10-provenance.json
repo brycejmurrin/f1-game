@@ -1,0 +1,61 @@
+{
+  "meaning": "Historical backlinks/outgoing targets, not current engineering navigation.",
+  "records": [
+    [
+      {
+        "source": "docs/notes/CURSOR-AGENTS-API-PROBE-2026-10-19.md",
+        "incoming_mentions_in_docs": [
+          "docs/archive/notes/CURSOR-SDK-RESEARCH-2026-10-20.md",
+          "docs/archive/notes/GROK-API-2026-10-22.md"
+        ],
+        "outgoing_markdown_targets": []
+      },
+      {
+        "source": "docs/notes/DECISIONS-2026-10-26.md",
+        "incoming_mentions_in_docs": [],
+        "outgoing_markdown_targets": []
+      },
+      {
+        "source": "docs/notes/DEFECT-LEDGER.md",
+        "incoming_mentions_in_docs": [
+          "docs/ARCHITECTURE-MAP.md",
+          "docs/ARCHITECTURE-REVIEW.md",
+          "docs/ARCHITECTURE.md",
+          "docs/BUGS.md",
+          "docs/NOTES-INDEX.md",
+          "docs/SCENERY-AND-TRACK-BUILD.md",
+          "docs/archive/notes/BOOT-LOAD-TOOLING-RESEARCH-2026-10-21.md",
+          "docs/archive/notes/LIVE-DEBUGGER-BOOT-PWA-2026-10-16.md",
+          "docs/archive/notes/LIVE-DEBUGGER-HUNT-2026-10-16.md",
+          "docs/archive/notes/LIVE-DEBUGGER-RACE-2026-10-22.md",
+          "docs/notes/ARCHITECTURE-REVIEW.md",
+          "docs/notes/BUG-HUNT-2026-09-18-PASS3.md",
+          "docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md",
+          "docs/notes/LIVE-DEBUGGER-RACE-2026-10-24.md",
+          "docs/notes/SCENERY-QA-PLAN.md",
+          "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+          "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+          "docs/notes/system-audit-4/cards/code-hunter.md",
+          "docs/notes/system-audit-4/cards/prior-art-scout.md",
+          "docs/notes/system-audit-4/hunt-physics-ai.md",
+          "docs/notes/system-audit-4/hunt-render.md",
+          "docs/notes/system-audit-4/skills/check-changes.md",
+          "docs/plans/2026-09-30-agent-skills-and-tools.md",
+          "docs/plans/2026-09-30-barrier-runoff-teleports.md",
+          "docs/plans/2026-09-30-test-ci-health.md",
+          "docs/plans/2026-10-09-bug-hunt-plan.md",
+          "docs/research/CONTROLS-AUDIT-2026-09.md",
+          "docs/research/TREE-RESTRUCTURE-2026-09.md",
+          "docs/tracks/paul_ricard.md"
+        ],
+        "outgoing_markdown_targets": [
+          "../archive/2026-08-architecture-review-journal.md",
+          "../archive/research/CLEANUP-SWEEP-2026-08-18.md",
+          "../archive/research/SURVEY-BUGS-PERF-2026-08-17.md",
+          "https://w3c.github.io/gamepad/#dom-gamepadhapticactuator-playeffect",
+          "https://webaudio.github.io/web-audio-api/#dom-audiocontext-close"
+        ]
+      }
+    ]
+  ]
+}

@@ -1,0 +1,563 @@
+{
+  "group": "30",
+  "scope": "Historical raw path references including missing/obsolete candidates and archive paths; no operational authority.",
+  "references": [
+    {
+      "source": "docs/notes/RULEBOOK-EVIDENCE-2026-10-26.md",
+      "raw": "scratch/sysaudit-research/bin/ctx-ab.sh",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": ".claude/**",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": ".claude/rules/claude-config.md",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": ".claude/rules/fleet-core.md",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": ".claude/rules/game-code.md",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": "/docs/en/costs",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": "/docs/en/memory",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": "/docs/en/model-config",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": "/docs/en/prompt-caching",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": "js/css/shell",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "raw": "tests/unit/rulebook-guards.test.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "docs/notes/DEFECT-LEDGER.md",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "docs/tracks/silverstone.md",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "js/render/shared/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "js/render/shared/assets.js",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/guards/",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/overhang/",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/p4/small-props.cjs",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/perf/",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/roadfold/",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/roadfold/mesh.js",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/t3/measure.cjs",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/terrainz/",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/under/overhead-coplanar.cjs",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "scratch/zfight/tri-audit.cjs",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "tools/lib/flicker-metric.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "tools/lib/track-build-vm.cjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "tools/shot/flicker-gate.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCENERY-QA-PLAN.md",
+      "raw": "tools/shot/motion-capture.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": ".github/actions/playwright-chromium",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/api/class-browsercontext#browser-context-route",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/api/class-browserserver",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/api/class-browsertype#browser-type-launch-server",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/api/class-page#page-screenshot",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/browsers#chromium-new-headless-mode",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/ci",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/ci#caching-browsers",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/gpu/swiftshader.md",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "/docs/test-sharding",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "artifacts/capture",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "artifacts/capture-benchmark",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "docs/notes/CI-RENDERING-PERFORMANCE.md",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "docs/notes/TESTING-FIELD-NOTES.md",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "tools/ci/remote-group.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "tools/lib/browser-workers.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "tools/protocol/page_handler.cc",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "tools/shot/apex-capture.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "tools/shot/capture-benchmark.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "tools/shot/shot.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+      "raw": "tools/shot/track-session.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": ".claude/agent-memory/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": ".claude/agents/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": ".claude/memory/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": ".claude/rules/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": ".claude/skills/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "/docs/context/rules",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "/docs/en/agents-and-tools/tool-use/memory-tool",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "/docs/en/memory",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "/docs/get-started-with-mcp",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "docs/README.md",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "docs/notes/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "docs/notes/*",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "docs/notes/AGENT-MEMORY.md",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "scratch/inbox/",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "tests/unit/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "tests/unit/agent-config.test.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "tests/unit/docs-integrity.test.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "tests/unit/memory-sync.test.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+      "raw": "tools/tests",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+      "raw": ".claude/agent-memory/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+      "raw": ".claude/allow-stop",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+      "raw": "/.claude/projects/",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+      "raw": "/docs/en/hooks",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+      "raw": "/docs/en/memory",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+      "raw": "/docs/en/skills",
+      "exists_literal": false,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+      "raw": "docs/notes/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SKILL-MCP-SCOUT-2026-10-18.md",
+      "raw": ".github/workflows/",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SKILL-MCP-SCOUT-2026-10-18.md",
+      "raw": "tools/check",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    },
+    {
+      "source": "docs/notes/SKILL-MCP-SCOUT-2026-10-18.md",
+      "raw": "tools/check/check-gctx.mjs",
+      "exists_literal": true,
+      "archive_reference": false,
+      "use": "Historical path quotation; missing may be generated, shorthand or obsolete, not a deletion finding."
+    }
+  ],
+  "archived_backlinks_from_report": [
+    "docs/archive/notes/GARAGE-CAR-CAPTURE-PERFORMANCE.md",
+    "docs/archive/notes/MCP-TOOL-TEST-2026-10-18.md"
+  ]
+}

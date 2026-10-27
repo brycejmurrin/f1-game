@@ -1,3 +1,5 @@
+> Coverage update: Initial21-file ledger retained as provenance. UI A/HUD/C/D/E continuation reports close all66 files; three initial HUD files were reread. Use coverage.tsv for current status.
+
 # UI complete-read ledger
 
 Status: **in progress; not a complete UI review**. Inventory: 66 files, 25,652 lines in `js/ui/` on 2026-10-27. `AGENTS.md` and `.claude/skills/code-nav/SKILL.md` read. Only this report is edited; no source edits, browser runs, commits, or permission flags.

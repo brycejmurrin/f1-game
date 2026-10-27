@@ -1,0 +1,202 @@
+{
+  "group": "15",
+  "purpose": "Raw historical paths kept separate from current routing; includes ignored scratch/artifact and any obsolete/archive references",
+  "notes": [
+    {
+      "source": "docs/notes/HUD-TABULAR-DIGITS.md",
+      "range": [
+        5040,
+        17505
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "tests/unit/font-digits.test.mjs",
+        "tools/check/"
+      ]
+    },
+    {
+      "source": "docs/notes/HUNT4-B-VERIFY-2026-10-14.md",
+      "range": [
+        0,
+        9829
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "docs/Web/API/Performance_API/Long_animation_frame_timing",
+        "docs/notes/PERF-HUNT-4-2026-10-14.md",
+        "docs/profile-chromium",
+        "tools/lib/harness.mjs"
+      ]
+    },
+    {
+      "source": "docs/notes/INPUT-GHOSTS-2026-10-01.md",
+      "range": [
+        0,
+        2480
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "js/car/ghost-share.js",
+        "js/car/ghost.js",
+        "js/car/input-ghost.js",
+        "js/game.js",
+        "js/race/real-replay.js",
+        "js/race/session-records.js",
+        "tests/unit/input-ghost-replay-vm.test.mjs",
+        "tests/unit/input-ghost.test.mjs",
+        "tools/manifest.cjs"
+      ]
+    },
+    {
+      "source": "docs/notes/IPHONE-MEMORY-2026-10-24.md",
+      "range": [
+        0,
+        11297
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "tests/unit/devicefarm-syslog.test.mjs",
+        "tools/perf/devicefarm-iphone.mjs",
+        "tools/perf/devicefarm-syslog.mjs"
+      ]
+    },
+    {
+      "source": "docs/notes/JEDDAH-START-2201-2026-10-18.md",
+      "range": [
+        0,
+        552
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": []
+    },
+    {
+      "source": "docs/notes/JS-DEBUGGER-IMPROVEMENTS-2026-10-19.md",
+      "range": [
+        0,
+        12296
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "docs/research/AGENT-JS-DEBUGGER-MCP.md",
+        "docs/tool-reference.md",
+        "js/agent/apex.js",
+        "js/agent/apex.js:382",
+        "js/agent/apex.js?v=dev",
+        "js/node/main/lib/internal/test_runner/runner.js",
+        "js/node/main/lib/internal/util/inspector.js",
+        "js/node/main/src/inspector/domain_node_worker.pdl",
+        "js/node/main/src/inspector/domain_target.pdl",
+        "scratch/js-debugger-research.md",
+        "tools/mcp/js-debugger-boot.cjs"
+      ]
+    },
+    {
+      "source": "docs/notes/LAMP-POPPING-PLAN-2026-09-24.md",
+      "range": [
+        0,
+        15148
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "js/car/car-mesh.js:794",
+        "js/game.js:7036",
+        "js/lighting/frame-lights.js",
+        "js/lighting/lamp-bake.js",
+        "scratch/lampbake-parity.cjs",
+        "scratch/wet-lamp-share.cjs",
+        "tests/unit/lamp-bake.test.mjs"
+      ]
+    },
+    {
+      "source": "docs/notes/LIT-WGSL-CENSUS-2026-10-24.md",
+      "range": [
+        0,
+        8585
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        ".github/workflows/lit-wgsl-advisory.yml",
+        "artifacts/lit-wgsl/wt",
+        "assets/**",
+        "js/**",
+        "js/render/three/tsl-lit.js",
+        "js/render/{three",
+        "tools/perf/lit-wgsl-census.mjs",
+        "vendor/**"
+      ]
+    },
+    {
+      "source": "docs/notes/LIVE-DEBUGGER-COCKPIT-FINISH-2026-10-21.md",
+      "range": [
+        0,
+        6595
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "js/car/car-draw.js:1063",
+        "js/car/car-draw.js:1216",
+        "js/car/car-draw.js:1265",
+        "js/car/car-draw.js:772",
+        "js/game.js",
+        "scratch/h33/cockpit-finish.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
+        "tools/shot/repro-shot.mjs"
+      ]
+    },
+    {
+      "source": "docs/notes/LIVE-DEBUGGER-GARAGE-2026-10-21.md",
+      "range": [
+        0,
+        14290
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "js/car/car-draw.js",
+        "js/car/car-draw.js:515",
+        "js/car/car-draw.js:520",
+        "js/car/liverytex.js",
+        "js/game.js:1293",
+        "js/game.js:8390",
+        "js/game.js:8955",
+        "js/garage/",
+        "js/garage/**",
+        "js/garage/livery-design-editor.js",
+        "js/garage/prebuild.js:53",
+        "js/garage/scene.js:1066",
+        "js/garage/setup-camera.js",
+        "js/garage/setup-sheet.js",
+        "js/garage/setup-sheet.js:1041",
+        "js/garage/surface-inspection.js:10",
+        "js/perf/thermal-drift.js:18",
+        "js/render/three/",
+        "js/render/three/tlx.js:2881",
+        "js/render/three/tlx.js:3546",
+        "js/ui/**",
+        "js/ui/loading-screen.js:840",
+        "js/ui/setting-deps.js:273",
+        "scratch/h30/drag-probe.mjs",
+        "scratch/h32/pick-probe.mjs",
+        "tests/unit/livery-design.test.mjs"
+      ]
+    },
+    {
+      "source": "docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md",
+      "range": [
+        0,
+        6463
+      ],
+      "status": "Historical raw mentions; existence, currency and archive status not asserted",
+      "paths": [
+        "js/game.js:4628",
+        "js/race/race-control.js",
+        "js/render/three/tlx-post.js",
+        "js/render/three/tlx-shadow.js",
+        "js/render/three/tlx.js",
+        "js/render/three/tsl-lit.js",
+        "js/ui/hud.js:74",
+        "js/ui/post-fx-opts.js",
+        "tools/lib/game-vm.cjs"
+      ]
+    }
+  ]
+}

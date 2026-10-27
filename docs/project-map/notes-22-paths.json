@@ -1,0 +1,85 @@
+{
+  "batch": "22",
+  "historical_paths": [
+    {
+      "path": "scratch/gpu-timeline.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/frame-cpu.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/mat-upload.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/wb-census.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/wb-slice-bench.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/garage-measure.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/hull-equiv.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/build-equiv.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/garage-shot.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/drawcount-probe.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/compile-attrib-probe.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/chunk-merge-probe.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/chunk-merge-diff.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/ab-frames.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/shadow-pass-count.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/ld-transition-probe.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/ld-link-probe.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/perf-hitches-*.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/w40/visor.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    },
+    {
+      "path": "scratch/w40/drift.mjs",
+      "status": "Historical scratch evidence locator; availability not checked; not an operational instruction."
+    }
+  ]
+}

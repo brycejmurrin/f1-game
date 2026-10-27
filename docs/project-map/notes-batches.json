@@ -1,0 +1,2749 @@
+{
+  "goal": "Fully read tracked notes as historical provenance. Half-open byte ranges; current runtime claims need corroboration. Never follow archived operational instructions as new authority.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "docs/notes/ACTIONS-AUDIT-2026-10-14.md",
+          "start": 0,
+          "end": 11109,
+          "kind": "text",
+          "sha256": "6bbc3ba100a4f8030573ac524f466e8749de71a86687aa5ed14313e64ba73bf8"
+        },
+        {
+          "path": "docs/notes/AGENT-CONFIG-RESEARCH-2026-10-15.md",
+          "start": 0,
+          "end": 12771,
+          "kind": "text",
+          "sha256": "b569a0f876278a5a1185fabb4b2a412f6c9b4cd0b20815b558b963b4e7f135f5"
+        },
+        {
+          "path": "docs/notes/AGENT-GUARDS-2026-10-14.md",
+          "start": 0,
+          "end": 12649,
+          "kind": "text",
+          "sha256": "50cbb3b79be6ff9883bc968072ed11ef1badfbfbe3499c41433610e8a3872d4b"
+        },
+        {
+          "path": "docs/notes/AGENT-MEMORY.md",
+          "start": 0,
+          "end": 6498,
+          "kind": "text",
+          "sha256": "f48519a7783c7b702feff2e9524d33427fc1d3abdd4bbca8fbf5cfb314fae098"
+        },
+        {
+          "path": "docs/notes/AGENT-PROCESS-RESEARCH-2026-09-16.md",
+          "start": 0,
+          "end": 31025,
+          "kind": "text",
+          "sha256": "d7f73ff7efeed2f104b93bbaed420d424ade864a9a242a38f397f4bc46f47bbc"
+        },
+        {
+          "path": "docs/notes/AGENT-RETRO-2026-10-17.md",
+          "start": 0,
+          "end": 14327,
+          "kind": "text",
+          "sha256": "be2be01a28172d97fd70be97fef556ebfa1320f46f3a26d76f102baef57bbc87"
+        },
+        {
+          "path": "docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md",
+          "start": 0,
+          "end": 2969,
+          "kind": "text",
+          "sha256": "4ab40b6884f5710ab41684b0d9110e6ac5308966b0ee4bc3500ac9e5d4ebbb4e"
+        },
+        {
+          "path": "docs/notes/AGENT-SURFACE-SURVEY-2026-10-05.md",
+          "start": 0,
+          "end": 8652,
+          "kind": "text",
+          "sha256": "944ebd77752eb49dea3cb610e056fa75e3179bbe9dbf1726c58ddba25bed84c5"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "docs/notes/AGENT-SURFACE-SURVEY-2026-10-05.md",
+          "start": 8652,
+          "end": 24724,
+          "kind": "text",
+          "sha256": "944ebd77752eb49dea3cb610e056fa75e3179bbe9dbf1726c58ddba25bed84c5"
+        },
+        {
+          "path": "docs/notes/AGENT-TOKEN-USE-2026-10-20.md",
+          "start": 0,
+          "end": 8471,
+          "kind": "text",
+          "sha256": "5765b87bc2400c512b2f2555a31adae7fe23d720fa126b00f2ba436f15c448bf"
+        },
+        {
+          "path": "docs/notes/AGENT-TOOLING-MARKETPLACE-2026-10-16.md",
+          "start": 0,
+          "end": 8466,
+          "kind": "text",
+          "sha256": "4b7a690ff61a8b948bd1bdf269cdabe90005570cbd6c845051d1bb935ba555af"
+        },
+        {
+          "path": "docs/notes/AGENT-WORKFLOW-EXPERIMENTS-2026-10-19.json",
+          "start": 0,
+          "end": 12070,
+          "kind": "text",
+          "sha256": "31aaca49337b0e1beb20b508b1e5591bcbe3e6cc3a273f39526aa7d4ed83eb4a"
+        },
+        {
+          "path": "docs/notes/AI-FIELD-RESEARCH.md",
+          "start": 0,
+          "end": 54921,
+          "kind": "text",
+          "sha256": "ae37cba043792abce23b993c5528f2608ef0adc07bbaf1ce57719ec874b9a0e3"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "docs/notes/AI-FIELD-RESEARCH.md",
+          "start": 54921,
+          "end": 59655,
+          "kind": "text",
+          "sha256": "ae37cba043792abce23b993c5528f2608ef0adc07bbaf1ce57719ec874b9a0e3"
+        },
+        {
+          "path": "docs/notes/AI-PASS-COMPLETION-TRAIL-YIELD-2026-10-19.md",
+          "start": 0,
+          "end": 6564,
+          "kind": "text",
+          "sha256": "c7437628c9f71817b8a0009a14868a0bab729cc6f4a607714b5fefc30d919fff"
+        },
+        {
+          "path": "docs/notes/AI-PERSONALITY-PLAN-2026-09-16.md",
+          "start": 0,
+          "end": 13484,
+          "kind": "text",
+          "sha256": "62fd62986224332e8fadb950808214f5e91c67547a12d216963f8767ff2a4773"
+        },
+        {
+          "path": "docs/notes/APEX-STEWARD-CARD-2026-10-05.md",
+          "start": 0,
+          "end": 1685,
+          "kind": "text",
+          "sha256": "7e8e6b38c58a9add9070f20d5d73c032cab0a44ed23189fcde15f66ddfafdd96"
+        },
+        {
+          "path": "docs/notes/ARCHITECTURE-REVIEW.md",
+          "start": 0,
+          "end": 12921,
+          "kind": "text",
+          "sha256": "2db99260db304b76165c26575e40e226f689808d5af5d8182502f6c1a458c53b"
+        },
+        {
+          "path": "docs/notes/ASSET-COMPRESSION-2026-10-24.md",
+          "start": 0,
+          "end": 10892,
+          "kind": "text",
+          "sha256": "954abce349a2679b0d91af8ef03e494610e2ba9a0156696996d8758f2d813461"
+        },
+        {
+          "path": "docs/notes/AUDIT-FIX-PLAN-2026-10-26.md",
+          "start": 0,
+          "end": 1889,
+          "kind": "text",
+          "sha256": "0a28761e3c4cb692ce0b40c758a1a6b3f71481a72066adee73925d41343eb6bf"
+        },
+        {
+          "path": "docs/notes/AWS-DEVICE-FARM-IPHONE-2026-10-23.md",
+          "start": 0,
+          "end": 31554,
+          "kind": "text",
+          "sha256": "f42319a3c90c6a56409ab9fb7e6b602eb9bfc7fb2b7eba035eb5ff5cdbe24ba3"
+        },
+        {
+          "path": "docs/notes/BASE-CONTEXT-2026-10-26.md",
+          "start": 0,
+          "end": 2090,
+          "kind": "text",
+          "sha256": "86d4133d634e4c2814a54486a0f7144d683b65943a87d4f1fe3bc5d2e830adee"
+        },
+        {
+          "path": "docs/notes/BASE-CONTEXT-AUDIT-2026-10-19.md",
+          "start": 0,
+          "end": 2669,
+          "kind": "text",
+          "sha256": "09082fa46bb0770a1ca11c2547b8199e1cf0a0bcf9d93b60dfa64b6c86487eeb"
+        },
+        {
+          "path": "docs/notes/BENCH-CAPTURE-2026-10-23.md",
+          "start": 0,
+          "end": 3931,
+          "kind": "text",
+          "sha256": "c642b71f38e48b4e059f30836be64765e01e0a5451889a72cd4568fcf801346d"
+        },
+        {
+          "path": "docs/notes/BLOAT-AUDIT-CAMERA-FX-2026-10-16.md",
+          "start": 0,
+          "end": 2383,
+          "kind": "text",
+          "sha256": "351167734ea344ef68781e7a9b704c81f44c98c8491fe6b5bacc1a4c762a28ac"
+        },
+        {
+          "path": "docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md",
+          "start": 0,
+          "end": 5204,
+          "kind": "text",
+          "sha256": "6bf39ef9fa3ecbb12f5ed611cb2bf37a4f06a063542f7112ad70b2071c55c7bb"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": "docs/notes/BROWSER-MCP-DEEP-DIVE-2026-10-19.md",
+          "start": 5204,
+          "end": 11735,
+          "kind": "text",
+          "sha256": "6bf39ef9fa3ecbb12f5ed611cb2bf37a4f06a063542f7112ad70b2071c55c7bb"
+        },
+        {
+          "path": "docs/notes/BUG-HUNT-2026-09-02.md",
+          "start": 0,
+          "end": 63881,
+          "kind": "text",
+          "sha256": "1d34f4b24d54ab5327f92a2d470689c6bb1098d81d633a522262f34472d50d27"
+        },
+        {
+          "path": "docs/notes/BUG-HUNT-2026-09-18-PASS3.md",
+          "start": 0,
+          "end": 18413,
+          "kind": "text",
+          "sha256": "a61c1af7e00c274340684fcc2351a80414badd2fe10240946035923acce99d5f"
+        },
+        {
+          "path": "docs/notes/BUG-HUNT-OPUS-2026-10-10.md",
+          "start": 0,
+          "end": 9783,
+          "kind": "text",
+          "sha256": "78aa962f6856ed0e327e52ff2fbc12b29fcad2de9787ef2642b57a1508097fd9"
+        },
+        {
+          "path": "docs/notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md",
+          "start": 0,
+          "end": 1392,
+          "kind": "text",
+          "sha256": "ea5bd2cd863f08a14f908132c455f4bb8f9e073c934ec0aee3f63fd44d0e2eb6"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "05",
+      "parts": [
+        {
+          "path": "docs/notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md",
+          "start": 1392,
+          "end": 9142,
+          "kind": "text",
+          "sha256": "ea5bd2cd863f08a14f908132c455f4bb8f9e073c934ec0aee3f63fd44d0e2eb6"
+        },
+        {
+          "path": "docs/notes/BUILD-HUNT-2026-10-24.md",
+          "start": 0,
+          "end": 9534,
+          "kind": "text",
+          "sha256": "14d763fdce5f8c4f2b70d04cb27554dc39f1f1534a23f2d20647ce6852342438"
+        },
+        {
+          "path": "docs/notes/CAMERA-BROADCAST-KIT-2026-10-01.md",
+          "start": 0,
+          "end": 1629,
+          "kind": "text",
+          "sha256": "4ed196314fba63fd9e8a881d71742f14e3b85086f9556a562aea46f2b39ad4b3"
+        },
+        {
+          "path": "docs/notes/CAMERA-FEEL.md",
+          "start": 0,
+          "end": 2847,
+          "kind": "text",
+          "sha256": "7664bb28ffb6daf70dd2ca37f8b8e3139e7e6e80fd4a0d8564dbef4a9e9306a5"
+        },
+        {
+          "path": "docs/notes/CAPACITOR-ANDROID.md",
+          "start": 0,
+          "end": 1893,
+          "kind": "text",
+          "sha256": "967ba763726f2c0cdd9bdbd70fb895884aebdae7e2e5b0551d43c6007fb5b6ed"
+        },
+        {
+          "path": "docs/notes/CAREER-BRAINSTORM-2026-09-21.md",
+          "start": 0,
+          "end": 12239,
+          "kind": "text",
+          "sha256": "e77373493693e5121ce895fce2fef72332823a3a63ed0729a38ca3cb8a98a50c"
+        },
+        {
+          "path": "docs/notes/CAREER-CEILING-FIX-2026-09-22.md",
+          "start": 0,
+          "end": 11995,
+          "kind": "text",
+          "sha256": "c535b3aa436c448873addae5b4f78a48fc658c19f95f741537f0cee53942d220"
+        },
+        {
+          "path": "docs/notes/CEILING-HISTORY.md",
+          "start": 0,
+          "end": 52113,
+          "kind": "text",
+          "sha256": "2f1510686d55c4eb70c08ad9b2f65b3dc4e7bb406931564440d70b857415e5f5"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "06",
+      "parts": [
+        {
+          "path": "docs/notes/CEILING-HISTORY.md",
+          "start": 52113,
+          "end": 152113,
+          "kind": "text",
+          "sha256": "2f1510686d55c4eb70c08ad9b2f65b3dc4e7bb406931564440d70b857415e5f5"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "07",
+      "parts": [
+        {
+          "path": "docs/notes/CEILING-HISTORY.md",
+          "start": 152113,
+          "end": 252113,
+          "kind": "text",
+          "sha256": "2f1510686d55c4eb70c08ad9b2f65b3dc4e7bb406931564440d70b857415e5f5"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "08",
+      "parts": [
+        {
+          "path": "docs/notes/CEILING-HISTORY.md",
+          "start": 252113,
+          "end": 254073,
+          "kind": "text",
+          "sha256": "2f1510686d55c4eb70c08ad9b2f65b3dc4e7bb406931564440d70b857415e5f5"
+        },
+        {
+          "path": "docs/notes/CHECKJS-ROLLOUT-2026-10-18.md",
+          "start": 0,
+          "end": 3271,
+          "kind": "text",
+          "sha256": "762a79425387dd5f779c9d35ea060bebca0144cf3ce37dbf95f1d90a716f2275"
+        },
+        {
+          "path": "docs/notes/CHROME-DEVTOOLS-MCP-AUDIT-2026-10-26.md",
+          "start": 0,
+          "end": 3629,
+          "kind": "text",
+          "sha256": "a95111f92f54d6683ee4781b17993e1af17199059088f090684c38470c53835f"
+        },
+        {
+          "path": "docs/notes/CI-CAPACITY-2026-09-29.md",
+          "start": 0,
+          "end": 12126,
+          "kind": "text",
+          "sha256": "7989ed65b01aeb2e407553f70a6c08db54da04871399c89b300631e8f5704465"
+        },
+        {
+          "path": "docs/notes/CI-CLOG-SURVEY-2026-10-15.md",
+          "start": 0,
+          "end": 23863,
+          "kind": "text",
+          "sha256": "4c876c98d271346c036b498e48cc7b3ef23f242ec4da1148286375650679e848"
+        },
+        {
+          "path": "docs/notes/CI-MERGE-BURST-2026-10-03.md",
+          "start": 0,
+          "end": 4297,
+          "kind": "text",
+          "sha256": "f78a384359d3e40ddd99b2ab53e826cad0b7faf546eec14900f6cb950a828423"
+        },
+        {
+          "path": "docs/notes/CI-RENDERING-PERFORMANCE.md",
+          "start": 0,
+          "end": 49602,
+          "kind": "text",
+          "sha256": "ee805d8db3c949fff1a8757d3a1cd2620153a9c0065c056cfb6476a76dc16593"
+        },
+        {
+          "path": "docs/notes/CI-SELECTION-PLAN-2026-10-16.md",
+          "start": 0,
+          "end": 1252,
+          "kind": "text",
+          "sha256": "e0084f4ba7bd3817f2b53475dd7523394f521ae1fb8e40f74d0ed8d267eb5b83"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "09",
+      "parts": [
+        {
+          "path": "docs/notes/CI-SELECTION-PLAN-2026-10-16.md",
+          "start": 1252,
+          "end": 15259,
+          "kind": "text",
+          "sha256": "e0084f4ba7bd3817f2b53475dd7523394f521ae1fb8e40f74d0ed8d267eb5b83"
+        },
+        {
+          "path": "docs/notes/CICD-JOBS-REVIEW-2026-10-16.md",
+          "start": 0,
+          "end": 15545,
+          "kind": "text",
+          "sha256": "c0a1ecc5eccfe5a491740d9c46598d41611ca354f32aaaf17a592f9cdf801048"
+        },
+        {
+          "path": "docs/notes/CICD-REVIEW-2026-10-16.md",
+          "start": 0,
+          "end": 30006,
+          "kind": "text",
+          "sha256": "6a55993ad314c59be001a61165d61a5482d01f293792c473c9a653208e6fcbf5"
+        },
+        {
+          "path": "docs/notes/COCKPIT-DATUMS.md",
+          "start": 0,
+          "end": 5842,
+          "kind": "text",
+          "sha256": "af4f69c9f6b7b24f382aebb8928b95ab2550c7b3755ed479d8533972988bd6e7"
+        },
+        {
+          "path": "docs/notes/COCKPIT-MODEL-REFERENCES.md",
+          "start": 0,
+          "end": 8193,
+          "kind": "text",
+          "sha256": "07ef837c0d153bd3a41c5f5de6b9ab416287ce6f152177c4b278e670b0646620"
+        },
+        {
+          "path": "docs/notes/COLLISION-CULLING-PLAN-2026-09-16.md",
+          "start": 0,
+          "end": 11363,
+          "kind": "text",
+          "sha256": "bb29a8a73cb58e8c3dec20320bbfe48a5cef919246ff6e26e00e2f6339faa84c"
+        },
+        {
+          "path": "docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md",
+          "start": 0,
+          "end": 3760,
+          "kind": "text",
+          "sha256": "9a7fddba78d7db15f9baefd796821f1e0c6b7c352d1b602b6c212082e727f0aa"
+        },
+        {
+          "path": "docs/notes/COTA-TECPRO-SOFTWARE-GL.md",
+          "start": 0,
+          "end": 1301,
+          "kind": "text",
+          "sha256": "a1b0a06a3dc4ca80969ef6b790402d6991db71b22307d0e2532460d49e7b0ab7"
+        },
+        {
+          "path": "docs/notes/CPU-HUNT-2026-10-24.md",
+          "start": 0,
+          "end": 7967,
+          "kind": "text",
+          "sha256": "445acc68759665749a19901ba5628213c4587f1670df616ea26392077e9ada26"
+        },
+        {
+          "path": "docs/notes/CURSOR-AGENTS-API-PROBE-2026-10-19.md",
+          "start": 0,
+          "end": 2016,
+          "kind": "text",
+          "sha256": "34f6c66606032d4b2e6a47196914647e46c6accb583d92de37a8491a324a39b1"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "10",
+      "parts": [
+        {
+          "path": "docs/notes/CURSOR-AGENTS-API-PROBE-2026-10-19.md",
+          "start": 2016,
+          "end": 9044,
+          "kind": "text",
+          "sha256": "34f6c66606032d4b2e6a47196914647e46c6accb583d92de37a8491a324a39b1"
+        },
+        {
+          "path": "docs/notes/DECISIONS-2026-10-26.md",
+          "start": 0,
+          "end": 4863,
+          "kind": "text",
+          "sha256": "550bd1b322f95c8ff61ab16510fe33779be3f70575dfc11441f9878fccf73b0d"
+        },
+        {
+          "path": "docs/notes/DEFECT-LEDGER.md",
+          "start": 0,
+          "end": 88109,
+          "kind": "text",
+          "sha256": "53f6d19863da9d78bb7f58619bb022d8d2dbfb1073a6a5eb6a7f06c7df8f5028"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "11",
+      "parts": [
+        {
+          "path": "docs/notes/DEFECT-LEDGER.md",
+          "start": 88109,
+          "end": 188109,
+          "kind": "text",
+          "sha256": "53f6d19863da9d78bb7f58619bb022d8d2dbfb1073a6a5eb6a7f06c7df8f5028"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "12",
+      "parts": [
+        {
+          "path": "docs/notes/DEFECT-LEDGER.md",
+          "start": 188109,
+          "end": 251354,
+          "kind": "text",
+          "sha256": "53f6d19863da9d78bb7f58619bb022d8d2dbfb1073a6a5eb6a7f06c7df8f5028"
+        },
+        {
+          "path": "docs/notes/DESKTOP-TEST-PLAN.md",
+          "start": 0,
+          "end": 7217,
+          "kind": "text",
+          "sha256": "3dfb8602c14f067043ce987488f4b67fd7db5640626908a786bcf368996cbd42"
+        },
+        {
+          "path": "docs/notes/DEVICE-FARM-ANALYSIS-2026-10-24.md",
+          "start": 0,
+          "end": 29538,
+          "kind": "text",
+          "sha256": "ab268da8b8f7558399569220e3daed0e1cdee63615e45892ebb8a929376c6f11"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "13",
+      "parts": [
+        {
+          "path": "docs/notes/DEVICE-FARM-ANALYSIS-2026-10-24.md",
+          "start": 29538,
+          "end": 30467,
+          "kind": "text",
+          "sha256": "ab268da8b8f7558399569220e3daed0e1cdee63615e45892ebb8a929376c6f11"
+        },
+        {
+          "path": "docs/notes/DEVICE-FARM-LEDGER-2026-10-23.md",
+          "start": 0,
+          "end": 24790,
+          "kind": "text",
+          "sha256": "29b89f518ed6e8b7fd059f4b9d604db01a3345ae626607fb2b55e3cea36fcb2f"
+        },
+        {
+          "path": "docs/notes/DRIVING-LINE-RESEARCH.md",
+          "start": 0,
+          "end": 10276,
+          "kind": "text",
+          "sha256": "3bd681372ae938b9908dbb16482e8e4fb0adc4df96fab30b0b30e80df5b1462a"
+        },
+        {
+          "path": "docs/notes/ELECTRON-BUILDER-26.md",
+          "start": 0,
+          "end": 986,
+          "kind": "text",
+          "sha256": "644b1c00b3ac18cec18f38d7a4cc423db3658ba7442973b23432e715fb1d7b63"
+        },
+        {
+          "path": "docs/notes/ENGINEERING-PRACTICE-NOTES.md",
+          "start": 0,
+          "end": 19914,
+          "kind": "text",
+          "sha256": "9eb24dccbf5e03b2dbeaf6fc781e9bc400e763bed9f3834c66198848367e1ebf"
+        },
+        {
+          "path": "docs/notes/F1-TOOLCHAIN-CONSOLIDATION-2026-10-26.md",
+          "start": 0,
+          "end": 4921,
+          "kind": "text",
+          "sha256": "938aa48fe69ca5927605399bcea94a2c3e3b8b9bf1f721d34586e13c56893421"
+        },
+        {
+          "path": "docs/notes/FIT-AUDIT.md",
+          "start": 0,
+          "end": 5654,
+          "kind": "text",
+          "sha256": "699cd98234904107c5083e7c4fa1adcb7ce337fa2e5f88228db5f46f8f667aa1"
+        },
+        {
+          "path": "docs/notes/FLAKY-QUARANTINE-3505-2026-10-25.md",
+          "start": 0,
+          "end": 4431,
+          "kind": "text",
+          "sha256": "33ab2a4e8890b362ee1454ba50c440004a586db8c9ce6ce8538c73b67d1d93e1"
+        },
+        {
+          "path": "docs/notes/FLICKER-GATE-A2-2026-10-10.md",
+          "start": 0,
+          "end": 12734,
+          "kind": "text",
+          "sha256": "e8594729e71f6246339d1beef07e28bcd75961b3b9797b2d8558fd76a0052954"
+        },
+        {
+          "path": "docs/notes/GARAGE-FINISHES-PARTS-2026-10-17.md",
+          "start": 0,
+          "end": 14023,
+          "kind": "text",
+          "sha256": "a4af07d0022bc02c946df5b22eed1d9f390148404f2461eb7d728a7f14c185ab"
+        },
+        {
+          "path": "docs/notes/GL-OBJECT-LEAK-2026-10-17.md",
+          "start": 0,
+          "end": 1342,
+          "kind": "text",
+          "sha256": "6346e0b5bb356e920301589e07fd74a13d7e400044650904934d6ad556e97719"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "14",
+      "parts": [
+        {
+          "path": "docs/notes/GL-OBJECT-LEAK-2026-10-17.md",
+          "start": 1342,
+          "end": 2036,
+          "kind": "text",
+          "sha256": "6346e0b5bb356e920301589e07fd74a13d7e400044650904934d6ad556e97719"
+        },
+        {
+          "path": "docs/notes/GLX-OUTPUT-TARGET.md",
+          "start": 0,
+          "end": 502,
+          "kind": "text",
+          "sha256": "1a0ffd8c427444f4b99644a67046fe16a4396db5f38d659085e89e070beb0032"
+        },
+        {
+          "path": "docs/notes/GPU-CAPTURE-2026-10-19.md",
+          "start": 0,
+          "end": 2255,
+          "kind": "text",
+          "sha256": "743fea661a6b3f147c7b338da9bf5fdc358496a71808b1a7a1eeb6cdb4a435db"
+        },
+        {
+          "path": "docs/notes/GPUMEM-HUNT-2026-10-24.md",
+          "start": 0,
+          "end": 8825,
+          "kind": "text",
+          "sha256": "bd81c2c6dc57ecf3d6289187255e39eab0f03af8e9badcf4fcc7b3dd3bb1f9b0"
+        },
+        {
+          "path": "docs/notes/GRAPHICS-DETAIL-SURVEY-2-2026-10-01.md",
+          "start": 0,
+          "end": 16902,
+          "kind": "text",
+          "sha256": "03cb0f8b7c0b6e4dc0f0dba69afe7ca03f745caebb115ae2737e8ca1f42a1e15"
+        },
+        {
+          "path": "docs/notes/HARNESS-SETTINGS-2026-10-26.md",
+          "start": 0,
+          "end": 27366,
+          "kind": "text",
+          "sha256": "8a475fba6afe97d67f702353b5ab525f36b1a881cb91ac6f0851218070136c69"
+        },
+        {
+          "path": "docs/notes/HELMET-VISOR-HUD-2026-10-05.md",
+          "start": 0,
+          "end": 3579,
+          "kind": "text",
+          "sha256": "2c8f35543fc4e64d073d3c3f714dde34b3cc353e805075c7f25e313abb89961b"
+        },
+        {
+          "path": "docs/notes/HOOKS-SECURITY-2026-10-26.md",
+          "start": 0,
+          "end": 4358,
+          "kind": "text",
+          "sha256": "7df96542f57ef605ed12ee7d388a090a8e4d8afff347eff0cac15678af99ab68"
+        },
+        {
+          "path": "docs/notes/HUD-CODE-AUDIT-2026-10-10.md",
+          "start": 0,
+          "end": 30479,
+          "kind": "text",
+          "sha256": "28a026e05fcb1a19e7ee9a146591b7f4cfc3deea03624c74d49178a089de3c88"
+        },
+        {
+          "path": "docs/notes/HUD-TABULAR-DIGITS.md",
+          "start": 0,
+          "end": 5040,
+          "kind": "text",
+          "sha256": "a00b60733e38c154ce94d7b58d0ca2449513d2d7120106ed989b2774a500da59"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "15",
+      "parts": [
+        {
+          "path": "docs/notes/HUD-TABULAR-DIGITS.md",
+          "start": 5040,
+          "end": 17505,
+          "kind": "text",
+          "sha256": "a00b60733e38c154ce94d7b58d0ca2449513d2d7120106ed989b2774a500da59"
+        },
+        {
+          "path": "docs/notes/HUNT4-B-VERIFY-2026-10-14.md",
+          "start": 0,
+          "end": 9829,
+          "kind": "text",
+          "sha256": "213212cbeefa5a419272668b4a22013ec6fcc1e8a8c7a2dc16c8b25bf88c0e5c"
+        },
+        {
+          "path": "docs/notes/INPUT-GHOSTS-2026-10-01.md",
+          "start": 0,
+          "end": 2480,
+          "kind": "text",
+          "sha256": "2e06c97c827573b7d6d942d69270c8246bc015ec3f671f8f26917ecd6271ca54"
+        },
+        {
+          "path": "docs/notes/IPHONE-MEMORY-2026-10-24.md",
+          "start": 0,
+          "end": 11297,
+          "kind": "text",
+          "sha256": "3088506d613f910ef9aad6cce00e04fcb5345448ef51f8d54ae5b6d72f35e84d"
+        },
+        {
+          "path": "docs/notes/JEDDAH-START-2201-2026-10-18.md",
+          "start": 0,
+          "end": 552,
+          "kind": "text",
+          "sha256": "7b199bfd2c7b946f21d6e4ae6464ef96247bf60cca0d9c1a151fb8b855a41814"
+        },
+        {
+          "path": "docs/notes/JS-DEBUGGER-IMPROVEMENTS-2026-10-19.md",
+          "start": 0,
+          "end": 12296,
+          "kind": "text",
+          "sha256": "2360a8b2843a3ee793179f389b5b530d90963f05dafae6fc24aa2fe3dccceee6"
+        },
+        {
+          "path": "docs/notes/LAMP-POPPING-PLAN-2026-09-24.md",
+          "start": 0,
+          "end": 15148,
+          "kind": "text",
+          "sha256": "879f52c5b7bfb4e81c68e07047c9721a859850ee069dc2c5f138b01a84c5a070"
+        },
+        {
+          "path": "docs/notes/LIT-WGSL-CENSUS-2026-10-24.md",
+          "start": 0,
+          "end": 8585,
+          "kind": "text",
+          "sha256": "ac43cd7c2ed6e1530a827efdaa8de66301f9f568bf145ebbf5cac596bba16081"
+        },
+        {
+          "path": "docs/notes/LIVE-DEBUGGER-COCKPIT-FINISH-2026-10-21.md",
+          "start": 0,
+          "end": 6595,
+          "kind": "text",
+          "sha256": "e504d19ddcd750e6c090d217564d54c885dd95d5f2d90a6fdfbc5141bc404de4"
+        },
+        {
+          "path": "docs/notes/LIVE-DEBUGGER-GARAGE-2026-10-21.md",
+          "start": 0,
+          "end": 14290,
+          "kind": "text",
+          "sha256": "9d540073593292692c10c56d579a6e2c050f40d83cf561c980b74e1fb55b495d"
+        },
+        {
+          "path": "docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md",
+          "start": 0,
+          "end": 6463,
+          "kind": "text",
+          "sha256": "1e25ad745099ac7797e4444e94ff03750b9ead92e2a08f8d7471719fe2960483"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "16",
+      "parts": [
+        {
+          "path": "docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md",
+          "start": 6463,
+          "end": 18810,
+          "kind": "text",
+          "sha256": "1e25ad745099ac7797e4444e94ff03750b9ead92e2a08f8d7471719fe2960483"
+        },
+        {
+          "path": "docs/notes/LIVE-DEBUGGER-RACE-2026-10-16.md",
+          "start": 0,
+          "end": 7420,
+          "kind": "text",
+          "sha256": "c200c275caecc84565bb6f605a6343d07a82fd7f53eedcf9c33cb2db91ab79d6"
+        },
+        {
+          "path": "docs/notes/LIVE-DEBUGGER-RACE-2026-10-24.md",
+          "start": 0,
+          "end": 12472,
+          "kind": "text",
+          "sha256": "33dfbfb506d11b1caa0f224569c91ba668c88f580d2def22b7458ff1d02490c5"
+        },
+        {
+          "path": "docs/notes/LIVE-DEBUGGER-RENDER-2026-10-16.md",
+          "start": 0,
+          "end": 14203,
+          "kind": "text",
+          "sha256": "dbbd587562c443ae634661a4ce152f81c6ef96a7ba33c2623bcc7b0bd81c98bf"
+        },
+        {
+          "path": "docs/notes/LIVE-DEBUGGER-RENDER-GPU-EVIDENCE-2026-10-17.md",
+          "start": 0,
+          "end": 3218,
+          "kind": "text",
+          "sha256": "50874349512b2f6c470a2f3c68ec86ff1efa1ee85f2e06220545cd10b778055a"
+        },
+        {
+          "path": "docs/notes/LIVE-FRAME-H10-2026-10-20.md",
+          "start": 0,
+          "end": 10968,
+          "kind": "text",
+          "sha256": "2cdee5990ca50ba9bce41174ae93f00fce0909f6d5dd7f8a386606bf8fe80b8d"
+        },
+        {
+          "path": "docs/notes/LIVE-INPUT-H11-2026-10-20.md",
+          "start": 0,
+          "end": 8297,
+          "kind": "text",
+          "sha256": "78911cf92f7675f03e3803af76902a762cc65ab64998d5bf2623ac2130fea92f"
+        },
+        {
+          "path": "docs/notes/LIVE-MEMORY-H12-2026-10-20.md",
+          "start": 0,
+          "end": 6469,
+          "kind": "text",
+          "sha256": "1401c9b72c8d48cfe6dd258e660901afa5aa5cc63184f8bb319473e40b65a81e"
+        },
+        {
+          "path": "docs/notes/LIVERY-2026-REFERENCE.md",
+          "start": 0,
+          "end": 11553,
+          "kind": "text",
+          "sha256": "460429c2d09f716d71ae1466d1023904d7f8d99c5d18a9243eb5a7590ea61b9e"
+        },
+        {
+          "path": "docs/notes/LIVERY-LAYOUTS-2026-10-19.md",
+          "start": 0,
+          "end": 3710,
+          "kind": "text",
+          "sha256": "c4a375f200c799aedf0bdfdfe9e021bd54e58b453886ae59789784ab338c1a35"
+        },
+        {
+          "path": "docs/notes/LIVERY-REF-2026-10-18.md",
+          "start": 0,
+          "end": 9343,
+          "kind": "text",
+          "sha256": "58317dcb2961288c827ef7a2ad3fbd65c70e4f52a1904ae72eb1f19ab8e102eb"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "17",
+      "parts": [
+        {
+          "path": "docs/notes/LIVERY-REF-2026-10-18.md",
+          "start": 9343,
+          "end": 9672,
+          "kind": "text",
+          "sha256": "58317dcb2961288c827ef7a2ad3fbd65c70e4f52a1904ae72eb1f19ab8e102eb"
+        },
+        {
+          "path": "docs/notes/LOAD-HUNT-2026-10-24.md",
+          "start": 0,
+          "end": 9260,
+          "kind": "text",
+          "sha256": "1f2b69f6eda3719de1b952276e4358a7f8873beadfb4b940e7ab96e8b7189675"
+        },
+        {
+          "path": "docs/notes/LOCAL-LLVMPIPE-2026-10-26.md",
+          "start": 0,
+          "end": 12159,
+          "kind": "text",
+          "sha256": "bc47031652b8174dc67143d5f3421be012c483bf62b3659e22d6f0980afdea52"
+        },
+        {
+          "path": "docs/notes/LOCAL-SURVEY-GALLERY.md",
+          "start": 0,
+          "end": 11572,
+          "kind": "text",
+          "sha256": "d516d0e3065b418ee6870e925c10685686a187f4e52e64982f96efe02f0b4479"
+        },
+        {
+          "path": "docs/notes/LSP-MCP-2026-10-18.md",
+          "start": 0,
+          "end": 16194,
+          "kind": "text",
+          "sha256": "1d2215914afe4373c22ca344e7b4cda17f3efdbe5e8d66fe94f4fca2aa4118a5"
+        },
+        {
+          "path": "docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md",
+          "start": 0,
+          "end": 2241,
+          "kind": "text",
+          "sha256": "bb860665cf77171277fc5c43d5afb721917555ed507ca2769e256a568bb8f925"
+        },
+        {
+          "path": "docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md",
+          "start": 0,
+          "end": 13723,
+          "kind": "text",
+          "sha256": "5f329750b136bef82bdd75b021a19a426e297802bc98bd8e4b5e3134db9ab9c9"
+        },
+        {
+          "path": "docs/notes/MCP-PROCESS-STAT-READER-2026-10-26.md",
+          "start": 0,
+          "end": 1313,
+          "kind": "text",
+          "sha256": "aa66a3b0611e443c0111bec5e04b84c883d9ca42633dc7ca633ea425213726fd"
+        },
+        {
+          "path": "docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md",
+          "start": 0,
+          "end": 18417,
+          "kind": "text",
+          "sha256": "d85a3a0adef548ac80cf30df05f15e8ad9c0aa29900bf74b172bca006385235d"
+        },
+        {
+          "path": "docs/notes/MEASURING-GPU-PERF-2026-09-16.md",
+          "start": 0,
+          "end": 13237,
+          "kind": "text",
+          "sha256": "02394712586162bae128544ed6651200015fffddbd984d133c9dbf9dd6007b22"
+        },
+        {
+          "path": "docs/notes/MEM-M1-2026-10-18.md",
+          "start": 0,
+          "end": 1555,
+          "kind": "text",
+          "sha256": "e745df93e881762543c38003ec193358bc40da5d856a38f59c551b1b1ebc883c"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "18",
+      "parts": [
+        {
+          "path": "docs/notes/MEM-M1-2026-10-18.md",
+          "start": 1555,
+          "end": 7528,
+          "kind": "text",
+          "sha256": "e745df93e881762543c38003ec193358bc40da5d856a38f59c551b1b1ebc883c"
+        },
+        {
+          "path": "docs/notes/MEMORY-TOOLING-RESEARCH-2026-10-21.md",
+          "start": 0,
+          "end": 8028,
+          "kind": "text",
+          "sha256": "a3fc138c194f670fc30bbdd5b6f0d5965d98f2befdc6637c0ddb087075e8d532"
+        },
+        {
+          "path": "docs/notes/MERGE-HYGIENE-2026-09-29.md",
+          "start": 0,
+          "end": 2561,
+          "kind": "text",
+          "sha256": "69aceac986b6bf2686c84c35bc5e3a898cee1871387d0af1c18f071b25a601e9"
+        },
+        {
+          "path": "docs/notes/MESH-CENSUS-2026-10-19.md",
+          "start": 0,
+          "end": 9618,
+          "kind": "text",
+          "sha256": "1bdcca91e73c74d22a8aaae37e75e81a05a7dcf9a0af4cab701ec7b28af5d495"
+        },
+        {
+          "path": "docs/notes/MIRROR-WARM-2026-10-24.md",
+          "start": 0,
+          "end": 15489,
+          "kind": "text",
+          "sha256": "35b3bc07110eb0e90b8fa0277659b13b1e0ec87fd61a1f9dfcf791498091d6f3"
+        },
+        {
+          "path": "docs/notes/MIXED-DYNAMIC-WEATHER-SURVEY-2026-10-05.md",
+          "start": 0,
+          "end": 6955,
+          "kind": "text",
+          "sha256": "9ecd7988431961a5d94c22dd7a9e601f3a0681e6e3ec68aeca90739afa41ced2"
+        },
+        {
+          "path": "docs/notes/MOBILE-UI-EMULATION.md",
+          "start": 0,
+          "end": 2995,
+          "kind": "text",
+          "sha256": "754b8670334cce90445456ee6edbc55e08a95ad4bb3de03f0e426913f47875e6"
+        },
+        {
+          "path": "docs/notes/MOSPORT-PLAN-2026-09-14.md",
+          "start": 0,
+          "end": 16208,
+          "kind": "text",
+          "sha256": "031c6737dedb5c008a028a81943a373f0157f5f89ec8353e9424a3e12af6438d"
+        },
+        {
+          "path": "docs/notes/MULTIPLAYER-AI-REPLICATION.md",
+          "start": 0,
+          "end": 6832,
+          "kind": "text",
+          "sha256": "950f9a28e70176c60d95605f1c42832dbe8bd1826de8d5979bd3dc9ded9f30fd"
+        },
+        {
+          "path": "docs/notes/MULTITHREADING-PLAN-2026-09-16.md",
+          "start": 0,
+          "end": 16636,
+          "kind": "text",
+          "sha256": "7f6daa670b38ba2296d51225974e1fffca3aa3c0b5721a467a3ee2bd151e6295"
+        },
+        {
+          "path": "docs/notes/NIGHT-ENTRY-WEBGPU-2026-10-23.md",
+          "start": 0,
+          "end": 4830,
+          "kind": "text",
+          "sha256": "9193c2991fae645b6d5d1019586743f3b28a55b9799943c9bd479d3ed8a61825"
+        },
+        {
+          "path": "docs/notes/NIGHT-MAST-POOLS-2026-10-05.md",
+          "start": 0,
+          "end": 3875,
+          "kind": "text",
+          "sha256": "6c79688c4f67c77c3bdaeb64e79b1760a45d3a0ecab60125aee898a54599db78"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "19",
+      "parts": [
+        {
+          "path": "docs/notes/NIGHT-MAST-POOLS-2026-10-05.md",
+          "start": 3875,
+          "end": 6604,
+          "kind": "text",
+          "sha256": "6c79688c4f67c77c3bdaeb64e79b1760a45d3a0ecab60125aee898a54599db78"
+        },
+        {
+          "path": "docs/notes/NODE-DEBUGGING-2026-10-19.md",
+          "start": 0,
+          "end": 30507,
+          "kind": "text",
+          "sha256": "270d2d79e29219a9e37b46fa364d23671eeacf7340800ac1031bf71225422f94"
+        },
+        {
+          "path": "docs/notes/OCCLUSION-PROBE.md",
+          "start": 0,
+          "end": 11924,
+          "kind": "text",
+          "sha256": "d14b9ea21d467181dd281e7f1f2d3ecf8559b1d2e4e85445e6e59062d50dab64"
+        },
+        {
+          "path": "docs/notes/PACK-CACHE-CONTENT-ADDRESS-2026-10-25.md",
+          "start": 0,
+          "end": 2176,
+          "kind": "text",
+          "sha256": "796dcbfecdf7ac1fd22ef67fd303f6844a90d8bbec0f67f0c8994777b14c1818"
+        },
+        {
+          "path": "docs/notes/PARALLEL-HUNT-2026-10-24.md",
+          "start": 0,
+          "end": 14379,
+          "kind": "text",
+          "sha256": "2fb16199a7a6679d3bb4ea8ba0108e5426d6766960fcc8c65cc073738e6d485a"
+        },
+        {
+          "path": "docs/notes/PARALLEL-WORK.md",
+          "start": 0,
+          "end": 7491,
+          "kind": "text",
+          "sha256": "95456357fd760b446953657fd1cbd8ffd7a0bd7e845bb603fc36c3426052e9da"
+        },
+        {
+          "path": "docs/notes/PERF-ALLOC-HUNT-2026-10-17.md",
+          "start": 0,
+          "end": 3986,
+          "kind": "text",
+          "sha256": "e87eb3ecc196515d671195155ce18ffd552902d4938f70ec2d8190a3b5fac07e"
+        },
+        {
+          "path": "docs/notes/PERF-FINDINGS.md",
+          "start": 0,
+          "end": 26808,
+          "kind": "text",
+          "sha256": "42609863766b91d5e8e4358bdb2a8c8abc0e001b057a739ad441af28f26c0cdb"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "20",
+      "parts": [
+        {
+          "path": "docs/notes/PERF-FINDINGS.md",
+          "start": 26808,
+          "end": 126808,
+          "kind": "text",
+          "sha256": "42609863766b91d5e8e4358bdb2a8c8abc0e001b057a739ad441af28f26c0cdb"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "21",
+      "parts": [
+        {
+          "path": "docs/notes/PERF-FINDINGS.md",
+          "start": 126808,
+          "end": 226808,
+          "kind": "text",
+          "sha256": "42609863766b91d5e8e4358bdb2a8c8abc0e001b057a739ad441af28f26c0cdb"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "22",
+      "parts": [
+        {
+          "path": "docs/notes/PERF-FINDINGS.md",
+          "start": 226808,
+          "end": 315415,
+          "kind": "text",
+          "sha256": "42609863766b91d5e8e4358bdb2a8c8abc0e001b057a739ad441af28f26c0cdb"
+        },
+        {
+          "path": "docs/notes/PERF-GAMEPLAY-HITCHES-2026-10-14.md",
+          "start": 0,
+          "end": 4789,
+          "kind": "text",
+          "sha256": "1c148c586fd9ac1b3bfdf6e385a94ce61bbee82e95f6fc9fb289a40a936a0737"
+        },
+        {
+          "path": "docs/notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md",
+          "start": 0,
+          "end": 6604,
+          "kind": "text",
+          "sha256": "1a21f39745fb8c1b246acc9bf816ce071fdab83f523e1bd03da1a2a78f92958a"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "23",
+      "parts": [
+        {
+          "path": "docs/notes/PERF-GOVERNOR-QUANTUM-2026-10-23.md",
+          "start": 6604,
+          "end": 8769,
+          "kind": "text",
+          "sha256": "1a21f39745fb8c1b246acc9bf816ce071fdab83f523e1bd03da1a2a78f92958a"
+        },
+        {
+          "path": "docs/notes/PERF-HUNT-2-2026-10-13.md",
+          "start": 0,
+          "end": 97835,
+          "kind": "text",
+          "sha256": "83b1a722c49ec3a676f93ea8696771918e56060f099f194a30af5dc744287563"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "24",
+      "parts": [
+        {
+          "path": "docs/notes/PERF-HUNT-2-2026-10-13.md",
+          "start": 97835,
+          "end": 104898,
+          "kind": "text",
+          "sha256": "83b1a722c49ec3a676f93ea8696771918e56060f099f194a30af5dc744287563"
+        },
+        {
+          "path": "docs/notes/PERF-HUNT-2026-08-18.md",
+          "start": 0,
+          "end": 16478,
+          "kind": "text",
+          "sha256": "f8a99d87002894fb0815c6e853baca618a4ee8f2e55a30ffe29590d0fe153c11"
+        },
+        {
+          "path": "docs/notes/PERF-HUNT-3-2026-10-13.md",
+          "start": 0,
+          "end": 73334,
+          "kind": "text",
+          "sha256": "7a093d17f1cf1618adba215006d0a15873fd9ceaf3b7844404d5e10102b92841"
+        },
+        {
+          "path": "docs/notes/PERF-HUNT-4-2026-10-14.md",
+          "start": 0,
+          "end": 3125,
+          "kind": "text",
+          "sha256": "5253a69a8d639e6168662e67d07c9a763d2cd4f40af7e75d554adecafe78b067"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "25",
+      "parts": [
+        {
+          "path": "docs/notes/PERF-HUNT-4-2026-10-14.md",
+          "start": 3125,
+          "end": 96572,
+          "kind": "text",
+          "sha256": "5253a69a8d639e6168662e67d07c9a763d2cd4f40af7e75d554adecafe78b067"
+        },
+        {
+          "path": "docs/notes/PERF-HUNT-CPU-2026-10-17.md",
+          "start": 0,
+          "end": 6553,
+          "kind": "text",
+          "sha256": "d09df00caacd93ae43ebdb3b3404a83cb388b9d0ab2c15b1ad574f2f41cea53b"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "26",
+      "parts": [
+        {
+          "path": "docs/notes/PERF-HUNT-CPU-2026-10-17.md",
+          "start": 6553,
+          "end": 7682,
+          "kind": "text",
+          "sha256": "d09df00caacd93ae43ebdb3b3404a83cb388b9d0ab2c15b1ad574f2f41cea53b"
+        },
+        {
+          "path": "docs/notes/PERF-HUNT-TLX-2026-10-17.md",
+          "start": 0,
+          "end": 6182,
+          "kind": "text",
+          "sha256": "897c7912fa882b427e48789fdf1956789ef31ce10c1ecb500d3abed5f5c0b51b"
+        },
+        {
+          "path": "docs/notes/PERF-IPHONE-AUDIT-2026-10-21.md",
+          "start": 0,
+          "end": 11640,
+          "kind": "text",
+          "sha256": "5d80d1c850db28cbdfabd808c317856c45f00ee78b1494c5f46bbeef064fa289"
+        },
+        {
+          "path": "docs/notes/PERF-KNOWN-WINS-2026-10-23.md",
+          "start": 0,
+          "end": 14251,
+          "kind": "text",
+          "sha256": "1d7cb227416316bd315c4b7d00a58222a34ee97fa5124fa8dc5bfc96319ca457"
+        },
+        {
+          "path": "docs/notes/PERF-OPTIONS-2026-09-16.md",
+          "start": 0,
+          "end": 21504,
+          "kind": "text",
+          "sha256": "e2ce4951c158cfea45aecd770e39d06a13e85ebe7f3de0ed3bdf2031675e39dc"
+        },
+        {
+          "path": "docs/notes/PERF-P1-2026-10-18.md",
+          "start": 0,
+          "end": 9824,
+          "kind": "text",
+          "sha256": "f03173ce3de1d2fb12bce7203cfe81460a15a5c15abd55eeedfb1d43d1b2b888"
+        },
+        {
+          "path": "docs/notes/PERF-P2-2026-10-18.md",
+          "start": 0,
+          "end": 7478,
+          "kind": "text",
+          "sha256": "6fe99654056d1199664871bfc84f5f790797de045e7cf5a4c173bdf07e977958"
+        },
+        {
+          "path": "docs/notes/PERF-P2-HTEXT-2026-10-18.md",
+          "start": 0,
+          "end": 2290,
+          "kind": "text",
+          "sha256": "36651f0e05f44f3a620e5fb9b7b5bd45c0a0f65a50e46e9ddf46525a947eda1b"
+        },
+        {
+          "path": "docs/notes/PERF-RENDER-CPU-2026-10-20.md",
+          "start": 0,
+          "end": 3041,
+          "kind": "text",
+          "sha256": "50f2fefecf21116447cb942b4a2bac6aacd650dbec684b1781005ed719b0962b"
+        },
+        {
+          "path": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+          "start": 0,
+          "end": 22661,
+          "kind": "text",
+          "sha256": "d97ed87c35cfe7910a79d6dafc2d3d1819915524558457e988a58d6600a58fe3"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "27",
+      "parts": [
+        {
+          "path": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+          "start": 22661,
+          "end": 76714,
+          "kind": "text",
+          "sha256": "d97ed87c35cfe7910a79d6dafc2d3d1819915524558457e988a58d6600a58fe3"
+        },
+        {
+          "path": "docs/notes/PERF-SCENE-CPU-2026-10-20.md",
+          "start": 0,
+          "end": 3724,
+          "kind": "text",
+          "sha256": "ef5810a60091559e83df0e289d124c680b03f5a6a4daaca092252000616f0ced"
+        },
+        {
+          "path": "docs/notes/PERFTEST-HUNT-2026-10-24.md",
+          "start": 0,
+          "end": 7366,
+          "kind": "text",
+          "sha256": "c6d793be5d179e128e9e682c566ebb267d40f1af0b6dd09a7cccf7d8f7c381b3"
+        },
+        {
+          "path": "docs/notes/PHONE-GPU-TEST-2026-10-21.md",
+          "start": 0,
+          "end": 3315,
+          "kind": "text",
+          "sha256": "1194cacbd0bf26dcd118d7eb8d0a5c1939a7520bd599c83b9cd492e1100c2072"
+        },
+        {
+          "path": "docs/notes/PHONE-RENDERER-AB-2026-10-21.md",
+          "start": 0,
+          "end": 9122,
+          "kind": "text",
+          "sha256": "9e614c727bbd83778647b97fda0779b76b5474bd5b8811cf6795f23a57fc872b"
+        },
+        {
+          "path": "docs/notes/PHYSICS-ORACLE-2026-10-18.md",
+          "start": 0,
+          "end": 3876,
+          "kind": "text",
+          "sha256": "b34fa26bdb5730a5bb5095f300e4fae3329743fd69d27c7fff3b07b28150d0cf"
+        },
+        {
+          "path": "docs/notes/PLAYER-PHYSICS-PLAN-TIER2-2026-09.md",
+          "start": 0,
+          "end": 18544,
+          "kind": "text",
+          "sha256": "ec1b225b7af0ff85adae249a07871bcd1e0446216cb8eee8e6bbb15fa9f4dac3"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "28",
+      "parts": [
+        {
+          "path": "docs/notes/PLAYER-PHYSICS-PLAN-TIER2-2026-09.md",
+          "start": 18544,
+          "end": 25809,
+          "kind": "text",
+          "sha256": "ec1b225b7af0ff85adae249a07871bcd1e0446216cb8eee8e6bbb15fa9f4dac3"
+        },
+        {
+          "path": "docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md",
+          "start": 0,
+          "end": 17705,
+          "kind": "text",
+          "sha256": "8feb0848017095e35845af7e4fe6ffa7e8312f2fffe85650958ad096d607d0aa"
+        },
+        {
+          "path": "docs/notes/PREPUSH-GATE-LADDER.md",
+          "start": 0,
+          "end": 5314,
+          "kind": "text",
+          "sha256": "5d01a427096d66cd2f698001c043467cd86380bf9aac9ed4da849e649ca9a6dc"
+        },
+        {
+          "path": "docs/notes/PROCESS-SPEEDUP-2026-09.md",
+          "start": 0,
+          "end": 20117,
+          "kind": "text",
+          "sha256": "1953571045a286f4fd6a5566ada4303b87936eb3710ca218da3c1b7dc4b4c2ad"
+        },
+        {
+          "path": "docs/notes/PRODUCT-BRAINSTORM-2026-09-16.md",
+          "start": 0,
+          "end": 10411,
+          "kind": "text",
+          "sha256": "6e3bf7c9f5df4eda5e9e1f7a8eae46c532c477504f1d6a125cfde50d571cce89"
+        },
+        {
+          "path": "docs/notes/PROFILER-DESIGN-2026-10-16.md",
+          "start": 0,
+          "end": 6779,
+          "kind": "text",
+          "sha256": "c04309b38f8c79414ad386b6328169e44863a72fe2440fd3cbc91d119560489a"
+        },
+        {
+          "path": "docs/notes/RACE-ENTRY-TOOLING-RESEARCH-2026-10-21.md",
+          "start": 0,
+          "end": 13334,
+          "kind": "text",
+          "sha256": "1af2404c89bc9772789c7b6f12f8c5d041f497d70a85512611fe12f707d5fb68"
+        },
+        {
+          "path": "docs/notes/RACING-LINE-RESEARCH.md",
+          "start": 0,
+          "end": 19075,
+          "kind": "text",
+          "sha256": "348bf23c3b7ece324135c5566fe111547f95c8e816210bd8d14aa1919f6cf371"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "29",
+      "parts": [
+        {
+          "path": "docs/notes/RACING-LINE-RESEARCH.md",
+          "start": 19075,
+          "end": 46770,
+          "kind": "text",
+          "sha256": "348bf23c3b7ece324135c5566fe111547f95c8e816210bd8d14aa1919f6cf371"
+        },
+        {
+          "path": "docs/notes/RATCHET-FRAGMENTS-2026-10-15.md",
+          "start": 0,
+          "end": 4728,
+          "kind": "text",
+          "sha256": "9c8c3529d1c04c89ca2528e87fc6a649d4f001edd19736d121d78bd123959863"
+        },
+        {
+          "path": "docs/notes/REAL-RACE-2026-09-27.md",
+          "start": 0,
+          "end": 20693,
+          "kind": "text",
+          "sha256": "40a4b7bf1f1a951a35634a5844cbcb0f37965462fd37cc70e6524e66c0464ad6"
+        },
+        {
+          "path": "docs/notes/REAR-WING-ACTIVE-AERO-2026-10-19.md",
+          "start": 0,
+          "end": 5297,
+          "kind": "text",
+          "sha256": "e794f49e9a1bcec63b7118bb20820d8bb01cf48617d6206b0643b357de58b868"
+        },
+        {
+          "path": "docs/notes/RENDER-PERF-PLAN-2026-09-16.md",
+          "start": 0,
+          "end": 17968,
+          "kind": "text",
+          "sha256": "46a6e74cad088d2a4bde6dc743fad39a67ca688ea45baa7c2d7eca547001938d"
+        },
+        {
+          "path": "docs/notes/RENDER-SETTINGS-TOOLING-RESEARCH-2026-10-21.md",
+          "start": 0,
+          "end": 7110,
+          "kind": "text",
+          "sha256": "d635bf47a1a7fe3b046b5894640224c27f675a69e52b252454c2a02b0b2409ac"
+        },
+        {
+          "path": "docs/notes/RENDERER-MACOS-RED-2026-09.md",
+          "start": 0,
+          "end": 5517,
+          "kind": "text",
+          "sha256": "d37e99c613ed0ee6c37473759317dc9d633d81ab5d47af8e4c27770c7d87c5b1"
+        },
+        {
+          "path": "docs/notes/REPO-SIZE-2026-10.md",
+          "start": 0,
+          "end": 6882,
+          "kind": "text",
+          "sha256": "fd173bc556b15f40a52e08dc8ce53867b882b3810304c2a62b093109e5a02396"
+        },
+        {
+          "path": "docs/notes/RULEBOOK-EVIDENCE-2026-10-26.md",
+          "start": 0,
+          "end": 4110,
+          "kind": "text",
+          "sha256": "0448b51fa5ef4ad3d34f5777e2036aee369ef1d32558d232bec2eee4e6c1af78"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "30",
+      "parts": [
+        {
+          "path": "docs/notes/RULEBOOK-EVIDENCE-2026-10-26.md",
+          "start": 4110,
+          "end": 5502,
+          "kind": "text",
+          "sha256": "0448b51fa5ef4ad3d34f5777e2036aee369ef1d32558d232bec2eee4e6c1af78"
+        },
+        {
+          "path": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+          "start": 0,
+          "end": 6559,
+          "kind": "text",
+          "sha256": "6c10852b6a39a27a8d5b052f4f8fdb0aa5da83a659330c499465fed0a2d149e1"
+        },
+        {
+          "path": "docs/notes/SCENERY-QA-PLAN.md",
+          "start": 0,
+          "end": 32372,
+          "kind": "text",
+          "sha256": "7d4c2ea408d3da594f92186f4a5fee9debb3faa34f0b873202a8af9c18f65f80"
+        },
+        {
+          "path": "docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md",
+          "start": 0,
+          "end": 14335,
+          "kind": "text",
+          "sha256": "df781fc90f62747226b0d410bfee4b0eac3f4ebe417faaf4449b1879892fb360"
+        },
+        {
+          "path": "docs/notes/SECOND-BRAIN-2026-10-14.md",
+          "start": 0,
+          "end": 21761,
+          "kind": "text",
+          "sha256": "9094a17940690e1c76d415cb9f2050d772d4a45703c5bcd317bff0bcd4e9bbc8"
+        },
+        {
+          "path": "docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md",
+          "start": 0,
+          "end": 17727,
+          "kind": "text",
+          "sha256": "c7064ff2957c14bd5dba93fc6227e40876081ef585cc51d373a0a096f0523c18"
+        },
+        {
+          "path": "docs/notes/SKILL-MCP-SCOUT-2026-10-18.md",
+          "start": 0,
+          "end": 5854,
+          "kind": "text",
+          "sha256": "7034ca64ceb9ed3454acd10933174bceab1951395a9d104d540025fe4b05d471"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "31",
+      "parts": [
+        {
+          "path": "docs/notes/SKILL-MCP-SCOUT-2026-10-18.md",
+          "start": 5854,
+          "end": 23611,
+          "kind": "text",
+          "sha256": "7034ca64ceb9ed3454acd10933174bceab1951395a9d104d540025fe4b05d471"
+        },
+        {
+          "path": "docs/notes/SKILL-TOOLING-PROPOSALS-2026-10-05.md",
+          "start": 0,
+          "end": 13440,
+          "kind": "text",
+          "sha256": "578d0a6b753d6b388b705fba4787a72a6ccd75438218ce7b413ea47ab487b325"
+        },
+        {
+          "path": "docs/notes/SPIKE-BACKENDS-CHECKLIST.md",
+          "start": 0,
+          "end": 44245,
+          "kind": "text",
+          "sha256": "9f866a011a6e9c3295e0888b264527f8bb000072f5fbb1849ae8342ee193553c"
+        },
+        {
+          "path": "docs/notes/STAGE-MINIFY-2026-10-19.md",
+          "start": 0,
+          "end": 6467,
+          "kind": "text",
+          "sha256": "6f1db1d0f8d71f93a025c1a0073d44a342dec0709446dcc0b5f989bf48decc99"
+        },
+        {
+          "path": "docs/notes/STOP-HOOK-H1-BRYCE-2026-10-18.md",
+          "start": 0,
+          "end": 1657,
+          "kind": "text",
+          "sha256": "65bec3d928aac3dd671b940d9323f329301b0eb819671c62341f911e16402f62"
+        },
+        {
+          "path": "docs/notes/SURVEY-ASSETS-BRANCH.md",
+          "start": 0,
+          "end": 2040,
+          "kind": "text",
+          "sha256": "c9885b3447ef85dc843ebac2745f874e7434e0cfcac507bbd8b7276b6674233a"
+        },
+        {
+          "path": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+          "start": 0,
+          "end": 14394,
+          "kind": "text",
+          "sha256": "732537038e69d2d8252fd1006c7502b495caa152054fc5388db9ef3d900f391e"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "32",
+      "parts": [
+        {
+          "path": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+          "start": 14394,
+          "end": 42983,
+          "kind": "text",
+          "sha256": "732537038e69d2d8252fd1006c7502b495caa152054fc5388db9ef3d900f391e"
+        },
+        {
+          "path": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+          "start": 0,
+          "end": 21231,
+          "kind": "text",
+          "sha256": "f0cb24b792d3994901496e4a25b48443d58139a436916e797b0e59542c29877a"
+        },
+        {
+          "path": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+          "start": 0,
+          "end": 39693,
+          "kind": "text",
+          "sha256": "c0f4ecdcab9c4d9c35a86cea9c4c9666f07b5823858706a31174191fcbea6049"
+        },
+        {
+          "path": "docs/notes/TESTING-FIELD-NOTES.md",
+          "start": 0,
+          "end": 10487,
+          "kind": "text",
+          "sha256": "62d5862d5f3c43a1cfeec08483a7ce6b5df9636244c95431f9c140be4d910830"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "33",
+      "parts": [
+        {
+          "path": "docs/notes/TESTING-FIELD-NOTES.md",
+          "start": 10487,
+          "end": 110487,
+          "kind": "text",
+          "sha256": "62d5862d5f3c43a1cfeec08483a7ce6b5df9636244c95431f9c140be4d910830"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "34",
+      "parts": [
+        {
+          "path": "docs/notes/TESTING-FIELD-NOTES.md",
+          "start": 110487,
+          "end": 140235,
+          "kind": "text",
+          "sha256": "62d5862d5f3c43a1cfeec08483a7ce6b5df9636244c95431f9c140be4d910830"
+        },
+        {
+          "path": "docs/notes/THREE-INSPECTOR-2026-10-16.md",
+          "start": 0,
+          "end": 2137,
+          "kind": "text",
+          "sha256": "b3a845b5800880176d3bb42f14026287e4b0ee48bbabad56f3aba0e1d08b83a8"
+        },
+        {
+          "path": "docs/notes/TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md",
+          "start": 0,
+          "end": 6373,
+          "kind": "text",
+          "sha256": "0ab97dc4cc646d38d67f4a054a0332f94b6a4ec51ade8db245bb3b08adebcb01"
+        },
+        {
+          "path": "docs/notes/TLX-PER-CHUNK-LAMPS-INERT.md",
+          "start": 0,
+          "end": 5911,
+          "kind": "text",
+          "sha256": "be03b763e642f628e9262d9137e3b591e99b36e4448c02ad7b0b0e7123d2f006"
+        },
+        {
+          "path": "docs/notes/TLX-PERF-HUNT-2026-10-11.md",
+          "start": 0,
+          "end": 37502,
+          "kind": "text",
+          "sha256": "5459a643b87f80b60170e4ce9f800d8e8d16d2db6ce1f7738f37ef08ceac0752"
+        },
+        {
+          "path": "docs/notes/TLX-PERF-HUNT-5-2026-10-16.md",
+          "start": 0,
+          "end": 11871,
+          "kind": "text",
+          "sha256": "2ee7b1e03f0afc012f7a7c6ad75db1b7db93c324ab08ab7181702a244c312fbf"
+        },
+        {
+          "path": "docs/notes/TLX-PERF-PLAN.md",
+          "start": 0,
+          "end": 6458,
+          "kind": "text",
+          "sha256": "927215063a591b04b818dd93a64141645dccd402d74078e7bd4138ea82af6b5c"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "35",
+      "parts": [
+        {
+          "path": "docs/notes/TLX-PERF-PLAN.md",
+          "start": 6458,
+          "end": 15090,
+          "kind": "text",
+          "sha256": "927215063a591b04b818dd93a64141645dccd402d74078e7bd4138ea82af6b5c"
+        },
+        {
+          "path": "docs/notes/TLX-PHONE-PASS-CENSUS-2026-10-23.md",
+          "start": 0,
+          "end": 7440,
+          "kind": "text",
+          "sha256": "52d9894ee589c029dcb2158469883ba1fc19e8c4c4f312b1d4ecc5fa10581e2e"
+        },
+        {
+          "path": "docs/notes/TOOLING-CONSOLIDATION-2026-10-26.md",
+          "start": 0,
+          "end": 7378,
+          "kind": "text",
+          "sha256": "a1d0b2b0f5933a1e641ae1fa77289a100d63ec480cd871d722c7188f977ad225"
+        },
+        {
+          "path": "docs/notes/TOUCH-BOOST-FIRST-PRESS-2026-10-23.md",
+          "start": 0,
+          "end": 6233,
+          "kind": "text",
+          "sha256": "be0b208704c322bf42da0990e716274e2365c113f579cbbba651b87aa0bf91ab"
+        },
+        {
+          "path": "docs/notes/TRACK-ROSTER-RESEARCH-2026-09-14.md",
+          "start": 0,
+          "end": 11461,
+          "kind": "text",
+          "sha256": "40695d06df3bcc48d5191680cf8d35901b108b9216363a0c5369fb2cb8ff4fad"
+        },
+        {
+          "path": "docs/notes/TRACK-SWITCH-LEAKS-2026-10-02.md",
+          "start": 0,
+          "end": 4545,
+          "kind": "text",
+          "sha256": "5d87219f2c5807f9afde50fe3cbf081c9482e35498fb5edbf4f860388add77d6"
+        },
+        {
+          "path": "docs/notes/TRACK-SWITCH-METAL-2026-10-17.md",
+          "start": 0,
+          "end": 5491,
+          "kind": "text",
+          "sha256": "5c5184451d77c510fdea4eff241850c33553de298aab544576234598c38e876c"
+        },
+        {
+          "path": "docs/notes/TRANSCRIPT-MINING-2026-10-16.md",
+          "start": 0,
+          "end": 16182,
+          "kind": "text",
+          "sha256": "09303a54b4f32b4084880b619303f811b0f315136a2466691a3e79631056cfaf"
+        },
+        {
+          "path": "docs/notes/TREE-BUDGET-2026-10-19.md",
+          "start": 0,
+          "end": 3325,
+          "kind": "text",
+          "sha256": "b4df85d4c7874708dc60a238156b1de2b6e7f258a923c1378d2bdaee617cee41"
+        },
+        {
+          "path": "docs/notes/TUMFTM-RACETRACK-DATABASE.md",
+          "start": 0,
+          "end": 3715,
+          "kind": "text",
+          "sha256": "50d76c55bff11bc914b78852327c946de4fa0cc9b0fac229d267fe1f45e5478d"
+        },
+        {
+          "path": "docs/notes/TYRE-SEVERITY-AUTHORING-2026-09-30.md",
+          "start": 0,
+          "end": 5138,
+          "kind": "text",
+          "sha256": "bdd7259ec18ff6fba11dca244ea2843d36cd5085c32ce3696453e328acdfd011"
+        },
+        {
+          "path": "docs/notes/UI-FIX-GREYOUT-2026-10-18.md",
+          "start": 0,
+          "end": 7279,
+          "kind": "text",
+          "sha256": "9a7b9aef0f94725f780419e612bccb3f882bfacf3b3c52034744a75a9bd5b83e"
+        },
+        {
+          "path": "docs/notes/UPSTREAM-THREE-ISSUES.md",
+          "start": 0,
+          "end": 10761,
+          "kind": "text",
+          "sha256": "75b51267ef744a553275843caa178dca9ae7ad44fede3f5883e7303ba83c9161"
+        },
+        {
+          "path": "docs/notes/VOICE-LAG-IPHONE-2026-10-01.md",
+          "start": 0,
+          "end": 2420,
+          "kind": "text",
+          "sha256": "b502482610f788185fecd3704c502d0723c26e15f5de9a5e159b970a0078106e"
+        }
+      ],
+      "bytes": 100000,
+      "status": "complete"
+    },
+    {
+      "id": "36",
+      "parts": [
+        {
+          "path": "docs/notes/VOICE-LAG-IPHONE-2026-10-01.md",
+          "start": 2420,
+          "end": 4332,
+          "kind": "text",
+          "sha256": "b502482610f788185fecd3704c502d0723c26e15f5de9a5e159b970a0078106e"
+        },
+        {
+          "path": "docs/notes/VOICE-OPUS-TWINS-2026-10-25.md",
+          "start": 0,
+          "end": 691,
+          "kind": "text",
+          "sha256": "e6bba2ec3bd770f9995d8f73d6ec8048a1f0f454f09c6901cee925b973e55bf4"
+        },
+        {
+          "path": "docs/notes/WEATHER-ROADMAP-2026-10-14.md",
+          "start": 0,
+          "end": 9306,
+          "kind": "text",
+          "sha256": "d9078397419d771043a33eb0eea16196812cd0c180b63ee3072fab9593ff9fbb"
+        },
+        {
+          "path": "docs/notes/WHEEL-STATE-2026-10-19.md",
+          "start": 0,
+          "end": 6465,
+          "kind": "text",
+          "sha256": "159cae381a4a36566f2d5f2b8e94f05f62a57f499e0d034eb7832655e60adeca"
+        },
+        {
+          "path": "docs/notes/WHY-BOTH-LEVERS-COST-2026-09-16.md",
+          "start": 0,
+          "end": 5307,
+          "kind": "text",
+          "sha256": "d0ce42dcd58bbd41e126d9a654fcfe0e2f42573a89f75ab9f3807a478c6d9160"
+        },
+        {
+          "path": "docs/notes/XR-PHASE0-ARCHITECTURE.md",
+          "start": 0,
+          "end": 4347,
+          "kind": "text",
+          "sha256": "17ef08ff33fd439bb6a3f4eb3d7f8baf4603686ff4812a6a8a67b0c4883e3b99"
+        },
+        {
+          "path": "docs/notes/XR-QUEST-ON-DEVICE.md",
+          "start": 0,
+          "end": 4263,
+          "kind": "text",
+          "sha256": "f36b80dfa041eaf1fd53c9dc2777155bc7548a7bb48e46cddaf6089b8b275980"
+        },
+        {
+          "path": "docs/notes/garage-perf-2026-10-20.md",
+          "start": 0,
+          "end": 5301,
+          "kind": "text",
+          "sha256": "da470c4be6e4ad66113a626ba86d060ed02b563d6fd414dae17fec5f3e56fd9e"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/README.md",
+          "start": 0,
+          "end": 2409,
+          "kind": "text",
+          "sha256": "62131537013a5d9834230df76cdb43e8beb50abdaceaca3bbc5f043df830a5f6"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/bus.md",
+          "start": 0,
+          "end": 13057,
+          "kind": "text",
+          "sha256": "82d10f515e0d19ea3463619d15a5b0ec1492dbb1ab102b7a002bced0ca1723d4"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/claude-sessions.md",
+          "start": 0,
+          "end": 20418,
+          "kind": "text",
+          "sha256": "dc23881ac9a9b08d141052d59e1c1e9500a54c1b5bc36cb5a357710f939d386f"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/codex.md",
+          "start": 0,
+          "end": 18617,
+          "kind": "text",
+          "sha256": "1bc48840708c33eb8b8d58f25113881eca807386299cefa8b879c4e118efdfdf"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/cursor-agents.md",
+          "start": 0,
+          "end": 7907,
+          "kind": "text",
+          "sha256": "5dc8c4a2f66b69912ba56d1cb0dbd249f8d883e0179123c36a95e8af13a1bd49"
+        }
+      ],
+      "bytes": 100000,
+      "status": "assigned"
+    },
+    {
+      "id": "37",
+      "parts": [
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/cursor-agents.md",
+          "start": 7907,
+          "end": 14546,
+          "kind": "text",
+          "sha256": "5dc8c4a2f66b69912ba56d1cb0dbd249f8d883e0179123c36a95e8af13a1bd49"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/outcomes.md",
+          "start": 0,
+          "end": 10911,
+          "kind": "text",
+          "sha256": "3faace3c89d271da0c453b757208c907ca0a2427d9a3e1dd3ad75ae42170a7fb"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/platform.md",
+          "start": 0,
+          "end": 15968,
+          "kind": "text",
+          "sha256": "b0519bb8193bc7d9a5263e4efb8916d91e967da7671a8220c0b071528c4e988c"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/rulebook.md",
+          "start": 0,
+          "end": 24484,
+          "kind": "text",
+          "sha256": "fcdd3ea787ab70acfad1d659660c3a6a95c310e794ec69efb52941def1004e11"
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/tooling.md",
+          "start": 0,
+          "end": 20006,
+          "kind": "text",
+          "sha256": "d55aec29d4548ce0191a1818269ea197831b4734c9b524c334eb654e1ed756e0"
+        },
+        {
+          "path": "docs/notes/system-audit-3/README.md",
+          "start": 0,
+          "end": 1229,
+          "kind": "text",
+          "sha256": "7612fd9fd0e9432953422f4b67a91144d3358c56378af54ba301429cce51f8a3"
+        },
+        {
+          "path": "docs/notes/system-audit-3/agents-hooks.md",
+          "start": 0,
+          "end": 9308,
+          "kind": "text",
+          "sha256": "49bd0de9e4ccba9e96bd96ef94695ca09a84143b6895dea151c2a6ed7f698a41"
+        },
+        {
+          "path": "docs/notes/system-audit-3/bus-prflow.md",
+          "start": 0,
+          "end": 10207,
+          "kind": "text",
+          "sha256": "7e7ffcaf8b5540a0418ea14775f6fd9b4fd3f31d1d837a5175ae70ee01c6fd8b"
+        },
+        {
+          "path": "docs/notes/system-audit-3/ci-train.md",
+          "start": 0,
+          "end": 1248,
+          "kind": "text",
+          "sha256": "143331189cd9b5d1808043eca9d02a3d75d55b3cd4db64e0f63b3fd98acde935"
+        }
+      ],
+      "bytes": 100000,
+      "status": "assigned"
+    },
+    {
+      "id": "38",
+      "parts": [
+        {
+          "path": "docs/notes/system-audit-3/ci-train.md",
+          "start": 1248,
+          "end": 10113,
+          "kind": "text",
+          "sha256": "143331189cd9b5d1808043eca9d02a3d75d55b3cd4db64e0f63b3fd98acde935"
+        },
+        {
+          "path": "docs/notes/system-audit-3/docs-memory.md",
+          "start": 0,
+          "end": 8853,
+          "kind": "text",
+          "sha256": "e00dce0a02b0f84d6903b4b9a724ddf0634b6b3c6a73891e51ffb714455999de"
+        },
+        {
+          "path": "docs/notes/system-audit-3/environment.md",
+          "start": 0,
+          "end": 9222,
+          "kind": "text",
+          "sha256": "9a3d053813da55786b53365d4096a89dcf7a263b1edd1059374b42b304dd2cc8"
+        },
+        {
+          "path": "docs/notes/system-audit-3/game-code.md",
+          "start": 0,
+          "end": 8013,
+          "kind": "text",
+          "sha256": "27d8501bc420871762ed3afc831ea29fc366b3199019072cd76b802a5d5e9aef"
+        },
+        {
+          "path": "docs/notes/system-audit-3/rulebook.md",
+          "start": 0,
+          "end": 10733,
+          "kind": "text",
+          "sha256": "f7bd999700c1a32aa009b6e28f50a89df2e4cc47a81b6756380c8d6d7ad7d518"
+        },
+        {
+          "path": "docs/notes/system-audit-3/skills-a-l.md",
+          "start": 0,
+          "end": 9022,
+          "kind": "text",
+          "sha256": "ef457465594f1977c87e7176c86400cd966fd0cf4e0e9d0bc18eb50a732aa02d"
+        },
+        {
+          "path": "docs/notes/system-audit-3/skills-m-z.md",
+          "start": 0,
+          "end": 9432,
+          "kind": "text",
+          "sha256": "5a9bc23b34db34bee89e2c70dc20b6158903af505064b942243b5a6648a5cf2f"
+        },
+        {
+          "path": "docs/notes/system-audit-3/tests.md",
+          "start": 0,
+          "end": 9487,
+          "kind": "text",
+          "sha256": "4aa04e7a18dde2046713c76925f04d217d1b6055e5d21809c5cf0e20f84ca3df"
+        },
+        {
+          "path": "docs/notes/system-audit-3/tools.md",
+          "start": 0,
+          "end": 9681,
+          "kind": "text",
+          "sha256": "07165e8d071f8027f506d973cfd533279346b7f462b37c07a1621ea00655148f"
+        },
+        {
+          "path": "docs/notes/system-audit-3/transcripts.md",
+          "start": 0,
+          "end": 9516,
+          "kind": "text",
+          "sha256": "063fac2204ab371d5ccc20bf295f1cf9e755677c00744435743e4c18a37602f4"
+        },
+        {
+          "path": "docs/notes/system-audit-4/README.md",
+          "start": 0,
+          "end": 1951,
+          "kind": "text",
+          "sha256": "6746c88f7591c6c03b508e32504cf699692956d4abc2877ee337ab39a35caaf0"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "start": 0,
+          "end": 5225,
+          "kind": "text",
+          "sha256": "5409fc9698576fce414a50d9a7ec081c6ad19c853ff3fc7dc8a002ded3c52c78"
+        }
+      ],
+      "bytes": 100000,
+      "status": "unassigned"
+    },
+    {
+      "id": "39",
+      "parts": [
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "start": 5225,
+          "end": 7472,
+          "kind": "text",
+          "sha256": "5409fc9698576fce414a50d9a7ec081c6ad19c853ff3fc7dc8a002ded3c52c78"
+        },
+        {
+          "path": "docs/notes/system-audit-4/bus-history.md",
+          "start": 0,
+          "end": 11652,
+          "kind": "text",
+          "sha256": "93a9eb98c2e643abc4b55726709a6e3441a2addf9b5c9e795b791ce259530517"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/agent-surface-reviewer.md",
+          "start": 0,
+          "end": 5515,
+          "kind": "text",
+          "sha256": "7e4164055fb11386436852d27bf3d42c5e2ce86a727269b11725d8c8248ce930"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/bloat-auditor.md",
+          "start": 0,
+          "end": 4831,
+          "kind": "text",
+          "sha256": "f9176e35219289e723fede6789a9260972b5033721bb05349426271326e1cc29"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/ci-red-triage.md",
+          "start": 0,
+          "end": 5326,
+          "kind": "text",
+          "sha256": "a53f5b705318b7749365a242783fea7b1c4b15912cc0d7fc8f14e67b13198c85"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/code-hunter.md",
+          "start": 0,
+          "end": 5097,
+          "kind": "text",
+          "sha256": "83ad2335c7b2aa17faae3edd751e2c22b261a839a772b5d69c1807b0a5256b67"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/deploy-research.md",
+          "start": 0,
+          "end": 5396,
+          "kind": "text",
+          "sha256": "8840d30592a787e65d70b6973d5820fca8790eb7d3d59dfb2c32d9765a2c81e7"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/finding-verifier.md",
+          "start": 0,
+          "end": 5425,
+          "kind": "text",
+          "sha256": "962481244bad6b5f54e8f1f95355334afb5275a92b1bc2ffc1ac58ed84810c39"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/physics-contract-auditor.md",
+          "start": 0,
+          "end": 6262,
+          "kind": "text",
+          "sha256": "c7166e734683c481483b7ee9703261dc37e1f533bfac50549d4d55ea0ff5aac3"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/prior-art-scout.md",
+          "start": 0,
+          "end": 5387,
+          "kind": "text",
+          "sha256": "990bced1f4516c2ae684472eb9a415c9c15d7ac4ec5583f01e5237cc3d2743fb"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/track-surveyor.md",
+          "start": 0,
+          "end": 5276,
+          "kind": "text",
+          "sha256": "9a56d1644235286d5ec4941b859c998ebb445afb37a8d2019869d1696865a925"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/verify-agent.md",
+          "start": 0,
+          "end": 5638,
+          "kind": "text",
+          "sha256": "1fd8ad9628fb3672b6d942784cf071ef6154a8946175adb8ba834b22dbfcaebe"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cards/worker.md",
+          "start": 0,
+          "end": 6746,
+          "kind": "text",
+          "sha256": "db9ef2e07782d15556b3e3fe796221fda04fa8c290d25602730ef63275b50443"
+        },
+        {
+          "path": "docs/notes/system-audit-4/ci-7d.md",
+          "start": 0,
+          "end": 11195,
+          "kind": "text",
+          "sha256": "2be975a7a840a5e4e30cce5cb8185e34cb9a7ea6b00a25718726bf216c116e0c"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cli-help.md",
+          "start": 0,
+          "end": 7119,
+          "kind": "text",
+          "sha256": "87e3d486c56156decec6db4c188e94f8030c8658a835874e62e0c7391ecb7734"
+        },
+        {
+          "path": "docs/notes/system-audit-4/cursor-lanes.md",
+          "start": 0,
+          "end": 6888,
+          "kind": "text",
+          "sha256": "44841b37d9a468878d4dd2a52077ee47cf50f7eeb1f8e410526d64ecbcbd714b"
+        }
+      ],
+      "bytes": 100000,
+      "status": "unassigned"
+    },
+    {
+      "id": "40",
+      "parts": [
+        {
+          "path": "docs/notes/system-audit-4/cursor-lanes.md",
+          "start": 6888,
+          "end": 10934,
+          "kind": "text",
+          "sha256": "44841b37d9a468878d4dd2a52077ee47cf50f7eeb1f8e410526d64ecbcbd714b"
+        },
+        {
+          "path": "docs/notes/system-audit-4/docs-claims-core.md",
+          "start": 0,
+          "end": 9470,
+          "kind": "text",
+          "sha256": "16eb95504a7db0358be6251308445378a40fa9587b2fdd9fa8cc6406ce8a30b9"
+        },
+        {
+          "path": "docs/notes/system-audit-4/docs-claims-rules.md",
+          "start": 0,
+          "end": 10565,
+          "kind": "text",
+          "sha256": "4570642dc8b44c89331a26c75f124071df95a6c96b4c0a380583153983bef142"
+        },
+        {
+          "path": "docs/notes/system-audit-4/economics.md",
+          "start": 0,
+          "end": 10346,
+          "kind": "text",
+          "sha256": "dab08be7f97ed1f3b4fa0172e8c0a7687abfac23a81d7a5323c0db23066dbe9f"
+        },
+        {
+          "path": "docs/notes/system-audit-4/hunt-core-b.md",
+          "start": 0,
+          "end": 9927,
+          "kind": "text",
+          "sha256": "13853a87a7bb5758ddb647d60a41640085bb7974e1b1cc20879559918e2ae166"
+        },
+        {
+          "path": "docs/notes/system-audit-4/hunt-core.md",
+          "start": 0,
+          "end": 4429,
+          "kind": "text",
+          "sha256": "102d072f9e1320e3ef72a58acaec93db4a26f54915b210a9b43029ae60b2b5dc"
+        },
+        {
+          "path": "docs/notes/system-audit-4/hunt-physics-ai.md",
+          "start": 0,
+          "end": 5069,
+          "kind": "text",
+          "sha256": "433aa51ad32fdcd5fd60263b1751a8029f8629af127984f3391fcc460d8083b7"
+        },
+        {
+          "path": "docs/notes/system-audit-4/hunt-physics-b.md",
+          "start": 0,
+          "end": 11307,
+          "kind": "text",
+          "sha256": "5ba9e3be8d9325f664f5b1c8ef6a85bffaa0aad8c811d0781574ba768b079ef9"
+        },
+        {
+          "path": "docs/notes/system-audit-4/hunt-render-b.md",
+          "start": 0,
+          "end": 9288,
+          "kind": "text",
+          "sha256": "d6721b40d0f762fdcc147fc5e641460dbb0be6d8f5e38342be7f0d68eb8b00ca"
+        },
+        {
+          "path": "docs/notes/system-audit-4/hunt-render.md",
+          "start": 0,
+          "end": 4325,
+          "kind": "text",
+          "sha256": "752b685c800987065867fcb3bb7233bd18bf7989a05d2cbb509e051f2248ea62"
+        },
+        {
+          "path": "docs/notes/system-audit-4/hunt-ui-b.md",
+          "start": 0,
+          "end": 9397,
+          "kind": "text",
+          "sha256": "3d00aa8b5c69311d6f402616973cb047230e3530aa9fc1da6a27a83830533ace"
+        },
+        {
+          "path": "docs/notes/system-audit-4/hunt-ui.md",
+          "start": 0,
+          "end": 5279,
+          "kind": "text",
+          "sha256": "9c157a200d565f4ab0edc3a93e7404b1d296cea49a5bde8c318e09f620ec7401"
+        },
+        {
+          "path": "docs/notes/system-audit-4/live-site.md",
+          "start": 0,
+          "end": 6552,
+          "kind": "text",
+          "sha256": "3e7c8e4a6b332c0244fe2558adb4173a9eac6eb6c0267fe40209d19b23708f26"
+        }
+      ],
+      "bytes": 100000,
+      "status": "unassigned"
+    },
+    {
+      "id": "41",
+      "parts": [
+        {
+          "path": "docs/notes/system-audit-4/live-site.md",
+          "start": 6552,
+          "end": 6960,
+          "kind": "text",
+          "sha256": "3e7c8e4a6b332c0244fe2558adb4173a9eac6eb6c0267fe40209d19b23708f26"
+        },
+        {
+          "path": "docs/notes/system-audit-4/memory-mcp.md",
+          "start": 0,
+          "end": 9311,
+          "kind": "text",
+          "sha256": "013b90c60d4803466fb21986c00700f3d07cfbbf6d7b5964dd2be759c2e55192"
+        },
+        {
+          "path": "docs/notes/system-audit-4/numbers.md",
+          "start": 0,
+          "end": 5470,
+          "kind": "text",
+          "sha256": "a9e16d6a42141f237817c621be1d33865694fe1a35b7f106da869eecf246c4db"
+        },
+        {
+          "path": "docs/notes/system-audit-4/pr-flow-7d.md",
+          "start": 0,
+          "end": 11890,
+          "kind": "text",
+          "sha256": "7e81b83a1470208f76fdcc1c7541df84775e15b1fffac5e7a04c00e9a8bfff72"
+        },
+        {
+          "path": "docs/notes/system-audit-4/redteam-gates.md",
+          "start": 0,
+          "end": 13916,
+          "kind": "text",
+          "sha256": "fda1a03d1d9d6efc68fddde1434f6d55c2131bff7fab1ff354307652dfb390ff"
+        },
+        {
+          "path": "docs/notes/system-audit-4/redteam-hooks.md",
+          "start": 0,
+          "end": 11393,
+          "kind": "text",
+          "sha256": "9cdd7dd2f208cbdf40c50fd952367f5463426f5689fb1a681a8dce9ff685de08"
+        },
+        {
+          "path": "docs/notes/system-audit-4/security.md",
+          "start": 0,
+          "end": 11302,
+          "kind": "text",
+          "sha256": "d90a801db7fb7103723c7aad154494da386331f696aeff010e5e081837568393"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/agent-config.md",
+          "start": 0,
+          "end": 5585,
+          "kind": "text",
+          "sha256": "0a1b6516240b95b4f4ea44c2cffe989dc3c6d9a3c743b142a631fceb83c0dd30"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/agent-fleet.md",
+          "start": 0,
+          "end": 8795,
+          "kind": "text",
+          "sha256": "85815fd818a257bb15070c8160efb901df887997887f0eb16709359cc0fdb53c"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/agent-view.md",
+          "start": 0,
+          "end": 6125,
+          "kind": "text",
+          "sha256": "4cb706bb8a570422192463642557ecaf509660636e24de387c4edb9ea8131ca3"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/ai-racecraft.md",
+          "start": 0,
+          "end": 5357,
+          "kind": "text",
+          "sha256": "42ef6053d671f4e46ad2d4b15a782d5fdd8390b3790b46a5e5e768152575d32e"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/asset-pack.md",
+          "start": 0,
+          "end": 3462,
+          "kind": "text",
+          "sha256": "6d32f46e3e097dd0a3912585f1359c06638348063b6919ad374770356ba9b93f"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/audio-debug.md",
+          "start": 0,
+          "end": 5200,
+          "kind": "text",
+          "sha256": "f04566a2db9f9a4c8c886de17a6b82b363fb402fd0b935a2baf23b338c626b59"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/career-mode.md",
+          "start": 0,
+          "end": 1786,
+          "kind": "text",
+          "sha256": "b24897aaa3d9211df9520fd37a47b5128142c457fefd4ebea102b11b8a77b447"
+        }
+      ],
+      "bytes": 100000,
+      "status": "unassigned"
+    },
+    {
+      "id": "42",
+      "parts": [
+        {
+          "path": "docs/notes/system-audit-4/skills/career-mode.md",
+          "start": 1786,
+          "end": 6343,
+          "kind": "text",
+          "sha256": "b24897aaa3d9211df9520fd37a47b5128142c457fefd4ebea102b11b8a77b447"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/check-changes.md",
+          "start": 0,
+          "end": 4371,
+          "kind": "text",
+          "sha256": "4e90b49dcaa3739f57bdc6d935ede10e900c68735b7d9bfb48c3a4f6b0910781"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/check.md",
+          "start": 0,
+          "end": 5349,
+          "kind": "text",
+          "sha256": "94c6c04316394a22b5adb264f26571f515c975a6814ae2191a3174ba8f081373"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/code-nav.md",
+          "start": 0,
+          "end": 3474,
+          "kind": "text",
+          "sha256": "bbdf60a2b5d43062ca8baee30ddef74fb55778747739b8aabcdcfd60acbc7fde"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/css-play.md",
+          "start": 0,
+          "end": 5008,
+          "kind": "text",
+          "sha256": "0314822fe9ffedc9703ec42ee0b6c9386971b9ad83afc1024f21775d4fad6e26"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/data-hub.md",
+          "start": 0,
+          "end": 4882,
+          "kind": "text",
+          "sha256": "b7b425cebcd53f8ac4c4d92889ca6fc53736c706eb79ba9200f86abecf397d0f"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/f1-animation-cameras.md",
+          "start": 0,
+          "end": 6800,
+          "kind": "text",
+          "sha256": "dd15b79810387772bcce13a41cb3ceea8de68c0e75ab87f14b5d5e9756c0a5ad"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/game-feel.md",
+          "start": 0,
+          "end": 5306,
+          "kind": "text",
+          "sha256": "194db3ebc12978975d43c226452ab16aac2a5ff9ca10b5ffebd4b7a2351d4054"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/garage-parts-livery.md",
+          "start": 0,
+          "end": 6276,
+          "kind": "text",
+          "sha256": "eb663a4841a93ecf862b8cc408303abb77ccb0031c4e90b3aebebe48dcc7cf2a"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/handoff.md",
+          "start": 0,
+          "end": 4815,
+          "kind": "text",
+          "sha256": "a562cf2aeaabd25b229f638acd2813688f680f5b3e2f7ca96c49c7403c8e711e"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/input-controls.md",
+          "start": 0,
+          "end": 6034,
+          "kind": "text",
+          "sha256": "f3e64ec7a4b852bb497f5d519222c99815e9e29932d3b19ffe92a40132e8d219"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/js-debugger.md",
+          "start": 0,
+          "end": 4890,
+          "kind": "text",
+          "sha256": "fde10b7eb154ac6687d141d12967d3832a48245596260c0504903fea8ebc44fc"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/lighting-tuner.md",
+          "start": 0,
+          "end": 4811,
+          "kind": "text",
+          "sha256": "f48750bf40f5efb84a40d33322c11fa252125cd956b5e164d31fbafb5f3f48d9"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/mcp-probe.md",
+          "start": 0,
+          "end": 4074,
+          "kind": "text",
+          "sha256": "e3c6cf1626b2dae244f1d9b267f8a64a84269aa46daedded83dd2e71a99d8d7b"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/multiplayer-debug.md",
+          "start": 0,
+          "end": 4557,
+          "kind": "text",
+          "sha256": "291bdde4e1be0c8c40ed1e54fe032ebf29db707544d1fb121cd225af94f7483e"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/new-track.md",
+          "start": 0,
+          "end": 4754,
+          "kind": "text",
+          "sha256": "bc024760c4e1e0268c4ac6fad844614fcce07ec85b095107d5162db01f93ff1f"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/phone-browser.md",
+          "start": 0,
+          "end": 5596,
+          "kind": "text",
+          "sha256": "63e726fed4b421122bcf6b00d8f5ffa5f9b9b92a14d9428d4e4e6daa9414a060"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/playwright-probe.md",
+          "start": 0,
+          "end": 6438,
+          "kind": "text",
+          "sha256": "10f9acd89235da12b8f37a0db9a52c7b032958fa9043b1451d4093acf43a2b8e"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/pwa-cache-service-worker.md",
+          "start": 0,
+          "end": 5241,
+          "kind": "text",
+          "sha256": "2cc1e30cf02eee60d751f64b0864fdf832c3fc6448c3c9c1a30c7f9cec5088ed"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/race-incidents-control.md",
+          "start": 0,
+          "end": 2767,
+          "kind": "text",
+          "sha256": "54ab2dc2ea3edfd63120067e75d766861a6252ce5bbed9906cc8e0384bb14d7c"
+        }
+      ],
+      "bytes": 100000,
+      "status": "unassigned"
+    },
+    {
+      "id": "43",
+      "parts": [
+        {
+          "path": "docs/notes/system-audit-4/skills/race-incidents-control.md",
+          "start": 2767,
+          "end": 4720,
+          "kind": "text",
+          "sha256": "54ab2dc2ea3edfd63120067e75d766861a6252ce5bbed9906cc8e0384bb14d7c"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/race-weekend.md",
+          "start": 0,
+          "end": 5951,
+          "kind": "text",
+          "sha256": "15bf91812c494678a5bb2ba8a82ed92be398d4424d5ac357bf5a920197d87744"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/renderer-debug.md",
+          "start": 0,
+          "end": 5538,
+          "kind": "text",
+          "sha256": "4c8223cf80d4f263bca79022527faa222719054cb72d3347039fc83fc52b4daa"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/scenery-dress.md",
+          "start": 0,
+          "end": 5155,
+          "kind": "text",
+          "sha256": "014fe770a0a16ceb6b6d63950f8820396e3eabb6ab555f9bf47fde0f5aa50ed2"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/season-mode.md",
+          "start": 0,
+          "end": 5336,
+          "kind": "text",
+          "sha256": "d85dd36149488e7a386c91bb60de6d44d80e0892134358d994e02e2ffbaaeb5e"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/ship.md",
+          "start": 0,
+          "end": 4737,
+          "kind": "text",
+          "sha256": "996dc42075eff527fccd3bdfeecde93c3864080da8e502de0be57d2be30391e8"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/slim-bloat.md",
+          "start": 0,
+          "end": 5256,
+          "kind": "text",
+          "sha256": "d415c05a3a0858f6563a71243d7c3439294c07b65b36c44d8cd0ebe01d34099c"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/steward.md",
+          "start": 0,
+          "end": 4762,
+          "kind": "text",
+          "sha256": "e4eba44b91a130a8ffa96fe454d853ba97d2e676dd96c5e1bf33842685a9b897"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/survey-track.md",
+          "start": 0,
+          "end": 7439,
+          "kind": "text",
+          "sha256": "7391264a866e759426aa308f82d3467b3589d18e6626e2cb7ae7e65fad8d854d"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/survey-ui-matrix.md",
+          "start": 0,
+          "end": 2735,
+          "kind": "text",
+          "sha256": "8ca4f2c9f703ed6c62375d6f40a19b16bb8a65accafffeb33e25bc6255c37537"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/tune-physics.md",
+          "start": 0,
+          "end": 5160,
+          "kind": "text",
+          "sha256": "fd2fb0f536ac329965384c041969070c6a9c1035caa9d82dadd70e5381734cbd"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/ui-menu-a11y.md",
+          "start": 0,
+          "end": 5011,
+          "kind": "text",
+          "sha256": "17a4e09247f992b38ff16ed6f69373f1eae9ff6dff23eeacb4956a00ead0f813"
+        },
+        {
+          "path": "docs/notes/system-audit-4/tests-deep.md",
+          "start": 0,
+          "end": 13563,
+          "kind": "text",
+          "sha256": "4761574e701b56dd997ccc359eed986ed1cad2511017a07c69b76c30b76f05fd"
+        },
+        {
+          "path": "docs/notes/system-audit-4/tx-bryce-routines-failed.md",
+          "start": 0,
+          "end": 11951,
+          "kind": "text",
+          "sha256": "596373a9b44d2e038c38b07088d693b621468e633cec6ef9aeb7761d31ea0c02"
+        },
+        {
+          "path": "docs/notes/system-audit-4/tx-orchestrators.md",
+          "start": 0,
+          "end": 10991,
+          "kind": "text",
+          "sha256": "c511ae430863a2fe073c7227867580f1d8116e4f7927bb8732ba1256c17d4ac4"
+        },
+        {
+          "path": "docs/notes/system-audit-4/tx-workers.md",
+          "start": 0,
+          "end": 4462,
+          "kind": "text",
+          "sha256": "e16ecf4f0ac325f75a61297d7e00abab69bec40ca3b9ad184aab49ec48dc396c"
+        }
+      ],
+      "bytes": 100000,
+      "status": "unassigned"
+    },
+    {
+      "id": "44",
+      "parts": [
+        {
+          "path": "docs/notes/system-audit-4/tx-workers.md",
+          "start": 4462,
+          "end": 13085,
+          "kind": "text",
+          "sha256": "e16ecf4f0ac325f75a61297d7e00abab69bec40ca3b9ad184aab49ec48dc396c"
+        },
+        {
+          "path": "docs/notes/system-audit-4/verify-1-10.md",
+          "start": 0,
+          "end": 10723,
+          "kind": "text",
+          "sha256": "e49b167e9e5c8b8afad19636fad1b9a5500cb23c88ae1c60516e93a725040630"
+        },
+        {
+          "path": "docs/notes/system-audit-4/verify-11-20.md",
+          "start": 0,
+          "end": 8087,
+          "kind": "text",
+          "sha256": "ddb13e155818b8e180d60de891b23eaba2a428ed19e7c8bc1e1245f108c43a00"
+        },
+        {
+          "path": "docs/notes/system-audit-4/verify-21-30.md",
+          "start": 0,
+          "end": 4044,
+          "kind": "text",
+          "sha256": "ef24cb4279335a0c12c3820291e69838457766b9f6049f48c80aa5065f0e91c1"
+        },
+        {
+          "path": "docs/notes/system-audit-4/verify-31-39.md",
+          "start": 0,
+          "end": 11432,
+          "kind": "text",
+          "sha256": "ec0bcceb4d69d38a9b2530b226323d66d38eb84a7e58891fcf9712a80b84736c"
+        },
+        {
+          "path": "docs/notes/system-audit-4/web-claude-code.md",
+          "start": 0,
+          "end": 14413,
+          "kind": "text",
+          "sha256": "e3590415b55cf7dff34e1f7d2194479e3675f6462b5ca5b11420cf5845ecbe78"
+        },
+        {
+          "path": "docs/notes/system-audit-4/web-github.md",
+          "start": 0,
+          "end": 12420,
+          "kind": "text",
+          "sha256": "aac145170146e0506144e3842c2b3f61f59b3dc6e1e355afd28abd09065cb1e7"
+        },
+        {
+          "path": "docs/notes/system-audit-4/web-hosts-gpu.md",
+          "start": 0,
+          "end": 11793,
+          "kind": "text",
+          "sha256": "5405864557af94dda3f6bef2275a7e5f50ae6b40be065e5b2576e8b30e401e00"
+        }
+      ],
+      "bytes": 81535,
+      "status": "unassigned"
+    }
+  ]
+}

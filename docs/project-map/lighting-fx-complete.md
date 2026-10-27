@@ -1,3 +1,5 @@
+> Coverage update: Implementation pass retained as provenance. light-presets-complete.md closes the entire remaining preset table, so the directory union is complete.
+
 # Lighting and FX implementation map; preset continuation pending
 
 Read 2026-10-27 in `/workspace/f1-game`. All 14 implementation files (5,716 lines) were fully inspected in bounded, untruncated reads. The fifteenth file, `js/lighting/presets.js`, is PARTIAL: only lines 1–200 of 7,228 were read. Total assigned scope is 15 files / 12,944 lines. This report filename is retained for the planned complete scope, but does **not** assert that the preset data pass is complete. Source hashes below bind the exact inspected bytes. Local HEAD at ledger capture was `212adc24b985b120a63507c988abea69e7740e74`; concurrent parent documentation commits may advance it. No runtime source was edited. No browser, runtime execution, tests, or commit was performed by this lane.

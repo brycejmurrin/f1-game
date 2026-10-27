@@ -1,0 +1,4664 @@
+{
+  "goal": "Read every tracked tests/unit file fully, map assertions to production and commit reports. No test execution in read-only mapping lanes.",
+  "source": "unchanged runtime; planning at current mapping branch",
+  "groups": [
+    {
+      "id": "01",
+      "files": [
+        {
+          "path": "tests/unit/a11y-label-in-name.test.mjs",
+          "lines": 36
+        },
+        {
+          "path": "tests/unit/a11y-loading-hint.test.mjs",
+          "lines": 60
+        },
+        {
+          "path": "tests/unit/a11y-opts.test.mjs",
+          "lines": 228
+        },
+        {
+          "path": "tests/unit/a11y-pwa-pass.test.mjs",
+          "lines": 663
+        },
+        {
+          "path": "tests/unit/active-aero-vm.test.mjs",
+          "lines": 258
+        },
+        {
+          "path": "tests/unit/adapted-specs.test.mjs",
+          "lines": 64
+        },
+        {
+          "path": "tests/unit/aero-defaults-2026.test.mjs",
+          "lines": 108
+        },
+        {
+          "path": "tests/unit/aero-flap-travel.test.mjs",
+          "lines": 132
+        },
+        {
+          "path": "tests/unit/aero-preview-fields.test.mjs",
+          "lines": 165
+        },
+        {
+          "path": "tests/unit/aero-shapes-d3c.test.mjs",
+          "lines": 111
+        },
+        {
+          "path": "tests/unit/aero-zone-tables.test.mjs",
+          "lines": 178
+        },
+        {
+          "path": "tests/unit/aero-zones-turns.test.mjs",
+          "lines": 114
+        },
+        {
+          "path": "tests/unit/aero-zones-vm.test.mjs",
+          "lines": 288
+        },
+        {
+          "path": "tests/unit/agent-anchors-vm.test.mjs",
+          "lines": 94
+        },
+        {
+          "path": "tests/unit/agent-config.test.mjs",
+          "lines": 1042
+        },
+        {
+          "path": "tests/unit/agent-determinism-vm.test.mjs",
+          "lines": 82
+        },
+        {
+          "path": "tests/unit/agent-experiment.test.mjs",
+          "lines": 148
+        },
+        {
+          "path": "tests/unit/agent-hooks-vm.test.mjs",
+          "lines": 374
+        },
+        {
+          "path": "tests/unit/agent-indexes.test.mjs",
+          "lines": 115
+        },
+        {
+          "path": "tests/unit/agent-output-config.test.mjs",
+          "lines": 62
+        },
+        {
+          "path": "tests/unit/agent-output.test.mjs",
+          "lines": 473
+        },
+        {
+          "path": "tests/unit/agent-surface.test.mjs",
+          "lines": 357
+        },
+        {
+          "path": "tests/unit/agent-view-vm.test.mjs",
+          "lines": 1516
+        },
+        {
+          "path": "tests/unit/agentview-api-contract.test.mjs",
+          "lines": 250
+        },
+        {
+          "path": "tests/unit/ai-band.test.mjs",
+          "lines": 110
+        },
+        {
+          "path": "tests/unit/ai-corridor.test.mjs",
+          "lines": 156
+        },
+        {
+          "path": "tests/unit/ai-drive.test.mjs",
+          "lines": 1849
+        },
+        {
+          "path": "tests/unit/ai-pack-stuck-vm.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/ai-pass-complete.test.mjs",
+          "lines": 240
+        },
+        {
+          "path": "tests/unit/ai-pass-defend-vm.test.mjs",
+          "lines": 57
+        },
+        {
+          "path": "tests/unit/ai-queue-reach-vm.test.mjs",
+          "lines": 72
+        },
+        {
+          "path": "tests/unit/ai-racecraft-vm.test.mjs",
+          "lines": 460
+        },
+        {
+          "path": "tests/unit/ai-ratings-math.test.mjs",
+          "lines": 115
+        },
+        {
+          "path": "tests/unit/ai-strategy.test.mjs",
+          "lines": 545
+        },
+        {
+          "path": "tests/unit/ai-stuck-vm.test.mjs",
+          "lines": 132
+        }
+      ],
+      "lines": 10797,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "02",
+      "files": [
+        {
+          "path": "tests/unit/ai-trail-yield-vm.test.mjs",
+          "lines": 52
+        },
+        {
+          "path": "tests/unit/albert-park-foundation.test.mjs",
+          "lines": 69
+        },
+        {
+          "path": "tests/unit/all-lights-fill.test.mjs",
+          "lines": 311
+        },
+        {
+          "path": "tests/unit/always-lamp-floor.test.mjs",
+          "lines": 60
+        },
+        {
+          "path": "tests/unit/ambient-env-override.test.mjs",
+          "lines": 119
+        },
+        {
+          "path": "tests/unit/announcer.test.mjs",
+          "lines": 1325
+        },
+        {
+          "path": "tests/unit/apca-timing.test.mjs",
+          "lines": 156
+        },
+        {
+          "path": "tests/unit/apex-arg-guards.test.mjs",
+          "lines": 93
+        },
+        {
+          "path": "tests/unit/apex-cam-fallback.test.mjs",
+          "lines": 84
+        },
+        {
+          "path": "tests/unit/apex-career-delete.test.mjs",
+          "lines": 93
+        },
+        {
+          "path": "tests/unit/apex-diag-canvas.test.mjs",
+          "lines": 57
+        },
+        {
+          "path": "tests/unit/apex-memory.test.mjs",
+          "lines": 84
+        },
+        {
+          "path": "tests/unit/apex-physstate.test.mjs",
+          "lines": 34
+        },
+        {
+          "path": "tests/unit/apex-server-fixes.test.mjs",
+          "lines": 375
+        },
+        {
+          "path": "tests/unit/apex-tools-mcp.test.mjs",
+          "lines": 3165
+        },
+        {
+          "path": "tests/unit/appearance-opts.test.mjs",
+          "lines": 605
+        },
+        {
+          "path": "tests/unit/appearance-steppers-tap.test.mjs",
+          "lines": 45
+        },
+        {
+          "path": "tests/unit/appearance-studio.test.mjs",
+          "lines": 570
+        },
+        {
+          "path": "tests/unit/appearance-sunlight-chrome.test.mjs",
+          "lines": 83
+        },
+        {
+          "path": "tests/unit/archive-sessions.test.mjs",
+          "lines": 139
+        },
+        {
+          "path": "tests/unit/assert-audit.test.mjs",
+          "lines": 180
+        },
+        {
+          "path": "tests/unit/assert-match-ratchet.test.mjs",
+          "lines": 44
+        },
+        {
+          "path": "tests/unit/assets-pack.test.mjs",
+          "lines": 2360
+        },
+        {
+          "path": "tests/unit/assets-verify-material-md5.test.mjs",
+          "lines": 95
+        },
+        {
+          "path": "tests/unit/async-lifecycle.test.mjs",
+          "lines": 686
+        },
+        {
+          "path": "tests/unit/audio-mix-improvements.test.mjs",
+          "lines": 77
+        },
+        {
+          "path": "tests/unit/audio-panel-boot.test.mjs",
+          "lines": 236
+        },
+        {
+          "path": "tests/unit/audio-panel-settings-ui.test.mjs",
+          "lines": 208
+        },
+        {
+          "path": "tests/unit/audio-recovery.test.mjs",
+          "lines": 827
+        },
+        {
+          "path": "tests/unit/audio-sample-upgrade.test.mjs",
+          "lines": 290
+        },
+        {
+          "path": "tests/unit/audio-tune.test.mjs",
+          "lines": 2548
+        },
+        {
+          "path": "tests/unit/audit-circuit.test.mjs",
+          "lines": 127
+        },
+        {
+          "path": "tests/unit/audit-summary.test.mjs",
+          "lines": 165
+        },
+        {
+          "path": "tests/unit/backend-surface-parity.test.mjs",
+          "lines": 108
+        },
+        {
+          "path": "tests/unit/badges.test.mjs",
+          "lines": 174
+        }
+      ],
+      "lines": 15644,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "03",
+      "files": [
+        {
+          "path": "tests/unit/bahrain-grandstand-rake.test.mjs",
+          "lines": 100
+        },
+        {
+          "path": "tests/unit/baked-model-instancing.test.mjs",
+          "lines": 134
+        },
+        {
+          "path": "tests/unit/baked-model-road-guard.test.mjs",
+          "lines": 121
+        },
+        {
+          "path": "tests/unit/baku-migration.test.mjs",
+          "lines": 153
+        },
+        {
+          "path": "tests/unit/baku-night-orbit.test.mjs",
+          "lines": 39
+        },
+        {
+          "path": "tests/unit/bank-zone-claim.test.mjs",
+          "lines": 55
+        },
+        {
+          "path": "tests/unit/barrier-runoff-jumps.test.mjs",
+          "lines": 217
+        },
+        {
+          "path": "tests/unit/base-green.test.mjs",
+          "lines": 58
+        },
+        {
+          "path": "tests/unit/bash-guard-hardening.test.mjs",
+          "lines": 1493
+        },
+        {
+          "path": "tests/unit/battle-earcon.test.mjs",
+          "lines": 173
+        },
+        {
+          "path": "tests/unit/behind-ship.test.mjs",
+          "lines": 68
+        },
+        {
+          "path": "tests/unit/bench-capture.test.mjs",
+          "lines": 191
+        },
+        {
+          "path": "tests/unit/bench-run.test.mjs",
+          "lines": 192
+        },
+        {
+          "path": "tests/unit/bitmap-decode-worker.test.mjs",
+          "lines": 350
+        },
+        {
+          "path": "tests/unit/blip-voice-pool.test.mjs",
+          "lines": 185
+        },
+        {
+          "path": "tests/unit/body-attitude.test.mjs",
+          "lines": 370
+        },
+        {
+          "path": "tests/unit/body-split.test.mjs",
+          "lines": 359
+        }
+      ],
+      "lines": 4258,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "04",
+      "files": [
+        {
+          "path": "tests/unit/body-styles.test.mjs",
+          "lines": 886
+        },
+        {
+          "path": "tests/unit/boot-idle-prefetch.test.mjs",
+          "lines": 330
+        },
+        {
+          "path": "tests/unit/boot-input-shape.test.mjs",
+          "lines": 180
+        },
+        {
+          "path": "tests/unit/boot-load-budget.test.mjs",
+          "lines": 84
+        },
+        {
+          "path": "tests/unit/boot-script-repair-overlay.test.mjs",
+          "lines": 98
+        },
+        {
+          "path": "tests/unit/bootstrap-doctor.test.mjs",
+          "lines": 223
+        },
+        {
+          "path": "tests/unit/brake-cue.test.mjs",
+          "lines": 147
+        },
+        {
+          "path": "tests/unit/branch-audit.test.mjs",
+          "lines": 150
+        },
+        {
+          "path": "tests/unit/browser-http-mcp.test.mjs",
+          "lines": 141
+        },
+        {
+          "path": "tests/unit/browser-http-up.test.mjs",
+          "lines": 15
+        },
+        {
+          "path": "tests/unit/browser-workers.test.mjs",
+          "lines": 149
+        },
+        {
+          "path": "tests/unit/build-client-drop.test.mjs",
+          "lines": 259
+        },
+        {
+          "path": "tests/unit/build-gallery.test.mjs",
+          "lines": 97
+        },
+        {
+          "path": "tests/unit/build-steps.test.mjs",
+          "lines": 239
+        },
+        {
+          "path": "tests/unit/build-worker.test.mjs",
+          "lines": 750
+        },
+        {
+          "path": "tests/unit/cam-avoid-vm.test.mjs",
+          "lines": 131
+        },
+        {
+          "path": "tests/unit/cam-avoid.test.mjs",
+          "lines": 123
+        },
+        {
+          "path": "tests/unit/cam-comfort.test.mjs",
+          "lines": 167
+        },
+        {
+          "path": "tests/unit/cam-context-alloc.test.mjs",
+          "lines": 94
+        },
+        {
+          "path": "tests/unit/cam-motion.test.mjs",
+          "lines": 36
+        },
+        {
+          "path": "tests/unit/cam-round2.test.mjs",
+          "lines": 285
+        }
+      ],
+      "lines": 4584,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "05",
+      "files": [
+        {
+          "path": "tests/unit/camera-defaults.test.mjs",
+          "lines": 819
+        },
+        {
+          "path": "tests/unit/camera-feel.test.mjs",
+          "lines": 408
+        },
+        {
+          "path": "tests/unit/camera-ride.test.mjs",
+          "lines": 573
+        },
+        {
+          "path": "tests/unit/camera-tuner-a11y.test.mjs",
+          "lines": 69
+        },
+        {
+          "path": "tests/unit/captions.test.mjs",
+          "lines": 113
+        },
+        {
+          "path": "tests/unit/capture-tools-regressions.test.mjs",
+          "lines": 979
+        },
+        {
+          "path": "tests/unit/car-draw-decal-budget.test.mjs",
+          "lines": 313
+        },
+        {
+          "path": "tests/unit/car-draw-decal-sweep.test.mjs",
+          "lines": 70
+        },
+        {
+          "path": "tests/unit/car-fields-vm.test.mjs",
+          "lines": 495
+        },
+        {
+          "path": "tests/unit/car-front-wing-width.test.mjs",
+          "lines": 77
+        },
+        {
+          "path": "tests/unit/car-fx.test.mjs",
+          "lines": 456
+        },
+        {
+          "path": "tests/unit/car-geometry-decimate.test.mjs",
+          "lines": 59
+        }
+      ],
+      "lines": 4431,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "06",
+      "files": [
+        {
+          "path": "tests/unit/car-materials.test.mjs",
+          "lines": 627
+        },
+        {
+          "path": "tests/unit/car-mesh-anchors.test.mjs",
+          "lines": 286
+        },
+        {
+          "path": "tests/unit/car-mesh-budget.test.mjs",
+          "lines": 52
+        },
+        {
+          "path": "tests/unit/car-mesh-crew-cache.test.mjs",
+          "lines": 301
+        },
+        {
+          "path": "tests/unit/car-multi-shot-tools.test.mjs",
+          "lines": 620
+        },
+        {
+          "path": "tests/unit/car-presentation-canary.test.mjs",
+          "lines": 199
+        },
+        {
+          "path": "tests/unit/car-presentation-vm.test.mjs",
+          "lines": 925
+        },
+        {
+          "path": "tests/unit/car-shade.test.mjs",
+          "lines": 661
+        },
+        {
+          "path": "tests/unit/car-wheels-w13d.test.mjs",
+          "lines": 28
+        },
+        {
+          "path": "tests/unit/car-wing-foil.test.mjs",
+          "lines": 371
+        },
+        {
+          "path": "tests/unit/career-ai-dev.test.mjs",
+          "lines": 305
+        }
+      ],
+      "lines": 4375,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "07",
+      "files": [
+        {
+          "path": "tests/unit/career-backup.test.mjs",
+          "lines": 2016
+        },
+        {
+          "path": "tests/unit/career-cross-tab.test.mjs",
+          "lines": 894
+        },
+        {
+          "path": "tests/unit/career-data-audio-improvements.test.mjs",
+          "lines": 85
+        },
+        {
+          "path": "tests/unit/career-determinism.test.mjs",
+          "lines": 102
+        },
+        {
+          "path": "tests/unit/career-experience.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/career-hire-rating.test.mjs",
+          "lines": 130
+        },
+        {
+          "path": "tests/unit/career-legends.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/career-readslot-quota.test.mjs",
+          "lines": 114
+        },
+        {
+          "path": "tests/unit/career-regulations.test.mjs",
+          "lines": 213
+        },
+        {
+          "path": "tests/unit/career-round2.test.mjs",
+          "lines": 513
+        },
+        {
+          "path": "tests/unit/career-seat-rollover.test.mjs",
+          "lines": 192
+        }
+      ],
+      "lines": 4544,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "08",
+      "files": [
+        {
+          "path": "tests/unit/career-settle.test.mjs",
+          "lines": 1512
+        },
+        {
+          "path": "tests/unit/career-ui-lazy.test.mjs",
+          "lines": 192
+        },
+        {
+          "path": "tests/unit/carve-a-modules.test.mjs",
+          "lines": 131
+        },
+        {
+          "path": "tests/unit/catalog-discovery.test.mjs",
+          "lines": 122
+        },
+        {
+          "path": "tests/unit/cdmcp-measure.test.mjs",
+          "lines": 285
+        },
+        {
+          "path": "tests/unit/census-verdict.test.mjs",
+          "lines": 310
+        },
+        {
+          "path": "tests/unit/centreline-kinks.test.mjs",
+          "lines": 55
+        },
+        {
+          "path": "tests/unit/change-driver-tools.test.mjs",
+          "lines": 306
+        },
+        {
+          "path": "tests/unit/change-kind.test.mjs",
+          "lines": 13
+        },
+        {
+          "path": "tests/unit/changed-files.test.mjs",
+          "lines": 48
+        },
+        {
+          "path": "tests/unit/changelog-fragments.test.mjs",
+          "lines": 130
+        },
+        {
+          "path": "tests/unit/check-js-types.test.mjs",
+          "lines": 25
+        },
+        {
+          "path": "tests/unit/chrome-server-fixes.test.mjs",
+          "lines": 175
+        },
+        {
+          "path": "tests/unit/chromium-shell.test.mjs",
+          "lines": 45
+        },
+        {
+          "path": "tests/unit/chunked-index-ranges.test.mjs",
+          "lines": 491
+        },
+        {
+          "path": "tests/unit/ci-coverage.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/ci-gate-selection.test.mjs",
+          "lines": 411
+        },
+        {
+          "path": "tests/unit/ci-gpu-census.test.mjs",
+          "lines": 358
+        },
+        {
+          "path": "tests/unit/ci-guard-tools.test.mjs",
+          "lines": 55
+        }
+      ],
+      "lines": 4769,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "09",
+      "files": [
+        {
+          "path": "tests/unit/ci-pages-train.test.mjs",
+          "lines": 395
+        },
+        {
+          "path": "tests/unit/ci-pr-base.test.mjs",
+          "lines": 150
+        },
+        {
+          "path": "tests/unit/ci-ship-filter-geometry.test.mjs",
+          "lines": 351
+        },
+        {
+          "path": "tests/unit/ci-ship-smoke-renderer.test.mjs",
+          "lines": 433
+        },
+        {
+          "path": "tests/unit/ci-verdict.test.mjs",
+          "lines": 155
+        },
+        {
+          "path": "tests/unit/ci-watch.test.mjs",
+          "lines": 606
+        },
+        {
+          "path": "tests/unit/ci-workflow-triggers.test.mjs",
+          "lines": 369
+        },
+        {
+          "path": "tests/unit/circuit-axis.test.mjs",
+          "lines": 87
+        },
+        {
+          "path": "tests/unit/circuit-corner-anchors.test.mjs",
+          "lines": 99
+        },
+        {
+          "path": "tests/unit/circuit-count-shell.test.mjs",
+          "lines": 34
+        },
+        {
+          "path": "tests/unit/circuit-def-fields.test.mjs",
+          "lines": 430
+        },
+        {
+          "path": "tests/unit/circuit-meta.test.mjs",
+          "lines": 46
+        },
+        {
+          "path": "tests/unit/circuit-scope.test.mjs",
+          "lines": 103
+        },
+        {
+          "path": "tests/unit/circuit-vocab.test.mjs",
+          "lines": 124
+        },
+        {
+          "path": "tests/unit/class-usage.test.mjs",
+          "lines": 49
+        },
+        {
+          "path": "tests/unit/classification-vm.test.mjs",
+          "lines": 384
+        },
+        {
+          "path": "tests/unit/cli-args.test.mjs",
+          "lines": 108
+        },
+        {
+          "path": "tests/unit/cli-only-ids.test.mjs",
+          "lines": 48
+        },
+        {
+          "path": "tests/unit/clipboard.test.mjs",
+          "lines": 121
+        },
+        {
+          "path": "tests/unit/coach-clone.test.mjs",
+          "lines": 81
+        },
+        {
+          "path": "tests/unit/cockpit-crest-stripe.test.mjs",
+          "lines": 111
+        },
+        {
+          "path": "tests/unit/cockpit-pale-surfaces.test.mjs",
+          "lines": 234
+        },
+        {
+          "path": "tests/unit/cockpit-preview.test.mjs",
+          "lines": 122
+        },
+        {
+          "path": "tests/unit/cockpit-wheel-finish.test.mjs",
+          "lines": 241
+        }
+      ],
+      "lines": 4881,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "10",
+      "files": [
+        {
+          "path": "tests/unit/cockpit-wheels.test.mjs",
+          "lines": 855
+        },
+        {
+          "path": "tests/unit/collide-wall-limits.test.mjs",
+          "lines": 66
+        },
+        {
+          "path": "tests/unit/collision-ai-fixes-vm.test.mjs",
+          "lines": 281
+        },
+        {
+          "path": "tests/unit/collision-contact-vm.test.mjs",
+          "lines": 732
+        },
+        {
+          "path": "tests/unit/collisions-deep-vm.test.mjs",
+          "lines": 358
+        },
+        {
+          "path": "tests/unit/collisions-vm.test.mjs",
+          "lines": 103
+        },
+        {
+          "path": "tests/unit/comment-citations.test.mjs",
+          "lines": 183
+        },
+        {
+          "path": "tests/unit/committed-images.test.mjs",
+          "lines": 77
+        },
+        {
+          "path": "tests/unit/component-inventory.test.mjs",
+          "lines": 102
+        },
+        {
+          "path": "tests/unit/compress-audio.test.mjs",
+          "lines": 78
+        },
+        {
+          "path": "tests/unit/conflict-cure.test.mjs",
+          "lines": 115
+        },
+        {
+          "path": "tests/unit/contact-geometry.test.mjs",
+          "lines": 260
+        },
+        {
+          "path": "tests/unit/context-cap-hook.test.mjs",
+          "lines": 72
+        },
+        {
+          "path": "tests/unit/controller-profiles.test.mjs",
+          "lines": 150
+        },
+        {
+          "path": "tests/unit/coplanar-faces.test.mjs",
+          "lines": 192
+        },
+        {
+          "path": "tests/unit/cover-legibility.test.mjs",
+          "lines": 195
+        },
+        {
+          "path": "tests/unit/coverage-merge.test.mjs",
+          "lines": 118
+        },
+        {
+          "path": "tests/unit/crest-marks.test.mjs",
+          "lines": 818
+        },
+        {
+          "path": "tests/unit/cross-file-paths.test.mjs",
+          "lines": 95
+        }
+      ],
+      "lines": 4850,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "11",
+      "files": [
+        {
+          "path": "tests/unit/cross-tool-guards.test.mjs",
+          "lines": 235
+        },
+        {
+          "path": "tests/unit/crowd-audio.test.mjs",
+          "lines": 297
+        },
+        {
+          "path": "tests/unit/crowd-ctx-rebuild.test.mjs",
+          "lines": 172
+        },
+        {
+          "path": "tests/unit/css-comments.test.mjs",
+          "lines": 128
+        },
+        {
+          "path": "tests/unit/css-critical-path.test.mjs",
+          "lines": 135
+        },
+        {
+          "path": "tests/unit/css-faces.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/css-has-scope.test.mjs",
+          "lines": 176
+        },
+        {
+          "path": "tests/unit/css-layers.test.mjs",
+          "lines": 386
+        },
+        {
+          "path": "tests/unit/css-media-disjoint.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/css-play.test.mjs",
+          "lines": 147
+        },
+        {
+          "path": "tests/unit/css-prefers-cascade.test.mjs",
+          "lines": 173
+        },
+        {
+          "path": "tests/unit/css-token-adoption.test.mjs",
+          "lines": 129
+        },
+        {
+          "path": "tests/unit/css-tokens.test.mjs",
+          "lines": 133
+        },
+        {
+          "path": "tests/unit/ctx-lost-menu-restore.test.mjs",
+          "lines": 113
+        },
+        {
+          "path": "tests/unit/ctx-lost-notice.test.mjs",
+          "lines": 128
+        },
+        {
+          "path": "tests/unit/cursor-agents.test.mjs",
+          "lines": 1093
+        },
+        {
+          "path": "tests/unit/curvature-channels.test.mjs",
+          "lines": 122
+        },
+        {
+          "path": "tests/unit/custom-tracks.test.mjs",
+          "lines": 698
+        },
+        {
+          "path": "tests/unit/cvd-palette.test.mjs",
+          "lines": 241
+        }
+      ],
+      "lines": 4753,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "12",
+      "files": [
+        {
+          "path": "tests/unit/daily-challenge.test.mjs",
+          "lines": 339
+        },
+        {
+          "path": "tests/unit/daily-intro-session-late.test.mjs",
+          "lines": 51
+        },
+        {
+          "path": "tests/unit/damage.test.mjs",
+          "lines": 192
+        },
+        {
+          "path": "tests/unit/data-api-status.test.mjs",
+          "lines": 1370
+        },
+        {
+          "path": "tests/unit/data-export.test.mjs",
+          "lines": 431
+        },
+        {
+          "path": "tests/unit/data-hub-layout.test.mjs",
+          "lines": 107
+        },
+        {
+          "path": "tests/unit/data-hub-offline.test.mjs",
+          "lines": 152
+        },
+        {
+          "path": "tests/unit/data-hub-picker.test.mjs",
+          "lines": 823
+        },
+        {
+          "path": "tests/unit/data-lazy-loader.test.mjs",
+          "lines": 271
+        },
+        {
+          "path": "tests/unit/data-replay-improvements.test.mjs",
+          "lines": 35
+        },
+        {
+          "path": "tests/unit/data-results.test.mjs",
+          "lines": 502
+        },
+        {
+          "path": "tests/unit/data-schedule-tz.test.mjs",
+          "lines": 304
+        },
+        {
+          "path": "tests/unit/data-standings.test.mjs",
+          "lines": 182
+        },
+        {
+          "path": "tests/unit/day-sky-palette-storm-deck.test.mjs",
+          "lines": 109
+        }
+      ],
+      "lines": 4868,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "13",
+      "files": [
+        {
+          "path": "tests/unit/debris-hazard-hint.test.mjs",
+          "lines": 266
+        },
+        {
+          "path": "tests/unit/debris-opts.test.mjs",
+          "lines": 158
+        },
+        {
+          "path": "tests/unit/debris-step-skip.test.mjs",
+          "lines": 420
+        },
+        {
+          "path": "tests/unit/debug-chrome.test.mjs",
+          "lines": 83
+        },
+        {
+          "path": "tests/unit/deep-link.test.mjs",
+          "lines": 118
+        },
+        {
+          "path": "tests/unit/delta-sign-colour.test.mjs",
+          "lines": 62
+        },
+        {
+          "path": "tests/unit/deploy-pr-rest.test.mjs",
+          "lines": 141
+        },
+        {
+          "path": "tests/unit/deploy-staging-build.test.mjs",
+          "lines": 130
+        },
+        {
+          "path": "tests/unit/deploy-staging.test.mjs",
+          "lines": 254
+        },
+        {
+          "path": "tests/unit/deploy-stamp.test.mjs",
+          "lines": 181
+        },
+        {
+          "path": "tests/unit/deploy-tool.test.mjs",
+          "lines": 996
+        },
+        {
+          "path": "tests/unit/design-matrix.test.mjs",
+          "lines": 215
+        },
+        {
+          "path": "tests/unit/design-preview-wheels.test.mjs",
+          "lines": 49
+        },
+        {
+          "path": "tests/unit/designer-canvas.test.mjs",
+          "lines": 525
+        },
+        {
+          "path": "tests/unit/designer-code-cli.test.mjs",
+          "lines": 149
+        },
+        {
+          "path": "tests/unit/designer-profile.test.mjs",
+          "lines": 324
+        },
+        {
+          "path": "tests/unit/designer-props.test.mjs",
+          "lines": 356
+        },
+        {
+          "path": "tests/unit/desktop-app-protocol.test.mjs",
+          "lines": 148
+        },
+        {
+          "path": "tests/unit/desktop-builder-config.test.mjs",
+          "lines": 102
+        }
+      ],
+      "lines": 4677,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "14",
+      "files": [
+        {
+          "path": "tests/unit/desktop-native.test.mjs",
+          "lines": 351
+        },
+        {
+          "path": "tests/unit/desktop-notices.test.mjs",
+          "lines": 52
+        },
+        {
+          "path": "tests/unit/desktop-pack-dry-run.test.mjs",
+          "lines": 37
+        },
+        {
+          "path": "tests/unit/desktop-stage.test.mjs",
+          "lines": 138
+        },
+        {
+          "path": "tests/unit/desktop-unpacked-bin.test.mjs",
+          "lines": 96
+        },
+        {
+          "path": "tests/unit/desktop-version.test.mjs",
+          "lines": 81
+        },
+        {
+          "path": "tests/unit/destructure-usage.test.mjs",
+          "lines": 29
+        },
+        {
+          "path": "tests/unit/determinism-bisect.test.mjs",
+          "lines": 97
+        },
+        {
+          "path": "tests/unit/determinism-replay-vm.test.mjs",
+          "lines": 146
+        },
+        {
+          "path": "tests/unit/dev-flags.test.mjs",
+          "lines": 113
+        },
+        {
+          "path": "tests/unit/dev-tools-vm.test.mjs",
+          "lines": 427
+        },
+        {
+          "path": "tests/unit/devicefarm-syslog.test.mjs",
+          "lines": 224
+        },
+        {
+          "path": "tests/unit/diagnostics-tools.test.mjs",
+          "lines": 374
+        },
+        {
+          "path": "tests/unit/digital-steer.test.mjs",
+          "lines": 550
+        },
+        {
+          "path": "tests/unit/dijon-clips-coplanar.test.mjs",
+          "lines": 64
+        },
+        {
+          "path": "tests/unit/director.test.mjs",
+          "lines": 611
+        },
+        {
+          "path": "tests/unit/dirty-air.test.mjs",
+          "lines": 81
+        },
+        {
+          "path": "tests/unit/dispatch.test.mjs",
+          "lines": 215
+        },
+        {
+          "path": "tests/unit/dock-layout.test.mjs",
+          "lines": 307
+        }
+      ],
+      "lines": 3993,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "15",
+      "files": [
+        {
+          "path": "tests/unit/docs-integrity.test.mjs",
+          "lines": 1065
+        },
+        {
+          "path": "tests/unit/drift-vm.test.mjs",
+          "lines": 152
+        },
+        {
+          "path": "tests/unit/driver-ratings-personality.test.mjs",
+          "lines": 136
+        },
+        {
+          "path": "tests/unit/driving-coach.test.mjs",
+          "lines": 629
+        },
+        {
+          "path": "tests/unit/driving-cues.test.mjs",
+          "lines": 419
+        },
+        {
+          "path": "tests/unit/driving-line-opts.test.mjs",
+          "lines": 182
+        },
+        {
+          "path": "tests/unit/driving-line-pace.test.mjs",
+          "lines": 44
+        },
+        {
+          "path": "tests/unit/driving-line.test.mjs",
+          "lines": 315
+        },
+        {
+          "path": "tests/unit/droplets-spray.test.mjs",
+          "lines": 242
+        },
+        {
+          "path": "tests/unit/duel-row.test.mjs",
+          "lines": 161
+        },
+        {
+          "path": "tests/unit/duel.test.mjs",
+          "lines": 183
+        },
+        {
+          "path": "tests/unit/dup-keys.test.mjs",
+          "lines": 63
+        },
+        {
+          "path": "tests/unit/editor-workspace.test.mjs",
+          "lines": 150
+        },
+        {
+          "path": "tests/unit/elev-presets.test.mjs",
+          "lines": 98
+        },
+        {
+          "path": "tests/unit/elevation-smoothness.test.mjs",
+          "lines": 134
+        },
+        {
+          "path": "tests/unit/elevation-tracks-vm.test.mjs",
+          "lines": 263
+        },
+        {
+          "path": "tests/unit/end-race-music-vm.test.mjs",
+          "lines": 92
+        },
+        {
+          "path": "tests/unit/engine-note-quality.test.mjs",
+          "lines": 183
+        },
+        {
+          "path": "tests/unit/engine-revs-replay-vm.test.mjs",
+          "lines": 107
+        }
+      ],
+      "lines": 4618,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "16",
+      "files": [
+        {
+          "path": "tests/unit/engineer.test.mjs",
+          "lines": 733
+        },
+        {
+          "path": "tests/unit/environment-json.test.mjs",
+          "lines": 321
+        },
+        {
+          "path": "tests/unit/episode-transients.test.mjs",
+          "lines": 101
+        },
+        {
+          "path": "tests/unit/ers-audio-layer.test.mjs",
+          "lines": 291
+        },
+        {
+          "path": "tests/unit/evaluate-scope-lint.test.mjs",
+          "lines": 117
+        },
+        {
+          "path": "tests/unit/extra-rigs.test.mjs",
+          "lines": 190
+        },
+        {
+          "path": "tests/unit/f1-dev-tools.test.mjs",
+          "lines": 359
+        },
+        {
+          "path": "tests/unit/factory-ai-setup.test.mjs",
+          "lines": 39
+        },
+        {
+          "path": "tests/unit/fake-audio-vm.cjs",
+          "lines": 36
+        },
+        {
+          "path": "tests/unit/field-lod.test.mjs",
+          "lines": 603
+        },
+        {
+          "path": "tests/unit/fill-gating.test.mjs",
+          "lines": 130
+        },
+        {
+          "path": "tests/unit/fin-design.test.mjs",
+          "lines": 932
+        },
+        {
+          "path": "tests/unit/finish-coast-rev-vm.test.mjs",
+          "lines": 101
+        },
+        {
+          "path": "tests/unit/fit-audit-car.test.mjs",
+          "lines": 148
+        },
+        {
+          "path": "tests/unit/fixture-consumer-audit.test.mjs",
+          "lines": 50
+        },
+        {
+          "path": "tests/unit/fixtures/flake-tally/junit-retries.xml",
+          "lines": 8
+        },
+        {
+          "path": "tests/unit/fixtures/flake-tally/live-reporter-flaky.log",
+          "lines": 9
+        },
+        {
+          "path": "tests/unit/fixtures/flake-tally/report-flaky.json",
+          "lines": 33
+        },
+        {
+          "path": "tests/unit/fixtures/process-dashboard/runs.json",
+          "lines": 146
+        },
+        {
+          "path": "tests/unit/flags.test.mjs",
+          "lines": 67
+        },
+        {
+          "path": "tests/unit/flake-tally.test.mjs",
+          "lines": 530
+        }
+      ],
+      "lines": 4944,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "17",
+      "files": [
+        {
+          "path": "tests/unit/flaky-quarantine.test.mjs",
+          "lines": 306
+        },
+        {
+          "path": "tests/unit/flicker-metric.test.mjs",
+          "lines": 203
+        },
+        {
+          "path": "tests/unit/floodmast-lamp-register.test.mjs",
+          "lines": 110
+        },
+        {
+          "path": "tests/unit/flyby-audit-rules.test.mjs",
+          "lines": 88
+        },
+        {
+          "path": "tests/unit/flyby-fleet.test.mjs",
+          "lines": 44
+        },
+        {
+          "path": "tests/unit/flyby-frame-report.test.mjs",
+          "lines": 79
+        },
+        {
+          "path": "tests/unit/flyby-intro.test.mjs",
+          "lines": 722
+        },
+        {
+          "path": "tests/unit/flyby-lighting.test.mjs",
+          "lines": 170
+        },
+        {
+          "path": "tests/unit/flyby-panel.test.mjs",
+          "lines": 714
+        },
+        {
+          "path": "tests/unit/flyby-pose-inverse.test.mjs",
+          "lines": 100
+        },
+        {
+          "path": "tests/unit/flyby-shots.test.mjs",
+          "lines": 1227
+        },
+        {
+          "path": "tests/unit/flying-start.test.mjs",
+          "lines": 135
+        },
+        {
+          "path": "tests/unit/followup-platform.test.mjs",
+          "lines": 56
+        },
+        {
+          "path": "tests/unit/followup-update-check.test.mjs",
+          "lines": 49
+        },
+        {
+          "path": "tests/unit/font-digits.test.mjs",
+          "lines": 170
+        },
+        {
+          "path": "tests/unit/forecast.test.mjs",
+          "lines": 291
+        },
+        {
+          "path": "tests/unit/foundation-core-vm.test.mjs",
+          "lines": 113
+        },
+        {
+          "path": "tests/unit/fov-fit.test.mjs",
+          "lines": 136
+        },
+        {
+          "path": "tests/unit/frame-fleet.test.mjs",
+          "lines": 127
+        }
+      ],
+      "lines": 4840,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "18",
+      "files": [
+        {
+          "path": "tests/unit/frame-hitch-analyse.test.mjs",
+          "lines": 494
+        },
+        {
+          "path": "tests/unit/frame-hotpath-alloc.test.mjs",
+          "lines": 342
+        },
+        {
+          "path": "tests/unit/frame-lights-rank-cache.test.mjs",
+          "lines": 171
+        },
+        {
+          "path": "tests/unit/frame-lights-release.test.mjs",
+          "lines": 53
+        },
+        {
+          "path": "tests/unit/frame-lights-shed.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/frame-math.test.mjs",
+          "lines": 157
+        },
+        {
+          "path": "tests/unit/free-cam.test.mjs",
+          "lines": 353
+        },
+        {
+          "path": "tests/unit/free-design-tools.test.mjs",
+          "lines": 148
+        },
+        {
+          "path": "tests/unit/front-wing-decal.test.mjs",
+          "lines": 119
+        },
+        {
+          "path": "tests/unit/frozen-globals.test.mjs",
+          "lines": 80
+        },
+        {
+          "path": "tests/unit/frustum-buckets.test.mjs",
+          "lines": 152
+        },
+        {
+          "path": "tests/unit/fuzz-untrusted-inputs.test.mjs",
+          "lines": 622
+        },
+        {
+          "path": "tests/unit/gallery-capture-draws.test.mjs",
+          "lines": 94
+        },
+        {
+          "path": "tests/unit/game-ctx-surface.test.mjs",
+          "lines": 157
+        },
+        {
+          "path": "tests/unit/game-round2-vm.test.mjs",
+          "lines": 307
+        },
+        {
+          "path": "tests/unit/game-tools-help.test.mjs",
+          "lines": 121
+        },
+        {
+          "path": "tests/unit/game-vm-pool.test.mjs",
+          "lines": 95
+        },
+        {
+          "path": "tests/unit/game-vm.test.mjs",
+          "lines": 345
+        },
+        {
+          "path": "tests/unit/gantry-cantilever-legs.test.mjs",
+          "lines": 28
+        },
+        {
+          "path": "tests/unit/garage-aero-no-camera.test.mjs",
+          "lines": 36
+        }
+      ],
+      "lines": 4017,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "19",
+      "files": [
+        {
+          "path": "tests/unit/garage-arrival.test.mjs",
+          "lines": 1278
+        },
+        {
+          "path": "tests/unit/garage-before-api.test.mjs",
+          "lines": 281
+        },
+        {
+          "path": "tests/unit/garage-before.test.mjs",
+          "lines": 291
+        },
+        {
+          "path": "tests/unit/garage-crew-choreo.test.mjs",
+          "lines": 243
+        },
+        {
+          "path": "tests/unit/garage-crew.test.mjs",
+          "lines": 455
+        },
+        {
+          "path": "tests/unit/garage-defaults.test.mjs",
+          "lines": 411
+        },
+        {
+          "path": "tests/unit/garage-finish-remap.test.mjs",
+          "lines": 117
+        },
+        {
+          "path": "tests/unit/garage-followups.test.mjs",
+          "lines": 416
+        },
+        {
+          "path": "tests/unit/garage-interior-gate.test.mjs",
+          "lines": 349
+        },
+        {
+          "path": "tests/unit/garage-looks.test.mjs",
+          "lines": 273
+        },
+        {
+          "path": "tests/unit/garage-mesh.test.mjs",
+          "lines": 878
+        }
+      ],
+      "lines": 4992,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "20",
+      "files": [
+        {
+          "path": "tests/unit/garage-panel-side.test.mjs",
+          "lines": 326
+        },
+        {
+          "path": "tests/unit/garage-perf-mesh-free.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/garage-personality.test.mjs",
+          "lines": 190
+        },
+        {
+          "path": "tests/unit/garage-prebuild.test.mjs",
+          "lines": 703
+        },
+        {
+          "path": "tests/unit/garage-sheet-round2.test.mjs",
+          "lines": 299
+        },
+        {
+          "path": "tests/unit/garage-sign-occlusion.test.mjs",
+          "lines": 147
+        },
+        {
+          "path": "tests/unit/gen-agent-index-order.test.mjs",
+          "lines": 146
+        },
+        {
+          "path": "tests/unit/gen-arch-table.test.mjs",
+          "lines": 131
+        },
+        {
+          "path": "tests/unit/generated-docs.test.mjs",
+          "lines": 275
+        },
+        {
+          "path": "tests/unit/geom-mountain-lowmat.test.mjs",
+          "lines": 38
+        },
+        {
+          "path": "tests/unit/geometry-paths-baseline.test.mjs",
+          "lines": 33
+        }
+      ],
+      "lines": 2374,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "21",
+      "files": [
+        {
+          "path": "tests/unit/gfx-backend-canary.test.mjs",
+          "lines": 7648
+        }
+      ],
+      "lines": 7648,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "22",
+      "files": [
+        {
+          "path": "tests/unit/gfx-debug-overlay.test.mjs",
+          "lines": 162
+        },
+        {
+          "path": "tests/unit/gfx-escalation.test.mjs",
+          "lines": 179
+        },
+        {
+          "path": "tests/unit/ghost-share.test.mjs",
+          "lines": 830
+        },
+        {
+          "path": "tests/unit/ghost.test.mjs",
+          "lines": 618
+        },
+        {
+          "path": "tests/unit/git-fixture-env.test.mjs",
+          "lines": 141
+        },
+        {
+          "path": "tests/unit/github-api.test.mjs",
+          "lines": 100
+        },
+        {
+          "path": "tests/unit/global-registry.test.mjs",
+          "lines": 299
+        },
+        {
+          "path": "tests/unit/glx-failure-paths.test.mjs",
+          "lines": 115
+        },
+        {
+          "path": "tests/unit/glx-lamp-shadow-slot.test.mjs",
+          "lines": 161
+        },
+        {
+          "path": "tests/unit/glx-multidraw.test.mjs",
+          "lines": 286
+        },
+        {
+          "path": "tests/unit/glx-occlusion.test.mjs",
+          "lines": 395
+        },
+        {
+          "path": "tests/unit/glx-output-target.test.mjs",
+          "lines": 132
+        },
+        {
+          "path": "tests/unit/glx-resize-hysteresis.test.mjs",
+          "lines": 63
+        },
+        {
+          "path": "tests/unit/glx-resource-balance.test.mjs",
+          "lines": 100
+        },
+        {
+          "path": "tests/unit/godray-keep-nearest.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/gpu-allocation-estimator.test.mjs",
+          "lines": 73
+        },
+        {
+          "path": "tests/unit/gpu-test-run.test.mjs",
+          "lines": 187
+        },
+        {
+          "path": "tests/unit/grid-boxes.test.mjs",
+          "lines": 307
+        },
+        {
+          "path": "tests/unit/grip-steer.test.mjs",
+          "lines": 204
+        },
+        {
+          "path": "tests/unit/harness-display.test.mjs",
+          "lines": 280
+        }
+      ],
+      "lines": 4737,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "23",
+      "files": [
+        {
+          "path": "tests/unit/headless-api-vm.test.mjs",
+          "lines": 274
+        },
+        {
+          "path": "tests/unit/helmet-memo.test.mjs",
+          "lines": 51
+        },
+        {
+          "path": "tests/unit/helmets.test.mjs",
+          "lines": 440
+        },
+        {
+          "path": "tests/unit/home-world.test.mjs",
+          "lines": 152
+        },
+        {
+          "path": "tests/unit/hooks-documented.test.mjs",
+          "lines": 123
+        },
+        {
+          "path": "tests/unit/html-sink-lint.test.mjs",
+          "lines": 84
+        },
+        {
+          "path": "tests/unit/hud-announce-lane-cache.test.mjs",
+          "lines": 299
+        },
+        {
+          "path": "tests/unit/hud-arrange.test.mjs",
+          "lines": 612
+        },
+        {
+          "path": "tests/unit/hud-control-clearance.test.mjs",
+          "lines": 126
+        },
+        {
+          "path": "tests/unit/hud-dock-pack.test.mjs",
+          "lines": 137
+        },
+        {
+          "path": "tests/unit/hud-elements.test.mjs",
+          "lines": 227
+        },
+        {
+          "path": "tests/unit/hud-feel.test.mjs",
+          "lines": 1446
+        },
+        {
+          "path": "tests/unit/hud-fit-idempotent.test.mjs",
+          "lines": 817
+        },
+        {
+          "path": "tests/unit/hud-gap-decimals.test.mjs",
+          "lines": 101
+        },
+        {
+          "path": "tests/unit/hud-helmet-placement.test.mjs",
+          "lines": 51
+        }
+      ],
+      "lines": 4940,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "24",
+      "files": [
+        {
+          "path": "tests/unit/hud-inputs.test.mjs",
+          "lines": 356
+        },
+        {
+          "path": "tests/unit/hud-layout-hidden.test.mjs",
+          "lines": 152
+        },
+        {
+          "path": "tests/unit/hud-layout.test.mjs",
+          "lines": 1635
+        },
+        {
+          "path": "tests/unit/hud-metrics-layout.test.mjs",
+          "lines": 294
+        },
+        {
+          "path": "tests/unit/hud-minimap-pitmark.test.mjs",
+          "lines": 80
+        },
+        {
+          "path": "tests/unit/hud-pins.test.mjs",
+          "lines": 290
+        },
+        {
+          "path": "tests/unit/hud-portrait-cluster.test.mjs",
+          "lines": 94
+        },
+        {
+          "path": "tests/unit/hud-radio-slot.test.mjs",
+          "lines": 168
+        },
+        {
+          "path": "tests/unit/hud-readouts.test.mjs",
+          "lines": 698
+        },
+        {
+          "path": "tests/unit/hud-relative.test.mjs",
+          "lines": 496
+        },
+        {
+          "path": "tests/unit/hud-speed-parity.test.mjs",
+          "lines": 120
+        },
+        {
+          "path": "tests/unit/hud-status-stack.test.mjs",
+          "lines": 109
+        },
+        {
+          "path": "tests/unit/hud-strategy.test.mjs",
+          "lines": 193
+        }
+      ],
+      "lines": 4685,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "25",
+      "files": [
+        {
+          "path": "tests/unit/hud-survey.test.mjs",
+          "lines": 977
+        },
+        {
+          "path": "tests/unit/hud-tyres.test.mjs",
+          "lines": 112
+        },
+        {
+          "path": "tests/unit/hungaroring-pit-firs-orbit.test.mjs",
+          "lines": 127
+        },
+        {
+          "path": "tests/unit/hunt-apex-aiplace-reset-vm.test.mjs",
+          "lines": 39
+        },
+        {
+          "path": "tests/unit/hunt-tlx-create-undo.test.mjs",
+          "lines": 35
+        },
+        {
+          "path": "tests/unit/hw-zones.test.mjs",
+          "lines": 134
+        },
+        {
+          "path": "tests/unit/i18n-lint.test.mjs",
+          "lines": 144
+        },
+        {
+          "path": "tests/unit/i18n.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/image-grade-shaders.test.mjs",
+          "lines": 343
+        },
+        {
+          "path": "tests/unit/import-hardening-apxc1.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/import-models-workflow.test.mjs",
+          "lines": 128
+        },
+        {
+          "path": "tests/unit/import-models.test.mjs",
+          "lines": 309
+        },
+        {
+          "path": "tests/unit/incident-gate.test.mjs",
+          "lines": 625
+        },
+        {
+          "path": "tests/unit/incident-rpm.test.mjs",
+          "lines": 49
+        },
+        {
+          "path": "tests/unit/init-owner-resize-observer.test.mjs",
+          "lines": 52
+        },
+        {
+          "path": "tests/unit/input-bindings.test.mjs",
+          "lines": 330
+        },
+        {
+          "path": "tests/unit/input-clock-rotate.test.mjs",
+          "lines": 80
+        },
+        {
+          "path": "tests/unit/input-ghost-replay-vm.test.mjs",
+          "lines": 187
+        },
+        {
+          "path": "tests/unit/input-ghost.test.mjs",
+          "lines": 572
+        },
+        {
+          "path": "tests/unit/input-hud-properties.test.mjs",
+          "lines": 102
+        },
+        {
+          "path": "tests/unit/inputs-hash.test.mjs",
+          "lines": 126
+        },
+        {
+          "path": "tests/unit/install-chip-overlap.test.mjs",
+          "lines": 109
+        },
+        {
+          "path": "tests/unit/ios-input-zoom-w25e.test.mjs",
+          "lines": 124
+        }
+      ],
+      "lines": 4951,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "26",
+      "files": [
+        {
+          "path": "tests/unit/ios-input-zoom.test.mjs",
+          "lines": 140
+        },
+        {
+          "path": "tests/unit/jeddah-night-orbit.test.mjs",
+          "lines": 60
+        },
+        {
+          "path": "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
+          "lines": 193
+        },
+        {
+          "path": "tests/unit/js-debugger-mcp.test.mjs",
+          "lines": 535
+        },
+        {
+          "path": "tests/unit/js-debugger-node.test.mjs",
+          "lines": 215
+        },
+        {
+          "path": "tests/unit/js-debugger-trace.test.mjs",
+          "lines": 99
+        },
+        {
+          "path": "tests/unit/js-debugger-tracks.test.mjs",
+          "lines": 216
+        },
+        {
+          "path": "tests/unit/js-debugger-transport.test.mjs",
+          "lines": 175
+        },
+        {
+          "path": "tests/unit/jump-start-vm.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/kerb-berm-surface.test.mjs",
+          "lines": 120
+        },
+        {
+          "path": "tests/unit/kerb-stripes.test.mjs",
+          "lines": 89
+        },
+        {
+          "path": "tests/unit/key-binds-calibration.test.mjs",
+          "lines": 200
+        },
+        {
+          "path": "tests/unit/key-binds-hunt.test.mjs",
+          "lines": 501
+        },
+        {
+          "path": "tests/unit/key-binds-pad-menu.test.mjs",
+          "lines": 274
+        },
+        {
+          "path": "tests/unit/key-binds-ui.test.mjs",
+          "lines": 392
+        },
+        {
+          "path": "tests/unit/key-binds.test.mjs",
+          "lines": 347
+        },
+        {
+          "path": "tests/unit/keyboard-first-audio-vm.test.mjs",
+          "lines": 48
+        },
+        {
+          "path": "tests/unit/knob-ab.test.mjs",
+          "lines": 40
+        },
+        {
+          "path": "tests/unit/kyalami-grandstand-orbit.test.mjs",
+          "lines": 89
+        },
+        {
+          "path": "tests/unit/lamp-bake.test.mjs",
+          "lines": 600
+        }
+      ],
+      "lines": 4476,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "27",
+      "files": [
+        {
+          "path": "tests/unit/lamp-chunks.test.mjs",
+          "lines": 573
+        },
+        {
+          "path": "tests/unit/lamp-density.test.mjs",
+          "lines": 219
+        },
+        {
+          "path": "tests/unit/lamp-fixture-anchor.test.mjs",
+          "lines": 399
+        },
+        {
+          "path": "tests/unit/lamp-shadow-pick.test.mjs",
+          "lines": 164
+        },
+        {
+          "path": "tests/unit/lane-preamble.test.mjs",
+          "lines": 83
+        },
+        {
+          "path": "tests/unit/lap-format-rollover.test.mjs",
+          "lines": 77
+        },
+        {
+          "path": "tests/unit/launch-gate.test.mjs",
+          "lines": 150
+        },
+        {
+          "path": "tests/unit/layers-anyopen-memo.test.mjs",
+          "lines": 92
+        },
+        {
+          "path": "tests/unit/layers-nav-memo.test.mjs",
+          "lines": 111
+        },
+        {
+          "path": "tests/unit/lazy-audio-firstbind-vm.test.mjs",
+          "lines": 195
+        },
+        {
+          "path": "tests/unit/lazy-audio-yield.test.mjs",
+          "lines": 256
+        },
+        {
+          "path": "tests/unit/lazy-bundles-prefetch.test.mjs",
+          "lines": 443
+        },
+        {
+          "path": "tests/unit/lazy-race-geom-warm.test.mjs",
+          "lines": 57
+        },
+        {
+          "path": "tests/unit/lazy-track-build.test.mjs",
+          "lines": 117
+        },
+        {
+          "path": "tests/unit/legend-parts-seed.test.mjs",
+          "lines": 294
+        },
+        {
+          "path": "tests/unit/legends-team.test.mjs",
+          "lines": 293
+        },
+        {
+          "path": "tests/unit/legends.test.mjs",
+          "lines": 285
+        },
+        {
+          "path": "tests/unit/lexical-window-guard.test.mjs",
+          "lines": 57
+        },
+        {
+          "path": "tests/unit/light-grid.test.mjs",
+          "lines": 730
+        },
+        {
+          "path": "tests/unit/light-presets-extreme-knobs.test.mjs",
+          "lines": 98
+        },
+        {
+          "path": "tests/unit/light-presets-knob-range.test.mjs",
+          "lines": 61
+        }
+      ],
+      "lines": 4754,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "28",
+      "files": [
+        {
+          "path": "tests/unit/light-presets.test.mjs",
+          "lines": 522
+        },
+        {
+          "path": "tests/unit/light-store-cond-layer.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/light-store-copy.test.mjs",
+          "lines": 356
+        },
+        {
+          "path": "tests/unit/light-store-perchunk-pin.test.mjs",
+          "lines": 211
+        },
+        {
+          "path": "tests/unit/lighting-ab-catalog.test.mjs",
+          "lines": 35
+        },
+        {
+          "path": "tests/unit/lighting-reapply.test.mjs",
+          "lines": 154
+        },
+        {
+          "path": "tests/unit/lighting-rebuild.test.mjs",
+          "lines": 113
+        },
+        {
+          "path": "tests/unit/lighting-sun-scratch.test.mjs",
+          "lines": 110
+        },
+        {
+          "path": "tests/unit/lighting-tuner-reset-weather.test.mjs",
+          "lines": 436
+        },
+        {
+          "path": "tests/unit/lighting-tuner-sweep.test.mjs",
+          "lines": 44
+        },
+        {
+          "path": "tests/unit/lit-wgsl-census.test.mjs",
+          "lines": 58
+        },
+        {
+          "path": "tests/unit/live-frame-census.test.mjs",
+          "lines": 58
+        },
+        {
+          "path": "tests/unit/live-run-check.test.mjs",
+          "lines": 65
+        },
+        {
+          "path": "tests/unit/livery-contrast-w13b.test.mjs",
+          "lines": 55
+        },
+        {
+          "path": "tests/unit/livery-contrast.test.mjs",
+          "lines": 577
+        },
+        {
+          "path": "tests/unit/livery-cover-graphics.test.mjs",
+          "lines": 238
+        },
+        {
+          "path": "tests/unit/livery-decal-surfaces.test.mjs",
+          "lines": 370
+        },
+        {
+          "path": "tests/unit/livery-design.test.mjs",
+          "lines": 642
+        },
+        {
+          "path": "tests/unit/livery-draft-mesh-cache.test.mjs",
+          "lines": 73
+        },
+        {
+          "path": "tests/unit/livery-finish-contract.test.mjs",
+          "lines": 308
+        },
+        {
+          "path": "tests/unit/livery-helmet-style.test.mjs",
+          "lines": 111
+        }
+      ],
+      "lines": 4678,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "29",
+      "files": [
+        {
+          "path": "tests/unit/livery-paint-zones.test.mjs",
+          "lines": 347
+        },
+        {
+          "path": "tests/unit/livery-sidewall.test.mjs",
+          "lines": 132
+        },
+        {
+          "path": "tests/unit/livery-stations.test.mjs",
+          "lines": 208
+        },
+        {
+          "path": "tests/unit/livery-swatch-cache.test.mjs",
+          "lines": 69
+        },
+        {
+          "path": "tests/unit/livery-tex-dispose.test.mjs",
+          "lines": 155
+        },
+        {
+          "path": "tests/unit/livery-tier.test.mjs",
+          "lines": 592
+        },
+        {
+          "path": "tests/unit/livery-wheels.test.mjs",
+          "lines": 109
+        },
+        {
+          "path": "tests/unit/livery-zone-finish.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/load-order.test.mjs",
+          "lines": 614
+        },
+        {
+          "path": "tests/unit/loading-card.test.mjs",
+          "lines": 1132
+        },
+        {
+          "path": "tests/unit/loading-screen-pack-gate.test.mjs",
+          "lines": 72
+        },
+        {
+          "path": "tests/unit/loading-wipe.test.mjs",
+          "lines": 94
+        },
+        {
+          "path": "tests/unit/lobby-answer-flight.test.mjs",
+          "lines": 36
+        },
+        {
+          "path": "tests/unit/lobby-codes.test.mjs",
+          "lines": 246
+        },
+        {
+          "path": "tests/unit/lobby-settings.test.mjs",
+          "lines": 137
+        },
+        {
+          "path": "tests/unit/lobed-trees.test.mjs",
+          "lines": 144
+        },
+        {
+          "path": "tests/unit/lockup-bench-vm.test.mjs",
+          "lines": 33
+        },
+        {
+          "path": "tests/unit/lockup-smoke-vm.test.mjs",
+          "lines": 49
+        },
+        {
+          "path": "tests/unit/log-namespaces.test.mjs",
+          "lines": 77
+        },
+        {
+          "path": "tests/unit/longitudinal-vm.test.mjs",
+          "lines": 185
+        },
+        {
+          "path": "tests/unit/loop-health.test.mjs",
+          "lines": 276
+        },
+        {
+          "path": "tests/unit/low-speed-lock.test.mjs",
+          "lines": 81
+        },
+        {
+          "path": "tests/unit/lsp-caller-fixes.test.mjs",
+          "lines": 49
+        }
+      ],
+      "lines": 4979,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "30",
+      "files": [
+        {
+          "path": "tests/unit/lsp-config-freshness.test.mjs",
+          "lines": 85
+        },
+        {
+          "path": "tests/unit/lsp-mcp-fixture.test.mjs",
+          "lines": 225
+        },
+        {
+          "path": "tests/unit/lsp-mcp.test.mjs",
+          "lines": 324
+        },
+        {
+          "path": "tests/unit/lsp-navigation-efficiency.test.mjs",
+          "lines": 252
+        },
+        {
+          "path": "tests/unit/lsp-reference-fixes.test.mjs",
+          "lines": 110
+        },
+        {
+          "path": "tests/unit/lsp-workflow-fixes.test.mjs",
+          "lines": 184
+        },
+        {
+          "path": "tests/unit/marshal-panels.test.mjs",
+          "lines": 296
+        },
+        {
+          "path": "tests/unit/marshal-post-grounding.test.mjs",
+          "lines": 100
+        },
+        {
+          "path": "tests/unit/mcp-cli.test.mjs",
+          "lines": 269
+        },
+        {
+          "path": "tests/unit/mcp-http-origin.test.mjs",
+          "lines": 84
+        },
+        {
+          "path": "tests/unit/mcp-listing-cost.test.mjs",
+          "lines": 72
+        },
+        {
+          "path": "tests/unit/mcp-smoke.test.mjs",
+          "lines": 207
+        },
+        {
+          "path": "tests/unit/measure-pr-ci-after-close.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/mechanics-coherence.test.mjs",
+          "lines": 128
+        },
+        {
+          "path": "tests/unit/mechanics-drills-vm.test.mjs",
+          "lines": 196
+        },
+        {
+          "path": "tests/unit/mechanics-integration-vm.test.mjs",
+          "lines": 277
+        },
+        {
+          "path": "tests/unit/mechanics-race-vm.test.mjs",
+          "lines": 264
+        },
+        {
+          "path": "tests/unit/meeting-picker-labels.test.mjs",
+          "lines": 68
+        },
+        {
+          "path": "tests/unit/mem-census-growth.test.mjs",
+          "lines": 357
+        },
+        {
+          "path": "tests/unit/mem-cycles-lib.test.mjs",
+          "lines": 63
+        },
+        {
+          "path": "tests/unit/memory-sync.test.mjs",
+          "lines": 330
+        },
+        {
+          "path": "tests/unit/menu-a11y-audit.test.mjs",
+          "lines": 801
+        },
+        {
+          "path": "tests/unit/menu-capture.test.mjs",
+          "lines": 133
+        }
+      ],
+      "lines": 4911,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "31",
+      "files": [
+        {
+          "path": "tests/unit/menu-car-prep-yield.test.mjs",
+          "lines": 91
+        },
+        {
+          "path": "tests/unit/menu-nav-spatial.test.mjs",
+          "lines": 331
+        },
+        {
+          "path": "tests/unit/menu-sentinel-resize.test.mjs",
+          "lines": 135
+        },
+        {
+          "path": "tests/unit/merge-gate.test.mjs",
+          "lines": 367
+        },
+        {
+          "path": "tests/unit/merge-hygiene.test.mjs",
+          "lines": 102
+        },
+        {
+          "path": "tests/unit/mesh-census.test.mjs",
+          "lines": 160
+        },
+        {
+          "path": "tests/unit/metrics.test.mjs",
+          "lines": 578
+        },
+        {
+          "path": "tests/unit/miami-hard-rock-orbit.test.mjs",
+          "lines": 114
+        },
+        {
+          "path": "tests/unit/mirror-glass-night.test.mjs",
+          "lines": 74
+        },
+        {
+          "path": "tests/unit/mirror-lights.test.mjs",
+          "lines": 160
+        },
+        {
+          "path": "tests/unit/mirror-pass-carbuild.test.mjs",
+          "lines": 433
+        },
+        {
+          "path": "tests/unit/mirror-pass-prepare.test.mjs",
+          "lines": 191
+        },
+        {
+          "path": "tests/unit/mirror-pass-watch.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/mirror-pass.test.mjs",
+          "lines": 368
+        },
+        {
+          "path": "tests/unit/mix-duck-radio.test.mjs",
+          "lines": 401
+        },
+        {
+          "path": "tests/unit/mobile-config.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/mobile-native-download.test.mjs",
+          "lines": 545
+        },
+        {
+          "path": "tests/unit/mobile-sync-web.test.mjs",
+          "lines": 199
+        },
+        {
+          "path": "tests/unit/model-pack-format.test.mjs",
+          "lines": 219
+        },
+        {
+          "path": "tests/unit/model-sway-parity.test.mjs",
+          "lines": 94
+        },
+        {
+          "path": "tests/unit/monaco-fairmont-orbit.test.mjs",
+          "lines": 38
+        },
+        {
+          "path": "tests/unit/monza-coplanar-clip.test.mjs",
+          "lines": 63
+        }
+      ],
+      "lines": 4910,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "32",
+      "files": [
+        {
+          "path": "tests/unit/move-tree.test.mjs",
+          "lines": 149
+        },
+        {
+          "path": "tests/unit/mugello-arrabbiata-orbit.test.mjs",
+          "lines": 135
+        },
+        {
+          "path": "tests/unit/needs-sync.test.mjs",
+          "lines": 73
+        },
+        {
+          "path": "tests/unit/net-audio-revs-vm.test.mjs",
+          "lines": 88
+        },
+        {
+          "path": "tests/unit/net-authority.test.mjs",
+          "lines": 1821
+        },
+        {
+          "path": "tests/unit/net-grid-separation.test.mjs",
+          "lines": 114
+        },
+        {
+          "path": "tests/unit/net-lobby-friend-quali.test.mjs",
+          "lines": 341
+        }
+      ],
+      "lines": 2721,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "33",
+      "files": [
+        {
+          "path": "tests/unit/net-lobby-lifecycle.test.mjs",
+          "lines": 2622
+        },
+        {
+          "path": "tests/unit/net-nostr-sockets.test.mjs",
+          "lines": 271
+        },
+        {
+          "path": "tests/unit/net-qr.test.mjs",
+          "lines": 248
+        },
+        {
+          "path": "tests/unit/net-rendezvous.test.mjs",
+          "lines": 728
+        },
+        {
+          "path": "tests/unit/net-roster.test.mjs",
+          "lines": 647
+        },
+        {
+          "path": "tests/unit/net-sdp.test.mjs",
+          "lines": 318
+        },
+        {
+          "path": "tests/unit/net-seed-sync-vm.test.mjs",
+          "lines": 122
+        }
+      ],
+      "lines": 4956,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "34",
+      "files": [
+        {
+          "path": "tests/unit/net-session.test.mjs",
+          "lines": 744
+        },
+        {
+          "path": "tests/unit/net-snapshot.test.mjs",
+          "lines": 545
+        },
+        {
+          "path": "tests/unit/net-start-arming.test.mjs",
+          "lines": 183
+        },
+        {
+          "path": "tests/unit/net-stub-surface.test.mjs",
+          "lines": 114
+        },
+        {
+          "path": "tests/unit/net-transport.test.mjs",
+          "lines": 1672
+        },
+        {
+          "path": "tests/unit/net-trystero-api.test.mjs",
+          "lines": 378
+        },
+        {
+          "path": "tests/unit/netplay-resilience.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/new-hooks-vm.test.mjs",
+          "lines": 602
+        },
+        {
+          "path": "tests/unit/night-washout-presets.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/nightly-group.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/no-bare-console.test.mjs",
+          "lines": 72
+        },
+        {
+          "path": "tests/unit/node-compile-cache.test.mjs",
+          "lines": 87
+        }
+      ],
+      "lines": 4768,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "35",
+      "files": [
+        {
+          "path": "tests/unit/node-plan.test.mjs",
+          "lines": 275
+        },
+        {
+          "path": "tests/unit/nontext-contrast.test.mjs",
+          "lines": 543
+        },
+        {
+          "path": "tests/unit/nurburgring-eifel-horizon.test.mjs",
+          "lines": 35
+        },
+        {
+          "path": "tests/unit/obs-act-edge-vm.test.mjs",
+          "lines": 232
+        },
+        {
+          "path": "tests/unit/offline-precache-nav.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/offtrack-edges-vm.test.mjs",
+          "lines": 56
+        },
+        {
+          "path": "tests/unit/offtrack-vm.test.mjs",
+          "lines": 166
+        },
+        {
+          "path": "tests/unit/onboard.test.mjs",
+          "lines": 288
+        },
+        {
+          "path": "tests/unit/ot-ahead-scan-gate.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/output-level-mcp.test.mjs",
+          "lines": 395
+        },
+        {
+          "path": "tests/unit/output-surface.test.mjs",
+          "lines": 90
+        },
+        {
+          "path": "tests/unit/over-road-scan.test.mjs",
+          "lines": 78
+        },
+        {
+          "path": "tests/unit/overlay-feed.test.mjs",
+          "lines": 269
+        },
+        {
+          "path": "tests/unit/overtake-mode.test.mjs",
+          "lines": 324
+        },
+        {
+          "path": "tests/unit/pace-arming-vm.test.mjs",
+          "lines": 92
+        },
+        {
+          "path": "tests/unit/pace-math.test.mjs",
+          "lines": 136
+        },
+        {
+          "path": "tests/unit/pack-content-address.test.mjs",
+          "lines": 177
+        },
+        {
+          "path": "tests/unit/pack-png-bytes.test.mjs",
+          "lines": 267
+        },
+        {
+          "path": "tests/unit/pad-haptics.test.mjs",
+          "lines": 329
+        },
+        {
+          "path": "tests/unit/particles-dirty.test.mjs",
+          "lines": 305
+        },
+        {
+          "path": "tests/unit/parts-copy-w13c.test.mjs",
+          "lines": 84
+        },
+        {
+          "path": "tests/unit/parts-distinct-mesh.test.mjs",
+          "lines": 115
+        },
+        {
+          "path": "tests/unit/parts-factory-key.test.mjs",
+          "lines": 35
+        },
+        {
+          "path": "tests/unit/parts-ladder.test.mjs",
+          "lines": 140
+        },
+        {
+          "path": "tests/unit/parts-locked-equivalent.test.mjs",
+          "lines": 106
+        },
+        {
+          "path": "tests/unit/parts-visual-distinctness.test.mjs",
+          "lines": 188
+        }
+      ],
+      "lines": 4954,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "36",
+      "files": [
+        {
+          "path": "tests/unit/pause-hud-layout.test.mjs",
+          "lines": 167
+        },
+        {
+          "path": "tests/unit/pause-key-tools.test.mjs",
+          "lines": 100
+        },
+        {
+          "path": "tests/unit/pause-opts.test.mjs",
+          "lines": 450
+        },
+        {
+          "path": "tests/unit/pause-silence.test.mjs",
+          "lines": 279
+        },
+        {
+          "path": "tests/unit/pause-taps.test.mjs",
+          "lines": 40
+        },
+        {
+          "path": "tests/unit/perf-frametime.test.mjs",
+          "lines": 22
+        },
+        {
+          "path": "tests/unit/perf-governor.test.mjs",
+          "lines": 1599
+        },
+        {
+          "path": "tests/unit/perf-race-entry.test.mjs",
+          "lines": 27
+        },
+        {
+          "path": "tests/unit/perf-sentinel.test.mjs",
+          "lines": 160
+        },
+        {
+          "path": "tests/unit/perf-spans.test.mjs",
+          "lines": 160
+        },
+        {
+          "path": "tests/unit/perf-try.test.mjs",
+          "lines": 628
+        },
+        {
+          "path": "tests/unit/perf-vm-alloc-budget.test.mjs",
+          "lines": 41
+        },
+        {
+          "path": "tests/unit/perf-vm-leak-cycles.test.mjs",
+          "lines": 51
+        },
+        {
+          "path": "tests/unit/persistence-vm.test.mjs",
+          "lines": 100
+        },
+        {
+          "path": "tests/unit/phone-input-improvements.test.mjs",
+          "lines": 201
+        },
+        {
+          "path": "tests/unit/phone-pad-netplay-vm.test.mjs",
+          "lines": 148
+        }
+      ],
+      "lines": 4173,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "37",
+      "files": [
+        {
+          "path": "tests/unit/phone-pad.test.mjs",
+          "lines": 2084
+        },
+        {
+          "path": "tests/unit/phone-recorder.test.mjs",
+          "lines": 328
+        },
+        {
+          "path": "tests/unit/phone-touch-surface.test.mjs",
+          "lines": 766
+        },
+        {
+          "path": "tests/unit/photo-kit.test.mjs",
+          "lines": 169
+        },
+        {
+          "path": "tests/unit/photo-studio.test.mjs",
+          "lines": 776
+        },
+        {
+          "path": "tests/unit/photomode-hold.test.mjs",
+          "lines": 246
+        },
+        {
+          "path": "tests/unit/physics-baseline-provenance.test.mjs",
+          "lines": 131
+        },
+        {
+          "path": "tests/unit/physics-characterization-vm.test.mjs",
+          "lines": 173
+        },
+        {
+          "path": "tests/unit/physics-feel-vm.test.mjs",
+          "lines": 122
+        },
+        {
+          "path": "tests/unit/physics-oracle.test.mjs",
+          "lines": 104
+        }
+      ],
+      "lines": 4899,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "38",
+      "files": [
+        {
+          "path": "tests/unit/physics-rows-vm.test.mjs",
+          "lines": 509
+        },
+        {
+          "path": "tests/unit/physics-tune-sweep.test.mjs",
+          "lines": 100
+        },
+        {
+          "path": "tests/unit/pick-tests.test.mjs",
+          "lines": 318
+        },
+        {
+          "path": "tests/unit/pick-unit-slices.test.mjs",
+          "lines": 277
+        },
+        {
+          "path": "tests/unit/pit-canopy-cull.test.mjs",
+          "lines": 103
+        },
+        {
+          "path": "tests/unit/pit-complex.test.mjs",
+          "lines": 937
+        },
+        {
+          "path": "tests/unit/pit-lane-vm.test.mjs",
+          "lines": 757
+        },
+        {
+          "path": "tests/unit/pit-lane.test.mjs",
+          "lines": 1792
+        }
+      ],
+      "lines": 4793,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "39",
+      "files": [
+        {
+          "path": "tests/unit/pit-signs.test.mjs",
+          "lines": 403
+        },
+        {
+          "path": "tests/unit/platform-session-install.test.mjs",
+          "lines": 76
+        },
+        {
+          "path": "tests/unit/player-collision-side.test.mjs",
+          "lines": 144
+        },
+        {
+          "path": "tests/unit/player-dynamics-shipped-vm.test.mjs",
+          "lines": 117
+        },
+        {
+          "path": "tests/unit/player-dynamics-vm.test.mjs",
+          "lines": 513
+        },
+        {
+          "path": "tests/unit/player-forces.test.mjs",
+          "lines": 309
+        },
+        {
+          "path": "tests/unit/player-tools-backup.test.mjs",
+          "lines": 148
+        },
+        {
+          "path": "tests/unit/player-tools-ui.test.mjs",
+          "lines": 350
+        },
+        {
+          "path": "tests/unit/poll-live-shell.test.mjs",
+          "lines": 240
+        },
+        {
+          "path": "tests/unit/post-fx-opts.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/pr-board.test.mjs",
+          "lines": 432
+        },
+        {
+          "path": "tests/unit/pr-body.test.mjs",
+          "lines": 126
+        },
+        {
+          "path": "tests/unit/pre-commit-guards.test.mjs",
+          "lines": 742
+        },
+        {
+          "path": "tests/unit/prepush-gate-coverage.test.mjs",
+          "lines": 149
+        },
+        {
+          "path": "tests/unit/process-dashboard.test.mjs",
+          "lines": 304
+        },
+        {
+          "path": "tests/unit/profile-lib.test.mjs",
+          "lines": 245
+        },
+        {
+          "path": "tests/unit/profile-mcp.test.mjs",
+          "lines": 57
+        },
+        {
+          "path": "tests/unit/prop-clipping.test.mjs",
+          "lines": 239
+        }
+      ],
+      "lines": 4736,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "40",
+      "files": [
+        {
+          "path": "tests/unit/props-over-road.test.mjs",
+          "lines": 459
+        },
+        {
+          "path": "tests/unit/props-tri-ratchet.test.mjs",
+          "lines": 131
+        },
+        {
+          "path": "tests/unit/prune-branches.test.mjs",
+          "lines": 133
+        },
+        {
+          "path": "tests/unit/pu-harvest-audio.test.mjs",
+          "lines": 145
+        },
+        {
+          "path": "tests/unit/publish-evidence.test.mjs",
+          "lines": 209
+        },
+        {
+          "path": "tests/unit/publish-shots.test.mjs",
+          "lines": 210
+        },
+        {
+          "path": "tests/unit/puddles.test.mjs",
+          "lines": 240
+        },
+        {
+          "path": "tests/unit/qatar-day-sf-orbit.test.mjs",
+          "lines": 90
+        },
+        {
+          "path": "tests/unit/quali-handoff-vm.test.mjs",
+          "lines": 121
+        },
+        {
+          "path": "tests/unit/quali-pace-parity-vm.test.mjs",
+          "lines": 70
+        },
+        {
+          "path": "tests/unit/quali-persist.test.mjs",
+          "lines": 555
+        },
+        {
+          "path": "tests/unit/quality-preset-phone.test.mjs",
+          "lines": 150
+        },
+        {
+          "path": "tests/unit/queue-depth.test.mjs",
+          "lines": 296
+        },
+        {
+          "path": "tests/unit/quick-validate.test.mjs",
+          "lines": 67
+        },
+        {
+          "path": "tests/unit/race-control.test.mjs",
+          "lines": 1035
+        },
+        {
+          "path": "tests/unit/race-entry-profile.test.mjs",
+          "lines": 557
+        }
+      ],
+      "lines": 4468,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "41",
+      "files": [
+        {
+          "path": "tests/unit/race-flow-fixes-vm.test.mjs",
+          "lines": 1189
+        },
+        {
+          "path": "tests/unit/race-flow-vm.test.mjs",
+          "lines": 103
+        },
+        {
+          "path": "tests/unit/race-insights.test.mjs",
+          "lines": 694
+        },
+        {
+          "path": "tests/unit/race-radio.test.mjs",
+          "lines": 1459
+        },
+        {
+          "path": "tests/unit/race-retain-vm.test.mjs",
+          "lines": 97
+        },
+        {
+          "path": "tests/unit/race-session-fixes.test.mjs",
+          "lines": 121
+        },
+        {
+          "path": "tests/unit/race-session-lazy.test.mjs",
+          "lines": 151
+        },
+        {
+          "path": "tests/unit/race-settings-pitplan-key.test.mjs",
+          "lines": 159
+        },
+        {
+          "path": "tests/unit/race-settings-vm.test.mjs",
+          "lines": 658
+        },
+        {
+          "path": "tests/unit/race-setup-sheets.test.mjs",
+          "lines": 323
+        }
+      ],
+      "lines": 4954,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "42",
+      "files": [
+        {
+          "path": "tests/unit/race-step-snap.test.mjs",
+          "lines": 68
+        },
+        {
+          "path": "tests/unit/radio-duration.test.mjs",
+          "lines": 78
+        },
+        {
+          "path": "tests/unit/radio-lines.test.mjs",
+          "lines": 75
+        },
+        {
+          "path": "tests/unit/radio-voice.test.mjs",
+          "lines": 1330
+        },
+        {
+          "path": "tests/unit/rain-cells-vm.test.mjs",
+          "lines": 70
+        },
+        {
+          "path": "tests/unit/rain-cells.test.mjs",
+          "lines": 231
+        },
+        {
+          "path": "tests/unit/rank-sort-alloc-vm.test.mjs",
+          "lines": 82
+        },
+        {
+          "path": "tests/unit/ratchet-merge-hotspot.test.mjs",
+          "lines": 235
+        },
+        {
+          "path": "tests/unit/ratchet-reason.test.mjs",
+          "lines": 33
+        },
+        {
+          "path": "tests/unit/ratchets-fold-schedule.test.mjs",
+          "lines": 68
+        },
+        {
+          "path": "tests/unit/ratchets.test.mjs",
+          "lines": 398
+        },
+        {
+          "path": "tests/unit/ready-gate.test.mjs",
+          "lines": 224
+        },
+        {
+          "path": "tests/unit/real-race-script.test.mjs",
+          "lines": 1015
+        },
+        {
+          "path": "tests/unit/real-race-tab-gap-refresh.test.mjs",
+          "lines": 227
+        }
+      ],
+      "lines": 4134,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "43",
+      "files": [
+        {
+          "path": "tests/unit/real-race.test.mjs",
+          "lines": 1088
+        },
+        {
+          "path": "tests/unit/real-replay-audio-focus.test.mjs",
+          "lines": 274
+        },
+        {
+          "path": "tests/unit/real-replay-broadcast.test.mjs",
+          "lines": 446
+        },
+        {
+          "path": "tests/unit/real-replay-captions.test.mjs",
+          "lines": 138
+        },
+        {
+          "path": "tests/unit/real-replay-frame-fit.test.mjs",
+          "lines": 179
+        },
+        {
+          "path": "tests/unit/real-replay-transport.test.mjs",
+          "lines": 738
+        },
+        {
+          "path": "tests/unit/real-replay-vm.test.mjs",
+          "lines": 405
+        },
+        {
+          "path": "tests/unit/rear-wing-active-aero.test.mjs",
+          "lines": 131
+        },
+        {
+          "path": "tests/unit/rear-wing-drs-rail.test.mjs",
+          "lines": 168
+        },
+        {
+          "path": "tests/unit/red-flag-fuel-vm.test.mjs",
+          "lines": 27
+        },
+        {
+          "path": "tests/unit/red-flag-pit-vm.test.mjs",
+          "lines": 127
+        },
+        {
+          "path": "tests/unit/red-flag-vm.test.mjs",
+          "lines": 165
+        },
+        {
+          "path": "tests/unit/redbull-orbit-clear.test.mjs",
+          "lines": 51
+        },
+        {
+          "path": "tests/unit/reject-lint.test.mjs",
+          "lines": 103
+        },
+        {
+          "path": "tests/unit/release-provenance.test.mjs",
+          "lines": 34
+        },
+        {
+          "path": "tests/unit/reliability.test.mjs",
+          "lines": 159
+        },
+        {
+          "path": "tests/unit/remote-group.test.mjs",
+          "lines": 265
+        },
+        {
+          "path": "tests/unit/render-final-contracts.test.mjs",
+          "lines": 226
+        },
+        {
+          "path": "tests/unit/render-lighting-prep.test.mjs",
+          "lines": 30
+        },
+        {
+          "path": "tests/unit/render-rate.test.mjs",
+          "lines": 194
+        }
+      ],
+      "lines": 4948,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "44",
+      "files": [
+        {
+          "path": "tests/unit/renderer-boot-island-preload.test.mjs",
+          "lines": 132
+        },
+        {
+          "path": "tests/unit/renderer-boot-timeout.test.mjs",
+          "lines": 319
+        },
+        {
+          "path": "tests/unit/renderer-picker-unavailable.test.mjs",
+          "lines": 137
+        },
+        {
+          "path": "tests/unit/renderer-soft-lifecycle.test.mjs",
+          "lines": 660
+        },
+        {
+          "path": "tests/unit/rendergeom-graph.test.mjs",
+          "lines": 161
+        },
+        {
+          "path": "tests/unit/rendergeom-staging.test.mjs",
+          "lines": 139
+        },
+        {
+          "path": "tests/unit/rendezvous-worker.test.mjs",
+          "lines": 264
+        },
+        {
+          "path": "tests/unit/replay-buf.test.mjs",
+          "lines": 799
+        },
+        {
+          "path": "tests/unit/repo-size.test.mjs",
+          "lines": 91
+        },
+        {
+          "path": "tests/unit/report-server.test.mjs",
+          "lines": 138
+        },
+        {
+          "path": "tests/unit/res-scale-census.test.mjs",
+          "lines": 23
+        },
+        {
+          "path": "tests/unit/results-cam.test.mjs",
+          "lines": 720
+        },
+        {
+          "path": "tests/unit/retired-car-obstacle-vm.test.mjs",
+          "lines": 108
+        },
+        {
+          "path": "tests/unit/retro-shift-lights.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/ribbon-cpu-release.test.mjs",
+          "lines": 49
+        },
+        {
+          "path": "tests/unit/rival-attach-init.test.mjs",
+          "lines": 250
+        },
+        {
+          "path": "tests/unit/rival-audio.test.mjs",
+          "lines": 493
+        },
+        {
+          "path": "tests/unit/rival-contact-sfx.test.mjs",
+          "lines": 263
+        }
+      ],
+      "lines": 4832,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "45",
+      "files": [
+        {
+          "path": "tests/unit/rival-passby-pool.test.mjs",
+          "lines": 218
+        },
+        {
+          "path": "tests/unit/road-lut-frame.test.mjs",
+          "lines": 93
+        },
+        {
+          "path": "tests/unit/road-position-checks.test.mjs",
+          "lines": 71
+        },
+        {
+          "path": "tests/unit/road-reflection-transition.test.mjs",
+          "lines": 96
+        },
+        {
+          "path": "tests/unit/road-under-floor.test.mjs",
+          "lines": 82
+        },
+        {
+          "path": "tests/unit/rulebook-guards.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/run-pid.test.mjs",
+          "lines": 67
+        },
+        {
+          "path": "tests/unit/s8-once-per-frame.test.mjs",
+          "lines": 168
+        },
+        {
+          "path": "tests/unit/safety-bans-hook.test.mjs",
+          "lines": 398
+        },
+        {
+          "path": "tests/unit/save-durability.test.mjs",
+          "lines": 500
+        },
+        {
+          "path": "tests/unit/save-migrate.test.mjs",
+          "lines": 404
+        },
+        {
+          "path": "tests/unit/save-schema-registry.test.mjs",
+          "lines": 226
+        },
+        {
+          "path": "tests/unit/scale-defaults.test.mjs",
+          "lines": 255
+        },
+        {
+          "path": "tests/unit/scene-live.test.mjs",
+          "lines": 80
+        },
+        {
+          "path": "tests/unit/scenery-api-contract.test.mjs",
+          "lines": 262
+        },
+        {
+          "path": "tests/unit/scenery-ground-audit.test.mjs",
+          "lines": 323
+        },
+        {
+          "path": "tests/unit/scenery-grounding.test.mjs",
+          "lines": 249
+        },
+        {
+          "path": "tests/unit/scenery-guards.test.mjs",
+          "lines": 349
+        }
+      ],
+      "lines": 3946,
+      "status": "assigned"
+    },
+    {
+      "id": "46",
+      "files": [
+        {
+          "path": "tests/unit/scenery-kits.test.mjs",
+          "lines": 1288
+        },
+        {
+          "path": "tests/unit/scenery-preview-budget.test.mjs",
+          "lines": 72
+        },
+        {
+          "path": "tests/unit/screen-looks.test.mjs",
+          "lines": 432
+        },
+        {
+          "path": "tests/unit/script-loader-preload.test.mjs",
+          "lines": 256
+        },
+        {
+          "path": "tests/unit/script-loader-retry-eval.test.mjs",
+          "lines": 108
+        },
+        {
+          "path": "tests/unit/script-loader-starved.test.mjs",
+          "lines": 59
+        },
+        {
+          "path": "tests/unit/script-loader-throw.test.mjs",
+          "lines": 138
+        },
+        {
+          "path": "tests/unit/scroll-strips.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/season-cal.test.mjs",
+          "lines": 1202
+        },
+        {
+          "path": "tests/unit/select-budget.test.mjs",
+          "lines": 114
+        },
+        {
+          "path": "tests/unit/select-preview-defer.test.mjs",
+          "lines": 136
+        },
+        {
+          "path": "tests/unit/select-screen-fixes.test.mjs",
+          "lines": 211
+        }
+      ],
+      "lines": 4159,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "47",
+      "files": [
+        {
+          "path": "tests/unit/select-specs.test.mjs",
+          "lines": 1865
+        },
+        {
+          "path": "tests/unit/selected-gate-verdict.test.mjs",
+          "lines": 233
+        },
+        {
+          "path": "tests/unit/service-worker.test.mjs",
+          "lines": 2064
+        },
+        {
+          "path": "tests/unit/session-contracts.test.mjs",
+          "lines": 137
+        },
+        {
+          "path": "tests/unit/session-entry-vm.test.mjs",
+          "lines": 417
+        },
+        {
+          "path": "tests/unit/session-status.test.mjs",
+          "lines": 229
+        }
+      ],
+      "lines": 4945,
+      "status": "complete across report/continuations"
+    },
+    {
+      "id": "48",
+      "files": [
+        {
+          "path": "tests/unit/session-stub-surface.test.mjs",
+          "lines": 195
+        },
+        {
+          "path": "tests/unit/session-transcript.test.mjs",
+          "lines": 271
+        },
+        {
+          "path": "tests/unit/setting-deps.test.mjs",
+          "lines": 338
+        },
+        {
+          "path": "tests/unit/settings-defaults.test.mjs",
+          "lines": 245
+        },
+        {
+          "path": "tests/unit/settings-export.test.mjs",
+          "lines": 1770
+        },
+        {
+          "path": "tests/unit/settings-one-home.test.mjs",
+          "lines": 57
+        },
+        {
+          "path": "tests/unit/settings-open-perf.test.mjs",
+          "lines": 303
+        },
+        {
+          "path": "tests/unit/settings-reload-vm.test.mjs",
+          "lines": 32
+        },
+        {
+          "path": "tests/unit/settings-search.test.mjs",
+          "lines": 153
+        },
+        {
+          "path": "tests/unit/settings-tabs.test.mjs",
+          "lines": 216
+        },
+        {
+          "path": "tests/unit/settings-ttlb-backup.test.mjs",
+          "lines": 222
+        },
+        {
+          "path": "tests/unit/setup-preview-hull.test.mjs",
+          "lines": 202
+        },
+        {
+          "path": "tests/unit/setup-screens-state.test.mjs",
+          "lines": 834
+        }
+      ],
+      "lines": 4838,
+      "status": "assigned"
+    },
+    {
+      "id": "49",
+      "files": [
+        {
+          "path": "tests/unit/setup-trial-session.test.mjs",
+          "lines": 173
+        },
+        {
+          "path": "tests/unit/setup-tune.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/shader-validate.test.mjs",
+          "lines": 96
+        },
+        {
+          "path": "tests/unit/shadow-pass-depth.test.mjs",
+          "lines": 327
+        },
+        {
+          "path": "tests/unit/shanghai-pudong-horizon.test.mjs",
+          "lines": 47
+        },
+        {
+          "path": "tests/unit/share-card-data.test.mjs",
+          "lines": 54
+        },
+        {
+          "path": "tests/unit/share-card-layout.test.mjs",
+          "lines": 52
+        },
+        {
+          "path": "tests/unit/share-card.test.mjs",
+          "lines": 246
+        },
+        {
+          "path": "tests/unit/share-code.test.mjs",
+          "lines": 579
+        },
+        {
+          "path": "tests/unit/shared-math.test.mjs",
+          "lines": 291
+        },
+        {
+          "path": "tests/unit/shared-track-foundation-characterization.test.cjs",
+          "lines": 416
+        },
+        {
+          "path": "tests/unit/sheet-per-screen.test.mjs",
+          "lines": 78
+        },
+        {
+          "path": "tests/unit/sheetshape-batch-measure.test.mjs",
+          "lines": 89
+        },
+        {
+          "path": "tests/unit/sheetshape-density-scale.test.mjs",
+          "lines": 169
+        },
+        {
+          "path": "tests/unit/sheetshape-keyboard.test.mjs",
+          "lines": 286
+        },
+        {
+          "path": "tests/unit/sheetshape-registry.test.mjs",
+          "lines": 134
+        },
+        {
+          "path": "tests/unit/shell-ids.test.mjs",
+          "lines": 114
+        },
+        {
+          "path": "tests/unit/ship-filter-paths.test.mjs",
+          "lines": 81
+        },
+        {
+          "path": "tests/unit/shot-jobs.test.mjs",
+          "lines": 218
+        },
+        {
+          "path": "tests/unit/shot-survey-runner.test.mjs",
+          "lines": 154
+        },
+        {
+          "path": "tests/unit/sim-bytecode-budget.test.mjs",
+          "lines": 67
+        },
+        {
+          "path": "tests/unit/skidmarks-cadence.test.mjs",
+          "lines": 181
+        },
+        {
+          "path": "tests/unit/skill-hint-hook.test.mjs",
+          "lines": 132
+        },
+        {
+          "path": "tests/unit/skill-progressive.test.mjs",
+          "lines": 618
+        },
+        {
+          "path": "tests/unit/skill-routing-eval.test.mjs",
+          "lines": 147
+        },
+        {
+          "path": "tests/unit/skill-smoke.test.mjs",
+          "lines": 30
+        }
+      ],
+      "lines": 4922,
+      "status": "assigned"
+    },
+    {
+      "id": "50",
+      "files": [
+        {
+          "path": "tests/unit/slider-effect.test.mjs",
+          "lines": 401
+        },
+        {
+          "path": "tests/unit/soak-run.test.mjs",
+          "lines": 143
+        },
+        {
+          "path": "tests/unit/soundtrack-cache.test.mjs",
+          "lines": 132
+        },
+        {
+          "path": "tests/unit/source-integrity.test.mjs",
+          "lines": 480
+        },
+        {
+          "path": "tests/unit/source-pin-hygiene.test.mjs",
+          "lines": 72
+        },
+        {
+          "path": "tests/unit/span-kinds.test.mjs",
+          "lines": 73
+        },
+        {
+          "path": "tests/unit/spec-timings.test.mjs",
+          "lines": 531
+        },
+        {
+          "path": "tests/unit/speed-cap-vm.test.mjs",
+          "lines": 58
+        },
+        {
+          "path": "tests/unit/speed-coupling.test.mjs",
+          "lines": 133
+        },
+        {
+          "path": "tests/unit/spline-fold-diagnostics.test.mjs",
+          "lines": 134
+        },
+        {
+          "path": "tests/unit/spline-project-height.test.mjs",
+          "lines": 196
+        },
+        {
+          "path": "tests/unit/sporting-regs.test.mjs",
+          "lines": 478
+        },
+        {
+          "path": "tests/unit/spotify-native.test.mjs",
+          "lines": 65
+        },
+        {
+          "path": "tests/unit/spotify-refresh.test.mjs",
+          "lines": 820
+        },
+        {
+          "path": "tests/unit/spotter-lifecycle.test.mjs",
+          "lines": 153
+        },
+        {
+          "path": "tests/unit/stage-minify.test.mjs",
+          "lines": 285
+        },
+        {
+          "path": "tests/unit/stand-curve-gap.test.mjs",
+          "lines": 134
+        },
+        {
+          "path": "tests/unit/start-lights.test.mjs",
+          "lines": 249
+        },
+        {
+          "path": "tests/unit/start-race-latch.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/steel-role.test.mjs",
+          "lines": 163
+        },
+        {
+          "path": "tests/unit/steer-feel-lift-off.test.mjs",
+          "lines": 78
+        },
+        {
+          "path": "tests/unit/steer-lock-taper.test.mjs",
+          "lines": 112
+        }
+      ],
+      "lines": 4976,
+      "status": "assigned"
+    },
+    {
+      "id": "51",
+      "files": [
+        {
+          "path": "tests/unit/steer-presets.test.mjs",
+          "lines": 345
+        },
+        {
+          "path": "tests/unit/steer-tuning-lock.test.mjs",
+          "lines": 45
+        },
+        {
+          "path": "tests/unit/storage-key-prefix.test.mjs",
+          "lines": 65
+        },
+        {
+          "path": "tests/unit/store-cross-tab.test.mjs",
+          "lines": 1158
+        },
+        {
+          "path": "tests/unit/store-key-types.test.mjs",
+          "lines": 229
+        },
+        {
+          "path": "tests/unit/store-registry.test.mjs",
+          "lines": 329
+        },
+        {
+          "path": "tests/unit/storm-vm.test.mjs",
+          "lines": 110
+        },
+        {
+          "path": "tests/unit/storm-weather.test.mjs",
+          "lines": 290
+        },
+        {
+          "path": "tests/unit/stuck-census.test.mjs",
+          "lines": 37
+        },
+        {
+          "path": "tests/unit/subagent-contract-hook.test.mjs",
+          "lines": 159
+        },
+        {
+          "path": "tests/unit/surface-id-parity.test.mjs",
+          "lines": 439
+        },
+        {
+          "path": "tests/unit/survey-hud.test.mjs",
+          "lines": 269
+        },
+        {
+          "path": "tests/unit/suzuka-circuit-wheel.test.mjs",
+          "lines": 64
+        },
+        {
+          "path": "tests/unit/suzuka-crossover-span.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/sw-build-meta.test.mjs",
+          "lines": 172
+        },
+        {
+          "path": "tests/unit/sweep-shards.test.mjs",
+          "lines": 57
+        },
+        {
+          "path": "tests/unit/sync-pr-robust.test.mjs",
+          "lines": 69
+        },
+        {
+          "path": "tests/unit/team-livery.test.mjs",
+          "lines": 450
+        },
+        {
+          "path": "tests/unit/team-style-relief.test.mjs",
+          "lines": 99
+        }
+      ],
+      "lines": 4472,
+      "status": "unassigned"
+    },
+    {
+      "id": "52",
+      "files": [
+        {
+          "path": "tests/unit/telemetry-trace.test.mjs",
+          "lines": 652
+        },
+        {
+          "path": "tests/unit/telemetry-view-resize.test.mjs",
+          "lines": 124
+        },
+        {
+          "path": "tests/unit/terrain-falloff.test.mjs",
+          "lines": 92
+        },
+        {
+          "path": "tests/unit/terrain-normals.test.mjs",
+          "lines": 196
+        },
+        {
+          "path": "tests/unit/terrain-y.test.mjs",
+          "lines": 130
+        },
+        {
+          "path": "tests/unit/test-bg-outcome.test.mjs",
+          "lines": 175
+        },
+        {
+          "path": "tests/unit/test-bg-waste.test.mjs",
+          "lines": 58
+        },
+        {
+          "path": "tests/unit/test-coverage-audit.test.mjs",
+          "lines": 74
+        },
+        {
+          "path": "tests/unit/test-groups-generated.test.mjs",
+          "lines": 178
+        },
+        {
+          "path": "tests/unit/test-groups.test.mjs",
+          "lines": 460
+        },
+        {
+          "path": "tests/unit/test-observed.test.mjs",
+          "lines": 152
+        },
+        {
+          "path": "tests/unit/tex-census.test.mjs",
+          "lines": 165
+        },
+        {
+          "path": "tests/unit/thermal-drift.test.mjs",
+          "lines": 212
+        },
+        {
+          "path": "tests/unit/three-inspector.test.mjs",
+          "lines": 227
+        },
+        {
+          "path": "tests/unit/three-shared-binding-update.test.mjs",
+          "lines": 79
+        },
+        {
+          "path": "tests/unit/throttle-latch.test.mjs",
+          "lines": 442
+        },
+        {
+          "path": "tests/unit/title-art.test.mjs",
+          "lines": 171
+        },
+        {
+          "path": "tests/unit/title-flow.test.mjs",
+          "lines": 213
+        },
+        {
+          "path": "tests/unit/title-fx.test.mjs",
+          "lines": 347
+        },
+        {
+          "path": "tests/unit/title-home-scene-prepaint.test.mjs",
+          "lines": 153
+        },
+        {
+          "path": "tests/unit/title-layout.test.mjs",
+          "lines": 460
+        }
+      ],
+      "lines": 4760,
+      "status": "unassigned"
+    },
+    {
+      "id": "53",
+      "files": [
+        {
+          "path": "tests/unit/title-menu-even.test.mjs",
+          "lines": 502
+        },
+        {
+          "path": "tests/unit/title-warm.test.mjs",
+          "lines": 128
+        },
+        {
+          "path": "tests/unit/tlx-anim-pump.test.mjs",
+          "lines": 84
+        },
+        {
+          "path": "tests/unit/tlx-car-shadow-cpu.test.mjs",
+          "lines": 81
+        },
+        {
+          "path": "tests/unit/tlx-chunked-lifecycle.test.mjs",
+          "lines": 486
+        },
+        {
+          "path": "tests/unit/tlx-cull-shadow-pack.test.mjs",
+          "lines": 178
+        },
+        {
+          "path": "tests/unit/tlx-fail-scope.test.mjs",
+          "lines": 322
+        },
+        {
+          "path": "tests/unit/tlx-fx-warm.test.mjs",
+          "lines": 101
+        },
+        {
+          "path": "tests/unit/tlx-glow-instancing.test.mjs",
+          "lines": 123
+        },
+        {
+          "path": "tests/unit/tlx-gpumem-leak.test.mjs",
+          "lines": 56
+        },
+        {
+          "path": "tests/unit/tlx-hunt3.test.mjs",
+          "lines": 956
+        },
+        {
+          "path": "tests/unit/tlx-hunt4.test.mjs",
+          "lines": 464
+        },
+        {
+          "path": "tests/unit/tlx-hunt4b.test.mjs",
+          "lines": 850
+        },
+        {
+          "path": "tests/unit/tlx-hunt4c.test.mjs",
+          "lines": 582
+        }
+      ],
+      "lines": 4913,
+      "status": "unassigned"
+    },
+    {
+      "id": "54",
+      "files": [
+        {
+          "path": "tests/unit/tlx-inst-cells.test.mjs",
+          "lines": 300
+        },
+        {
+          "path": "tests/unit/tlx-mat-key-memo.test.mjs",
+          "lines": 115
+        },
+        {
+          "path": "tests/unit/tlx-mirror-inset.test.mjs",
+          "lines": 123
+        },
+        {
+          "path": "tests/unit/tlx-pipe-pin-warm.test.mjs",
+          "lines": 125
+        },
+        {
+          "path": "tests/unit/tlx-post-fixed-mats.test.mjs",
+          "lines": 149
+        },
+        {
+          "path": "tests/unit/tlx-post-orient-cover-webgpu.test.mjs",
+          "lines": 53
+        },
+        {
+          "path": "tests/unit/tlx-post-phone-res.test.mjs",
+          "lines": 106
+        },
+        {
+          "path": "tests/unit/tlx-prune-pin.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/tlx-recovery-lifecycle.test.mjs",
+          "lines": 174
+        },
+        {
+          "path": "tests/unit/tlx-rig-warm.test.mjs",
+          "lines": 328
+        },
+        {
+          "path": "tests/unit/tlx-round2.test.mjs",
+          "lines": 390
+        },
+        {
+          "path": "tests/unit/tlx-smith-root.test.mjs",
+          "lines": 151
+        },
+        {
+          "path": "tests/unit/tlx-texture-release.test.mjs",
+          "lines": 412
+        },
+        {
+          "path": "tests/unit/tlx-viewport.test.mjs",
+          "lines": 312
+        },
+        {
+          "path": "tests/unit/tolerance-diff.test.mjs",
+          "lines": 86
+        },
+        {
+          "path": "tests/unit/tooling-fast-runner.test.mjs",
+          "lines": 660
+        },
+        {
+          "path": "tests/unit/tooling-timings.test.mjs",
+          "lines": 61
+        },
+        {
+          "path": "tests/unit/tools-a12-guards.test.mjs",
+          "lines": 176
+        },
+        {
+          "path": "tests/unit/tools-runnable.test.mjs",
+          "lines": 877
+        },
+        {
+          "path": "tests/unit/tools-w13a-agent-help.test.mjs",
+          "lines": 39
+        },
+        {
+          "path": "tests/unit/tools-w13a-helmet-sheet.test.mjs",
+          "lines": 25
+        },
+        {
+          "path": "tests/unit/tools-w13a-probe-page.test.mjs",
+          "lines": 70
+        },
+        {
+          "path": "tests/unit/tools-w13a-quick-validate.test.mjs",
+          "lines": 44
+        }
+      ],
+      "lines": 4862,
+      "status": "unassigned"
+    },
+    {
+      "id": "55",
+      "files": [
+        {
+          "path": "tests/unit/touch-drag-anchor.test.mjs",
+          "lines": 236
+        },
+        {
+          "path": "tests/unit/touch-drag-speed.test.mjs",
+          "lines": 175
+        },
+        {
+          "path": "tests/unit/track-accuracy-validator.test.mjs",
+          "lines": 38
+        },
+        {
+          "path": "tests/unit/track-build-grids.test.mjs",
+          "lines": 129
+        },
+        {
+          "path": "tests/unit/track-build-load.test.mjs",
+          "lines": 60
+        },
+        {
+          "path": "tests/unit/track-build-vm-release.test.mjs",
+          "lines": 303
+        },
+        {
+          "path": "tests/unit/track-build-wait.test.mjs",
+          "lines": 278
+        },
+        {
+          "path": "tests/unit/track-centerline-seam.test.mjs",
+          "lines": 46
+        },
+        {
+          "path": "tests/unit/track-codec.test.mjs",
+          "lines": 313
+        },
+        {
+          "path": "tests/unit/track-def-factory.test.mjs",
+          "lines": 137
+        },
+        {
+          "path": "tests/unit/track-designer-dom.test.mjs",
+          "lines": 2988
+        }
+      ],
+      "lines": 4703,
+      "status": "unassigned"
+    },
+    {
+      "id": "56",
+      "files": [
+        {
+          "path": "tests/unit/track-editor-geometry.test.mjs",
+          "lines": 408
+        },
+        {
+          "path": "tests/unit/track-fixes.test.mjs",
+          "lines": 287
+        },
+        {
+          "path": "tests/unit/track-foundation.test.mjs",
+          "lines": 542
+        },
+        {
+          "path": "tests/unit/track-graph.test.mjs",
+          "lines": 710
+        },
+        {
+          "path": "tests/unit/track-insight.test.mjs",
+          "lines": 232
+        },
+        {
+          "path": "tests/unit/track-line-circuits.test.mjs",
+          "lines": 112
+        },
+        {
+          "path": "tests/unit/track-line.test.mjs",
+          "lines": 254
+        },
+        {
+          "path": "tests/unit/track-maps-corners.test.mjs",
+          "lines": 218
+        },
+        {
+          "path": "tests/unit/track-night-override.test.mjs",
+          "lines": 47
+        },
+        {
+          "path": "tests/unit/track-preview-plan.test.mjs",
+          "lines": 165
+        },
+        {
+          "path": "tests/unit/track-project-hints.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/track-randomise.test.mjs",
+          "lines": 127
+        },
+        {
+          "path": "tests/unit/track-retained-state.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/track-shot-survey.test.mjs",
+          "lines": 517
+        },
+        {
+          "path": "tests/unit/track-themes-build.test.mjs",
+          "lines": 257
+        },
+        {
+          "path": "tests/unit/track-validate-fleet.test.mjs",
+          "lines": 227
+        },
+        {
+          "path": "tests/unit/track-wetness-vm.test.mjs",
+          "lines": 89
+        },
+        {
+          "path": "tests/unit/tracks-preview-cache.test.mjs",
+          "lines": 92
+        },
+        {
+          "path": "tests/unit/trackside.test.mjs",
+          "lines": 118
+        },
+        {
+          "path": "tests/unit/traffic-arc-buckets.test.mjs",
+          "lines": 328
+        }
+      ],
+      "lines": 4940,
+      "status": "unassigned"
+    },
+    {
+      "id": "57",
+      "files": [
+        {
+          "path": "tests/unit/trail-brake-turnin.test.mjs",
+          "lines": 109
+        },
+        {
+          "path": "tests/unit/transcripts-cli.test.mjs",
+          "lines": 170
+        },
+        {
+          "path": "tests/unit/tree-counts-catch.test.mjs",
+          "lines": 24
+        },
+        {
+          "path": "tests/unit/trim-comments.test.mjs",
+          "lines": 180
+        },
+        {
+          "path": "tests/unit/tt-lap-validity-vm.test.mjs",
+          "lines": 311
+        },
+        {
+          "path": "tests/unit/tumftm-import.test.mjs",
+          "lines": 158
+        },
+        {
+          "path": "tests/unit/twin-drift.test.mjs",
+          "lines": 120
+        },
+        {
+          "path": "tests/unit/twin-fidelity.test.mjs",
+          "lines": 127
+        },
+        {
+          "path": "tests/unit/twinned-specs.test.mjs",
+          "lines": 295
+        },
+        {
+          "path": "tests/unit/tyre-model.test.mjs",
+          "lines": 1240
+        },
+        {
+          "path": "tests/unit/tyre-peak-slip.test.mjs",
+          "lines": 82
+        },
+        {
+          "path": "tests/unit/tyre-recipes-open-rim.test.mjs",
+          "lines": 95
+        },
+        {
+          "path": "tests/unit/tyre-squeal-race-vm.test.mjs",
+          "lines": 79
+        },
+        {
+          "path": "tests/unit/tyre-squeal-slip.test.mjs",
+          "lines": 184
+        },
+        {
+          "path": "tests/unit/tyre-strategy-vm.test.mjs",
+          "lines": 397
+        },
+        {
+          "path": "tests/unit/ui-experience.test.mjs",
+          "lines": 549
+        },
+        {
+          "path": "tests/unit/ui-explorer-core.test.mjs",
+          "lines": 231
+        },
+        {
+          "path": "tests/unit/ui-explorer-report.test.mjs",
+          "lines": 178
+        }
+      ],
+      "lines": 4529,
+      "status": "unassigned"
+    },
+    {
+      "id": "58",
+      "files": [
+        {
+          "path": "tests/unit/ui-explorer.test.mjs",
+          "lines": 596
+        },
+        {
+          "path": "tests/unit/ui-fit-camtune-portrait-r7.test.mjs",
+          "lines": 52
+        },
+        {
+          "path": "tests/unit/ui-fit-camtune-tap-r5.test.mjs",
+          "lines": 71
+        },
+        {
+          "path": "tests/unit/ui-fit-flyby-tap-r6.test.mjs",
+          "lines": 56
+        },
+        {
+          "path": "tests/unit/ui-fit-garage-livery-r6.test.mjs",
+          "lines": 56
+        },
+        {
+          "path": "tests/unit/ui-fit-lighting-flyby-stack.test.mjs",
+          "lines": 58
+        },
+        {
+          "path": "tests/unit/ui-fit-lighttune-tap-r6.test.mjs",
+          "lines": 38
+        },
+        {
+          "path": "tests/unit/ui-fit-photostudio-tap-r6.test.mjs",
+          "lines": 36
+        },
+        {
+          "path": "tests/unit/ui-fit-settings-a11y-r6.test.mjs",
+          "lines": 66
+        },
+        {
+          "path": "tests/unit/ui-fit-settings-appearance-r6.test.mjs",
+          "lines": 133
+        },
+        {
+          "path": "tests/unit/ui-fit-tap-scroll-round3.test.mjs",
+          "lines": 179
+        },
+        {
+          "path": "tests/unit/ui-fixer-uncommitted.test.mjs",
+          "lines": 43
+        },
+        {
+          "path": "tests/unit/ui-improve-pass.test.mjs",
+          "lines": 2572
+        },
+        {
+          "path": "tests/unit/ui-inspector-audit.test.mjs",
+          "lines": 126
+        },
+        {
+          "path": "tests/unit/ui-inspector-css.test.mjs",
+          "lines": 170
+        },
+        {
+          "path": "tests/unit/ui-inspector-transitions.test.mjs",
+          "lines": 254
+        },
+        {
+          "path": "tests/unit/ui-journey-career.test.mjs",
+          "lines": 161
+        },
+        {
+          "path": "tests/unit/ui-journey-race.test.mjs",
+          "lines": 168
+        },
+        {
+          "path": "tests/unit/ui-journey-session.test.mjs",
+          "lines": 90
+        }
+      ],
+      "lines": 4925,
+      "status": "unassigned"
+    },
+    {
+      "id": "59",
+      "files": [
+        {
+          "path": "tests/unit/ui-layers-reflow.test.mjs",
+          "lines": 146
+        },
+        {
+          "path": "tests/unit/ui-sheets-audit.test.mjs",
+          "lines": 1061
+        },
+        {
+          "path": "tests/unit/uilayers-modal-order.test.mjs",
+          "lines": 411
+        },
+        {
+          "path": "tests/unit/validation-cli.test.mjs",
+          "lines": 455
+        },
+        {
+          "path": "tests/unit/vegas-day-strip.test.mjs",
+          "lines": 67
+        },
+        {
+          "path": "tests/unit/vehicle-tick-alloc.test.mjs",
+          "lines": 229
+        },
+        {
+          "path": "tests/unit/vendor-licences.test.mjs",
+          "lines": 38
+        },
+        {
+          "path": "tests/unit/verify-live.test.mjs",
+          "lines": 287
+        },
+        {
+          "path": "tests/unit/vertex-pack.test.mjs",
+          "lines": 334
+        },
+        {
+          "path": "tests/unit/viewer.test.mjs",
+          "lines": 105
+        },
+        {
+          "path": "tests/unit/visor-optics.test.mjs",
+          "lines": 389
+        },
+        {
+          "path": "tests/unit/visual-oracle.test.mjs",
+          "lines": 15
+        },
+        {
+          "path": "tests/unit/vm-debug-preload.test.mjs",
+          "lines": 62
+        },
+        {
+          "path": "tests/unit/vm-filename-lint.test.mjs",
+          "lines": 59
+        },
+        {
+          "path": "tests/unit/vm-page-lifecycle.test.mjs",
+          "lines": 153
+        }
+      ],
+      "lines": 3811,
+      "status": "unassigned"
+    },
+    {
+      "id": "60",
+      "files": [
+        {
+          "path": "tests/unit/voice-pack.test.mjs",
+          "lines": 1364
+        },
+        {
+          "path": "tests/unit/vsfriend-head-200.test.mjs",
+          "lines": 63
+        },
+        {
+          "path": "tests/unit/vstd-invariant.test.mjs",
+          "lines": 432
+        },
+        {
+          "path": "tests/unit/wait-for.test.mjs",
+          "lines": 152
+        },
+        {
+          "path": "tests/unit/wait-polling.test.mjs",
+          "lines": 159
+        },
+        {
+          "path": "tests/unit/wake-lock-vm.test.mjs",
+          "lines": 344
+        },
+        {
+          "path": "tests/unit/wall-clamp.test.mjs",
+          "lines": 412
+        },
+        {
+          "path": "tests/unit/wall-end-face-vm.test.mjs",
+          "lines": 79
+        },
+        {
+          "path": "tests/unit/watch-transport-scrub.test.mjs",
+          "lines": 196
+        },
+        {
+          "path": "tests/unit/water-local-level.test.mjs",
+          "lines": 60
+        },
+        {
+          "path": "tests/unit/weather-arc-plan.test.mjs",
+          "lines": 146
+        },
+        {
+          "path": "tests/unit/weather-arc-rain.test.mjs",
+          "lines": 311
+        },
+        {
+          "path": "tests/unit/weather-blend.test.mjs",
+          "lines": 608
+        }
+      ],
+      "lines": 4326,
+      "status": "unassigned"
+    },
+    {
+      "id": "61",
+      "files": [
+        {
+          "path": "tests/unit/webgpu-lifecycle.test.mjs",
+          "lines": 3926
+        },
+        {
+          "path": "tests/unit/webgpu-menu-warm.test.mjs",
+          "lines": 145
+        },
+        {
+          "path": "tests/unit/webgpu-uint16-index.test.mjs",
+          "lines": 154
+        },
+        {
+          "path": "tests/unit/wet-grip-ladder.test.mjs",
+          "lines": 102
+        },
+        {
+          "path": "tests/unit/wgsl-bindings.test.mjs",
+          "lines": 140
+        },
+        {
+          "path": "tests/unit/wgx-chunked-fallback.test.mjs",
+          "lines": 193
+        }
+      ],
+      "lines": 4660,
+      "status": "unassigned"
+    },
+    {
+      "id": "62",
+      "files": [
+        {
+          "path": "tests/unit/wgx-free-retire.test.mjs",
+          "lines": 498
+        },
+        {
+          "path": "tests/unit/wgx-labels.test.mjs",
+          "lines": 250
+        },
+        {
+          "path": "tests/unit/wheel-state.test.mjs",
+          "lines": 191
+        },
+        {
+          "path": "tests/unit/wind-speed.test.mjs",
+          "lines": 166
+        },
+        {
+          "path": "tests/unit/wind-vm.test.mjs",
+          "lines": 87
+        },
+        {
+          "path": "tests/unit/wind.test.mjs",
+          "lines": 142
+        },
+        {
+          "path": "tests/unit/worker-pack-strip.test.mjs",
+          "lines": 189
+        },
+        {
+          "path": "tests/unit/workflow-harness.test.mjs",
+          "lines": 221
+        },
+        {
+          "path": "tests/unit/workflow-lint-ci-plan.test.mjs",
+          "lines": 107
+        },
+        {
+          "path": "tests/unit/workflow-lint.test.mjs",
+          "lines": 134
+        },
+        {
+          "path": "tests/unit/world-physics-vm.test.mjs",
+          "lines": 157
+        },
+        {
+          "path": "tests/unit/wx-grid.test.mjs",
+          "lines": 97
+        },
+        {
+          "path": "tests/unit/xr-backend-pin.test.mjs",
+          "lines": 82
+        },
+        {
+          "path": "tests/unit/xr-cull-union.test.mjs",
+          "lines": 125
+        },
+        {
+          "path": "tests/unit/xr-opts.test.mjs",
+          "lines": 127
+        },
+        {
+          "path": "tests/unit/xr-phase0.test.mjs",
+          "lines": 1192
+        },
+        {
+          "path": "tests/unit/xr-plan.test.mjs",
+          "lines": 161
+        },
+        {
+          "path": "tests/unit/xr-visibility-pause.test.mjs",
+          "lines": 96
+        },
+        {
+          "path": "tests/unit/yaw-damp-speed.test.mjs",
+          "lines": 121
+        },
+        {
+          "path": "tests/unit/yaw-low-speed-substep.test.mjs",
+          "lines": 117
+        }
+      ],
+      "lines": 4260,
+      "status": "unassigned"
+    }
+  ]
+}

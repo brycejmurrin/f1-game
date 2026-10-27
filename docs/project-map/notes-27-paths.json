@@ -1,0 +1,61 @@
+{
+  "batch": "27",
+  "purpose": "Raw historical paths; provenance only, no command authority",
+  "references": [
+    {
+      "source": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+      "historical_reference": "vendor/three-0.186.1/",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+      "historical_reference": "vendor/three-0.186.1/PATCHES.md",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+      "historical_reference": "vendor/three-0.186.1/MANIFEST.json",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERFTEST-HUNT-2026-10-24.md",
+      "historical_reference": "tools/archive/perf/ers-deploy-census.mjs",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERFTEST-HUNT-2026-10-24.md",
+      "historical_reference": "cursor/boost-press-gate-h17b",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PHONE-RENDERER-AB-2026-10-21.md",
+      "historical_reference": "scratch/h23/ab.mjs",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PHONE-RENDERER-AB-2026-10-21.md",
+      "historical_reference": "docs/archive/notes/LIVE-DEBUGGER-RENDER-2026-10-21.md",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PHONE-RENDERER-AB-2026-10-21.md",
+      "historical_reference": "scratch/h23/diff.py",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PHYSICS-ORACLE-2026-10-18.md",
+      "historical_reference": "artifacts/oracle/",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PHYSICS-ORACLE-2026-10-18.md",
+      "historical_reference": "artifacts/oracle/<track",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PHYSICS-ORACLE-2026-10-18.md",
+      "historical_reference": "artifacts/oracle/track-<track",
+      "status": "historical; not validated as current"
+    }
+  ]
+}

@@ -1,0 +1,275 @@
+{
+  "group": "16",
+  "read_date": "2026-10-27",
+  "ranges": "zero-based half-open",
+  "total_assigned_bytes": 100000,
+  "parts": [
+    {
+      "path": "docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md",
+      "start": 6463,
+      "end": 18810,
+      "kind": "text",
+      "sha256": "1e25ad745099ac7797e4444e94ff03750b9ead92e2a08f8d7471719fe2960483",
+      "file_bytes": 18810,
+      "whole_sha256": "1e25ad745099ac7797e4444e94ff03750b9ead92e2a08f8d7471719fe2960483",
+      "matches_manifest": true,
+      "part_sha256": "f971b8d16b03429c2ca7741d7c16218b54e10b09c9179bb4490982e1bfaad886",
+      "chunks": [
+        {
+          "start": 6463,
+          "end": 15463,
+          "sha256": "271a17bd20a9d9a029c7adde649aad8090a9350b88a4ca5983ca6bf993cce600"
+        },
+        {
+          "start": 15463,
+          "end": 18810,
+          "sha256": "8202af8f9f3ef7fe2433f6bfdfb9babb259402884e2696b8a698037090a8036a"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/NOTES-INDEX.md",
+        "docs/notes/CPU-HUNT-2026-10-24.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVE-DEBUGGER-RACE-2026-10-16.md",
+      "start": 0,
+      "end": 7420,
+      "kind": "text",
+      "sha256": "c200c275caecc84565bb6f605a6343d07a82fd7f53eedcf9c33cb2db91ab79d6",
+      "file_bytes": 7420,
+      "whole_sha256": "c200c275caecc84565bb6f605a6343d07a82fd7f53eedcf9c33cb2db91ab79d6",
+      "matches_manifest": true,
+      "part_sha256": "c200c275caecc84565bb6f605a6343d07a82fd7f53eedcf9c33cb2db91ab79d6",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7420,
+          "sha256": "c200c275caecc84565bb6f605a6343d07a82fd7f53eedcf9c33cb2db91ab79d6"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/archive/notes/LIVE-DEBUGGER-RACE-2-2026-10-17.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVE-DEBUGGER-RACE-2026-10-24.md",
+      "start": 0,
+      "end": 12472,
+      "kind": "text",
+      "sha256": "33dfbfb506d11b1caa0f224569c91ba668c88f580d2def22b7458ff1d02490c5",
+      "file_bytes": 12472,
+      "whole_sha256": "33dfbfb506d11b1caa0f224569c91ba668c88f580d2def22b7458ff1d02490c5",
+      "matches_manifest": true,
+      "part_sha256": "33dfbfb506d11b1caa0f224569c91ba668c88f580d2def22b7458ff1d02490c5",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "89945baef262af7069962c7a4654eb3ff247158001b2d0027b166dacfccfd448"
+        },
+        {
+          "start": 9000,
+          "end": 12472,
+          "sha256": "5dd83101b6a2f09b4799b729c7e51d227d414a33daabab31965d3036d02b9626"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/NOTES-INDEX.md",
+        "docs/notes/system-audit-4/cards/physics-contract-auditor.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVE-DEBUGGER-RENDER-2026-10-16.md",
+      "start": 0,
+      "end": 14203,
+      "kind": "text",
+      "sha256": "dbbd587562c443ae634661a4ce152f81c6ef96a7ba33c2623bcc7b0bd81c98bf",
+      "file_bytes": 14203,
+      "whole_sha256": "dbbd587562c443ae634661a4ce152f81c6ef96a7ba33c2623bcc7b0bd81c98bf",
+      "matches_manifest": true,
+      "part_sha256": "dbbd587562c443ae634661a4ce152f81c6ef96a7ba33c2623bcc7b0bd81c98bf",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "646c5a768ac4d28f2738a3678a05e9a2b003161994103a4959c0459ae4893d86"
+        },
+        {
+          "start": 9000,
+          "end": 14203,
+          "sha256": "8ea7ee57f10417af3be6cd02e0640ebc9cc51f92f575ea479aff01720c9f1498"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/archive/notes/ISSUE-TRIAGE-1518-2649-2026-10-22.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVE-DEBUGGER-RENDER-GPU-EVIDENCE-2026-10-17.md",
+      "start": 0,
+      "end": 3218,
+      "kind": "text",
+      "sha256": "50874349512b2f6c470a2f3c68ec86ff1efa1ee85f2e06220545cd10b778055a",
+      "file_bytes": 3218,
+      "whole_sha256": "50874349512b2f6c470a2f3c68ec86ff1efa1ee85f2e06220545cd10b778055a",
+      "matches_manifest": true,
+      "part_sha256": "50874349512b2f6c470a2f3c68ec86ff1efa1ee85f2e06220545cd10b778055a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3218,
+          "sha256": "50874349512b2f6c470a2f3c68ec86ff1efa1ee85f2e06220545cd10b778055a"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/plans/2026-09-30-load-download-weight.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVE-FRAME-H10-2026-10-20.md",
+      "start": 0,
+      "end": 10968,
+      "kind": "text",
+      "sha256": "2cdee5990ca50ba9bce41174ae93f00fce0909f6d5dd7f8a386606bf8fe80b8d",
+      "file_bytes": 10968,
+      "whole_sha256": "2cdee5990ca50ba9bce41174ae93f00fce0909f6d5dd7f8a386606bf8fe80b8d",
+      "matches_manifest": true,
+      "part_sha256": "2cdee5990ca50ba9bce41174ae93f00fce0909f6d5dd7f8a386606bf8fe80b8d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "846fd3531d72766e33fc97638bf481be2b6b038d9daf719b74c1cd1c9ac79854"
+        },
+        {
+          "start": 9000,
+          "end": 10968,
+          "sha256": "41575f19e33607589744ee0a311de7e9553bdea87c0c326ad715317649992832"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/NOTES-INDEX.md",
+        "docs/notes/PHONE-GPU-TEST-2026-10-21.md",
+        "docs/perf/iphone-browserstack-2026-10-21.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVE-INPUT-H11-2026-10-20.md",
+      "start": 0,
+      "end": 8297,
+      "kind": "text",
+      "sha256": "78911cf92f7675f03e3803af76902a762cc65ab64998d5bf2623ac2130fea92f",
+      "file_bytes": 8297,
+      "whole_sha256": "78911cf92f7675f03e3803af76902a762cc65ab64998d5bf2623ac2130fea92f",
+      "matches_manifest": true,
+      "part_sha256": "78911cf92f7675f03e3803af76902a762cc65ab64998d5bf2623ac2130fea92f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8297,
+          "sha256": "78911cf92f7675f03e3803af76902a762cc65ab64998d5bf2623ac2130fea92f"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/NOTES-INDEX.md",
+        "docs/archive/notes/INPUT-HUD-TESTING-RESEARCH-2026-10-21.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVE-MEMORY-H12-2026-10-20.md",
+      "start": 0,
+      "end": 6469,
+      "kind": "text",
+      "sha256": "1401c9b72c8d48cfe6dd258e660901afa5aa5cc63184f8bb319473e40b65a81e",
+      "file_bytes": 6469,
+      "whole_sha256": "1401c9b72c8d48cfe6dd258e660901afa5aa5cc63184f8bb319473e40b65a81e",
+      "matches_manifest": true,
+      "part_sha256": "1401c9b72c8d48cfe6dd258e660901afa5aa5cc63184f8bb319473e40b65a81e",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6469,
+          "sha256": "1401c9b72c8d48cfe6dd258e660901afa5aa5cc63184f8bb319473e40b65a81e"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/NOTES-INDEX.md",
+        "docs/notes/MEMORY-TOOLING-RESEARCH-2026-10-21.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVERY-2026-REFERENCE.md",
+      "start": 0,
+      "end": 11553,
+      "kind": "text",
+      "sha256": "460429c2d09f716d71ae1466d1023904d7f8d99c5d18a9243eb5a7590ea61b9e",
+      "file_bytes": 11553,
+      "whole_sha256": "460429c2d09f716d71ae1466d1023904d7f8d99c5d18a9243eb5a7590ea61b9e",
+      "matches_manifest": true,
+      "part_sha256": "460429c2d09f716d71ae1466d1023904d7f8d99c5d18a9243eb5a7590ea61b9e",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "29eb4ef7a04a327e700cee04e0802ab3d434cccd44e56d1bbb92d4000f36e5da"
+        },
+        {
+          "start": 9000,
+          "end": 11553,
+          "sha256": "bd25ca2f4b97f0f40f4e1e8fe68861d2ba92f4a8f7275b671a68d2bac49240e2"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/notes/LIVERY-REF-2026-10-18.md",
+        "docs/archive/superpowers/plans/2026-09-09-livery-open-gaps-plan.md",
+        "docs/archive/superpowers/specs/2026-09-09-livery-open-gaps-design.md"
+      ]
+    },
+    {
+      "path": "docs/notes/LIVERY-LAYOUTS-2026-10-19.md",
+      "start": 0,
+      "end": 3710,
+      "kind": "text",
+      "sha256": "c4a375f200c799aedf0bdfdfe9e021bd54e58b453886ae59789784ab338c1a35",
+      "file_bytes": 3710,
+      "whole_sha256": "c4a375f200c799aedf0bdfdfe9e021bd54e58b453886ae59789784ab338c1a35",
+      "matches_manifest": true,
+      "part_sha256": "c4a375f200c799aedf0bdfdfe9e021bd54e58b453886ae59789784ab338c1a35",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3710,
+          "sha256": "c4a375f200c799aedf0bdfdfe9e021bd54e58b453886ae59789784ab338c1a35"
+        }
+      ],
+      "incoming_documentation_backlinks": []
+    },
+    {
+      "path": "docs/notes/LIVERY-REF-2026-10-18.md",
+      "start": 0,
+      "end": 9343,
+      "kind": "text",
+      "sha256": "58317dcb2961288c827ef7a2ad3fbd65c70e4f52a1904ae72eb1f19ab8e102eb",
+      "file_bytes": 9672,
+      "whole_sha256": "58317dcb2961288c827ef7a2ad3fbd65c70e4f52a1904ae72eb1f19ab8e102eb",
+      "matches_manifest": true,
+      "part_sha256": "aa00cfd47888ea599d113be971eca1078d2ce9623ca388ff2cc3384306f20e04",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "31021448c0aa773290841dbf285c637d9107ac7454ebd066629d3e97c34f398b"
+        },
+        {
+          "start": 9000,
+          "end": 9343,
+          "sha256": "c3cc1d209c040b6c57141e85d969096596bb953d025556a5ea2adb59a1a43c24"
+        }
+      ],
+      "incoming_documentation_backlinks": [
+        "docs/TESTING-COVERAGE.md"
+      ]
+    }
+  ]
+}

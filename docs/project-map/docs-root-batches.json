@@ -1,0 +1,203 @@
+{
+  "goal": "Fully read root documentation, map producers and source contracts, distinguish historical/current claims. Never edit generated references by hand.",
+  "groups": [
+    {
+      "id": "01",
+      "files": [
+        {
+          "path": "docs/AGENT-HOOKS.md",
+          "lines": 119
+        },
+        {
+          "path": "docs/AGENT-SURFACE.md",
+          "lines": 691
+        },
+        {
+          "path": "docs/AGENT-WORLD-API.md",
+          "lines": 6
+        },
+        {
+          "path": "docs/ARCHITECTURE-MAP.md",
+          "lines": 153
+        },
+        {
+          "path": "docs/ARCHITECTURE-REVIEW.md",
+          "lines": 6
+        },
+        {
+          "path": "docs/ARCHITECTURE.md",
+          "lines": 2228
+        },
+        {
+          "path": "docs/BUGS.md",
+          "lines": 369
+        },
+        {
+          "path": "docs/CAPTURE-REVIEW.md",
+          "lines": 87
+        },
+        {
+          "path": "docs/CAREER.md",
+          "lines": 1095
+        },
+        {
+          "path": "docs/CODE-STANDARDS.md",
+          "lines": 224
+        }
+      ],
+      "lines": 4978,
+      "status": "complete"
+    },
+    {
+      "id": "02",
+      "files": [
+        {
+          "path": "docs/COMPONENTS.md",
+          "lines": 741
+        },
+        {
+          "path": "docs/CONSOLE-RECIPES.md",
+          "lines": 6
+        }
+      ],
+      "lines": 747,
+      "status": "complete"
+    },
+    {
+      "id": "03",
+      "files": [
+        {
+          "path": "docs/DEBUG-HOOKS.md",
+          "lines": 5451
+        }
+      ],
+      "lines": 5451,
+      "status": "complete"
+    },
+    {
+      "id": "04",
+      "files": [
+        {
+          "path": "docs/DESIGN-TOOLS.md",
+          "lines": 161
+        },
+        {
+          "path": "docs/EVIDENCE-STORAGE.md",
+          "lines": 217
+        },
+        {
+          "path": "docs/FLOW.md",
+          "lines": 112
+        },
+        {
+          "path": "docs/LAYOUT-AUDIT.md",
+          "lines": 6
+        },
+        {
+          "path": "docs/LIGHTING-TUNER-SLIDERS.md",
+          "lines": 859
+        },
+        {
+          "path": "docs/LIGHTING.md",
+          "lines": 786
+        },
+        {
+          "path": "docs/MULTIPLAYER.md",
+          "lines": 373
+        },
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "lines": 228
+        },
+        {
+          "path": "docs/PACKAGING.md",
+          "lines": 197
+        },
+        {
+          "path": "docs/PERF-FINDINGS.md",
+          "lines": 6
+        },
+        {
+          "path": "docs/PHYSICS.md",
+          "lines": 1238
+        },
+        {
+          "path": "docs/PLATFORM.md",
+          "lines": 99
+        },
+        {
+          "path": "docs/README.md",
+          "lines": 70
+        },
+        {
+          "path": "docs/RENDERERS.md",
+          "lines": 6
+        },
+        {
+          "path": "docs/SCENERY-AND-TRACK-BUILD.md",
+          "lines": 329
+        }
+      ],
+      "lines": 4687,
+      "status": "complete"
+    },
+    {
+      "id": "05",
+      "files": [
+        {
+          "path": "docs/SCENERY-API.md",
+          "lines": 1265
+        },
+        {
+          "path": "docs/SCENERY-GROUNDING.md",
+          "lines": 6
+        },
+        {
+          "path": "docs/TESTING-COVERAGE.md",
+          "lines": 1235
+        },
+        {
+          "path": "docs/TESTING.md",
+          "lines": 1389
+        },
+        {
+          "path": "docs/TRACK-DESIGNER.md",
+          "lines": 464
+        },
+        {
+          "path": "docs/UI-EXPLORER.md",
+          "lines": 91
+        },
+        {
+          "path": "docs/UI-MAP.md",
+          "lines": 514
+        }
+      ],
+      "lines": 4964,
+      "status": "complete"
+    },
+    {
+      "id": "06",
+      "files": [
+        {
+          "path": "docs/USAGE-PATHS.md",
+          "lines": 266
+        },
+        {
+          "path": "docs/VERIFICATION.md",
+          "lines": 80
+        },
+        {
+          "path": "docs/WORKERS.md",
+          "lines": 112
+        },
+        {
+          "path": "docs/ui-experience-studio.md",
+          "lines": 182
+        }
+      ],
+      "lines": 640,
+      "status": "complete"
+    }
+  ]
+}

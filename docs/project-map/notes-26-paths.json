@@ -1,0 +1,86 @@
+{
+  "batch": "26",
+  "purpose": "Raw historical scratch, artifact, branch and versioned-vendor references; no command authority",
+  "references": [
+    {
+      "source": "docs/notes/PERF-HUNT-TLX-2026-10-17.md",
+      "historical_reference": "cursor/tlx-chunk-dust-merge-4f7a",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-HUNT-TLX-2026-10-17.md",
+      "historical_reference": "scratch/drawcalls.mjs",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-HUNT-TLX-2026-10-17.md",
+      "historical_reference": "cursor/tlx-perf-r2-9b3e",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-KNOWN-WINS-2026-10-23.md",
+      "historical_reference": "origin/claude/f1-game-project-26h3ng",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-KNOWN-WINS-2026-10-23.md",
+      "historical_reference": "vendor/three-0.186.1",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-P1-2026-10-18.md",
+      "historical_reference": "scratch/p1/",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-P2-2026-10-18.md",
+      "historical_reference": "scratch/p2/trace.mjs",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-P2-2026-10-18.md",
+      "historical_reference": "scratch/p2/bench.mjs",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-P2-2026-10-18.md",
+      "historical_reference": "scratch/p2/bisect.mjs",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-P2-2026-10-18.md",
+      "historical_reference": "artifacts/logs/",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-P2-2026-10-18.md",
+      "historical_reference": "scratch/",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-P2-HTEXT-2026-10-18.md",
+      "historical_reference": "scratch/p2/trace.mjs",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+      "historical_reference": "vendor/three-0.186.1/PATCHES.md",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+      "historical_reference": "vendor/three-0.186.1/PATCHES.md",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+      "historical_reference": "scratch/allocprobe.mjs",
+      "status": "historical; not validated as current"
+    },
+    {
+      "source": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+      "historical_reference": "vendor/three-0.186.1/three.webgpu.min.js",
+      "status": "historical; not validated as current"
+    }
+  ]
+}

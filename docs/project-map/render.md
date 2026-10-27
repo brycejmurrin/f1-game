@@ -1,3 +1,5 @@
+> Coverage update: Initial bounded snapshot. Complete renderer, shader, car, camera and performance reports supersede this initial read coverage. Use coverage.tsv for current status.
+
 # Render, car, camera and performance map
 
 ## Goal

@@ -1,0 +1,23 @@
+{
+  "source": "docs/notes/TESTING-FIELD-NOTES.md",
+  "range": [
+    10487,
+    110487
+  ],
+  "classification": "Historical literal paths; obsolete or ephemeral references, not execution instructions",
+  "paths": [
+    "origin/main",
+    "/home/user/f1-game/node_modules",
+    "scratch/offline-check.cjs",
+    "scratch/bootprofile.mjs",
+    "scratch/live-probe.mjs",
+    "scratch/dump-wgsl.mjs",
+    "scratch/race-quality-bench.mjs",
+    "artifacts/diag-small/canvas-0.png",
+    "artifacts/wgsl-dump-iphone",
+    "artifacts/wgsl-dump-2",
+    "artifacts/wgsl-dump-3",
+    ".selected-failed.txt",
+    "/usr/share/vulkan/icd.d/"
+  ]
+}

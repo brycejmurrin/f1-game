@@ -32,24 +32,28 @@ Branch cursor/project-map-a84f, source ae73c6766, first report checkpoint c4dc49
 - js/agent, overlay, share, workers, xr: all25; agent-misc-complete.md.
 - css: all34; css-a-complete.md plus css-b-complete.md.
 - Root shell/config/roster/types: all13 scoped files; root-shell-complete.md.
-- Circuit scenery: groups A and B (26 files) complete; groups C/D source reads reported complete, reports still pending.
+- Circuit scenery: all four groups A/B/C/D fully read and reported.
 
 ## Runtime milestone
 Every tracked JavaScript file under js/ is fully read: **561/561**. All34 CSS files, root shell/roster/type scope, and all95 platform files are mapped (59 fully read text files plus36 inspected binaries). Source reading does not establish browser/GPU correctness. The full project goal remains open.
 
-## Active assignments
-- finish_tools_ci_a/b/c: all82 tools/ci files fully read, reports returned.
-- finish_tools_mcp_a/b: split56 MCP infrastructure files; first28 read, remaining reading.
-- finish_tools_lib: all54 shared tooling libraries.
-- finish_tools_gen: all34 generators.
-- finish_tools_environment: all tracked tools/env and tools/environment.
-- finish_tests_helpers: all71 test helper files.
+## Current wider-project progress
+- All582 tracked tools paths fully read across tools-ci/mcp/lib/gen/check/environment/shot/ui-gfx/gfx-tail/car/track/perf-light/misc reports.
+- All39 root Markdown guides fully read across docs-root reports.
+- All598 changelog fragments fully read; docs-changelog-complete.md.
+- All182 assets mapped:11 prose/code files fully read,24 generated voice indexes completely parsed/tuple-validated,147 binary resources inspected; assets-complete.md. Generated data is not claimed manually semantically read.
+- Unit groups01–44 and46–47 complete; group45 report integration pending. Group02 raw gaps closed by02a/b/c; group21 raw gaps closed by21a/b/c/d.
+- All57 vendor paths mapped:56 text files fully read; Rapier wrapper source fully read and encoded WASM structurally inspected. All20 vendor continuation groups complete.
+- Historical notes groups01–35 fully read as assigned byte ranges; notes-batches.json tracks44 groups and coverage.tsv credits full files only after interval closure.
+
+## Active/queued assignments and continuation
+Use collaboration.list_agents for actual live worker state. Current readers: unit45 and48–50, notes36–37. Continue units51–62 and notes38–44, then remaining tests, documentation and auxiliary roots. Start fresh GPT-6.1 Sol agents with fork_turns none and explicit model. Keep at most6 workers plus parent; a seventh worker launch was actually rejected by host.
 
 ## Persistence checkpoint
-Draft PR https://github.com/brycejmurrin/f1-game/pull/3922. Separate report commits through 212adc24b are local; earlier64809115e pushed. New runtime/platform/scenery/CI reports are awaiting next validated checkpoint. coverage.tsv records 561/561 runtime JS complete, full reads vs binary metadata vs unread for all tracked files outside these reports.
+Draft PR https://github.com/brycejmurrin/f1-game/pull/3922. Separate report commits through8a222466b local; remote last pushed64809115e. More validated report commits and push are pending. Documentation checks are being rerun after correcting report path/Markdown quoting issues; do not treat a failing historical log as latest green. coverage.tsv is source-hash/read-status evidence; own mapping reports are excluded to avoid recursive scope.
 
 ## Remaining backlog
-Tools outside CI and tests; current and historical docs; assets/vendor; tracked and relevant retained artifacts/scratch; other root metadata and unlisted tracked directories. Runtime and stylesheet source has largely completed full-read evidence, but the wider backlog remains open. Initial seven maps contain explicit partial/unread file tables. None of these scopes is complete merely because its initial map exists.
+Remaining unit groups, browser specs/manual tests/fixtures/data, historical and non-root documentation, auxiliary tracked roots, symlink metadata, and relevant retained artifacts/scratch. Runtime, stylesheets, tools, assets, vendor and platform scopes have completed the evidence methods recorded above. Earlier partial maps are superseded by complete domain reports; no initial map alone proves completion.
 
 ## Verification and persistence
 Parent serializes report integration and commits. New reports need docs-integrity and agent-config checks. Existing checkpoint passed 74/74. Agents created under an earlier read-only policy may remain EROFS even after parent access restored; parent writes their supplied text. Never claim completion while backlog remains.

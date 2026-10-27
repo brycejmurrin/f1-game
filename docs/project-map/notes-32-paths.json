@@ -1,0 +1,300 @@
+{
+  "group": "32",
+  "purpose": "Historical raw path provenance; missing literals may be abbreviated, obsolete or ephemeral, not proof of deletion.",
+  "paths": [
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": ".claude/rules/game-code.md",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": ".claude/settings.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "docs/VERIFICATION.md",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "docs/agent-index.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "docs/agent-output/policies.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "docs/notes/HOOKS-SECURITY-2026-10-26.md",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "scratch/sysaudit2/raw/",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "scratch/sysaudit2/{pr-board",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "tests/data/ratchets.d",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "tests/data/ratchets.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "tests/groups.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "tools/README.md",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "tools/check/ratchets.mjs",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "tools/ci/{ready-gate",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "tools/gen/gen-tools-readme.mjs",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+      "raw_path": "tools/shot/scenery-locations.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": ".claude/**",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": ".claude/allow-*",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": ".claude/allow-protected",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": ".codex/hooks.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "artifacts/launch-gate/receipt.json",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "docs/changelog.d/*.md",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "docs/plans/2026-10-19-fleet-redesign.md",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "js/<dir>/",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "js/css/index.html",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "js/game.js",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "scratch/sysaudit3/BRIEF.md",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "tools/archive",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "tools/ci",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+      "raw_path": "tools/shot/scenery-locations.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": ".cursor/BUGBOT.md",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "artifacts/pre-commit-guards.ok",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "docs/archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md",
+      "exists_literal": true,
+      "archive_reference": true
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "docs/notes/DEFECT-LEDGER.md",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "docs/research",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "js/game.js",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "js/index.html",
+      "exists_literal": false,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "js/track/build-worker.js",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "js/track/circuit-elevations.js",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "js/track/circuit-meta.js",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "js/workers",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "tests/unit/changelog-fragments.test.mjs",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md",
+      "raw_path": "tools/shot/scenery-locations.json",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/TESTING-FIELD-NOTES.md",
+      "raw_path": "js/game.js",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/TESTING-FIELD-NOTES.md",
+      "raw_path": "js/perf/quality-preset.js",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/TESTING-FIELD-NOTES.md",
+      "raw_path": "js/perf/renderer-picker.js",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/TESTING-FIELD-NOTES.md",
+      "raw_path": "tests/unit/ui-sheets-audit.test.mjs",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/TESTING-FIELD-NOTES.md",
+      "raw_path": "tools/car/logo-authored-sweep.mjs",
+      "exists_literal": true,
+      "archive_reference": false
+    },
+    {
+      "source": "docs/notes/TESTING-FIELD-NOTES.md",
+      "raw_path": "tools/ci/test-bg.mjs",
+      "exists_literal": true,
+      "archive_reference": false
+    }
+  ]
+}

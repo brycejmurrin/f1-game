@@ -1,3 +1,5 @@
+> Coverage update: Initial snapshot. Engine/tail, circuit-definition and scenery A/B/C/D reports close all scoped runtime source reads.
+
 # Track engine and circuit map
 
 ## Goal

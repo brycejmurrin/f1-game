@@ -1,0 +1,14 @@
+{
+  "group": "21",
+  "historical_only": true,
+  "paths": [
+    {
+      "path": "docs/archive/research/PERF-LEDGER-2026-08.md",
+      "reason": "Pre-08-18 narrative moved here on 2026-09-01; historical archive backlink."
+    },
+    {
+      "path": "check/offline-precache-check.cjs",
+      "reason": "Entry explicitly says removed from tools on 2026-09-10; git-history-only behavioral check."
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "authority": "Historical references only; existence, obsolescence and current suitability unverified",
+  "sources": [
+    {
+      "source": "docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md",
+      "historical_local_or_vendor_references": []
+    },
+    {
+      "source": "docs/notes/LIVE-DEBUGGER-RACE-2026-10-16.md",
+      "historical_local_or_vendor_references": []
+    },
+    {
+      "source": "docs/notes/LIVE-DEBUGGER-RACE-2026-10-24.md",
+      "historical_local_or_vendor_references": [
+        "scratch/probe-*-ah11.*",
+        "scratch/probe-perf-ah11.cjs",
+        "scratch/prof-summary-ah11.cjs"
+      ]
+    },
+    {
+      "source": "docs/notes/LIVE-DEBUGGER-RENDER-2026-10-16.md",
+      "historical_local_or_vendor_references": []
+    },
+    {
+      "source": "docs/notes/LIVE-DEBUGGER-RENDER-GPU-EVIDENCE-2026-10-17.md",
+      "historical_local_or_vendor_references": []
+    },
+    {
+      "source": "docs/notes/LIVE-FRAME-H10-2026-10-20.md",
+      "historical_local_or_vendor_references": [
+        "scratch/h10-live-frame.mjs",
+        "vendor/three-0.186.1"
+      ]
+    },
+    {
+      "source": "docs/notes/LIVE-INPUT-H11-2026-10-20.md",
+      "historical_local_or_vendor_references": [
+        "scratch/h11/probe.mjs"
+      ]
+    },
+    {
+      "source": "docs/notes/LIVE-MEMORY-H12-2026-10-20.md",
+      "historical_local_or_vendor_references": [
+        "scratch/h12/leak-run.mjs"
+      ]
+    },
+    {
+      "source": "docs/notes/LIVERY-2026-REFERENCE.md",
+      "historical_local_or_vendor_references": []
+    },
+    {
+      "source": "docs/notes/LIVERY-LAYOUTS-2026-10-19.md",
+      "historical_local_or_vendor_references": []
+    },
+    {
+      "source": "docs/notes/LIVERY-REF-2026-10-18.md",
+      "historical_local_or_vendor_references": [
+        "scratch/livery-ref/"
+      ]
+    }
+  ]
+}

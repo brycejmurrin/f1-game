@@ -1,0 +1,307 @@
+{
+  "batch": "14",
+  "read_date": "2026-10-27",
+  "range_convention": "zero-based bytes, exclusive end",
+  "parts": [
+    {
+      "path": "docs/notes/GL-OBJECT-LEAK-2026-10-17.md",
+      "start": 1342,
+      "end": 2036,
+      "kind": "text",
+      "sha256": "6346e0b5bb356e920301589e07fd74a13d7e400044650904934d6ad556e97719",
+      "whole_bytes": 2036,
+      "whole_sha256": "6346e0b5bb356e920301589e07fd74a13d7e400044650904934d6ad556e97719",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "0b10c0cb47a1f1545dd0341d76c428cb7b0cf1c150769a51f72a2e54948d9d52",
+      "chunks": [
+        {
+          "start": 1342,
+          "end": 2036,
+          "sha256": "0b10c0cb47a1f1545dd0341d76c428cb7b0cf1c150769a51f72a2e54948d9d52"
+        }
+      ],
+      "incoming_backlinks": []
+    },
+    {
+      "path": "docs/notes/GLX-OUTPUT-TARGET.md",
+      "start": 0,
+      "end": 502,
+      "kind": "text",
+      "sha256": "1a0ffd8c427444f4b99644a67046fe16a4396db5f38d659085e89e070beb0032",
+      "whole_bytes": 502,
+      "whole_sha256": "1a0ffd8c427444f4b99644a67046fe16a4396db5f38d659085e89e070beb0032",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "1a0ffd8c427444f4b99644a67046fe16a4396db5f38d659085e89e070beb0032",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 502,
+          "sha256": "1a0ffd8c427444f4b99644a67046fe16a4396db5f38d659085e89e070beb0032"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 83
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/GPU-CAPTURE-2026-10-19.md",
+      "start": 0,
+      "end": 2255,
+      "kind": "text",
+      "sha256": "743fea661a6b3f147c7b338da9bf5fdc358496a71808b1a7a1eeb6cdb4a435db",
+      "whole_bytes": 2255,
+      "whole_sha256": "743fea661a6b3f147c7b338da9bf5fdc358496a71808b1a7a1eeb6cdb4a435db",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "743fea661a6b3f147c7b338da9bf5fdc358496a71808b1a7a1eeb6cdb4a435db",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2255,
+          "sha256": "743fea661a6b3f147c7b338da9bf5fdc358496a71808b1a7a1eeb6cdb4a435db"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/DEBUG-HOOKS.md",
+          "line": 1068
+        },
+        {
+          "path": "docs/surveys/w24b-tools.md",
+          "line": 195
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/GPUMEM-HUNT-2026-10-24.md",
+      "start": 0,
+      "end": 8825,
+      "kind": "text",
+      "sha256": "bd81c2c6dc57ecf3d6289187255e39eab0f03af8e9badcf4fcc7b3dd3bb1f9b0",
+      "whole_bytes": 8825,
+      "whole_sha256": "bd81c2c6dc57ecf3d6289187255e39eab0f03af8e9badcf4fcc7b3dd3bb1f9b0",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "bd81c2c6dc57ecf3d6289187255e39eab0f03af8e9badcf4fcc7b3dd3bb1f9b0",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8825,
+          "sha256": "bd81c2c6dc57ecf3d6289187255e39eab0f03af8e9badcf4fcc7b3dd3bb1f9b0"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 101
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/GRAPHICS-DETAIL-SURVEY-2-2026-10-01.md",
+      "start": 0,
+      "end": 16902,
+      "kind": "text",
+      "sha256": "03cb0f8b7c0b6e4dc0f0dba69afe7ca03f745caebb115ae2737e8ca1f42a1e15",
+      "whole_bytes": 16902,
+      "whole_sha256": "03cb0f8b7c0b6e4dc0f0dba69afe7ca03f745caebb115ae2737e8ca1f42a1e15",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "03cb0f8b7c0b6e4dc0f0dba69afe7ca03f745caebb115ae2737e8ca1f42a1e15",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "add55dcf0e5ce6243ade2254353de29e6ad217d94da8b073c4bcb566acc80ad4"
+        },
+        {
+          "start": 9000,
+          "end": 16902,
+          "sha256": "56ec354280e7cce96f9d9133b5b238b42fb709966799bf47f484fdef34c6ceab"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/plans/2026-10-01-models-life.md",
+          "line": 7
+        },
+        {
+          "path": "docs/archive/notes/DOCS-SURVEY-2026-10-06.md",
+          "line": 192
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/HARNESS-SETTINGS-2026-10-26.md",
+      "start": 0,
+      "end": 27366,
+      "kind": "text",
+      "sha256": "8a475fba6afe97d67f702353b5ab525f36b1a881cb91ac6f0851218070136c69",
+      "whole_bytes": 27366,
+      "whole_sha256": "8a475fba6afe97d67f702353b5ab525f36b1a881cb91ac6f0851218070136c69",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "8a475fba6afe97d67f702353b5ab525f36b1a881cb91ac6f0851218070136c69",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "4e4915ee481e58ec9c474ffb57ff5ca0c1cda12f8415629f372f1150e401e4c6"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "sha256": "06889dab2920dd47520e3cce07b008595f8f4ec6933511879d5edbeb1e6e4a86"
+        },
+        {
+          "start": 18000,
+          "end": 27000,
+          "sha256": "0deb3a265c37fd7f65a38d7c1f733d7a2582efeba143acd20aeb03f1a63bc8d1"
+        },
+        {
+          "start": 27000,
+          "end": 27366,
+          "sha256": "e948c442b4f7a965d96b01b0481ee15f1293ef95a5e0c997f6835cf366bc33d7"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 30
+        },
+        {
+          "path": "docs/notes/RULEBOOK-EVIDENCE-2026-10-26.md",
+          "line": 10
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/platform.md",
+          "line": 5
+        },
+        {
+          "path": "docs/notes/system-audit-3/environment.md",
+          "line": 35
+        },
+        {
+          "path": "docs/notes/system-audit-4/verify-31-39.md",
+          "line": 33
+        },
+        {
+          "path": "docs/notes/system-audit-4/web-claude-code.md",
+          "line": 4
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/HELMET-VISOR-HUD-2026-10-05.md",
+      "start": 0,
+      "end": 3579,
+      "kind": "text",
+      "sha256": "2c8f35543fc4e64d073d3c3f714dde34b3cc353e805075c7f25e313abb89961b",
+      "whole_bytes": 3579,
+      "whole_sha256": "2c8f35543fc4e64d073d3c3f714dde34b3cc353e805075c7f25e313abb89961b",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "2c8f35543fc4e64d073d3c3f714dde34b3cc353e805075c7f25e313abb89961b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3579,
+          "sha256": "2c8f35543fc4e64d073d3c3f714dde34b3cc353e805075c7f25e313abb89961b"
+        }
+      ],
+      "incoming_backlinks": []
+    },
+    {
+      "path": "docs/notes/HOOKS-SECURITY-2026-10-26.md",
+      "start": 0,
+      "end": 4358,
+      "kind": "text",
+      "sha256": "7df96542f57ef605ed12ee7d388a090a8e4d8afff347eff0cac15678af99ab68",
+      "whole_bytes": 4358,
+      "whole_sha256": "7df96542f57ef605ed12ee7d388a090a8e4d8afff347eff0cac15678af99ab68",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "7df96542f57ef605ed12ee7d388a090a8e4d8afff347eff0cac15678af99ab68",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4358,
+          "sha256": "7df96542f57ef605ed12ee7d388a090a8e4d8afff347eff0cac15678af99ab68"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 102
+        },
+        {
+          "path": "docs/notes/SYSTEM-AUDIT-2-2026-10-26.md",
+          "line": 189
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/HUD-CODE-AUDIT-2026-10-10.md",
+      "start": 0,
+      "end": 30479,
+      "kind": "text",
+      "sha256": "28a026e05fcb1a19e7ee9a146591b7f4cfc3deea03624c74d49178a089de3c88",
+      "whole_bytes": 30479,
+      "whole_sha256": "28a026e05fcb1a19e7ee9a146591b7f4cfc3deea03624c74d49178a089de3c88",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "28a026e05fcb1a19e7ee9a146591b7f4cfc3deea03624c74d49178a089de3c88",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "3e4120667b89c1a78265fbade0332d7490852bb25c347ad626e29800811e2a5b"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "sha256": "cc9470051f025d0326e2b4c6e8a8f4ffa6e9233ed354ca5a9fff97f17cb6266c"
+        },
+        {
+          "start": 18000,
+          "end": 27000,
+          "sha256": "d470666470720b257c25c80d01bccd533de22f262bcf450f6e37e6688d15ef1d"
+        },
+        {
+          "start": 27000,
+          "end": 30479,
+          "sha256": "c6c7559e3a23f4898ca826b8275857db1bf351a9b150e339751d704cec7e3861"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/notes/CEILING-HISTORY.md",
+          "line": 114
+        },
+        {
+          "path": "docs/notes/CEILING-HISTORY.md",
+          "line": 172
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 45
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/HUD-TABULAR-DIGITS.md",
+      "start": 0,
+      "end": 5040,
+      "kind": "text",
+      "sha256": "a00b60733e38c154ce94d7b58d0ca2449513d2d7120106ed989b2774a500da59",
+      "whole_bytes": 17505,
+      "whole_sha256": "a00b60733e38c154ce94d7b58d0ca2449513d2d7120106ed989b2774a500da59",
+      "manifest_whole_hash_matches": true,
+      "part_sha256": "097933e3f161e08656e876c6b14c172f12d737bcdcf7286c7d9a3cf2b3b12eed",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5040,
+          "sha256": "097933e3f161e08656e876c6b14c172f12d737bcdcf7286c7d9a3cf2b3b12eed"
+        }
+      ],
+      "incoming_backlinks": []
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "group": "12",
+  "range_convention": "half-open bytes",
+  "read_chunk_max_bytes": 9000,
+  "parts": [
+    {
+      "path": "docs/notes/DEFECT-LEDGER.md",
+      "whole_bytes": 251354,
+      "whole_sha256": "53f6d19863da9d78bb7f58619bb022d8d2dbfb1073a6a5eb6a7f06c7df8f5028",
+      "start": 188109,
+      "end": 251354,
+      "part_sha256": "0d91514ad02503af70411bfb700e6bcc64b77d6b8c749f22069687fc0501e18b",
+      "manifest_sha256": "53f6d19863da9d78bb7f58619bb022d8d2dbfb1073a6a5eb6a7f06c7df8f5028",
+      "chunks": [
+        {
+          "start": 188109,
+          "end": 197109,
+          "sha256": "d95f9fae1ccc709fc79d4fca45f9848ef0e3a52ef1a7526a301de0b9397e951d"
+        },
+        {
+          "start": 197109,
+          "end": 206109,
+          "sha256": "e9524863d82aab44b9dee6883c52575c2a8d9c1b6d0c4d54bb78a17108fe96fb"
+        },
+        {
+          "start": 206109,
+          "end": 215109,
+          "sha256": "63bb495f2080da1166dd868303c31211bdd9eb9df547bf57296a89eb466d97dd"
+        },
+        {
+          "start": 215109,
+          "end": 224109,
+          "sha256": "5caa90d1840a2549388821cba228026d19fcc27666518d37669d202f56ea1601"
+        },
+        {
+          "start": 224109,
+          "end": 233109,
+          "sha256": "2853efff9a607c68c78523f3f4a48600fbe82bc1db107d5b950012d3871ec5ee"
+        },
+        {
+          "start": 233109,
+          "end": 242109,
+          "sha256": "48b34173ecc0460573ff3a4edd8a501bfc4490d0db2e513cbde9a2b879d66dde"
+        },
+        {
+          "start": 242109,
+          "end": 251109,
+          "sha256": "8b17b1a90261c01f84952c65146b80f0370cac6a9e6858325f6e3fedb7bccbd8"
+        },
+        {
+          "start": 251109,
+          "end": 251354,
+          "sha256": "dccea63a40aa90e6cfb89b6ee3db46b8a123069d18a1f33fe4a5a501ee619e5c"
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/DESKTOP-TEST-PLAN.md",
+      "whole_bytes": 7217,
+      "whole_sha256": "3dfb8602c14f067043ce987488f4b67fd7db5640626908a786bcf368996cbd42",
+      "start": 0,
+      "end": 7217,
+      "part_sha256": "3dfb8602c14f067043ce987488f4b67fd7db5640626908a786bcf368996cbd42",
+      "manifest_sha256": "3dfb8602c14f067043ce987488f4b67fd7db5640626908a786bcf368996cbd42",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7217,
+          "sha256": "3dfb8602c14f067043ce987488f4b67fd7db5640626908a786bcf368996cbd42"
+        }
+      ]
+    },
+    {
+      "path": "docs/notes/DEVICE-FARM-ANALYSIS-2026-10-24.md",
+      "whole_bytes": 30467,
+      "whole_sha256": "ab268da8b8f7558399569220e3daed0e1cdee63615e45892ebb8a929376c6f11",
+      "start": 0,
+      "end": 29538,
+      "part_sha256": "6d2ab8a7b68a136a07de9a208d9e8ace30ebfc0f47d81ce550883d38db351865",
+      "manifest_sha256": "ab268da8b8f7558399569220e3daed0e1cdee63615e45892ebb8a929376c6f11",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "ef9e6139a4276fb1d56cf1e9b8fde8144c0c95a50a3b98c4fda51819f533da12"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "sha256": "670ca79dd6aa13ce05037292c2764f0651913b868547c54e0e97286c8d645675"
+        },
+        {
+          "start": 18000,
+          "end": 27000,
+          "sha256": "116c7e29d673ae1e6361177dd023b8f703ead359cb4566d9c180fe8bed344dc2"
+        },
+        {
+          "start": 27000,
+          "end": 29538,
+          "sha256": "c386da1a12903db6ba243d361596fd9e2ffa47625dde159322600a7631b1c5d8"
+        }
+      ]
+    }
+  ]
+}

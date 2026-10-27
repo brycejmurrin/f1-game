@@ -1,3 +1,5 @@
+> Coverage update: Initial bounded snapshot. Editor, garage, lighting/FX/presets, agent/misc, assets and vendor continuation reports supply subsequent coverage. Use coverage.tsv for current status.
+
 # Remaining subsystems, assets and documentation map
 
 ## Goal

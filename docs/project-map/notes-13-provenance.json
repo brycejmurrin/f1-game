@@ -1,0 +1,300 @@
+{
+  "group": "13",
+  "range_convention": "zero-based bytes, end exclusive",
+  "parts": [
+    {
+      "path": "docs/notes/DEVICE-FARM-ANALYSIS-2026-10-24.md",
+      "start": 29538,
+      "end": 30467,
+      "kind": "text",
+      "sha256": "ab268da8b8f7558399569220e3daed0e1cdee63615e45892ebb8a929376c6f11",
+      "whole_bytes": 30467,
+      "whole_sha256": "ab268da8b8f7558399569220e3daed0e1cdee63615e45892ebb8a929376c6f11",
+      "part_sha256": "7b2ead28f8daa4adefa77d3557841993d86914cae7c95c604147821405762b45",
+      "chunks": [
+        {
+          "start": 29538,
+          "end": 30467,
+          "bytes": 929,
+          "sha256": "7b2ead28f8daa4adefa77d3557841993d86914cae7c95c604147821405762b45",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": [
+        "docs/NOTES-INDEX.md",
+        "docs/notes/IPHONE-MEMORY-2026-10-24.md",
+        "docs/surveys/w24d-devicefarm.md"
+      ]
+    },
+    {
+      "path": "docs/notes/DEVICE-FARM-LEDGER-2026-10-23.md",
+      "start": 0,
+      "end": 24790,
+      "kind": "text",
+      "sha256": "29b89f518ed6e8b7fd059f4b9d604db01a3345ae626607fb2b55e3cea36fcb2f",
+      "whole_bytes": 24790,
+      "whole_sha256": "29b89f518ed6e8b7fd059f4b9d604db01a3345ae626607fb2b55e3cea36fcb2f",
+      "part_sha256": "29b89f518ed6e8b7fd059f4b9d604db01a3345ae626607fb2b55e3cea36fcb2f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "3d8009d2df5d16a4a794ff9281a38a7b83e8e61c57a8fd73079f783f7e0939fb",
+          "read": "entire returned untruncated source"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "6b25e5c34e784467c8abbb14b8417c6e5caf703acec32b19c7f47ddfe9c43402",
+          "read": "entire returned untruncated source"
+        },
+        {
+          "start": 18000,
+          "end": 24790,
+          "bytes": 6790,
+          "sha256": "f37481e1c1f316addb2ce6937c8242fc2a4bfd6028a80e5081be4c7983e0988c",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": [
+        "docs/NOTES-INDEX.md",
+        "docs/notes/DEVICE-FARM-ANALYSIS-2026-10-24.md",
+        "docs/notes/PERF-KNOWN-WINS-2026-10-23.md",
+        "docs/surveys/w24d-devicefarm.md"
+      ]
+    },
+    {
+      "path": "docs/notes/DRIVING-LINE-RESEARCH.md",
+      "start": 0,
+      "end": 10276,
+      "kind": "text",
+      "sha256": "3bd681372ae938b9908dbb16482e8e4fb0adc4df96fab30b0b30e80df5b1462a",
+      "whole_bytes": 10276,
+      "whole_sha256": "3bd681372ae938b9908dbb16482e8e4fb0adc4df96fab30b0b30e80df5b1462a",
+      "part_sha256": "3bd681372ae938b9908dbb16482e8e4fb0adc4df96fab30b0b30e80df5b1462a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "f2b0ce2887541323cc2cc08975213a215a93a1c1333c5cd69636e7b9accea769",
+          "read": "entire returned untruncated source"
+        },
+        {
+          "start": 9000,
+          "end": 10276,
+          "bytes": 1276,
+          "sha256": "11dbdd2bd238896685486db1e2c28c4499b6398ccd71e77e7a26fd7439d7de9e",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": [
+        "docs/notes/CEILING-HISTORY.md",
+        "docs/notes/RACING-LINE-RESEARCH.md",
+        "docs/plans/2026-10-04-colourblind-captions.md"
+      ]
+    },
+    {
+      "path": "docs/notes/ELECTRON-BUILDER-26.md",
+      "start": 0,
+      "end": 986,
+      "kind": "text",
+      "sha256": "644b1c00b3ac18cec18f38d7a4cc423db3658ba7442973b23432e715fb1d7b63",
+      "whole_bytes": 986,
+      "whole_sha256": "644b1c00b3ac18cec18f38d7a4cc423db3658ba7442973b23432e715fb1d7b63",
+      "part_sha256": "644b1c00b3ac18cec18f38d7a4cc423db3658ba7442973b23432e715fb1d7b63",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 986,
+          "bytes": 986,
+          "sha256": "644b1c00b3ac18cec18f38d7a4cc423db3658ba7442973b23432e715fb1d7b63",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": [
+        "docs/NOTES-INDEX.md"
+      ]
+    },
+    {
+      "path": "docs/notes/ENGINEERING-PRACTICE-NOTES.md",
+      "start": 0,
+      "end": 19914,
+      "kind": "text",
+      "sha256": "9eb24dccbf5e03b2dbeaf6fc781e9bc400e763bed9f3834c66198848367e1ebf",
+      "whole_bytes": 19914,
+      "whole_sha256": "9eb24dccbf5e03b2dbeaf6fc781e9bc400e763bed9f3834c66198848367e1ebf",
+      "part_sha256": "9eb24dccbf5e03b2dbeaf6fc781e9bc400e763bed9f3834c66198848367e1ebf",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "72bbc6a4ed113cfb5c1dfa827ecb4c512bb66496d51296b1d6d374b787a2fc42",
+          "read": "entire returned untruncated source"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "944b912363dd71ce11c68f8727f12664c106d47593edf4f0eeb127a255ffa1b4",
+          "read": "entire returned untruncated source"
+        },
+        {
+          "start": 18000,
+          "end": 19914,
+          "bytes": 1914,
+          "sha256": "bf844b4585c557445469bbd9268a98358614e55636a94601629926233abe4c4d",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": [
+        "docs/NOTES-INDEX.md",
+        "docs/notes/SPIKE-BACKENDS-CHECKLIST.md",
+        "docs/research/PLATFORM-INPUT-NOTES.md",
+        "docs/archive/research/TOTAL-AUDIT-2026-08.md",
+        "docs/notes/system-audit-4/skills/slim-bloat.md"
+      ]
+    },
+    {
+      "path": "docs/notes/F1-TOOLCHAIN-CONSOLIDATION-2026-10-26.md",
+      "start": 0,
+      "end": 4921,
+      "kind": "text",
+      "sha256": "938aa48fe69ca5927605399bcea94a2c3e3b8b9bf1f721d34586e13c56893421",
+      "whole_bytes": 4921,
+      "whole_sha256": "938aa48fe69ca5927605399bcea94a2c3e3b8b9bf1f721d34586e13c56893421",
+      "part_sha256": "938aa48fe69ca5927605399bcea94a2c3e3b8b9bf1f721d34586e13c56893421",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4921,
+          "bytes": 4921,
+          "sha256": "938aa48fe69ca5927605399bcea94a2c3e3b8b9bf1f721d34586e13c56893421",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": []
+    },
+    {
+      "path": "docs/notes/FIT-AUDIT.md",
+      "start": 0,
+      "end": 5654,
+      "kind": "text",
+      "sha256": "699cd98234904107c5083e7c4fa1adcb7ce337fa2e5f88228db5f46f8f667aa1",
+      "whole_bytes": 5654,
+      "whole_sha256": "699cd98234904107c5083e7c4fa1adcb7ce337fa2e5f88228db5f46f8f667aa1",
+      "part_sha256": "699cd98234904107c5083e7c4fa1adcb7ce337fa2e5f88228db5f46f8f667aa1",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5654,
+          "bytes": 5654,
+          "sha256": "699cd98234904107c5083e7c4fa1adcb7ce337fa2e5f88228db5f46f8f667aa1",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": []
+    },
+    {
+      "path": "docs/notes/FLAKY-QUARANTINE-3505-2026-10-25.md",
+      "start": 0,
+      "end": 4431,
+      "kind": "text",
+      "sha256": "33ab2a4e8890b362ee1454ba50c440004a586db8c9ce6ce8538c73b67d1d93e1",
+      "whole_bytes": 4431,
+      "whole_sha256": "33ab2a4e8890b362ee1454ba50c440004a586db8c9ce6ce8538c73b67d1d93e1",
+      "part_sha256": "33ab2a4e8890b362ee1454ba50c440004a586db8c9ce6ce8538c73b67d1d93e1",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4431,
+          "bytes": 4431,
+          "sha256": "33ab2a4e8890b362ee1454ba50c440004a586db8c9ce6ce8538c73b67d1d93e1",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": [
+        "docs/NOTES-INDEX.md"
+      ]
+    },
+    {
+      "path": "docs/notes/FLICKER-GATE-A2-2026-10-10.md",
+      "start": 0,
+      "end": 12734,
+      "kind": "text",
+      "sha256": "e8594729e71f6246339d1beef07e28bcd75961b3b9797b2d8558fd76a0052954",
+      "whole_bytes": 12734,
+      "whole_sha256": "e8594729e71f6246339d1beef07e28bcd75961b3b9797b2d8558fd76a0052954",
+      "part_sha256": "e8594729e71f6246339d1beef07e28bcd75961b3b9797b2d8558fd76a0052954",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "2b65b144b9c55a62b4425fa6d4a2f737c36f84c1055857c7224a762bfffdfc6b",
+          "read": "entire returned untruncated source"
+        },
+        {
+          "start": 9000,
+          "end": 12734,
+          "bytes": 3734,
+          "sha256": "2e2c341766b6a0f817923778111475f6defead4cf88995f372b41a37fbc31304",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": []
+    },
+    {
+      "path": "docs/notes/GARAGE-FINISHES-PARTS-2026-10-17.md",
+      "start": 0,
+      "end": 14023,
+      "kind": "text",
+      "sha256": "a4af07d0022bc02c946df5b22eed1d9f390148404f2461eb7d728a7f14c185ab",
+      "whole_bytes": 14023,
+      "whole_sha256": "a4af07d0022bc02c946df5b22eed1d9f390148404f2461eb7d728a7f14c185ab",
+      "part_sha256": "a4af07d0022bc02c946df5b22eed1d9f390148404f2461eb7d728a7f14c185ab",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "a158fe3fd182d5f15487fd75c2a8169be1a3857c908ce7ed389e3d797339cc26",
+          "read": "entire returned untruncated source"
+        },
+        {
+          "start": 9000,
+          "end": 14023,
+          "bytes": 5023,
+          "sha256": "35d1d7267d2e215a0ac341122cf293aa1e3a4c28e54741aa36efacfc31465202",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": [
+        "docs/TESTING-COVERAGE.md"
+      ]
+    },
+    {
+      "path": "docs/notes/GL-OBJECT-LEAK-2026-10-17.md",
+      "start": 0,
+      "end": 1342,
+      "kind": "text",
+      "sha256": "6346e0b5bb356e920301589e07fd74a13d7e400044650904934d6ad556e97719",
+      "whole_bytes": 2036,
+      "whole_sha256": "6346e0b5bb356e920301589e07fd74a13d7e400044650904934d6ad556e97719",
+      "part_sha256": "1ca88aa38424598f389499db15a91b906de8a99de8be1b353ef2bf2750eacbf1",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1342,
+          "bytes": 1342,
+          "sha256": "1ca88aa38424598f389499db15a91b906de8a99de8be1b353ef2bf2750eacbf1",
+          "read": "entire returned untruncated source"
+        }
+      ],
+      "backlinks": []
+    }
+  ]
+}

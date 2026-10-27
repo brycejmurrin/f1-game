@@ -1,3 +1,5 @@
+> Coverage update: Initial backend pass retained. shaders-complete.md closes both pending shader files; combined TLX source reading is complete.
+
 # Three renderer source map
 
 Source inspection: 2026-10-27, checkout HEAD `64809115e276d7a2b03ccf5678773a001e817db3`. This report records source reading, not a runtime or visual verification. No source edits or browser runs were made.

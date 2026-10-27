@@ -1,3 +1,5 @@
+> Coverage update: Initial backend pass retained as provenance. shaders-complete.md closes both pending shader files; the combined WebGPU source scope is complete.
+
 # WebGPU implementation source map
 
 Read on 2026-10-27 UTC at checkout HEAD `64809115e276d7a2b03ccf5678773a001e817db3`. This lane completed the six renderer implementation files and the foreground shader registry: **7 files / 8,210 lines**. The other two shader registries are inventoried and outlined but await their own full reads; despite the report filename, this is not a claim that all of WebGPU has been read. No source edit, browser, GPU run, or commit was performed.

@@ -1,0 +1,25 @@
+{
+  "batch": "25",
+  "purpose": "Historical identifiers only; not current paths or execution instructions.",
+  "scratch_paths": [
+    "hunt4/",
+    "scratchpad/hunt4/",
+    "hunt4/B/",
+    "logs/*.json",
+    "logs/*.trace",
+    "scratch/perfB/",
+    "scratch/perfB/rewrite.js",
+    "scratch/three-0.186.1.tgz"
+  ],
+  "obsolete_vendor_paths": [
+    "vendor/three-0.186.0/",
+    "vendor/three-0.186.1/"
+  ],
+  "historical_branches": [
+    "cursor/hunt4-wgx-7a1f",
+    "cursor/hunt4-tlxw-5d1e",
+    "cursor/hunt4-glx-chunk-align-c-p7",
+    "cursor/hunt4-car-cb36f"
+  ],
+  "limits": "Paths and branch names are quoted provenance; no existence or current relevance asserted."
+}

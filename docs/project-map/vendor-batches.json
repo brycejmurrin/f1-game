@@ -1,0 +1,185 @@
+{
+  "goal": "Fully read remaining nonbinary minified bundle bytes. Half-open UTF8-safe byte ranges; prior prefix0..2048 covered in vendor-map.md. No library execution.",
+  "groups": [
+    {
+      "id": "01",
+      "path": "vendor/gpu-capture/spector.bundle.js",
+      "start": 2048,
+      "end": 102048,
+      "bytes": 100000,
+      "whole_sha256": "5218807ed79ffa6b7753d8d1325d51baef590b27e0a8edd737c55983826ebf58",
+      "status": "complete"
+    },
+    {
+      "id": "02",
+      "path": "vendor/gpu-capture/spector.bundle.js",
+      "start": 102048,
+      "end": 202048,
+      "bytes": 100000,
+      "whole_sha256": "5218807ed79ffa6b7753d8d1325d51baef590b27e0a8edd737c55983826ebf58",
+      "status": "complete"
+    },
+    {
+      "id": "03",
+      "path": "vendor/gpu-capture/spector.bundle.js",
+      "start": 202048,
+      "end": 302048,
+      "bytes": 100000,
+      "whole_sha256": "5218807ed79ffa6b7753d8d1325d51baef590b27e0a8edd737c55983826ebf58",
+      "status": "complete"
+    },
+    {
+      "id": "04",
+      "path": "vendor/gpu-capture/spector.bundle.js",
+      "start": 302048,
+      "end": 402048,
+      "bytes": 100000,
+      "whole_sha256": "5218807ed79ffa6b7753d8d1325d51baef590b27e0a8edd737c55983826ebf58",
+      "status": "complete"
+    },
+    {
+      "id": "05",
+      "path": "vendor/gpu-capture/spector.bundle.js",
+      "start": 402048,
+      "end": 502048,
+      "bytes": 100000,
+      "whole_sha256": "5218807ed79ffa6b7753d8d1325d51baef590b27e0a8edd737c55983826ebf58",
+      "status": "complete"
+    },
+    {
+      "id": "06",
+      "path": "vendor/gpu-capture/spector.bundle.js",
+      "start": 502048,
+      "end": 602048,
+      "bytes": 100000,
+      "whole_sha256": "5218807ed79ffa6b7753d8d1325d51baef590b27e0a8edd737c55983826ebf58",
+      "status": "complete"
+    },
+    {
+      "id": "07",
+      "path": "vendor/gpu-capture/spector.bundle.js",
+      "start": 602048,
+      "end": 682744,
+      "bytes": 80696,
+      "whole_sha256": "5218807ed79ffa6b7753d8d1325d51baef590b27e0a8edd737c55983826ebf58",
+      "status": "complete"
+    },
+    {
+      "id": "08",
+      "path": "vendor/three-0.186.1/three.core.min.js",
+      "start": 2048,
+      "end": 102048,
+      "bytes": 100000,
+      "whole_sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",
+      "status": "complete"
+    },
+    {
+      "id": "09",
+      "path": "vendor/three-0.186.1/three.core.min.js",
+      "start": 102048,
+      "end": 202048,
+      "bytes": 100000,
+      "whole_sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",
+      "status": "complete"
+    },
+    {
+      "id": "10",
+      "path": "vendor/three-0.186.1/three.core.min.js",
+      "start": 202048,
+      "end": 302048,
+      "bytes": 100000,
+      "whole_sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",
+      "status": "complete"
+    },
+    {
+      "id": "11",
+      "path": "vendor/three-0.186.1/three.core.min.js",
+      "start": 302048,
+      "end": 389329,
+      "bytes": 87281,
+      "whole_sha256": "dae72ed2eea6703b95e6b57e26469ffa95733a9320675b4bfd1b5f5df1c12f8b",
+      "status": "complete"
+    },
+    {
+      "id": "12",
+      "path": "vendor/three-0.186.1/three.tsl.min.js",
+      "start": 2048,
+      "end": 25647,
+      "bytes": 23599,
+      "whole_sha256": "2c38aa6be480f22bfa858b38f43fd25f5891f002f3f44fd41a95f674f5bccdf0",
+      "status": "complete"
+    },
+    {
+      "id": "13",
+      "path": "vendor/three-0.186.1/three.webgpu.min.js",
+      "start": 2048,
+      "end": 102048,
+      "bytes": 100000,
+      "whole_sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "status": "complete"
+    },
+    {
+      "id": "14",
+      "path": "vendor/three-0.186.1/three.webgpu.min.js",
+      "start": 102048,
+      "end": 202048,
+      "bytes": 100000,
+      "whole_sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "status": "complete"
+    },
+    {
+      "id": "15",
+      "path": "vendor/three-0.186.1/three.webgpu.min.js",
+      "start": 202048,
+      "end": 302048,
+      "bytes": 100000,
+      "whole_sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "status": "complete"
+    },
+    {
+      "id": "16",
+      "path": "vendor/three-0.186.1/three.webgpu.min.js",
+      "start": 302048,
+      "end": 402048,
+      "bytes": 100000,
+      "whole_sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "status": "complete"
+    },
+    {
+      "id": "17",
+      "path": "vendor/three-0.186.1/three.webgpu.min.js",
+      "start": 402048,
+      "end": 502048,
+      "bytes": 100000,
+      "whole_sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "status": "complete"
+    },
+    {
+      "id": "18",
+      "path": "vendor/three-0.186.1/three.webgpu.min.js",
+      "start": 502048,
+      "end": 602048,
+      "bytes": 100000,
+      "whole_sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "status": "complete"
+    },
+    {
+      "id": "19",
+      "path": "vendor/three-0.186.1/three.webgpu.min.js",
+      "start": 602048,
+      "end": 702048,
+      "bytes": 100000,
+      "whole_sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "status": "complete"
+    },
+    {
+      "id": "20",
+      "path": "vendor/three-0.186.1/three.webgpu.min.js",
+      "start": 702048,
+      "end": 714087,
+      "bytes": 12039,
+      "whole_sha256": "02a9bd70c638f841e62d76925f5cddea5950720ee2a2689927fdecfd26fb40db",
+      "status": "complete"
+    }
+  ]
+}

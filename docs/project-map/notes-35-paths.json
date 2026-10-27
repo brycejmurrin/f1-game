@@ -1,0 +1,29 @@
+{
+  "group": "35",
+  "authority": "Historical provenance only; not command authority",
+  "archive_paths": [
+    "docs/archive/notes/PASS-CENSUS-2026-10-17.md",
+    "docs/archive/notes/RENDERER-ALTERNATIVES-2026-10-24.md",
+    "tools/archive/perf/ers-deploy-census.mjs",
+    "tools/archive/perf/touch-boost-probe.mjs",
+    "tools/archive/gen/trees/measure-tree-budget.mjs"
+  ],
+  "session_only_paths": [
+    "scratch/compile-attrib-probe.mjs",
+    "scratch/shadow-pass-count.mjs",
+    "scratch/ab-frames.mjs",
+    "scratchpad/leak-repro.cjs",
+    "scratch/voice-lag-probe.mjs",
+    "scratch/pack-coverage.mjs",
+    "scratch/sysaudit/tools/merge-conflicts-7d.txt"
+  ],
+  "historical_deleted_or_retired": [
+    "tools/moves/",
+    "readback-quit-menu-oracle-repeat.mjs",
+    "res-scale-ab.mjs",
+    "pit-canopy-evidence.mjs",
+    "~/.claude/stop-hook-git-check.sh",
+    "launch-policy.md",
+    "orchestrator.md"
+  ]
+}

@@ -1,3 +1,5 @@
+> Coverage update: Initial bounded snapshot. Later complete core, network/input, data/career, audio and UI reports close its unread source rows. Use coverage.tsv for current status.
+
 # Feature systems map
 
 ## Goal

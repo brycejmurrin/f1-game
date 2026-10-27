@@ -1,0 +1,52 @@
+{
+  "meaning": "Historical backlinks and outgoing destinations, not current engineering navigation.",
+  "records": [
+    {
+      "source": "docs/notes/COCKPIT-DATUMS.md",
+      "incoming_mentions_in_docs": [
+        "docs/NOTES-INDEX.md",
+        "docs/archive/notes/COCKPIT-REAR-MIRROR-DESIGN.md"
+      ],
+      "outgoing_markdown_targets": []
+    },
+    {
+      "source": "docs/notes/COCKPIT-MODEL-REFERENCES.md",
+      "incoming_mentions_in_docs": [
+        "docs/archive/notes/COCKPIT-REAR-MIRROR-DESIGN.md"
+      ],
+      "outgoing_markdown_targets": [
+        "https://www.mercedesamgf1.com/news/how-does-an-f1-steering-wheel-work",
+        "https://www.mclaren.com/racing/team/through-the-ages-formula-one-steering-wheels/",
+        "https://www.racecar-engineering.com/tech-explained/tech-explained-formula-1-halo/",
+        "https://www.motorsport.com/f1/news/hamilton-ferrari-steering-wheel-like-mercedes/10701097/",
+        "https://www.redbull.com/au-en/f1-technician-cockpit-driver",
+        "https://www.autoweek.com/racing/formula-1/a1993516/get-grip-guide-mclarens-complex-f1-steering-wheel/",
+        "https://silodrome.com/niki-laudas-mclaren-mp4-steering-wheel-is-for-sale/",
+        "https://www.astonmartinf1.com/en-GB/news/feature/inside-the-cockpit-the-tools-of-formula-ones-new-era",
+        "https://motorsport.tech/formula-1/master-control-understanding-the-williams-fw-43-steering-wheel",
+        "https://www.williamsf1.com/videos/7d2e649c-31de-4e53-a166-455deb0c44ee/explained-our-2024-steering-wheel",
+        "../archive/notes/COCKPIT-REAR-MIRROR-DESIGN.md"
+      ]
+    },
+    {
+      "source": "docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md",
+      "incoming_mentions_in_docs": [
+        "docs/NOTES-INDEX.md",
+        "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+        "docs/plans/2026-09-30-agent-skills-and-tools.md",
+        "docs/archive/notes/DOCS-SURVEY-2026-10-06.md"
+      ],
+      "outgoing_markdown_targets": [
+        "RULEBOOK-REWRITE-2026-10-26.md"
+      ]
+    },
+    {
+      "source": "docs/notes/CURSOR-AGENTS-API-PROBE-2026-10-19.md",
+      "incoming_mentions_in_docs": [
+        "docs/archive/notes/CURSOR-SDK-RESEARCH-2026-10-20.md",
+        "docs/archive/notes/GROK-API-2026-10-22.md"
+      ],
+      "outgoing_markdown_targets": []
+    }
+  ]
+}

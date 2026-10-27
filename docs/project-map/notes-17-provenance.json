@@ -1,0 +1,394 @@
+{
+  "group": "17",
+  "read_date": "2026-10-27",
+  "range_convention": "zero-based bytes, exclusive end",
+  "parts": [
+    {
+      "path": "docs/notes/LIVERY-REF-2026-10-18.md",
+      "whole_bytes": 9672,
+      "whole_sha256": "58317dcb2961288c827ef7a2ad3fbd65c70e4f52a1904ae72eb1f19ab8e102eb",
+      "assigned_start": 9343,
+      "assigned_end": 9672,
+      "part_sha256": "0c22be4a9181916f7d9b9d08edd81b8a89002ff8cc6473221250e79316426eb8",
+      "manifest_sha256": "58317dcb2961288c827ef7a2ad3fbd65c70e4f52a1904ae72eb1f19ab8e102eb",
+      "chunks": [
+        {
+          "start": 9343,
+          "end": 9672,
+          "sha256": "0c22be4a9181916f7d9b9d08edd81b8a89002ff8cc6473221250e79316426eb8"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/TESTING-COVERAGE.md",
+          "line": 102
+        }
+      ],
+      "historical_raw_references": []
+    },
+    {
+      "path": "docs/notes/LOAD-HUNT-2026-10-24.md",
+      "whole_bytes": 9260,
+      "whole_sha256": "1f2b69f6eda3719de1b952276e4358a7f8873beadfb4b940e7ab96e8b7189675",
+      "assigned_start": 0,
+      "assigned_end": 9260,
+      "part_sha256": "1f2b69f6eda3719de1b952276e4358a7f8873beadfb4b940e7ab96e8b7189675",
+      "manifest_sha256": "1f2b69f6eda3719de1b952276e4358a7f8873beadfb4b940e7ab96e8b7189675",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "56a2d33cd3a9b201cf119c5261585d99ef854251afb0f676db23d2857471a0ba"
+        },
+        {
+          "start": 9000,
+          "end": 9260,
+          "sha256": "8acae8562da9d7497c688966f0f051539e5f58b4fd0aac8b0d44cf44b0b02218"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 112
+        }
+      ],
+      "historical_raw_references": [
+        "node tools/desktop/stage.mjs --out artifacts/site --stamp --at 21999",
+        "scratch/load/sw-overhead.mjs",
+        "scratch/load/ab-summary.mjs",
+        "artifacts/logs/ab-early-adapter.log"
+      ]
+    },
+    {
+      "path": "docs/notes/LOCAL-LLVMPIPE-2026-10-26.md",
+      "whole_bytes": 12159,
+      "whole_sha256": "bc47031652b8174dc67143d5f3421be012c483bf62b3659e22d6f0980afdea52",
+      "assigned_start": 0,
+      "assigned_end": 12159,
+      "part_sha256": "bc47031652b8174dc67143d5f3421be012c483bf62b3659e22d6f0980afdea52",
+      "manifest_sha256": "bc47031652b8174dc67143d5f3421be012c483bf62b3659e22d6f0980afdea52",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "f5d6f737d4500baaad1c75987c661e6958651ec819b43b77dee236d80417ceb2"
+        },
+        {
+          "start": 9000,
+          "end": 12159,
+          "sha256": "19ee55b33b5e87760fc6c297c685f6f7461fcd5b58aafdef303efa0b0aa92aad"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 31
+        },
+        {
+          "path": "docs/notes/system-audit-3/environment.md",
+          "line": 37
+        },
+        {
+          "path": "docs/notes/system-audit-4/web-hosts-gpu.md",
+          "line": 2
+        }
+      ],
+      "historical_raw_references": [
+        "scratch/sysaudit-research/",
+        "node scratch/sysaudit-research/bin/llvmpipe-probe.mjs"
+      ]
+    },
+    {
+      "path": "docs/notes/LOCAL-SURVEY-GALLERY.md",
+      "whole_bytes": 11572,
+      "whole_sha256": "d516d0e3065b418ee6870e925c10685686a187f4e52e64982f96efe02f0b4479",
+      "assigned_start": 0,
+      "assigned_end": 11572,
+      "part_sha256": "d516d0e3065b418ee6870e925c10685686a187f4e52e64982f96efe02f0b4479",
+      "manifest_sha256": "d516d0e3065b418ee6870e925c10685686a187f4e52e64982f96efe02f0b4479",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "60422e06b7930716e111d0f5421499b3609d98f7898a9d6b7bf38627466331d8"
+        },
+        {
+          "start": 9000,
+          "end": 11572,
+          "sha256": "71e8cf481e09edfadd531d2c92f9d102403e543ff266e202ac70cfa4c00e5e1b"
+        }
+      ],
+      "incoming_backlinks": [],
+      "historical_raw_references": [
+        "cursor/survey-gallery-fix-a1",
+        "artifacts/gallery/tracks",
+        "track-survey-assets"
+      ]
+    },
+    {
+      "path": "docs/notes/LSP-MCP-2026-10-18.md",
+      "whole_bytes": 16194,
+      "whole_sha256": "1d2215914afe4373c22ca344e7b4cda17f3efdbe5e8d66fe94f4fca2aa4118a5",
+      "assigned_start": 0,
+      "assigned_end": 16194,
+      "part_sha256": "1d2215914afe4373c22ca344e7b4cda17f3efdbe5e8d66fe94f4fca2aa4118a5",
+      "manifest_sha256": "1d2215914afe4373c22ca344e7b4cda17f3efdbe5e8d66fe94f4fca2aa4118a5",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "a525a02f53cd4c028306ac86d85dc5b43747b67f57cb9aceee185271b41eb9b6"
+        },
+        {
+          "start": 9000,
+          "end": 16194,
+          "sha256": "5d896aae1f0d1ba2ecaedf0776b8b303f949e59f1c69b3f2ddcf46fd96ea4129"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/AGENT-SURFACE.md",
+          "line": 150
+        },
+        {
+          "path": "docs/archive/notes/LSP-NAVIGATION-EFFICIENCY-2026-10-18.md",
+          "line": 126
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/code-nav.md",
+          "line": 3
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/code-nav.md",
+          "line": 14
+        }
+      ],
+      "historical_raw_references": [
+        "scratch/lsp/measure.mjs"
+      ]
+    },
+    {
+      "path": "docs/notes/LSP-MCP-TIMEOUT-2026-10-19.md",
+      "whole_bytes": 2241,
+      "whole_sha256": "bb860665cf77171277fc5c43d5afb721917555ed507ca2769e256a568bb8f925",
+      "assigned_start": 0,
+      "assigned_end": 2241,
+      "part_sha256": "bb860665cf77171277fc5c43d5afb721917555ed507ca2769e256a568bb8f925",
+      "manifest_sha256": "bb860665cf77171277fc5c43d5afb721917555ed507ca2769e256a568bb8f925",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2241,
+          "sha256": "bb860665cf77171277fc5c43d5afb721917555ed507ca2769e256a568bb8f925"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/TESTING.md",
+          "line": 477
+        }
+      ],
+      "historical_raw_references": []
+    },
+    {
+      "path": "docs/notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md",
+      "whole_bytes": 13723,
+      "whole_sha256": "5f329750b136bef82bdd75b021a19a426e297802bc98bd8e4b5e3134db9ab9c9",
+      "assigned_start": 0,
+      "assigned_end": 13723,
+      "part_sha256": "5f329750b136bef82bdd75b021a19a426e297802bc98bd8e4b5e3134db9ab9c9",
+      "manifest_sha256": "5f329750b136bef82bdd75b021a19a426e297802bc98bd8e4b5e3134db9ab9c9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "7d3be1f953c1cb17b24199b47d997975a6011b53d34c2df877cd5d337b52b2d7"
+        },
+        {
+          "start": 9000,
+          "end": 13723,
+          "sha256": "6719283dfd192baa9901167f7310749149b8d3636756e46fcf269d2d090aa245"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 28
+        },
+        {
+          "path": "docs/notes/AGENT-CONFIG-RESEARCH-2026-10-15.md",
+          "line": 9
+        },
+        {
+          "path": "docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md",
+          "line": 110
+        },
+        {
+          "path": "docs/archive/notes/DEEP-RESEARCH-CLAUDE-CODE-FLEET-2026-10-15.md",
+          "line": 119
+        },
+        {
+          "path": "docs/archive/notes/DEEP-RESEARCH-CLAUDE-CODE-FLEET-2026-10-15.md",
+          "line": 396
+        }
+      ],
+      "historical_raw_references": []
+    },
+    {
+      "path": "docs/notes/MCP-PROCESS-STAT-READER-2026-10-26.md",
+      "whole_bytes": 1313,
+      "whole_sha256": "aa66a3b0611e443c0111bec5e04b84c883d9ca42633dc7ca633ea425213726fd",
+      "assigned_start": 0,
+      "assigned_end": 1313,
+      "part_sha256": "aa66a3b0611e443c0111bec5e04b84c883d9ca42633dc7ca633ea425213726fd",
+      "manifest_sha256": "aa66a3b0611e443c0111bec5e04b84c883d9ca42633dc7ca633ea425213726fd",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1313,
+          "sha256": "aa66a3b0611e443c0111bec5e04b84c883d9ca42633dc7ca633ea425213726fd"
+        }
+      ],
+      "incoming_backlinks": [],
+      "historical_raw_references": []
+    },
+    {
+      "path": "docs/notes/MCP-SINGLE-TOOL-REDESIGN-2026-10-20.md",
+      "whole_bytes": 18417,
+      "whole_sha256": "d85a3a0adef548ac80cf30df05f15e8ad9c0aa29900bf74b172bca006385235d",
+      "assigned_start": 0,
+      "assigned_end": 18417,
+      "part_sha256": "d85a3a0adef548ac80cf30df05f15e8ad9c0aa29900bf74b172bca006385235d",
+      "manifest_sha256": "d85a3a0adef548ac80cf30df05f15e8ad9c0aa29900bf74b172bca006385235d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "22e4269ae50a1fa499a7fea14009e296345e542a221419f52e43cd49cf50bd2d"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "sha256": "31c2ca3c8323711482a7392164e7fb35d29884212a712b95502d180ec453b431"
+        },
+        {
+          "start": 18000,
+          "end": 18417,
+          "sha256": "7f03ebfcd1449884a9a29f578fecb24cb08f72d5ba39b928a67484b2e4054763"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/AGENT-SURFACE.md",
+          "line": 241
+        },
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 113
+        },
+        {
+          "path": "docs/TESTING.md",
+          "line": 477
+        }
+      ],
+      "historical_raw_references": [
+        "cursor/mcp-one-tool-w11a",
+        ".claude/skills/apex-ops/SKILL.md"
+      ]
+    },
+    {
+      "path": "docs/notes/MEASURING-GPU-PERF-2026-09-16.md",
+      "whole_bytes": 13237,
+      "whole_sha256": "02394712586162bae128544ed6651200015fffddbd984d133c9dbf9dd6007b22",
+      "assigned_start": 0,
+      "assigned_end": 13237,
+      "part_sha256": "02394712586162bae128544ed6651200015fffddbd984d133c9dbf9dd6007b22",
+      "manifest_sha256": "02394712586162bae128544ed6651200015fffddbd984d133c9dbf9dd6007b22",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "sha256": "a5a81ac996bc82385cf7124c6914e21c821e449d72253679e78e472fda3fda92"
+        },
+        {
+          "start": 9000,
+          "end": 13237,
+          "sha256": "a255c3daa56a3a406f46a4308147c050443df576f94ba797470f1db2be7ed217"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/NOTES-INDEX.md",
+          "line": 81
+        },
+        {
+          "path": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+          "line": 39
+        },
+        {
+          "path": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+          "line": 78
+        },
+        {
+          "path": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+          "line": 91
+        },
+        {
+          "path": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+          "line": 328
+        },
+        {
+          "path": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+          "line": 382
+        },
+        {
+          "path": "docs/notes/PERF-RESEARCH-2026-10-17.md",
+          "line": 390
+        },
+        {
+          "path": "docs/surveys/w24b-tools.md",
+          "line": 16
+        },
+        {
+          "path": "docs/surveys/w24b-tools.md",
+          "line": 41
+        },
+        {
+          "path": "docs/surveys/w24b-tools.md",
+          "line": 147
+        },
+        {
+          "path": "docs/surveys/w24b-tools.md",
+          "line": 153
+        }
+      ],
+      "historical_raw_references": []
+    },
+    {
+      "path": "docs/notes/MEM-M1-2026-10-18.md",
+      "whole_bytes": 7528,
+      "whole_sha256": "e745df93e881762543c38003ec193358bc40da5d856a38f59c551b1b1ebc883c",
+      "assigned_start": 0,
+      "assigned_end": 1555,
+      "part_sha256": "e16b8d138a051b5403ae9564d598371e7d45b3c28266d3048b6ab3ad57fbb8b1",
+      "manifest_sha256": "e745df93e881762543c38003ec193358bc40da5d856a38f59c551b1b1ebc883c",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1555,
+          "sha256": "e16b8d138a051b5403ae9564d598371e7d45b3c28266d3048b6ab3ad57fbb8b1"
+        }
+      ],
+      "incoming_backlinks": [
+        {
+          "path": "docs/TESTING-COVERAGE.md",
+          "line": 51
+        }
+      ],
+      "historical_raw_references": [
+        "cursor/garage-livery-leak-m1a7",
+        "scratch/m1probe.mjs"
+      ]
+    }
+  ]
+}

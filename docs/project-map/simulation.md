@@ -1,3 +1,5 @@
+> Coverage update: Initial bounded snapshot. physics-complete.md and race-complete.md close all scoped source reads. Use coverage.tsv for current status.
+
 # Simulation project map
 
 ## Goal

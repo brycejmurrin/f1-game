@@ -1,0 +1,575 @@
+{
+  "group": "29",
+  "policy": "Historical provenance only; raw references are not commands or authority. No missing-path inference of deletion.",
+  "sources": [
+    {
+      "source": "docs/notes/RACING-LINE-RESEARCH.md",
+      "assigned_range": [
+        19075,
+        46770
+      ],
+      "references": [
+        {
+          "raw": "tools/check/ai-pace.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tools/lib/game-vm.cjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/physics/consts.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "\u221a(\u03bcg/|K|)",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "\u03a3((\u03a8_k \u2212 \u03a8_{k\u22121})/\u0394s)\u00b2 + \u03bb(\u03b4_k \u2212 \u03b4_{k\u22121})\u00b2",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "\u03ba/(1+\u03bax) \u2212 x''",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "track-line.test.mjs",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tools/track/line-audit.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "driving-line.js",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "track-line-circuits.test.mjs",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "PHYSICS.md",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "w = clamp((v/cap)\u00b2, wMin, 1)",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "ai-line.mjs",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/track/core/",
+          "literal_local_path_exists": true
+        }
+      ]
+    },
+    {
+      "source": "docs/notes/RATCHET-FRAGMENTS-2026-10-15.md",
+      "assigned_range": [
+        0,
+        4728
+      ],
+      "references": [
+        {
+          "raw": "ratchets.json",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/game.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/game.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/agent/apex.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/agent/apex.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/game.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/agent/apex.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "docs/notes/MERGE-HYGIENE-2026-09-29.md",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "ratchets.mjs --auto-raise",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/data/ratchets.d/<branch>.json",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/unit/ratchet-merge-hotspot.test.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "docs/changelog.d/README.md",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "protect-files.py",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "ratchets.json",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "node tools/check/ratchets.mjs --update --fragment --reason=\"<why>\"",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/data/ratchets.d/<branch>.json",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "ratchets.json",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/unit/ratchet-merge-hotspot.test.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "game.js",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "apex.js",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "agentview.js",
+          "literal_local_path_exists": false
+        }
+      ]
+    },
+    {
+      "source": "docs/notes/REAL-RACE-2026-09-27.md",
+      "assigned_range": [
+        0,
+        20693
+      ],
+      "references": [
+        {
+          "raw": "https://api.openf1.org/v1",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/sessions?session_key=",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/drivers",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/laps",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/stints",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/pit",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/race_control",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/weather",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/session_result",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/overtakes",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/position",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/starting_grid",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/fixtures/openf1-baku-2026-race.json",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/race/real-race.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/game.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/race/race-control.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "dnfAt = (lapsDone + 0.5) / laps",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "mul = clamp((1 / rel) \u00d7 (1 + KP\u00b7err / lapS), 0.90, 1.10)",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "game.js",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "age / planLaps",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "K0 = referencePole() / best clean real lap",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "K \u00b7 ref \u00b7 realLaps / simLaps",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/overtakes",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "/location",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/race/real-replay.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "game.js",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "real.speed / REAL_VMAX \u00b7 vTop()",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/race/broadcast.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "mirror-pass.js",
+          "literal_local_path_exists": false
+        }
+      ]
+    },
+    {
+      "source": "docs/notes/REAR-WING-ACTIVE-AERO-2026-10-19.md",
+      "assigned_range": [
+        0,
+        5297
+      ],
+      "references": [
+        {
+          "raw": "js/car/car-body-geom.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/unit/rear-wing-active-aero.test.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "car3d.js",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/data/car-wing-foil-tris.json",
+          "literal_local_path_exists": true
+        }
+      ]
+    },
+    {
+      "source": "docs/notes/RENDER-PERF-PLAN-2026-09-16.md",
+      "assigned_range": [
+        0,
+        17968
+      ],
+      "references": [
+        {
+          "raw": "tools/check/occlusion-estimate.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/unit/chunked-index-ranges.test.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "occlusion-estimate.mjs",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "BACKEND-DRAWCALL-RESEARCH-2026-09-16.md",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/render/glx/chunked.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/unit/glx-multidraw.test.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/lighting/knobs.js",
+          "literal_local_path_exists": true
+        }
+      ]
+    },
+    {
+      "source": "docs/notes/RENDER-SETTINGS-TOOLING-RESEARCH-2026-10-21.md",
+      "assigned_range": [
+        0,
+        7110
+      ],
+      "references": [
+        {
+          "raw": "TLX-GPU-COST-PARAVIRTUAL-2026-10-20.md",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "chrome://flags/#enable-webgpu-developer-features",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/agent/apex.js:1471",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/render/three/tlx.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/perf/phone-recorder.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "live-frame-census.mjs",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/perf/governor.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/ui/scale.js:14",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "phone-recorder.js",
+          "literal_local_path_exists": false
+        }
+      ]
+    },
+    {
+      "source": "docs/notes/RENDERER-MACOS-RED-2026-09.md",
+      "assigned_range": [
+        0,
+        5517
+      ],
+      "references": [
+        {
+          "raw": "image-grade-visual.spec.js \u203a rendered image grade \u203a blacks visibly change the deepest image detail",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "webgl-probes.spec.js \u203a WebGL renderer probes \u203a dynamic player shadow uses the current-frame car transform",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/render/shared/shadow-pass.js:323",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tlx.js:2602",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "shadow-pass.js:343",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "gpu-census.yml",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "ci.yml:291",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "js/render/shared/lamp-chunks.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/render/glx/chunked.js",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tools/ci/nightly-group.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tools/ci/ci-coverage.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "js/render/",
+          "literal_local_path_exists": true
+        }
+      ]
+    },
+    {
+      "source": "docs/notes/REPO-SIZE-2026-10.md",
+      "assigned_range": [
+        0,
+        6882
+      ],
+      "references": [
+        {
+          "raw": ".github/workflows/repo-size.yml",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tools/ci/repo-size.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "docs/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "assets/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/ui-screenshots/lap-audit",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/specs/menu-baseline.spec.js-snapshots",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/ui-screenshots/baku-audit",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "assets/pack/mat-*",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "docs/look-survey/*_grid.png",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/ui-screenshots/lap-audit/*.png",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/unit/committed-images.test.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "*-snapshots/",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "assets/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "tests/ui-screenshots/",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "repo-size.mjs",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "docs/archive/slider-effect/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "docs/look-survey/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "artifacts/shots/",
+          "literal_local_path_exists": false
+        },
+        {
+          "raw": "tests/unit/committed-images.test.mjs",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "docs/",
+          "literal_local_path_exists": true
+        },
+        {
+          "raw": "artifacts/",
+          "literal_local_path_exists": true
+        }
+      ]
+    },
+    {
+      "source": "docs/notes/RULEBOOK-EVIDENCE-2026-10-26.md",
+      "assigned_range": [
+        0,
+        4110
+      ],
+      "references": [
+        {
+          "raw": ".claude/rules/",
+          "literal_local_path_exists": true
+        }
+      ]
+    }
+  ],
+  "archived_backlinks_from_report": [
+    "docs/archive/notes/BACKEND-DRAWCALL-RESEARCH-2026-09-16.md",
+    "scratch/f1-source-restore/docs/archive/notes/BACKEND-DRAWCALL-RESEARCH-2026-09-16.md"
+  ]
+}

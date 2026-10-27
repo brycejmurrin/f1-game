@@ -1,0 +1,25 @@
+{
+  "purpose": "Historical, transient, or branch-only references; provenance only, not operational authority or verified current locations",
+  "references": [
+    {
+      "path": "scratch/ab.cjs",
+      "context": "Ledger Istanbul A/B scratch producer; not a durable reproduction artifact"
+    },
+    {
+      "path": "cursor/governor-vsync-step-a40g",
+      "context": "Device analysis ownership branch at writing time"
+    },
+    {
+      "path": "desktop/dev-app-update.yml",
+      "context": "Proposed future development update configuration, not asserted existing"
+    },
+    {
+      "path": "artifacts/devicefarm/units.json",
+      "context": "Analysis \u00a75a says harness unit history landed here; generated runtime artifact not inspected"
+    },
+    {
+      "path": "units.json",
+      "context": "Analysis \u00a75 proposal shorthand; not independent current file evidence"
+    }
+  ]
+}

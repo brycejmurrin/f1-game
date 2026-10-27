@@ -1,0 +1,165 @@
+{
+  "meaning": "Historical inbound filename references, retained as provenance data rather than current engineering navigation.",
+  "entries": [
+    {
+      "original_report_line": 167,
+      "source_entry": "- `tools/gfx/chunk-reach.cjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json",
+        "docs/archive/moves/phase4-tools.json"
+      ]
+    },
+    {
+      "original_report_line": 168,
+      "source_entry": "- `tools/gfx/chunk-share-census.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json",
+        "docs/archive/moves/phase4-tools.json"
+      ]
+    },
+    {
+      "original_report_line": 172,
+      "source_entry": "- `tools/gfx/gltf-selftest.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json"
+      ]
+    },
+    {
+      "original_report_line": 173,
+      "source_entry": "- `tools/gfx/glx-call-census.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json",
+        "docs/archive/moves/phase4-tools.json"
+      ]
+    },
+    {
+      "original_report_line": 174,
+      "source_entry": "- `tools/gfx/gpu-census.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json"
+      ]
+    },
+    {
+      "original_report_line": 175,
+      "source_entry": "- `tools/gfx/gpu-game-check.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json"
+      ]
+    },
+    {
+      "original_report_line": 176,
+      "source_entry": "- `tools/gfx/gpu-mem-census.mjs`",
+      "historical_paths": [
+        "docs/archive/notes/GPU-MEM-CENSUS-2026-10-17.md"
+      ]
+    },
+    {
+      "original_report_line": 179,
+      "source_entry": "- `tools/gfx/mem-census.mjs`",
+      "historical_paths": [
+        "docs/archive/notes/HEAP-CENSUS-MEASUREMENT-CONTRACT.md"
+      ]
+    },
+    {
+      "original_report_line": 181,
+      "source_entry": "- `tools/gfx/pass-census.mjs`",
+      "historical_paths": [
+        "docs/archive/notes/PASS-CENSUS-2026-10-17.md"
+      ]
+    },
+    {
+      "original_report_line": 184,
+      "source_entry": "- `tools/gfx/res-scale-census.mjs`",
+      "historical_paths": [
+        "docs/archive/notes/RES-SCALE-FIXED-TARGETS-2026-10-17.md"
+      ]
+    },
+    {
+      "original_report_line": 185,
+      "source_entry": "- `tools/gfx/road-lut-census.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json"
+      ]
+    },
+    {
+      "original_report_line": 186,
+      "source_entry": "- `tools/gfx/ssr-probe.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json"
+      ]
+    },
+    {
+      "original_report_line": 187,
+      "source_entry": "- `tools/gfx/tlx-pack-check.cjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json",
+        "docs/archive/moves/phase4-tools.json"
+      ]
+    },
+    {
+      "original_report_line": 189,
+      "source_entry": "- `tools/gfx/wgx-lavapipe-probe.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-c.json"
+      ]
+    },
+    {
+      "original_report_line": 194,
+      "source_entry": "- `tools/ui/circuit-axis.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-b.json",
+        "docs/archive/moves/phase4-tools.json"
+      ]
+    },
+    {
+      "original_report_line": 199,
+      "source_entry": "- `tools/ui/explorer/browser.mjs`",
+      "historical_paths": [
+        "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-1ofn.md"
+      ]
+    },
+    {
+      "original_report_line": 201,
+      "source_entry": "- `tools/ui/explorer/core.mjs`",
+      "historical_paths": [
+        "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-1ofn.md"
+      ]
+    },
+    {
+      "original_report_line": 207,
+      "source_entry": "- `tools/ui/fit-audit.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-b.json"
+      ]
+    },
+    {
+      "original_report_line": 209,
+      "source_entry": "- `tools/ui/menu-capture.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-b.json",
+        "docs/archive/moves/phase4-tools.json"
+      ]
+    },
+    {
+      "original_report_line": 210,
+      "source_entry": "- `tools/ui/menu-fit.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-b.json"
+      ]
+    },
+    {
+      "original_report_line": 211,
+      "source_entry": "- `tools/ui/menu-mock.mjs`",
+      "historical_paths": [
+        "docs/archive/notes/ISSUE-TRIAGE-3305-UP-2026-10-22.md"
+      ]
+    },
+    {
+      "original_report_line": 215,
+      "source_entry": "- `tools/ui/ui-scale-axis.mjs`",
+      "historical_paths": [
+        "docs/archive/moves/phase4-tools-b.json"
+      ]
+    }
+  ]
+}

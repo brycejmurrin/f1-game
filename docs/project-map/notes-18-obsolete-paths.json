@@ -1,0 +1,26 @@
+{
+  "batch": "18",
+  "purpose": "Historical obsolete/archive references only; no existence or migration claim.",
+  "references": [
+    {
+      "source": "docs/notes/MIRROR-WARM-2026-10-24.md",
+      "path": "docs/archive/notes/COLD-FIRST-RACE-WARM-2026-10-23.md",
+      "status": "archive reference"
+    },
+    {
+      "source": "docs/notes/MOSPORT-PLAN-2026-09-14.md",
+      "path": "lighting/campaign/config.mjs",
+      "status": "explicitly deleted, #2176"
+    },
+    {
+      "source": "docs/notes/MOSPORT-PLAN-2026-09-14.md",
+      "path": "js/circuits/CLAUDE.md",
+      "status": "historical documentation reference; current status unverified"
+    },
+    {
+      "source": "docs/notes/MOSPORT-PLAN-2026-09-14.md",
+      "path": "the lighting-campaign test",
+      "status": "source does not give raw filename; explicitly deleted, #2176"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+> Coverage update: Initial inventory snapshot. All582 tools paths are now fully read across complete tooling reports; test coverage remains in progress. coverage.tsv is authoritative.
+
 # Tooling and tests project map
 
 ## Goal

@@ -1,0 +1,18 @@
+{
+  "batch": "20",
+  "source": "docs/notes/PERF-FINDINGS.md",
+  "scope": [
+    26808,
+    126808
+  ],
+  "historical_paths": [
+    {
+      "path": "docs/PERF-FINDINGS.md",
+      "status": "historical location named by source; canonical indexed source is docs/notes/PERF-FINDINGS.md"
+    },
+    {
+      "path": "gfx/loop-fault-repro.mjs",
+      "status": "source explicitly says removed from tools on 2026-09-10; available in git history"
+    }
+  ]
+}

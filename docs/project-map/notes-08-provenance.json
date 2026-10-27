@@ -1,0 +1,9 @@
+{
+  "meaning": "Historical backlinks and outgoing destinations, not current engineering navigation.",
+  "records": [
+    {
+      "historicalTool": "docs/archive/tools/gfx/wgpu-flag-test.mjs",
+      "historicalReview": "ARCHITECTURE-REVIEW.md"
+    }
+  ]
+}
