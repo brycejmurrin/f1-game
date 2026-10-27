@@ -2083,6 +2083,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/gen/trees/install-trees.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
+    },
+    {
       "path": "tools/gen/vendor-three.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",

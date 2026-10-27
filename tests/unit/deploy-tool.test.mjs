@@ -991,6 +991,6 @@ console.log(JSON.stringify({error:r.error?.code,survivors:r.survivors}));`;
   assert.deepEqual(JSON.parse(r.stdout), { error: "SIGTERM", survivors: [] });
 });
 
-test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (fleet-owner relies on it)", () => {
+test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (sync-pr conflict cure relies on it)", () => {
   for (const p of GENERATED_PATHS) assert.equal(cureableConflicts([p]).cureable, true, `${p} is listed as generated but deploy.mjs cannot cure a conflict in it`);
 });
