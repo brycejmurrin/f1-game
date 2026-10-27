@@ -26,17 +26,20 @@ deploy gate will pass.
 
 ## Before a code push
 
-After all edits, run the full structural floor and the groups named by
-`pick-tests`:
+A worker's local floor is [WORKERS.md](WORKERS.md) §3, its one home:
+`tooling-fast --changed` plus ONE relevant spec (or `verify-track` for a
+circuit). The full tiers run on the PR: `run-ci` on a draft gives the fast
+tier (its `Structural guards` check is what `ready-gate` reads), the full tier
+runs once the PR is ready, and `land.yml`'s `gate` check judges the merge
+result. A worker's session ends at `land` (WORKERS.md §5).
+
+Optional, for a Bryce-attended session that wants the whole node gate locally
+(background tasks, never a worker's foreground step):
 
 ```sh
-npm run test:tooling-fast
-node tools/ci/pick-tests.mjs
-node tools/ci/deploy.mjs --gate-only
+npm run test:tooling-fast           # the full structural floor; a green run writes the stamp ready-gate also accepts
+node tools/ci/deploy.mjs --gate-only   # the deploy's node and sweep coverage; never pushes
 ```
-
-`deploy.mjs --gate-only` is the authoritative local pre-push check. It runs the
-same node and sweep coverage used by the deploy protocol and never pushes.
 
 ## Docs and skill changes
 
@@ -51,7 +54,8 @@ Run `npm run gen:check` when a generated reader or a tool `@doc` header changed.
 
 ## CI and Pages
 
-PR CI validates the PR head. A deploy-branch push starts the Pages release train;
+PR CI validates the PR head; the deploy branch requires one check, `gate`,
+whose ci row requires `CI` green on the head. A draft starts no CI without the `run-ci` label (`= ci none`). A deploy-branch push starts the Pages release train;
 there is no separate ship-push CI run. Pages runs the reusable CI release gate
 against its selected `before_sha` and publishes the staged artifact.
 A green PR is not proof that Pages is live; verify live `version.json`
@@ -74,6 +78,7 @@ unknown and the ready gate is not evaluated by this command.
 ## Related readers
 
 - [AGENTS.md](../AGENTS.md) — binding rules and the full ladder.
+- [WORKERS.md](WORKERS.md) — the worker floor, `land`, and where a session ends.
 - [TESTING.md](TESTING.md) — test groups and the per-file catalog.
 - [ARCHITECTURE-MAP.md](ARCHITECTURE-MAP.md) — where verification tools fit.
 - [AGENT-SURFACE.md](AGENT-SURFACE.md) — CLI and MCP ownership.

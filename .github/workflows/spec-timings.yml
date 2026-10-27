@@ -82,9 +82,13 @@ jobs:
     # Only the deploy branch's runs. A feature branch measures the same specs on
     # the same runners, but it may also be measuring a spec mid-edit, and the
     # record is meant to describe what ships. A dispatch is always allowed.
+    # Only a SUCCESSFUL Pages run (2026-10-27, review WP-W1): a pending-replaced
+    # (cancelled) train still fired this job, a 77 s full-history checkout on
+    # each of 371 cancelled runs in 14 d, and it measures a train that never shipped.
     if: >-
       ${{ github.event_name == 'workflow_dispatch'
-          || github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' }}
+          || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng'
+              && github.event.workflow_run.conclusion == 'success') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job force-pushes the bot/spec-timings side branch
         with:

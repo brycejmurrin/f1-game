@@ -12,7 +12,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
+import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
   isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
@@ -260,7 +260,7 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   const r = selectToolingFastChanged(["tools/ci/test-bg.mjs"], { allFiles: all, pinIndex,
     scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
   assert.equal(r.reason, "matched");
-  assert.deepEqual(r.files.sort(), ["tests/unit/agent-config.test.mjs", "tests/unit/test-bg-outcome.test.mjs"].sort());
+  assert.deepEqual(r.files, ["tests/unit/agent-config.test.mjs"]);
   assert.ok(r.files.length < all.length);
   // Which CI halves run those files follows the CI split (time-balanced since 2026-10-21), not a stride.
   const covering = ["1/4", "2/4", "3/4", "4/4"].filter((sp) => ciShardFiles(all, sp).some((f) => r.files.includes(f)));
@@ -657,4 +657,20 @@ test("ciShardFiles: the two CI halves partition the list, balanced by the commit
   assert.deepEqual(ciShardFiles(all, "1/2"), a);
   assert.deepEqual(shardsCoveringFiles([a[0]], all, 2), ["1/2"]);
   assert.deepEqual(shardsCoveringFiles([b[0]], all, 2), ["2/2"]);
+});
+
+test("buildToolingFastPinIndex resolves relative import specifiers against the importing test (#3907)", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pin-rel-"));
+  fs.mkdirSync(path.join(root, "tests/unit"), { recursive: true });
+  fs.writeFileSync(path.join(root, "tests/unit/verify-live.test.mjs"),
+    'import { a } from "../../tools/ci/verify-live.mjs";\nimport h from "./helper.mjs";\n');
+  const index = buildToolingFastPinIndex(["tests/unit/verify-live.test.mjs"], root);
+  assert.ok(index.get("tools/ci/verify-live.mjs").has("tests/unit/verify-live.test.mjs"));
+  assert.ok(!index.has("tools/ci"), "relative pins are exact, not directory-wide");
+  assert.ok(!index.has("tests/unit"), "a sibling import must not pin the whole test directory");
+});
+
+test("--changed selects a test that imports its subject by relative path (#3907)", () => {
+  const r = selectToolingFastChanged(["tools/ci/verify-live.mjs"]);
+  assert.deepEqual(r.files.filter((f) => f === "tests/unit/verify-live.test.mjs"), ["tests/unit/verify-live.test.mjs"]);
 });
