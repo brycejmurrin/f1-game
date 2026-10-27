@@ -3802,6 +3802,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "deleteSlot": [
@@ -3828,6 +3829,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "eraSeasonsLeft": [
@@ -3913,6 +3915,7 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "makeOffers": [
@@ -3984,7 +3987,8 @@
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
-        "tests/unit/career-settle.test.mjs"
+        "tests/unit/career-settle.test.mjs",
+        "tests/unit/share-card-data.test.mjs"
       ],
       "rolloverMarket": [
         "tests/unit/career-settle.test.mjs"
@@ -4078,6 +4082,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "state": [
@@ -4302,6 +4307,7 @@
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -4340,6 +4346,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -5139,6 +5146,7 @@
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/setup-tune.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
@@ -15385,8 +15393,28 @@
         "tests/unit/three-inspector.test.mjs"
       ]
     },
+    "js/share/share-card-chips.js": {
+      "append": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "chip": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "slug": [
+        "tests/unit/share-card.test.mjs"
+      ]
+    },
     "js/share/share-card-data.js": {
+      "fromCareerYear": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
       "fromDaily": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "fromRace": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "fromSeason": [
         "tests/unit/share-card-data.test.mjs"
       ],
       "text": [

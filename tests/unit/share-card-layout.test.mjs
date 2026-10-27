@@ -50,3 +50,37 @@ test("fake metrics force long text down to the minimum size without overflow", (
   assert.ok(track.size >= 24);
   assert.ok(track.text.length < MODEL.trackName.length, "ellipsises when the minimum still cannot fit");
 });
+
+const rowsOf = (n) => Array.from({ length: n }, (_, i) => ({ pos: i + 1, code: "D" + i,
+  name: "A DELIBERATELY LONG DRIVER NAME " + i, teamColor: "#3366ff", value: (300 - i) + " (310) PTS", you: i === n - 1 }));
+
+test("table cards (race, ten-row season, career with hero, linked) stay in bounds on every spec", () => {
+  const layout = load();
+  const measure = (text, size) => String(text).length * size * 0.62;
+  const models = [
+    { ...MODEL, kind: "race", rows: rowsOf(4), hero: null, link: null },
+    { ...MODEL, kind: "season", rows: rowsOf(10), hero: null, link: "https://example.test/#card=x" },
+    { ...MODEL, kind: "career", rows: rowsOf(3).map((r) => ({ ...r, pos: null, teamColor: null })),
+      hero: { label: "DRIVERS' CHAMPIONSHIP", value: "P3 · 210 PTS", medal: null, streak: null }, link: null },
+  ];
+  for (const model of models) {
+    for (const [name, spec] of Object.entries(layout.SPECS)) {
+      const ops = layout.layout(model, name, measure);
+      const tag = `${model.kind} ${name}`;
+      assert.match(ops.find((op) => op.id === "footer").text, /UNOFFICIAL FAN GAME/, tag);
+      assert.equal(ops.filter((op) => /^row-\d+-value$/.test(op.id)).length, model.rows.length, tag + " one value per row");
+      assert.ok(ops.some((op) => op.id === `row-${model.rows.length - 1}-you`), tag + " highlights the player");
+      const footer = ops.find((op) => op.id === "footer-band"), qr = ops.find((op) => op.op === "qr");
+      for (const op of ops) {
+        assert.ok(op.x >= 0 && op.y >= 0, `${tag} ${op.id} starts in bounds`);
+        if (op.width != null) assert.ok(op.x + op.width <= spec.width + 0.001, `${tag} ${op.id} width`);
+        if (op.height != null) assert.ok(op.y + op.height <= spec.height + 0.001, `${tag} ${op.id} height`);
+        if (op.op === "text") assert.ok(measure(op.text, op.size) <= op.maxWidth + 0.001, `${tag} ${op.id} text fit`);
+        if (/^row-/.test(op.id)) {
+          assert.ok(op.y + (op.height || 0) <= footer.y, `${tag} ${op.id} above the footer`);
+          if (qr) assert.ok((op.align === "right" ? op.x : op.x + (op.width || 0)) <= qr.x, `${tag} ${op.id} clear of the QR`);
+        }
+      }
+    }
+  }
+});

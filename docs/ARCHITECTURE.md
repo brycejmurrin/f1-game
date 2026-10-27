@@ -604,6 +604,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
 | `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
+| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip: one button shape for every result screen. |
 
 **`js/render/glx/shaders/`**
 
