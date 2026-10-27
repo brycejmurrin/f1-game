@@ -22,19 +22,18 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
 2. **Branch and draft PR.** Branch `cursor/<topic>-<hash>` from the deploy tip. Open a DRAFT PR into
    `claude/f1-game-project-26h3ng` at the first commit, from `.github/pull_request_template.md`: Goal, Plan (the live
    checklist), Verified / Not run, Hand-off. Add `lane:<host>` and `Closes #<n>`.
-3. **Work.** AGENTS.md §The loop, local part only: make all edits, then `node tools/ci/tooling-fast.mjs --changed
-   --jobs=3` and ONE spec (`npm test -- tests/specs/<file>.spec.js`, or `verify-track` for a circuit). That is the
-   local verification floor, and the one home of it (AGENTS.md rule 3 points here). The full tiers run on the PR:
-   add `run-ci` to the draft for the fast tier; the full tier runs once the PR is ready; the `gate` check runs on
-   the merge result. Do not run `deploy.mjs --gate-only`, the full `npm run test:tooling-fast` or a whole browser
-   group in the foreground; they are optional tools for a Bryce-attended session. `ready-gate` (step 5) needs
-   `Structural guards` green on your head, so let the `run-ci` fast tier finish once before you land (a full local
-   tooling-fast run writes the other accepted stamp).
+3. **Work.** AGENTS.md §The loop: make all edits, then verify once to the pre-push floor (AGENTS.md rule 3 is its
+   one home). The full tiers run on the PR: add `run-ci` to the draft for the fast tier; the full tier runs once
+   the PR is ready; the `gate` check runs on the merge result. `ready-gate` (step 5) needs `Structural guards`
+   green on your head, so let the `run-ci` fast tier finish once before you land (a full local tooling-fast run
+   writes the other accepted stamp).
 4. **Watch.** Subscribe to the PR (Claude: `subscribe_pr_activity`) only while CI runs on your own head. No
    timers. A red on your head while you still own it is work now; a red elsewhere is not yours. Never claim done
    on a red.
 5. **Land.** When `node tools/ci/ready-gate.mjs --pr <n>` exits 0: flip the PR ready, add the `land` label, refresh
-   the Hand-off block. Then the session ENDS. `land.yml` runs `merge-gate.mjs --check` as the check named `gate`
+   the Hand-off block, and end the turn. The session stays subscribed, so each PR event wakes it, until the
+   dispatcher archives it (rule 4 below: `archiveAfterMinutes` after its PR merged or closed, 60 in
+   `tools/ci/dispatch.json`, on the hourly cycle). `land.yml` runs `merge-gate.mjs --check` as the check named `gate`
    and arms auto-merge pinned to your head; the ruleset merges when `gate` is green (its ci row requires the newest
    check named exactly `CI` green on your head). Adding `land` while CI still runs is fine: `gate` shows in
    progress ("waiting") and re-evaluates when CI ends. Going back to draft or removing `land` turns `gate` red. A
