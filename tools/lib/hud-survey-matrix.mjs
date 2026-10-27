@@ -450,10 +450,12 @@ export const LEADS = Object.freeze([
   // live switch to BROADCAST. Since #843 each HUD STYLE keeps its own layout
   // (js/ui/hud-layout.js SIX LAYOUTS), so the move is written into the
   // broadcast style's other set (presetProf) — a STANDARD-set move no longer
-  // reaches the BROADCAST HUD at all, by design.
+  // reaches the BROADCAST HUD at all, by design. The move is IN RANGE for
+  // BROADCAST's left-anchored tower (x+3): a saved entry is never clamped, so
+  // the old x-30 (a centred-tower habit) put it at -374 by design (#3267).
   { name: "lead05-base", profileLive: "broadcast", lead: "baseline for lead 5 (STANDARD boot, live switch to BROADCAST)" },
-  { name: "lead05-broadcast-moved", profileLive: "broadcast", presetProf: "broadcast", preset: { tower: { x: -30 }, map: { y: 10 } },
-    lead: "BROADCAST-style other-set TOWER x-30 + MAP y+10, then a live switch to BROADCAST: tower on-screen, map moved once",
+  { name: "lead05-broadcast-moved", profileLive: "broadcast", presetProf: "broadcast", preset: { tower: { x: 3 }, map: { y: 10 } },
+    lead: "BROADCAST-style other-set TOWER x+3 + MAP y+10, then a live switch to BROADCAST: tower on-screen, map moved once",
     checks: [{ type: "onScreen", keys: ["tower", "map"] }, { type: "shift", key: "map", vs: "lead05-base", axis: "y", pct: 10, tolPct: 3 }] },
   // 6. Light theme: tower digits must read against their plate.
   { name: "lead06-light-contrast", theme: "light", lead: "LIGHT theme: .hud-top .hud-value contrast vs plate >= 4.5",
