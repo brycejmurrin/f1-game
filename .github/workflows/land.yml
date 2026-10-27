@@ -11,7 +11,7 @@ name: Land
 # JOBS AND TRUST. resolve (read-only, seconds, no checkout) decides which PRs this event concerns. land-gate (one
 # matrix leg per PR, a fresh runner each, token READ-ONLY: contents/pull-requests/checks read) checks out the deploy
 # branch and runs merge-gate, which executes the merge result's own scripts (gen:check, the ratchet tests); its
-# verdict leaves the leg only as an artifact. post (checks: write, NO checkout, no repo code: gh and jq only) writes
+# verdict leaves the leg only as an artifact. post (statuses: write, NO checkout, no repo code: gh and jq only) writes
 # `gate`, re-reading the head, the labels and the Actions-app `CI` check itself before it posts a pass. arm
 # (contents/pull-requests write, no checkout) re-reads every veto and the deploy tip, then arms.
 #
@@ -19,7 +19,7 @@ name: Land
 # or a reopen re-evaluates at once. Re-evaluation after CI finishes is `workflow_run`, not `check_suite`: "To prevent
 # recursive workflows, [check_suite] does not trigger workflows if the check suite was created by GitHub Actions"
 # (https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#check_suite, read
-# 2026-10-27). A CI run that ends red re-gates too, so a `gate` posted while CI ran never stays in_progress. A Pages
+# 2026-10-27). A CI run that ends red re-gates too, so a `gate` posted while CI ran never stays pending. A Pages
 # train finishing re-gates the open `land` PRs because the deploy tip moved (the gen, ratchets and distance rows are
 # measured against the tip); it arms at most one of them (`priority` first, then oldest), and the next train arms the
 # next. Both `workflow_run` and `check_suite` "only trigger a workflow run if the workflow file exists on the default
@@ -29,15 +29,17 @@ name: Land
 # NOISE. Job-level `if:` on `resolve` (no runner at all): a label other than `land`/`hold`, an event on a PR without
 # `land`, a ci.yml `CI ignored: …` run (label/edit noise; ci.yml run-name) and a cancelled or skipped run exit at once.
 #
-# THE CHECK NAMED `gate`. Exactly ONE check run named `gate` per PR head, written through the Checks API
-# (https://docs.github.com/en/rest/checks/runs; `checks: write`), tagged `external_id: land-gate`, and updated in
-# place. No job is named `gate` (a skipped or red job named `gate` would be a second `gate` check: #3902,
-# 2026-10-27). Its `output.text` carries `evaluated-at: <time resolve read the PR>`; a write whose evaluation is
-# OLDER than the stored one is dropped, so a slow stale run never replaces a newer verdict.
-#   merge-gate exit 0 → completed/success (in_progress "paused" while `dispatch:merge-pause` is set on Dispatch)
-#   exit 3 (CI still running) → in_progress    exit 2 → completed/failure    exit 1 or no verdict → in_progress
+# THE STATUS NAMED `gate`. A commit status, context `gate`, on the PR head (https://docs.github.com/en/rest/commits/statuses;
+# `statuses: write`); the newest status per context is the one GitHub reads. NOT a check run: a Checks API run created
+# for a PR head from another event (a CI workflow_run re-gate) joins an arbitrary existing Actions suite, and a newer run
+# of that suite's workflow hides it, so the ruleset reads `gate` as Expected forever (#3914, 2026-10-27). No job is
+# named `gate` either (a skipped job reports success under its name: #3902). A write is dropped when a `gate` status
+# newer than this run's resolve read (AT) exists, so a slow stale run never replaces a newer verdict. The full
+# merge-gate output is the run's step summary; the status links to the run.
+#   merge-gate exit 0 → success (pending "paused" while `dispatch:merge-pause` is set on Dispatch)
+#   exit 3 (CI still running) → pending    exit 2 → failure    exit 1 or no verdict → pending
 #   "error, will retry" (an API or git hiccup is not a refusal)    `hold`, `land` removed, back to draft →
-#   completed/failure "not asked", and an armed auto-merge is disabled.
+#   failure "not asked", and an armed auto-merge is disabled.
 #
 # MERGE-PAUSE. `dispatch:merge-pause` on the open issue titled `Dispatch` arms nothing and disarms what this event
 # touches. Removing the label re-gates nothing by itself: the next push, label flip, CI or train run does.
@@ -237,7 +239,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      checks: write
+      statuses: write
+      checks: read
       contents: write
       pull-requests: write
       actions: read
@@ -264,30 +267,28 @@ jobs:
         run: |
           set -uo pipefail
           R="$GITHUB_REPOSITORY"
-          # write_gate <head> <status> <conclusion|""> <title> <summary>: update the head's land-gate check in place,
-          # unless it carries a NEWER evaluated-at than this run's (compare-and-set; ISO-8601 sorts as text).
+          # write_gate <head> <status> <conclusion|""> <title> <summary>: post the head's `gate` COMMIT STATUS (newest
+          # per context wins), unless a newer one was posted after this run's resolve read (AT): compare-and-set by time.
+          # Not a check run: an API-made check run on a PR head joins an arbitrary Actions suite, and a newer run of that
+          # suite's workflow then hides it from the ruleset ("Expected", #3914 2026-10-27).
           write_gate() {
-            local head=$1 st=$2 c=$3 title=$4 summary=$5 cur id seen body
-            cur=$(gh api "repos/$R/commits/$head/check-runs?check_name=gate&per_page=100" --jq \
-              '[.check_runs[] | select(.external_id == "land-gate")] | sort_by(.id) | last
-               | if . == null then "" else "\(.id) \(((.output.text // "") | capture("evaluated-at: (?<t>[^ \n]+)") | .t) // "-")" end') || return 1
-            id=${cur%% *}; seen=${cur#* }
-            if [ -n "$cur" ] && [ "$seen" != "-" ] && [[ "$seen" > "$AT" ]]; then
-              echo "gate on ${head:0:12}: kept the newer verdict (evaluated-at $seen > $AT)"; return 0
+            local head=$1 st=$2 c=$3 title=$4 summary=$5 seen state body
+            seen=$(gh api "repos/$R/commits/$head/statuses?per_page=100" --jq \
+              '[.[] | select(.context == "gate")] | first | if . == null then "" else .created_at end') || return 1
+            if [ -n "$seen" ] && [[ "$seen" > "$AT" ]]; then
+              echo "gate on ${head:0:12}: kept the newer verdict (posted $seen > $AT)"; return 0
             fi
-            body=$(jq -n --arg h "$head" --arg st "$st" --arg c "$c" --arg t "$title" --arg s "$summary" --arg at "$AT" \
-              '{name: "gate", head_sha: $h, external_id: "land-gate", status: $st, output: {title: $t, summary: $s, text: "evaluated-at: \($at)"}}
-               + (if $c == "" then {} else {conclusion: $c} end)')
-            if [ -n "$cur" ]; then
-              gh api --method PATCH "repos/$R/check-runs/$id" --input - --jq '.html_url' <<<"$body"
-            else
-              gh api --method POST "repos/$R/check-runs" --input - --jq '.html_url' <<<"$body"
-            fi
+            case "$st/$c" in completed/success) state=success ;; completed/*) state=failure ;; *) state=pending ;; esac
+            body=$(jq -n --arg st "$state" --arg t "$title" --arg u "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" \
+              '{state: $st, context: "gate", description: ($t | .[0:140]), target_url: $u}')
+            # shellcheck disable=SC2016 # the backticks are Markdown for the step summary, not a command substitution
+            printf '### gate %s → %s\n\n%s\n\n```\n%s\n```\n' "${head:0:12}" "$state" "$title" "$summary" >> "$GITHUB_STEP_SUMMARY"
+            gh api --method POST "repos/$R/statuses/$head" --input - --jq '.url' <<<"$body"
           }
-          # A PR that no longer asks to land: an existing land-gate check turns red ("not asked" is not a pass).
+          # A PR that no longer asks to land: an existing `gate` status turns red ("not asked" is not a pass).
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row"); why=$(jq -r .why <<<"$row")
-            if gh api "repos/$R/commits/$head/check-runs?check_name=gate&per_page=100" --jq '[.check_runs[] | select(.external_id == "land-gate")] | length > 0' | grep -qx true; then
+            if gh api "repos/$R/commits/$head/statuses?per_page=100" --jq '[.[] | select(.context == "gate")] | length > 0' | grep -qx true; then
               write_gate "$head" completed failure "= merge-gate not asked — $why" "PR #$n does not ask to land: $why." || echo "::warning::PR #$n: could not update gate"
             fi
           done 3< <(jq -c '.[]' <<<"$NOTASKED")
