@@ -1081,6 +1081,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/trees/install-trees.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
     "tools/gen/trees/caps.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

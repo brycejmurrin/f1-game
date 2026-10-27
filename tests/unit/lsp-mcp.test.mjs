@@ -122,6 +122,8 @@ test("MCP client: definition, references and symbols on the real tree", { timeou
   assert.ok(+/^(\d+) uses/.exec(lerp.content[0].text)[1] >= 50, "aliased helpers have far more callers than alias lines");
   // A case slip gets a suggestion, not a guess.
   assert.match((await c.call("lsp_definition", { symbol: "Tlx" })).content[0].text, /did you mean TLX \(js\/render\/three\/tlx\.js:\d+\)\?$/);
+  // A game.js IIFE local is not on GameCtx: the façade miss names the next call.
+  assert.match((await c.call("lsp_definition", { symbol: "G.updateCar" })).content[0].text, /has no member updateCar; .*try lsp_symbols updateCar/);
 
   const pos = await c.call("lsp_definition", { file: "js/ui/select-screen.js", line: 1, column: 1 });
   assert.equal(pos.isError, false, pos.content[0].text);

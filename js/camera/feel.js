@@ -356,8 +356,7 @@ const CamFeel = (function () {
   }
 
   // Last opacity written. paintVignette runs every race frame and its node sits under
-  // #overlay, which UiLayers observes for style mutations: an unchanged or sub-1 % write
-  // still queues a record that drops the nav memo (layers.js navDirty), so skip it.
+  // #hud: an unchanged or sub-1 % write still queues a style-mutation record, so skip it.
   let _vigOp = "";
   function setVigOpacity(v) {
     if (v !== _vigOp) { _vigOp = v; _vigEl.style.opacity = v; }
@@ -373,11 +372,15 @@ const CamFeel = (function () {
       _vigEl.id = "speed-vignette";
       _vigEl.setAttribute("aria-hidden", "true");
       // Radial tunnel — no new CSS class token (cssClasses ratchet is saturated).
-      _vigEl.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:4;" +
+      _vigEl.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:-1;" +
         "opacity:0;transition:opacity .12s linear;" +
         "background:radial-gradient(ellipse at center," +
         "rgba(0,0,0,0) 42%,rgba(0,0,0,.55) 100%)";
-      (document.getElementById("overlay") || document.body).appendChild(_vigEl);
+      // #overlay is hidden during races. #hud (z-index 10) is its own stacking context, so
+      // z-index -1 paints above the 3D canvas and behind every HUD element.
+      const hud = document.getElementById("hud");
+      if (hud) hud.insertBefore(_vigEl, hud.firstChild);
+      else document.body.appendChild(_vigEl);
     }
     // 1 % steps under a .12 s opacity transition: not a visible change.
     setVigOpacity(String(Math.round(clamp(amt, 0, 0.7) * 100) / 100));
