@@ -71,6 +71,12 @@ Sources: [r2/landing-design.md](../notes/review-2026-10-27/r2/landing-design.md)
   before ending; `@parent` at the cap; close-as-fixed exit), cap 300k, `NUDGE_SESSION` lines for BLOCKED / idle
   children with open work, immediate takeover when a worker adds its own `needs-owner`; AGENTS rule 13 wording (in
   the WP-R1 PR). Interim: the dispatcher was asked to nudge children by hand each cycle.
+- [ ] WP-L10 follow-ups found while landing (2026-10-27): (a) dispatch: a newer `adopts PR #n` comment naming another
+  session supersedes the child — no NUDGE, archive it (dispatcher, first cycle on #3933); (b) bash-guard's commit hook
+  should take `artifacts/heavy.lock` itself (wrapping `git commit` in flock does not cover a PreToolUse hook); (c) workers
+  write commit messages under their worktree, never the shared scratchpad (two collided); (d) `playwright.config.js`
+  lines 119 and 291-292 still name the deleted `webkit-leg.yml`; (e) `.codex/hooks.json` and the `.cursor` MCP
+  matchers do not route `issue_write` to the guard (#3937); (f) at most three worker subagents per 4-core box.
 - [ ] WP-L8 small gate fixes: ready-gate's shard fallback accepts A+B of four (:68); archive-sessions checks only
   `session_status` (reuse dispatch's `archiveGuard`) — or delete it, see WP-D2.
 
