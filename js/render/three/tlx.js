@@ -1915,7 +1915,7 @@ const TLX = (function () {
       // miss RATE is the number that predicts churn. Counting it costs two
       // increments.
       let _matHit = 0, _matMiss = 0, _matEvict = 0;
-      const _matMissLog = [];   // the first 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them
+      const _matMissLog = [];   // the LAST 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them; a first-64 log filled at boot hid every race miss (#3673)
       function fallbackMat(instanced) {
         // An attribute-instanced mesh (R1 run, A2 batch) needs a NODE material to carry its instance step:
         // the raw classic rung has none, so it draws nothing there (drawInstanced skips a null).
@@ -1993,7 +1993,7 @@ const TLX = (function () {
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
-          if (_matMissLog.length < 64) _matMissLog.push(key);
+          if (_matMissLog.push(key) > 64) _matMissLog.shift();
           if (matCache.size >= MAT_CACHE_CAP) {
             // Evict the oldest entry NOT used this frame. If every entry is in
             // use the cache simply runs over cap for the rest of the frame:
