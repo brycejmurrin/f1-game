@@ -17,14 +17,17 @@ Review, hunt or survey findings on the PR → agent `finding-verifier` before yo
 
 1. Check out the PR's branch. Claims are for issues (docs/WORKERS.md §1); a PR is yours because you opened it or
    were launched on a `needs-owner` PR with `CONTINUE PR #<n>`: start from its Plan and Hand-off block, set `owner:`.
-2. Read CI on the current tip: `node tools/ci/ci-watch.mjs --sha <head> --once` (§1 for `cancelled`, §8 for `running`).
-3. Triage a red: agent `ci-red-triage` names the job, test and assertion.
-4. Fix on the branch; sync only when §2 says you must.
-5. Verify at the local floor, docs/WORKERS.md §3 (§6).
+2. Read CI on the current tip: `node tools/ci/ci-watch.mjs --sha <head> --once` (§1 for `cancelled`, §8 for the
+   other verdicts), THEN `node tools/ci/needs-sync.mjs <branch>` (two calls). On `stale-red` (the tip moved after the
+   run started) sync FIRST (§2) and fix only what is still red: the tip may already carry the fix.
+3. Triage a red: agent `ci-red-triage` names the job, test and assertion; its `base:` line says whose it is
+   (`already-red-on-base` → §3, not yours to fix).
+4. Fix on the branch.
+5. Verify at the pre-push floor (AGENTS.md rule 3 → docs/WORKERS.md §3; §6).
 6. ONE push per verified batch; refresh the PR body's Plan and Hand-off block.
-7. Watch (§7–§9) only while CI runs on your head.
-8. Gate → ready → `land`: §12. The session ENDS at `land`; a red or conflict after it is a fresh
-   `CONTINUE PR #<n>` launch, not yours (docs/WORKERS.md §5).
+7. Watch (§7–§9) while CI runs on your head.
+8. Gate → ready → `land`: skill `ship` steps 5–6 (§12 lists the overrides). After `land`, docs/WORKERS.md §5 and
+   AGENTS.md rule 13 say how long the session stays subscribed and who owns a later red.
 
 ## 1. `cancelled`: read the jobs, not the conclusion
 
@@ -42,19 +45,23 @@ A PR that ends `cancelled` twice with zero failures:
    the newest run, do not re-run.
 3. The newest run itself `cancelled` → `ci-red-triage` for a job at its cap (a
    real red); check `/proc/loadavg`.
-4. Neither → re-dispatch `ci.yml` once (`group: <name>`); never sync to
-   "refresh" it (§2). Re-run only via `tools/ci/ci-rerun.mjs <run_id>`.
+4. Neither → re-run once via `node tools/ci/ci-rerun.mjs <run_id>` (a `ci.yml` `group:` dispatch runs a
+   browser group, not the PR's tier); never sync to "refresh" it (§2).
 
 ## 2. A base merge is `sync-pr.mjs`, never a hand merge, and only when you must
 
 When to sync is AGENTS.md §Git branch & deploy; `node tools/ci/needs-sync.mjs <branch>`
-answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `no`.
+answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `no` (exit 4). The third reason,
+which needs-sync cannot see, is the `gate` status's `distance` row (the merge-base is too many game merges behind
+the tip; `tools/ci/merge-gate.mjs` holds the limit): on a `distance` failure run
+`node tools/ci/sync-pr.mjs <branch> --force-clean-behind --push`.
 
     node tools/ci/sync-pr.mjs <branch> --plan   # cached refs only; no conflict proof
     node tools/ci/sync-pr.mjs <branch>          # real merge, pushes nothing, leaves you ON sync-pr-<branch>
     node tools/ci/sync-pr.mjs <branch> --push   # fresh verified sync, when publication is intended
 
-- **Red AND conflicting:** fix the red on the branch first, sync once, then ONE push.
+- **Red AND conflicting:** a `stale-red` syncs first; any other red is fixed on the branch first; then sync once
+  and ONE push.
 - Verify by diff size: a clean merge where gen rewrote nothing and the PR diff is
   prose or generated files only → `--verify=none --push` (CI re-gates the head);
   else the default `--verify=fast` plus `tooling-fast --changed` (a full ladder
@@ -67,7 +74,7 @@ answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `n
 
 ## 3. A red you did not cause → find out who is on it FIRST
 
-    node tools/ci/pr-board.mjs --json      # open PRs, their heads and what each is fixing
+    node tools/ci/pr-board.mjs --json      # open PRs: heads, state, failing jobs, owner
 
 Search open PR titles, branches and the Board issue for the failing test name, and the `deploy:red` label on
 the Board issue (docs/WORKERS.md): the first claimant fixes, the rest wait. This **overrides "port the fix now
@@ -86,9 +93,9 @@ A retry-pass is a red and is quarantined by name, never skipped or widened (AGEN
 ## 6. Validate a fix push at the floor; the PR runs the tiers
 
 The local verification floor is docs/WORKERS.md §3 (its one home); the fast tier (`run-ci` on the draft), the full
-tier (ready) and the `gate` check prove the rest. Green below never means green above (AGENTS.md rule 3):
-`ready-gate.mjs` needs Structural guards green on the tip (the `run-ci` fast tier) or the stamp a full green
-`tooling-fast` writes. Push once per VERIFIED batch: a push over
+tier (ready) and the `gate` status prove the rest. Green below never means green above (AGENTS.md rule 3):
+`ready-gate.mjs` needs Structural guards green on the tip, so a draft needs `run-ci` (its local
+`tooling-fast-ready.sha` stamp has no writer in the repo). Push once per VERIFIED batch: a push over
 a live run cancels it, and a killed job runs no `if: always()` step, so its
 failures are lost. Ratchets: `.claude/rules/game-code.md`.
 
@@ -96,7 +103,7 @@ failures are lost. Ratchets: `.claude/rules/game-code.md`.
 
 - A green PR does not prove Pages. Watch by `head_sha`, one `Monitor` per push (AGENTS.md rule 13 is the home):
   `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (`--pages` after a deploy-branch
-  push) while CI runs on your head; the watch ends with the session at `land`. `pages.yml` gates the tip once and publishes exactly that commit.
+  push) while CI runs on your head. `pages.yml` gates the tip once and publishes exactly that commit.
 - **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask `deploy-research` for it; never
   curl github.io from the main context. PR CI and Pages (`pages.yml`) are separate verdicts;
   the deploy push starts Pages' reusable CI gate, not a separate ship-push CI run.
@@ -109,7 +116,7 @@ failures are lost. Ratchets: `.claude/rules/game-code.md`.
 On every CI `system_notification` or native "N checks failing" banner, re-read
 the **current** tip — not the notification commit (two commands):
 
-    gh pr view <N> --json headRefOid -q .headRefOid
+    gh pr view <N> --json headRefOid -q .headRefOid   # no gh: pr-board.mjs --pr <N>, or MCP pull_request_read
     node tools/ci/ci-watch.mjs --sha <that sha> --once
 
 - `= ci failed` → triage → fix → push → re-subscribe (never "stale" because the
@@ -121,6 +128,13 @@ the **current** tip — not the notification commit (two commands):
 - `= ci none` / `unknown` → no run observed / API evidence unavailable,
   respectively; neither proves a pass. `superseded` → follow the named current
   head or replacement run before concluding anything about that tree.
+- `= ci blocked` → the PR conflicts, so GitHub starts no run: `sync-pr.mjs <branch>`, then push.
+- `= ci none-yet` → no run 10 min after the push: on a draft, add `run-ci`; else read its `mergeable_state`.
+- `= ci cancelled-external` → someone cancelled it (not a timeout): re-run once (§1 step 4) or re-push.
+- `= ci timeout` → the WATCH gave up, not CI: re-read with `--once`.
+- `gate` is a COMMIT STATUS posted by `land.yml`, not a workflow run, so ci-watch never shows it: read it with
+  `gh api repos/<owner>/<repo>/commits/<sha>/statuses` (the newest `context: gate`; its description and the linked
+  run's summary name the failing merge-gate row).
 - Only "stale / no action" when `= ci passed` on that same `headRefOid`, or a
   proven draft→ready cancel with a live sibling still 0-failed on the same SHA.
 
@@ -144,16 +158,13 @@ owns a red (§3); it does not sweep, disarm or take over another lane's PR.
 
 Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one run, `--stop`, never in a subagent).
 
-## 12. Draft → ready → `land` (the steps that broke on 2026-10-26)
+## 12. Draft → ready → `land`: the overrides (the steps live in skill `ship`)
 
-1. **Push** with `git push -u origin <branch>` alone — no output pipe (a piped push went to the
-   permission classifier and was denied; the same push bare passed). Commit first in two calls (AGENTS.md rule 12).
-2. **Mergeable first**: a ready flip on a CONFLICTING/DIRTY head starts no CI (AGENTS.md rule 13); `needs-sync.mjs`,
-   then `sync-pr.mjs`, then flip.
-3. **Gate on the draft**: `node tools/ci/ready-gate.mjs --pr <n>` exit 0 on the head you will flip. It refuses a
-   PR that is not a draft, and its `--pr` receipt is what the hooks demand before the flip. The Plan's open
-   terminal item `- [ ] land: …` is exempt (`.github/pull_request_template.md`).
-4. **Flip and land**: flip ready, add the `land` label, refresh the Hand-off block (docs/WORKERS.md §5). A veto is
-   the `hold` label, never body wording.
-5. `land.yml` runs the `gate` check and arms auto-merge; GitHub merges. Nothing in this session merges, arms or
-   waits for the merge: the session ends at `land`.
+These broke on 2026-10-26:
+
+1. **Push** with `git push -u origin <branch>` alone (a piped push went to the permission classifier and was
+   denied; the same push bare passed). Commit first in two calls (AGENTS.md rule 12).
+2. **Mergeable first**: a conflicting head gets no CI on the flip (AGENTS.md rule 13); `needs-sync.mjs`, then
+   `sync-pr.mjs`, then flip.
+3. **The receipt**: the hooks demand `ready-gate.mjs --pr <n>`'s receipt before the flip, and it refuses a PR that
+   is already ready. A veto is the `hold` label, never body wording.

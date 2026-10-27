@@ -9,7 +9,7 @@ reaches for these first. They are not bloat.
 | `Tracks.curvature()` on the player with assists off | The arc must not reach the driver. | physics-contract-auditor; `docs/PHYSICS.md` columns |
 | `dt` clamp, `steps < 5`, `renderAlpha` | Tab-resume tunneling, spiral of death, stutter. | `docs/notes/ENGINEERING-PRACTICE-NOTES.md` §1 |
 | Split `updateCar()` or `render()` | Continuous integration / one draw; inventing a struct risks characterization. | `docs/ARCHITECTURE.md` §Reorg |
-| Extract garage preview "because it's big" | ~15 new `G` accessors — moves coupling, does not remove it. Sort by **boundary crossings**, not lines. | same §, 2026-08 table |
+| Extract a block "because it's big" | A carve that needs many new `G` accessors moves coupling, does not remove it. Sort by **boundary crossings**, not lines (the garage preview went out in 2026-09 through the car-drawing seam, not as an accessor-heavy extract). | `docs/ARCHITECTURE.md` §Extraction lessons |
 | IIFE → `import`/`export` | No ES modules (vendored three.js only). | `tests/unit/global-registry.test.mjs` |
 | Delete a bug-explaining comment | The one growth the size ratchet tolerates (`codeLines` ignores it). The comment **is** the test the suite cannot write. | `docs/notes/CEILING-HISTORY.md` header |
 | Delete a `catch` without the why-comment | `bareCatches` ratchet: an empty catch needs the sentence. | `tests/data/ratchets.json`, `tools/check/tree-counts.mjs` |
