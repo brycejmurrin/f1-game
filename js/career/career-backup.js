@@ -586,6 +586,12 @@ const CareerBackup = (function () {
   function writeSlot(f, i, data, expectedRevision) {
     return writeSlotValue(f, i, data, expectedRevision, false);
   }
+  // With local restore history loaded, replacing a saved slot needs its
+  // "before-import" point captured AND awaited first (applyWithUndo): a
+  // fire-and-forget capture let a blocked or slow IndexedDB lose the undo.
+  function undoRequired(s, key) {
+    return typeof CareerRestorePoints !== "undefined" && s.get(key, null) != null;
+  }
   // Only apply() owns prepared values. Public single-slot writes still migrate.
   function writeSlotValue(f, i, data, expectedRevision, prepared) {
     const s = store();
@@ -598,16 +604,13 @@ const CareerBackup = (function () {
       return { ok: false, durable: false, reason: "conflict" };
     }
     if (liveConflict(f, i)) return { ok: false, durable: false, reason: "conflict" };
+    if (!prepared && undoRequired(s, key)) return { ok: false, durable: false, reason: "undo-required" };
     let value = null;
     if (data != null) {
       const clone = JSON.parse(JSON.stringify(data));
       const migrated = prepared ? clone : migrate(clone);
       if (!migrated) return { ok: false, durable: false, reason: "migrate-failed" };
       value = migrated;
-    }
-    if (typeof CareerRestorePoints !== "undefined") {
-      const previous = s.get(key, null);
-      if (previous) CareerRestorePoints.capture(f, i, previous, { reason: "before-import" });
     }
     const result = typeof s.write === "function" ? s.write(key, value) : { ok: true, durable: s.set(key, value) !== false, reason: null };
     if (result.ok && typeof Career !== "undefined" && Career) {
@@ -799,7 +802,75 @@ const CareerBackup = (function () {
     return { ok: true, slots, extras };
   }
 
-  function apply(envelope, opts) {
+  const DRY = 1, UNDO_READY = 2;
+  function apply(envelope, opts) { return applyCore(envelope, opts, 0); }
+  // The import entry point: preflight, then capture a "before-import" restore
+  // point for every saved slot the import replaces and await each one. A
+  // failed capture refuses the whole import (as CareerRestorePoints.restore
+  // refuses an undo it cannot itself undo); nothing has been written yet.
+  // Destination revisions are pinned before the awaits, so a slot changed
+  // meanwhile refuses as a conflict instead of losing the change.
+  // The ONE exception is the live career's own save of its own slot (the hub's
+  // lazy Career.objective() draw can land inside the IndexedDB await): no
+  // foreign notice touched the key and Career is armed at the new revision, so
+  // that slot is captured again and re-pinned instead of the import refusing
+  // itself. A foreign write (which an idle Career reloads and re-arms to) or
+  // any other change still refuses.
+  function ownLiveSave(step, pinned, foreign) {
+    if (foreign.all || foreign.keys.has(slotKey(step.f, step.i))) return false;
+    if (typeof Career === "undefined" || !Career || !Career.slot || !Career.armedRevision) return false;
+    const live = Career.slot();
+    if (!live || live.flavour !== step.f || live.i !== step.i || (Career.conflicted && Career.conflicted())) return false;
+    const now = revisionOf(step.f, step.i);
+    return now != null && now !== pinned && Career.armedRevision() === now;
+  }
+  // A capture's verdict: null when the restore point is saved, else the
+  // refusal applyWithUndo returns. The await itself stays inline there, so the
+  // import takes no extra microtask turns.
+  function refusedCapture(step, saved) {
+    if (saved && saved.ok) return null;
+    log("warn", "career backup: import refused, no restore point for " + step.id + " (" + ((saved && saved.reason) || "capture-failed") + ")");
+    return { ok: false, durable: false, reason: "undo-unavailable", detail: (saved && saved.reason) || "capture-failed", slot: step.id, written: [] };
+  }
+  async function applyWithUndo(envelope, opts) {
+    const o = opts || {};
+    const dry = applyCore(envelope, o, DRY);
+    if (!dry.ok) return dry;
+    const s = store(), expected = Object.assign({}, o.expectedRevisions);
+    const foreign = { all: false, keys: new Set() };
+    const unsubscribe = s && s.subscribe ? s.subscribe((ch) => {
+      if (!ch || !ch.foreign) return;
+      if (ch.clear) foreign.all = true;
+      if (typeof ch.key === "string") foreign.keys.add(ch.key);
+      if (Array.isArray(ch.keys)) for (const k of ch.keys) foreign.keys.add(k);
+    }) : null;
+    try {
+      const captured = [];
+      const previousOf = (step) => s && typeof CareerRestorePoints !== "undefined" ? s.get(slotKey(step.f, step.i), null) : null;
+      // Round 0 captures every saved destination; later rounds only a live
+      // slot the career itself saved meanwhile (ownLiveSave), re-pinned.
+      for (let round = 0; round < 4; round++) {
+        const steps = round === 0 ? dry.plan : captured.filter((step) => ownLiveSave(step, expected[step.id], foreign));
+        if (!steps.length) break;
+        for (const step of steps) {
+          if (round === 0) { if (!own(expected, step.id)) expected[step.id] = revisionOf(step.f, step.i); }
+          else { log("info", "career backup: live career saved " + step.id + " during its restore point; capturing it again"); expected[step.id] = revisionOf(step.f, step.i); }
+          const previous = previousOf(step);
+          if (previous == null) continue;
+          if (round === 0) captured.push(step);
+          let saved;
+          try { saved = await CareerRestorePoints.capture(step.f, step.i, previous, { reason: "before-import" }); } catch (_) { saved = null; }
+          const refused = refusedCapture(step, saved);
+          if (refused) return refused;
+        }
+      }
+      return applyCore(envelope, Object.assign({}, o, { expectedRevisions: expected }), UNDO_READY);
+    } finally {
+      if (unsubscribe) unsubscribe();
+    }
+  }
+
+  function applyCore(envelope, opts, mode) {
     const o = opts || {};
     const checked = validate(envelope, o.rawText);
     if (!checked.ok) return checked;
@@ -857,6 +928,7 @@ const CareerBackup = (function () {
         if (expected[id] !== now) return { ok: false, reason: "conflict", slot: id };
       }
       if (liveConflict(f, idx)) return { ok: false, reason: "conflict", slot: id };
+      if (mode === 0 && s && undoRequired(s, slotKey(f, idx))) return { ok: false, durable: false, reason: "undo-required", slot: id };
       // Migration is part of preflight: a malformed later row must not throw
       // after earlier destination slots have already been replaced.
       let data;
@@ -883,6 +955,7 @@ const CareerBackup = (function () {
       if (!merged.ok) return merged;
       mergedDaily = merged.value;
     }
+    if (mode === DRY) return { ok: true, plan };
 
     for (let p = 0; p < plan.length; p++) {
       const step = plan[p];
@@ -985,6 +1058,7 @@ const CareerBackup = (function () {
     validate: validate,
     recoveryEnvelope: recoveryEnvelope,
     apply: apply,
+    applyWithUndo: applyWithUndo,
     preview: preview,
     writeSlot: writeSlot,
     otherFlavourPending: otherFlavourPending,
