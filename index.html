@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-ui-theme="dark" data-menu-accent="ember" data-text-size="large" data-ui-contrast="high">
 <head>
 <meta charset="utf-8">
 <!-- @gen-shell:csp -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-wWx+z9KMUGEcBO5lr2IV0QGE1Fkqx0HRvn6hrkRx0g4=' 'sha256-zu4qKsCgabv8zyRwJsUGeJ8EcoKRCH4RhLt3zYqan6Y=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'sha256-vzIQtaYQxCXfyBWN4SBAzu3GEPyGK0fJQnxYUb0+GDY=' 'sha256-LCgs0pCrmAZl0z6XkhdI0edo+m7ZqV7Pkp+BJAacS4s=' 'sha256-KTsGUFhhpJsuDN0XrJwie05t9LbiXry532pPqTOPTrQ=' 'sha256-wWx+z9KMUGEcBO5lr2IV0QGE1Fkqx0HRvn6hrkRx0g4=' 'sha256-hN+RtFyABD3qaRpkvnryJ3KKnilEv2l1BalQHE+8h0M=' 'sha256-0VKrfVrR0ldyhkX+GX9nkPvqwcdSeb9EOa3Um2mezAI=' 'wasm-unsafe-eval' https://sdk.scdn.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' data: blob: https: wss: ws://127.0.0.1:* ws://localhost:* http://127.0.0.1:* http://localhost:*; worker-src 'self' blob:; frame-src 'self' https://sdk.scdn.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <!-- /@gen-shell:csp -->
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <script>
@@ -574,6 +574,31 @@
       if (pd === "soft" || pd === "off") de.pauseDim = pd;
       if (mh === "off") de.menuHelp = mh;
     } catch (e) { /* PauseOpts / AppearanceOpts answer at eval */ }
+    // Appearance (Bryce: "old UI flashes before my profile loads"), FIRST answer
+    // only: the html element ships the SettingsDefaults answers for theme / menu accent /
+    // text size / contrast statically, and this reads the saved apex26.* picks
+    // (json lane) over them — the same answers js/ui/appearance-opts.js
+    // applyAll() and js/ui/scale.js applyScale("uiScale") write at eval, which is
+    // after #overlay's first paint. TEAM accent's --red needs Teams, so it stays
+    // with AppearanceOpts. --ui-scale runs BEFORE data-density below reads it.
+    // Held equal by tests/unit/title-home-scene-prepaint.test.mjs.
+    try {
+      var ap = function (k) {
+        try { var v = JSON.parse(localStorage.getItem("apex26." + k)); return typeof v === "number" && !isFinite(v) ? null : v; } catch (e6) { return null; }
+      };
+      var de2 = document.documentElement, ds2 = de2.dataset;
+      var th = ap("uiTheme"), ma = ap("menuAccent"), ts = ap("textSize"), uc = ap("uiContrast"), cv = ap("cvdMode"), us = ap("uiScale");
+      if (th === "dark" || th === "light" || th === "system") ds2.uiTheme = th;
+      if (["brand", "team", "ember", "amber", "cyan", "violet", "lime", "custom"].indexOf(ma) >= 0) ds2.menuAccent = ma;
+      if (ma === "custom") {
+        var mx = String(ap("menuAccentHex") || "").trim().match(/^#?([0-9a-fA-F]{6})$/);
+        de2.style.setProperty("--red", mx ? "#" + mx[1].toLowerCase() : "#e10600");
+      }
+      if (ts === "normal") delete ds2.textSize; else if (ts === "large" || ts === "larger") ds2.textSize = ts;
+      if (uc === "off") delete ds2.uiContrast; else if (uc === "high") ds2.uiContrast = "high";
+      if (cv === "deutan" || cv === "protan" || cv === "tritan") ds2.cvd = cv;
+      if (typeof us === "number") de2.style.setProperty("--ui-scale", String(Math.round(Math.max(40, Math.min(200, us)) / 0.25) * 0.25 / 100));
+    } catch (e) { /* AppearanceOpts / UiScale answer at eval */ }
     var b = document.body;
     if (!b || !window.getComputedStyle) return;
     try {
@@ -628,10 +653,11 @@
       var hsModes = ["auto", "garage", "night", "studio", "track", "pitlane", "static", "photo"];
       var hsMode = (typeof hsRaw === "string" && hsModes.indexOf(hsRaw) >= 0) ? hsRaw : "photo";
       if (hsMode === "auto") {
-        // homeVariation.peek before enter() — index starts at 0 (homeVisit applies
-        // only once renderHome calls enter(), after the first paint).
-        var envs = ["garage", "track", "night", "pitlane", "studio"];
-        hsMode = envs[0];
+        // homeVariation (js/ui/experience.js) answers this visit from
+        // apex26.homeVisit even before enter(): the same slot, the same list.
+        var envs = ["garage", "track", "night", "pitlane", "studio"], hv = null;
+        try { hv = JSON.parse(localStorage.getItem("apex26.homeVisit")); } catch (e5) { /* unset */ }
+        hsMode = envs[(typeof hv === "number" && hv >= 0 && Math.floor(hv) === hv && hv <= 9007199254740991 ? hv % 20 : 0) % envs.length];
       }
       document.documentElement.setAttribute("data-home-scene", hsMode);
       if (hsMode === "static") document.documentElement.removeAttribute("data-home-live");

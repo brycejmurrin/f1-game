@@ -5678,6 +5678,7 @@
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/settings-defaults.test.mjs",
         "tests/unit/store-registry.test.mjs",
+        "tests/unit/title-home-scene-prepaint.test.mjs",
         "tests/unit/tools-runnable.test.mjs"
       ]
     },
@@ -15896,7 +15897,8 @@
         "tests/unit/appearance-opts.test.mjs"
       ],
       "*": [
-        "tests/unit/settings-export.test.mjs"
+        "tests/unit/settings-export.test.mjs",
+        "tests/unit/title-home-scene-prepaint.test.mjs"
       ]
     },
     "js/ui/appearance-studio.js": {
@@ -16120,6 +16122,7 @@
         "tests/unit/ui-improve-pass.test.mjs"
       ],
       "homeVariation": [
+        "tests/unit/title-home-scene-prepaint.test.mjs",
         "tests/unit/ui-experience.test.mjs"
       ],
       "isPracticePick": [
@@ -16146,14 +16149,14 @@
       "scene": [
         "tests/unit/ui-experience.test.mjs"
       ],
+      "stamp": [
+        "tests/unit/title-home-scene-prepaint.test.mjs"
+      ],
       "stopHome": [
         "tests/unit/ui-experience.test.mjs"
       ],
       "values": [
         "tests/unit/ui-improve-pass.test.mjs"
-      ],
-      "*": [
-        "tests/unit/title-home-scene-prepaint.test.mjs"
       ]
     },
     "js/ui/flags.js": {
@@ -17144,7 +17147,8 @@
         "tests/specs/ui-resize.spec.js",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
-        "tests/unit/test-groups.test.mjs"
+        "tests/unit/test-groups.test.mjs",
+        "tests/unit/title-home-scene-prepaint.test.mjs"
       ]
     },
     "js/ui/screen-looks.js": {
