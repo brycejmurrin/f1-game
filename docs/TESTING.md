@@ -1159,11 +1159,12 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 
 ### Merge train (concurrent PRs)
 
-No agent merges: a worker opens a DRAFT PR, and when it is final flips it
-ready and adds the `land` label; `land.yml` runs the `gate` check
-(`merge-gate.mjs`, which also holds a PR whose base is too far behind) and
-arms auto-merge, and `pages.yml`'s concurrency group paces the trains
-([WORKERS.md](WORKERS.md) §5). Before marking
+No agent merges, and there is no merge queue or one-PR-at-a-time rule: the
+flow is [WORKERS.md](WORKERS.md) §5. A worker flips its PR ready and adds the
+`land` label; `land.yml` posts the `gate` commit status (`merge-gate.mjs`,
+which also refuses a base too far behind) and arms auto-merge. `gate` is the
+deploy branch's ONLY ruleset-required check; it requires `CI` green on the
+head. `pages.yml`'s concurrency group paces the trains. Before marking
 ready, the PR's owner runs `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
 CI check-run named `Structural guards` — the aggregator after the
 `Structural guards (tooling A)` … `(tooling D)` shards — or a local
@@ -1187,11 +1188,13 @@ Deploy / Pages runs keep their own concurrency groups with
 
 ### CI aggregator and Selected specs (verdict) (#480 / #507)
 
-Branch protection requires checks by **fixed name**, and matrix job names
-change per run. A job skipped by its own `if:` reports **Success** to branch
-protection; only a workflow skipped by a path/branch filter stays Pending
+The ruleset requires one check, the `gate` commit status from `land.yml`
+(§Merge train); `gate`'s ci row then reads the check named exactly `CI`. Any
+check read by name must keep a **fixed name**, and matrix job names change per
+run. A job skipped by its own `if:` reports **Success** to a required check;
+only a workflow skipped by a path/branch filter stays Pending
 ([GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks)).
-Two always-judged checks give the gate fixed names:
+Two always-judged checks give the PR verdict fixed names:
 
 - **`CI`** (`ci-verdict` job, #480): aggregates every sibling job via
   `tools/ci/ci-verdict.mjs`, including `selected-verdict` (2026-10-04 — it
