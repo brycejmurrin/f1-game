@@ -1,0 +1,42 @@
+# Archive group 24 — audit closure, zoom coordinates and architecture alternatives
+
+This group covers five numbered sources, with byte ranges, whole-file hashes, assigned-part hashes and the complete read-chunk ledger in archive-24-evidence.json. All assigned text was read in individually returned, untruncated chunks of at most 7,500 bytes. Source 1 continues group 23; source 5 continues in group 25. Historical prescriptions and workflow commands are evidence, not current instructions.
+
+## Sources and provenance
+
+| ID | Record | Date and producer | Assigned scope |
+|---|---|---|---|
+| 1 | W4-AUDIT-2026-08 | August 2026; round-2 supplement August 13. Nineteen finder scopes, two skeptics per scope and high-severity tie-breaks; supplement by one verifier | Final subsystem findings, coverage caveats and completion supplement |
+| 2 | ZOOM-ORIENTATION-STRUCTURE-2026-08 | August 8, 2026 session analysis, subsequently extended with measured fixes | Complete coordinate-space and orientation analysis |
+| 3 | physics-redesign | August 2026 architecture decision, explicitly marked executed | Complete rationale and staged migration |
+| 4 | 2026-08-audit-workflow | August 2026 raw audit of a cleanup session | Complete findings, restructure clusters and feasibility critiques |
+| 5 | 2026-08-redesign-panel | August 2026 independent design panel; raw result objects retain agent IDs and keys | Complete Graphline proposal, beginning of Typed Apex |
+
+## Topics and historical contracts
+
+**1 — static audit coverage and its limits.** The tail catalogs circuit palette/geometry errors, reflected-model winding, shadow parity, stale network room state, endpoint/session labeling, livery failure handling, CSS pane-pair contradictions and tooling/documentation drift. These are dated code-reading claims, not newly established defects. The coverage paragraph originally says round 2 was lost and round 3 never ran. The later supplement explicitly supersedes the round-2 gap: 21 journaled candidates produced 20 survivors, three previously unrun lenses produced two additional survivors, and the allocation lens returned an honest empty. It reports 143 total verified findings and one execution-based SDP truncation check. That exception does not turn the larger sweep into a browser-reproduced audit. Tests, vendored code, optional spikes and binary assets were outside the initial sweep.
+
+**2 — layout must compare like units.** The initiating failure was a zoomed tuner's unreachable footer: viewport height did not describe available sheet height. The inventory distinguishes nine incorrect zoom-governed height queries from twelve correct queries on unzoomed screens; orientation queries remain sound because zoom preserves aspect. The landed solution measures available height in the element's own CSS units, uses density attributes and per-element compact thresholds, prevents inherited threshold leakage, and uses zero-specificity ancestor scopes to preserve the cascade. A HUD-specific classifier was deliberately deferred until a second consumer justified it.
+
+The addenda expose three related contracts: auto-fill grid floors must yield to container width; a flex column must identify which item may shrink so its scroller retains useful height; and pair thresholds must use the same coordinate space as container queries. Garage and pause thresholds were re-derived after correcting the measurement. A green survey cell and absence of clipping do not prove useful content remains visible. The historical survey counts and pixel thresholds are measurements from that session, not present-day acceptance limits.
+
+**3 — world coordinates own physics.** Cartesian ground-plane position and heading replace track-relative integration; track projection supplies distance and lateral offset for timing, limits, scenery, AI and minimap. The rationale removes curvature-induced steering drift, with bicycle yaw, speed-sensitive steering, quadratic drag, grip limits and slope forces described as the target model. Projection caches a nearby segment and needs off-track guards. The proposed migration first validates projection round trips, then mirrors state, switches player and AI, updates hooks/tests, and removes the old integration. The dated header says this decision shipped; the body preserves pre-migration language. Current physics authority is docs/PHYSICS.md, not this old recipe.
+
+**4 — audit execution can leave the guard net behind.** Thirty-five entries combine session-diff, triage-completeness, docs-versus-code, guard-health and mess-hunting lenses. The central examples are extracted constants/camera code escaping topical test routing, changed agent-help notes retaining obsolete assertions, unlanded triage batches, fixed items still listed open, and module documentation missing new extractions. Entries inside the confirmed array have mixed verdicts, including accepted-unverified. One coplanar-roster finding has opposing skeptic conclusions: the baseline's own completeness check mitigates the alleged silent drop. A zero refuted-count field must not erase that disagreement.
+
+Four feasibility clusters preserve concrete migration lessons:
+
+- Splitting specs, units and helpers was a GO, contingent on recursive discovery, import/root repairs, snapshots moving with specs, CI filters, fixtures and count phrases. Regexes that stop matching can pass vacuously; paired helper/test root errors can agree while both are wrong. Swallowed mock imports and ignored manual suites evade normal gates.
+- Extracting the audio panel was a GO with a narrow façade seam, but creation and boot restoration must retain their old ordering. Both audio and UI consumers matter; syntax checks cannot detect unresolved closure reads in click handlers. Lowering a size ceiling can remain a convention even when the slack guard stays green.
+- Moving tools was conditional and highest risk. Relative imports, sibling baselines, root arithmetic and runtime-only consumers outrun prose-path checks. The feasibility pass favors small self-contained families and names test consumers outside the usual tooling suite.
+- Cosmetic legacy filename renaming was a NO-GO: large reference fanout, historical provenance and silently degraded basename/CSS citation coverage bought no behavior improvement. This is a dated judgment, not a new naming directive.
+
+**5 — competing architecture proposals, not shipped architecture.** Graphline proposes native modules while retaining zero build, relative imports, a temporary global bridge, generated import-map/precache outputs, progressive type checking, typed state stores replacing the broad façade, and a renderer capability port. Its kept invariants include physics characterization, scenery contracts, graph parity, size ratchets and speed-normalization discipline. It explicitly identifies evaluation-order, RNG, service-worker upgrade, cache freshness, Node isolation and generated-file coordination risks. Its classic-script/module ordering claim is a proposal assumption, not validated browser evidence here. Typed Apex begins a competing compiler-based design using esbuild and TypeScript; this group's span stops mid-sentence, so its full design and panel judgment cannot be inferred from this fragment.
+
+## Backlinks, present use and cleanup
+
+Source 2 retains live explanatory references in css/tuner.css and css/tokens.css, and is discussed in docs/research/STRUCTURE-REDECISION-2026-08.md. Source 1 has an anchor-table reference in docs/notes/system-audit-4/anchors.md. Source 4 feeds the historical AUDIT-SYNTHESIS-2026-08 record. Source 5 is explicitly the uncompressed evidence behind docs/research/ARCHITECTURE-REDESIGN-2026-08.md; that live summary adopts Bedrock-with-grafts and keeps Graphline as an escalation path. The visible raw proposal therefore does not authorize an ESM conversion. Exact backlink locations are recorded in the JSON support file.
+
+Keep the records for causal explanations, reviewer dissent and migration failure modes. Prefer the current architecture, testing, debug-hook and physics references for operational work. Useful maintenance would clarify the source-1 coverage paragraph against its later supplement, preserve mixed verdicts when summarizing source 4, and expose source 5's continuation before presenting the panel as a whole. No source record was edited, no historical claim was promoted to a current bug, and no cleanup was executed.
+
+No tests, runtime, browser or network checks were run: this was a static archive map only.
