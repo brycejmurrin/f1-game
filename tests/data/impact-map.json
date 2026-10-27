@@ -16440,6 +16440,26 @@
         "tests/unit/hud-metrics-layout.test.mjs"
       ]
     },
+    "js/ui/hud-radio-lane.js": {
+      "announceLaneTick": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
+      "create": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/hud-fit-idempotent.test.mjs",
+        "tests/unit/hud-pins.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs"
+      ],
+      "radioPaintedCollapse": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
+      "radioTopSlot": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ]
+    },
     "js/ui/hud-readouts.js": {
       "bbText": [
         "tests/unit/hud-readouts.test.mjs"
@@ -16609,9 +16629,6 @@
       ]
     },
     "js/ui/hud.js": {
-      "announceLaneTick": [
-        "tests/unit/hud-feel.test.mjs"
-      ],
       "create": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/ghost-share.test.mjs",
@@ -16673,12 +16690,6 @@
       ],
       "pickDocks": [
         "tests/unit/hud-fit-idempotent.test.mjs"
-      ],
-      "radioPaintedCollapse": [
-        "tests/unit/hud-metrics-layout.test.mjs"
-      ],
-      "radioTopSlot": [
-        "tests/unit/hud-metrics-layout.test.mjs"
       ],
       "resetRace": [
         "tests/unit/hud-feel.test.mjs",

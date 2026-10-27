@@ -154,7 +154,8 @@ test("dropped gaps and the limits chip ride measured offsets", () => {
   assert.ok(paintCollapse > 0, "fitHud runs the painted announce collapse");
   assert.equal(fitBody.indexOf("radioTopSlot(", paintCollapse), -1,
     "no radioTopSlot after painted announce collapse (undoes the collapse)");
-  const helper = hud.slice(hud.indexOf("function radioPaintedCollapse"), hud.indexOf("// THE MIRROR AS PAINTED"));
+  const lane = fs.readFileSync(path.join(root, "js/ui/hud-radio-lane.js"), "utf8");   // the helper left hud.js (#3261)
+  const helper = lane.slice(lane.indexOf("function radioPaintedCollapse"), lane.indexOf("// PERF #2151"));
   assert.ok(helper.includes('toggleAttribute("data-lane-collapsed", true)'), "the helper paints data-lane-collapsed on a hit");
   // invalidateFit re-picks the slot, so it must run the same guard right after (it used to leave a relit top slot until the next tick).
   const inv = hud.slice(hud.indexOf("function invalidateFit"), hud.indexOf("_invalidateFit = invalidateFit"));
