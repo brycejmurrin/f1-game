@@ -1,121 +1,199 @@
 # Review fix plan, 2026-10-27
 
-Status: OPEN. Evidence: [notes/review-2026-10-27/](../notes/review-2026-10-27/README.md) (36 Opus skill passes,
-8 Opus code hunts, the rulebook review). Six domain reviews (workflows, relay leftovers, agents and hooks, docs, dead
-tools, landing design) are still running and add work packages to §5 when they land.
+Status: OPEN. Built from the second, from-scratch Opus pass (R2):
+[notes/review-2026-10-27/r2/](../notes/review-2026-10-27/r2/) — 36 skill reviews, 9 code hunts, 6 domain reviews
+(workflows, relay/fleet leftovers, agents + hooks, docs, dead tools, landing design). The first pass
+([skills/](../notes/review-2026-10-27/skills/), [hunts/](../notes/review-2026-10-27/hunts/),
+[rulebook.md](../notes/review-2026-10-27/rulebook.md)) is kept as corroboration: a row both passes found
+independently is marked **2×**.
 
-Bryce, 2026-10-27: "make sure we are saving a plan doc with all these review subagents to create a plan to fix all".
+Bryce, 2026-10-27: "make sure we are saving a plan doc with all these review subagents to create a plan to fix all",
+then "fully re launch all of our subagents for skills and opus ones from scratch".
 
 ## 1. How this plan runs
 
-- Each work package (WP) below is one PR: a draft with `run-ci`, the template's Plan and ```handoff block, then
-  ready-gate, ready and `land` (docs/WORKERS.md). Independent WPs go to worker subagents in their own worktrees.
-- A finding is a claim to re-check before the fix: the reviewers read code, they did not run the game. Re-read the
-  cited lines on the current tip first; a row that no longer holds is struck in the PR's Plan with why.
+- Each work package (WP) is one PR: a draft with `run-ci`, the template's Plan and ```handoff block, then ready-gate,
+  ready and `land` (docs/WORKERS.md). Independent WPs go to `worker` subagents in their own worktrees.
+- A finding is a claim to re-check first: the reviewers read code, they did not run the game. Re-read the cited lines
+  on the current tip; a row that no longer holds is struck in the PR's Plan with why.
 - Game-code WPs name their tests; a browser group a WP needs but did not run is listed as not-run (AGENTS.md rule 9).
 - This file's checklists are the state: tick an item with its PR number, strike one with why. Never delete an item.
+- Items marked **Bryce** wait on his yes (workflow trust, hooks, settings, deleting workflows or scheduled tasks).
 
-## 2. P0 — landing and dispatch safety (before more workers land)
+## 2. P0 — landing, gates and dispatch (before more workers land)
 
-Source: [hunts/hunt-ci-tools-workflows.md](../notes/review-2026-10-27/hunts/hunt-ci-tools-workflows.md).
+Sources: [r2/landing-design.md](../notes/review-2026-10-27/r2/landing-design.md),
+[r2/hunt-ci-tools-workflows.md](../notes/review-2026-10-27/r2/hunt-ci-tools-workflows.md),
+[r2/agents-hooks.md](../notes/review-2026-10-27/r2/agents-hooks.md), [r2/workflows.md](../notes/review-2026-10-27/r2/workflows.md).
 
-- [ ] **WP-L1 land.yml trust (HIGH).** On `pull_request` GitHub runs the PR's own copy of `land.yml`; `post` and `arm`
-  hold write tokens and `LAND_TOKEN`, so a PR that edits `land.yml` could post `gate` and merge itself. Fix: the gate
-  runs from the base branch's workflow (a no-permission `pull_request` relay plus the writes in a `workflow_run`
-  job, or `pull_request_target` with no PR checkout), and `.github/workflows/**` gets a CODEOWNERS / ruleset path
-  rule. **Needs Bryce's yes** (workflow trust model + a ruleset change). Test: a workflow lint that no job holding a
-  write permission runs under `pull_request`.
-- [ ] **WP-L2 verdict integrity (MED).** Scripts from the merge result (gen:check, ratchet tests) can leave a detached
-  process that rewrites `verdict/<n>.json` before upload. Fix: run them in their own process group and kill it
-  before the verdict is written; `post` recomputes the Plan and distance rows itself.
-- [ ] **WP-L3 hook doors (MED).** (a) A hand-written merge receipt still passes `merge_policy.py` /
-  `github-mcp-guard.sh`: deny every session merge unconditionally (and fix `merge-gate.test.mjs:236`, which asserts
-  acceptance). (b) Removing `hold` or `dispatch:merge-pause` is unguarded: classify as ask in `shellparse.py` and the
-  MCP guard. (c) The launch receipt is never consumed: bind it to the call or delete it after `create_session`.
-  (d) `protect-files` does not cover `.github/workflows/`. **Hook edits need Bryce's yes** (.claude/rules/claude-config.md).
-- [x] WP-L4 `gate` as a commit status (#3917, merged): an API-made check run joined an old CI suite and was hidden.
-- [ ] **WP-L5 dispatcher children-only** (#3921, open): count and archive only sessions GitHub names; launch comment
-  carries the session id; archive 10 min after merge; hunt F5 (open PR read as closed). Then tell the dispatcher.
-- [ ] WP-L6 dispatcher leftovers (LOW): rule 4 lacks `archive-sessions.mjs`'s idle / push / in-flight guards (F6);
-  `dispatch.json` `mergePause` and `baseBehindMax` do nothing (F7).
+- [ ] **WP-L1 land.yml trust (CRITICAL, 2×, Bryce).** `land.yml` triggers on plain `pull_request` (checked at the
+  deploy tip, line 54), so GitHub runs the PR's OWN copy: a same-repo PR that edits it gets `statuses: write`,
+  `contents: write` and `LAND_TOKEN`, can post `gate` = success and merge itself. Any other workflow with
+  `statuses: write` can post a `gate` status too. Fix: label/draft/push triggers move to `pull_request_target`
+  (resolve/post/arm check out nothing); `LAND_TOKEN` into an Environment limited to the deploy branch; post `gate`
+  from a dedicated App and pin the ruleset to it; restrict pushes to `.github/workflows/**`; drop the `check_suite`
+  trigger (0 runs in 14 days). Test: a workflow lint that no job with a write permission runs under `pull_request`.
+  (The agents-hooks reviewer's "a PR cannot weaken its own gate" is wrong for this trigger.)
+- [ ] **WP-L2 verdict integrity (HIGH, 2×).** `verdict/<n>.json` is written in the job that ran the PR's gen:check and
+  ratchet scripts; a detached process can rewrite it before upload. `post` re-checks only head/draft/labels/CI. Fix:
+  `post` recomputes the Plan and distance rows itself; PR scripts run in their own process group, killed before the
+  verdict is written. Also: `setup-node cache: npm` in that leg can poison the deploy branch's cache — no cache there.
+- [ ] **WP-L3 land.yml correctness (HIGH/MED).** (a) workflow-level `cancel-in-progress` lets any label event (e.g.
+  `needs-owner`) cancel the CI re-gate, leaving `gate` pending on a green PR — scope concurrency to the jobs;
+  (b) `write_gate` compares `created_at` (whole s) to `AT` (ns) as strings — compare epoch seconds (:301);
+  (c) the `land-tip` group fallback lets one PR's pending re-gate replace another's; (d) the 4-PR train slice is held
+  by perpetually refused PRs — skip PRs whose current-head gate already failed; (e) merge-gate's `ci` row accepts any
+  check run named `CI` from the Actions app — pin it to ci.yml's run.
+- [ ] **WP-L4 hook doors (HIGH, Bryce).** (a) `github-mcp-guard.sh:83-95` lets MCP `merge_pull_request` /
+  `enable_pr_auto_merge` through when an `artifacts/merge-gate/<pr>.json` receipt exists, and merge-gate writes none:
+  only a hand-written file opens it — deny both outright (the shell door already does); (b) protect-files lets Write
+  and Bash reach `artifacts/{merge,ready,launch}-gate/` — block them; (c) the ready receipt is checked with no head,
+  so a receipt for head A lets a flip through after an unverified head B (shellparse.py:1650) — pass the live head;
+  (d) the launch receipt is never bound to the call or consumed; `launch-gate.py:59` only checks the sha is 64 hex —
+  bind to `artifacts/launch/self.json` and make it single-use; (e) removing `hold` is unguarded on every route
+  (`gh pr edit`, `gh api -X DELETE`, `gh label delete`, MCP `issue_write`) — classify as ask.
+- [x] WP-L5 `gate` as a commit status (#3917, merged).
+- [ ] **WP-L6 dispatcher children-only** (#3921): CI green; gate refused on distance (3 behind), synced (fb2c516b);
+  then land and tell the dispatcher.
+- [ ] **WP-L7 dispatch follow-ups (MED/LOW).** `landProblem` (dispatch.mjs:186) reads check runs only, so a land PR
+  whose `gate` status failed parks forever — read `commits/<sha>/status` (2×); stale rule ignores a live worker
+  session naming the PR (:282); `--apply` without `--sessions` bypasses `maxLiveWorkers` (:391); two accounts can both
+  launch for one issue (claim posted after launch); `mergePause` / `baseBehindMax` do nothing.
+  **Label clobber (reported by the dispatcher, 2026-10-27):** the worker prompt's "add `claimed`" leads workers to
+  MCP `issue_write` with `labels`, which REPLACES the list — #3263–#3267 lost `bug` / `area:ui` (restored by hand). The
+  dispatch.mjs brief and docs/WORKERS.md say add it with `gh api POST issues/<n>/labels`, never `issue_write` labels.
+- [ ] WP-L8 small gate fixes: ready-gate's shard fallback accepts A+B of four (:68); archive-sessions checks only
+  `session_status` (reuse dispatch's `archiveGuard`) — or delete it, see WP-D2.
 
-## 3. Game bugs (from the hunts)
+## 3. Game bugs (from the hunts; nothing measured unless noted)
 
 Medium — one PR each:
-- [ ] **WP-G1 track editor start-line stamp** — `js/editor/designer.js:262` `remapZones`: a stamp over a span that wraps
-  the start line makes old `pts[j]` the new start, and banking, hills, bridges and props slide about 190 m (a bridge can
-  become a red at-grade crossing). Rotate the old loop to the new start before the anchor walk. CONFIRMED (VM).
-- [ ] **WP-G2 Mercedes setup defaults** — `js/garage/setup-tune.js:29` (arbF/arbR 7/7) vs the shipped
-  `js/data/garage-defaults.js:71` (6/5): an untouched Mercedes is not neutral. Make them agree from one source; test
-  every `setup.<team>` default against `SetupTune.defaults(team)`.
-- [ ] **WP-G3 spun-car collision feedback** — `js/physics/collide.js:355` `orientedResponse`: a car yawed > 20° gets
-  floor-level FX and a 0.15 damage booking for any hit. Gate FX on the pass's real closing via `firstPairFx`.
-- [ ] **WP-G4 title-edit drag on iPhone** — `js/ui/title-layout.js:505`: each pointermove writes localStorage and
-  re-sets every CSS var on `<html>`. Batch per frame, persist on pointerup (as `hud-arrange.js` does).
+- [ ] **WP-G1 track editor** — `designer.js:262` start-line stamp shifts banking/hills/props ~190 m (R1, CONFIRMED in
+  a VM); `validate.js:217-231` pit-opening check runs over every close pair on the lap, so parallel hairpin straights
+  anywhere get a RED that blocks SAVE/RACE/SHARE — gate it on the pit window and side; `validate.js:228-233` the first
+  matching pair masks a farther red.
+- [ ] **WP-G2 Mercedes setup defaults (2×)** — `setup-tune.js:30` arbF/arbR 7/7 vs `garage-defaults.js:71` 6/5: a fresh
+  install shows TUNED and reset cannot clear it. One source; test every team.
+- [ ] **WP-G3 career import with no undo** — `career-backup.js:610` the before-import restore point is not awaited;
+  with IndexedDB down the import overwrites the slot anyway (the restore path refuses in that case).
+- [ ] **WP-G4 weekend marked started too early** — `game.js:2487` `Career.markWeekendStarted()` runs before
+  `ensureRaceSession`, the conflict and `canRace` checks; a failed load + BACK locks the brief and escrows planning.
+- [ ] WP-G5 spun-car collision feedback — `collide.js:355` a car yawed > 20° gets floor FX + 0.15 damage for any hit (R1).
+- [ ] WP-G6 title-edit drag on iPhone — `title-layout.js:505` localStorage + every CSS var per pointermove (R1);
+  `#tl-handle` 22 px hit area, no pinch (2×).
 
-Low — batched by area into a few PRs:
-- [ ] WP-G5 core/storage: `save-schema-registry.js:38` misses `setupPresets.<team>` (CONFIRMED warning on every save);
-  `validateKey` / lane never used at runtime; `restore-points.js:61` rejects a missing or string `v`;
-  `setup-presets.js:11` drops a whole preset on any field drift; `career-planning.js:66` copies career constants.
-- [ ] WP-G6 perf/runtime: `thermal-drift.js` cooldown 160–200 s vs a documented 60 s (MEASURED); `grip-steer.js`
-  per-tick allocation; `visor-optics.js` per-light allocation; `bitmap-decode` dead `decode` path + idle worker;
-  `glx.js:740` reload while the tab is hidden; `menu-sheet-gate.js:108` warm never resumes after a door-focused close.
-- [ ] WP-G7 UI/CSS: `#tl-handle` 22 px hit area; `#cs-arrival` raw safe-area inset; `hud.js:1029` aero nudge re-fit
-  loop; `photo-studio.js:723` upscales small photos; `i18n.js:47` navigator detection and boot race (latent: only en ships).
+Low — batched by area:
+- [ ] WP-G7 core/i18n/storage: `dom-apply.js:44` set("en") never restores; `i18n.js:218` no generation token;
+  `i18n.js:260` double apply; dead exports (`parkedWarm`, `applyNode`, `shouldApply`, `I18n.dir`, game.js:5796 guard);
+  `save-schema-registry.js:38` setupPresets warning (R1); restore-points `v` / "import" reason / re-validate cost;
+  `setup-presets.js` drops presets; share link mangled by `text()`.
+- [ ] WP-G8 perf/runtime: `thermal-drift.js` cooldown ~130 s vs documented 60 s (2×); `wheel-state.js:192` closures
+  per tick; `player-forces.js:190` flatSpot/rumble use the heuristic lock under WheelState; `sheet-shape.js:650`
+  rotation re-measures ~13×; `xr-session.js:258` late attach from a cancelled session.
+- [ ] WP-G9 render: `compatibility-recovery.js:52` DETAILS re-raises the popover; `tlx.js:4475` `_sizeOwned` drops a
+  resize; `tlx.js:1070` / `wgx.js:845` reload listener never removed; `glx.js:740` reload while hidden (R1).
+- [ ] WP-G10 dead shell loads: `js/render/shared/puddles.js` and `js/overlay/render.js` load every boot with no game
+  caller — move out of the shell list in `tools/manifest.cjs`, `npm run gen`.
 
-## 4. Skills — every skill returned FIX
+## 4. Skills — all 36 returned FIX in both passes
 
 One line per skill: the first step an agent following it today gets wrong (full rows in
-[skills/](../notes/review-2026-10-27/skills/)). Batch about six skills per PR, by area.
+[r2/](../notes/review-2026-10-27/r2/)). About six skills per PR. Cross-cutting rules for every skill PR:
+- a browser spec runs as `test-bg.mjs --spec` (or `remote-group.mjs` for a group), never foreground `npm test --` or a
+  whole local group (seen in data-hub, game-feel, race-weekend, race-incidents, garage, survey-track, check-changes);
+- a JS symbol goes to apex-lsp, not `grep -n`/`rg` (slim-bloat, f1-animation-cameras, physics-contract-auditor);
+- hard-coded numbers become pointers; no `/tmp` evidence paths; no hand-rolled `until` waiters (`wait-for.mjs`).
 
-- [ ] **WP-S1 workflow skills** (ship, steward, check, check-changes, handoff, slim-bloat) — these carry the landing
-  contract, so they go first, after WP-R1 settles the wording:
-  ship: the `run-ci` opt-in is mandatory (ready-gate has nothing to read without it); a worker stays subscribed after
-  `land` until archived. steward: run `needs-sync` before fixing a stale red; the distance row needs
-  `sync-pr --force-clean-behind`. check: "green" means `gate` success on the head, not `= ci passed`.
-  check-changes: one pre-push floor (AGENTS rule 3), and `verify-change` alone starts a 30–45 min group.
-  handoff: point at the PR's handoff block instead of retyping it; no `needs-owner` when the user asked.
-  slim-bloat: an over-ceiling branch (the ≤ 40-line absorb, `ratchet-reason.mjs`), and `lsp_outline`, not grep.
+- [ ] **WP-S1 landing skills** (ship, steward, check, check-changes, handoff, slim-bloat) — after WP-R1:
+  ship: `run-ci` is mandatory (ready-gate has nothing to read without it), add the CI watch, the session does not end
+  at `land` (rule 13), `gate` is a status. steward: run `needs-sync` before fixing a red; the `distance` row and
+  `sync-pr --force-clean-behind`. check: green = `CI` + `gate` success on the head; liveness via `deploy-research`;
+  a merged PR. check-changes: lead with `verify-change --fast` + one `test-bg --spec` (bare verify-change starts a
+  30–45 min group). handoff: `needs-owner` does not skip the 2 h wait (the label bumps `updated_at`); add the adopt
+  step. slim-bloat: an over-ceiling branch (20/40-line absorb in `ratchet-reason.mjs`, `--lower-only` skips a carve
+  still over), `lsp_outline` for ranges; do-not.md's garage example is stale.
 - [ ] **WP-S2 debugging skills** (js-debugger, mcp-probe, code-nav, playwright-probe, renderer-debug, agent-view):
-  a worked `debugger_break` example (`c.speed`, no `captureLocals`); heap `filePath` per client, never `/tmp`, and
-  `await __apex.race()`; the `lsp_symbols` fallback for a `G.x` not on GameCtx; the Monaco tunnel compare is
-  `0.47 eye` with `--backend`; on iPhone TLX WebGPU use `?gfxdebug=1` and `backendState().api`; agent-view's one-line
-  `agent.mjs <id> track --what all --vm`.
+  a condition runs in the paused frame and a throwing one never pauses (`c.human && c.speed > …`, m/s); `await
+  __apex.race()` then `jump()`/`step()` before `physState()`, heap paths under `artifacts/`; an IIFE-local route for
+  `updateCar` (not on GameCtx) and the façade-miss hint in lsp-mcp.mjs:936; Monaco tunnel is `0.47 eye`, delete the
+  stray fence at recipes.md:182; `?gfxdebug=1` first on the iPhone, the census is Chromium/Dawn not Safari, link the
+  WGSL rules from TLX; `corners()` peaks are not the official corner list.
 - [ ] **WP-S3 race/AI/physics skills** (ai-racecraft, tune-physics, race-weekend, race-incidents-control, game-feel,
-  input-controls): the T1 lunge gate, not `otFireRate`; measure the phone car (`carWeight: 10`); `twoCompoundApplies()`
-  and its gates; what `hazards()` counts and when shards drop out; the kerb shake lives in `vantage.js` and
-  `rumble()` is muted on kerbs; `hold-buttons.js` also carries the steer arrows.
+  input-controls): the T1 lunge gate, not `otFireRate`; measure the phone car (`carWeight: 10`) and pick rows by vStd,
+  defaults live in `drive-tune.js`; `G.pits.twoCompoundApplies()` and its `enabled()` / `cmpOn` gates; `hazards()`
+  counts only resting on-road debris, shards despawn 4 s after settling; kerb audio is the continuous kerb loop
+  (`rumble()` returns while `kerbLive`) and shake is zeroed by touch comfort mode; touch release nets live in
+  `input.js:2237-2299`, `__apex.inputState()`, DRAG AT SPEED defaults OFF.
 - [ ] **WP-S4 content skills** (new-track, scenery-dress, survey-track, asset-pack, lighting-tuner, garage-parts-livery):
-  append a new circuit LAST, never above an existing id (saved-pick indexes); Spa density uses `forestEdge` and
-  exclusions; build the dated evidence packet before a satellite survey; the asphalt bake source is `matHeight`/
-  `matSurface`; night lift is `nightAmbLift` (probe `lightState()` without `setTimeOfDay`); new wing looks go in
-  `STYLES` and `flapSig`, and say where garage defaults live.
+  a new circuit needs `js/circuits/scenery/<id>.js` and a `def-factory-golden.json` row, append last; forestEdge
+  footing and `dressingExclusions` (spa.js:650), `recordBarrier` not `markBarrier`; build the evidence packet in the
+  short loop and pass absolute paths to the surveyor's worktree; texture path is `matTexLayer`, not `lgRoad`;
+  measure `lightState()` first, Singapore inherits `nightAmbLift` 1.45 from the shared stamp; front-wing looks are
+  `STYLES` rows + `VISUAL_FIELD_REGISTRY`, gate with `npm run test:garage-unit`. js/circuits/AGENTS.md still talks
+  about script-tag order and a "lockstep".
 - [ ] **WP-S5 modes/UI skills** (career-mode, season-mode, data-hub, ui-menu-a11y, css-play, survey-ui-matrix):
-  `careerSim()` does report sponsor pay and a classified DNF keeps points; the sprint toggle needs APPLY and the
-  saved config; a LAST SEASON tag mid-season is a fault, and the cache key includes the year; a disabled door still
-  swallows Escape; the pause chips live in `experience.css` / `overlays.css`; the 844 run needs `--shots --dom`.
+  a classified late DNF can score; APPLY + the frozen `activeCfg`; LAST SEASON mid-season is a bug, not a fallback;
+  Escape-does-nothing causes in modal.js:144-178 (a missing/disabled door swallows it); pause chips live in
+  `experience.css` / `overlays.css`, a later layer wins; `apex_ui_mission_plan` is not a matrix planner, the 844 cell
+  needs `--shots --dom`, setup at 844×390 not 852×393.
 - [ ] **WP-S6 platform skills** (audio-debug, pwa-cache-service-worker, multiplayer-debug, phone-browser,
-  f1-animation-cameras, agent-config): check `GameAudio._stub` before `enabled()`; compare the phone's loaded build,
-  not live vs live; a QR pairing is two transfers (the answer must come back); token rotation must stop the old server;
-  a seek snap is a designed cut; free routing checks before the paid A/B.
+  f1-animation-cameras, agent-config): `audioGestureUnlock` / `AUDIO_GESTURES`; compare the phone's booted build,
+  not live vs live, and `UpdateCheck` is the path an installed PWA uses; the default is STUN-only (no TURN), so
+  relay-only e2e needs `--turn`; token rotation does not restart the server and the tunnel cannot leave this proxy;
+  HIGHLIGHTS seek is a designed cut (`seekTo` → `snapGameCam`), the probe needs a reel mode; agent-config byte vs line
+  caps.
 
-Cross-cutting rules for every skill PR: hard-coded numbers become pointers to their source; `rg` for a JS symbol
-becomes apex-lsp; browser runs say `test-bg --spec` or `remote-group`, never a whole local group.
+## 5. Rulebook, docs, tools and workflows
 
-## 5. Rulebook and docs
+Sources: [r2/docs.md](../notes/review-2026-10-27/r2/docs.md), [r2/relay-fleet.md](../notes/review-2026-10-27/r2/relay-fleet.md),
+[r2/dead-tools.md](../notes/review-2026-10-27/r2/dead-tools.md), [r2/workflows.md](../notes/review-2026-10-27/r2/workflows.md),
+[rulebook.md](../notes/review-2026-10-27/rulebook.md).
 
-Source: [rulebook.md](../notes/review-2026-10-27/rulebook.md) (rows already fixed by #3914 are skipped).
-- [ ] **WP-R1 one pre-push floor** — AGENTS rule 3 (full `tooling-fast`) vs WORKERS (`--changed` + one spec) vs loop
-  step 6 (`deploy.mjs --gate-only`) vs WORKERS ("do not run it"). Pick one, state it once, point the skills at it.
-- [ ] **WP-R2 what a worker does after `land`** — WORKERS says the session ends; in practice it stays subscribed and
-  wakes on every PR event until the dispatcher archives it (10 min after merge, #3921). Write down what is true.
-- [ ] WP-R3 Codex hooks (AGENTS says none run; `.codex/hooks.json` wires two); "a red you did not cause" (AGENTS
-  claims-and-fixes vs WORKERS "not yours"); undefined terms (Board/Dispatch issue numbers, "game merges", "FLEET
-  build", "OWNED/FORBIDDEN paths"); rules repeated between AGENTS rule 12 / §Coordination and WORKERS.
-- [ ] WP-R4…: workflow, relay-leftover, agents/hooks, docs and dead-tool rows — added here when those reports land.
+- [ ] **WP-R1 one pre-push floor (Bryce picks).** Four sources disagree (2×, three reviewers): AGENTS step 6
+  (`deploy --gate-only`), AGENTS rule 3 (full `tooling-fast` + pick), VERIFICATION.md:38 / ARCHITECTURE-MAP
+  ("`--gate-only` is authoritative"), WORKERS.md:17 (`tooling-fast --changed` + one spec, "do not run `--gate-only`").
+  State it once, point everything else at it.
+- [ ] WP-R2 what a worker does after `land`: it stays subscribed until the dispatcher archives it (10 min after merge).
+- [ ] WP-R3 rulebook drift: Codex hooks (AGENTS.md:147 says none; `.codex/hooks.json` wires two); TESTING.md §Merge
+  train and §CI aggregator describe the retired flow; BUGS.md "sibling sessions"; ARCHITECTURE-MAP "every ratchet
+  saturated" (7 of 14); `game-code.md:18` absorb wording (20 silent, 40 with a trailer); AGENTS.md:187 says the
+  dispatcher uses archive-sessions.
+- [ ] WP-R4 docs index: 97 of 204 notes and 22 of 42 plans are unindexed (incl. AGENT-MEMORY.md, SURVEY-ASSETS-BRANCH.md
+  that AGENTS.md cites); archive ~15 shipped/superseded plans and the 7 redirect stubs; merge CAPTURE-REVIEW +
+  UI-EXPLORER into DESIGN-TOOLS; UI-MAP is historical.
+- [ ] **WP-D1 fleet leftovers.** The f1-dev-tools plugin skill still teaches the `claude/fleet-bus` branch and
+  `github-fleet.cjs`; widen `rulebook-guards.test.mjs` to scan plugin-sources, cursor-plugins, `.cursor`, `.codex`;
+  stale hook text ("ask your orchestrator", `QUEUE_BRANCH`, `fleet-bus` in the poll regex, `APEX_MERGE_DESK`) —
+  hook edits need Bryce; `APEX-TOOLS-MCP.md` `apex_who_is_on_it`; `policies.json:747`; `ci-watch.mjs:323`.
+- [ ] **WP-D2 dead tools** (each with its `tests/groups.json` row + `npm run gen`): `tools/mcp/check-doctor-catalog.mjs`;
+  `archive-sessions.mjs` (+ AGENTS.md:187, settings.json:74 — Bryce); `pr-body.mjs` + `fleet-block.mjs` (move the 3
+  `planVerdict` cases to ready-gate's test first); `lane-preamble.mjs`; `measure-pr-ci-after-close.mjs`;
+  `publish-shots.mjs`; `lsp-navigation-bench.mjs`; `readyClaimVerdict` in gate-receipt.mjs. Fix headers:
+  `queue-depth.mjs` (not a hold), `launch-gate.mjs` (orchestrator.md). Bryce decides: the workflow-harness trio,
+  `visor-lab-export.mjs`.
+- [ ] **WP-W1 workflows (Bryce for deletes).** Delete never-run `hud-survey.yml` and `webkit-leg.yml` (+ their rows in
+  pick-tests / select-specs / nightly-group); gpu-census and capture-gallery become dispatch-only (agents dispatch
+  fine; renderer-debug SKILL.md:18 still teaches the push relay); car-shot into capture-gallery; import-models gets a
+  read-only bake job (it downloads an arbitrary URL with `contents: write`); process-dashboard dispatch-only or
+  delete; ratchets-fold + changelog-fold → one `folds.yml`; spec-timings needs a conclusion filter (77 s on each of
+  371 cancelled Pages runs); `ci.yml`'s `edited` trigger makes every Plan update a "CI ignored" run (41 % of sampled
+  PR runs). Bryce runs `gh workflow disable` on the ghost registrations docs-guards, iphone-census, wire-select-specs.
+- [ ] WP-A1 agents: `agent-surface-reviewer` maxTurns 30 → 45 with a "write by turn 25" rule; `worker.md:143` (`hold`
+  is a land veto, not a push block); `deploy-research` mentions TinyFish it lacks; code-hunter / finding-verifier /
+  bloat-auditor lack `lsp_symbols`; bash-guard does not stop a subagent running fit-audit / menu-fit / explorer.
 
-## 6. Decisions for Bryce
+## 6. Outside the repo (Bryce)
 
-1. WP-L1: move the gate to the base branch's workflow (and protect `.github/workflows/**`) — yes / no.
-2. WP-L3: hook edits for the merge, hold-label and launch-receipt doors — yes / no.
+- [ ] Scheduled task "Backlog check-in #1518" (`trig_01LVTyhcecvVX9deFigKWDEt`) fires 2026-10-28 16:00Z with a fleet-era
+  prompt (fleet.yml, Fleet board) — delete or rewrite from its own conversation.
+- [ ] The disabled cross-account "Fleet B inbox → B·R1" task still holds an API token — delete it or revoke the token.
+- [ ] Remote branches `claude/fleet-bus` and 26 `cursor/orcha*-queue-*` can go; old orchestrator / merge-desk sessions
+  need a manual archive (archive-sessions never matched their roles).
+
+## 7. Decisions for Bryce
+
+1. WP-L1: move land.yml to `pull_request_target`, put `LAND_TOKEN` in an Environment, protect `.github/workflows/**`.
+2. WP-L4 / WP-D1: the hook edits (merge and arm deny, receipt directories, ready head, launch receipt, `hold` removal).
 3. WP-R1: which pre-push floor is the rule.
+4. WP-W1 / WP-D2: delete the never-run workflows and the dead tools listed.
+5. §6: the stale scheduled task, the token-holding relay task, the old branches.
