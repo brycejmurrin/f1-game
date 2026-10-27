@@ -2828,6 +2828,19 @@ lighting; compare day/night images and physical-device timings before enabling
 this experiment more broadly. Initial AUTO preparation conservatively retains
 detailed bodies because its private camera/software policy is not duplicated.
 
+### `ersPlan(plan?) → {plan, ok, neutral}`
+
+The manual sector ERS plan (#1580, `js/race/energy-plan.js`): one policy per
+timing sector, `"manual" | "deploy" | "save"`. At each sector entry DEPLOY
+asks for BOOST on and SAVE for BOOST off, through the same toggle a press makes.
+With no argument it reads the plan. With a 3-entry array it sets it for this
+session; the stored Race Settings choice (`ersPlan`) is not written. `ok` is false
+for an invalid plan, which leaves the old one in place. `neutral` is true for
+MANUAL ×3, the shipped plan, which changes nothing. Time trial ignores it.
+```js
+__apex.ersPlan(["deploy", "manual", "save"]);   // → { plan: [...], ok: true, neutral: false }
+```
+
 ### `damage(carIdx?, hit?) → {fwL, fwR, rw, floor, knock, hits, worst, shown} | null`
 
 The DISPLAY-ONLY damage readout of `js/race/damage.js` for car `carIdx`
