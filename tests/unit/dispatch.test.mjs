@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import {
   planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, extractSessions, sessionRefs, activityAt, applyPlan, loadConfig,
   issuePrompt, continuePrompt, deployRedPrompt, PROMPT_MAX_LINES, BOARD_MARKER, LAUNCH_RE,
-  titleNames, readSessionPages, readState, getAll, landProblem, recordToken, recordComment, main, claimedSessionIds,
+  titleNames, readSessionPages, childSessionIds, sessionsPage, readState, getAll, landProblem, recordToken, recordComment, main, claimedSessionIds,
 } from "../../tools/ci/dispatch.mjs";
 
 const NOW = Date.parse("2026-10-27T12:00:00Z");
@@ -36,7 +36,7 @@ test("rule 1: a ready, unclaimed issue launches one claude worker with a launch 
   const l = p.launches[0];
   assert.deepEqual([l.kind, l.host, l.number, l.comment.on], ["issue", "claude", 10, 10]);
   assert.equal(l.comment.body, `dispatch: launched claude:[Worker] #10 Task 10 for #10 at ${ISO}`);
-  assert.deepEqual(LAUNCH_RE.exec(l.comment.body).slice(1), ["claude", "[Worker] #10 Task 10", "#10", ISO]);
+  assert.deepEqual(LAUNCH_RE.exec(l.comment.body).slice(1), ["claude", "[Worker] #10 Task 10", "#10", ISO, undefined]);
   assert.deepEqual({ ...l.spec, prompt: "" }, { source_url: "https://github.com/brycejmurrin/f1-game", source_revision: DEFAULT_CONFIG.deployBranch,
     permission_mode: "auto", model: "claude-sonnet-5-5", title: "[Worker] #10 Task 10", tags: ["f1-game-dispatch", "role:worker", "issue:10", "lane:claude"], prompt: "" });
   assert.deepEqual(l.spec.prompt.split("\n"), ["Task: #10 — Task 10", "Do the thing 10.",
@@ -253,7 +253,7 @@ test("apply (M4): labels and the Board edit go through the client; NO launch com
   assert.equal(writes, 2);
   const line = (s, tag) => [s.slice(0, tag.length), JSON.parse(s.slice(tag.length))];
   assert.deepEqual(line(out[0], "CREATE_SESSION ")[1].source_url, "https://github.com/brycejmurrin/f1-game");
-  assert.equal(out[1], `RECORD_LAUNCH node tools/ci/dispatch.mjs --record-launch ${recordToken(p.launches[0])}`);
+  assert.equal(out[1], `RECORD_LAUNCH node tools/ci/dispatch.mjs --record-launch ${recordToken(p.launches[0])} --session <the new session id>`);
   assert.equal(line(out[2], "CREATE_SESSION ")[1].title, "[Worker] CONTINUE PR #20 PR 20");
   assert.equal(out[3].slice(0, 14), "RECORD_LAUNCH ");
   assert.equal(out[4], "ARCHIVE_SESSION session_01DONE000000");
@@ -319,4 +319,21 @@ test("extractSessions reads an MCP page with its envelope; loadConfig merges the
   const c = loadConfig("x.json", () => JSON.stringify({ maxLaunchesPerRun: 1, staleHours: { codex: 9 } }));
   assert.deepEqual([c.maxLaunchesPerRun, c.staleHours, c.model], [1, { default: 2, codex: 9 }, "claude-sonnet-5-5"]);
   assert.equal(loadConfig("missing.json", () => { throw Object.assign(new Error("x"), { code: "ENOENT" }); }).maxLaunchesPerRun, 4);
+});
+
+test("children, not history: launch comments name the session; --children lists only the sessions GitHub names", () => {
+  const tok = recordToken({ comment: { on: 10 }, host: "claude", title: "[Worker] #10 Task 10", number: 10 });
+  const sid = "session_017Yzwxw8VfSo9sSSFypx4SF";
+  const c = recordComment(tok, NOW, sid);
+  assert.equal(c.body, `dispatch: launched claude:[Worker] #10 Task 10 for #10 at ${ISO} as ${sid}`);
+  assert.equal(LAUNCH_RE.exec(c.body)[5], sid);
+  assert.throws(() => recordComment(tok, NOW, "not-a-session"), /--session is not a session id/);
+  const claim = "session_01AbCdEfGhIjKlMn", owner = "session_01ZyXwVuTsRqPoNm";
+  const st = { issues: [{ number: 10, comments: [{ body: c.body }] }], prs: [{ number: 20, body: "```handoff\nowner: claude:" + owner + "\n```", comments: [] }],
+    closedIssues: [{ number: 30, comments: [{ body: `claims #30 — claude:${claim}` }] }], closedPrs: [] };
+  assert.deepEqual(childSessionIds(st), [owner, claim, sid].sort());
+  const one = JSON.stringify({ ccr: { id: sid, title: "[Worker] #10", session_status: "SESSION_STATUS_RUNNING", status_bucket: "SESSION_STATUS_BUCKET_WORKING", tags: ["role:worker"] } });
+  const pg = sessionsPage(one);
+  assert.deepEqual([pg.hasMore, pg.sessions.length, pg.sessions[0].id, pg.sessions[0].bucket], [false, 1, sid, "SESSION_STATUS_BUCKET_WORKING"]);
+  assert.equal(readSessionPages([one]).complete, true, "get_session results are a complete set");
 });

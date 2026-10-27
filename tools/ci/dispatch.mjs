@@ -13,27 +13,36 @@
 //                           permission_mode "auto", model, title, tags, prompt)
 //   CURSOR_LAUNCH <json>    cursor-agents.mjs buildLaunchBody's shape (prompt.text, model.id, name, repos[0].startingRef);
 //                           run `node tools/ci/cursor-agents.mjs launch --prompt-file <f> --ref <startingRef> --name <name>`
-//   RECORD_LAUNCH <cmd>     follows each launch line: run <cmd> (`node tools/ci/dispatch.mjs --record-launch <token>`)
-//                           ONLY after that create_session / launch SUCCEEDED; it posts the launch comment (the claim)
+//   RECORD_LAUNCH <cmd>     follows each launch line: run <cmd> (`… --record-launch <token> --session <id>`) with the
+//                           new session's id, ONLY after that create_session / launch SUCCEEDED; it posts the launch
+//                           comment (the claim), which names the session so the next cycle can look it up
+//   GET_SESSION <id>        (from --children) the claude-code-remote `get_session` argument
 //   ARCHIVE_SESSION <id>    the claude-code-remote `archive_session` argument
 //
-//   node tools/ci/dispatch.mjs --plan [--json] [--sessions <page>]... [--quota allowed|allowed_warning|rejected] [--now <iso>]
+//   node tools/ci/dispatch.mjs --children                   # prints GET_SESSION <id> per dispatched worker GitHub names
+//   node tools/ci/dispatch.mjs --plan [--json] [--sessions <file>]... [--quota allowed|allowed_warning|rejected] [--now <iso>]
 //   node tools/ci/dispatch.mjs --apply [...same flags]      # writes labels and the Board, then prints the lines above
-//   node tools/ci/dispatch.mjs --record-launch <token>      # posts one launch comment, stamped now
+//   node tools/ci/dispatch.mjs --record-launch <token> --session <id>   # posts one launch comment, stamped now
 //
 // Why RECORD_LAUNCH (review M4, 2026-10-27): the launch comment is a 2 h claim. Posted before create_session, a refused
 // or skipped launch left a phantom claim (no worker, the issue blocked for launchClaimHours). It is now posted only
-// after the session exists. `--sessions` repeats, one saved list_sessions page each: a last page with `has_more: true`
-// means the live-worker count is unknown, so the plan launches nothing (list again with after_id and pass every page).
+// after the session exists, and names it (`… as session_…`).
+//
+// CHILDREN, NOT HISTORY (Bryce + the dispatcher, 2026-10-27). The dispatcher never lists the account's sessions (7+
+// pages of history, growing ~100 a day). Its workers are the sessions GitHub names: launch comments, the workers' own
+// claim/adoption comments and PR ```handoff owners, on open issues/PRs and on claimed or lane:* ones closed in the last
+// recentClosedHours. `--children` prints those ids; each get_session result is passed back with `--sessions <file>`.
+// Anything no claim names (Bryce's chats, other sessions) is never counted or archived.
 //
 // THE SCHEDULED TASK'S PROMPT (hourly, bound to the persistent dispatcher session tagged role:dispatcher + no-archive;
 // a create_new_session_on_fire session lacks get_session/list_sessions/create_session), Sonnet, verbatim:
-//   1. Call list_sessions (limit 100; again with after_id while has_more) and save each page to a file.
-//   2. Call get_session ALONE and wait for its result (the PostToolUse hook writes artifacts/launch/self.json).
-//   3. Run `node tools/ci/dispatch.mjs --apply --quota <rate_limit_info.status> --sessions <page1> [--sessions <page2>…]`.
+//   1. Run `node tools/ci/dispatch.mjs --children`; call get_session on each GET_SESSION id; save each result to a file.
+//   2. Call get_session ALONE (no id) and wait for its result (the PostToolUse hook writes artifacts/launch/self.json).
+//   3. Run `node tools/ci/dispatch.mjs --apply --quota <rate_limit_info.status> --sessions <file1> [--sessions <file2>…]`.
 //   4. For each CREATE_SESSION line, strictly one step at a time, never in parallel: call get_session alone; AFTER it
 //      returns run `node tools/ci/launch-gate.mjs artifacts/launch/self.json`; only on its exit 0 call create_session
-//      with the line's JSON; only when that succeeded run the RECORD_LAUNCH command that follows it.
+//      with the line's JSON; only when that succeeded run the RECORD_LAUNCH command that follows it, with
+//      `--session <the new session's id>`.
 //   5. Call archive_session for each ARCHIVE_SESSION line; end.
 //
 // Issue conventions: the pinned issue titled `Board` (config boardIssueTitle) holds ONE comment this tool edits each run
@@ -44,13 +53,13 @@
 // within maxLaunchesPerRun and maxLiveWorkers, none when the quota is not `allowed`; (2) an open PR with no push and no
 // comment for staleHours (6 for lane:codex), no `hold`/`needs-decision` → `needs-owner` + ONE `CONTINUE PR #n` worker
 // carrying the body's ```handoff block; (3) deploy red and no open PR labelled `deploy:red` → label the Board, launch one
-// fixer; (4) a session whose every PR merged/closed > archiveAfterMinutes ago → archive, only a `role:worker` session
+// fixer; (4) a child whose every PR merged/closed > archiveAfterMinutes (10) ago → archive (stops the post-land wakes), only a `role:worker` session
 // named in a claim/adoption comment, never one tagged `no-archive` or `role:dispatcher`, never RUNNING/WORKING/BLOCKED;
 // (5) the Board markdown. Idempotent: every launch is recorded (RECORD_LAUNCH) as the comment
-// `dispatch: launched <host>:<title> for #<n> at <iso>` on the issue/PR (deploy:red fixers on the Board issue) and a launch
+// `dispatch: launched <host>:<title> for #<n> at <iso> as <session id>` on the issue/PR (deploy:red fixers on the Board issue) and a launch
 // comment younger than launchClaimHours is a live claim, so a second run inside the hour launches nothing twice.
-// Live workers (maxLiveWorkers) = listed sessions tagged `role:worker` that are RUNNING or in status_bucket WORKING,
-// plus recent launch comments no listed session names; idle, finished, Bryce's own and the dispatcher never count.
+// Live workers (maxLiveWorkers) = children tagged `role:worker` that are RUNNING or in status_bucket WORKING, plus recent
+// launch comments no fetched session names; idle and finished children, Bryce's own and the dispatcher never count.
 // Rule 2's "last activity" is the PR's updated_at (any push, comment, edit or label change) or its newest comment, the
 // dispatcher's launch comments excluded. Label-only churn can only delay a takeover, never fake one; the head commit's
 // committer date is NOT the push time (a commit made at 10:00 and pushed at 12:30 is not 2.5 h idle). Never stale: a
@@ -67,7 +76,7 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const CONFIG_FILE = path.join(ROOT, "tools", "ci", "dispatch.json");
 export const BOARD_MARKER = "<!-- dispatch-board -->";
-export const LAUNCH_RE = /^dispatch: launched (\S+?):(.+?) for (#\d+|deploy:red) at (\S+)/m;
+export const LAUNCH_RE = /^dispatch: launched (\S+?):(.+?) for (#\d+|deploy:red) at (\S+)(?: as (session_[A-Za-z0-9]{12,}))?/m;
 /** A claim or adoption comment naming a session ("claims #12 — claude:session_…", "adopts PR #3 — claude:session_…"). */
 const CLAIM_RE = /\b(?:claims|adopts)\b[^\n]*?\b(session_[A-Za-z0-9]{12,})\b/g;
 const SESSION_RE = /\bsession_[A-Za-z0-9]{12,}\b/g;
@@ -110,7 +119,7 @@ export function parseHandoff(body) {
 /** The dispatcher's launch comments on one object: [{host, title, target, at}], newest first. Pure. */
 export function launchComments(comments) {
   return (comments || []).map((c) => LAUNCH_RE.exec(String(c.body || ""))).filter(Boolean)
-    .map((m) => ({ host: m[1], title: m[2], target: m[3], at: m[4] })).sort((a, b) => t(b.at) - t(a.at));
+    .map((m) => ({ host: m[1], title: m[2], target: m[3], at: m[4], session: m[5] || null })).sort((a, b) => t(b.at) - t(a.at));
 }
 /** The newest launch comment younger than `hours` (a live claim), or null. Pure. */
 export const liveLaunch = (comments, now, hours) => launchComments(comments).find((l) => hoursAgo(l.at, now) < hours) || null;
@@ -128,8 +137,18 @@ export function claimedSessionIds(state) {
     }
   };
   for (const x of [...(state.issues || []), ...(state.prs || []), ...(state.closedIssues || []), ...(state.closedPrs || [])]) scanComments(x.comments);
-  for (const p of state.prs || []) for (const m of String(parseHandoff(p.body)?.owner || "").matchAll(SESSION_RE)) ids.add(m[0]);
+  for (const p of [...(state.prs || []), ...(state.closedPrs || [])]) for (const m of String(parseHandoff(p.body)?.owner || "").matchAll(SESSION_RE)) ids.add(m[0]);
   return ids;
+}
+
+/** The dispatcher's children: every session id a launch comment (`… as session_…`), a worker's claim/adoption comment
+ *  or a PR's ```handoff `owner:` names, on open issues/PRs and on those closed in the last `recentClosedHours`. These are
+ *  the only sessions the dispatcher counts or archives, so it never lists the account's history. Sorted. Pure. */
+export function childSessionIds(state) {
+  const ids = claimedSessionIds(state);
+  for (const x of [...(state.issues || []), ...(state.prs || []), ...(state.closedIssues || []), ...(state.closedPrs || [])])
+    for (const l of launchComments(x.comments)) if (l.session) ids.add(l.session);
+  return [...ids].sort();
 }
 
 /** One `{ccr:{data:[…], has_more}}` list_sessions page (MCP text with its envelope, or raw JSON) → { sessions, hasMore }. Pure. */
@@ -139,6 +158,7 @@ export function sessionsPage(text) {
   if (start < 0) throw new Error("no JSON object in the page");
   let obj = JSON.parse(s.slice(start, s.lastIndexOf("}") + 1));
   if (obj.ccr) obj = obj.ccr;
+  if (!Array.isArray(obj.data) && typeof obj.id === "string") obj = { data: [obj], has_more: false };   // one get_session result
   if (!Array.isArray(obj.data)) throw new Error("page has no data[] array");
   return { hasMore: obj.has_more === true, sessions: obj.data.map((x) => ({ id: x.id, title: x.title || "", status: x.status || x.session_status || "",
     bucket: x.status_bucket || "", created_at: x.created_at, updated_at: x.updated_at, tags: x.tags || [], pr: x.pr })) };
@@ -364,7 +384,7 @@ export function getAll(api, p, { pick = (j) => j, maxPages = 50 } = {}) {
   return out;
 }
 const comments = (api, n) => getAll(api, `issues/${n}/comments`).map((c) => ({ id: c.id, author: c.user?.login, body: c.body, created_at: c.created_at }));
-export function readState({ api = githubApi, config, sessionTexts = [], quota = "unknown" } = {}) {
+export function readState({ api = githubApi, config, sessionTexts = [], quota = "unknown", now = Date.now() } = {}) {
   const rawIssues = getAll(api, "issues?state=open").filter((i) => !i.pull_request);
   const special = [config.boardIssueTitle, config.dispatchIssueTitle];
   // Comments: the Board/Dispatch issues, ready issues (launch claims) and claimed issues (the workers' claim comments).
@@ -391,15 +411,25 @@ export function readState({ api = githubApi, config, sessionTexts = [], quota = 
   const pages = sessionTexts.length ? readSessionPages(sessionTexts) : { sessions: [], complete: true };
   const sessions = pages.sessions;
   const openPrs = new Set(prs.map((p) => p.number)), openIssues = new Set(issues.map((i) => i.number)), closedPrs = [], closedIssues = [];
+  // Recently closed work (claimed issues, lane:* PRs): where a finished child's claim lives once its issue/PR closes.
+  const since = new Date(now - (config.recentClosedHours ?? 48) * 3600e3).toISOString();
+  for (const x of getAll(api, `issues?state=closed&since=${since}`, { pick: (j) => (Array.isArray(j) ? j : []) })) {
+    if (!has(x, "claimed") && !labelsOf(x).some((l) => l.startsWith("lane:"))) continue;
+    if (x.pull_request) {
+      const r = api(`pulls/${x.number}`);
+      if (r.json?.closed_at) closedPrs.push({ number: x.number, body: r.json.body || "", merged: !!r.json.merged_at, merged_at: r.json.merged_at, closed_at: r.json.closed_at, comments: comments(api, x.number) });
+    } else closedIssues.push({ number: x.number, closed_at: x.closed_at, comments: comments(api, x.number) });
+  }
+  const seenClosed = new Set([...closedPrs, ...closedIssues].map((x) => x.number));
   // Closed refs only for sessions rule 4 may archive; their comments carry the claims (review H2).
   const refs = sessions.filter((s) => !archiveGuard(s) && !/ARCHIVED/i.test(s.status || "")).map(sessionRefs);
   for (const n of new Set(refs.flatMap((r) => r.prs))) {
-    if (openPrs.has(n)) continue;
-    const r = api(`pulls/${n}`);
-    if (r.json) closedPrs.push({ number: n, merged: !!r.json.merged_at, merged_at: r.json.merged_at, closed_at: r.json.closed_at, comments: comments(api, n) });
+    if (openPrs.has(n) || seenClosed.has(n)) continue;
+    const r = api(`pulls/${n}`);   // only a CLOSED PR: an open one on another base read as closed in 1970 (hunt F5)
+    if (r.json?.state === "closed" && r.json.closed_at) closedPrs.push({ number: n, body: r.json.body || "", merged: !!r.json.merged_at, merged_at: r.json.merged_at, closed_at: r.json.closed_at, comments: comments(api, n) });
   }
   for (const n of new Set(refs.flatMap((r) => r.issues))) {
-    if (openIssues.has(n)) continue;
+    if (openIssues.has(n) || seenClosed.has(n)) continue;
     const r = api(`issues/${n}`);
     if (r.json?.state === "closed") closedIssues.push({ number: n, closed_at: r.json.closed_at, comments: comments(api, n) });
   }
@@ -411,14 +441,15 @@ export function readState({ api = githubApi, config, sessionTexts = [], quota = 
 export const recordToken = (l) => Buffer.from(JSON.stringify({ on: l.comment.on, host: l.host, title: l.title,
   target: l.number ? `#${l.number}` : "deploy:red" })).toString("base64url");
 /** The launch comment a RECORD_LAUNCH token posts, stamped `now`: { on, body }; throws on a malformed token. Pure. */
-export function recordComment(token, now) {
+export function recordComment(token, now, session = "") {
   let r;
   try { r = JSON.parse(Buffer.from(String(token || ""), "base64url").toString("utf8")); } catch { throw new Error("--record-launch: the token is not base64url JSON"); }
   const on = Number(r?.on);
   if (!Number.isInteger(on) || on < 1) throw new Error("--record-launch: the token names no issue/PR number");
   // A title saying "for #5" would end LAUNCH_RE's lazy title early: reword it; the target still names the session.
   const title = String(r.title || "").replace(/\s+/g, " ").replace(/ for (?=#\d|deploy:red)/g, " / ");
-  const body = `dispatch: launched ${r.host}:${title} for ${r.target} at ${new Date(now).toISOString()}`;
+  if (session && !/^session_[A-Za-z0-9]{12,}$/.test(session)) throw new Error("--record-launch: --session is not a session id");
+  const body = `dispatch: launched ${r.host}:${title} for ${r.target} at ${new Date(now).toISOString()}${session ? ` as ${session}` : ""}`;
   const m = LAUNCH_RE.exec(body);
   if (!m || m[1] !== r.host || m[3] !== r.target) throw new Error("--record-launch: the token does not make a launch comment");
   return { on, body };
@@ -438,7 +469,7 @@ export function applyPlan(plan, { api = githubApi, config, log = console.log } =
   // The launch comment (the claim) is NOT posted here: RECORD_LAUNCH posts it once the session exists (review M4).
   for (const l of plan.launches) {
     log(`${l.host === "cursor" ? "CURSOR_LAUNCH" : "CREATE_SESSION"} ${JSON.stringify(l.spec)}`);
-    if (l.comment.on) log(`RECORD_LAUNCH node tools/ci/dispatch.mjs --record-launch ${recordToken(l)}`);
+    if (l.comment.on) log(`RECORD_LAUNCH node tools/ci/dispatch.mjs --record-launch ${recordToken(l)} --session <the new session id>`);
   }
   for (const a of plan.archives) log(`ARCHIVE_SESSION ${a.id}`);
   return writes;
@@ -453,14 +484,16 @@ export function renderPlan(plan) {
   return out;
 }
 
-const USAGE = `usage: node tools/ci/dispatch.mjs (--plan | --apply) [--json] [--sessions <saved list_sessions page>]...
+const USAGE = `usage: node tools/ci/dispatch.mjs --children                      # GET_SESSION <id> per dispatched worker GitHub names
+       node tools/ci/dispatch.mjs (--plan | --apply) [--json] [--sessions <saved get_session result>]...
                                   [--quota allowed|allowed_warning|rejected] [--now <iso>] [--config <file>]
-       node tools/ci/dispatch.mjs --record-launch <token>
+       node tools/ci/dispatch.mjs --record-launch <token> --session <new session id>
   --plan   reads GitHub (GETs only) and prints the plan: launches, labels, archives, skips, and the Board markdown (--json: one object)
   --apply  performs the GitHub-side writes (labels, the Board comment), then prints one line per session-side action:
            CREATE_SESSION <json> | CURSOR_LAUNCH <json>, each followed by RECORD_LAUNCH <cmd> | ARCHIVE_SESSION <id>
   --record-launch  posts the launch comment (the 2 h claim); run it only after that launch succeeded
-  --sessions repeats, one saved page each; a last page with has_more launches nothing.
+  --sessions repeats: one saved get_session result per --children id (a list_sessions page still parses; a last page
+           with has_more launches nothing). Sessions no claim names are never counted or archived.
   The scheduled task runs --apply and executes those lines with the claude-code-remote tools (header of this file).`;
 
 export function main(argv, { api = githubApi, read = fs.readFileSync, log = console.log, now = Date.now } = {}) {
@@ -468,22 +501,28 @@ export function main(argv, { api = githubApi, read = fs.readFileSync, log = cons
   const val = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
   if (argv.includes("--record-launch")) {
     let c;
-    try { c = recordComment(val("--record-launch"), now()); } catch (e) { log(`dispatch: ${e.message}`); return 1; }
+    try { c = recordComment(val("--record-launch"), now(), val("--session") || ""); } catch (e) { log(`dispatch: ${e.message}`); return 1; }
     const r = api(`issues/${c.on}/comments`, { method: "POST", body: { body: c.body } });
     if (r.error) { log(`dispatch: POST issues/${c.on}/comments: ${r.error}`); return 3; }
     log(`= launch recorded on #${c.on}: ${c.body}`);
     return 0;
   }
-  const plan = argv.includes("--plan"), apply = argv.includes("--apply");
-  if (plan === apply) { log(USAGE); return 1; }
+  const plan = argv.includes("--plan"), apply = argv.includes("--apply"), children = argv.includes("--children");
+  if ((plan ? 1 : 0) + (apply ? 1 : 0) + (children ? 1 : 0) !== 1) { log(USAGE); return 1; }
   const config = loadConfig(val("--config") || CONFIG_FILE, read);
   const quota = val("--quota") || "unknown";
   const when = val("--now") ? Date.parse(val("--now")) : now();
   if (!Number.isFinite(when)) { log(`dispatch: --now ${val("--now")} is not an ISO time`); return 1; }
   let state;
   const sessionFiles = argv.flatMap((a, i) => (a === "--sessions" && argv[i + 1] ? [argv[i + 1]] : []));
-  try { state = readState({ api, config, sessionTexts: sessionFiles.map((f) => read(f, "utf8")), quota }); }
+  try { state = readState({ api, config, sessionTexts: sessionFiles.map((f) => read(f, "utf8")), quota, now: when }); }
   catch (e) { log(`dispatch: ${e.message}`); return 3; }
+  if (children) {   // step 1 of the cycle: the only sessions to look up (get_session each, save, pass as --sessions)
+    const ids = childSessionIds(state), cap = 3 * ((config.maxLiveWorkers.claude ?? 0) + (config.maxLiveWorkers.cursor ?? 0));
+    for (const id of ids) log(`GET_SESSION ${id}`);
+    log(`= dispatch children: ${ids.length} session(s) named on open or recently closed work${ids.length > cap ? ` — over ${cap}: check for stale claims` : ""}`);
+    return 0;
+  }
   const p = planDispatch(state, config, when);
   if (apply) {
     let writes;
