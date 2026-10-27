@@ -78,14 +78,18 @@ const ApexXR = (function () {
       caps.gpu = typeof navigator !== "undefined" && !!navigator.gpu;
       caps.xrgpu = typeof globalThis !== "undefined" && typeof globalThis.XRGPUBinding !== "undefined";
       caps.mobileQuest = typeof navigator !== "undefined" && questUa(navigator.userAgent);
-      let vr = false;
+      // Only rewrite apex26.xrCaps when the probe settles. A throw must not wipe
+      // a positive latch (bootPick / VR rows still need the last good detect).
       if (caps.xr && navigator.xr && navigator.xr.isSessionSupported) {
         try {
-          vr = !!(await navigator.xr.isSessionSupported("immersive-vr"));
-        } catch (_) { vr = false; }
+          const vr = !!(await navigator.xr.isSessionSupported("immersive-vr"));
+          caps.vr = vr;
+          lsSet(LS_CAPS, vr ? "1" : "0");
+        } catch (_) { /* keep caps.vr from syncCapsFromCache */ }
+      } else {
+        caps.vr = false;
+        lsSet(LS_CAPS, "0");
       }
-      caps.vr = vr;
-      lsSet(LS_CAPS, vr ? "1" : "0");
       _caps = caps;
       _plan = null; // invalidate so plan() re-resolves
       if (typeof XROpts !== "undefined" && XROpts.onCaps) {
@@ -162,18 +166,21 @@ const ApexXR = (function () {
   function rendererMatchesPlan() {
     const p = plan();
     if (p.xrMode !== "armed") return true;
-    // Shippable VR attaches only via TLX+forceGL (XrBoot.canAttach). Prefer that
-    // live gate over gfxBound — GLX also reports bound===webgl2 but cannot attach.
+    let canAttach = false;
     if (typeof XrBoot !== "undefined" && typeof XrBoot.canAttach === "function") {
-      try { if (XrBoot.canAttach()) return true; } catch (_) { /* */ }
+      try { canAttach = !!XrBoot.canAttach(); } catch (_) { canAttach = false; }
     }
-    let bound = null;
-    try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
+    // canAttach means TLX+WebGL2 — matches the shippable webgl2 path only.
     if (p.path === "webgl2") {
-      // Plan boots TLX (backendPref three + forceGL); soft-bound WebGL2 is ok.
+      if (canAttach) return true;
+      let bound = null;
+      try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
       return bound === "webgl2" || bound === "three";
     }
-    // webgpu experimental: TLX clears gfxBound on a successful bind.
+    // Experimental WebGPU XR: a live WebGL2 attach is the wrong backend.
+    if (canAttach) return false;
+    let bound = null;
+    try { bound = sessionStorage.getItem("apex26.gfxBound"); } catch (_) { bound = null; }
     return bound == null;
   }
 

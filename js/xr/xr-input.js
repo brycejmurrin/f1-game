@@ -50,7 +50,7 @@ const XrInput = (function () {
     let primaryDown = false, secondaryDown = false;
     const list = sources || [];
     // XRInputSourceArray is indexed/iterable, but has no Array.prototype.some.
-    let hasLeft = false, hasStick = false, hasGamepad = false;
+    let hasLeft = false, hasStick = false, hasGamepad = false, stickChosen = false;
     for (let i = 0; i < list.length; i++)
       if (usableStick(list[i]) && list[i].handedness === "left") hasLeft = true;
     for (let i = 0; i < list.length; i++) {
@@ -68,11 +68,13 @@ const XrInput = (function () {
         thr = Math.max(thr, t);
       }
       const sx = axis(gp, AXIS_STICK_X);
-      // Prefer left stick for steer when both present; else any.
+      // Prefer left stick for steer when both present; else any. Do not use
+      // !stickX — a centered axis is 0 and would let a later "none" overwrite.
       if (usableStick(src)) {
         hasStick = true;
-        if (hand === "left" || (!hasLeft && hand !== "right" && !stickX) || (hand === "right" && !hasLeft)) {
+        if (hand === "left" || (!hasLeft && hand !== "right" && !stickChosen) || (hand === "right" && !hasLeft)) {
           stickX = sx; stickY = axis(gp, AXIS_STICK_Y);
+          stickChosen = true;
         }
       }
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;

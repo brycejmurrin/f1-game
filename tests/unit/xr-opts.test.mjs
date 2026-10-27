@@ -101,6 +101,37 @@ test("ApexXR.noteFallback latches sessionStorage and logs", () => {
   assert.ok(ctx.ApexXR.fallbacks().some((f) => f.reason.includes("enabledFeatures")));
 });
 
+test("ApexXR.detect throw keeps a positive xrCaps latch for bootPick", async () => {
+  const { ctx, ls } = bootOpts({
+    "apex26.xr": "1",
+    "apex26.xrCaps": "1",
+    "apex26.xrBackend": "webgl2",
+  });
+  ctx.navigator.xr.isSessionSupported = async () => { throw new Error("SecurityError"); };
+  const caps = await ctx.ApexXR.detect();
+  assert.equal(ls.getItem("apex26.xrCaps"), "1", "throw must not wipe the last positive detect");
+  assert.equal(caps.vr, true);
+  assert.equal(ctx.ApexXR.bootPick(), "three");
+});
+
+test("ApexXR.rendererMatchesPlan: canAttach only satisfies the shippable webgl2 path", () => {
+  const { ctx } = bootOpts({
+    "apex26.xr": "1",
+    "apex26.xrCaps": "1",
+    "apex26.xrBackend": "webgpu",
+  });
+  ctx.XRGPUBinding = function XRGPUBinding() {};
+  ctx.XrBoot = { canAttach: () => true };
+  // Force caps so the plan cannot miss XRGPUBinding via a stale cache.
+  const caps = ctx.ApexXR.caps();
+  caps.xrgpu = true; caps.gpu = true; caps.vr = true; caps.xr = true;
+  assert.equal(ctx.ApexXR.plan(true).path, "webgpu");
+  assert.equal(ctx.ApexXR.rendererMatchesPlan(), false, "TLX+GL attach ≠ experimental webgpu plan");
+  ctx.XROpts.setXrBackend("webgl2");
+  assert.equal(ctx.ApexXR.plan(true).path, "webgl2");
+  assert.equal(ctx.ApexXR.rendererMatchesPlan(), true);
+});
+
 test("ApexXR.plan records webgpu→webgl2 when XRGPUBinding missing", () => {
   const { ctx } = bootOpts({
     "apex26.xr": "1",
