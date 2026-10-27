@@ -209,7 +209,8 @@ jobs:
         run: |
           set -uo pipefail
           mkdir -p verdict
-          out=$(node tools/ci/merge-gate.mjs --pr "$N" --sha "$HEAD_SHA" --check 2>&1); code=$?
+          # Actions runs `bash -e`: a bare `out=$(…); code=$?` aborts on a refused/waiting gate (exit 2/3) before the verdict is written.
+          code=0; out=$(node tools/ci/merge-gate.mjs --pr "$N" --sha "$HEAD_SHA" --check 2>&1) || code=$?
           echo "$out"
           line=$(grep -E '^= merge-gate ' <<<"$out" | tail -n 1)
           tip=$(sed -n 's/.* tip=\([0-9a-f]*\).*/\1/p' <<<"$line")
