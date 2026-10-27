@@ -190,10 +190,16 @@ Sources: [r2/docs.md](../notes/review-2026-10-27/r2/docs.md), [r2/relay-fleet.md
 - [ ] Remote branches `claude/fleet-bus` and 26 `cursor/orcha*-queue-*` can go; old orchestrator / merge-desk sessions
   need a manual archive (archive-sessions never matched their roles).
 
-## 7. Decisions for Bryce
+## 7. Decisions (Bryce delegated them, 2026-10-27: "You consider the options and make the best decisions")
 
-1. WP-L1: move land.yml to `pull_request_target`, put `LAND_TOKEN` in an Environment, protect `.github/workflows/**`.
-2. WP-L4 / WP-D1: the hook edits (merge and arm deny, receipt directories, ready head, launch receipt, `hold` removal).
-3. WP-R1: which pre-push floor is the rule.
-4. WP-W1 / WP-D2: delete the never-run workflows and the dead tools listed.
-5. §6: the stale scheduled task, the token-holding relay task, the old branches.
+1. WP-L1: YES — land.yml moves to `pull_request_target` in code. Left for Bryce in repo settings (not code): an
+   Environment holding `LAND_TOKEN` limited to the deploy branch, and a push restriction on `.github/workflows/**`.
+2. WP-L4 / WP-D1: YES — the hook edits (merge and arm deny, receipt directories, ready head, single-use launch receipt,
+   `hold` removal as ask, stale orchestrator text). This sentence is the grant `.claude/rules/claude-config.md` asks for.
+3. WP-R1: the pre-push floor is `tooling-fast --changed` plus the one spec `pick-tests` names, as a background
+   `test-bg --spec`. The full `tooling-fast` runs on the PR (Structural guards A–D); `deploy --gate-only` is optional,
+   for reproducing a gate-only red. One home: AGENTS.md rule 3.
+4. WP-W1 / WP-D2: YES — delete the never-run workflows and the dead tools; gpu-census and capture-gallery become
+   dispatch-only. `archive-sessions.mjs` waits for the dispatch PRs (it touches `.claude/settings.json`).
+5. §6: "Backlog check-in #1518" was rewritten for the current flow (fires 2026-10-28 16:00Z). Deleting the
+   "Fleet B inbox" relay task was refused by the session's auto-mode classifier; it is disabled — Bryce deletes it.
