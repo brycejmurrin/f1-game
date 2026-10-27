@@ -14,8 +14,7 @@ node tools/shot/hud-survey.mjs --matrix quick --only chase-default   # 1 boot, ~
 node tools/shot/hud-survey.mjs --matrix quick            # 13 cells / 3 boots, ~10 min
 node tools/shot/hud-survey.mjs --matrix quick --no-shots --gl llvmpipe   # MEASURE FIRST: 5.4 min, then --only <cells with findings> for pixels
 node tools/shot/hud-survey.mjs --matrix leads            # static-audit repros with numeric checks
-# full ≈ 45 min (pairwise); exhaustive ≈ 4 h → shard it: --shard i/n, then --merge <dirs>,
-# or dispatch .github/workflows/hud-survey.yml (llvmpipe shards + one merged artifact)
+# full ≈ 45 min (pairwise); exhaustive ≈ 4 h → shard it: --shard i/n, then --merge <dirs>
 ```
 
 MCP: `apex_hud_shot` (one cell's knobs → `structuredContent` {shot, findings,

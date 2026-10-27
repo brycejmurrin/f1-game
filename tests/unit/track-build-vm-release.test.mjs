@@ -262,8 +262,8 @@ const STRIP = {
   //   clear the steel stand. Emission 321026 → 315410, strip-after 291892 → 286386.
   // → #3859 D scenery train fix (2026-10-26): Curva Grande stonePines at gap 22.
   //   Re-measured on the mega wave 5 merged tree: 315410 → 315393, strip-after
-  //   286386 → 286363.
-  monza: { before: 315393, after: 286363 },
+  //   286386 → 286363. #3374: stand-span pine clear + lake hedge split → 313432 / 284510.
+  monza: { before: 313432, after: 284510 },
 };
 for (const [id, want] of Object.entries(STRIP)) {
   test(`${id}: props index strip is at the measured share and deterministic`, () => {

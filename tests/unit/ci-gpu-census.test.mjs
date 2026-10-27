@@ -51,13 +51,13 @@ test("gpu-census runs nightly staggered from the boot group, with the full check
 });
 
 test("gpu-census: agents may still request by push; dispatches queue, push requests never cancel each other", () => {
-  // The push-request path (2026-09-09) is how sessions WITHOUT dispatch rights
-  // reach the real GPU (a GH App token gets 403 on workflow_dispatch), and it
-  // is in daily use (2026-10-14: runs 38603534048, 38610120171, 38611116514).
+  // Dispatch is the default route (agent tokens dispatch; review 2026-10-27). The
+  // push-request path stays for the request-only legs (`leg`, `lf_*`, `lrm_*`):
+  // the dispatch form is at GitHub's 25-input cap.
   const wf = parseYAML(gpuWorkflow);
   assert.deepEqual(Object.keys(wf.on).sort(), ["push", "schedule", "workflow_dispatch"]);
   assert.match(gpuWorkflow, /paths: \["\.github\/gpu-census-request\.json"\]/,
-    "agents without workflow_dispatch may push a request file on cursor/*");
+    "a request-only leg is pushed as a request file on cursor/*");
   assert.deepEqual(wf.on.push.branches, ["cursor/**", "claude/**"]);
   const req = JSON.parse(fs.readFileSync(new URL("../../.github/gpu-census-request.json", import.meta.url), "utf8"));
   assert.ok(req && typeof req === "object", "the request file must stay valid JSON — the plan job json.load()s it");
