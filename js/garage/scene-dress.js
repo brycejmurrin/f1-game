@@ -46,8 +46,11 @@ function boardInfo(team, getParts, driverIdx, ctx) {
     // ONE resolveSetup call carries everything: it already returns the stat
     // `mods`, the total `cost`, and `options` (the RESOLVED option per category,
     // which is what a supplier-locked fallback actually fitted — not the id the
-    // save asked for).
-    const r = Parts.resolveSetup(getParts(team.id), team);
+    // save asked for). Pass SetupTune.mods the same way the DOM bars do
+    // (setup-sheet.js renderStatBars → Parts.getMods(..., tune)), so a mechanical
+    // set-up change cannot leave the wall quoting different numbers.
+    const tune = typeof SetupTune !== "undefined" ? SetupTune.mods(team.id) : null;
+    const r = Parts.resolveSetup(getParts(team.id), team, tune);
     const base = GarageExperience.statsOf(team) || { speed: 85, accel: 85, cornering: 85, braking: 85 };
     const stats = Parts.STAT_KEYS.map((k) => {
       const b = base[k.key] || 75;

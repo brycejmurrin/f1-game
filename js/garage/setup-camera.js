@@ -174,8 +174,8 @@ function startDriveOut() {
   driveOutEngine(true);
   return Math.round(GarageArrival.duration(play, "out") * 1000 / play.speed);
 }
-// Wall ms of the drive-out still to play: it advances on the clamped frame dt, so a
-// stalled frame (a circuit build on the main thread) delays it rather than skipping it.
+// Wall ms of the drive-out still to play: stepDriveOut advances on the wall clock
+// (gap capped at 0.1 s), so a stalled frame delays it rather than skipping it.
 function driveOutLeft() {
   return driveOut ? Math.max(0, (GarageArrival.duration(driveOut.cfg, "out") - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
 }
@@ -341,14 +341,11 @@ const SP_VIEWS = {
   wingFront: { az: Math.PI * 0.30, el: 0.34, dist: 3.6, aim: "front", minDist: 2.0 },
   wingRear:  { az: Math.PI * 0.72, el: 0.50, dist: 4.6, aim: "rear",  minDist: 2.4 },
 };
-// The point the preview camera ORBITS and LOOKS AT. The defaults reproduce the
-// previous hard-coded numbers exactly (eye was offset -1.0 in z from a target at
-// z 0), so every existing view is unchanged; only the wing presets move them.
-// ORBIT AND AIM ARE THE SAME POINT, AND IT IS THE CAR'S CENTRE. These used to
-// be [0, 0.35, -1.0] and [0, 0.35, 0] — a camera circling a point 1 m BEHIND
-// the one it looked at, swinging the car across the frame instead of rotating
-// it in place. The drawn body spans z -2.69..3.18 (measured), so its centre
-// is z +0.245, not 0 and not -1.
+// The point the preview camera ORBITS and LOOKS AT. ORBIT AND AIM ARE THE SAME
+// POINT, AND IT IS THE CAR'S CENTRE. These used to be [0, 0.35, -1.0] and
+// [0, 0.35, 0] — a camera circling a point 1 m BEHIND the one it looked at,
+// swinging the car across the frame instead of rotating it in place. The drawn
+// body spans z -2.69..3.18 (measured), so its centre is z +0.245, not 0 and not -1.
 const SP_CAR_CTR = [0, 0.45, 0.245];
 const SP_ORBIT_DEF = SP_CAR_CTR.slice(), SP_TGT_DEF = SP_CAR_CTR.slice();
 let setupPreviewOrbit = SP_ORBIT_DEF.slice(), setupPreviewTgt = SP_TGT_DEF.slice();

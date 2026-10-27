@@ -151,8 +151,8 @@ const PitSigns = (function () {
       const canvas = paintAtlas(track.pit.row.boxes, { mobile: !!(G.isMobile || G.mobileTier), side: track.pit.side, limitKph: track.pit.limitKph });
       track.meshes.pitSignTex = G.createTexture(canvas);
       track.meshes.pitSigns = G.createTexMesh({ pos: q.pos, nrm: q.nrm, uv: q.uv, idx: q.idx });
-      // The entrance lamps' RED aspects: a second mesh on the same texture,
-      // drawn only under a red flag (draw()).
+      // The entrance lamps' GREEN call-in aspects: a second mesh on the same
+      // texture, drawn when the player is called in (draw()'s `called`).
       const r = track.pitSignal;
       track.meshes.pitSignal = r && r.idx && r.idx.length
         ? G.createTexMesh({ pos: r.pos, nrm: r.nrm, uv: r.uv, idx: r.idx }) : null;

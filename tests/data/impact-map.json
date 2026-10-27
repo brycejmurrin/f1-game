@@ -7685,12 +7685,17 @@
       ]
     },
     "js/garage/scene-dress.js": {
+      "boardInfo": [
+        "tests/unit/garage-sheet-round2.test.mjs"
+      ],
+      "releaseDress": [
+        "tests/unit/garage-sheet-round2.test.mjs"
+      ],
       "*": [
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
-        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
@@ -8145,6 +8150,7 @@
       ],
       "mods": [
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
       "rake": [
@@ -8154,7 +8160,6 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "*": [
-        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/player-tools-ui.test.mjs"
       ]
     },
