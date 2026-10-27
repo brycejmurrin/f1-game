@@ -1,0 +1,19 @@
+{
+  "apps": "./.app.json",
+  "author": {
+    "name": "App developer"
+  },
+  "description": "Private connection to the existing F1 workspace MCP gateway.",
+  "interface": {
+    "capabilities": [],
+    "category": "Developer Tools",
+    "defaultPrompt": "Discover the available F1 tools and call the exposed status tool before workspace operations. Use one browser workflow at a time. Report missing tool attachment separately from local gateway readiness.",
+    "developerName": "App developer",
+    "displayName": "F1 Cloud MCP",
+    "longDescription": "Connects to the existing private F1 Cloud MCP app. Available tools are provided by the connected workspace gateway; discovery and authorization are managed by the host.",
+    "shortDescription": "Private F1 workspace MCP connection"
+  },
+  "name": "dev-6ade996f81448191a51fc4e7a33152a8",
+  "version": "1.0.5",
+  "skills": "./skills"
+}

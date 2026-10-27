@@ -1,0 +1,58 @@
+{
+  "ok": true,
+  "route": "local MCP client",
+  "hostedCall": false,
+  "tools": 145,
+  "hostNamesSupplied": 20,
+  "checkout": "/workspace/f1-game",
+  "summary": {
+    "pass": 239,
+    "warn": 0,
+    "fail": 0
+  },
+  "checks": [
+    {
+      "id": "runtime.dependencies",
+      "status": "pass",
+      "message": "Declared dependencies resolve",
+      "details": {
+        "missing": []
+      }
+    },
+    {
+      "id": "session.catalog",
+      "status": "pass",
+      "message": "Supplied host catalog inspected; availability is not execution proof",
+      "details": {
+        "ok": true,
+        "tools": 20,
+        "invalid": [],
+        "duplicates": [],
+        "capabilities": {
+          "deterministicBrowser": false,
+          "browserUse": false,
+          "browserCancellation": false,
+          "library": false
+        },
+        "omittedOrchestration": [
+          "functions.exec",
+          "functions.wait",
+          "functions.request_user_input",
+          "functions.request_user_input_async",
+          "collaboration.spawn_agent",
+          "collaboration.followup_task",
+          "collaboration.interrupt_agent",
+          "collaboration.list_agents",
+          "collaboration.send_message",
+          "collaboration.wait_agent"
+        ],
+        "warnings": [],
+        "upstreamOnly": [
+          "Hosted plugin installation and permission state",
+          "Hosted tool schemas and cancellation endpoints",
+          "Remote skill resource packaging and mounted helper paths"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "packages": [
+    {
+      "file": "f1-cloud-mcp-1.0.5.zip",
+      "sha256": "6accd4766a5949c5507d8a39d7600cb3a94c748ec1ab34f36189eade1103c5c5",
+      "members": 5
+    },
+    {
+      "file": "f1-dev-tools-0.2.5.zip",
+      "sha256": "37a99ba035bdc9a92732dc6f1ed041b451724c804eea1b2f4f38cf49554be8c7",
+      "members": 25
+    }
+  ],
+  "appBinding": "preserved",
+  "published": false
+}

@@ -1,0 +1,15 @@
+diff --git a/tools/check/doctor.mjs b/tools/check/doctor.mjs
+index 92a09c786..2ab7e0c48 100644
+--- a/tools/check/doctor.mjs
++++ b/tools/check/doctor.mjs
+@@ -75,7 +75,9 @@ export function diagnose({ root = ROOT, catalog, env = process.env, nodeVersion
+       const require = createRequire(path.join(root, "package.json"));
+       const missing = [];
+       for (const name of Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }).sort()) {
+-        try { require.resolve(name); } catch { missing.push(safeName(name)); }
++        // The MCP SDK's published root entry may be absent; this project imports its server subpath.
++        const entry = name === "@modelcontextprotocol/sdk" ? `${name}/server/index.js` : name;
++        try { require.resolve(entry); } catch { missing.push(safeName(name)); }
+       }
+       add("runtime.dependencies", missing.length ? "fail" : "pass", missing.length ? "Declared dependencies are missing; run npm install" : "Declared dependencies resolve", { missing });
+     } catch {

@@ -1,0 +1,42 @@
+{
+  "chat-mcp-service.mjs": {
+    "sourceCommit": "f5a253e68f18244b13a84ae4bc41715d6875f173",
+    "sourcePath": "tools/env/chat-mcp-service.mjs",
+    "originalSha256": "946f531c59ed10df74e70c562d53fb2bc11486be5a384023ae9f320780f86c63",
+    "retainedSha256": "b462caefe7a71b78fdf218f816a61439b91133590fee88f6894ecd3f321d729c",
+    "adaptations": [
+      "standalone toolchain runtime paths",
+      "existing profile preserved through supported MCP command override",
+      "SDK installed from separate lockfile"
+    ]
+  },
+  "chat-gateway.mjs": {
+    "sourceCommit": "f5a253e68f18244b13a84ae4bc41715d6875f173",
+    "sourcePath": "tools/mcp/chat-gateway.mjs",
+    "originalSha256": "904d9d1f75ac7a8770d2e5109e33db54cab231dc6ba8c9618564d3491e17675d",
+    "retainedSha256": "2e7ca0fa4f50d30978c0980e74a068f40c3a4b9974120804a7fc6f0ac57229ac",
+    "adaptations": [
+      "standalone toolchain runtime paths",
+      "existing profile preserved through supported MCP command override",
+      "SDK installed from separate lockfile",
+      "Optional bounded caller-supplied hostToolNames doctor adapter"
+    ]
+  },
+  "check-chat-contract.mjs": {
+    "sourceCommit": "f5a253e68f18244b13a84ae4bc41715d6875f173",
+    "sourcePath": "tools/mcp/check-chat-contract.mjs",
+    "originalSha256": "64fa36a63669afa14de9d170e34ddcfd5cb4c015dba6a86191401f1059a10347",
+    "retainedSha256": "d9989d3fa44393c6af13cecb6187e7efcfca4953949f83bf0371edf195e5742a",
+    "adaptations": [
+      "standalone toolchain runtime paths",
+      "existing profile preserved through supported MCP command override",
+      "SDK installed from separate lockfile"
+    ]
+  },
+  "doctor-catalog.mjs": {
+    "retainedSha256": "02e08c14a9034613fcb6e0b25c09b22cb16b01eef7b43a65d2aa6cf7fa332d17",
+    "adaptations": [
+      "Calls the checkout doctor with inline caller-provided catalog; no path override or persisted snapshot"
+    ]
+  }
+}
