@@ -1,6 +1,6 @@
 ---
 name: season-mode
-description: "Use when the standalone Season screen or setup changes or a sprint/quali toggle is ignored — calendar, weekend format, sprint, quali-on/off, lap count, points table, fastest-lap point (flPoint), Season SETUP (#season-setup), season-cal.js, season-ui.js. Not a season, sprint or quali bug inside a DRIVER CAREER / MY TEAM save → career-mode."
+description: "Use when the standalone Season screen or SETUP changes or a sprint/quali toggle is ignored — calendar, weekend format, lap count, points table, fastest-lap point (flPoint), #season-setup, season-cal.js, season-ui.js. A sprint/quali bug inside a DRIVER CAREER / MY TEAM save → career-mode."
 ---
 
 # Standalone Season — calendar vs format

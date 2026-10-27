@@ -1,6 +1,6 @@
 ---
 name: career-mode
-description: "Use when DRIVER CAREER, MY TEAM, career saves or slots, contracts, sponsors, R&D economy, career qualifying, DNF money/settlement, career hooks/tests change — including season, sprint and quali behaviour INSIDE a career save (it races its stamped calendar, Career.calendar()). The standalone Season screen with no career save open → season-mode; reliability plans → race-incidents-control."
+description: "Use when DRIVER CAREER, MY TEAM, career saves/slots, contracts, sponsors, R&D economy, career qualifying, DNF money, career hooks/tests change — including season, sprint and quali INSIDE a career save (its stamped calendar, Career.calendar()). Season screen with no career save → season-mode; reliability plans → race-incidents-control."
 ---
 
 ## Overview
