@@ -74,3 +74,9 @@ seat     audit frontWing~chassis rows (ferrari+mclaren, 6 bodies)   baseline gat
 (a design assertion that contradicts the audit's PENETRATION limit). Landing it needs either a per-body seat that keeps
 hammerhead's cap inside (hammerhead is outside the six-body audit set) or Bryce relaxing that test. Left as the
 decision; no geometry committed.
+
+## Row 1 landed (per-body seat)
+Decision (orchestration session, 2026-10-27): keep the `body-styles` "supports penetrate the nose" test as is (rule 9).
+`noseMount()` seat is now `style.noseSeat` when set, else `-0.012` for podSculpt bodies, else `+0.012`. The six expansion
+bodies (hammerhead, swan, manta, wasp, scorpion, blade) pin `noseSeat: 0.012` because their thin noses must keep the cap inside.
+Measured: six-body `--baseline` PASS (0 NEW/WORSE, 146 s); `tooling-fast --changed` 81/81; no frontWing~chassis row remains.
