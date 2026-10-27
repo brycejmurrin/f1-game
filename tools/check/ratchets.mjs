@@ -425,8 +425,14 @@ export function changedFiles() {
 /** A topic-branch delta may RAISE anything, but LOWER only a file the branch
  *  changed; tree metrics are not attributable to one file and pass. */
 export function scopeToBranch(rows, touched = changedFiles()) {
-  if (!touched) return rows;
-  return rows.filter((r) => r.tree || r.value >= r.ceiling || touched.has(r.file));
+  // A tree-wide row enters a fragment only when it is AT or OVER its ceiling (a
+  // deliberate `--update --fragment` raise). Snapping a LOOSE tree ceiling down to
+  // this branch's count wrote e.g. assertPins −54 into every topic fragment: the
+  // first sibling to merge one pin then left each of them over on the merge
+  // result (2026-10-27, PRs #3970/#3981/#3985). Tree lowering is the deploy
+  // branch's `--update` / `--fold`, never a topic branch's (#2583 for files).
+  if (!touched) return rows.filter((r) => !r.tree || r.value >= r.ceiling);
+  return rows.filter((r) => (r.tree ? r.value >= r.ceiling : r.value >= r.ceiling || touched.has(r.file)));
 }
 
 /** Add `rows`' (value - ceiling) to this branch's fragment; delete it when

@@ -55,6 +55,26 @@ name: Land
 #   "error, will retry" (an API or git hiccup is not a refusal)    `hold`, `land` removed, back to draft →
 #   failure "not asked", and an armed auto-merge is disabled.
 #
+# IMMEDIATE RE-GATE (`retry` job). A gated, green PR whose arm found the deploy tip moved (another PR merged in
+# between), or whose post read "the deploy tip moved between trusted-rows and land-gate", used to wait for the next
+# train or its own next CI run: 60–90 min on a busy day (#3957, #3942, #3940, 2026-10-27). `retry` (actions: write
+# only, no checkout, no repo code, GITHUB_TOKEN) now dispatches this workflow again for that ONE PR. "events
+# triggered by the GITHUB_TOKEN will not create a new workflow run, with the following exceptions: workflow_dispatch
+# and repository_dispatch events always create workflow runs" (https://docs.github.com/en/actions/how-tos/
+# write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow, read
+# 2026-10-27). The dispatch is the REST call (POST …/actions/workflows/land.yml/dispatches, `ref` + `inputs`,
+# https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event; the Actions permission
+# "write" per https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens),
+# with `ref` = the deploy branch, so the run uses the deploy branch's copy of this file ("GITHUB_REF: the branch or
+# tag that received the dispatch"; the file must exist on the default branch, https://docs.github.com/en/actions/
+# reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch). resolve refuses a dispatch on
+# any other ref. A dispatched run is resolved like a land/hold label event: one PR, re-gated, armed on a pass. It is
+# BOUNDED per head: inputs carry `head` and `attempt`; resolve resets the count to 0 when the PR's head is no longer
+# `head` (a push re-gates on its own), and `retry` stops at RETRY_MAX dispatches per head ("retry budget spent; the
+# next train re-gates"), so a tip that keeps moving cannot loop. Nothing is counted in repo files. Still ONE arm per
+# run; a train arming one PR and the next train arming the next is unchanged. Anyone with write access may dispatch
+# it by hand too (`gh workflow run land.yml --ref claude/f1-game-project-26h3ng -f pr=<n>`): a re-gate now.
+#
 # MERGE-PAUSE. `dispatch:merge-pause` on the open issue titled `Dispatch` arms nothing and disarms what this event
 # touches. Removing the label re-gates nothing by itself: the next push, label flip, CI or train run does.
 #
@@ -74,9 +94,28 @@ on:
   workflow_run:   # zizmor: ignore[dangerous-triggers] same as pull_request_target above
     workflows: ["CI", "Deploy to GitHub Pages"]
     types: [completed]
+  # The immediate re-gate (`retry` below; IMMEDIATE RE-GATE above). Runs the dispatched ref's file: resolve accepts
+  # only the deploy branch. Inputs are read through env and validated, never interpolated into a script.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to re-gate (and arm on a pass)
+        required: true
+        type: string
+      head:
+        description: the head sha the retry budget counts against (empty = the PR's current head)
+        required: false
+        default: ""
+        type: string
+      attempt:
+        description: immediate re-gates already spent on that head (retry adds 1; stops at RETRY_MAX)
+        required: false
+        default: "0"
+        type: string
 
 env:
   DEPLOY_BRANCH: claude/f1-game-project-26h3ng
+  RETRY_MAX: 3
 
 # ONE group per PR (a CI run on a PR head carries the PR number); the deploy branch's train runs share `land-tip`; a
 # CI run that names no PR (a fork) gets `land-sha-<head>`, never the train's group (GitHub keeps one pending run per
@@ -85,11 +124,16 @@ env:
 # itself; a CI or train re-gate never cancels, it queues. A label that is not land/hold is noise and runs alone in
 # `land-noise-<run id>` (its resolve is skipped): before, it cancelled an in-flight CI re-gate and left `gate` pending
 # on a green PR (WP-L3a). The train run and a PR run can still overlap: AT and arm's re-read of every veto cover that.
+# A dispatched re-gate joins its PR's `land-<n>` group and never cancels (cancel-in-progress is true only for
+# pull_request_target): it queues behind the run that dispatched it. "At most one … workflow run can be pending in the
+# concurrency group … any existing pending … run in the same group is canceled and replaced"
+# (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency, read 2026-10-27):
+# a pending CI re-gate and a pending dispatch of one PR do the same work, since resolve reads the PR's live state.
 concurrency:
   group: >-
     ${{ (github.event_name == 'pull_request_target' && (github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold')
     && format('land-noise-{0}', github.run_id)
-    || format('land-{0}', github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
+    || format('land-{0}', github.event.pull_request.number || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 permissions: {}
@@ -105,6 +149,7 @@ jobs:
         || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land'))))
       || (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.display_title, 'CI ignored')
         && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -112,6 +157,7 @@ jobs:
       issues: read
       statuses: read
     outputs:
+      attempt: ${{ steps.pick.outputs.attempt }}
       landable: ${{ steps.pick.outputs.landable }}
       prs: ${{ steps.pick.outputs.prs }}
       notasked: ${{ steps.pick.outputs.notasked }}
@@ -130,6 +176,9 @@ jobs:
           RUN_REPO: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           CANDIDATES: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+          IN_PR: ${{ github.event.inputs.pr }}
+          IN_HEAD: ${{ github.event.inputs.head }}
+          IN_ATTEMPT: ${{ github.event.inputs.attempt }}
         run: |
           set -euo pipefail
           # The moment the PR state was read, in WHOLE seconds like a status's `created_at`; post compares the two
@@ -139,8 +188,17 @@ jobs:
             --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0')
           numbers=()
           train=false
+          attempt=0
           if [ "$EVENT" = pull_request_target ]; then
             numbers=("$PR_NUMBER")
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            # An immediate re-gate (the `retry` job, or a person): one PR, resolved like a land/hold label event.
+            if ! [[ "$IN_PR" =~ ^[0-9]{1,7}$ ]]; then echo "::error::workflow_dispatch input pr='$IN_PR' is not a PR number"; exit 1; fi
+            numbers=("$IN_PR")
+            # The budget counts per head: a head that moved since the retry was asked for starts again at 0.
+            [[ "$IN_ATTEMPT" =~ ^[0-9]{1,3}$ ]] && attempt=$IN_ATTEMPT
+            if [ -n "$IN_HEAD" ] && [ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$IN_PR" --jq .head.sha)" != "$IN_HEAD" ]; then attempt=0; fi
+            echo "dispatched re-gate of #$IN_PR (attempt $attempt of $RETRY_MAX on ${IN_HEAD:0:12})"
           elif [ "$RUN_BRANCH" = "$DEPLOY_BRANCH" ] && [ "$RUN_REPO" = "$GITHUB_REPOSITORY" ]; then
             if [ "$RUN_CONCLUSION" = success ]; then
               # The train (or the tip's own suite) finished: the tip moved, so every open `land` PR is re-gated.
@@ -200,8 +258,9 @@ jobs:
             echo "disarm=$disarm"
             echo "paused=$paused"
             echo "at=$at"
+            echo "attempt=$attempt"
           } >> "$GITHUB_OUTPUT"
-          echo "landable=$landable prs=$prs notasked=$notasked disarm=$disarm paused=$paused at=$at"
+          echo "landable=$landable prs=$prs notasked=$notasked disarm=$disarm paused=$paused at=$at attempt=$attempt"
 
   # THE TRUSTED ROWS: merge-gate.mjs --trusted (open, hold, plan, ci, distance) from the deploy branch's own code. It
   # fetches each head's objects for the merge-base and never checks them out or runs them, so `post` can believe it
@@ -320,6 +379,7 @@ jobs:
       actions: read
     outputs:
       arm: ${{ steps.post.outputs.arm }}
+      retry: ${{ steps.post.outputs.retry }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: needs.resolve.outputs.landable == 'true'
@@ -377,6 +437,7 @@ jobs:
             fi
           done
           arm=""
+          retry='[]'
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row"); f="verdicts/$n.json"
             if [ -f "$f" ]; then
@@ -400,6 +461,8 @@ jobs:
               code=3; line="$tline"
             elif [ "$code" = 0 ] && [ "$ttip" != "$tip" ]; then
               code=1; line="the deploy tip moved between trusted-rows (${ttip:0:12}) and land-gate (${tip:0:12})"
+              # Both halves passed on different tips: re-gate this PR at once (the `retry` job), not on the next train.
+              retry=$(jq -c --argjson n "$n" --arg h "$head" '. + [{number: $n, head: $h}]' <<<"$retry")
             elif [ "$code" = 0 ]; then
               line="$tline (gen, ratchets: land-gate)"
             fi
@@ -433,8 +496,8 @@ jobs:
             esac
             [ "$ok" = true ] || echo "::warning::PR #$n: could not write gate"
           done 3< <(jq -c '.[]' <<<"$PRS")
-          echo "arm=$arm" >> "$GITHUB_OUTPUT"
-          echo "arm=${arm:-none}"
+          { echo "arm=$arm"; echo "retry=$retry"; } >> "$GITHUB_OUTPUT"
+          echo "arm=${arm:-none} retry=$retry"
 
   # ARM one PR. gh merges at once when the PR is mergeable (see the header), so every veto is re-read first.
   arm:
@@ -447,8 +510,11 @@ jobs:
       contents: write
       pull-requests: write
       issues: read
+    outputs:
+      retry: ${{ steps.arm.outputs.retry }}
     steps:
       - name: Re-check the vetoes and the tip, then arm pinned to the gated head
+        id: arm
         env:
           LAND_TOKEN: ${{ secrets.LAND_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -467,10 +533,16 @@ jobs:
           [ "$(jq -r .draft <<<"$pr")" = false ] || skip="PR is a draft"
           [ "$(jq -r .head.sha <<<"$pr")" = "$head" ] || skip="head moved past ${head:0:12}"
           jq -e '[.labels[].name] | index("land") and (index("hold") | not)' <<<"$pr" >/dev/null || skip="\`land\` gone or \`hold\` set"
-          # The gate measured gen:check and the ratchets on a merge onto `tip`; a moved tip is an ungated combination.
-          if [ -z "$tip" ] || [ "$now" != "$tip" ]; then skip="deploy tip moved ${tip:0:12} -> ${now:0:12}; the next train re-gates"; fi
+          [ -n "$tip" ] || skip="the verdict names no deploy tip"
           if [ -n "$skip" ]; then
             echo "::notice::not arming #$n: $skip" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          # The gate measured gen:check and the ratchets on a merge onto `tip`; a moved tip is an ungated combination.
+          # Skipped ONLY for that reason: hand the PR to `retry`, which re-gates it at once (bounded per head).
+          if [ "$now" != "$tip" ]; then
+            echo "::notice::not arming #$n: deploy tip moved ${tip:0:12} -> ${now:0:12}; re-gating at once" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           who=GITHUB_TOKEN
           if [ -n "$LAND_TOKEN" ]; then
@@ -482,3 +554,43 @@ jobs:
           fi
           gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --auto --merge --match-head-commit "$head"
           echo "armed (or merged) #$n @ ${head:0:12} onto ${tip:0:12} with $who" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # RETRY: the immediate re-gate (IMMEDIATE RE-GATE in the header). Dispatches this workflow on the deploy branch for
+  # each PR that post or arm handed over because ONLY the deploy tip moved. actions: write and nothing else, no
+  # checkout, no repo code, no secret: GITHUB_TOKEN's workflow_dispatch is one of the two events it may start.
+  retry:
+    name: retry
+    needs: [resolve, post, arm]
+    if: >-
+      !cancelled() && needs.resolve.result == 'success'
+      && ((needs.post.outputs.retry != '' && needs.post.outputs.retry != '[]') || needs.arm.outputs.retry != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch a re-gate of each PR whose gate passed on a tip that has since moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTEMPT: ${{ needs.resolve.outputs.attempt }}
+          POST_RETRY: ${{ needs.post.outputs.retry }}
+          ARM_RETRY: ${{ needs.arm.outputs.retry }}
+        run: |
+          set -euo pipefail
+          a=0; [[ "${ATTEMPT:-}" =~ ^[0-9]{1,3}$ ]] && a=$ATTEMPT
+          list=$(jq -c -n --arg p "${POST_RETRY:-}" --arg a "${ARM_RETRY:-}" \
+            '((if $p == "" then [] else ($p | fromjson) end) + (if $a == "" then [] else [$a | fromjson] end)) | unique_by(.number)')
+          while IFS= read -r row <&3; do
+            n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row")
+            if [ "$a" -ge "$RETRY_MAX" ]; then
+              echo "::notice::#$n: retry budget spent ($a of $RETRY_MAX immediate re-gates on ${head:0:12}); the next train re-gates" | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            # POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches: `ref` + `inputs` (strings).
+            if gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/land.yml/dispatches" \
+                 -f ref="$DEPLOY_BRANCH" -f "inputs[pr]=$n" -f "inputs[head]=$head" -f "inputs[attempt]=$((a + 1))" >/dev/null; then
+              echo "re-gate of #$n dispatched (attempt $((a + 1)) of $RETRY_MAX on ${head:0:12})" | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning::#$n: could not dispatch the re-gate; the next train or CI run re-gates"
+            fi
+          done 3< <(jq -c '.[]' <<<"$list")
