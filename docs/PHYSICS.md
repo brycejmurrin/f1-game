@@ -734,7 +734,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   entirely and the AI's pace comes off the same `TyreModel` curve the player is
   driving, so a strategy fight is fought on one model (§Wear, and the stop), and
   the STARTING compound comes from the car's own plan rather than the class draw.
-- **The field races a strategy** (`AiDrive.stintPlan` / `pitNow`, executed by
+- **The field races a strategy** (`AiDrive.stintPlan` / `pitNow`, bodies in `js/physics/ai-strategy.js`, executed by
   `PitLane.planFor` / `think`), when TYRE WEAR is on. Each car enumerates every
   0-, 1- and 2-stop plan over the three dry compounds and keeps the cheapest
   under `Σ stint costs + stops × pit loss` — the formulation strategists
