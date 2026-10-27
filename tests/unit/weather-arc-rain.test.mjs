@@ -309,3 +309,31 @@ test("fix 4 — the road dries slower than it wets, frame-rate independent, and 
   G.raceWeather = "dry";
   assert.equal(wetness(), 0, "endSession: no wet road leaks into the next race");
 });
+
+// ── #1627: the lateral drying line — one surface field read by grip, shaders and the view ──
+test("drying line: on a drying road the groove is drier than off-line; soaked and dry roads have none", () => {
+  const { G, wa } = raced("rain");
+  G.track = { total: 5800 }; G.frame = {};
+  wa.startArc("rain", "dry", 60);
+  G.raceT = 70;   // past the ramp: the road is part-dry (τ 36 s)
+  wa.tick(70);
+  const s = 2000, len = 5800;
+  // find the groove centre by scan, then compare against 8 m off it
+  let best = -9, bv = 0;
+  for (let x = -8; x <= 8; x += 0.25) { const v = wa.dryLine(s / len, x); if (v > bv) { bv = v; best = x; } }
+  assert.ok(bv > 0.99, "the groove has a centre inside the road");
+  const w = wa.wetness();
+  assert.ok(w > 0.05 && w < 0.95, "part-dry road " + w);
+  const on = wa.wetnessAt(s, best), off = wa.wetnessAt(s, best + 8);
+  assert.ok(on < off - 0.05, `groove ${on} drier than off-line ${off}`);
+  assert.equal(wa.wetnessAt(s), w, "no lateral offset = the lap value");
+  assert.ok(Math.abs(off - w) < 0.01, "far off-line reads the unmodified wetness");
+  G.player = { s, x: best };
+  assert.equal(wa.viewWetness(), on, "the view and grip read the same field at (s, x)");
+  wa.syncWetness(0);
+  assert.equal(G.frame.wetness, on, "frame.wetness agrees with wetnessAt at the player's (s, x)");
+  const dry = raced("dry"); dry.G.track = { total: 5800 };
+  assert.equal(dry.wa.wetnessAt(s, best), 0, "bone dry: no line");
+  const wet = raced("rain"); wet.G.track = { total: 5800 };
+  assert.equal(wet.wa.wetnessAt(s, best), 1, "soaked: no line");
+});

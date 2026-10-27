@@ -352,17 +352,37 @@ const WeatherArc = (function () {
     }
     /** Road wetness at arc position `s` (metres) — the SURFACE under that car.
      *  Global weather (no local arc) is the scalar wetness(). */
-    function wetnessAt(s) {
+    function wetnessAt(s, x) {
       const a = arc, len = G.track && G.track.total;
-      if (!local(a) || !hasRC() || !(len > 0) || !Number.isFinite(s)) return wetness();
-      if (typeof a.w0 !== "number") adopt(a);
-      return RainCells.sample(segs(a), s / len);
+      let w = wetness();
+      if (local(a) && hasRC() && len > 0 && Number.isFinite(s)) {
+        if (typeof a.w0 !== "number") adopt(a);
+        w = RainCells.sample(segs(a), s / len);
+      }
+      return Number.isFinite(x) && len > 0 && Number.isFinite(s) ? w * (1 - DRYLINE_K * dryLine(s / len, x) * Math.sqrt(Math.max(0, 1 - w))) : w;
+    }
+    // ── Drying line (#1627) — a lateral field on top of the along-lap wetness ──
+    // SURFACE channel (docs/PHYSICS.md): the groove is where traffic has worn the rubber in, a fixed smooth
+    // wander about the centreline hashed from the lap fraction alone — no curvature, no racing-line read —
+    // so every car at the same (s, x) and every peer sees the same water. It dries first (up to DRYLINE_K of
+    // the wetness) when the road is part-dry; a soaked (1) or bone-dry (0) road has no line.
+    const DRYLINE_K = 0.6, DRYLINE_W = 2.2, DRYLINE_AMP = 2.5;   // max share dried; groove half-width m; wander m
+    function grooveX(frac) {
+      const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = u * u * (3 - 2 * u);
+      const h = (j) => RainCells.h01("groove|" + (((j % n) + n) % n)) * 2 - 1;
+      return DRYLINE_AMP * (h(i) + (h(i + 1) - h(i)) * k);
+    }
+    /** 0..1 — how much of the groove lies under lateral offset `x` (m, + right) at lap fraction `frac`. */
+    function dryLine(frac, x) {
+      if (!hasRC()) return 0;
+      const d = (x - grooveX(frac)) / DRYLINE_W;
+      return Math.exp(-d * d);
     }
     /** What the VIEW stands on: the followed car's (camera's) position, so the
      *  rain starts and stops as you drive into and out of a shower. */
     function viewWetness() {
       const p = G.player;
-      return p && Number.isFinite(p.s) ? wetnessAt(p.s) : wetness();
+      return p && Number.isFinite(p.s) ? wetnessAt(p.s, p.x) : wetness();
     }
     /** The wettest segment: what the SKY shows (a shower anywhere darkens the
      *  circuit's one sky) and what ends a local arc once it has dried. */
@@ -508,7 +528,7 @@ const WeatherArc = (function () {
         return;
       }
       // The VIEW's road: the lap mean (trackWetness) unless a local shower makes it position-dependent.
-      const wetTarget = local(arc) && hasRC() ? viewWetness() : (G.trackWetness ? G.trackWetness() : 0);
+      const wetTarget = (local(arc) || (G.player && Number.isFinite(G.player.x))) && hasRC() ? viewWetness() : (G.trackWetness ? G.trackWetness() : 0);
       const cur = frame.wetness || 0;
       const step = (dt == null || !(dt > 0)) ? 1 : Math.min(1, dt * 0.8);
       frame.wetness = cur + (wetTarget - cur) * step;
@@ -516,7 +536,7 @@ const WeatherArc = (function () {
 
     return {
       setWeatherLive, setTimeOfDay, weather,
-      startArc, tick, syncWetness, wetness, wetnessAt, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
+      startArc, tick, syncWetness, wetness, wetnessAt, dryLine, viewWetness, rainfallAt, viewRainfall, rainSectors, planFor, previewPlan, previewArc, startChangeable, endChangeable, restoreBase, endSession,
       get arc() { return arc; }, set arc(v) { arc = v; if (!arc) setWeatherLive(G.raceWeather); },
       get changeable() { return changeable; }, set changeable(v) { changeable = v; },
       get plan() { return plan; }, set plan(v) { plan = v; },
