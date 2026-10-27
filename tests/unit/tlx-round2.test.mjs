@@ -354,6 +354,7 @@ function decalRunHarness() {
   const dropEnd = TLX.indexOf('      // (geometry, material, OCCURRENCE)', dropStart);
   return new Function('THREE', `
     const scene = new THREE.Scene(), _instRegistry = [], meshPool = [], meshByGeo = new Map();
+    const _instAdd = (im) => { scene.add(im); _instRegistry.push(im); };   // tlx.js's F3 helper with apex26.tlxInstRoot=0: in scene, as before
     const shadowSys = null, BLOB_CAP = 8, window = {}, renderer = {};
     let _warmPending = false, _sceneRenders = 0;
     const skipBatches = () => false, _coDrop = () => {};
@@ -388,3 +389,40 @@ for (const warming of [false, true]) {
     assert.equal(disposed, 40, 'each instance buffer/render object released once');
   });
 }
+
+// F3 (#3104): the instanced registry hangs off one root whose children are the
+// members visible at render time, so three's projectObject never visits the hidden
+// ones (monza 844x390: 59 hidden a main pass, 108 a mirror pass). Sliced from tlx.js.
+function instRootRig(storage) {
+  const a = TLX.indexOf("      // F3 (#3104) — THE INSTANCED ROOT");
+  const z = TLX.indexOf("      // A-H1 (perf hunt 4) — STREAM");
+  assert.ok(a > 0 && z > a, "the F3 block moved — check this test, not the code");
+  return new Function("THREE", "localStorage", `
+    const scene = new THREE.Scene(), _instRegistry = [];
+    ${TLX.slice(a, z)}
+    return { scene, instRoot, reg: _instRegistry, add: _instAdd, detach: _instDetach };`)(CORE, storage);
+}
+test("F3: hidden registry members are off the tree; scene.onBeforeRender shows exactly the visible ones", () => {
+  const R = instRootRig({ getItem: () => null });
+  const m = [0, 1, 2, 3].map(() => { const o = new CORE.Mesh(); o.visible = false; R.add(o); return o; });
+  assert.deepEqual(R.scene.children, [R.instRoot], "one child in scene, whatever the registry holds");
+  m[1].visible = true; m[3].visible = true;
+  R.scene.onBeforeRender();
+  const drawn = []; R.scene.traverseVisible((o) => { if (o.isMesh) drawn.push(o); });
+  assert.deepEqual(drawn, [m[1], m[3]], "a pass sees its visible members, in registry order");
+  assert.ok(m.every((o) => o.parent === R.instRoot));
+  m[1].visible = false; m[0].visible = true;
+  R.scene.onBeforeRender();
+  assert.deepEqual(R.instRoot.children, [m[0], m[3]], "the next pass (the mirror's) rebuilds the list");
+  R.reg.splice(R.reg.indexOf(m[3]), 1); R.detach(m[3]);
+  assert.deepEqual(R.instRoot.children, [m[0]], "a freed member leaves the shown list at once");
+  assert.equal(m[3].parent, null);
+});
+test("F3: apex26.tlxInstRoot=0 keeps every member a direct scene child", () => {
+  const R = instRootRig({ getItem: (k) => (k === "apex26.tlxInstRoot" ? "0" : null) });
+  const o = new CORE.Mesh(); o.visible = false; R.add(o);
+  assert.deepEqual(R.scene.children, [o]);
+  assert.notEqual(R.scene.onBeforeRender.name, "_instShow", "three's default hook, not the F3 rebuild");
+  R.reg.length = 0; R.detach(o);
+  assert.deepEqual(R.scene.children, []);
+});

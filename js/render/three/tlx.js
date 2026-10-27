@@ -2116,6 +2116,40 @@ const TLX = (function () {
       // start bumps the stamp (A5: a Set.clear() per pass minted a fresh table).
       let _instStamp = 0;
       const _instRegistry = [];       // all live InstancedMeshes (hide undrawn)
+      // F3 (#3104) — THE INSTANCED ROOT, R6's pool root for the registry. Every
+      // instanced mesh, its A1 mirror view and every R1/A2 run sat in `scene`,
+      // hidden whenever this pass did not draw it, and three's projectObject
+      // visits every child of every render: monza at 844x390 walked 142 children
+      // a pass to draw 35 (main) or none of them (mirror). They now hang off one
+      // plain Object3D (not a Group: no groupOrder) whose `children` is rebuilt
+      // from the registry's visible members by scene.onBeforeRender, which three
+      // runs in render() and compileAsync() before it projects, so each pass and
+      // warm sees exactly what its visibility flags say. scene.matrixWorldAutoUpdate
+      // is false, so no matrix depends on the parent. apex26.tlxInstRoot=0: off.
+      let _f3 = true;
+      try { _f3 = localStorage.getItem("apex26.tlxInstRoot") !== "0"; } catch (_) { /* no storage: on */ }
+      const instRoot = new THREE.Object3D(), _instKids = [];
+      instRoot.matrixAutoUpdate = false; instRoot.matrixWorldAutoUpdate = false;
+      function _instShow() {
+        let n = 0;
+        for (let i = 0; i < _instRegistry.length; i++) { const im = _instRegistry[i]; if (im.visible) _instKids[n++] = im; }
+        if (_instKids.length !== n) _instKids.length = n;
+      }
+      if (_f3) { scene.add(instRoot); instRoot.children = _instKids; scene.onBeforeRender = _instShow; }
+      // ?three-devtools=1 (beside window.scene): a hidden member is no scene child now.
+      try { if (typeof DevFlags !== "undefined" && DevFlags.get("three-devtools")) window.tlxInstanced = _instRegistry; } catch (_) { /* debug only */ }
+      function _instAdd(im) {
+        if (_f3) im.parent = instRoot; else scene.add(im);   // by hand, as R6: no added/removed events, nothing listens
+        _instRegistry.push(im);
+      }
+      // A freed member leaves the shown list now, not at the next render: a
+      // census taken before then must not find it held.
+      function _instDetach(im) {
+        if (im.parent !== instRoot) { scene.remove(im); return; }
+        im.parent = null;
+        const k = _instKids.indexOf(im);
+        if (k >= 0) _instKids.splice(k, 1);
+      }
       // A-H1 (perf hunt 4) — STREAM, NOT DYNAMIC, ON THE PLAIN-MESH INSTANCE-RATE BUFFERS. three r186's
       // Attributes.update uploads when `version < attribute.version || usage === DynamicDrawUsage`, and with an
       // empty updateRanges list (the previous upload cleared it) that upload is the WHOLE array: a Dynamic buffer
@@ -2229,8 +2263,7 @@ const TLX = (function () {
         _instColorAttr(imesh, n);
         _writeInstanceMatrices(imesh, matrices, colors, n);
         imesh.visible = false;
-        scene.add(imesh);
-        _instRegistry.push(imesh);
+        _instAdd(imesh);
 
         const batch = {
           __tlx: true,
@@ -2403,7 +2436,7 @@ const TLX = (function () {
           batch._mir = null;
           const ix = _instRegistry.indexOf(mv.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
-          try { scene.remove(mv.imesh); } catch (_) { /* */ }
+          try { _instDetach(mv.imesh); } catch (_) { /* */ }
           disposeInstancedObject(mv.imesh);
           try { mv.imesh.geometry.dispose(); } catch (_) { /* */ }
           mv.imesh = null; mv.cells = null; mv.srcMatrices = mv.srcColors = mv.packMatrices = mv.packColors = null;
@@ -2411,7 +2444,7 @@ const TLX = (function () {
         if (batch.imesh) {
           const ix = _instRegistry.indexOf(batch.imesh);
           if (ix >= 0) _instRegistry.splice(ix, 1);
-          try { scene.remove(batch.imesh); } catch (_) { /* */ }
+          try { _instDetach(batch.imesh); } catch (_) { /* */ }
           disposeInstancedObject(batch.imesh);
           batch.imesh = null;
         }
@@ -2469,8 +2502,7 @@ const TLX = (function () {
         // no cells is never packed — cullInstances returns its full count).
         _writeInstanceMatrices(im, batch.srcMatrices, batch.srcColors, n);
         im.visible = false;
-        scene.add(im);
-        _instRegistry.push(im);
+        _instAdd(im);
         return (batch._mir = {
           __tlx: true, geo: batch.geo, instances: batch.instances, visible: batch.instances, imesh: im,
           srcMatrices: batch.srcMatrices, srcColors: batch.srcColors,
@@ -2667,8 +2699,7 @@ const TLX = (function () {
           // matrices into the draw buffer once per frame per render object (_instUsageOf).
           im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
           im.visible = false;
-          scene.add(im);
-          _instRegistry.push(im);
+          _instAdd(im);
           b = _blob = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 };
         }
         // This pass's run is live while its record is (resetRecs nulls it).
@@ -2705,7 +2736,7 @@ const TLX = (function () {
           const im = new THREE.InstancedMesh(geo, mat, (window.TLXShaders && TLXShaders.uboInstCap) ? TLXShaders.uboInstCap(renderer, BLOB_CAP) : BLOB_CAP);
           im.matrixAutoUpdate = false; im.frustumCulled = false; im.visible = false;
           im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);   // A-H1: InstancedMesh, per-pass rewrites (_instUsageOf)
-          scene.add(im); _instRegistry.push(im);
+          _instAdd(im);
           _decalRuns.set(geo, b = { __tlx: true, imesh: im, instances: BLOB_CAP, visible: 0, rec: -1 });
         }
         if (b.rec >= 0 && b.rec < drawList.n && drawList[b.rec].instanced === b) {
@@ -2812,7 +2843,7 @@ const TLX = (function () {
         m.matrixAutoUpdate = false; m.matrixWorldAutoUpdate = false; m.frustumCulled = false;
         if (neg) m.matrixWorld.copy(_coReflect);
         m.visible = false;
-        scene.add(m); _instRegistry.push(m);   // _showInstanced / _hideUndrawnInstanced, like every run
+        _instAdd(m);   // _showInstanced / _hideUndrawnInstanced, like every run
         return (pair[s] = { __tlx: true, imesh: m, ib, instances: CO_CAP, visible: 0, rec: -1 });
       }
       function _coAppend(geo, w, opts) {
@@ -3369,14 +3400,16 @@ const TLX = (function () {
       // One geometry per vertex layout among the scene's lit meshes: the layouts the casters draw (tlx-shadow probes).
       function casterSources() {
         const seen = new Set(), out = [];
-        scene.traverse((o) => {
+        const visit = (o) => {
           const g = o.isMesh && o.geometry, m = o.material;
           if (!g || !g.attributes || !g.attributes.position || !m || typeof m.customProgramCacheKey !== "function") return;
           if (String(m.customProgramCacheKey()).indexOf("tlx-lit") !== 0) return;
           const sig = Object.keys(g.attributes).sort().join(",") + (g.index ? "|i" : "");
           if (seen.has(sig) || out.length >= 8) return;
           seen.add(sig); out.push(g);
-        });
+        };
+        scene.traverse(visit);
+        for (let i = 0; i < _instRegistry.length; i++) visit(_instRegistry[i]);   // hidden members are off the tree (F3); already-seen layouts skip
         return out;
       }
       function drawWarmStage(usePost, useTag, opts, mirrorWarmed, mirrorOnly) {   // mirrorOnly: startMirrorWarm (B-F3.1)
@@ -6766,7 +6799,7 @@ const TLX = (function () {
             return o;
           },
           async shader(idx = 0) {
-            const meshes = scene.children.concat(poolRoot.children).filter((o) => o.isMesh && o.visible);
+            const meshes = scene.children.concat(poolRoot.children, instRoot.children).filter((o) => o.isMesh && o.visible);
             const target = meshes[idx];
             if (!target) return null;
             const out = await renderer.debug.getShaderAsync(scene, camera, target);
