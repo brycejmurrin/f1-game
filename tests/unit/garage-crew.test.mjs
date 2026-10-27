@@ -24,7 +24,7 @@ function load() {
   const draws = [], meshes = [], freed = [];
   const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length, d }; meshes.push(mesh); return mesh; }, freeMesh: (mesh) => freed.push(mesh), draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
@@ -87,7 +87,7 @@ test("design-preview crew looks: each builds valid, distinct geometry; classic s
   const meshes = [];
   const gfx = { createMesh: (d) => { meshes.push(d); return { d }; }, freeMesh() {}, draw() {} };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx);
@@ -121,7 +121,7 @@ test("pit-stop front jack: saddle seated on each chassis' nose underside, clear 
   const STYLES = { base: {}, droop: { noseDroop: -0.03, noseSlim: 0.84 }, long: { noseTipZ: 0.55 }, short: { noseTipZ: -0.32, noseDroop: 0.04 } };
   const Car3D = { CHASSIS: { nose: [{ z: 2.60, y: 0.245, h: 0.072 }, { z: 2.00, y: 0.315, h: 0.235 }] }, teamStyleOf: (id) => STYLES[id] || {}, bodyStyleKey: (t, b) => b || t };
   const ctx = vm.createContext({ Math, Object, Array, Number, Float32Array, Car3D, Log: { info() {}, warn() {} } });
-  for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
+  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js", "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/scene-crew.js", "js/garage/arrival.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Crew = vm.runInContext("GarageCrew", ctx), Arrival = vm.runInContext("GarageArrival", ctx);
   Crew.init(gfx); Crew.setLook("pitstop");

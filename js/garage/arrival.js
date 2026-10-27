@@ -2,7 +2,7 @@
 const GarageArrival = (function () {
   "use strict";
   const DOOR_S = 1.8;
-  const ease = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  const ease = GarageCrewDraw.ease;
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix" });
   // THE CREWS each way: the shipped five, MIX (a different one every visit) and
   // the Blender-authored variants (GarageCrewChoreo.IDS, js/garage/crew-choreo.js).

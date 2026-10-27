@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { absSrc } from '../helpers/abs-src.mjs';
 const context = vm.createContext({});
+vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
 vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context);
 const Arrival = vm.runInContext('GarageArrival', context);
 vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context);
@@ -661,6 +663,7 @@ function garageEntryRegressionHarness() {
     reducedMotion: () => false,
   };
   vm.createContext(c);
+  vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/crew-draw.js') });
   vm.runInContext(introArrivalSource, c);
   const clockStart = introCameraSource.indexOf('let driveOut = null;');
   const clockEnd = introCameraSource.indexOf('// THE ARRIVAL PREVIEW', clockStart);
