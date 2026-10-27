@@ -8,6 +8,19 @@
     "Empty on purpose until Slice 4+ migrates a screen (plan 2026-10-04-localisation)."
   ],
   "files": [],
-  "html": [],
+  "html": [
+    "#dlg-settings",
+    "#pm-pit-choice-label",
+    "#pm-drill-label",
+    "#pm-res-label",
+    "#pm-fullscreen-label",
+    "#pm-upscale-label",
+    "#pm-occlusion-label",
+    "#pm-debris-label",
+    "#pm-ssao-label",
+    "#pm-godrays-label",
+    "#pm-buildworker-label",
+    "#pm-feel-label"
+  ],
   "allow": {}
 }
