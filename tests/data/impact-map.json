@@ -1535,17 +1535,78 @@
       ]
     },
     "js/camera/feel.js": {
+      "applyFreeLook": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "consumeAimSnap": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "drive": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
       "follow": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "freeLookState": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
+      "isBuzzMode": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "isFreeLookMode": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "lookBackLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "lookingBackNow": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "modeFov": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetFollow": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetFreeLook": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "scoped": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "setLookBackLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "setSpeedVignette": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shake": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shakeNoise": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shouldLookBack": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "speedFov": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "speedVignette": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
       "tick": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "tickRace": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ]
     },
