@@ -234,3 +234,23 @@ test("SOUND turned on mid-race sets the team voice and circuit venue before the 
   assert.ok(calls.indexOf("setVoice:Mercedes") >= 0 && calls.indexOf("setVoice:Mercedes") < eng, calls.join(" "));
   assert.ok(calls.indexOf("setVenue:green") >= 0 && calls.indexOf("setVenue:green") < eng, calls.join(" "));
 });
+
+test("SOUND ON under the pause card still sets voice/venue; engine waits for resume (M31)", () => {
+  // Race began SOUND OFF → pause → SOUND ON. game.js setPaused(false) starts the
+  // engine with setVoice but not setVenue; venue must land on the panel click.
+  const { calls, G, GameAudio } = boot({ soundOn: false, musicEnabled: true });
+  GameAudio.setVoice = (e) => calls.push("setVoice:" + e);
+  GameAudio.setVenue = (d) => calls.push("setVenue:" + d.theme);
+  GameAudio.startEngine = () => calls.push("startEngine");
+  GameAudio.startMusic = () => calls.push("startMusic");
+  G.state = "race"; G.paused = true;
+  G.player = { team: { engine: "Ferrari" } };
+  G.track = { def: { theme: "street_day" } };
+  G.viewRainfall = () => 0;
+  calls.length = 0;
+  G.els.soundbtn.onclick();
+  assert.ok(calls.indexOf("setVoice:Ferrari") >= 0, calls.join(" "));
+  assert.ok(calls.indexOf("setVenue:street_day") >= 0, calls.join(" "));
+  assert.equal(calls.indexOf("startEngine"), -1, "paused: resume owns startEngine — " + calls.join(" "));
+  assert.equal(calls.indexOf("startMusic"), -1, "paused: resume owns startMusic — " + calls.join(" "));
+});
