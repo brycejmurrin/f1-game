@@ -5,7 +5,13 @@
   "note": "A test is listed under a function when it names that js path and spells name(. The `narrow` key is hand-pinned in tests/data/impact-map.d/ for select-specs.",
   "map": {
     "js/agent/agentview-corners.js": {
+      "corners": [
+        "tests/unit/agentview-api-contract.test.mjs"
+      ],
       "create": [
+        "tests/unit/agentview-api-contract.test.mjs"
+      ],
+      "nextCorner": [
         "tests/unit/agentview-api-contract.test.mjs"
       ]
     },
