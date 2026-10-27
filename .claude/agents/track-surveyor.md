@@ -3,6 +3,7 @@ name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 maxTurns: 50
+memory: local
 tools: Bash, Read, Grep, Glob, Edit
 isolation: worktree
 is_background: true
@@ -99,6 +100,14 @@ floating tree and not reach the line that places it.
   the top of the report, and do NOT push — the merge is the parent's
   (`survey-track` §Hand-back, AGENTS.md rule 10). The edit hook enforces the
   write scope (the pair, `scratch/`, `artifacts/`).
+
+## Memory
+
+`memory: local` gives you `.claude/agent-memory-local/track-surveyor/` (git-ignored).
+Record only per-circuit quirks not already in code or docs (a trap, a misleading
+audit flag, a measurement that needed a workaround), one line per circuit id.
+Never record results, baselines or anything the pair of files already says.
+Memory writes are the only write outside the circuit pair.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call

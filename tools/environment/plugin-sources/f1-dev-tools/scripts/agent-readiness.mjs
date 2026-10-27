@@ -22,18 +22,12 @@ export function inspectAgents(names = null) {
     interrupt: capability(/^collaboration\.interrupt_agent$/),
     wait: capability(/^collaboration\.wait_agent$/),
   };
-  const github = {
-    read: capability(/(?:^|__)github_fetch$/),
-    commit: capability(/(?:^|__)github_create_commit$/),
-    ref: capability(/(?:^|__)github_update_ref$/),
-  };
   const all = object => Object.values(object).every(row => row.exposure === "EXPOSED_UNVERIFIED");
   return {
     schemaVersion: 1, snapshot: names === null ? "UNKNOWN" : "SUPPLIED_UNVERIFIED",
-    native, github,
+    native,
     routes: {
       nativeTeam: all(native) ? "AVAILABLE_NEEDS_LIVE_TEST" : names === null ? "UNKNOWN" : "INCOMPLETE",
-      githubFleetBus: all(github) ? "AVAILABLE_NEEDS_LIVE_TEST" : names === null ? "UNKNOWN" : "INCOMPLETE",
     },
     external: {
       claude: capability(/^mcp__claude[_a-z]*__(?:create_session|send_message|list_sessions)$/),
@@ -43,7 +37,7 @@ export function inspectAgents(names = null) {
     },
     serviceChecks: "NOT_RUN",
     limits: ["Native team controls do not address arbitrary chats or external sessions.",
-      "A fleet message is durable coordination; it does not itself launch or wake a worker.",
+      "Cross-session state lives on GitHub (issues, labels, PR bodies, comments; the repo's docs/WORKERS.md); none of it launches or wakes a worker.",
       "Local MCP declarations and installed skills do not prove host tool exposure."],
   };
 }

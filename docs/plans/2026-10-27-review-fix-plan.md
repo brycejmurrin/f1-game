@@ -53,15 +53,30 @@ Sources: [r2/landing-design.md](../notes/review-2026-10-27/r2/landing-design.md)
   bind to `artifacts/launch/self.json` and make it single-use; (e) removing `hold` is unguarded on every route
   (`gh pr edit`, `gh api -X DELETE`, `gh label delete`, MCP `issue_write`) — classify as ask.
 - [x] WP-L5 `gate` as a commit status (#3917, merged).
-- [ ] **WP-L6 dispatcher children-only** (#3921): CI green; gate refused on distance (3 behind), synced (fb2c516b);
+- [x] **WP-L6 dispatcher children-only** — #3921 merged 8a58c266 (#3921): CI green; gate refused on distance (3 behind), synced (fb2c516b);
   then land and tell the dispatcher.
-- [ ] **WP-L7 dispatch follow-ups (MED/LOW).** `landProblem` (dispatch.mjs:186) reads check runs only, so a land PR
+- [x] **WP-L7 dispatch follow-ups (MED/LOW).** — #3933 merged 0af0148d `landProblem` (dispatch.mjs:186) reads check runs only, so a land PR
   whose `gate` status failed parks forever — read `commits/<sha>/status` (2×); stale rule ignores a live worker
   session naming the PR (:282); `--apply` without `--sessions` bypasses `maxLiveWorkers` (:391); two accounts can both
   launch for one issue (claim posted after launch); `mergePause` / `baseBehindMax` do nothing.
   **Label clobber (reported by the dispatcher, 2026-10-27):** the worker prompt's "add `claimed`" leads workers to
   MCP `issue_write` with `labels`, which REPLACES the list — #3263–#3267 lost `bug` / `area:ui` (restored by hand). The
   dispatch.mjs brief and docs/WORKERS.md say add it with `gh api POST issues/<n>/labels`, never `issue_write` labels.
+- [x] **WP-L9 workers stall waiting for the user** — #3933 merged 0af0148d (rule 13 wording: #3939) (Bryce, 2026-10-27: "they are sometimes getting stuck waiting for
+  user instead of asking you or dispatcher message them and set this up"; evidence
+  [r2/worker-stalls.md](../notes/review-2026-10-27/r2/worker-stalls.md)). Bryce unblocked 5 of 8 children by typing
+  into them. Causes: STOP AT 150k leaves ~57k of work after a ~93k first request; last turns addressed to "you";
+  ending on CI without a working subscription; no "already fixed" exit; the dispatcher never messages a child.
+  Fix (in the WP-L7 dispatch PR): brief rules (never ask the user, decide or `needs-decision` or `@parent`; subscribe
+  before ending; `@parent` at the cap; close-as-fixed exit), cap 300k, `NUDGE_SESSION` lines for BLOCKED / idle
+  children with open work, immediate takeover when a worker adds its own `needs-owner`; AGENTS rule 13 wording (in
+  the WP-R1 PR). Interim: the dispatcher was asked to nudge children by hand each cycle.
+- [ ] WP-L10 follow-ups found while landing (2026-10-27): (a) dispatch: a newer `adopts PR #n` comment naming another
+  session supersedes the child — no NUDGE, archive it (dispatcher, first cycle on #3933); (b) bash-guard's commit hook
+  should take `artifacts/heavy.lock` itself (wrapping `git commit` in flock does not cover a PreToolUse hook); (c) workers
+  write commit messages under their worktree, never the shared scratchpad (two collided); (d) `playwright.config.js`
+  lines 119 and 291-292 still name the deleted `webkit-leg.yml`; (e) `.codex/hooks.json` and the `.cursor` MCP
+  matchers do not route `issue_write` to the guard (#3937); (f) at most three worker subagents per 4-core box.
 - [ ] WP-L8 small gate fixes: ready-gate's shard fallback accepts A+B of four (:68); archive-sessions checks only
   `session_status` (reuse dispatch's `archiveGuard`) — or delete it, see WP-D2.
 
@@ -72,8 +87,10 @@ Medium — one PR each:
   a VM); `validate.js:217-231` pit-opening check runs over every close pair on the lap, so parallel hairpin straights
   anywhere get a RED that blocks SAVE/RACE/SHARE — gate it on the pit window and side; `validate.js:228-233` the first
   matching pair masks a farther red.
-- [ ] **WP-G2 Mercedes setup defaults (2×)** — `setup-tune.js:30` arbF/arbR 7/7 vs `garage-defaults.js:71` 6/5: a fresh
-  install shows TUNED and reset cannot clear it. One source; test every team.
+- [x] ~~**WP-G2 Mercedes setup defaults (2×)** — `setup-tune.js:30` arbF/arbR 7/7 vs `garage-defaults.js:71` 6/5: a fresh
+  install shows TUNED and reset cannot clear it.~~ Intended, no change: the 6/5 is Bryce's deliberate tune (d0721f0530),
+  pinned by `garage-defaults.test.mjs:389` (asserts `isDefault("mercedes") === false`); `setup-tune.test.mjs:131` pins
+  reset() to the shipped sheet (#1289).
 - [ ] **WP-G3 career import with no undo** — `career-backup.js:610` the before-import restore point is not awaited;
   with IndexedDB down the import overwrites the slot anyway (the restore path refuses in that case).
 - [ ] **WP-G4 weekend marked started too early** — `game.js:2487` `Career.markWeekendStarted()` runs before
@@ -165,13 +182,13 @@ Sources: [r2/docs.md](../notes/review-2026-10-27/r2/docs.md), [r2/relay-fleet.md
   `github-fleet.cjs`; widen `rulebook-guards.test.mjs` to scan plugin-sources, cursor-plugins, `.cursor`, `.codex`;
   stale hook text ("ask your orchestrator", `QUEUE_BRANCH`, `fleet-bus` in the poll regex, `APEX_MERGE_DESK`) —
   hook edits need Bryce; `APEX-TOOLS-MCP.md` `apex_who_is_on_it`; `policies.json:747`; `ci-watch.mjs:323`.
-- [ ] **WP-D2 dead tools** (each with its `tests/groups.json` row + `npm run gen`): `tools/mcp/check-doctor-catalog.mjs`;
+- [x] **WP-D2 dead tools** — #3935 merged (each with its `tests/groups.json` row + `npm run gen`): `check-doctor-catalog.mjs (deleted, #3935)`;
   `archive-sessions.mjs` (+ AGENTS.md:187, settings.json:74 — Bryce); `pr-body.mjs` + `fleet-block.mjs` (move the 3
   `planVerdict` cases to ready-gate's test first); `lane-preamble.mjs`; `measure-pr-ci-after-close.mjs`;
   `publish-shots.mjs`; `lsp-navigation-bench.mjs`; `readyClaimVerdict` in gate-receipt.mjs. Fix headers:
   `queue-depth.mjs` (not a hold), `launch-gate.mjs` (orchestrator.md). Bryce decides: the workflow-harness trio,
   `visor-lab-export.mjs`.
-- [ ] **WP-W1 workflows (Bryce for deletes).** Delete never-run `hud-survey.yml` and `webkit-leg.yml` (+ their rows in
+- [x] **WP-W1 workflows (Bryce for deletes).** — #3935 merged (gpu-census kept push for its request-file legs; ci.yml `edited` kept for the `CI: run` marker) Delete never-run `hud-survey.yml` and `webkit-leg.yml` (+ their rows in
   pick-tests / select-specs / nightly-group); gpu-census and capture-gallery become dispatch-only (agents dispatch
   fine; renderer-debug SKILL.md:18 still teaches the push relay); car-shot into capture-gallery; import-models gets a
   read-only bake job (it downloads an arbitrary URL with `contents: write`); process-dashboard dispatch-only or
@@ -190,10 +207,16 @@ Sources: [r2/docs.md](../notes/review-2026-10-27/r2/docs.md), [r2/relay-fleet.md
 - [ ] Remote branches `claude/fleet-bus` and 26 `cursor/orcha*-queue-*` can go; old orchestrator / merge-desk sessions
   need a manual archive (archive-sessions never matched their roles).
 
-## 7. Decisions for Bryce
+## 7. Decisions (Bryce delegated them, 2026-10-27: "You consider the options and make the best decisions")
 
-1. WP-L1: move land.yml to `pull_request_target`, put `LAND_TOKEN` in an Environment, protect `.github/workflows/**`.
-2. WP-L4 / WP-D1: the hook edits (merge and arm deny, receipt directories, ready head, launch receipt, `hold` removal).
-3. WP-R1: which pre-push floor is the rule.
-4. WP-W1 / WP-D2: delete the never-run workflows and the dead tools listed.
-5. §6: the stale scheduled task, the token-holding relay task, the old branches.
+1. WP-L1: YES — land.yml moves to `pull_request_target` in code. Left for Bryce in repo settings (not code): an
+   Environment holding `LAND_TOKEN` limited to the deploy branch, and a push restriction on `.github/workflows/**`.
+2. WP-L4 / WP-D1: YES — the hook edits (merge and arm deny, receipt directories, ready head, single-use launch receipt,
+   `hold` removal as ask, stale orchestrator text). This sentence is the grant `.claude/rules/claude-config.md` asks for.
+3. WP-R1: the pre-push floor is `tooling-fast --changed` plus the one spec `pick-tests` names, as a background
+   `test-bg --spec`. The full `tooling-fast` runs on the PR (Structural guards A–D); `deploy --gate-only` is optional,
+   for reproducing a gate-only red. One home: AGENTS.md rule 3.
+4. WP-W1 / WP-D2: YES — delete the never-run workflows and the dead tools; gpu-census and capture-gallery become
+   dispatch-only. `archive-sessions.mjs` waits for the dispatch PRs (it touches `.claude/settings.json`).
+5. §6: "Backlog check-in #1518" was rewritten for the current flow (fires 2026-10-28 16:00Z). Deleting the
+   "Fleet B inbox" relay task was refused by the session's auto-mode classifier; it is disabled — Bryce deletes it.

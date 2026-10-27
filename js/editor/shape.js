@@ -300,8 +300,10 @@ const TrackShape = (function () {
   }
   /** Closest approach between non-adjacent spans: for each node the nearest node
    *  more than `minArc` away along the lap (and within `vSep` m vertically when py
-   *  is given). Returns the worst K pairs: [{ i, j, dist, dy }]. */
-  function clearance(px, pz, py, n, minArc, vSep, cell = 24, keep = 8) {
+   *  is given). Returns the worst K pairs: [{ i, j, dist, dy, gap }], ordered by
+   *  `gap` — dist less hw[i] + hw[j] when a half-width array is given (edge to
+   *  edge, so a wide pair farther apart can rank first), else dist. */
+  function clearance(px, pz, py, n, minArc, vSep, cell = 24, keep = 8, hw = null) {
     const grid = new Map(), key = (cx, cz) => cx + "," + cz;
     for (let i = 0; i < n; i++) { const k = key(Math.floor(px[i] / cell), Math.floor(pz[i] / cell)); (grid.get(k) || grid.set(k, []).get(k)).push(i); }
     const worst = [];
@@ -315,9 +317,9 @@ const TrackShape = (function () {
           if (dg <= minArc) continue;
           const dy = py ? Math.abs(py[i] - py[j]) : 0;
           if (dy >= vSep) continue;
-          const dist = hyp(px[i] - px[j], pz[i] - pz[j]);
-          if (worst.length < keep || dist < worst[worst.length - 1].dist) {
-            worst.push({ i, j, dist, dy }); worst.sort((a, b) => a.dist - b.dist); if (worst.length > keep) worst.pop();
+          const dist = hyp(px[i] - px[j], pz[i] - pz[j]), gap = hw ? dist - hw[i] - hw[j] : dist;
+          if (worst.length < keep || gap < worst[worst.length - 1].gap) {
+            worst.push({ i, j, dist, dy, gap }); worst.sort((a, b) => a.gap - b.gap); if (worst.length > keep) worst.pop();
           }
         }
       }

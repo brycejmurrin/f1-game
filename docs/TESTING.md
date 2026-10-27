@@ -197,9 +197,9 @@ serializes the agent behind SwiftShader several times over.
 
 | When | Run |
 |---|---|
-| in the edit loop | `node tools/ci/verify-change.mjs --fast` (or `node tools/ci/tooling-fast.mjs --changed --jobs=3`) selects only the structural files owned by the diff and reports an estimated critical path; this is the quick local loop. `npm run test:tooling-fast` remains the full structural floor required before a code push. In CI the same full suite is **Structural guards**: two parallel tooling-fast shards named `Structural guards (tooling A)` / `Structural guards (tooling B)` (`tooling-fast.mjs --jobs=4 --shard=1/2 --bail` and `2/2 --bail`: since 2026-10-16 a shard stops STARTING files after its first failure, the files in flight finish, and the log says how many it skipped; the local full command has no `--bail`), then ratchet/audit on the aggregator still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 — `.github/workflows/ci.yml` header; #1075). `ready-gate.mjs` reads that aggregator name |
+| in the edit loop | `node tools/ci/verify-change.mjs --fast` (or `node tools/ci/tooling-fast.mjs --changed --jobs=3`) selects only the structural files owned by the diff and reports an estimated critical path; this is the quick local loop and, with ONE relevant spec, a worker's whole local floor ([WORKERS.md](WORKERS.md) §3). The full `npm run test:tooling-fast` is optional locally (a green run writes the stamp `ready-gate` accepts); in CI the same full suite is **Structural guards**: two parallel tooling-fast shards named `Structural guards (tooling A)` / `Structural guards (tooling B)` (`tooling-fast.mjs --jobs=4 --shard=1/2 --bail` and `2/2 --bail`: since 2026-10-16 a shard stops STARTING files after its first failure, the files in flight finish, and the log says how many it skipped; the local full command has no `--bail`), then ratchet/audit on the aggregator still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 — `.github/workflows/ci.yml` header; #1075). `ready-gate.mjs` reads that aggregator name |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
-| once, when the edits are done | `node tools/ci/test-bg.mjs tiny` — page loads, `__apex` responds; if red, nothing else is worth running — then the groups `pick-tests` named (capped at two) |
+| once, when the edits are done | a worker runs ONE relevant spec; the groups `pick-tests` names run on the PR (`run-ci`, `remote-group.mjs`). A Bryce-attended session may run `node tools/ci/test-bg.mjs tiny` (page loads, `__apex` responds) and then up to two named groups locally |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
 | single spec | `npm test -- tests/specs/<file>.spec.js` |
 | single unit suite | `node --test tests/unit/<file>.test.mjs` |
@@ -456,7 +456,7 @@ tools directly.)
 | `perf-race-entry` | `perf-race-entry.spec.js` — race vs practice PREPARING stage spans (`RaceEntryProfile` / `__apex.raceEntryStages`), writes `artifacts/perf-race-entry/*.json` for regression diffs (issue #1881) |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
 | `xr` | Immersive Web Emulation Runtime (IWER) emulated-VR suite — Playwright project `xr-emulated`, pinned `tests/vendor/iwer-2.5.0.min.js`, `forceInstall` metaQuest3. Spec-level only (not Quest GPU). Run `npm run test:xr`. Path-gated CI job (`xr-filter` → `xr`) when the diff touches `js/xr/`, IWER, or `vr-emulated.spec.js`. On-device checklist: `docs/notes/XR-QUEST-ON-DEVICE.md` |
-| `webkit` | WebKit iPhone-path proxy — Playwright project `webkit` (`Desktop Safari`), `tests/specs/webkit-boot.spec.js` only. Opt-in via `APEX_WEBKIT=1` or `--project=webkit` (so bare `npm test` never needs a WebKit binary). Pins `apex26.gfxBackend=three` + `apex26.tlxForceGL=1`. Run `npm run test:webkit` or dispatch `.github/workflows/webkit-leg.yml`. See §WebKit leg below |
+| `webkit` | WebKit iPhone-path proxy — Playwright project `webkit` (`Desktop Safari`), `tests/specs/webkit-boot.spec.js` only. Opt-in via `APEX_WEBKIT=1` or `--project=webkit` (so bare `npm test` never needs a WebKit binary). Pins `apex26.gfxBackend=three` + `apex26.tlxForceGL=1`. Run `npm run test:webkit` on a macOS host. See §WebKit leg below |
 
 ### Node groups (`node --test`, no browser)
 
@@ -824,31 +824,29 @@ authority stays `tools/gfx/wgx-validate.mjs`. Evidence: `docs/notes/SKILL-MCP-SC
 Every ordinary browser job and `npm test` project runs Chromium. The phone's
 shipped path is three.js WebGL2 on WebKit (JavaScriptCore + ANGLE-Metal), so a
 change that only looks green under Chromium/SwiftShader can still break on
-Bryce's iPhone. `.github/workflows/webkit-leg.yml` is the nearest CI proxy:
+Bryce's iPhone. The opt-in `webkit` project is the nearest proxy (its dispatch-only
+workflow `webkit-leg.yml` never ran and was deleted 2026-10-27; it proxied TLX WebGL2,
+not his TLX WebGPU path):
 
 | piece | what |
 |---|---|
-| trigger | `workflow_dispatch` only — not on every PR (macOS minutes; opt-in) |
-| runner | `macos-latest` by default (ANGLE-Metal like iOS, no extra packages). `ubuntu-latest` needs `npx playwright install --with-deps webkit` |
+| trigger | `npm run test:webkit` by hand — not on any PR or schedule |
+| host | macOS (ANGLE-Metal like iOS, no extra packages); Linux needs `npx playwright install --with-deps webkit` |
 | project | Playwright `webkit` (`devices["Desktop Safari"]`), gated by `APEX_WEBKIT=1`; `WEBKIT_SPECS` are ignored by `headless` / `render` / `xr-emulated` |
 | pins | `apex26.gfxBackend=three`, `apex26.tlxForceGL=1` |
-| report | `artifacts/webkit-leg/report.json` + job summary: `browser.version()`, boot (`__apex.info().track` + backend), first race frame, short rAF frame-time sample, heap after two race cycles |
+| report | `artifacts/webkit-leg/report.json`: `browser.version()`, boot (`__apex.info().track` + backend), first race frame, short rAF frame-time sample, heap after two race cycles |
 
 **It is a proxy, not the phone.** The repo pins `playwright-core` 1.63.0, whose
 `browsers.json` names WebKit revision 2359 / browserVersion **26.6**. That is
 Safari 26-era WebKit, not whatever Safari ships on the phone, and it does not
-reproduce iOS thermal or jetsam behaviour. The job log prints
+reproduce iOS thermal or jetsam behaviour. The run prints
 `browser.version()` so nobody reads a green tick as "the phone is fine".
 
 **Local install.** On this agent container, `npx playwright install webkit`
 downloads but host-library validation fails. Prove Chromium projects are
 unchanged locally (`npx playwright test --list` still shows only headless /
-render / xr-emulated collecting ordinary specs). Dispatching the workflow is
-Dad's call:
-
-```sh
-gh workflow run webkit-leg.yml --ref <branch> -f image=macos-latest
-```
+render / xr-emulated collecting ordinary specs). A real WebKit run needs a macOS
+host: `npm run test:webkit`.
 
 **pass-census under WebKit.** `tools/gfx/pass-census.mjs` launches Chromium via
 `tools/lib/harness.mjs` (`launchChromium`) and is not WebKit-capable. The
@@ -897,9 +895,10 @@ also runs on a staggered nightly cron (`47 5 * * *`, after ci.yml's `17 4 * * *`
 full check, dispatch defaults restated inline because a scheduled run has empty
 `inputs`; the nightly skips itself when nothing under `js/render`, `js/lighting`,
 `tools/gfx` or `vendor` changed since the last green nightly (unknown → run).
-It runs on dispatch, on the nightly, and on an agent's push of
-`.github/gpu-census-request.json` (each push request in its own concurrency
-group); `macos-latest` by default, a second dispatch on a branch queues
+It runs on dispatch (the default route), on the nightly, and on a push of
+`.github/gpu-census-request.json` — kept only for the request-only legs (`leg`,
+`lf_*`, `lrm_*`; the form is at the 25-input cap), each push request in its own
+concurrency group; `macos-latest` by default, a second dispatch on a branch queues
 instead of cancelling, each game-check leg
 is capped at 6 min, and its Verdict is `tools/gfx/census-verdict.mjs`.
 `tests/unit/ci-coverage.test.mjs` pins all of the above.
@@ -1160,9 +1159,12 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 
 ### Merge train (concurrent PRs)
 
-The ship branch is a **merge train**: merge **one large PR at a time**; batch
-small independent PRs so the tip does not thrash. Agents open DRAFT PRs and
-mark ready only when final (AGENTS.md §Coordination). Before marking
+No agent merges, and there is no merge queue or one-PR-at-a-time rule: the
+flow is [WORKERS.md](WORKERS.md) §5. A worker flips its PR ready and adds the
+`land` label; `land.yml` posts the `gate` commit status (`merge-gate.mjs`,
+which also refuses a base too far behind) and arms auto-merge. `gate` is the
+deploy branch's ONLY ruleset-required check; it requires `CI` green on the
+head. `pages.yml`'s concurrency group paces the trains. Before marking
 ready, the PR's owner runs `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
 CI check-run named `Structural guards` — the aggregator after the
 `Structural guards (tooling A)` … `(tooling D)` shards — or a local
@@ -1186,11 +1188,13 @@ Deploy / Pages runs keep their own concurrency groups with
 
 ### CI aggregator and Selected specs (verdict) (#480 / #507)
 
-Branch protection requires checks by **fixed name**, and matrix job names
-change per run. A job skipped by its own `if:` reports **Success** to branch
-protection; only a workflow skipped by a path/branch filter stays Pending
+The ruleset requires one check, the `gate` commit status from `land.yml`
+(§Merge train); `gate`'s ci row then reads the check named exactly `CI`. Any
+check read by name must keep a **fixed name**, and matrix job names change per
+run. A job skipped by its own `if:` reports **Success** to a required check;
+only a workflow skipped by a path/branch filter stays Pending
 ([GitHub docs](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks)).
-Two always-judged checks give the gate fixed names:
+Two always-judged checks give the PR verdict fixed names:
 
 - **`CI`** (`ci-verdict` job, #480): aggregates every sibling job via
   `tools/ci/ci-verdict.mjs`, including `selected-verdict` (2026-10-04 — it
@@ -1202,8 +1206,8 @@ Two always-judged checks give the gate fixed names:
   cancel fails the aggregator. Advisory jobs (`baseline-trial`) never fail it.
   It carries the FAILURES of smoke, the sweeps, renderer-macos and xr, not their
   execution: only the `REQUIRE_SUCCESS` set (full-tier PR runs) must have run, and
-  the job summary lists which jobs executed vs were skipped (#3507). Since 2026-10-15 it is the deploy branch's ONE required check (an
-  owner setting; the twelve-name list before it is in
+  the job summary lists which jobs executed vs were skipped (#3507). From 2026-10-15 it was the deploy branch's one required check; since
+  2026-10-27 the ruleset requires only `gate` (land.yml), whose ci row requires `CI` green (an owner setting); the twelve-name list before it is in
   `docs/notes/CI-CLOG-SURVEY-2026-10-15.md` §4 C, the settings record in its §8).
 - **`Selected specs (verdict)`** (`selected-verdict` job, #507): one fixed
   name for the change-aware gate. `select` must succeed and `selected` must
