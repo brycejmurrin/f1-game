@@ -5894,7 +5894,7 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   const wgsl = read("js/render/webgpu/wgsl-post.js");
   for (const [file, re, why] of [
     ["index.html", /id="pm-upscale"/, "shell must ship the UPSCALE set-row"],
-    ["index.html", /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE"],
+    ["index.html", /id="pm-upscale-label"[^>]*>UPSCALE</, "label must be UPSCALE"],
     ["js/ui/scale.js", /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row"],
     ["js/ui/scale.js", /setSpatialUpscale/, "row must call the backend API"],
     ["js/render/three/tlx.js", /setSpatialUpscale/, "TLX must export setSpatialUpscale"],
