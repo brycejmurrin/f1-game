@@ -34,5 +34,5 @@ PR head, so inspect it before removing or renaming it. Then, in order:
 `pr-board.mjs` if the base file is not yours → `git checkout <branch> &&
 git merge origin/claude/f1-game-project-26h3ng` → keep BOTH sides' intent in
 each hand-written file → generated leftovers at the source + `npm run gen`
-(AGENTS.md rule 11) → `git add` / commit → `deploy.mjs --gate-only` → plain
+(AGENTS.md rule 11) → `git add` / commit → `tooling-fast --changed` → plain
 `git push` (never force).

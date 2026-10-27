@@ -43,7 +43,7 @@ The script throws, takes long, or a URL needs checking (`browser_status`, `orien
 
 The `…/mcp?token=…` URL lets whoever holds it run `browser_eval` (arbitrary `page.evaluate`) in a page that can reach
 this container's 127.0.0.1 services (apex-tools :3713 among them). The token rides in the query string, so it lands in
-tunnel and proxy logs. Give it to the user only; never paste it into a PR body, commit, doc, bus line or a shared
+tunnel and proxy logs. Give it to the user only; never paste it into a PR body, commit, doc, issue comment or a shared
 transcript. To rotate it: delete `scratch/browser-http/state.json` and re-run `browser-http-up.mjs` (a kept state file
 reuses the old token), then give them the `new` URL.
 

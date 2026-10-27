@@ -2,7 +2,7 @@
 
 Proposal, 2026-10-27. Bryce's ask, typed in this session: "I feel like we need to re design our orchestration system,
 read full project and assume everyone is changeable and nothing is hard rules and all was created by parallel agents",
-then "Go deeper, read agent transcripts, look at codex transcripts". Status: PROPOSAL — nothing here is applied.
+then "Go deeper, read agent transcripts, look at codex transcripts". Status: SHIPPED in #3895 on 2026-10-27, with the §7 decisions ("Decided 2026-10-27"; the $15 hard-cap archive is still a follow-up).
 Evidence: eight read-only reviews in [`docs/notes/orchestration-redesign-2026-10-27/`](../notes/orchestration-redesign-2026-10-27/README.md)
 (bus history, tooling, rulebook, measured outcomes, current platform docs, Claude session transcripts, Cursor agent
 transcripts, Codex transcripts), plus the audits they cite.
@@ -213,7 +213,7 @@ Net: ~28k lines of coordination code, hooks and tests → under 5k; 14 roles →
 | 4. Optional | Transfer the repo to a free organization for a merge queue (replaces the "base behind" row and most syncs); a GitHub-event scheduled task on `needs-decision` that pings Bryce's phone; `deploy.mjs --gate-only` refuses to run in a Codex or Cursor container without `--remote`. | — | sync merges 63 % of merge commits → < 20 %; lane time in local verification 72 % → < 20 % |
 
 Steps 1–3 are three PRs; the `.claude/**` and `.github/**` edits in them need Bryce's typed yes in the acting session
-(claude-config.md), which is why this document is a proposal and not a diff.
+(claude-config.md), which is why this document was written as a proposal before the diff (shipped in #3895).
 
 ## 7. Decisions only Bryce can make
 

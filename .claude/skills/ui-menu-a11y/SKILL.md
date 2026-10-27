@@ -27,7 +27,7 @@ Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `
 
 ## Default-first visual verification
 
-Bryce's profile first — 844×390 landscape, touch (`.claude/rules/fleet-core.md`): one cell is
+Bryce's profile first — 844×390 landscape, touch (AGENTS.md §Coordination): one cell is
 `node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens=<id>` (parent only; the default
 `ios-iphone-landscape` is 852×393, not his phone). Then shipped settings, stress cases labelled separately:
 **survey-ui-matrix** §Default-first visual verification (one copy).

@@ -91,7 +91,7 @@ test("tools/README.md: one row per tool, every row within the @doc cap, no undef
       if (e.name.startsWith("_") || e.name === "__pycache__" || e.name === "README.md") continue;
       const abs = path.join(dir, e.name), r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) walk(abs, r);
-      else if (/\.(mjs|cjs|js|sh|py|html)$/.test(e.name)) onDisk.push(r);
+      else if (/\.(mjs|cjs|js|sh|py|html)$/.test(e.name) || fs.readFileSync(abs, "utf8").startsWith("#!/")) onDisk.push(r);
     }
   })(path.join(ROOT, "tools"), "");
   assert.ok(onDisk.length >= 100, `the walk saw only ${onDisk.length} tools — a silent empty list proves nothing`);

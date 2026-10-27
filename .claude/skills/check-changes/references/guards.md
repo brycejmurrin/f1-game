@@ -45,8 +45,8 @@ generated readers and executable changes follow the code gates below.
    node tools/ci/tooling-fast.mjs --changed --jobs=3
    ```
    Run it in the background with `--jobs=3` (AGENTS.md rule 4; the default is 1). It is the
-   edit-loop check: the full `tooling-fast` still runs before a code push
-   (AGENTS.md rule 3), and CI and `deploy.mjs --gate-only` run the full ladder.
+   worker's local floor (docs/WORKERS.md §3, with one spec); the PR's CI tiers
+   run the full ladder (AGENTS.md rule 3).
    Docs/skills/tools edits: `--changed` selects the docs-integrity family.
    Smoke + load order when you touched `index.html` or `tools/manifest.cjs`:
    ```sh
@@ -76,9 +76,9 @@ Check `/proc/loadavg` (< 3) and for a live `playwright test` process first.
 
 ## Push
 
-Push your `cursor/<topic>-<hash>` branch; the deploy branch is
-`claude/f1-game-project-26h3ng` — never push there without review. Run
-`deploy.mjs --gate-only` first, then commit + `git push -u origin <branch>`.
+Push your `cursor/<topic>-<hash>` branch, never the deploy branch
+`claude/f1-game-project-26h3ng` (refused). Clear the local floor
+(docs/WORKERS.md §3) first, then commit + `git push -u origin <branch>`.
 
 ## Coverage and structured results
 

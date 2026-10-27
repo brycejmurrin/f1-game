@@ -16,7 +16,7 @@
 //   open      the PR is open and not a draft, and its head is the `--sha` the workflow gated (when given)
 //   hold      no `hold` label (replaces the body line `MERGE-HOLD:`, which is no longer read)
 //   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored)
-//   ci        the `CI` check-run is `success` on the PR's current head, newest attempt
+//   ci        the `CI` check-run from the GitHub Actions app is `success` on the PR's current head, newest attempt
 //   gen       the head merges clean onto the current base tip in a throw-away worktree, and `gen:check` passes there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
@@ -38,6 +38,9 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
 export const REQUIRED_CHECK = "CI";
+/** The only app whose `CI` check-run counts: ci.yml runs under GitHub Actions. Any token with `checks: write` can
+ * create a check-run named `CI`, but only under its OWN app, so a run from another app (or none) is ignored. */
+export const CI_APP = "github-actions";
 /** The label that vetoes a landing (plan §4.1: whoever sets it removes it; Bryce can always remove it). */
 export const HOLD_LABEL = "hold";
 /** Game merges are the ones a Pages train ships; the distance row counts them. */
@@ -78,15 +81,16 @@ export function planRow(body) {
   return row(true, p.state === "none" ? "no ## Plan checklist in the body" : `Plan closed (${p.items} items)`);
 }
 
-/** ci: the required check-run on the head, newest attempt (highest id), success only. Pure. */
-export function ciVerdict(checkRuns, name = REQUIRED_CHECK) {
+/** ci: the required check-run on the head from `app` (CI_APP), newest attempt (highest id), success only. Pure. */
+export function ciVerdict(checkRuns, name = REQUIRED_CHECK, app = CI_APP) {
   let best = null;
   for (const c of checkRuns || []) {
-    if (!c || c.name !== name) continue;
+    if (!c || c.name !== name || c.app?.slug !== app) continue;
     if (!best || (c.id || 0) > (best.id || 0)) best = c;
   }
-  if (!best) return row(false, `no ${name} check-run on the head yet`);
-  if (best.status !== "completed") return row(false, `${name} ${best.status}`);
+  // Not finished is "waiting", not "refused": a `land` label added while CI still runs must not paint `gate` red.
+  if (!best) return { ...row(false, `no ${name} check-run on the head yet`), pending: true };
+  if (best.status !== "completed") return { ...row(false, `${name} ${best.status}`), pending: true };
   return best.conclusion === "success" ? row(true, `${name} success (check-run ${best.id})`) : row(false, `${name} ${best.conclusion}`);
 }
 
@@ -159,7 +163,8 @@ export function distanceFor({ head, tip, cwd = ROOT, max = MAX_BEHIND, run = git
 /**
  * The environment for code from the merge result (gen:check, the ratchet tests): the PR's own scripts run there, so
  * no token and none of the runner's file-command paths (GITHUB_OUTPUT, GITHUB_ENV, …) a script could write a forged
- * gate verdict or a check run through. land.yml's `gate` job holds `checks: write`. Pure.
+ * verdict through. Defence in depth only: the parent's environment is readable by the same uid, so land.yml runs this
+ * gate in a job whose token is read-only (`land-gate`), and a separate job with no repo code posts the check. Pure.
  */
 export function untrustedEnv(env = process.env) {
   const out = { ...env };
@@ -288,13 +293,17 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, maxBehind =
   }
   const ordered = {};
   for (const k of ROWS) ordered[k] = rows[k];
-  return { ok: ROWS.every((k) => ordered[k].ok), rows: ordered, pr, head, base, tip };
+  const ok = ROWS.every((k) => ordered[k].ok);
+  // Waiting: every row that is not ok is a pending one (only `ci` can be), so the verdict is not known yet.
+  const waiting = !ok && ROWS.every((k) => ordered[k].ok || ordered[k].pending);
+  return { ok, waiting, rows: ordered, pr, head, base, tip };
 }
 
 /** The printed rows: one `= gate <row>: ok|FAIL <reason>` line each, then the summary line. Pure. */
 export function rowLines(v) {
-  const lines = ROWS.filter((k) => v.rows?.[k]).map((k) => `= gate ${k}: ${v.rows[k].ok ? "ok" : "FAIL"} ${v.rows[k].evidence}`);
-  lines.push(`= merge-gate ${v.ok ? "passed" : "refused"} — ${ROWS.filter((k) => v.rows?.[k]).map((k) => `${k}=${v.rows[k].ok ? "ok" : "FAIL"}`).join(" ")} pr=#${v.pr} sha=${v.head || ""} tip=${v.tip || ""}`);
+  const mark = (r) => (r.ok ? "ok" : r.pending ? "WAIT" : "FAIL");
+  const lines = ROWS.filter((k) => v.rows?.[k]).map((k) => `= gate ${k}: ${mark(v.rows[k])} ${v.rows[k].evidence}`);
+  lines.push(`= merge-gate ${v.ok ? "passed" : v.waiting ? "waiting" : "refused"} — ${ROWS.filter((k) => v.rows?.[k]).map((k) => `${k}=${mark(v.rows[k])}`).join(" ")} pr=#${v.pr} sha=${v.head || ""} tip=${v.tip || ""}`);
   return lines;
 }
 
@@ -305,7 +314,8 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
     open (open, not a draft, head = --sha when given), hold (no \`hold\` label), plan (Plan closed; \`land:\` items
     exempt), ci (\`CI\` success on the head), gen (clean merge onto the current base tip + gen:check),
     ratchets (on that merge result), distance (merge-base at most N game merges behind the base tip; default ${MAX_BEHIND}).
-  Exit 0 all rows ok, 2 a row failed, 1 usage or API/git error. Writes nothing but an optional --json summary.`;
+  A row still waiting on CI prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other row ok, CI not
+  finished), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
 
 export function main(argv, { request = api, root = ROOT, log = console.log, localMerge = localMergeGenCheck, distance = distanceFor, write = fs.writeFileSync } = {}) {
   exitIfHelp(argv, USAGE);
@@ -319,7 +329,7 @@ export function main(argv, { request = api, root = ROOT, log = console.log, loca
   for (const l of rowLines(v)) log(l);
   const jsonPath = opt("--json");
   if (jsonPath) write(path.resolve(root, jsonPath), JSON.stringify({ ...v, maxBehind, at: new Date().toISOString() }, null, 2) + "\n");
-  return v.ok ? 0 : 2;
+  return v.ok ? 0 : v.waiting ? 3 : 2;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));

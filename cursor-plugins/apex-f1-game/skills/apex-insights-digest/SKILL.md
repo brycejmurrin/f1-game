@@ -19,7 +19,9 @@ Write `/workspace/apex-insights/digest-YYYY-MM-DD.md` with:
 1. Recurring issues / collision zones
 2. Unfinished follow-ups (cite PR/bc)
 3. Duplicate or overlapping agent work
-4. Ranked next actions for orchestrator / specialists
+4. Ranked next actions, each a candidate `ready` issue
 5. Gaps (agents with PR but no transcript)
 
-End with five bullets for chat. Do not launch fix fleets from this skill unless the user asked. Close-outs need the stall/handoff fields in `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`. Cap swarm launches (max 6 / 10 min); never arm auto-merge.
+End with five bullets for chat. Do not launch workers from this skill: a fix becomes a `ready` issue, and the
+hourly dispatcher launches it within its caps (`tools/ci/dispatch.json`, `docs/WORKERS.md` §The dispatcher). A
+close-out is the PR's ```handoff block (`docs/WORKERS.md` §The Hand-off block). Never merge or arm auto-merge.

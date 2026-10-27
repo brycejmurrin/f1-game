@@ -20,6 +20,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 
 | Note | What it records |
 |---|---|
+| [notes/orchestration-redesign-2026-10-27/](notes/orchestration-redesign-2026-10-27/README.md) | 2026-10-27: the eight read-only reviews (bus history, tooling, rulebook, measured outcomes, platform docs, Claude / Cursor / Codex transcripts) behind the [orchestration redesign plan](plans/2026-10-27-orchestration-redesign.md) |
 | [System audit, fourth pass](notes/SYSTEM-AUDIT-4-2026-10-26.md) | 2026-10-26: ~75 reviewers; re-verifies pass 3 (13 corrections), whole-population bus/PR/CI/session/Cursor/skill/card/docs/economics review; evidence in `notes/system-audit-4/` |
 | [System audit, third pass](notes/SYSTEM-AUDIT-3-2026-10-26.md) | 2026-10-26: 12 reviewers, 137 findings ranked into 39 items; what #3785/#3811 fixed; slice evidence in `notes/system-audit-3/` |
 | [System audit, second pass](notes/SYSTEM-AUDIT-2-2026-10-26.md) | 2026-10-26: 16 ranked setup-and-coordination findings after #3785; fixed in #3811 |
@@ -29,7 +30,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/APEX-STEWARD-CARD-2026-10-05.md](notes/APEX-STEWARD-CARD-2026-10-05.md) | Always-on steward card + hashes (skip re-read of steward / check-changes / PR template when they match); lane mutex; `cursor/<topic>-<hash>` → ship; resolve-swarm cap; tooling/docs merge-train exclusion — superseded by [RULEBOOK-REWRITE-2026-10-26.md](notes/RULEBOOK-REWRITE-2026-10-26.md) |
 | [notes/HARNESS-SETTINGS-2026-10-26.md](notes/HARNESS-SETTINGS-2026-10-26.md) | Measured Claude Code harness costs (42k bare, +12k rulebook, +0.5–1k per MCP server), compaction/cache/hook settings to adopt, GitHub ruleset and preview options |
 | [notes/LOCAL-LLVMPIPE-2026-10-26.md](notes/LOCAL-LLVMPIPE-2026-10-26.md) | llvmpipe binds in a cloud container with no /dev/dri once libEGL/libGLES are installed (probe table); setup-script and ci.yml recipe |
-| [notes/RULEBOOK-EVIDENCE-2026-10-26.md](notes/RULEBOOK-EVIDENCE-2026-10-26.md) | Sources on instruction count vs compliance; size targets for AGENTS.md, fleet-core and the memory index |
+| [notes/RULEBOOK-EVIDENCE-2026-10-26.md](notes/RULEBOOK-EVIDENCE-2026-10-26.md) | Sources on instruction count vs compliance; size targets for AGENTS.md, the (retired 2026-10-27) fleet-core rule file and the memory index |
 | [notes/SECOND-BRAIN-2026-10-14.md](notes/SECOND-BRAIN-2026-10-14.md) | Obsidian and agent-memory tools (Basic Memory, Mem0, Zep/Graphiti, Letta, MCP memory, Notion, Logseq) weighed for an agent fleet: keep knowledge in git, Obsidian as a human viewer only; the context-rot and memory-poisoning evidence behind the hidden-Unicode, memory `source:` and `Supersedes:` guards. |
 | [notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md](notes/BUG-HUNT-ROUND-2-REGISTER-2026-10-10.md) | Round-2 whole-tree hunt on the 2026-10-09 tip: 79 findings by area with where each went (merged PR, sibling #1289, handed, open), the method, and the lessons (auto-merge skips the non-required geometry sweeps; stale-baseline ratchets; test-group registration). |
 | [notes/BUG-HUNT-OPUS-2026-10-10.md](notes/BUG-HUNT-OPUS-2026-10-10.md) | Six read-only Opus hunters on the 78cb4831be tip, one per area: the race-runtime items fixed in their PR (hidden-tab intro clock, pit-garage pause, spotter churn), the renderer / track / physics / menus findings with each hunter's confidence, and the lane for each follow-up. |
@@ -57,7 +58,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/CI-SELECTION-PLAN-2026-10-16.md](notes/CI-SELECTION-PLAN-2026-10-16.md) | Test selection and tiering plan, 2026-10-16: what each job × tier caught in 40 h (2,097 runs; 58 % of failed jobs inherited from a red tip), 160 merges replayed through the selectors (node fail-safes, HUD/editor/CSS routing), the train since train-on-push, what Meta/Google/Ekstazi say about diff-based selection, ten ranked proposals and three owner decisions. |
 | [notes/PREPUSH-GATE-LADDER.md](notes/PREPUSH-GATE-LADDER.md) | The pre-push ladder: `test:guards` ⊂ `test:tooling-fast` ⊂ `deploy.mjs --gate-only`, with the measured sizes (`gen-ladder-figures.mjs` regenerates it). Read before judging a green rung as proof of the one above. |
 | [archive/notes/SHARED-BRANCH-COORDINATION.md](archive/notes/SHARED-BRANCH-COORDINATION.md) | (Superseded in part: work lands via PR only.) `who-is-on-it.mjs` claims and the stand-down rule when another session already pushed a fix or holds a claim on your paths. |
-| [notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md](notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md) | Evidence behind AGENTS.md §Concurrent PRs: merge commits only, draft=fast / ready=full, when a sync is worth a full PR run. — superseded by [RULEBOOK-REWRITE-2026-10-26.md](notes/RULEBOOK-REWRITE-2026-10-26.md) |
+| [notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md](notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md) | Evidence behind the retired AGENTS.md §Concurrent PRs: merge commits only, draft=fast / ready=full, when a sync is worth a full PR run. — superseded by [RULEBOOK-REWRITE-2026-10-26.md](notes/RULEBOOK-REWRITE-2026-10-26.md) |
 | [notes/CI-MERGE-BURST-2026-10-03.md](notes/CI-MERGE-BURST-2026-10-03.md) | (Superseded in part: `ship-fast` gone since 2026-10-16, release train instead.) A 30-merge burst held the site 30 PRs behind: one fast tier per merge clogged 40 slots and only-the-tip poking deployed nothing mid-burst. The fix: one shared no-cancel `ship-fast` group, a superseded green run pokes when no train is moving, and merge pacing; merge queue is not available on a personal-account repo. |
 | [notes/RATCHET-FRAGMENTS-2026-10-15.md](notes/RATCHET-FRAGMENTS-2026-10-15.md) | Why ratchets.json still fought after one-entry-per-line: two PRs growing ONE module wrote two absolutes on one line (#2231/#2242/#2254/#2289); per-branch delta fragments in `tests/data/ratchets.d/`, `--fold`, and the GitHub merge-driver citation (#2291). |
 | [notes/MERGE-HYGIENE-2026-09-29.md](notes/MERGE-HYGIENE-2026-09-29.md) | Concurrent-PR merge conflicts: measured hotspots (~60 ship merges), why `merge=union` is never for JSON, and the one-entry-per-line + sorted normalizer (`tools/check/merge-hygiene.mjs`). |
@@ -97,7 +98,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | [notes/DEVICE-FARM-ANALYSIS-2026-10-24.md](notes/DEVICE-FARM-ANALYSIS-2026-10-24.md) | Every AWS Device Farm iPhone session analysed: what proved real, what was noise, what to run next (A·Y1). |
 | [notes/DEVICE-FARM-LEDGER-2026-10-23.md](notes/DEVICE-FARM-LEDGER-2026-10-23.md) | One table of every Device Farm run on Apex 26, so lanes stop re-deriving it. |
 | [notes/FLAKY-QUARANTINE-3505-2026-10-25.md](notes/FLAKY-QUARANTINE-3505-2026-10-25.md) | Flaky quarantine #3505 row 1: `garage-livery-churn` verdict and fix scope (Fleet B worker B·W1·L1). |
-| [archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md](archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md) | Adaptive A+D fleet coordination plan agreed on the agent webhook; SUPERSEDED by `.claude/rules/fleet-core.md` and pass-4 DECISIONS #2/#3 (its section 7.3 is struck). |
+| [archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md](archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md) | Adaptive A+D fleet coordination plan agreed on the agent webhook; SUPERSEDED by the fleet-core rule file and pass-4 DECISIONS #2/#3 (its section 7.3 is struck), both retired by the [2026-10-27 orchestration redesign](plans/2026-10-27-orchestration-redesign.md). |
 | [notes/GPUMEM-HUNT-2026-10-24.md](notes/GPUMEM-HUNT-2026-10-24.md) | GPU memory growth and leaks on Bryce's THREE PATH: WEBGPU (`GPUBuffer` counts across race and quit cycles; A·H12). |
 | [notes/HOOKS-SECURITY-2026-10-26.md](notes/HOOKS-SECURITY-2026-10-26.md) | Hooks, guards and permissions security pass (lane S5 of the 2026-10-26 system-audit implementation, PR #3785). |
 | [notes/IPHONE-MEMORY-2026-10-24.md](notes/IPHONE-MEMORY-2026-10-24.md) | iPhone memory read from the Device Farm syslogs, lever 5 of the Device Farm analysis (A·Y2, issue #3675); no device minutes spent. |
@@ -201,6 +202,11 @@ ledger lists.
 | [archive/2026-08-repo-audit.md](archive/2026-08-repo-audit.md) | The Aug-2026 repo audit's finding register as recorded at the time. |
 | [archive/2026-08-architecture-review-journal.md](archive/2026-08-architecture-review-journal.md) | The session journal behind the architecture review: the full defect register with fix narratives, verbatim. |
 | [archive/SCENERY-UPGRADE-PLAN.md](archive/SCENERY-UPGRADE-PLAN.md) | The scenery upgrade roadmap; its helpers are all in the frozen contract now. |
+
+## Orchestration
+
+- [Orchestration redesign: GitHub is the orchestrator](plans/2026-10-27-orchestration-redesign.md): shipped in #3895 on 2026-10-27 — labels, `land.yml` and the dispatcher replace the bus, claims board and orchestrators (the contract: [WORKERS.md](WORKERS.md)); evidence in [notes/orchestration-redesign-2026-10-27/](notes/orchestration-redesign-2026-10-27/README.md).
+- [Fleet redesign, 2026-10-19](plans/2026-10-19-fleet-redesign.md): superseded by the 2026-10-27 redesign; history only.
 
 ## Deferred repository maintenance
 

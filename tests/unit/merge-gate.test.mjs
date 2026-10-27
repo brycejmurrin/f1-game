@@ -13,7 +13,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
-  REQUIRED_CHECK, HOLD_LABEL, MAX_BEHIND, ROWS, openVerdict, holdVerdict, planRow, ciVerdict, isGamePath, gameFiles,
+  REQUIRED_CHECK, CI_APP, HOLD_LABEL, MAX_BEHIND, ROWS, openVerdict, holdVerdict, planRow, ciVerdict, isGamePath, gameFiles,
   gameMergesBehind, distanceVerdict, baseHistory, distanceFor, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main,
   untrustedEnv,
 } from "../../tools/ci/merge-gate.mjs";
@@ -23,6 +23,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const scratch = (prefix) => { const d = path.join(ROOT, "artifacts", "tmp"); fs.mkdirSync(d, { recursive: true }); return fs.mkdtempSync(path.join(d, prefix)); };
 const HEAD = "a".repeat(40), TIP = "t".repeat(40);
 const sha = (n) => String(n).repeat(40).slice(0, 40);
+const GHA = { slug: "github-actions" };
 
 test("openVerdict: only an open, non-draft PR passes", () => {
   assert.equal(openVerdict({ state: "open", draft: false }).ok, true);
@@ -51,9 +52,9 @@ test("ciVerdict: the required check-run on the head, newest attempt, success onl
   assert.equal(REQUIRED_CHECK, "CI");
   assert.equal(ciVerdict([]).ok, false);
   assert.equal(ciVerdict([{ id: 1, name: "CI (draft fast tier)", status: "completed", conclusion: "success" }]).ok, false);
-  assert.equal(ciVerdict([{ id: 1, name: "CI", status: "in_progress" }]).ok, false);
-  assert.equal(ciVerdict([{ id: 1, name: "CI", status: "completed", conclusion: "failure" }, { id: 2, name: "CI", status: "completed", conclusion: "success" }]).ok, true, "newest attempt wins");
-  assert.equal(ciVerdict([{ id: 2, name: "CI", status: "completed", conclusion: "success" }, { id: 3, name: "CI", status: "completed", conclusion: "failure" }]).ok, false);
+  assert.equal(ciVerdict([{ id: 1, name: "CI", app: GHA, status: "in_progress" }]).ok, false);
+  assert.equal(ciVerdict([{ id: 1, name: "CI", app: GHA, status: "completed", conclusion: "failure" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success" }]).ok, true, "newest attempt wins");
+  assert.equal(ciVerdict([{ id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success" }, { id: 3, name: "CI", app: GHA, status: "completed", conclusion: "failure" }]).ok, false);
 });
 
 test("game paths: js/ css/ assets/ index.html sw.js", () => {
@@ -165,7 +166,7 @@ test("two PRs each at the assert-match ceiling alone are over it on the merge re
 /** A fake GitHub plus fake merge and distance for the evaluator; `pull` and `checks` are mutable per case. */
 function fakes() {
   const pull = { state: "open", draft: false, labels: [], head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
-  const checks = [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", status: "completed", conclusion: "success" }];
+  const checks = [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success" }];
   const calls = [];
   const request = (p) => {
     if (p === "pulls/7") return { json: pull };
@@ -366,4 +367,36 @@ test("audit 4: a READY claim checks the PR number, the live head and the gate fi
     assert.deepEqual(readyClaimVerdict(dir, { pr: 12, text: "ready" }), { ok: false, pr: 12,
       why: `ready-gate receipt for #12: tools/ci/ready-gate.mjs in ${tampered.gateRoot} is not the file that wrote this receipt: re-run the gate from this checkout` });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("CI not finished is WAIT, not FAIL: exit 3 only when every other row is ok (land.yml posts `gate` in_progress)", () => {
+  assert.equal(ciVerdict([]).pending, true, "no CI check-run yet");
+  assert.equal(ciVerdict([{ id: 1, name: "CI", app: GHA, status: "in_progress" }]).pending, true);
+  assert.equal(ciVerdict([{ id: 1, name: "CI", app: GHA, status: "completed", conclusion: "failure" }]).pending, undefined, "a finished red CI refuses");
+  const f = fakes();
+  f.checks[1].status = "in_progress"; delete f.checks[1].conclusion;
+  const logs = [];
+  const deps = { ...f.deps, log: (l) => logs.push(l) };
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], deps), 3);
+  assert.ok(logs.some((l) => l.startsWith("= gate ci: WAIT CI in_progress")), logs.join("\n"));
+  assert.ok(logs.at(-1).startsWith("= merge-gate waiting — open=ok hold=ok plan=ok ci=WAIT"), logs.at(-1));
+  f.pull.body = "## Plan\n- [ ] still open\n";
+  logs.length = 0;
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], deps), 2, "a real refusal next to a waiting CI refuses");
+  assert.ok(logs.at(-1).startsWith("= merge-gate refused —"), logs.at(-1));
+});
+
+test("ciVerdict: only the GitHub Actions app's `CI` counts; a same-named check from another app (or none) is ignored", () => {
+  assert.equal(CI_APP, "github-actions");
+  const forged = { id: 9, name: "CI", app: { slug: "some-app" }, status: "completed", conclusion: "success" };
+  const bare = { id: 8, name: "CI", status: "completed", conclusion: "success" };
+  assert.equal(ciVerdict([forged]).ok, false);
+  assert.equal(ciVerdict([forged]).pending, true, "no CI from the Actions app yet is waiting");
+  assert.equal(ciVerdict([bare]).ok, false, "a check-run with no app is not trusted");
+  const red = { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "failure" };
+  assert.equal(ciVerdict([red, forged]).ok, false, "a newer forged success does not replace the real red");
+  assert.equal(ciVerdict([red, { ...red, id: 3, conclusion: "success" }]).ok, true);
+  const f = fakes();
+  f.checks[1].app = { slug: "not-actions" };
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"]);
 });
