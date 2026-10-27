@@ -389,6 +389,25 @@ test.describe("Time Trial — results panel", () => {
     expect(title).toContain("TIME TRIAL");
   });
 
+  test("a personal-best ghost puts a SHARE CARD chip on TT results (#1547)", async ({ page }) => {
+    await enterTT(page);
+    await page.evaluate(() => window.__apex.park(0));
+    // A synthetic 80 s lap at 20 Hz becomes the stored best (Ghost is a page global).
+    await page.evaluate(() => {
+      Ghost.startLap();
+      for (let i = 0; i <= 1600; i++) Ghost.record(i / 20, i * 2.5, 0);
+      Ghost.finishLap(80, null);
+    });
+    await page.evaluate(() => window.__apex.finishRace());
+    await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
+    const chip = page.locator("#res-ghost-card");
+    await chip.scrollIntoViewIfNeeded();
+    await expect(chip).toBeVisible();
+    const [file] = await Promise.all([page.waitForEvent("download", { timeout: 20_000 }), chip.click()]);
+    expect(file.suggestedFilename()).toMatch(/^apex26-lap-[a-z0-9-]+\.png$/);
+    await expect(chip).toHaveText("DOWNLOADED");
+  });
+
   test("TRY AGAIN button shown in TT results", async ({ page }) => {
     await enterTT(page);
     await page.evaluate(() => window.__apex.park(0));
