@@ -217,6 +217,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
+        "tests/unit/ratchets.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
@@ -12265,7 +12266,8 @@
       "*": [
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/race/quali-model.js": {
@@ -13303,6 +13305,9 @@
       ],
       "vmaxMul": [
         "tests/unit/wind.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/render/gfx.js": {
@@ -16362,7 +16367,8 @@
         "tests/unit/hud-inputs.test.mjs"
       ],
       "*": [
-        "tests/unit/a11y-opts.test.mjs"
+        "tests/unit/a11y-opts.test.mjs",
+        "tests/unit/cvd-palette.test.mjs"
       ]
     },
     "js/ui/hud-layout.js": {
@@ -16457,6 +16463,7 @@
         "tests/unit/hud-minimap-pitmark.test.mjs"
       ],
       "*": [
+        "tests/unit/cvd-palette.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs"
       ]
     },
@@ -17758,6 +17765,7 @@
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/cvd-palette.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
