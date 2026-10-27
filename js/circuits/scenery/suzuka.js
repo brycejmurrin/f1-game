@@ -12,7 +12,7 @@
               building, tower, billboard,
               marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
               addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, groundYAt, terrainYAt, onTrack, forestEdge, backdrop,
-              MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound } = api;
+              MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound, bakedModel } = api;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────
       const navy      = [0.18, 0.26, 0.46];
@@ -990,4 +990,11 @@
           });
         }
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.96, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const [s, side] of [[0.1198, 1], [0.3404, 1], [0.4213, 1], [0.8549, 1], [0.9275, 1]])
+        bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
     };

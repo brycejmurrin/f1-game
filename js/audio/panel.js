@@ -56,17 +56,21 @@ var AudioPanel = (() => {
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else if (G.state === "menu") GameAudio.startMusic(-1);
-      // Not under the pause menu: resume starts the engine, and in a friend race
-      // the loop keeps driving an engine started here, audibly.
-      else if ((G.state === "race" || G.state === "count") && !G.paused) {   // the countdown is the race's first seconds
-        GameAudio.startMusic(G.trackIdx);
-        // A race that began with SOUND OFF skipped game.js's setVoice/setVenue, so
-        // lifting the master mid-race would otherwise run the default voice and venue.
+      // Mid-race SOUND ON (countdown is the race's first seconds). A race that
+      // began with SOUND OFF skipped game.js's setVoice/setVenue (BUGS M31).
+      // Apply them even under the pause card — resume starts the engine without
+      // setVenue (game.js setPaused), so venue/voice must land here.
+      else if (G.state === "race" || G.state === "count") {
         if (G.player && G.player.team && GameAudio.setVoice) GameAudio.setVoice(G.player.team.engine);
         if (G.track && G.track.def && GameAudio.setVenue) GameAudio.setVenue(G.track.def);
-        GameAudio.startEngine();
-        // The cloud can clear while the road remains wet.
-        if (G.viewRainfall() > 0.01) GameAudio.startRain();
+        // Not under the pause menu: resume starts the engine, and in a friend
+        // race the loop keeps driving an engine started here, audibly.
+        if (!G.paused) {
+          GameAudio.startMusic(G.trackIdx);
+          GameAudio.startEngine();
+          // The cloud can clear while the road remains wet.
+          if (G.viewRainfall() > 0.01) GameAudio.startRain();
+        }
       }
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();
@@ -108,6 +112,9 @@ var AudioPanel = (() => {
     const chatNow = () => (rr() ? rr().chat() : store.get("radioChat", "normal"));
     const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
+    // The language the system voice speaks (RadioVoice.spokenLang); captions follow the UI language, not this.
+    const SLANG_VALUES = [["auto", "AUTO"], ["en", "ENGLISH"], ["es", "ESPAÑOL"], ["pt", "PORTUGUÊS"], ["it", "ITALIANO"], ["de", "DEUTSCH"], ["fr", "FRANÇAIS"], ["ja", "日本語"], ["nl", "NEDERLANDS"]];
+    const slangNow = () => { const v = String(store.get("spokenLang", "auto")); return SLANG_VALUES.some((x) => x[0] === v) ? v : "auto"; };
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
     const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
     const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");
@@ -437,6 +444,7 @@ var AudioPanel = (() => {
       SettingRow.paint($("as-chat"), chatNow(), CHAT_VALUES);
       SettingRow.paint($("as-comm"), commNow(), COMM_VALUES);
       SettingRow.paint($("as-rpack"), packNow(), PACK_VALUES);
+      SettingRow.paint($("as-slang"), slangNow(), SLANG_VALUES);
       if (GameAudio.radioPresets) SettingRow.paint($("as-rpreset"), GameAudio.radioPreset(), GameAudio.radioPresets());
       SettingRow.paint($("as-spot"), spotNow(), ONOFF);
       SettingRow.paint($("as-focus"), focusNow(), FOCUS_VALUES);
@@ -522,6 +530,16 @@ var AudioPanel = (() => {
       write: (v) => { if (v === "on") { setRadio(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setRadio(false); } } });
     SettingRow.wire("as-chat", { values: CHAT_VALUES, read: chatNow,
       write: (v) => { if (rr()) rr().setChat(v); else store.set("radioChat", v); GameAudio.uiTick(); syncAudioPanel(); } });
+    // Built here, not in index.html: the shell's node count is a shrink-only ratchet.
+    const rpreset = $("as-rpreset");
+    if (rpreset && rpreset.parentNode && !$("as-slang")) {
+      const label = typeof I18n !== "undefined" ? I18n.t("settings.spokenLang", null, "SPOKEN LANGUAGE") : "SPOKEN LANGUAGE";
+      const built = SettingRow.build("as-slang", label, SLANG_VALUES);
+      built.label.setAttribute("data-i18n", "settings.spokenLang");
+      rpreset.parentNode.insertBefore(built.row, rpreset.nextSibling);
+    }
+    SettingRow.wire("as-slang", { values: SLANG_VALUES, read: slangNow,
+      write: (v) => { store.set("spokenLang", v); GameAudio.uiTick(); syncAudioPanel(); } });
     SettingRow.wire("as-rpack", { values: PACK_VALUES, read: packNow,
       write: (v) => { if (G.radio && G.radio.setPackOn) G.radio.setPackOn(v === "rec"); store.set("radioPack", v === "rec"); GameAudio.uiTick(); syncAudioPanel(); } });
     if (GameAudio.radioPresets) SettingRow.wire("as-rpreset", { values: GameAudio.radioPresets(), read: () => GameAudio.radioPreset(),
