@@ -2829,7 +2829,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: tools/ci
+          # junit-failed.mjs imports tools/lib/cli-args.mjs (audit4 C2)
+          sparse-checkout: |
+            tools/ci
+            tools/lib
       # Sparse checkout for an empty/skipped plan: still need the verdict script
       # (guards/select/dropped rules). Cheap; no junit download.
       - name: Checkout the gate verdict scripts (empty plan)
@@ -2837,7 +2840,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          sparse-checkout: tools/ci
+          # junit-failed.mjs imports tools/lib/cli-args.mjs (audit4 C2)
+          sparse-checkout: |
+            tools/ci
+            tools/lib
       # https://github.com/actions/download-artifact (v8: pattern + merge-multiple)
       - name: Every shard's junit
         id: dl_junit
