@@ -365,3 +365,20 @@ test("audit 4: a READY claim checks the PR number, the live head and the gate fi
       why: `ready-gate receipt for #12: tools/ci/ready-gate.mjs in ${tampered.gateRoot} is not the file that wrote this receipt: re-run the gate from this checkout` });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("CI not finished is WAIT, not FAIL: exit 3 only when every other row is ok (land.yml posts `gate` in_progress)", () => {
+  assert.equal(ciVerdict([]).pending, true, "no CI check-run yet");
+  assert.equal(ciVerdict([{ id: 1, name: "CI", status: "in_progress" }]).pending, true);
+  assert.equal(ciVerdict([{ id: 1, name: "CI", status: "completed", conclusion: "failure" }]).pending, undefined, "a finished red CI refuses");
+  const f = fakes();
+  f.checks[1].status = "in_progress"; delete f.checks[1].conclusion;
+  const logs = [];
+  const deps = { ...f.deps, log: (l) => logs.push(l) };
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], deps), 3);
+  assert.ok(logs.some((l) => l.startsWith("= gate ci: WAIT CI in_progress")), logs.join("\n"));
+  assert.ok(logs.at(-1).startsWith("= merge-gate waiting — open=ok hold=ok plan=ok ci=WAIT"), logs.at(-1));
+  f.pull.body = "## Plan\n- [ ] still open\n";
+  logs.length = 0;
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], deps), 2, "a real refusal next to a waiting CI refuses");
+  assert.ok(logs.at(-1).startsWith("= merge-gate refused —"), logs.at(-1));
+});

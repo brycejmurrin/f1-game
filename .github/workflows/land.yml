@@ -19,11 +19,13 @@ name: Land
 # reads each PR's draft flag and labels itself, and lists the open `land` PRs when the triggering run was the
 # train (a deploy-branch run belongs to no PR).
 #
-# THE CHECK NAMED `gate`. On a `pull_request` event the `gate` job's own check run sits on the PR head, which is
-# where the ruleset reads it. On a `workflow_run` / `check_suite` event the run's commit is the default-branch
-# tip, so the job posts the verdict as a check run named `gate` on the PR head through the Checks API instead
-# (https://docs.github.com/en/rest/checks/runs#create-a-check-run; `checks: write`). Same name, same app, the
-# newest one on a commit wins. A skipped `gate` (no label, draft, `hold`) is "not asked", not "refused".
+# THE CHECK NAMED `gate`. Exactly ONE check run named `gate` exists per PR head, always written through the Checks
+# API (https://docs.github.com/en/rest/checks/runs#create-a-check-run, #update-a-check-run; `checks: write`),
+# tagged `external_id: land-gate`, and every later evaluation of the same head UPDATES it. The job that runs the
+# gate is named `land-gate`, so no job ever adds a second `gate` check: on 2026-10-27 #3902 had a red `gate` job
+# check (labelled while CI still ran) next to a later green API one, and the ruleset kept the PR blocked.
+# CI still running is WAITING, not refused: merge-gate exits 3 and `gate` is posted `in_progress`, so the `land`
+# label can go on before CI finishes. A skipped evaluation (no label, draft, `hold`) is "not asked", not "refused".
 #
 # AUTO-MERGE. `gh pr merge --auto --merge --match-head-commit <sha>`: "Automatically merge only after necessary
 # requirements are met"; "Commit SHA that the pull request head must match to allow merge"
@@ -129,7 +131,7 @@ jobs:
   # green on the head, gen:check + ratchets on a throwaway merge with the current tip, base not too far behind).
   # No receipt is written and no bus is read in --check mode.
   gate:
-    name: gate
+    name: land-gate
     needs: resolve
     if: needs.resolve.outputs.landable == 'true'
     runs-on: ubuntu-latest
@@ -171,24 +173,33 @@ jobs:
             echo "$out"
             echo "::endgroup::"
             verdict=$(grep -E '^= merge-gate ' <<<"$out" | tail -n 1)
+            # 0 passed, 3 waiting on CI (in_progress, not red), anything else refused.
             if [ "$code" -eq 0 ]; then
-              conclusion=success; passed=$(jq -c --argjson n "$n" --arg h "$head" '. + [{number: $n, head: $h}]' <<<"$passed")
+              status=completed; conclusion=success
+              passed=$(jq -c --argjson n "$n" --arg h "$head" '. + [{number: $n, head: $h}]' <<<"$passed")
+            elif [ "$code" -eq 3 ]; then
+              status=in_progress; conclusion=""
             else
-              conclusion=failure; refused=$((refused + 1))
+              status=completed; conclusion=failure; refused=$((refused + 1))
             fi
             # shellcheck disable=SC2016 # the backticks are Markdown for the job summary, not a command substitution
             printf '### gate PR #%s\n\n`%s`\n\n```\n%s\n```\n' "$n" "${verdict:-= merge-gate unknown (exit $code)}" "$out" >> "$GITHUB_STEP_SUMMARY"
-            # Off a pull_request event this run's own check sits on the deploy tip, not the PR head: post one there.
-            if [ "$EVENT" != pull_request ]; then
-              jq -n --arg h "$head" --arg c "$conclusion" --arg t "${verdict:-merge-gate exit $code}" --arg s "$(tail -c 60000 <<<"$out")" \
-                '{name: "gate", head_sha: $h, status: "completed", conclusion: $c, output: {title: $t, summary: $s}}' \
-                | gh api --method POST "repos/$GITHUB_REPOSITORY/check-runs" --input - --jq '.html_url'
+            # ONE `gate` check per head: update the land-gate one when it exists, else create it.
+            body=$(jq -n --arg h "$head" --arg st "$status" --arg c "$conclusion" --arg t "${verdict:-merge-gate exit $code}" \
+              --arg s "$(tail -c 60000 <<<"$out")" \
+              '{name: "gate", head_sha: $h, external_id: "land-gate", status: $st, output: {title: $t, summary: $s}}
+               + (if $c == "" then {} else {conclusion: $c} end)')
+            id=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/check-runs?check_name=gate&per_page=100" \
+              --jq '[.check_runs[] | select(.external_id == "land-gate")] | sort_by(.id) | last | .id // empty' || true)
+            if [ -n "$id" ] && gh api --method PATCH "repos/$GITHUB_REPOSITORY/check-runs/$id" --input - --jq '.html_url' <<<"$body"; then
+              :
+            else
+              gh api --method POST "repos/$GITHUB_REPOSITORY/check-runs" --input - --jq '.html_url' <<<"$body"
             fi
           done
           echo "passed=$passed" >> "$GITHUB_OUTPUT"
           echo "passed=$passed refused=$refused"
-          # On a pull_request event the job IS the PR's `gate` check: refused means red.
-          if [ "$EVENT" = pull_request ] && [ "$refused" -gt 0 ]; then exit 1; fi
+          # The verdict lives in the `gate` check run above; this job (land-gate) stays green unless it errored.
 
   # ARM: GitHub merges when `CI` and `gate` are green on exactly this head; the ruleset does the rest.
   arm:

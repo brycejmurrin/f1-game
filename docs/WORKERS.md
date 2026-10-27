@@ -20,7 +20,8 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
    timers. A red on your head is work now; a red elsewhere is not yours.
 5. **Land.** When `node tools/ci/ready-gate.mjs --pr <n>` exits 0: flip the PR ready, add the `land` label, refresh
    the Hand-off block. Then the session ENDS. `land.yml` runs `merge-gate.mjs --check` as the check named `gate`
-   and arms auto-merge pinned to your head; the branch ruleset merges when `CI` and `gate` are green. A red or a
+   and arms auto-merge pinned to your head; the branch ruleset merges when `CI` and `gate` are green. Adding `land`
+   while CI still runs is fine: `gate` shows in progress ("waiting") and re-evaluates when CI ends. A red or a
    conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
 6. **Stop at the cost cap.** The brief's cap is $10 soft. At the cap: finish the current unit, leave the Plan and
    the Hand-off block current, add `needs-owner`, and end. Over the hard cap the dispatcher archives the session.
