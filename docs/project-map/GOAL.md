@@ -1,62 +1,49 @@
-# Complete project mapping goal
+# Complete project mapping goal — complete
 
 ## User goal
-Read every file in the requested root areas, map source relationships with LSP, identify evidence-backed comment cleanup, and commit reports. Use GPT-6.1 Sol agents. Source fixes are separate from mapping.
 
-## Completion rules
-A complete source read requires every line visible in nontruncated chunks. Header scans, outlines and inventory are partial. LSP references corroborate contracts but do not establish runtime behavior. Binary assets require metadata/provenance and usage inspection rather than a fictional line read. Generated/vendor/history content must retain provenance. Secret and browser profile contents are excluded.
+Read the project from scratch with fresh GPT-6.1 Sol agents, map source relationships using LSP, identify evidence-backed comment cleanup candidates and commit each report. Runtime source fixes are separate from this mapping.
 
-## Source
-Branch cursor/project-map-a84f, source ae73c6766, first report checkpoint c4dc493d9. Current complete reads below are bound to unchanged runtime source.
+## Source and navigation
 
-## Current complete source passes
-- js/core: 16 files / 3,597 lines; core-complete.md.
-- js/physics: 20 files / 8,454 lines; physics-complete.md.
-- js/race: 41 files / 14,098 lines; race-complete.md.
-- js/net and js/input: 25 files / 14,237 lines; net-input-complete.md.
-- js/data and js/career: 38 files / 16,118 lines; data-career-complete.md.
-- js/camera: 28 files; camera-complete.md.
-- js/car: 24 files; car-small-complete.md and car-large-complete.md.
-- js/perf: 20 files / 7,277 lines; perf-complete.md.
-- game.js: all 9,554 lines; game-boot/middle/tail-complete.md.
-- js/render/glx: 10 files / 10,485 lines; glx-complete.md.
-- js/render/three and webgpu: backend/subsystem files plus all shader leaves; three-complete.md, webgpu-complete.md, shaders-complete.md (initial pending shader rows are satisfied by the latter).
+Original source snapshot: ae73c67669bbb7fe4b54f58f78bcfb9c8b00aebb. Branch: cursor/project-map-a84f. First report checkpoint: c4dc493d9. Runtime source is unchanged. The original documentation index received one intentional mapping link; its current identity is the explicit audit exception.
 
-## Additional completed source passes
-- js/ui: all66 files; initial21 plus ui-a/hud/c/d/e-complete.md (three initial HUD files intentionally reread).
-- js/editor and js/audio: all20 files each; editor-complete.md and audio-complete.md.
-- js/track: all28 /16,090 lines; track-engine-complete.md plus track-tail-complete.md (initial pending rows satisfied by tail report).
-- js/circuits definitions: all52; circuit-defs-complete.md.
-- js/garage: all22; garage-complete.md.
-- js/lighting and js/fx: all15; lighting-fx-complete.md plus light-presets-complete.md (initial pending preset rows satisfied).
-- js/agent, overlay, share, workers, xr: all25; agent-misc-complete.md.
-- css: all34; css-a-complete.md plus css-b-complete.md.
-- Root shell/config/roster/types: all13 scoped files; root-shell-complete.md.
-- Circuit scenery: all four groups A/B/C/D fully read and reported.
+Start at [INDEX.md](INDEX.md), then [PROJECT.md](PROJECT.md) for directory ownership and runtime flow. [coverage.tsv](coverage.tsv) contains the exact original tracked-entry roster, SHA-256, method and evidence. [coverage-audit.md](coverage-audit.md) records independent reconciliation and limits.
 
-## Runtime milestone
-Every tracked JavaScript file under js/ is fully read: **561/561**. All34 CSS files, root shell/roster/type scope, and all95 platform files are mapped (59 fully read text files plus36 inspected binaries). Source reading does not establish browser/GPU correctness. All original tracked areas have now completed their recorded read/inspection method; final reconciliation and publication remain open.
+## Completed original scope
 
-## Current wider-project progress
-- All582 tracked tools paths fully read across tools-ci/mcp/lib/gen/check/environment/shot/ui-gfx/gfx-tail/car/track/perf-light/misc reports.
-- All39 root Markdown guides fully read across docs-root reports.
-- All598 changelog fragments fully read; docs-changelog-complete.md.
-- Test data221 files complete:214 fully raw-read; seven generated tables structurally traversed,111905 JSON nodes total. Fixture scope35 complete:34 fully raw-read, OpenF1 timing snapshot structurally traversed; tests-data/fixtures-complete reports.
-- Test-only IWER vendor bundle complete across two byte groups; tests-vendor-complete.md. Full test-group roster127191 bytes read and56 group contracts mapped; tests-groups-complete.md.
-- Manual test scope11 files/1439 lines complete; tests-manual-complete.md. Icons/locale leaves complete:77 PNG metadata, icon guide and both English catalogs read; icons-locales-complete.md. All38 tracked symlinks inspected; symlinks-complete.md. Original tracked-entry inventory is5109 (directory symlinks restored to coverage).
-- All182 assets mapped:11 prose/code files fully read,24 generated voice indexes completely parsed/tuple-validated,147 binary resources inspected; assets-complete.md. Generated data is not claimed manually semantically read.
-- All62 unit groups complete:1056 files/305161 source lines. Group02 raw gaps closed by02a/b/c; group21 raw gaps closed by21a/b/c/d.
-- All57 vendor paths mapped:56 text files fully read; Rapier wrapper source fully read and encoded WASM structurally inspected. All20 vendor continuation groups complete.
-- All44 historical-note groups complete; every byte interval of all305 original tracked notes is covered, with source hashes and provenance limits.
+All 5,109 original Git entries are accounted for, with no unread or partial rows:
 
-## Active/queued assignments and continuation
-Use collaboration.list_agents for actual live worker state. All assigned source/data/binary/symlink passes are complete. Original inventory5109 entries:4672 fully raw-read files,366 binary metadata entries,38 symlink metadata entries,32 fully traversed structured-data files,1 mixed raw-wrapper/embedded-binary vendor file. No unread or partial original entries remain. Final independent coverage audit passed with explicit identity/attestation limits; the29-entry corroborated comment register and5,776-entry retained-output catalog are complete. All4,750 duplicate canonical identities and2,289 equal blocks across463 retained source identities are reconciled; no unresolved identity matches remain. Snapshot01–08 novel bytes and retained-source01–04 source/prose reads are complete; equal blocks reuse matching canonical reads, not fictional duplicate raw reads. Start fresh GPT-6.1 Sol agents with fork_turns none and explicit model. Keep at most6 workers plus parent; a seventh worker launch was actually rejected by host.
+| Method | Entries |
+|---|---:|
+| Fully raw-read source, prose and small data | 4,672 |
+| Binary metadata/provenance inspected | 366 |
+| Symlink metadata inspected | 38 |
+| Large structured data completely traversed/validated | 32 |
+| Raw JavaScript wrapper plus embedded binary inspection | 1 |
 
-## Persistence checkpoint
-Draft PR https://github.com/brycejmurrin/f1-game/pull/3922. Remote checkpoint1eaaa85cb; latest individual reports committed locally through8b6db7ab1. Initial143 plus24 plus19 plus15 plus30 newer report commits passed the documentation guard. Latest docs/config checks74/74; subsequent docs37 checks and per-commit guards pass. Draft fast CI atf8c43939b passed26 jobs,24 skipped,0 failed (runs40498578383/40498578206). Integrating further completed reports now. Documentation checks are being rerun after correcting report path/Markdown quoting issues; do not treat a failing historical log as latest green. coverage.tsv is source-hash/read-status evidence; own mapping reports are excluded to avoid recursive scope.
+Every tracked runtime JavaScript file under js/ is fully read (561 files), as are all 34 stylesheets and 582 tooling paths. All platform, asset/vendor, test, documentation, instruction/workflow, example and prototype scopes are mapped. Unit reports cover all 1,056 files and 305,161 source lines; browser-spec byte groups cover the entire tracked spec scope with image metadata kept separate. Per-family manifests and complete reports preserve exact rosters and boundaries.
 
-## Remaining backlog
-Final navigation, documentation verification and durable publication of the completed reports. Runtime, stylesheets, tools, assets, vendor and platform scopes have completed the evidence methods recorded above. Earlier partial maps are superseded by complete domain reports; no initial map alone proves completion.
+Full source reading requires nontruncated visible chunks; outlines and AST metadata alone are partial evidence. Binary, structured-data and alias methods are never relabelled as manual source reads. LSP fallback/text matches and unresolved dynamic properties retain their limits. Source inspection does not establish browser, GPU, device or deployment behavior.
 
-## Verification and persistence
-Parent serializes report integration and commits. New reports need docs-integrity and agent-config checks. Earlier checkpoint passed 74/74; current reports are being checked again. Agents created under an earlier read-only policy may remain EROFS even after parent access restored; parent writes their supplied text. Never claim completion while backlog remains.
+## Completed retained scope
+
+The separate frozen retained census classifies 5,776 entries. All 70 planned novel retained source/prose inputs are read (507,826 bytes across four groups). Eight snapshot groups read all differing historical ranges, including the cached shell. All 463 retained source identities and 2,289 equal blocks are verified; equal plus novel ranges cover every source byte. All 4,750 canonical duplicate identities resolve, preserving their original read/inspection methods.
+
+See [retained-output-catalog.md](retained-output-catalog.md) and [retained-identity-closure.json](retained-identity-closure.json). Generated diagnostics/logs receive explicit structural or provenance treatment. Installed dependencies, caches, browser profiles, secret contents and own mapping outputs retain their documented exclusion boundaries; this is not a claim to have manually read every filesystem byte. No retained files were deleted or historical commands activated.
+
+## Findings and verification
+
+[comment-cleanup.md](comment-cleanup.md) contains 29 independently corroborated current comment/title candidates with exact source quotes/ranges, behavior evidence, suggested wording and limits. Two unsupported earlier candidates were rejected; the original incorrect test-count sentence was corrected. The broader domain reports retain additional observations and historical distinctions.
+
+The independent coverage audit passed with the explicit documentation-index identity exception and reader-attestation limits. All mapping JSON documents parse. Documentation and agent-configuration checks passed 74/74, and per-report commit guards passed. Draft fast CI passed at the published checkpoints; the PR hand-off records the final pushed head and remote verdict. Browser, GPU, native-build and deployment suites were outside this documentation-only change.
+
+## Persistence and hand-off
+
+Every completed report and supporting ledger is committed. Global navigation and the final verification record are included in the completion commit. Draft PR: https://github.com/brycejmurrin/f1-game/pull/3922. The PR remains a reviewable documentation change; runtime fixes and landing are separate actions.
+
+- [x] Complete all original tracked source/data/binary/symlink mapping.
+- [x] Close source-read continuations and canonical identity inheritance.
+- [x] Catalog relevant retained outputs and explicit exclusions.
+- [x] Independently audit coverage and corroborate comment candidates.
+- [x] Commit reports, publish navigation and run documentation checks.
