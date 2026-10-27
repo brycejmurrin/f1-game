@@ -3862,6 +3862,7 @@
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "objective": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "objectiveChoices": [

@@ -2105,3 +2105,45 @@ test("the career IMPORT card surfaces a refused restore point and keeps the save
   assert.equal(ui.notices.at(-1), "IMPORT REFUSED — COULD NOT KEEP A RESTORE POINT OF THE SAVE IT WOULD REPLACE; NOTHING CHANGED");
   assert.equal(h.store.get("career.driver.1").money, 100);
 });
+
+// PR #3940 race (career-hub.spec "Daily class merges…" → "Daily merge refused:
+// conflict"): the hub opened by __apex.career() builds after a lazy load and
+// its Career.objective() draw SAVES the live slot. Landing inside the
+// before-import capture's IndexedDB await, that own save moved the pinned
+// revision and the import refused itself. The capture resolves a microtask
+// later, as IndexedDB does, after the live career's own save.
+function liveSaveDuringCapture(h, write) {
+  let n = 0;
+  return withPoints(h, async () => {
+    await Promise.resolve();
+    if (n++ === 0) write();
+    return { ok: true, durable: true, id: "p" + n };
+  });
+}
+const liveImport = (h) => ({ format: h.CareerBackup.FORMAT, slots: [{ flavour: "driver", i: 0, data: save({ money: 777 }) }] });
+
+test("the live career's own save during the before-import capture is captured again, not a conflict", async () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  const calls = liveSaveDuringCapture(h, () => { h.Career.data().money = 4242; h.Career.save(); });
+  const result = await h.CareerBackup.applyWithUndo(liveImport(h));
+  assert.equal(result.ok, true, "reason: " + result.reason);
+  assert.deepEqual([...result.written], ["driver:0"]);
+  assert.equal(calls.length, 2, "the newer live save gets its own restore point");
+  assert.equal(calls[1].money, 4242, "the undo holds the save the import replaced, not the stale one");
+  assert.equal(h.store.get("career.driver.0").money, 777);
+  assert.equal(h.Career.conflicted(), false);
+});
+
+test("a foreign write to the live slot during the before-import capture still refuses", async () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  liveSaveDuringCapture(h, () => {
+    h.disk.set("apex26.career.driver.0", JSON.stringify(save({ money: 9000 })));
+    h.foreign("apex26.career.driver.0");
+  });
+  const result = await h.CareerBackup.applyWithUndo(liveImport(h));
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, "conflict");
+  assert.equal(h.store.get("career.driver.0").money, 9000);
+});
