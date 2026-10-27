@@ -1701,6 +1701,280 @@
       "interpreter": "bash"
     },
     {
+      "path": "tools/environment/.gitignore",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/ENVIRONMENT.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/MCP-STARTUP-SKILL.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/PLUGIN-BUILD.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/activate.sh",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/bin/f1-build-plugins",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/bin/f1-env",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/bind-canonical.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/boot-chat-mcp.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/build-plugins.py",
+      "classification": "entrypoint-candidate",
+      "interpreter": "python3",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/environment/check-chat-mcp-health.py",
+      "classification": "entrypoint-candidate",
+      "interpreter": "python3",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/environment/environment/install-dependencies.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/environment/install-local-plugins.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/environment/install-tools.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/environment/plugin-install.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
+      "path": "tools/environment/environment/preflight.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/environment/resume.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/environment/test-environment.py",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/environment/test-health.py",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/environment/validate-shaders.mjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/environment/verify.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/fixtures/lifecycle-echo.mjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/install-environment.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/launch-mcp.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/plugin-sources/.agents/plugins/marketplace.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-cloud-mcp/.app.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-cloud-mcp/.codex-plugin/plugin.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-cloud-mcp/tests/packaging.test.mjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/.app.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/.codex-plugin/plugin.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/executor/.mcp.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/executor/mcp.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/plugin.json",
+      "classification": "data"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/agent-readiness.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/apex-tools-bridge.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/github-fleet.cjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/readiness.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/codex-workflows.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/SKILL.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/garage-parts.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/profiling.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/readiness.md",
+      "classification": "asset",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/ui-inspection.md",
+      "classification": "asset"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/workflows.md",
+      "classification": "asset",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs",
+      "classification": "entrypoint-candidate",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/tests/agent-setup.test.mjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/tests/bridge.test.mjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/tests/packaging.test.mjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/plugin-sources/f1-dev-tools/tests/readiness.test.mjs",
+      "classification": "ambiguous"
+    },
+    {
+      "path": "tools/environment/setup.sh",
+      "classification": "entrypoint-candidate",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/environment/test-plugin-build.py",
+      "classification": "ambiguous",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
+      "path": "tools/environment/test-stdio-lifecycle.py",
+      "classification": "entrypoint-candidate",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/garage-angles-fetch.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -2656,9 +2930,18 @@
       "outputPolicy": "protocol-only"
     },
     {
+      "path": "tools/mcp/check-chat-browser.mjs",
+      "classification": "ambiguous"
+    },
+    {
       "path": "tools/mcp/check-chat-contract.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/mcp/check-doctor-catalog.mjs",
+      "classification": "entrypoint-candidate",
       "interpreter": "node"
     },
     {
@@ -2682,6 +2965,10 @@
       "path": "tools/mcp/diagnostics-tools.mjs",
       "classification": "ambiguous",
       "outputPolicy": "job-status"
+    },
+    {
+      "path": "tools/mcp/doctor-catalog.mjs",
+      "classification": "ambiguous"
     },
     {
       "path": "tools/mcp/garage-plan.mjs",

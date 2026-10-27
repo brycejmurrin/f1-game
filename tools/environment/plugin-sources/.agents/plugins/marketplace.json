@@ -1,0 +1,19 @@
+{
+  "name": "f1-workspace",
+  "plugins": [
+    {
+      "name": "dev-6ade996f81448191a51fc4e7a33152a8",
+      "source": {
+        "source": "local",
+        "path": "./f1-cloud-mcp"
+      }
+    },
+    {
+      "name": "f1-dev-tools",
+      "source": {
+        "source": "local",
+        "path": "./f1-dev-tools"
+      }
+    }
+  ]
+}
