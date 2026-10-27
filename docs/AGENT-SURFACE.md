@@ -432,7 +432,7 @@ Pins the wrap always applies (you cannot override them):
   enum or a bounded number, inline `preset` offsets and a `matrix` file (JSON
   under `artifacts/` or `scratch/`) are validated by the CLI's own pure
   validators before the lock; `matrix: exhaustive` (~4 h) is refused without
-  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). A cell is ~2 min
+  a `shard`. A cell is ~2 min
   and the quick matrix ~10, past the host's ~60–120 s MCP call, so both default
   to `apex_job_start` kinds `hud_shot` / `hud_survey` and return a `jobId`
   (poll `apex_job_status`). `async: false` blocks instead; only that path's
@@ -642,6 +642,7 @@ boot-time classifiers see the phone. `--safe T,R,B,L` sets real
 (0–200 px each; the iPhone Pro Max landscape notch is about 0,59,21,59).
 `--summary` prints tab-separated coverage and issue lines (screen, size, kind,
 selector, message) instead of the JSON, which is still written to `--out`.
+`explorer.mjs summarize <replay.json>` is offline (no Chromium): it reads the final cumulative action history once (checkpoint records overlap) and reports action counts, current binding assertions, other action assertions and assertions after the last reload. `--group-unmapped` (on `summarize <inspection.json>` or `inspect --summary`) lists unmapped controls by stable group id (selector prefix, else role) with names; status stays `unknown`, no binding is inferred from a label.
 `provenance.emulation` records the settings. A sweep record that has not settled
 gets one more settlement budget (`settlement.retried`). Settlement also waits for finite running CSS animations on, inside or above the root (`settlement.animating`): a fade or pointer-events transition leaves geometry final while hit tests still answer `<html>`; infinite animations are ignored. If it is still moving,
 its issues carry `provisional: true`. A hit test whose visible centre lands on

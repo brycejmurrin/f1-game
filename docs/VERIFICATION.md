@@ -26,19 +26,18 @@ deploy gate will pass.
 
 ## Before a code push
 
-A worker's local floor is [WORKERS.md](WORKERS.md) §3, its one home:
-`tooling-fast --changed` plus ONE relevant spec (or `verify-track` for a
-circuit). The full tiers run on the PR: `run-ci` on a draft gives the fast
-tier (its `Structural guards` check is what `ready-gate` reads), the full tier
-runs once the PR is ready, and `land.yml`'s `gate` check judges the merge
-result. A worker's session ends at `land` (WORKERS.md §5).
+The pre-push floor is stated once, in `AGENTS.md` rule 3. The full tiers run on
+the PR: `run-ci` on a draft gives the fast tier (its `Structural guards` A–D
+run the full `tooling-fast`, and that check is what `ready-gate` reads), the
+full tier runs once the PR is ready, and `land.yml`'s `gate` check judges the
+merge result. A worker ends its turn at `land` ([WORKERS.md](WORKERS.md) §5).
 
-Optional, for a Bryce-attended session that wants the whole node gate locally
-(background tasks, never a worker's foreground step):
+What the two optional rungs above the floor mean (background tasks, never a
+foreground step):
 
 ```sh
-npm run test:tooling-fast           # the full structural floor; a green run writes the stamp ready-gate also accepts
-node tools/ci/deploy.mjs --gate-only   # the deploy's node and sweep coverage; never pushes
+npm run test:tooling-fast           # the whole structural rung; a green run writes the stamp ready-gate also accepts
+node tools/ci/deploy.mjs --gate-only   # the deploy's node half; reproduces a gate-only red; never pushes
 ```
 
 ## Docs and skill changes

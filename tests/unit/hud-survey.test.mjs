@@ -455,6 +455,11 @@ test("lead checks decide from the numbers, and merge re-decides across shards", 
   const [drop] = ev(mk([{ type: "varSame", var: "--hud-z-top", vs: "b" }]));
   assert.equal(drop.severity, "high");
   assert.equal(ev(mk([{ type: "varSame", var: "--hud-z-top", vs: "missing" }]))[0].severity, "info");
+  // noShrink (#3270): "" is uncapped, so 0.7 → "" passes; a lower value still fails.
+  const ns = (vars, bv) => ev({ ...mk([{ type: "varSame", var: "--hud-z-top", vs: "b", noShrink: true }]), state: { vars } })[0];
+  assert.equal(ns({ "--hud-z-top": "" }).severity, "info");
+  assert.equal(ns({ "--hud-z-top": "0.9" }).severity, "info");
+  assert.equal(ns({ "--hud-z-top": "0.5" }).severity, "high");
   assert.equal(ev(mk([{ type: "varWritten", var: "--hud-z-dock" }]))[0].severity, "high");
   const shift = ev(mk([{ type: "shift", key: "map", vs: "b", axis: "y", pct: 10, tolPct: 3 }]))[0];
   assert.equal(shift.severity, "info", shift.detail);   // 72px at 720 = 10 %
@@ -656,24 +661,6 @@ test("MCP: results carry structuredContent, its serialized copy first, and resou
   assert.ok(shot.structuredContent.shot && Array.isArray(shot.structuredContent.findings) && Array.isArray(shot.structuredContent.measurements));
   assert.ok(shot.content.some((c) => c.type === "resource_link" && c.mimeType === "image/png"));
   assert.deepEqual(survey.content.filter((c) => c.type === "resource_link").map((c) => c.mimeType), ["text/markdown", "text/html", "application/json"]);
-});
-
-test("the dispatch-only workflow shards, runs llvmpipe, merges and stays opt-in", () => {
-  const yml = read(".github/workflows/hud-survey.yml");
-  assert.match(yml, /^on:\n  workflow_dispatch:/m);
-  assert.doesNotMatch(yml, /^\s+(push|pull_request|schedule):/m, "dispatch only");
-  assert.match(yml, /--shard "\$SHARD" --gl llvmpipe/);
-  assert.match(yml, /uses: \.\/\.github\/actions\/mesa-xvfb/);
-  assert.match(yml, /hud-survey\.mjs --merge/);
-  // Merge after red shards, never after a cancel or a failed plan (shard skipped).
-  assert.match(yml, /needs: \[shard\]\n(?:\s+#.*\n)*\s+if: \$\{\{ !cancelled\(\) && needs\.shard\.result != 'skipped' \}\}/);
-  assert.doesNotMatch(yml, /needs: \[shard\]\n(?:\s+#.*\n)*\s+if: always\(\)/, "always() merged after a failed plan");
-  for (const m of yml.matchAll(/uses: ([^\s]+)/g)) if (!m[1].startsWith("./")) assert.match(m[1], /@[0-9a-f]{40}$/, `${m[1]} is SHA-pinned`);
-  for (const choice of /options: \[(quick[^\]]*)\]/.exec(yml)[1].split(",").map((s) => s.trim())) assert.doesNotThrow(() => M.expandMatrix(choice));
-  // Inputs reach the shell through env only.
-  for (const l of yml.split("\n").filter((x) => /^\s+(run:|\s{2,}\S)/.test(x) && x.includes("${{ inputs."))) {
-    assert.doesNotMatch(l, /^\s+(node|echo|if|extra)/, `input interpolated into a script line: ${l.trim()}`);
-  }
 });
 
 // ── hud-live-sample: the LIVE (unfrozen) counterpart of the frozen survey cell ─────

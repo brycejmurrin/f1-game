@@ -2484,7 +2484,7 @@ async function startRaceBody() {
     if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.mark) RaceEntryProfile.mark("body:yield");
     await yieldMain();
   }
-  if (stale()) return false; if (isCareer()) Career.markWeekendStarted();   // quali or the race is under way: the round's brief is locked
+  if (stale()) return false;
   rlap("scenery");
   let sessionOk = await ensureRaceSession(); while (!sessionOk && !stale() && await LoadingScreen.failed() === "retry") sessionOk = await ensureRaceSession(); if (stale()) return false;   // #2625 RETRY re-runs the load, BACK falls through; LAZY_RACE_SESSION — pit/radio/reliability before grid/pits + AudioPanel
   if (!sessionOk) { loadingScreen.stop(); quitToMenu(); announce("RACE MODULES FAILED TO LOAD — RETRY", 3, "info"); return false; }   // the stubs have no retirements or pit stops, and TT data would be lost silently
@@ -2546,7 +2546,7 @@ async function startRaceBody() {
   // Break the remaining sync legs (settings → car meshes) into separate tasks.
   // Skip in game-vm: its setTimeout queue is only flushed by hand, not by settle().
   if (!vmNoFramePump) await yieldMain(); if (stale()) return false;
-  if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; }
+  if (gfxContextLost()) { quitToMenuAfterCtxLost(); return false; } if (isCareer()) Career.markWeekendStarted();   // session loaded, no save conflict, track built: the round's brief locks
   // PRACTICE IS PER-SESSION. Armed from the pause menu inside one session, it
   // must never survive into the next — a race that silently did not count
   // because the last one was practice is the worst possible failure here. A

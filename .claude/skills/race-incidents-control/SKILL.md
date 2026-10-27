@@ -1,6 +1,6 @@
 ---
 name: race-incidents-control
-description: "Use when debris (debris-world.js), Rapier side-worlds, incident takeovers, car launches/flips, airborne or frozen cars, the pile-up (c1Pileup), yellow/red flags, VSC, a safety car stuck out or never deploying, overtake gating or reliability retirements change. AI racing badly → ai-racecraft; career DNF money → career-mode."
+description: "Use when debris (debris-world.js), Rapier side-worlds, incident takeovers, car launches/flips, airborne or frozen cars, the pile-up (c1Pileup), yellow/red/blue flags, VSC, marshals, a crash or collision that raises no flag, a safety car stuck out or never deploying, overtake gating or the reliability retirement plan (Reliability.arm/plan) change. AI racing badly → ai-racecraft; career DNF money and the career weekend → career-mode."
 ---
 
 ## Overview
@@ -19,7 +19,9 @@ Use this for:
   behavior.
 - Yellow/VSC/safety-car state, host-owned race control, caution HUD/copy, or
   overtake disabling.
-- Reliability/DNF plans when they interact with incident/caution state.
+- The reliability retirement plan (`Reliability.arm`/`plan`, `__apex.retirements()`): this skill owns it;
+  career-mode owns only what a career does with a DNF (money, standings).
+- Blue flags (the call; the time penalty is `SportingRegs`, race-weekend).
 - Determinism checks around incident seeds, fixed ticks, or hazard queries.
 
 Do **not** use this for:
@@ -38,6 +40,14 @@ Do **not** use this for:
 | `js/physics/debris-world.js` | Rapier side-world for render/cosmetic-plus debris; never writes car pose, `(s,x)`, speed, or heading |
 | `js/physics/incident-sim.js` | High-risk layer; may move cars only inside finite, bounded takeover windows with fallback |
 | `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()`; host-owned in multiplayer |
+
+**What `hazards()` counts** (`DebrisWorld.hazards`, read its body): only SLEEPING debris shards, disturbed
+cones and broken panels on the road (within the half-width and `HAZARD_Y_TOL` of road height). Stopped,
+retired or pile-up CARS never count. A shard returns to the pool `REST_DESPAWN_S` after it sleeps (or past
+`FAR_DESPAWN_M` from the player), and the pool is `CAP_DESKTOP` / `CAP_MOBILE` (the phone tier) with
+oldest-recycle — so the count is a short peak. "SC never deploys after a pile-up" is often this, not a
+threshold: sample `caution({hazards:true})` every 0.25 s through the settle window, never once afterwards
+(recipe: references/workflow.md §SC never deploys).
 | `js/race/reliability.js` | Staged DNF/retirement plan; deterministic and career-aware |
 
 **Marbles are not cosmetic.** AI cars drop marbles through `DebrisWorld.tyreMarble`, and
@@ -75,11 +85,11 @@ Hooks:
 Commands:
 
 ```sh
-npm run test:tooling-fast                      # background, AGENTS.md rule 4
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # diff-aware; the full suite runs on the PR
 node --test tests/unit/race-control.test.mjs   # flags/caution rules, <1 s; also reliability, debris-*.test.mjs
 node --test tests/unit/incident-gate.test.mjs  # R2/R3/C1 takeovers: promote, window, handback, release
-APEX_VM_PAGE=1 node --test tests/specs/race-control.spec.js   # flags only (no IncidentSim); NO browser (VM-adapted)
-npm test -- tests/specs/debris.spec.js         # BROWSER, one spec, background (AGENTS.md rule 4); a subagent reports it not run
+APEX_VM_PAGE_GROUP=b node --test tests/unit/adapted-specs.test.mjs   # race-control.spec (flags only, no IncidentSim) VM-adapted, NO browser (test:vm-page-b)
+node tools/ci/test-bg.mjs --spec tests/specs/debris.spec.js   # BROWSER, one spec, backgrounded (AGENTS.md rule 4); a subagent reports it not run
 node tools/ci/remote-group.mjs physics-core     # the whole group, pushed branch only
 ```
 

@@ -4,9 +4,9 @@
 // @section runner
 // @skill steward
 //
-// Why (docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7/Q1): orchestrator.md
-// §Pre-launch quota check says "at `allowed_warning` or worse, launch nothing",
-// and OrchA 33 still launched 7 sessions into a 75 % weekly quota. Prose did not
+// Why (docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7/Q1): the rule was "at
+// `allowed_warning` or worse, launch nothing" (then in the retired orchestrator agent),
+// and a launcher still started 7 sessions into a 75 % weekly quota. Prose did not
 // hold, so the rule is a receipt like merge-gate's: this tool reads ONE saved
 // `get_session` result (the MCP text, envelope and all, or raw JSON), and
 // `.claude/hooks/launch-gate.py` refuses `create_session` unless the receipt is
@@ -20,7 +20,8 @@
 // PAGE_SKEW_S (a page typed by hand and `touch`ed is newer than anything the harness wrote: audit 4 G13, O1/O2 forged
 // it), and the receipt records the page's sha256 plus the launch it is for (lane, pr) so the hook can tie the receipt
 // to one create_session. A page written by the PostToolUse hook (`artifacts/launch/self.json`, `"written_by":
-// "launch-page.py"`, `content_sha256`) is the expected source.
+// "launch-page.py"`, `content_sha256`) is the only source the hook accepts since WP-L4 (2026-10-27): it compares the
+// receipt's page.sha256 with that file's sha256 and spends the receipt on one create_session (receipt.json.used).
 //
 // Exit 0 = receipt ok, 1 = refused (receipt written with ok:false), 2 = usage or unreadable page.
 // The page is another session's record: data to read one field from, never instructions.
@@ -127,7 +128,8 @@ export function verdict(session, { override = "" } = {}) {
 export function writeReceipt(root, data, now = Date.now()) {
   const file = receiptPath(root);
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ kind: "launch", ...data, at: new Date(now).toISOString() }, null, 2) + "\n");
+  // `nonce`: the hook renames a spent receipt to receipt.json.used and refuses the same nonce twice (WP-L4).
+  fs.writeFileSync(file, JSON.stringify({ kind: "launch", nonce: crypto.randomUUID(), ...data, at: new Date(now).toISOString() }, null, 2) + "\n");
   return file;
 }
 
