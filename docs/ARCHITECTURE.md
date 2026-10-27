@@ -262,6 +262,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `debris-opts.js` | `DebrisOpts` | tag | DebrisOpts: the DEBRIS switch as a player setting. |
 | `post-fx-opts.js` | `PostFxOpts` | tag | PostFxOpts: AMBIENT OCCLUSION and GOD-RAYS as two independent player settings (GRAPHICS). |
 | `hud-minimap.js` | `HudMinimap` | tag | HUD MINIMAP: the in-race track map on #minimap (js/ui/hud.js's GameHud owns the tick and calls draw()). |
+| `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
@@ -269,7 +270,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `home-world.js` | `HomeWorld` | tag | Home's prepared circuit: camera ownership and a bounded render budget only. |
 | `photo-studio.js` | `PhotoStudio` | tag | Photo Studio captures only the renderer, then composes a cropped image. |
 | `experience.js` | `UiExperience` | tag | connected menu doors, race context and bounded live garage home. |
-| `share-code.js` | `ShareCode` | tag | ShareCode: pasteable APX envelopes for setup / livery / daily (+ #share=). |
+| `share-code.js` | `ShareCode` | tag | ShareCode: pasteable APX envelopes for setup / livery / daily / card lap (+ #share=). |
 | `title-menu.js` | `TitleMenu` | tag | TITLE MENU retention doors: career summary, direct Continue, and today's Daily Challenge. |
 | `deep-link.js` | `DeepLink` | tag | DeepLink: the installed-icon shortcuts (manifest.json `shortcuts`) land on `./?go=<door>`. |
 | `title-flow.js` | `TitleFlow` | tag | TitleFlow: title-menu session entry and shared ghost links. |
@@ -606,6 +607,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
 | `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
+| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip: one button shape for every result screen. |
 
 **`js/render/glx/shaders/`**
 
