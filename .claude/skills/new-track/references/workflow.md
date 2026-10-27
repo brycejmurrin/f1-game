@@ -33,8 +33,8 @@ Load from the SKILL.md index when the task needs this detail.
    so a further circuit comes from OpenStreetMap: add a row to
    `tools/track/osm-circuits.json` `circuits` (`name`, `country`, `bbox`
    `[s,w,n,e]`, `target` = the real lap length in metres of the configuration
-   F1 raced, from its Wikipedia infobox — a wrong number picks a wrong layout —
-   and `gp` years), then
+   F1 raced, from its Wikipedia infobox — a wrong number picks a wrong layout; where the
+   venue was rebuilt the row's `_doc` says to use the CURRENT length — plus `location` and `gp` years), then
    ```sh
    node tools/track/stitch-osm-ring.mjs <id>     # ad hoc instead: --bbox <s,w,n,e> --target <m>
    node tools/track/import-circuit-path.mjs --source artifacts/osm-rings.geojson <id>:<id>
@@ -46,6 +46,11 @@ Load from the SKILL.md index when the task needs this detail.
    `turns` (and `sectors` if researched), `furniture`, `kit`, `standSet` and —
    for street/modern circuits — `barrier` / `cityStyle`; copy a sibling's rows
    as the starting point.
+
+   **1b. The scenery file — a circuit is a PAIR.** `LAZY_SCENERY` in `tools/manifest.cjs` maps EVERY
+   `CIRCUITS` id to `js/circuits/scenery/<id>.js`, so create it in the same commit: copy a sibling's
+   scenery file and rename its `(window.TrackScenery = window.TrackScenery || {})["<id>"]` key. The
+   body (trees, stands, barriers) → skill scenery-dress.
 
    **Designer presets from TUMFTM (optional, not a shipped def).** For layouts
    Apex does not carry (Norisring, Moscow Raceway, Oschersleben, Nürburgring
@@ -66,15 +71,15 @@ Load from the SKILL.md index when the task needs this detail.
    `LAZY_CIRCUIT` / `ensureCircuit`. `circuit-meta.js` is GENERATED (AGENTS.md rule 11):
    never hand-edit it; `npm run gen:check` names drift, and `tests/unit/circuit-meta.test.mjs`
    fails on it. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
-   `CIRCUITS` order == `Tracks.LIST` == picker/season order:
+   `CIRCUITS` order == `Tracks.LIST` == picker order:
 
-   - **Season circuits** (24 rounds): append in calendar order at the end of the
-     season block (before the `classic: true` section).
-   - **Not a current-season round → `classic: true`** (retired, or never on the
-     calendar, e.g. Portimão): set it in the def and append after the season
-     rounds (see the `// ── appended circuits … ──` comment in `manifest.cjs`).
-     `Tracks.SEASON` is `LIST.filter(t => !t.classic)`, so a missing flag adds a
-     25th round and breaks `SEASON.length`.
+   - **Always APPEND the id at the END of `CIRCUITS`**, never interleave: a stored
+     `apex26.track` is a positional index, so an insert re-points every saved pick
+     below it (the comment above `CIRCUITS` in `manifest.cjs`).
+   - **`classic` decides SEASON membership, position does not.** `Tracks.SEASON` is
+     `LIST.filter(t => !t.classic)` (istanbul and portimao already sit among the
+     classics). Not a current-season round → set `classic: true` in the def; a
+     missing flag adds a 25th round and breaks `SEASON.length`.
    - **The roster count is asserted.** It is a forcing function, not a budget — raise
      it deliberately, in the commit that adds the circuit, and say why. Adding a circuit
      means updating, in the same commit:
@@ -85,8 +90,8 @@ Load from the SKILL.md index when the task needs this detail.
         in `tests/data/f1-circuit-reference.geojson` (its count derives from the map). The spec
         asserts the game's circuits and the map are the same SET, so a circuit with no
         reference feature fails outright.
-     3. `tools/check/offline-precache-check.cjs` — the literal scenery-file count (a
-        browser tool: the parent runs it),
+     3. `tools/check/offline-precache-check.cjs` — the literal scenery-file count in its
+        `installed.scenery !== N` line (a browser tool: the parent runs it),
      4. `js/ui/flags.js` if the country is new — `tests/unit/flags.test.mjs`
         fails on a circuit whose country has no drawn flag,
      5. `tests/data/landmarks/<id>.json` for a hero landmark (`js/circuits/AGENTS.md`),
@@ -94,7 +99,14 @@ Load from the SKILL.md index when the task needs this detail.
      6. the `tools/track/*-baseline.json` audits (clip, coplanar, float; props-tris is a ratchet) at EXACTLY the measured
         value. A cap above the measurement fails as loudly as one below, and an
         absent id means a cap of 0 — so omit the row when the circuit measures
-        clean rather than writing a 0.
+        clean rather than writing a 0,
+     7. `tests/data/def-factory-golden.json` `hashes` — one row per shipped circuit
+        (`tests/unit/track-def-factory.test.mjs` fails "no golden row" and asserts rows ==
+        shipped circuits). To capture it, add the row with a placeholder value, run that
+        test, and paste the hash its `<id>: <hash> != golden …` line prints.
+     Optional per-id tables (absent = the default; no unit test was found requiring a
+     row on 2026-10-27): `js/lighting/presets.js` `"<id>|tod|wx"` rows, `js/data/circuit-lore.js`,
+     `tools/shot/scenery-locations.json`.
      Removing a circuit instead is a FOUR-file pass, not the three this file
      used to name: `js/circuits/<id>.js`, `js/circuits/scenery/<id>.js`, its
      `CIRCUITS` entry, and every row above; then `npm run gen` (circuit-meta).
@@ -119,9 +131,9 @@ Load from the SKILL.md index when the task needs this detail.
 
 5. **Tests** — `node tools/ci/pick-tests.mjs` names the groups. The single
    browser check is that circuit's `tests/specs/<id>-foundation.spec.js`
-   (AGENTS.md verification table; hyphenated file names, e.g. `albert-park-`), run via
-   `npm test -- tests/specs/<id>-foundation.spec.js` in the background (AGENTS.md rule 4; a subagent
-   reports it not run). A NEW `<id>-foundation.spec.js` needs no `tests/groups.json` row: the
+   (AGENTS.md verification table; hyphenated file names, e.g. `albert-park-`), run alone via
+   `node tools/ci/test-bg.mjs --spec tests/specs/<id>-foundation.spec.js` (AGENTS.md rules 4-5; a
+   subagent reports it not run; a whole group → `node tools/ci/remote-group.mjs <group>` on the pushed branch). A NEW `<id>-foundation.spec.js` needs no `tests/groups.json` row: the
    `test:circuits` group globs `tests/specs/*-foundation.spec.js`; only a new non-glob test file needs a
    groups row + TESTING.md §5 row + `npm run gen`. Not every circuit has one (madrid does not):
    with none, run what `pick-tests` names, plus `tests/specs/f1-track-accuracy.spec.js` and
@@ -133,7 +145,7 @@ Load from the SKILL.md index when the task needs this detail.
 Before an edit, read `docs/tracks/<id>.md` (and `docs/tracks/START-LINES.md`); a hero-landmark edit also touches
 `tests/data/landmarks/<id>.json` (rules in `js/circuits/AGENTS.md`). Then:
 ```sh
-node tools/track/verify-track.cjs <id>                 # ~6 s; OK line + guard drops (monza: suppressed 2 is the baseline, not a fail)
+node tools/track/verify-track.cjs <id>                 # seconds; OK line + guard drops (monza: suppressed 2 is the baseline, not a fail)
 node tools/track/clip-audit.cjs <id>                   # severe-spot count vs tools/track/clip-baseline.json
 node tools/track/coplanar-audit.cjs <id>               # z-fight count vs coplanar-baseline.json
 node tools/track/float-audit.cjs <id>                  # floating props vs float-baseline.json (absent id = 0)
@@ -170,7 +182,7 @@ Both are cosine bumps `{ s, halfM, rise }` (full width 2 x halfM, peak `rise` m)
 
 - **`path` is the geometry, full stop.** There is no hand-authored segment
   fallback any more: a def without `path` fails the build with an error naming
-  the circuit (`verify-track` shows it in 2 s). Use `reverse`/`startFrac` to
+  the circuit (`verify-track` shows it). Use `reverse`/`startFrac` to
   orient a trace and `hwZones` to narrow it — never edit `path.pts` by hand
   (`realPoints()` keeps the trace index-for-index; `startFrac` counts in it).
 - **Cloning a track:** copy the whole def — `path`, `turns`, `furniture`,
