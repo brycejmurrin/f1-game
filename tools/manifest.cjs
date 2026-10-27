@@ -263,6 +263,7 @@ const FULL = [
   "js/lighting/lamp-bake.js",           // LampBake: every lamp's diffuse pool baked into a ground light map (TLX/GLX read it)
   "js/lighting/lighting.js",
   "js/lighting/profiles.js",
+  "js/car/cockpit-rig.js", // CockpitRig: wheel, dash, cabin, glass, shift lights (CarMesh re-exports the keys)
   "js/car/car-mesh.js",
   "js/garage/experience.js",
   "js/garage/scene-prims.js",
@@ -584,6 +585,7 @@ const CARVIEW = [
   "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
+  "js/car/cockpit-rig.js",
   "js/car/car-mesh.js",
   "js/camera/cockpit-preview.js",
 ];
@@ -839,6 +841,7 @@ const HARD_EDGES = [
   // load-order guard exists to prevent.
   ["js/car/crest-paths.js", "js/car/liverytex.js"],
   ["js/car/crest-draw.js", "js/car/liverytex.js"],   // liverytex destructures LiveryCrests.create(...) at eval
+  ["js/car/cockpit-rig.js", "js/car/car-mesh.js"], // CarMesh return reads CockpitRig at eval
   ["js/core/store.js", "js/camera/offsets.js"],  // cam-tune destructures GameStore at eval
   ["js/core/store.js", "js/career/career.js"],    // career destructures GameStore at eval
   ["js/core/store.js", "js/career/season-cal.js"], // season-cal destructures GameStore at eval
