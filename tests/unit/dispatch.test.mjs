@@ -234,7 +234,7 @@ test("prompts: every launch prompt is at most 25 lines and ends with the five co
     const lines = text.split("\n");
     assert.ok(lines.length <= PROMPT_MAX_LINES, `${lines.length} lines`);
     assert.deepEqual(lines.slice(-5), COMMON(n));
-    assert.equal(lines.includes("STOP AT: 150k"), true, "M8: context-cap.py reads the brief's STOP AT");
+    assert.equal(lines.filter((l) => l === "STOP AT: 150k").length, 1, "M8: context-cap.py reads the brief's one STOP AT line");
   }
   assert.equal(issuePrompt(long, c, "claude").split("\n")[1].length, 160, "a body line is cut at 160 chars");
 });
