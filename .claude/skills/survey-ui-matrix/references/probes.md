@@ -9,14 +9,14 @@ Load this when a measurement looks wrong, when reaching a screen, or when a CSS 
 
 **Writes/ownership:** read-only diagnosis; CSS edits stay with `css-play` and menu ownership stays with `ui-menu-a11y`.
 ## Contents
-- 3. The probe — four questions, each with its trap
-- 4. Reaching each screen, and resetting between them
-- 5. Diagnosing "my CSS change did nothing"
-- 6. What to do with the findings
+- 1. The probe — four questions, each with its trap
+- 2. Reaching each screen, and resetting between them
+- 3. Diagnosing "my CSS change did nothing"
+- 4. What to do with the findings
 - Common mistakes
 - Capture CLI boundaries
 
-## 3. The probe — four questions, each with its trap
+## 1. The probe — four questions, each with its trap
 
 Paste into `evaluate_script`. Every helper here is written the way it is because
 the naive version produced a wrong answer.
@@ -73,11 +73,10 @@ function truncIn(root) {
 //   342x16.
 // TRAP 3: getBoundingClientRect() inside `.sheet` returns ZOOMED px
 //   (zoom: var(--ui-scale)). Divide by el.currentCSSZoom for CSS px. A row that
-//   paints 60px is 52 CSS px at a UI scale of 1.15 — it PASSES a 52px floor.
-//   (1.15 was the coarse-pointer default when this was written; it is 1.09
-//   now — `css/tokens.css` coarse block, mirrored in `js/ui/scale.js` — and 1.0
-//   on a desktop pointer, so the arithmetic bites on touch and whenever a
-//   player dials UI SIZE up, which the matrix does deliberately.)
+//   paints 57px is ~52 CSS px at the coarse-pointer UI scale of 1.09 — it PASSES
+//   a 52px floor. (The scale lives in the `css/tokens.css` coarse block, mirrored
+//   in `js/ui/scale.js`; 1.0 on a desktop pointer, so the arithmetic bites on
+//   touch and whenever a player dials UI SIZE up, which the matrix does.)
 // TRAP 4: DO NOT SCORE ON min(width, height). Height is the thumb dimension; a
 //   full-height tab that is merely NARROW is not a small target. Scoring on the
 //   minimum produced two false alarms out of three findings in one sweep —
@@ -127,17 +126,16 @@ await new Promise((r,reject) => { const deadline=Date.now()+15000; const t = set
 
 ---
 
-## 4. Reaching each screen, and resetting between them
+## 2. Reaching each screen, and resetting between them
 
 Reach a screen **through the app's own controls**, never by unhiding its element —
 forcing `hidden = false` desyncs the screen's internal state and poisons every
 later cell in the sweep. Reset between cells:
 
 ```js
-const OV = ["select","carsetup","career","career-offers","career-history","career-guide","teampicker",
-            "race-settings","quali","standings","results","customize","season-setup","howtoplay",
-            "advanced","pmsettings","pausemenu","datahub","trackdesigner","track-detail","vsfriend",
-            "audioset","spotifypanel","lighting","camtune","flyby","photo-controls","duel-picker"];  // = OVERLAY_IDS
+// Paste the LIVE list — never a copy (a stale copy missed photo-studio, which poisons every later cell):
+//   node -e 'import("./tools/ui/menu-screens.mjs").then((m) => console.log(JSON.stringify(m.OVERLAY_IDS)))'
+const OV = /* OVERLAY_IDS from tools/ui/menu-screens.mjs */ [];
 for (const id of OV) { const e = document.getElementById(id);
   if (e) { if (e.tagName === 'DIALOG' && e.open) e.close(); e.hidden = true; } }
 const o = document.getElementById('overlay');
@@ -195,7 +193,7 @@ in-race screens with `__apex.race(id)` + `go()` + `jump()`, not by reloading.
 
 ---
 
-## 5. Diagnosing "my CSS change did nothing"
+## 3. Diagnosing "my CSS change did nothing"
 
 Before re-editing, prove the browser has the rule. This exact check saved two
 wasted rounds:
@@ -220,7 +218,7 @@ adds no specificity.
 
 ---
 
-## 6. What to do with the findings
+## 4. What to do with the findings
 
 Sort by **failure mode, not by count**:
 
