@@ -3504,6 +3504,9 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
+      "applyWithUndo": [
+        "tests/unit/career-backup.test.mjs"
+      ],
       "build": [
         "tests/unit/career-backup.test.mjs"
       ],
@@ -3859,6 +3862,7 @@
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "objective": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "objectiveChoices": [
@@ -4412,10 +4416,10 @@
     },
     "js/career/team-identity.js": {
       "capture": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
       "*": [
-        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs"
       ]
     },
