@@ -281,7 +281,7 @@ recorded in the PR body.
 5. **Daily streak corruption** if a link staged a past-day daily — closed by the
    today-only rule and a test.
 6. **Concurrent PRs.** player-a11y Slice 4 may land first; run
-   `node tools/ci/who-is-on-it.mjs` first and keep `share-link.js` a thin adapter.
+   `node who-is-on-it.mjs first and keep `share-link.js` a thin adapter.
 
 ## Open questions for the owner
 1. Player display name at all, or anonymous "DRIVER"? Proposed: anonymous, optional

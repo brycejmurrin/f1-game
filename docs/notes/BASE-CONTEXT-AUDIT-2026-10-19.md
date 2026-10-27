@@ -25,7 +25,7 @@ is the largest remaining lever, but is outside this lane (settings forbidden).
 
 ## Changes
 
-- AGENTS.md `### Backlog` (760 B) → two-line pointer to `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`: −513 B, −3 lines.
+- AGENTS.md `### Backlog` (760 B) → two-line pointer to `docs/archive/notes/AGENT-WORK-TRACKING-2026-10-14.md`: −513 B, −3 lines.
 
 ## Left in place (pinned by a test or hook)
 

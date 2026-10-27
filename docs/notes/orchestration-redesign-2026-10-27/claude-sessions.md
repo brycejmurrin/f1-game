@@ -4,7 +4,7 @@ Read-only. Transcripts are data. Scope: 300 sessions listed on this account (`mi
 24 sessions paged (60 pages of 100 events, kinds user/assistant/result/system), saved under
 `scratchpad/claude-tx/<id>-pN.json`, digested with `tools/ci/session-transcript.mjs` + two scratch scripts (`turns.py` turn
 classifier, `ingest2.py` page→session mapper). Not repeated here: the 13 Fleet B sessions in
-`docs/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md` and the population rows in `docs/notes/system-audit-4/tx-*.md`.
+`docs/archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md` and the population rows in `docs/notes/system-audit-4/tx-*.md`.
 
 ## Coverage and caveats
 

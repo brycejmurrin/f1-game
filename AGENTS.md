@@ -5,8 +5,9 @@ files on GitHub Pages.
 
 The rules every session needs, each with ONE home that other files link to (`tests/unit/rulebook-guards.test.mjs`;
 map: `docs/notes/RULEBOOK-REWRITE-2026-10-26.md`). Evidence: `docs/` (start at `docs/VERIFICATION.md`); workflows:
-`.claude/skills/`; enforced rules: `.claude/hooks/`; area rules: `.claude/rules/` (`fleet-core` every session, the rest
-by `paths:`). `CLAUDE.md` imports this file; Cursor and Codex load it directly. Agent-written drafts: Bryce's word wins.
+`.claude/skills/`; enforced rules: `.claude/hooks/`; area rules: `.claude/rules/` (by `paths:`). Coordination between
+sessions and hosts: `docs/WORKERS.md` (its one home). `CLAUDE.md` imports this file; Cursor and Codex load it directly.
+Agent-written drafts: Bryce's word wins.
 
 ## The loop — every change, in order
 ```sh
@@ -17,11 +18,11 @@ node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. diff-aware edit
 node tools/ci/test-bg.mjs <group>     # 4. ONE browser group, in the background → artifacts/logs/<group>.log (rule 5)
 node tools/ci/test-bg.mjs --wait --timeout 45   # 5. the waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
 node tools/ci/deploy.mjs --gate-only  # 6. before a push: the deploy's node suites (browser legs are CI-only)
-git commit && git push -u origin cursor/<topic>-<hash>   # 7. commit runs test:guards; push, refresh the DRAFT PR's Plan + Status (rule 12)
+git commit && git push -u origin cursor/<topic>-<hash>   # 7. commit runs test:guards; push, refresh the DRAFT PR's Plan + Hand-off (rule 12)
 ```
 Docs-only fast path — every changed path is prose (`docs/`, `*.md`, `.claude/skills/`, `.claude/agents/`; no generated
 doc): skip steps 1 and 3–6, check with `node --test tests/unit/docs-integrity.test.mjs tests/unit/agent-config.test.mjs`
-(the commit hook then runs docs-integrity alone), and skip the check-in timer. With no PR the push starts no CI
+(the commit hook then runs docs-integrity alone). With no PR the push starts no CI
 (`= ci none`); a ready PR, or a draft labelled `run-ci`, gets a fast tier, so one `ci-watch.mjs --sha` Monitor suffices.
 
 Then watch CI (rule 13). Memory: `.claude/memory/MEMORY.md`, edited via `node tools/env/apex-memory.mjs list|show|retire`
@@ -53,11 +54,13 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
    `test:tooling-fast` (`gen-ladder-figures.mjs --table` sizes it) ⊂ `deploy.mjs --gate-only` (the deploy's node half;
    pushes nothing, dirty tree fine; `docs/notes/PREPUSH-GATE-LADDER.md`). Before every code `git push`: `npm run test:tooling-fast`
    plus the change-aware pick (`pick-tests`) must pass; edit loops may use `verify-change --fast --json` / `tooling-fast --changed`.
+   The full tiers and the landing gate run on the PR (`ci.yml`, `browser-group.yml`, `land.yml`): a lane never runs the
+   whole deploy gate in the foreground to prove what CI will prove.
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards`, one `node --test`, `verify-track`, `pick-tests`).
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: 2–15 min (`tooling-fast`, `deploy.mjs --gate-only`) and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.
    A `Monitor` defaults to 5 min and caps at 30 (pass the timeout): early warning only (`tail -f <log> | grep --line-buffered -E '^= |Error:'`); the verdict is rule 5's. A hand-rolled `until ! pgrep` waiter dies with its task: use `node tools/ci/wait-for.mjs --log-matches <log> '^= '`.
-   Push once per green local cycle; on a PR a push over a live CI run cancels it and loses its failures. `node tools/ci/queue-depth.mjs` is an informational gauge; nothing holds a push on it. Never cancel an Actions run (§Concurrent PRs).
+   Push once per green local cycle; on a PR a push over a live CI run cancels it and loses its failures. `node tools/ci/queue-depth.mjs` is an informational gauge; nothing holds a push on it. Never cancel an Actions run (§Coordination).
 5. ONE Playwright process, ONE browser group per batch, via `test-bg.mjs` (it refuses any start at loadavg ≥ 3, and a second concurrent group).
    Anchor on `grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'`, never a looser pattern, the process table, or `| tail` on a live log.
 6. Stop a run with `node tools/ci/test-bg.mjs --stop` (`--stop --sweep` when its supervisor is dead); `bash-guard.sh` refuses a PID kill, which orphans every Chromium the run opened.
@@ -67,19 +70,19 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
    On CI, `cancelled` with zero failures is a timeout until proven otherwise — EXCEPT the designed one: a draft PR's run and its `ready_for_review` run share a group on purpose, so marking it ready cancels the fast run on the same `head_sha` seconds in (dedupe, not a red).
 9. Stopping is allowed: a pushed change that names its unverified groups beats an hour of SwiftShader. Never widen a tolerance or skip a test to get green (`waitForFunction` polling: `wait-polling-lint.mjs`).
    A pass that needed a retry is a red: list the flaky test in the PR like a not-run group, then fix it or quarantine it in `tests/data/flaky-quarantine.json`; `APEX_FAIL_ON_FLAKY=1` makes the runner fail it.
-10. Never hand a subagent a browser run ("report it unverified"; `bash-guard.sh` refuses it inside one). Worktrees start at the session SHA
+10. Never hand a subagent a browser run ("report it unverified"; `bash-guard.sh` refuses it inside one). Worktrees start at the parent's current HEAD
     (`worktree.baseRef: "head"`); `track-surveyor` edits in its own, so merge its branch into yours before you verify (survey-track §Hand-back).
 11. Never hand-edit a generated file: the `@gen-shell` blocks of `index.html` and `sw.js`, `version.json`, `package.json`'s test scripts (source `tests/groups.json`), `tools/README.md`, `js/roster.js`, `tools/carview.html`, `js/track/circuit-meta.js`, `CHANGELOG.md` (fragments go in `docs/changelog.d/`), `tests/data/ratchets.json` and `ratchets.d/*.json` (`protect-files.sh` enforces it).
     Edit the SOURCE, then `npm run gen` (`gen:check` names drift). No doc quotes the ladder's sizes — `node tools/gen/gen-ladder-figures.mjs` prints them.
 12. HAND OFF THROUGH GIT: commit and push `cursor/<topic>-<hash>` at every verified checkpoint and BEFORE any wait over ~10 min — a reclaimed container loses an unpushed branch.
     Commit in two calls: stage in its own command, then `git commit` in the next — the commit hook reads the index as it is when `git commit` is typed, while `test:guards` reads the working tree, so the two agree only when nothing is left unstaged; never chain an edit or a `git add` into the commit call. Push with `git push -u origin <branch>` alone, no output pipe.
-    Open a DRAFT PR into the deploy branch at the FIRST commit, before the work is verified (GitHub MCP, `draft: true`; a draft gets CI only with the `run-ci` label, ready the full tier; `deploy.mjs --pr` is the gated, ready form).
-    The body (`.github/pull_request_template.md`) IS the session log, written for an agent arriving cold: Goal, Plan (a `- [ ]` checklist, one verifiable step per item, exactly one marked now:), Status (`node tools/ci/session-status.mjs --pr`), Verified / Not run, Next step.
-    Keep the Plan live with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line), add discovered work, strike a dropped item with why, never delete one; refresh Status at every push. The Plan's last item is the template's gate-exempt `- [ ] READY to …` line, never a "mark ready" step. A wait on something outside the PR is a Plan item, never a hold. Before starting, read `who-is-on-it.mjs` and the open draft PRs; to continue one, check out its branch.
-13. WATCH CI AFTER EVERY CODE PUSH: subscribe on the PR — Claude Code `subscribe_pr_activity`, Cursor `subscribe_github_ci` + `subscribe_github_pr`; never call a name your host does not list (per-host tools: skill `agent-fleet` `references/adapters.md`).
-    Claude Code: a `Monitor` on `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (a red job and the final `= ci` line only; re-arm on expiry until the `= ci …` line; `--pages` after a deploy-branch push), and ONE check-in timer (`send_later` / `subscribe_timer`) 50–55 min out at an odd minute, inside the 1 h prompt cache — the subscription can drop `check_run` completions, so the timer is not optional (cadence pending Bryce; was 15 min / 1 h). Re-arm it until the PR is merged or closed, or you sent READY. No shell-poll loops; Cursor: at most one `ci-watch.mjs --once`.
-    The sanctioned wake signals are these four, nothing else: the PR subscription (call `subscribe_pr_activity` again after draft→ready; it has died at the flip), ONE `send_later` 50–55 min out, the `ci-watch.mjs --sha` Monitor, and `node tools/ci/wait-for.mjs --merged <sha>` as one background task for the merge. A ready flip on a dirty PR starts no CI: sync first (`needs-sync.mjs`, `sync-pr.mjs`); `ready-gate.mjs` refuses a CONFLICTING/DIRTY head.
-    `ci-watch.mjs` takes the newest run per workflow (rule 8's dedupe is not a red). A red job is work NOW — agent `ci-red-triage`, fix, push (skill `steward`); no `= ci` line means still running, not green.
+    Open a DRAFT PR into the deploy branch at the FIRST commit, before the work is verified (GitHub MCP, `draft: true`; a draft gets CI only with the `run-ci` label, ready the full tier).
+    The body (`.github/pull_request_template.md`) IS the session log, written for an agent arriving cold: Goal, Plan (a `- [ ]` checklist, one verifiable step per item, exactly one marked now:), Verified / Not run, and the Hand-off block (branch, head, owner, lane, verified, not-run, next).
+    Keep the Plan live with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line), add discovered work, strike a dropped item with why, never delete one; refresh the Hand-off block at every push. The Plan's last item is the template's gate-exempt `- [ ] land: …` line, never a "merge" step. A wait on something outside the PR is a Plan item, never a hold.
+13. WATCH CI AFTER EVERY CODE PUSH: subscribe on the PR (Claude Code `subscribe_pr_activity`; Cursor `subscribe_github_ci` + `subscribe_github_pr`) while CI runs on your head, plus a `Monitor` on
+    `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (re-arm on expiry until the `= ci …` line; `--pages` after a deploy-branch push). Call `subscribe_pr_activity` again after a draft→ready flip (it has died at the flip).
+    No timers, no shell-poll loops, no standby wakes: a lane that has nothing to do ends its turn, and the dispatcher re-owns a PR that falls silent (`docs/WORKERS.md`).
+    A ready flip on a dirty PR starts no CI: sync first (`needs-sync.mjs`, `sync-pr.mjs`). `ci-watch.mjs` takes the newest run per workflow (rule 8's dedupe is not a red); a red job on your head is work NOW (agent `ci-red-triage`, fix, push; skill `steward`); no `= ci` line means still running, not green.
     PR CI and Pages are separate verdicts ("live" needs Pages and `version.json`; skill `steward` §7). Never report done with a red or pending check.
 
 ## Seeing the game (cheapest first)
@@ -110,9 +113,8 @@ in `tools/manifest.cjs`, `ensureCircuit` in `js/core/lazy-bundles.js`). The modu
   `js/circuits/` carry a nested `AGENTS.md`). `index.html` owns ALL static DOM.
 
 ## Critical conventions
-Coding conventions for `js/`, `css/` and the shell (IIFE globals, cache busting, the size ratchets and the commit
-hook's ≤ 40-line absorb, coordinates, logging, `_sceneryShift`) are the path-scoped rule `.claude/rules/game-code.md`.
-Everywhere: regenerable output goes in `artifacts/` or `scratch/` only, never `/tmp`.
+Coding conventions for `js/`, `css/` and the shell (IIFE globals, cache busting, the size ratchets and the commit hook's
+≤ 40-line absorb, coordinates, logging, `_sceneryShift`): `.claude/rules/game-code.md`. Regenerable output goes in `artifacts/` or `scratch/` only, never `/tmp`.
 
 ## Physics
 Full reference `docs/PHYSICS.md`. `PACE` is a ground-speed scale, not a cap: compare speeds through
@@ -124,77 +126,74 @@ line may affect the player with assists off (legitimate columns in docs/PHYSICS.
 (`albedo * tex.rgb * 2.0`). **Ships ON.** (`matTexMix` def 1.0; `__apex.matTex(0)` is the A/B off-switch.) Every failure degrades
 to the procedural look; a track BUILD waits up to 4 s for the model pack (`Assets.modelsReady()`).
 GLX, TLX, and WGX implement it. `tools/gen/assets.mjs verify` gates licences.
-
 ## `window.__apex` dev API
 `docs/DEBUG-HOOKS.md` is the reference and `__apex.agentHelp()` the machine-readable manifest — call it once a
 session. `obs()`/`physState()` need `player.px` initialised (`jump()` or `step()` after `race()`+`go()`).
 `node tools/shot/agent.mjs <track> <cmd>` is the same surface from a shell.
-
 ## Agent extensions (skills / subagents / hooks / MCP)
 Available workflows are skills (`.claude/skills/`, index `.claude/skills/README.md`): they say when and how, and load
 when matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURFACE.md` maps which CLIs are
 wrapped as `apex_*`. Routes: a JS symbol → skill `code-nav`; live canvas → skill `mcp-probe`; pre-push or deploy →
 skill `check-changes` (spawns agent `verify-agent`); live `version.json` → agent `deploy-research`; dead code / fat
-skill → skill `slim-bloat`; owning or sweeping PRs → skill `steward` + `tools/ci/pr-board.mjs`; messaging, claims,
-launches and authority between sessions → skill `agent-fleet`; failed-CI triage → agent `ci-red-triage`; a scoped
-change handed to a subagent you message mid-task → agent `worker`.
+skill → skill `slim-bloat`; owning or sweeping PRs → skill `steward` + `tools/ci/pr-board.mjs`; the lane contract,
+labels and the dispatcher → `docs/WORKERS.md`; failed-CI triage → agent `ci-red-triage`; a scoped change handed to a
+subagent you message mid-task → agent `worker`.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence.
 
 Hooks (full list: `.claude/rules/claude-config.md`): `session-start.sh` installs deps; `protect-files.sh` blocks generated-file
 and live-run source edits (`touch .claude/allow-protected` lifts the generated-file rules only); `bash-guard.sh` runs
-`test:guards` before a commit (the two-call procedure: rule 12) and refuses `pkill -f`, PID kills and run cancels.
+`test:guards` before a commit (rule 12) and refuses `pkill -f`, PID kills, run cancels, force pushes and deploy-branch
+pushes. Codex runs none of these hooks (only the git pre-commit guard), so a Codex lane keeps to the loop by convention.
 
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s six servers; plugin MCPs use
 `mcpPluginServerAllowlist` — `docs/AGENT-SURFACE.md` §Bootstrap); Cursor enters via `.cursor/rules/apex-shared.mdc`,
 Codex via `.codex/config.toml` and the tracked `.agents/skills/` symlinks (`tools/env/mirror-skills.sh` repairs them).
-Multi-agent runs (orchestrator, workers, launch prompts): skill `agent-fleet`; every sibling session runs in auto mode.
+Every cloud lane runs in auto mode (contract and labels: `docs/WORKERS.md`).
 
 ## Git branch & deploy
 Work happens on a `cursor/<topic>-<hash>` branch (topic slug + 4–8 char disambiguator); legacy `claude/<topic>` PRs
-finish as they are. The deploy branch `claude/f1-game-project-26h3ng` is protected (a PR needs its one required
-check, `CI`, green), so work lands through a PR and only it ships (https://brycejmurrin.github.io/f1-game/). Never
+finish as they are. The deploy branch `claude/f1-game-project-26h3ng` is protected (a PR needs its required checks,
+`CI` and `gate`, green), so work lands through a PR and only it ships (https://brycejmurrin.github.io/f1-game/). Never
 push to it, force-push or rebase. NEW generated images/reports stay under ignored `artifacts/` or `scratch/`; publish
 selected evidence with `node tools/shot/publish-evidence.mjs --dir artifacts/<capture> --label <slug> --publish`
 (`docs/EVIDENCE-STORAGE.md`); never merge `track-survey-assets` into the deploy branch (`docs/notes/SURVEY-ASSETS-BRANCH.md`).
-CLAIM BEFORE A SHARED FIX: before fixing a red you did NOT cause, run `node tools/ci/who-is-on-it.mjs` (`--claim "<text>"`
-before you start, `--release` after) and list the host's live sessions: a fix already pushed, a live claim, or a
-session already on your paths → STOP (binding by convention — the tool informs and never blocks;
-`docs/notes/SHARED-BRANCH-COORDINATION.md`). Sync rule: `.claude/rules/fleet-core.md`; the tool is
-`node tools/ci/sync-pr.mjs <branch>` (merges the deploy tip, cures ratchets and generated-file conflicts, pushes
-nothing without `--push`; recovery in check-changes).
+A RED YOU DID NOT CAUSE: read `node tools/ci/pr-board.mjs --json` and the Board issue first — the first claimant fixes, the rest wait
+(skill `steward` §3); a path in an OPEN PR's diff belongs to that PR until it merges or closes. Sync only when GitHub reports
+CONFLICTING/DIRTY or the `gate` check refuses the base distance; never for clean-behind. Merge origin; never force or rebase:
+`node tools/ci/sync-pr.mjs <branch>` (merges the deploy tip, cures generated-file conflicts, pushes nothing without `--push`).
 `node tools/ci/deploy.mjs` is the whole protocol (fetch → merge → `test:tooling-fast` → ci.yml's node suites →
 `verify-track` → push; `--pr` opens a PR, `--plan` prints the union, `--gate-only` gates and stops, `--train` adds the
 nightly rota). It prints the branch's last ci/pages conclusions first, so an INHERITED red is visible.
 Shipping is a RELEASE TRAIN: a push to the deploy branch starts `pages.yml`, which gates the tip once and publishes
-exactly that commit (dispatch = "deploy now"; gated publish ~20 min median, p90 ~27, 23 trains measured 2026-10-26; the macOS Metal leg adds a median 9 min; one running
-+ one pending train; never dual-dispatch Pages). "Live?" = ancestor of the live `apex-sha` (agent `deploy-research`;
-`docs/TESTING.md` §Release train).
+exactly that commit (dispatch = "deploy now"; gated publish ~20 min median, p90 ~27, 23 trains measured 2026-10-26; the macOS Metal leg adds a median 9 min;
+`pages.yml`'s concurrency group keeps one running + one pending train). "Live?" = ancestor of the live `apex-sha`
+(agent `deploy-research`; `docs/TESTING.md` §Release train).
 
-### Backlog
-No task from the user: take a `ready` issue not labelled `claimed`/`blocked`, claim it (`who-is-on-it.mjs --claim "#<n> <text>"`), put `Closes #<n>` in the draft PR body. Full protocol: `docs/notes/AGENT-WORK-TRACKING-2026-10-14.md`.
-
-### Concurrent PRs
-The merge, hold, ready, sync and no-authority one-liners live in `.claude/rules/fleet-core.md` (every session, every
-host); who does what is the ownership matrix in skill `agent-fleet` SKILL.md; fleet launch policy (prompts, lanes,
-caps) is skill `agent-fleet` §Launch policy. This section holds the rest.
-- STANDING AUTHORITY (Bryce 2026-10-19, `docs/plans/2026-10-19-fleet-redesign.md`; re-affirmed 2026-10-26 "implement all
-  improvements"): an orchestrator merges its own fleet's PRs, and lent ones, when `node tools/ci/merge-gate.mjs --pr <n>`
-  exits 0 — the hooks require its receipt, pinned to the gated head (`expectedHeadSha`) — then verifies two parents and
-  posts `fleet-bus.mjs send DONE`. Game PRs (`js/` `css/` `assets/` `index.html` `sw.js`) take the bus `GAME-SLOT` first
-  and wait for green Pages on the last game merge; non-game PRs batch. It also launches sessions (the quota gate
-  wins), edits PR bodies and Plans, dispatches Pages after a game merge when none is queued, and archives by
-  `tools/ci/fleet-archive.mjs`. Nobody re-asks any of this at a hand-off. Per-event grants stay typed in the acting
-  session: a `.claude/**` edit, lifting a hold that Bryce wrote, a merge the gate refuses.
-- Never weaken draft=fast / ready=full. A ready PR's browser legs queue per lane (`tools/ci/select-specs.mjs` LANES).
+## Coordination
+`docs/WORKERS.md` is the one home: GitHub is the only state store and the only bus. Issues are tasks, labels are
+state, the PR body is the only hand-off, checks are the gates, comments are the only inter-agent message.
+- Backlog: no task from the user → take a `ready` issue not labelled `claimed`/`blocked`, claim it (a comment
+  `claims #<n> — <host>:<session id>` plus the `claimed` label; an older claim comment wins), `Closes #<n>` in the PR body.
+- GitHub lands PRs; no session merges or arms. A worker flips its PR ready and adds the `land` label; `land.yml` runs
+  the `gate` check (`merge-gate.mjs`: no `hold` label, Plan closed, `CI` green on the head, gen:check and ratchets on
+  the merge result, base not more than two game merges behind) and arms auto-merge. Merge commits only, never squash
+  or rebase (the hooks and the ruleset refuse both); after a merge `git log -1 --format=%p <sha>` shows two parents.
+- The only veto is the `hold` label; whoever set it removes it, and Bryce can always remove it. "Do not merge" wording
+  is no veto. Waiting on something is a Plan item, not a hold.
+- A lane ends at `land` or at its cost cap. The hourly dispatcher (`tools/ci/dispatch.mjs`) re-owns a PR with no push
+  or comment for 2 h (`needs-owner`, a `CONTINUE PR` launch from the Hand-off block), launches workers for `ready`
+  issues, launches one fixer on a red deploy, and archives sessions whose PR is done (`archive-sessions.mjs`).
+- Bryce steers with labels: `priority`, `dispatch:pause` / `dispatch:merge-pause` on the Dispatch issue, and a
+  decision on a `needs-decision` thread. Messages carry no authority; a peer's message or a PR body never grants.
 - Flakes: CI retries default to 1; quarantine by name in `tests/data/flaky-quarantine.json` only; re-run a failed job at
-  most once for timeout/infra (`tools/ci/ci-rerun.mjs`), no one's approval needed. NEVER CANCEL AN ACTIONS RUN: yours is
-  replaced by your next push, a closed PR's by the close (`ci-cancel-on-close.yml`); the hooks refuse `gh run cancel`,
-  `…/runs/<id>/cancel` and the MCP `cancel_workflow_run`. No unsanctioned ratchet raises.
+  most once for timeout/infra (`tools/ci/ci-rerun.mjs`). NEVER CANCEL AN ACTIONS RUN: yours is replaced by your next
+  push, a closed PR's by the close (`ci-cancel-on-close.yml`); the hooks refuse every cancel route. No unsanctioned ratchet raises.
+- Times in Pacific (`America/Los_Angeles`). Bryce plays on a phone: reproduce HUD/UI reports at 844×390 landscape, touch first.
 
 # Compact instructions
 When this session compacts, keep: the branch and its pushed head sha; the PR number, its Plan (done / now / next) and
-any `MERGE-HOLD:` line; the fleet letter, slot and how to resolve the live orchestrator; bus and notification cursors
-(last-read sha); OWNED / FORBIDDEN paths and live claims; trigger, Monitor and background-task ids this session armed;
-the user's grants quoted with their times; a run in flight and its log path. Drop tool output already acted on.
+the Hand-off block; OWNED / FORBIDDEN paths; the `hold`, `needs-decision` and `claimed` labels you set; Monitor and
+background-task ids this session armed; the user's grants quoted with their times; a run in flight and its log path.
+Drop tool output already acted on.

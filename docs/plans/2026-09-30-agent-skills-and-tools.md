@@ -12,11 +12,11 @@ work in parallel on the same repo.
 
 | Doc | Role vs this plan |
 |---|---|
-| [`docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md`](../notes/AGENT-TOOLING-RESEARCH-2026-09-22.md) | Prior research; many §5 items landed the same day (§6). This plan starts from what is still open for *parallel Cloud agents* in 2026-09-30. |
+| the AGENT-TOOLING-RESEARCH-2026-09-22 note (archived) (AGENT-TOOLING-RESEARCH-2026-09-22, archived 2026-10-27) | Prior research; many §5 items landed the same day (§6). This plan starts from what is still open for *parallel Cloud agents* in 2026-09-30. |
 | [`docs/notes/CI-CAPACITY-2026-09-29.md`](../notes/CI-CAPACITY-2026-09-29.md) | Measured jam (20 slots → Pro 40); selector / node-plan / selected-verdict work that landed. |
 | [`docs/notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md`](../notes/CONCURRENT-PRS-CI-HYGIENE-2026-09-30.md) | Concurrent-PR protocol (drafts, sync-once, no unsanctioned ratchet raises). |
 | [`docs/notes/PREPUSH-GATE-LADDER.md`](../notes/PREPUSH-GATE-LADDER.md) | Why tooling-fast ≠ the deploy gate (three reds). |
-| [`docs/notes/SHARED-BRANCH-COORDINATION.md`](../notes/SHARED-BRANCH-COORDINATION.md) | Three sessions / one bug / one revert (2026-09-18). |
+| the SHARED-BRANCH-COORDINATION note (archived) (SHARED-BRANCH-COORDINATION, archived 2026-10-27) | Three sessions / one bug / one revert (2026-09-18). |
 | [`docs/plans/2026-09-16-process-speedup-next.md`](2026-09-16-process-speedup-next.md) | Earlier process backlog; mostly CI speed, not skill gaps. |
 
 ---
@@ -57,7 +57,7 @@ Measured on this checkout after `git fetch origin claude/f1-game-project-26h3ng`
 **Evidence.**
 
 - `AGENTS.md` L170–173: branch protection refuses direct pushes (2026-09-30), **then** still says "Other sessions develop directly on it, so a deploy is a merge of THEIR work… they also all see one red at once".
-- `docs/notes/SHARED-BRANCH-COORDINATION.md` L35–40: still frames the shared-red problem as every session developing on the ship branch.
+- the SHARED-BRANCH-COORDINATION note (archived) L35–40: still frames the shared-red problem as every session developing on the ship branch.
 
 **Why it hurts.** Since branch protection, work lands by **PR**. The shared-red class is now "many PRs see a red tip / inherited red", not "ten agents push to the same ref". Agents still follow the old claim/stand-down dance as if they were about to push the tip. `who-is-on-it.mjs` remains valuable for tip reds and overlapping path claims; the prose should match PR-first reality.
 
@@ -184,7 +184,7 @@ Replace the contradictory ship-branch sentence (`AGENTS.md` ~L170–173) with:
 > `cursor/<topic>`). The deploy branch is `claude/f1-game-project-26h3ng`:
 > direct pushes are refused (branch protection); land via PR (`deploy.mjs
 > --pr`). A tip red is shared across open PRs — before fixing a red you did
-> not cause, run `node tools/ci/who-is-on-it.mjs` and claim or stand down.
+> not cause, run `node who-is-on-it.mjs and claim or stand down.
 
 Add under Agent extensions (one bullet):
 
@@ -211,7 +211,7 @@ description: Use when starting multi-file work, a ratchet or CI/workflow
 
 # Plan before editing
 
-1. `node tools/ci/who-is-on-it.mjs` + list open draft PRs (overlap?).
+1. `node who-is-on-it.mjs + list open draft PRs (overlap?).
 2. Create `docs/plans/YYYY-MM-DD-<topic>.md` with: Goal, Evidence (paths),
    Non-goals, Ranked steps, Verify (pick-tests groups / gate-only), Risks
    (ratchets, shared files).
@@ -286,7 +286,7 @@ description: Use when GitHub reports a merge conflict with the deploy
 
 # Sync a PR to ship safely
 
-1. `node tools/ci/who-is-on-it.mjs` (overlapping claims?).
+1. `node who-is-on-it.mjs (overlapping claims?).
 2. `node tools/ci/sync-pr.mjs <branch> --plan` — names conflicts.
 3. `node tools/ci/sync-pr.mjs <branch>` then `--push` when clean.
 4. You may be on `sync-pr-<branch>` — check `git rev-parse --abbrev-ref HEAD`
@@ -401,7 +401,7 @@ Each slice: draft PR, gate-only / tooling-fast as appropriate, watch CI, undraft
 ## 10. Appendix — command cheat sheet agents should learn first
 
 ```sh
-node tools/ci/who-is-on-it.mjs
+node who-is-on-it.mjs
 node tools/ci/pick-tests.mjs
 node tools/ci/verify-change.mjs --fast          # edit loop only
 node tools/ci/deploy.mjs --gate-only            # THE pre-push gate

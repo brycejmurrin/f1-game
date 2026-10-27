@@ -122,8 +122,8 @@ Bus evidence = `origin/claude/fleet-bus` (58 lines, 08:03-17:45Z 10-19). Claims 
 | `.claude/skills/ci-watch/SKILL.md:3, 10-12, 26-28` | "orchestrator holds merge pacing (role-merge-holder)"; "the orchestrator (when no desk is live) merges" | singular. |
 | `.claude/agents/merge-desk.md` description (line 3) | "merge desk user/orchestrator merges at Level 3 per role-merge-holder" | singular; role dormant. |
 | `tools/ci/fleet-bus.mjs` (see §3c) | lease subcommands and header | lease retired for merging. |
-| `docs/notes/FLEET-BUS-2026-10-19.md` (see §3c) | lease design as the merge refusal | add a 10-19 17:50Z superseding note. |
-| `docs/notes/FLEET-BUS-2026-10-19.md:13` | "AGENTS.md named 'Grok Bot' as the sole merge holder" | history, fine; but adapters.md never caught up. |
+| `docs/archive/notes/FLEET-BUS-2026-10-19.md` (see §3c) | lease design as the merge refusal | add a 10-19 17:50Z superseding note. |
+| `docs/archive/notes/FLEET-BUS-2026-10-19.md:13` | "AGENTS.md named 'Grok Bot' as the sole merge holder" | history, fine; but adapters.md never caught up. |
 
 ### 3b. Duties nobody owns, or owned twice
 
@@ -166,7 +166,7 @@ No hook or workflow enforces the lease today (grep: no `lease check` in `.claude
 | `tools/ci/fleet-bus.mjs:2-4, 22-26, 39` | header "the host-neutral merge lease", usage lines for lease acquire/renew/check/break; TYPES without GAME-SLOT | header: "bus (lease subcommands retained, not a merge gate)"; add GAME-SLOT type (tool change + test) |
 | `tools/README.md:564` | "Merge lease (one holder, expiry, refusal) and typed fleet bus" | generated from fleet-bus.mjs `@doc` (`npm run gen`), not hand-edited |
 | `tests/unit/fleet-bus.test.mjs` (44 `lease` refs), `tests/groups.json:413`, `tools/ci/tooling-fast.mjs:470`, `docs/TESTING-COVERAGE.md:453` | describe "the cross-host merge lease" | keep the lease tests if the subcommand stays (it is still a valid generic mutex); reword descriptions via `tests/groups.json` + `npm run gen`; add a GAME-SLOT race test |
-| `docs/notes/FLEET-BUS-2026-10-19.md:1, 17-47, 72-75` | lease as the merge refusal; proposed merge_policy.py lease hook | append a dated "Superseded 2026-10-19 17:50Z: both orchestrators merge" section; strike proposal 2 |
+| `docs/archive/notes/FLEET-BUS-2026-10-19.md:1, 17-47, 72-75` | lease as the merge refusal; proposed merge_policy.py lease hook | append a dated "Superseded 2026-10-19 17:50Z: both orchestrators merge" section; strike proposal 2 |
 | `.claude/memory/bryce-merges-manually.md:3, 11` | "outside the merge lease/bus", "while an orchestrator holds the merge lease" | reword to "outside the bus"; via `apex-memory.mjs` |
 | bus history (`origin/claude/fleet-bus` `lease.json`) | ORCH12 holds a lease until ~18:19Z | ORCH12 should `lease release` once so `lease` shows free and nobody waits on it |
 

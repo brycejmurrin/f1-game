@@ -186,17 +186,15 @@ const SOURCE_EXEMPT = new Map([
   // The scratch tree tools/gen/move-tree.mjs is tested on. The names are
   // deliberately fictional (js/zzfix/…) so a real move's sweep can never
   // rewrite the fixture — see the header of move-tree.test.mjs.
-  // tools/ci/fleet-owner.mjs's tests own fictional paths (glob depth, held vs claimed vs free): strings it
-  // must classify, never files it must find.
-  ["js/a.js", /fleet-owner(\.test)?\.mjs|docs-integrity/],
-  ["js/b.js", /fleet-owner(\.test)?\.mjs|docs-integrity/],
-  ["js/c.js", /fleet-owner\.test\.mjs|docs-integrity/],
-  ["js/free.js", /fleet-owner\.test\.mjs|docs-integrity/],
-  ["js/render/three/a/b.js", /fleet-owner\.test\.mjs|docs-integrity/],
-  ["tools/a.mjs", /fleet-owner\.test\.mjs|docs-integrity/],
-  ["tools/ci/a.mjs", /fleet-owner\.test\.mjs|docs-integrity/],
-  ["tools/gfx/other.mjs", /fleet-owner\.test\.mjs|docs-integrity/],
-  ["tools/x.mjs", /fleet-owner\.test\.mjs|docs-integrity/],
+  // Fictional diff paths the landing-gate tests classify (generated-file and
+  // ratchet rows): strings they must classify, never files they must find.
+  ["js/a.js", /merge-gate\.test\.mjs|docs-integrity/],
+  ["js/b.js", /merge-gate\.test\.mjs|docs-integrity/],
+  ["css/a.css", /merge-gate\.test\.mjs|docs-integrity/],
+  ["tools/x.mjs", /merge-gate\.test\.mjs|docs-integrity/],
+  ["tools/y.mjs", /merge-gate\.test\.mjs|docs-integrity/],
+  ["docs/a.md", /merge-gate\.test\.mjs|docs-integrity/],
+  ["docs/x.md", /ready-gate\.test\.mjs|docs-integrity/],
   ["js/zzfix/", /move-tree\.test\.mjs|docs-integrity/],
   ["tests/unit/zzfix.test.mjs", /move-tree\.test\.mjs|docs-integrity/],
   ["tests/helpers/seed-zzfix.mjs", /move-tree\.test\.mjs|docs-integrity/],

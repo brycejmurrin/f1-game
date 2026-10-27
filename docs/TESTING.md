@@ -1161,7 +1161,7 @@ pins all of it. "Is my commit live?" is `git merge-base --is-ancestor <sha>
 
 The ship branch is a **merge train**: merge **one large PR at a time**; batch
 small independent PRs so the tip does not thrash. Agents open DRAFT PRs and
-mark ready only when final (`.claude/rules/fleet-core.md`). Before marking
+mark ready only when final (AGENTS.md §Coordination). Before marking
 ready, the PR's owner runs `node tools/ci/ready-gate.mjs` (green tooling-fast evidence on the tip: the
 CI check-run named `Structural guards` — the aggregator after the
 `Structural guards (tooling A)` … `(tooling D)` shards — or a local
@@ -1175,7 +1175,7 @@ cancelled; the train, the nightly and a dispatch get a group of their own
 per leg and never wait behind PR work. Smoke has no lane (2026-10-16: one
 2.6-min job per run that never failed waited p90 17.5 min behind other PRs'
 smoke, the 2026-10-16 CI/CD review note (#2333) finding 6). Sync only by
-`.claude/rules/fleet-core.md` (CONFLICTING/DIRTY or a red required tip check,
+AGENTS.md §Git branch & deploy (CONFLICTING/DIRTY or a refused base distance,
 via `node tools/ci/sync-pr.mjs <branch>`); never enable auto-update-branch bots
 or a require-up-to-date protection rule. `tools/ci/behind-ship.mjs` (at the end of
 Structural guards tooling B since 2026-10-15, PR only) prints how far the head is behind

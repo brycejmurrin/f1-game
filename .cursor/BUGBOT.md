@@ -6,20 +6,14 @@ can still ship with an explicit "not run" note.
 
 ## Merge & CI ops (blocking)
 
-- Follow `AGENTS.md` §Concurrent PRs and `.claude/rules/fleet-core.md` for
-  current merge authority. Each orchestrator may merge its own fleet's PRs
-  after a successful `merge-gate.mjs` receipt pinned to the gated head;
-  workers do not merge. Merge Desk exists only when designated.
-  **MERGE (merge commit) only**; flag squash/rebase merges and history rewriting
-  on shared branches. Sync by merging origin/ship, never rebase or force-push.
-  Draft→ready requires the green tip and a successful `ready-gate.mjs` receipt.
-- Never dual-dispatch Pages, and never cancel another session's CI to free
-  slots. Flag suggestions to re-run or cancel siblings for capacity.
-- The only veto is a PR-body line starting `MERGE-HOLD:`. "do not merge"
-  wording and the launch line `Do not enable auto-merge or merge.` are not
-  vetoes — assess the acting role against the canonical authority and gate
-  receipts. Flag any SQUASH/REBASE auto-merge arm.
-
+- Follow `AGENTS.md` §Coordination and `docs/WORKERS.md`: GitHub lands PRs. A worker
+  flips its PR ready and adds the `land` label; `land.yml` runs the `gate` check and arms
+  auto-merge. No session merges, arms or waits for the merge. **MERGE (merge commit)
+  only**; flag squash/rebase merges and history rewriting on shared branches. Sync by
+  merging the deploy branch, never rebase or force-push; never for clean-behind.
+- Never cancel another session's CI to free slots. Flag suggestions to re-run or cancel
+  siblings for capacity. `pages.yml`'s concurrency group paces the release train.
+- The only veto is the `hold` label; "do not merge" wording is not one.
 ## Hot-path evidence (blocking when absent)
 
 Flag WebGL / physics / hot-path edits under `js/physics/`, `js/game.js`, or

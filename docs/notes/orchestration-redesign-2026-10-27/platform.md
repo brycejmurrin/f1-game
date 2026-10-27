@@ -3,7 +3,7 @@
 Scope: current primary docs (code.claude.com, docs.github.com, cursor.com, learn.chatgpt.com) plus two first-hand
 probes from this session (`get_session`, the GitHub proxy's own refusal text). Repo beliefs checked against:
 `docs/plans/2026-10-19-fleet-redesign.md` §4A/§7, `docs/notes/HARNESS-SETTINGS-2026-10-26.md`,
-`docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md`, `docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md`.
+`docs/archive/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md`, `docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md`.
 Legend for "replaces": ROT = orchestrator rotation + hand-off; BUS = bus branch; WATCH = fleet-watch cron;
 NET = safety-net send_later; CLAIMS = claims board; GATE = merge-gate/GAME-SLOT pacing; BRIEF = launch briefs.
 

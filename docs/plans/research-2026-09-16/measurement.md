@@ -192,7 +192,7 @@ motivated the A5 allow-list), and the item-3 waste rows.
 **Plan.**
 - `.claude/hooks/ledger.sh` on `PermissionRequest|PermissionDenied`, async,
   appending `{"t":…,"ev":"perm_request","tool":"Bash","key":"npm run gen"}`.
-- `tools/ci/session-ledger.mjs`:
+- session-ledger.mjs:
   `--from-transcript <path> | --session <id> | --summarise | --json`.
 - Row schema (one shape for both writers):
 

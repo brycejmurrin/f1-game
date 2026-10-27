@@ -1,6 +1,6 @@
 // gate-receipt.mjs — the receipt a gate writes and a hook reads (2026-10-19).
 // @doc Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one, github-mcp-guard.sh requires it.
-// @skill agent-fleet
+// @skill steward
 //
 // Why: merging, arming and draft→ready were gated by a human word ("Level 3",
 // a re-granted AskUserQuestion per orchestrator rotation) while no hook checked

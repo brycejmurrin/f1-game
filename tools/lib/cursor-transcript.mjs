@@ -1,6 +1,6 @@
 // cursor-transcript.mjs — parse a Cursor cloud-agent run stream (SSE) into rows a reader can filter.
 // @doc Parse Cursor run streams into rows: chat, tool calls (args, outcome, result head), failures, results; modes + masking.
-// @skill agent-fleet
+// @skill steward
 //
 // Input is the text `GET /v1/agents/{id}/runs/{runId}/stream` returns (or a cached dump of it). Output is data:
 // rows for one run, and one-line renderings of them for `cursor-agents.mjs transcript` and the `apex_cursor_agents`

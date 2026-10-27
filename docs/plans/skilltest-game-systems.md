@@ -56,7 +56,7 @@ GPU / secret-gated work is marked **not testable**.
 | `tools/net/nostr-probe.mjs` | not testable | — | Needs public WSS + `@noble/curves`. | — |
 | `tools/archive/net/rtc-sync-probe.mjs` | not testable | — | Shares port 4468 with rtc-e2e-3p; long; skipped. | — |
 | `tools/ci/ci-watch.mjs` (steward) | broken → fixed | without env token: `= ci unknown`; with `gh auth token`: lists jobs | Env-only auth | #679 |
-| `tools/ci/who-is-on-it.mjs` / `session-status.mjs` | works | both print useful handoff | `@skill` on who-is-on-it is `check-changes` (steward documents it) — intentional split. | — |
+| who-is-on-it.mjs / `session-status.mjs` | works | both print useful handoff | `@skill` on who-is-on-it is `check-changes` (steward documents it) — intentional split. | — |
 
 ## Fix PRs opened this audit
 

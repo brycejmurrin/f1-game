@@ -1,3 +1,3 @@
 Improved: fleet authority is a standing rule, not a per-session grant — AGENTS.md §Concurrent PRs names what an orchestrator may do (merge by gate, archive by rule, launch, Plan edits, Pages dispatch), so a successor never re-asks it at a hand-off (docs/plans/2026-10-19-fleet-redesign.md).
 New: `tools/ci/merge-gate.mjs` proves a PR's state (open, ready-gate, required CI check, no MERGE-HOLD, gen:check on a local merge onto the current tip, bus GAME-SLOT pacing) and writes the receipt `github-mcp-guard.sh` now requires on `merge_pull_request` / `enable_pr_auto_merge`, pinned to `expectedHeadSha`; `ready-gate.mjs --pr` writes the receipt a draft→ready flip needs.
-New: `tools/ci/fleet-archive.mjs` applies the archive rule to a saved `list_sessions` page; `GAME-SLOT` is a fleet-bus type.
+New: fleet-archive.mjs applies the archive rule to a saved `list_sessions` page; `GAME-SLOT` is a fleet-bus type.

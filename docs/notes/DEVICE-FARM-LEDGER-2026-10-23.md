@@ -111,7 +111,7 @@ Also seen, not yet reproduced (OrchA 27's read of the raw artifacts):
   never print them. Expect your auto-mode classifier to ask Bryce before the CLI install and before the first
   metered session.
 - **Before a run:** claim the device on the bus:
-  `node tools/ci/fleet-bus.mjs send HANDOFF --to A "DF CLAIM <device> <lane> <min>"`.
+  `node fleet-bus.mjs send HANDOFF --to A "DF CLAIM <device> <lane> <min>"`.
   Fleet A uses the iPhone 18 Pro Max; Fleet D uses the iPhone 14 and 14 Pro. Sessions sit in STOPPING for minutes
   after they end and count against account concurrency (`PENDING_CONCURRENCY`).
 - **Budget:** the account's 1,000-minute free trial had 703.73 minutes left at 09:08Z (both fleets combined).

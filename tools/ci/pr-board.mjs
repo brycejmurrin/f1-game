@@ -32,13 +32,11 @@
  * Each ARM counts toward MAX_ARMED (2 repo-wide, any method). The
  * PLAN column is ready-gate.mjs's planVerdict of the PR body: done/items, or "-"
  * for a body with no ## Plan checklist (AGENTS.md rule 12).
- * FLEET is the worker's report (agent-fleet role-pr-owner.md §Monitoring and
- * reporting): the body's `fleet-status: <state> | <reason> | <utc>` line,
+ * FLEET reads the retired (2026-10-27) worker report on PRs opened before the
+ * redesign: the body's `fleet-status: <state> | <reason> | <utc>` line,
  * or the newest PR comment starting `fleet-status:` or `@orchestrator
  * NEEDS-DECISION:` when it is newer than the body line; state, age, reason.
- * FL and SLOT (JSON `fleetLetter`, `slot`; `fleet` stays the report above, which
- * fleet-tick.mjs reads) are the body's ```fleet block: the letter from `fleet:`,
- * a letter `orchestrator:` or the slot; the slot from `slot:` or a `<letter>·<slot>`
+ * LANE is the PR's `lane:<host>` label and OWNER the `owner:` line of the body's ```handoff block (docs/WORKERS.md).
  * token in the block's title (ready-gate.mjs fleetIdentity; no extra API call).
  *
  *   node tools/ci/pr-board.mjs              # the table
@@ -53,7 +51,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY } from "./github-api.mjs";
 import { createSnapshot, runsByHead } from "../lib/pr-snapshot.mjs";
-import { guardsVerdict, planVerdict, fleetIdentity } from "./ready-gate.mjs";
+import { guardsVerdict, planVerdict } from "./ready-gate.mjs";
 import { exitIfHelp } from "../lib/cli-args.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
 
@@ -68,40 +66,16 @@ const MERGE_METHOD = "merge";
 export function hasMergeHold(body) {
   return /^MERGE-HOLD:/m.test(String(body || "").replace(/<!--[\s\S]*?-->/g, ""));
 }
-/** One `fleet-status: <state> | <reason> | <utc>` line (body or comment), outside
- *  HTML comments; the last one in the text wins. null when absent. */
-export function parseFleetStatus(text) {
-  const lines = String(text || "").replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/);
-  let out = null;
-  for (const l of lines) {
-    const m = /^\s*fleet-status:\s*([^|]+?)\s*(?:\|\s*([^|]*?)\s*)?(?:\|\s*(\S[^|]*?)\s*)?$/.exec(l);
-    if (!m || m[1].startsWith("<")) continue; // the template placeholder is not a report
-    const at = Date.parse(m[3] || "");
-    out = { state: m[1], reason: m[2] || "", at: Number.isFinite(at) ? new Date(at).toISOString() : null };
-  }
-  return out;
+/** The `lane:<host>` label of a PR, else "-". Pure. */
+export function laneOf(pr) {
+  const l = (pr.labels || []).map((x) => (typeof x === "string" ? x : x.name)).find((n) => /^lane:/.test(n || ""));
+  return l ? l.slice(5) : "-";
 }
-
-/** The fleet report for one PR: the body line, replaced by the newest comment
- *  that starts `fleet-status:` or `@orchestrator NEEDS-DECISION:` when that
- *  comment is newer (a body line with no time loses to any such comment). */
-export function fleetStatus(body, comments = []) {
-  const fromBody = parseFleetStatus(body);
-  let best = fromBody ? { ...fromBody, source: "body" } : null;
-  for (const c of comments || []) {
-    const text = String(c?.body || "").trimStart();
-    const at = c?.created_at ? new Date(c.created_at).toISOString() : null;
-    let s = null;
-    const ask = /^@orchestrator NEEDS-DECISION:\s*(.*)/.exec(text);
-    if (ask) s = { state: "needs-decision", reason: ask[1].split(/\r?\n/)[0].trim(), at };
-    else if (/^fleet-status:/.test(text)) {
-      const p = parseFleetStatus(text.split(/\r?\n/)[0]);
-      if (p) s = { ...p, at };
-    }
-    if (!s || !at) continue;
-    if (!best || !best.at || Date.parse(at) > Date.parse(best.at)) best = { ...s, source: "comment" };
-  }
-  return best;
+/** The `owner:` line of the body's ```handoff block (docs/WORKERS.md), else "-". Pure. */
+export function handoffOwner(body) {
+  const m = /```handoff\n([\s\S]*?)```/.exec(String(body || ""));
+  const line = m && /^owner:\s*(.+)$/m.exec(m[1]);
+  return line ? line[1].trim() : "-";
 }
 
 /** "45m", "3h", "2d" since `at` (ISO), or "?" without a time. */
@@ -209,11 +183,9 @@ export function evaluate(items, opts = {}) {
     const ci = ciState(it.runs);
     const gate = guardsVerdict(it.checkRuns || []);
     const failing = [...new Set((it.jobs || []).filter((j) => BAD_JOB.has(j.conclusion)).map((j) => j.name))].sort();
-    const who = fleetIdentity(pr.body);
     const row = {
       number: pr.number,
-      fleetLetter: who.letter || "-",
-      slot: who.slot || "-",
+      lane: laneOf(pr),
       title: pr.title || "",
       branch: pr.head?.ref || "",
       draft: pr.draft === true,
@@ -229,8 +201,8 @@ export function evaluate(items, opts = {}) {
       gate: gate.state,
       gateEvidence: gate.evidence,
       plan: planVerdict(pr.body),
-      hold: hasMergeHold(pr.body),
-      fleet: fleetStatus(pr.body, it.comments),
+      hold: hasMergeHold(pr.body) || (pr.labels || []).some((l) => (typeof l === "string" ? l : l.name) === "hold"),
+      owner: handoffOwner(pr.body),
       url: pr.html_url || "",
     };
     const d = decide(row, ctx);
@@ -245,13 +217,12 @@ const clip = (s, n) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 /** The table plus a one-line footer. */
 export function render(result, { now = Date.now() } = {}) {
   const { rows } = result;
-  const head = ["PR", "FL", "SLOT", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "FLEET", "SUGGEST"];
+  const head = ["PR", "LANE", "OWNER", "TITLE", "STATE", "HEAD", "MERGEABLE", "AUTO-MERGE", "CI", "FAILING JOBS", "GATE", "PLAN", "SUGGEST"];
   const plan = (p) => (!p || p.state === "none" ? "-" : `${p.items - p.open.length}/${p.items}`);
-  const fleet = (f) => (!f ? "-" : clip(`${f.state} ${ageLabel(f.at, now)}${f.reason ? `: ${f.reason}` : ""}`, 40));
   const body = rows.map((r) => [
-    `#${r.number}`, r.fleetLetter || "-", clip(r.slot || "-", 12), clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
+    `#${r.number}`, r.lane || "-", clip(r.owner || "-", 18), clip(r.title, 40), r.draft ? "draft" : "ready", r.sha || "-",
     r.mergeableState || "-", r.armed ? (r.mergeMethod || "armed") : "-", r.ci,
-    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), fleet(r.fleet), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
+    clip(r.failing.join(", "), 36) || "-", r.gate, plan(r.plan), r.hold ? `${r.suggest} (HOLD)` : r.suggest,
   ]);
   const all = [head, ...body];
   const w = head.map((_, i) => Math.max(...all.map((row) => row[i].length)));
@@ -350,7 +321,7 @@ export function alarmLines(rows, opts = {}) {
   const hit = stalled(rows, opts);
   return [
     ...hit.map((r) => `#${r.number} STALLED ${ageLabel(r.ciAt, now)} ready+green, no hold, no push`
-      + ` (fleet ${r.fleetLetter || "-"}${r.armed ? `, armed ${r.mergeMethod}` : ""}): ${clip(r.title, 60)} ${r.url}`),
+      + ` (lane ${r.lane || "-"}${r.armed ? `, armed ${r.mergeMethod}` : ""}): ${clip(r.title, 60)} ${r.url}`),
     `= alarm ${hit.length ? `${hit.length} stalled` : "none"} (ready > ${opts.hours ?? ALARM_HOURS} h, green, no hold, no push)`,
   ];
 }
@@ -376,8 +347,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
 Read-only board of every open PR into ${DEPLOY}: draft/ready, mergeable_state,
 auto-merge (method), ci.yml state on the head, failing jobs, ready-gate verdict,
-the worker's fleet-status report (state, age, reason), the fleet block's letter (FL)
-and slot (SLOT), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
+the legacy fleet-status report on pre-2026-10-27 PRs, the lane:<host> label (LANE)
+and the Hand-off block's owner (OWNER), and a SUGGESTION (ARM READY SYNC FIX FOREIGN-ARM WAIT NONE) for a CI Watch session.
 Each SYNC/FIX row also prints needs-sync.mjs's verdict (= sync needed: conflict|stale-red|no; git fetch, no writes).
 --alarm prints only the stall alarm: PRs ready > ${ALARM_HOURS} h, green, no MERGE-HOLD, no push
 (\`= alarm none|<n> stalled\`; exit 1 when any). Requests go through tools/lib/pr-snapshot.mjs (ETag cache).

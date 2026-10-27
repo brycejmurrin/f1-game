@@ -10,7 +10,7 @@
  *   node tools/env/apex-memory.mjs show <file.md>
  *   node tools/env/apex-memory.mjs retire <file.md>   # drops topic + MEMORY.md index line
  *
- * Docs: docs/notes/AGENT-MEMORY.md. Fleet rules: .claude/rules/fleet-core.md.
+ * Docs: docs/notes/AGENT-MEMORY.md. Coordination rules: docs/WORKERS.md.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -22,7 +22,7 @@ const INDEX = path.join(MEM, "MEMORY.md");
 
 const USAGE = `usage: node tools/env/apex-memory.mjs <list|show|retire> [file.md]
   Shared auto-memory store (.claude/memory/). Every host reads the same files.
-  Fleet rules: .claude/rules/fleet-core.md. Details: docs/notes/AGENT-MEMORY.md.`;
+  Coordination rules: docs/WORKERS.md. Details: docs/notes/AGENT-MEMORY.md.`;
 
 function die(msg, code = 2) {
   process.stderr.write(msg + "\n");

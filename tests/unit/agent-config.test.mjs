@@ -208,15 +208,6 @@ test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)
     cwd: ROOT, encoding: "utf8",
   });
   assert.equal(r.status, 0, r.stdout + r.stderr);
-  const fleet = stripFrontmatter(read(".claude/rules/fleet-core.md"));
-  assert.equal(fleet.fm.trim(), "", "fleet-core is always-on (no paths:)");
-  const fleetLines = fleet.body.trimEnd().split("\n").length;
-  assert.ok(fleetLines <= BUDGET.fleetCoreLines, `fleet-core.md is ${fleetLines} lines — keep ≤${BUDGET.fleetCoreLines}`);
-  assert.ok(Buffer.byteLength(read(".claude/rules/fleet-core.md")) <= BUDGET.fleetCoreBytes,
-    "fleet-core.md over 2 KB — trim before growing AGENTS.md");
-  const cursorFleet = stripFrontmatter(read(".cursor/rules/fleet-core.mdc"));
-  assert.match(cursorFleet.fm, /alwaysApply:\s*true/);
-  assert.doesNotMatch(cursorFleet.fm, /^globs:/m);
   for (const name of ["render-wgx", "render-tlx", "js-nav", "tests-specs", "claude-config", "ci-tools"]) {
     const claude = stripFrontmatter(read(`.claude/rules/${name}.md`));
     const cursor = stripFrontmatter(read(`.cursor/rules/${name}.mdc`));
@@ -229,7 +220,7 @@ test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)
   }
   assert.match(read(".claude/rules/render-tlx.md"), /One census run per branch/);
   assert.match(read(".claude/rules/render-wgx.md"), /One census run per branch/);
-  assert.match(read("AGENTS.md"), /fleet-core/);
+  assert.match(read("AGENTS.md"), /docs\/WORKERS\.md/);
   assert.doesNotMatch(read("AGENTS.md"), /sampleCount/, "the WGSL rules moved to .claude/rules/render-wgx.md");
 });
 
@@ -584,10 +575,10 @@ test("a memory's source: paths still exist", () => {
   assert.ok(seen >= 1, "no memory carries a `source:` line — the scan above checked nothing");
 });
 
-// Fleet-core owns merge/MERGE-HOLD/SWEEP/arm; the MEMORY.md index must not
+// AGENTS.md §Coordination owns merge/hold/arm; the MEMORY.md index must not
 // restate those topics. Topic files with a "Stale check" note are themselves
 // stale — delete or rewrite, do not keep the flag.
-test("MEMORY.md index has no duplicate topic links, no fleet-core restatements, no Stale-check topics", () => {
+test("MEMORY.md index has no duplicate topic links, no coordination restatements, no Stale-check topics", () => {
   const index = read(".claude/memory/MEMORY.md");
   const links = [...index.matchAll(/^\s*-\s*\[[^\]]*\]\(([^)]+\.md)\)/gm)].map((m) => m[1]);
   const seen = new Map();
@@ -599,7 +590,7 @@ test("MEMORY.md index has no duplicate topic links, no fleet-core restatements, 
   for (const line of index.split("\n")) {
     if (!/^\s*-\s*\[/.test(line)) continue;
     assert.doesNotMatch(line, FLEET_RE,
-      `MEMORY.md index restates fleet-core (${line.slice(0, 80)}…) — move to .claude/rules/fleet-core.md or trim`);
+      `MEMORY.md index restates a coordination rule (${line.slice(0, 80)}…) — its home is AGENTS.md §Coordination; trim`);
   }
   const dir = path.join(ROOT, ".claude/memory");
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "MEMORY.md")) {
@@ -1049,119 +1040,3 @@ test("stop-guard.sh lets a stop through when Claude is already continuing, and o
   assert.notEqual(junk.status, 1, `a malformed payload must not crash the hook: ${junk.stderr}`);
 });
 
-// ── AGENT-FLEET CONTRACT (merged from agent-fleet.test.mjs, findings T1-18) ──
-// The orchestrator/worker contract every vendor's session reads (.claude/skills/agent-fleet,
-// docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md). Each case is a mistake a real session made on 2026-10-10.
-const FLEET_SKILL = read(".claude/skills/agent-fleet/SKILL.md");
-const FLEET_ORCH = read(".claude/skills/agent-fleet/references/orchestrator.md");
-const FLEET_WORKER = read(".claude/skills/agent-fleet/references/worker.md");
-const FLEET_ADAPT = read(".claude/skills/agent-fleet/references/adapters.md");
-
-test("every host's PR-subscription tool is named for its host, and none is called fake", () => {
-  for (const [file, text] of [["AGENTS.md", read("AGENTS.md")],
-    ["steward/SKILL.md", read(".claude/skills/steward/SKILL.md")],
-    ["agent-fleet/SKILL.md", FLEET_SKILL], ["references/worker.md", FLEET_WORKER]]) {
-    assert.doesNotMatch(text, /fake name|never invent `subscribe_pr_activity`/,
-      `${file} must not call Claude Code's subscribe_pr_activity fake`);
-    assert.match(text, /subscribe_pr_activity/, `${file} names the Claude Code tool`);
-    assert.match(text, /subscribe_github_ci/, `${file} names the Cursor tool`);
-  }
-});
-
-test("a subscription never stands alone: each host's timer is named beside it", () => {
-  // anthropics/claude-code#62561: subscribe_pr_activity dropped check_run completions
-  // and sessions sat idle through a red; the timer wake that reads CI is the fallback.
-  for (const [file, text] of [["AGENTS.md", read("AGENTS.md")],
-    ["steward/SKILL.md", read(".claude/skills/steward/SKILL.md")],
-    ["agent-fleet/SKILL.md", FLEET_SKILL], ["references/worker.md", FLEET_WORKER]]) {
-    assert.match(text, /send_later/, `${file} names Claude Code's timer`);
-    assert.match(text, /subscribe_timer/, `${file} names Cursor's timer`);
-  }
-  assert.match(FLEET_WORKER, /ci-watch\.mjs --sha <head> --once/, "worker reads CI on every wake");
-  assert.match(FLEET_WORKER, /tooling-fast\.mjs --changed/);
-  assert.match(FLEET_WORKER, /tooling-fast\.mjs --changed --jobs=3/, "worker's edit loop keeps the rule-4 job cap");
-});
-
-test("the launch template's WATCH line and the orchestrator's first-act routines stay pinned", () => {
-  // Bryce 2026-10-25: owners must subscribe, and orchestrators must arm the bus routines;
-  // "subscribe with your host's tool" alone let sessions skip both.
-  const tpl = FLEET_ORCH.match(/## Launch template[\s\S]*?```text\n([\s\S]*?)```/)[1];
-  const watch = tpl.match(/^WATCH:.*(?:\n {6}.*)*/m);
-  assert.ok(watch, "launch template has a WATCH: line");
-  for (const k of ["subscribe_pr_activity", "send_later", "50–55 min", "subscribe_github_ci",
-    "subscribe_github_pr", "subscribe_timer"]) {
-    assert.ok(watch[0].includes(k), `WATCH line names ${k}`);
-  }
-  const first = FLEET_ORCH.split("## First acts")[1]?.split("\n## ")[0] || "";
-  assert.match(first, /a `Monitor` that prints only NEW[^]*fleet-bus\.mjs read --to/, "first acts arm the bus Monitor (audit row 14)");
-  assert.doesNotMatch(first, /send_later` ~3 min/, "no 3-min tick on top of the bus Monitor");
-  assert.match(first, /hourly `create_trigger`[^]*0 \* \* \* \*/, "first acts arm the hourly safety net");
-  const owner = read(".claude/skills/agent-fleet/references/role-pr-owner.md");
-  assert.match(owner, /`subscribe_pr_activity` on the PR/);
-  assert.match(owner, /`send_later` check-in at AGENTS\.md rule 13's cadence \(50–55 min/, "owner check-in follows rule 13 (50–55 min, Bryce to confirm; was 15 min)");
-});
-
-test("the adapter table covers each host's verified spawn path", () => {
-  // The table moved from orchestrator.md to adapters.md (2026-10-18 split); the pins moved with it.
-  const table = FLEET_ADAPT.match(/## Per-vendor adapters[\s\S]*?\n\| spawn \|([^\n]*)/);
-  assert.ok(table, "adapters.md has the adapter table with a spawn row");
-  assert.match(table[1], /create_session/, "Claude Code spawn");
-  assert.match(table[1], /environment: "cloud"/, "Cursor in-agent Task spawn");
-  assert.match(table[1], /POST \/v1\/agents/, "Cursor API spawn");
-  assert.match(table[1], /grok [^|]*-p /, "Grok Build headless spawn");
-  assert.match(FLEET_ADAPT, /--deny "Bash\(git push --force\*\)"/, "a Grok worker is denied force-push");
-});
-
-test("the steward card's hashes match the files it lets sessions skip", async () => {
-  const { createHash } = await import("node:crypto");
-  const card = read("docs/notes/APEX-STEWARD-CARD-2026-10-05.md");
-  const line = card.match(/^HASHES: (.*)$/m);
-  assert.ok(line, "card carries a HASHES line");
-  const files = { steward: ".claude/skills/steward/SKILL.md",
-    "check-changes": ".claude/skills/check-changes/SKILL.md",
-    "pr-template": ".github/pull_request_template.md" };
-  for (const [, key, want] of line[1].matchAll(/([a-z-]+)=([0-9a-f]{8})/g)) {
-    assert.ok(files[key], `unknown HASHES key ${key}`);
-    const got = createHash("sha256").update(fs.readFileSync(path.join(ROOT, files[key]))).digest("hex").slice(0, 8);
-    assert.equal(got, want, `card says ${key}=${want} but ${files[key]} hashes to ${got}: refresh the card`);
-  }
-});
-
-test("the fleet block keys are the same in the skill and the worker reference", () => {
-  const block = FLEET_SKILL.match(/```fleet\n([\s\S]*?)```/);
-  assert.ok(block, "SKILL.md carries the fenced fleet block");
-  const keys = [...block[1].matchAll(/^([a-z-]+):/gm)].map((m) => m[1]);
-  assert.deepEqual(keys, ["worker", "fleet", "orchestrator", "owned", "state", "blocker", "needs-orchestrator"]);
-  assert.match(block[1], /state: .*\bblocked\b/);
-  for (const k of ["state: blocked", "needs-orchestrator: yes"]) {
-    assert.ok(FLEET_WORKER.includes(k), `worker.md escalation uses \`${k}\``);
-    assert.ok(FLEET_ORCH.includes(k), `orchestrator.md launch template uses \`${k}\``);
-  }
-  assert.ok(FLEET_WORKER.includes("@orchestrator BLOCKED:") && FLEET_ORCH.includes("@orchestrator BLOCKED:"),
-    "one escalation comment prefix, the same in both references");
-});
-
-test("the launch template carries every field the agent-fleet launch policy requires", () => {
-  const tpl = FLEET_ORCH.match(/## Launch template[\s\S]*?```text\n([\s\S]*?)```/);
-  assert.ok(tpl, "orchestrator.md has the fenced launch template");
-  for (const field of ["OWNED:", "FORBIDDEN:", "DONE WHEN:", "CAPS:", "ORCHESTRATOR:",
-    "ready-gate.mjs", "Do not enable auto-merge or merge."]) {
-    assert.ok(tpl[1].includes(field), `launch template lost ${field}`);
-  }
-  assert.ok(!tpl[1].includes("PUSH SLOT"), "paced push was retired 2026-10-16");
-  // The policy moved from AGENTS.md §Concurrent PRs to the skill (2026-10-14 trim); the pin moved with it.
-  const policy = read(".claude/skills/agent-fleet/references/launch-policy.md").split("## Launch policy")[1] || "";
-  assert.match(policy, /the exact line `Do not enable auto-merge or merge\.`/,
-    "the template's last line is the one the skill's §Launch policy mandates verbatim");
-  assert.match(read("AGENTS.md"), /skill `agent-fleet` §Launch policy/, "AGENTS.md points launch policy at the skill");
-});
-
-test("the skill routes to both references and to its evidence note", () => {
-  for (const ref of ["references/orchestrator.md", "references/authority.md", "references/adapters.md",
-    "references/running.md", "references/worker.md"]) {
-    assert.ok(FLEET_SKILL.includes(ref), `SKILL.md links ${ref}`);
-  }
-  const note = "docs/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md";
-  assert.ok(FLEET_SKILL.includes(note) && fs.existsSync(path.join(ROOT, note)), "evidence note exists and is linked");
-  assert.match(read("AGENTS.md"), /skill `agent-fleet`/, "AGENTS.md points multi-agent runs at the skill");
-});

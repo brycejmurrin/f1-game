@@ -6,7 +6,7 @@ paths:
 
 # CI tools / workflows
 
-- Run cancels and merge methods: AGENTS.md §Concurrent PRs and `.claude/rules/fleet-core.md`
+- Run cancels and merge methods: AGENTS.md §Coordination and `docs/WORKERS.md`
   (the hooks and `merge_policy.py` enforce both). A queued run holds no slot.
 - `= ci none` after a push means no run started — dispatch `ci.yml` by hand and
   watch by head sha. Sync via `node tools/ci/sync-pr.mjs <branch>` (merge

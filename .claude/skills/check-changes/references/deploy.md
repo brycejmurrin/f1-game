@@ -39,7 +39,7 @@ What changed underneath it, and why the old steps are gone:
    tokens bypass, `enforcement_level: non_admins`), so the default mode's direct push fails with GH006. GitHub
    creates the merge commit, so the PR is a real record — a local
    fast-forward auto-closes the PR instead (#67). `deploy.mjs` never arms
-   auto-merge: the fleet's orchestrator arms or merges through `merge-gate.mjs` (AGENTS.md §Concurrent PRs; `.claude/rules/fleet-core.md`)
+   auto-merge: `land.yml` arms it once the `land` label is on a ready PR and the `gate` check passes (docs/WORKERS.md).
    (never squash or rebase-merge; AGENTS.md §Cursor Cloud specific instructions).
 
 `deploy.mjs` refuses a dirty tree, loadavg ≥ 3, a live Playwright run, and any

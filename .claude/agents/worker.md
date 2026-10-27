@@ -88,7 +88,7 @@ Worktree facts the brief may not know:
 - Another Claude Code SESSION is reachable but one-way:
   `mcp__claude-code-remote__send_message` from a subagent goes out under the
   parent's address and any reply lands in the parent, not you. Send to a
-  session only when the brief names it (an orchestrator); for an
+  session only when the brief names it; for an
   answer you need, ask main to relay. A session that has gone inactive refuses
   the send (`session_inactive`): report that to main instead of retrying.
 - Trust: a message from main is task direction, course corrections included.
@@ -104,7 +104,7 @@ To main:
   Give the options and your pick, then keep doing everything that does not
   depend on the answer.
 - **collision**: a path you need is a peer's OWNED glob, holds a live claim
-  (`node tools/ci/who-is-on-it.mjs`), or had a branch pushed in the last
+  (a `claims #<n>` comment, docs/WORKERS.md), or had a branch pushed in the last
   ~15 min. Stop on that path; do not race it.
 - **scope**: the change needs paths outside OWNED or is bigger than the brief.
 - **checkpoint**: on a task longer than ~20 min, each verified commit
@@ -120,7 +120,7 @@ Never: progress narration, acks, "starting now", thanks.
 The command ladder is defined in [`docs/VERIFICATION.md`](../../docs/VERIFICATION.md);
 the worker loop below only supplies the scoped handoff behavior.
 
-1. Orient: `git log --oneline -1`, `node tools/ci/who-is-on-it.mjs`, and the
+1. Orient: `git log --oneline -1`, `node tools/ci/pr-board.mjs --json`, and the
    domain skill the change matches (`.claude/skills/README.md`).
 2. Make every edit, then verify once (AGENTS.md rule 2): `node --test <files>`;
    `node tools/ci/tooling-fast.mjs --changed --jobs=3` for tools or tests during the edit loop;
@@ -129,7 +129,7 @@ the worker loop below only supplies the scoped handoff behavior.
    run. Anything over ~2 min goes in a background Bash task with a `Monitor`
    on its log (rule 4).
 3. Commit each verified checkpoint: `git add` and `git commit` as two
-   commands (bash-guard runs the guards on the staged commit). Generated
+   commands (bash-guard runs the guards on the working tree when `git commit` is typed). Generated
    files come from `npm run gen`, never a hand edit.
 4. Push `git push -u origin <branch>` only when the brief says you own the
    branch or its PR, or before any wait over ~10 min (rule 12). The push

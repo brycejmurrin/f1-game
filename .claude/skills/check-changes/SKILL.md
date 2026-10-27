@@ -45,7 +45,7 @@ once (the ladder: AGENTS.md rule 3). A started batch's verdict is its log's `= r
 (`references/triage.md`).
 
 The commit hook (two-call procedure: AGENTS.md rule 12) runs only in Claude Code sessions: Cursor and
-Codex commits reach CI unguarded (two malformed changelog fragments did on 2026-10-26), so a
+Codex and Cursor route `git commit` through the shell guard, but a commit made through the GitHub API does not run it, so a
 non-Claude branch's first CI run is its guard run — run `npm run test:guards` by hand before that push.
 
 - **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /

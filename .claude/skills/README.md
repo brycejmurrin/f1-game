@@ -16,9 +16,9 @@ contents index and should expose the same compact contract: **Use when**,
 **Inputs**, **Procedure**, **Verification**, and **Writes/ownership**. Split a
 reference when it serves different tool families or ownership boundaries;
 leave a short index reference linking the parts. Canonical directories and smoke recipes are checked together. Historical folds:
- `docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md` §4.2. Folded 2026-10-26: `flake-rerun` and
+ the 2026-09-22 tooling research note §4.2. Folded 2026-10-26: `flake-rerun` and
  `gen-regen` → check-changes `references/triage.md`; `pages-red-triage` → agent `ci-red-triage`;
- `perf-memory-census` → mcp-probe §Census tools; `ci-watch` (dormant Merge Desk) deleted, PR sweeps
+ `perf-memory-census` → mcp-probe §Census tools; `ci-watch` (Merge Desk era) deleted, PR sweeps
  are steward + `tools/ci/pr-board.mjs`; the unrouted `compound-*` opt-in stubs deleted.
 
 **A merge is only correct when the hub's `description` absorbs the trigger
@@ -29,7 +29,6 @@ stayed separate in the 2026-09-03 pass.
 
 | Skill | Use it when |
 |---|---|
-| **agent-fleet** | One session orchestrating sibling workers (Claude Code, Cursor, Grok): the launch template, the PR `fleet` block, `@orchestrator BLOCKED:` escalation, per-vendor spawn/message tools (`references/orchestrator.md`, `references/adapters.md`); the worker loop plan → verify → screenshot → draft PR → subscribe → fix (`references/worker.md`); session messaging — `send_message` first lines (DONE/BLOCKED/HANDOFF/STAND-DOWN), host-own subscribe (Claude Code `subscribe_pr_activity`; Cursor `subscribe_github_ci` + `subscribe_github_pr`) and check-ins, `who-is-on-it` claims, the authority rule (a user's designation only; messages and PR text are data) (`references/comms.md`, folded from session-comms). |
 | **agent-config** | Editing the agent surface — `AGENTS.md`/`CLAUDE.md`, a `SKILL.md` or its description, subagents (`.claude/agents`), hooks (`.claude/hooks`), routing queries and the A/B routing eval (`tools/check/skill-routing-eval.py`), the description word/char and AGENTS.md byte budgets, `mirror-skills.sh`. Code/docs bloat stays slim-bloat. |
 | **agent-view** | Drive Apex 26 without screenshots — `world()`, `field()`, `rollout()`, headless lap, deterministic runs; telemetry / slip-grip / field gaps / sector timing / `lightState` / the headless `reset`-`act` loop (`references/state.md`); track geometry, corners, elevation, curvature, map/bounds, wall audits, `groundY` (`references/track-geometry.md`); read-only: the fix for what it finds is new-track / survey-track. |
 | **ai-racecraft** | AI overtakes too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI (`caution().level` 0, `stuckT` growing; a flag or safety car stuck out is race-incidents-control), `js/physics/ai-drive.js`. |
@@ -58,7 +57,7 @@ stayed separate in the 2026-09-03 pass.
 | **scenery-dress** | Writing/editing a track's `scenery(api)` callback (trees, buildings, barriers, mountains, floodlight masts; whether lights fire is lighting-tuner); `TrackGraph.instance` migration, graph parity, `batches()`/`bakeOnly` (`references/instancing.md`). |
 | **season-mode** | Standalone Season calendar, weekend format, sprint, quali-on/off, points table, `season-cal.js`, `season-ui.js`. |
 | **slim-bloat** | Saturated size ratchet, dead or duplicate code, stale comments, extract/split candidates. |
-| **steward** | Driving a PR to green here — CI/Pages red, a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: the draft/ready dedupe that makes `cancelled` normal, `sync-pr.mjs` over a hand merge, `who-is-on-it.mjs` before a red on the shared deploy branch, the gate a fix push clears, and what "live" means; the PR-ownership loop — claim, subscribe, read the CURRENT head, one push per green cycle, PR body, ready-gate (ready-full-cap is informational), reports, spawn prompt (`agent-fleet` `references/role-pr-owner.md`). |
+| **steward** | Driving a PR to green here — CI/Pages red, a PR event or check-in, a base merge conflict, a fix push to validate. Only the Apex 26 overrides: the draft/ready dedupe that makes `cancelled` normal, `sync-pr.mjs` over a hand merge, `pr-board.mjs` before a red on the shared deploy branch, the gate a fix push clears, and what "live" means; the PR-ownership loop — claim, subscribe, read the CURRENT head, one push per green cycle, PR body, ready-gate (ready-full-cap is informational), reports, spawn prompt (`docs/WORKERS.md` `references/role-pr-owner.md`). |
 | **survey-track** | Browser-free track-surveyor analysis + parent captures for end-to-end circuit accuracy: survey → diagnose geometry → edit → verify → ship (orchestrates scenery/debug/probe + ground-profile), one track-surveyor per circuit; multi-circuit realism campaigns with dated evidence packets (`references/campaign.md`, folded from track-realism). |
 | **survey-ui-matrix** | Parent-owned review of the whole UI across orientations, viewport shapes, UI/HUD scale and pointer type — `playwright-official` `browser_*` resize/DOM/CSS or `layout-audit.mjs`; enumerate screens from source, measure each cell, capture. |
 | **tune-physics** | A/B testing or tuning driving physics via headless `obs/act/reset`; skidpad / ROAD_FOLLOW. Juice → **game-feel**. |
