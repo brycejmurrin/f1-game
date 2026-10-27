@@ -79,7 +79,10 @@ test("toolingFast notes are comments, and the exported array is files only", () 
 
 test("shared benchmark policy generates wrappers only for affected Node groups and retains coverage rosters", () => {
   assert.equal(new Set(doc.isolatedFiles).size, doc.isolatedFiles.length);
-  for (const file of doc.isolatedFiles) assert.ok(TOOLING_FAST_FILES.includes(file));
+  // audit4 E1 (2026-10-26): an isolated benchmark may live in a node group alone once the floor carve moved it out of
+  // tooling-fast; it still runs alone first wherever run-node-group.mjs runs that group.
+  const nodeGroupHas = (file) => Object.values(doc.groups).some((g) => g.kind === "node" && (g.files || []).includes(file));
+  for (const file of doc.isolatedFiles) assert.ok(TOOLING_FAST_FILES.includes(file) || nodeGroupHas(file), `${file} is isolated but no node group or tooling-fast runs it`);
   const def = { kind: "node", flags: ["--test-concurrency=2"], files: ["ordinary-a", "bench-a", "ordinary-b", "bench-b"] };
   const isolated = ["bench-a", "bench-b"], extra = ["--test-name-pattern=selected contract", "--test-reporter=dot"];
   assert.deepEqual(nodeGroupPhases(def, isolated, extra), [

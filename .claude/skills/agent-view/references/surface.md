@@ -189,10 +189,8 @@ An LLM can't decide at 60 Hz — that is what `rollout({policy})` is for.
 reads as "my policy stalled" when it merely ran out of interval. One lap of Monza
 at the pace above takes ~200 s, so a lap is 2-3 chained `rollout()` calls, not
 one; carry your own distance/lap total across them and check `terminal()` between
-each. Measured with the policy above: ~10.5 km over three 120 s calls, no rescue,
-~7 % off-track. Those figures are illustrative, not reproducible to the digit —
-the recipe drives a live AI field and pins no seed, so your run will differ.
-Pin `seed(n)` before `race()` if you need to compare two runs.
+each. The recipe drives a live AI field and pins no seed, so runs differ: pin
+`seed(n)` before `race()` to compare two.
 **Reaching `finished` takes a real race.** The default is 3 laps, so ~600 s —
 five-plus chained calls. `setLap(n)` only moves the counter: `finished` is set
 by the line-crossing handler, so you must still drive across the line after it.

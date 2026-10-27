@@ -1,10 +1,10 @@
 #!/bin/bash
 # PreToolUse guard for the GitHub MCP tools that change a PR's merge state.
 #
-# AGENTS.md §Concurrent PRs (MERGE-COMMIT-ONLY, #1458; standing authority,
-# 2026-10-19): every PR lands as a merge commit, a merge or an arm needs a fresh
-# merge-gate receipt pinned to the head it merges, and a draft goes ready only
-# with a fresh ready-gate receipt. Until 2026-10-14 that was prose only; until
+# AGENTS.md §Coordination (MERGE-COMMIT-ONLY, #1458): every PR lands as a merge
+# commit; since 2026-10-27 no session merges or arms (land.yml does, and
+# merge-gate.mjs writes no receipt, so the merge door stays shut); a draft goes
+# ready only with a fresh ready-gate receipt. Until 2026-10-14 that was prose only; until
 # 2026-10-19 the receipt was a human word per session (docs/plans/
 # 2026-10-19-fleet-redesign.md §1). This hook:
 #

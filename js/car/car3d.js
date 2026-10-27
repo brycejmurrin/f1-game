@@ -202,16 +202,14 @@ const Car3D = (function () {
   const {
     styledNoseStations, noseFlankX, bodySpan, haloHoopPath,
     endplateGeom, wingOf, wingFoilOf, frontCascade, frontBakedCount, frontHalf, frontPlateGeom,
-    noseUnderAt, elemPoint, elemRecord, elemTopAt, hinged, flapSig, aeroFlapsGeom, solveFlapsGeom,
-    buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift, rearMainOf,
+    aeroFlapsGeom, solveFlapsGeom, buildFlapGeom, aeroFlapAim, wingBandGeom, numberBoard, shapeLift, rearMainOf,
     FIN_SHAPES, FIN_SHAPE_IDS, FIN, sharkFinRoot, sharkFinPanel, sharkFinBadge, finOf, finTop,
     COVER_VENT_IDS, SPINE_HEIGHT_IDS, spineRise, COVER_STACK,
     coverProfile, coverFlankX, coverSurfaceY, COVER_CROWN,
     mirrorLightAnchors, cockpitMirrorGlass,
     buildPartRecipes, aeroLevelOf, aeroStyleOf,
-    buildSharedChassis, sidepodStations, bodyAnchors, buildBodyAnchors, fitBodyDetails, addInletMouth,
-    buildSidepodBodywork, buildEngineCoverBodywork, addNoseSDuct,
-    REAR_TYRE_CROWN, REAR_WING_TOP, FW_SPAN, CAR_HALF,
+    buildSharedChassis, bodyAnchors, fitBodyDetails, addInletMouth,
+    buildSidepodBodywork, buildEngineCoverBodywork, addNoseSDuct, CAR_HALF,
   } = body;
 
   const { PH_HALO, PH_HOOP, PH_MIRROR, PH_RIM, FINISH_FIELDS, finishPass, refinish } = CarMaterials;   // finish stand-ins

@@ -1,5 +1,7 @@
 # Skilltest — guards-and-agent-kit (2026-10-01)
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — a 2026-10-01 audit report; its fixes were cut as separate PRs and its findings were not re-run.
+
 Hands-on audit of slim-bloat, `tools/check/` (excl. ai-*/defend-duel/player-dyn/physics-tune-sweep/check-physics/audio-test), `tools/lib/`, `tools/env/`, and the agent kit (hooks, agents, settings, `.cursor/rules`, `.agents/skills`, `skill-routing-eval.py`).
 
 Ship tip at start of work: `cd4ec4c6f` (later advanced; fix PRs branched from then-current tip).

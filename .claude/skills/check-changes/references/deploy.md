@@ -39,7 +39,7 @@ What changed underneath it, and why the old steps are gone:
    tokens bypass, `enforcement_level: non_admins`), so the default mode's direct push fails with GH006. GitHub
    creates the merge commit, so the PR is a real record — a local
    fast-forward auto-closes the PR instead (#67). `deploy.mjs` never arms
-   auto-merge: the fleet's orchestrator arms or merges through `merge-gate.mjs` (AGENTS.md §Concurrent PRs; `.claude/rules/fleet-core.md`)
+   auto-merge: `land.yml` arms it once the `land` label is on a ready PR and the `gate` check passes (docs/WORKERS.md).
    (never squash or rebase-merge; AGENTS.md §Cursor Cloud specific instructions).
 
 `deploy.mjs` refuses a dirty tree, loadavg ≥ 3, a live Playwright run, and any
@@ -77,7 +77,7 @@ Live `version.json`: subagent **deploy-research**, or
 or `curl`, which reaches github.io from this container. For "is MY commit
 live?" curl is the only option that works, because the answer is a `<meta
 name="apex-sha">` in the shell and the fetch tool drops every meta tag:
-`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. A gated publish is median 23 min, p90 73 (AGENTS.md §Git branch & deploy). A NEWER push to the
+`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Publish timings: AGENTS.md §Git branch & deploy and `docs/TESTING.md` §Release train (their one home). A NEWER push to the
 deploy branch CANCELS the pending run (concurrency group) —
 `gh run list --workflow pages.yml` when a build seems missing. A user reporting
 a just-fixed bug is usually on the previous build: check live version FIRST.

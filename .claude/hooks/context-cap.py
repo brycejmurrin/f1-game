@@ -8,10 +8,9 @@ input fields), but it carries `transcript_path`, and every assistant entry there
 context = input + cache read + cache write of the newest main-thread entry (the method of
 tools/ci/session-transcript.mjs --ctx and the audit's rows 1/2).
 
-Caps: APEX_CTX_SOFT / APEX_CTX_HARD (k) win; else the brief's last `STOP AT: <N>k`; else the role named in the brief's
-`You are … <role>` line, looked up in the Size stop table of
-.claude/skills/agent-fleet/references/launch-policy.md (so a cap edited there applies here); hard = soft + the
-table's `Hard cap = soft + <N>k`. A session with no brief (one Bryce opened) has no cap and gets nothing.
+Caps: APEX_CTX_SOFT / APEX_CTX_HARD (k) win; else the brief's last `STOP AT: <N>k`; hard = soft + HARD_DELTA_K.
+A session with no brief (one Bryce opened) has no cap and gets nothing. (The per-role table in the agent-fleet
+launch policy was retired 2026-10-27; a dispatcher brief states its own STOP AT, docs/WORKERS.md.)
 
   UserPromptSubmit, PostToolUse — advisory: one line, `context N k / cap C k`, once per level (soft, hard) per
                                    session (state in artifacts/ctx-cap/). Any error → no output.
@@ -26,7 +25,7 @@ import os
 import re
 import sys
 
-ROLE_DOC = os.path.join(".claude", "skills", "agent-fleet", "references", "launch-policy.md")
+HARD_DELTA_K = 50
 TAIL = 4 << 20
 HANDOFF = re.compile(r"\bhand-?off\b|\bsuccessor\b", re.I)
 SPAWNS = ("Agent", "mcp__claude-code-remote__create_session")
@@ -70,24 +69,8 @@ def brief_text(path):
     return ""
 
 
-def role_table(root):
-    """{role: soft k} and the hard-cap delta from launch-policy.md §Size stop."""
-    try:
-        with open(os.path.join(root, ROLE_DOC), encoding="utf-8") as fh:
-            text = fh.read()
-    except OSError:
-        return {}, 50
-    sec = text[text.find("Size stop"):] if "Size stop" in text else ""
-    table = {}
-    for m in re.finditer(r"^\|\s*([a-z][a-z ]*?)\s*\|\s*(\d+)\s*k\b", sec[:4000], re.M | re.I):
-        table[m.group(1).lower()] = int(m.group(2))
-    d = re.search(r"Hard cap\s*=\s*soft\s*\+\s*(\d+)\s*k", sec, re.I)
-    return table, int(d.group(1)) if d else 50
-
-
 def caps(root, brief, env):
     """(soft k, hard k, source) or None when the session has no cap."""
-    table, delta = role_table(root)
     soft, src = None, None
     if (env.get("APEX_CTX_SOFT") or "").isdigit():
         soft, src = int(env["APEX_CTX_SOFT"]), "APEX_CTX_SOFT"
@@ -96,16 +79,8 @@ def caps(root, brief, env):
         if stops:
             soft, src = int(stops[-1]), "brief STOP AT"
     if soft is None:
-        m = re.search(r"\bYou are\b([^.\n]{0,80})", brief)
-        if m:
-            said = m.group(1).lower()
-            for role in sorted(table, key=len, reverse=True):
-                if re.search(r"\b%s\b" % re.escape(role), said):
-                    soft, src = table[role], "role %s (launch-policy.md)" % role
-                    break
-    if soft is None:
         return None
-    hard = int(env["APEX_CTX_HARD"]) if (env.get("APEX_CTX_HARD") or "").isdigit() else soft + delta
+    hard = int(env["APEX_CTX_HARD"]) if (env.get("APEX_CTX_HARD") or "").isdigit() else soft + HARD_DELTA_K
     return soft, hard, src
 
 
@@ -150,13 +125,13 @@ def decide(data, root, env):
         return json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny",
             "permissionDecisionReason": ("context-cap: %s, over the hard cap %dk (%s). No new spawns: push, then "
                 "hand off to a successor (a create_session whose prompt says hand-off/successor is allowed; "
-                "launch-policy.md §Size stop)." % (line, hard, src))}})
+                "docs/WORKERS.md §The contract)." % (line, hard, src))}})
     if k < soft:
         return ""
     level = "hard" if k >= hard else "soft"
     if not once(root, data.get("session_id"), level):
         return ""
-    msg = ("context-cap: %s (%s; hard %dk). %s (launch-policy.md §Size stop)." % (line, src, hard,
+    msg = ("context-cap: %s (%s; hard %dk). %s (docs/WORKERS.md §The contract)." % (line, src, hard,
            "Over the hard cap: push and hand off now; new Agent/create_session spawns are refused" if level == "hard"
            else "Over the soft cap: finish the current unit, push, hand off"))
     if event == "UserPromptSubmit":

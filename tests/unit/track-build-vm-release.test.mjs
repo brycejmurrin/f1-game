@@ -209,7 +209,9 @@ const STRIP = {
   // → #3368 Fairmont-cliff plane crowns past orbit ring (2026-10-26): gap 9–11
   //   → 58–68; one plane onTrack-suppressed. Emission 274207 → 274147,
   //   strip-after 255274 → 255214.
-  monaco: { before: 274147, after: 255214 },
+  // → #3280 cantilever gantries keep one mast (2026-10-26): the two Monaco
+  //   spans lose their second leg pair. Emission 274147 → 274099, strip-after 255214 → 255176.
+  monaco: { before: 274099, after: 255176 },
   // ship 342395/315326 → tip +156 emitted (tyre footings / LED legs / etc.)
   // → fix-top-counts 342563/315709 (mist wedges lifted off the ditch bank,
   // banking tiers abut, moss band out of the lower tier; ground-audit)

@@ -6,5 +6,6 @@
 {"query": "I need to merge my branch into the deploy branch claude/f1-game-project-26h3ng. Run the same gate the deploy runs without actually pushing anything, and tell me which rungs of the pre-push check I've skipped so far.", "expect": "check-changes"},
 {"query": "The Pages deploy is red after my push and I need to know exactly what to do next: check whether the base was already red, see if another session is already fixing it, and get my PR back to green, handling the cancelled draft/ready runs.", "expect": "steward"},
 {"query": "After I edit sw.js and js/ files the offline PWA still serves old assets. Explain how the service worker cache gets invalidated, whether version.json needs a bump, and why a Playwright run failed when version.json changed mid-run.", "expect": "pwa-cache-service-worker"},
-{"query": "I added a new hill to js/circuits/spa.js and want to verify the track edit: check the elevation profile, corner metadata and bridge crossings are right, and then walk me through editing the geometry properly.", "expect": "new-track"}
+{"query": "I added a new hill to js/circuits/spa.js and want to verify the track edit: check the elevation profile, corner metadata and bridge crossings are right, and then walk me through editing the geometry properly.", "expect": "new-track"},
+{"query": "push this to the deploy branch and open the PR", "expect": "ship"}
 ]

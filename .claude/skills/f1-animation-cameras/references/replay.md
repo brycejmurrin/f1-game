@@ -1,6 +1,6 @@
 # Replay camera lifecycle
 
-Folded from the retired `replay-camera` skill (2026-10-14). Load this when
+Load this when
 WATCH/HIGHLIGHTS or replay camera motion snaps, keeps an old follow anchor or
 reframes after a seek, follow change, exit or re-entry. WATCH loading the wrong
 driver or race is **data-hub**.
@@ -20,6 +20,8 @@ cannot establish anchor ownership across those transitions.
    on a missing `ffmpeg-<revision>`, install it first
    ([prerequisites](replay-diagnosis.md)). Review every phase's frame/camera
    anchors and pixels, including exit and reentry. Preserve failure receipts.
+   Then a second run at Bryce's phone shape (`--viewport 844x390`): WATCH is
+   used on the phone.
 
 Where the anchor lives, fields to diff, non-Baku fixtures: [diagnosis](replay-diagnosis.md).
 See [the fixture and evidence contract](replay-workflow.md). Delegate only

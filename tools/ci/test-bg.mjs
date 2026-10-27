@@ -22,6 +22,11 @@
  *                                                   #   loadavg < 3 between groups; exit 3 if it never settles)
  *   node tools/ci/test-bg.mjs --stop                # kill everything still running
  *   node tools/ci/test-bg.mjs --stop --sweep        # ...and hunt orphans whose supervisor is already dead
+ *   node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # ONE spec: `npm test -- <file>` under the same
+ *                                                   #   one-run lock, loadavg gate and log (artifacts/logs/spec-x.log)
+ *   --workers <n>   Playwright workers per group (default: env WORKERS, else 1 on <= 4 cores, 2 above)
+ *   --force | --last-failed | --keep-going | --parallel   (see the sections below)
+ *   An unknown flag prints this usage and exits 2 (tools/lib/cli-args.mjs strictFlags).
  *
  * Default is SEQUENTIAL (one group at a time). `--parallel` restores the old
  * core-capped concurrent start. AGENTS.md: ONE Playwright process, ONE browser
@@ -43,6 +48,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { changedPaths } from "../lib/changed-files.mjs";
+import { strictFlags } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 // Same deploy tip pick-tests uses — docs-only waste is vs that base, not main.
@@ -58,7 +64,7 @@ const STATEFILE = path.join(LOGDIR, "test-bg.json");
 // One worker on a 4-core box: two SwiftShader workers push loadavg to 6-8 and
 // every "failure" is then a timeout (tiny.log 2026-09-01: 3 false reds, all
 // PASS solo). Bigger boxes keep 2.
-const WORKERS = process.env.WORKERS || (os.cpus().length <= 4 ? "1" : "2");
+let WORKERS = process.env.WORKERS || (os.cpus().length <= 4 ? "1" : "2");
 
 // THE CAP EXISTS BECAUSE OVERSUBSCRIPTION DOES NOT LOOK LIKE OVERSUBSCRIPTION.
 // Every Playwright worker drives a SwiftShader Chromium, so the real browser
@@ -71,7 +77,7 @@ const WORKERS = process.env.WORKERS || (os.cpus().length <= 4 ? "1" : "2");
 // Default concurrent cap is 1 (sequential). --parallel raises it to cores/WORKERS.
 // --force overrides the cap entirely for a box that really is bigger.
 const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
-const PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2)));
+let PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2)));
 
 const readState = () => {
   try { return JSON.parse(fs.readFileSync(STATEFILE, "utf8")); } catch (_) { return { runs: [] }; }
@@ -230,12 +236,28 @@ function waitDeadlineFromMin(waitTimeoutMin) {
   return waitTimeoutMin > 0 ? Date.now() + waitTimeoutMin * 60_000 : Infinity;
 }
 
-/** Parse CLI flags shared by --wait and group starts. `--timeout` is minutes (AGENTS.md). */
+export const KNOWN_FLAGS = ["--timeout", "--workers", "--spec", "--force", "--last-failed", "--parallel", "--keep-going",
+  "--sweep", "--status", "--stop", "--tail", "--wait", "--help"];
+/** One spec runs as a pseudo-group `spec-<basename>` so it shares the lock, the registry and the log layout. */
+export const specGroupName = (file) => "spec-" + path.basename(String(file)).replace(/\.spec\.[cm]?js$/, "").replace(/[^a-z0-9._-]/gi, "_");
+/** Parse CLI flags shared by --wait and group starts. `--timeout` is minutes (AGENTS.md).
+ *  Strict: an unknown `--flag` throws (main prints the usage and exits 2). */
 export function parseTestBgArgv(argv) {
   let waitTimeoutMin = 0;
+  let workers = null;
   const groups = [];
+  const specs = [];
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
+    const kv = /^(--workers|--spec)(?:=(.*))?$/.exec(a);
+    if (kv) {
+      const v = kv[2] !== undefined ? kv[2] : argv[++i];
+      if (v == null || v === "" || v.startsWith("-")) throw new Error(`${kv[1]} requires a value`);
+      if (kv[1] === "--spec") specs.push(v);
+      else if (!(Number(v) >= 1 && Number.isInteger(Number(v)))) throw new Error("--workers requires a positive integer");
+      else workers = String(Number(v));
+      continue;
+    }
     if (a === "--timeout") {
       const v = argv[++i];
       if (v == null || v.startsWith("-")) throw new Error("--timeout requires a value (minutes)");
@@ -249,12 +271,17 @@ export function parseTestBgArgv(argv) {
       if (!Number.isFinite(waitTimeoutMin) || waitTimeoutMin <= 0) throw new Error("--timeout requires a positive number of minutes");
       continue;
     }
-    if (a.startsWith("--")) continue;
+    if (a.startsWith("--")) {
+      if (!KNOWN_FLAGS.includes(a)) throw new Error(`unknown flag ${a}\n  accepts: ${KNOWN_FLAGS.join(" ")}`);
+      continue;
+    }
     groups.push(a);
   }
   return {
     waitTimeoutMin,
-    groups,
+    workers,
+    specs,
+    groups: [...groups, ...specs.map(specGroupName)],
     force: argv.includes("--force"),
     lastFailed: argv.includes("--last-failed"),
     parallel: argv.includes("--parallel"),
@@ -440,7 +467,8 @@ function spawnGroup(group, pkg, { lastFailed = false } = {}) {
   // --workers is a Playwright flag. A `node --test` group would take it as a
   // FILE PATH, so only the browser groups get it.
   const isBrowser = /run-playwright/.test(pkg.scripts[`test:${group}`]);
-  const forward = isBrowser ? ["--", `--workers=${WORKERS}`, ...(lastRun ? ["--last-failed"] : [])] : [];
+  const spec = SPEC_RUNS[group];
+  const forward = isBrowser ? ["--", ...(spec ? [JSON.stringify(spec)] : []), `--workers=${WORKERS}`, ...(lastRun ? ["--last-failed"] : [])] : [];
   // detached + ignored stdin: the run must outlive this process and must
   // never block waiting for a terminal that is no longer attached.
   // The `= bg exit N` trailer is the terminal line for groups that print
@@ -448,7 +476,7 @@ function spawnGroup(group, pkg, { lastFailed = false } = {}) {
   // outcome() above for why a log without one reads as a dead run.
   const cmd =
     `start_s=$(date +%s); ` +
-    `npm run --silent test:${group}${forward.length ? " " + forward.join(" ") : ""}; ` +
+    `npm ${spec ? "test --silent" : `run --silent test:${group}`}${forward.length ? " " + forward.join(" ") : ""}; ` +
     `ec=$?; end_s=$(date +%s); ` +
     `echo "[test-bg] END group=${group} duration=$((end_s-start_s))s exit=$ec loadavg=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo '?')"; ` +
     `echo "= bg exit $ec"`;
@@ -520,8 +548,17 @@ export function changedForWaste({ root = ROOT } = {}) {
   }
 }
 
-function start(groups, { force = false, parallel = false, lastFailed = false } = {}) {
+/** `--spec` pseudo-groups: name → spec file. Filled by main from parseTestBgArgv. */
+const SPEC_RUNS = {};
+/** package.json, plus a synthetic `test:spec-<name>` (= `npm test`) per --spec so start/waitChain treat it as a group. */
+function loadPkg() {
   const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  for (const name of Object.keys(SPEC_RUNS)) pkg.scripts[`test:${name}`] = pkg.scripts.test;
+  return pkg;
+}
+
+function start(groups, { force = false, parallel = false, lastFailed = false } = {}) {
+  const pkg = loadPkg();
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
   if (unknown.length) {
     console.error(`[test-bg] no such group: ${unknown.join(", ")}`);
@@ -661,7 +698,7 @@ async function settleLoad(maxMs, pollMs = 15_000) {
 async function waitChain(groups, { force = false, waitTimeoutMin = 0 } = {}) {
   const deadline = waitDeadlineFromMin(waitTimeoutMin);
   const remainingMs = () => (deadline === Infinity ? CHAIN_SETTLE_MS : Math.max(0, deadline - Date.now()));
-  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"));
+  const pkg = loadPkg();
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
   if (unknown.length) {
     console.error(`[test-bg] no such group: ${unknown.join(", ")}`);
@@ -702,12 +739,22 @@ async function waitChain(groups, { force = false, waitTimeoutMin = 0 } = {}) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 const argv = isMain ? process.argv.slice(2) : [];
+export const USAGE = `usage: node tools/ci/test-bg.mjs <group> [group...] [--parallel] [--force] [--last-failed] [--workers <n>]
+       node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js [--force] [--workers <n>]   # one spec, same lock + log
+       node tools/ci/test-bg.mjs --wait [--timeout <min>] [group...] [--keep-going] [--force]   # exit 1 red, 124 timeout
+       node tools/ci/test-bg.mjs --status | --stop [--sweep] | --tail <group>`;
 let parsed;
 if (isMain) {
+  strictFlags(argv, KNOWN_FLAGS, USAGE);
   try { parsed = parseTestBgArgv(argv); } catch (e) {
     console.error(`[test-bg] ${e.message}`);
     process.exit(2);
   }
+  for (const f of parsed.specs) {
+    if (!fs.existsSync(path.resolve(ROOT, f))) { console.error(`[test-bg] --spec: no such file ${f}`); process.exit(2); }
+    SPEC_RUNS[specGroupName(f)] = f;
+  }
+  if (parsed.workers) { WORKERS = parsed.workers; PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2))); }
 }
 const { waitTimeoutMin, groups, force, lastFailed, parallel } = parsed || {};
 
@@ -722,8 +769,6 @@ else if (argv.includes("--tail")) {
   if (groups.length) await waitChain(groups, { force, waitTimeoutMin });
   else await waitForRunning({ waitTimeoutMin });
 } else if (!groups.length) {
-  console.error("usage: node tools/ci/test-bg.mjs <group> [group...] [--parallel] [--force] [--last-failed]");
-  console.error("       node tools/ci/test-bg.mjs --wait [group...] [--keep-going] [--force]");
-  console.error("       node tools/ci/test-bg.mjs --status | --stop | --tail <group>");
+  console.error(USAGE);
   process.exit(2);
 } else start(groups, { force, parallel, lastFailed });

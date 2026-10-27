@@ -3,7 +3,7 @@
 Shared by github-mcp-guard.sh (the GitHub MCP tools) and bash-guard.sh (the
 same actions through `gh pr merge`, `gh pr ready` and `gh api`, via
 shellparse.gh_issues), so the two doors refuse with the same words
-(AGENTS.md §Concurrent PRs, MERGE-COMMIT-ONLY, #1458).
+(AGENTS.md §Coordination, MERGE-COMMIT-ONLY, #1458).
 
 Since 2026-10-19 (docs/plans/2026-10-19-fleet-redesign.md §2, "gate, don't
 grant") a merge or an arm needs a fresh `artifacts/merge-gate/<pr>.json`
@@ -33,16 +33,16 @@ import subprocess
 import time
 
 GATE = "run `node tools/ci/ready-gate.mjs --pr <n>` (must exit 0 on the tip) first"
-DENY_METHOD = ("MERGE-COMMIT-ONLY (AGENTS.md §Concurrent PRs): every PR lands as a merge commit; "
+DENY_METHOD = ("MERGE-COMMIT-ONLY (AGENTS.md §Coordination): every PR lands as a merge commit; "
                "use the merge method, never squash or rebase.")
-DENY_GATE_MERGE = ("A merge needs a fresh merge-gate receipt (AGENTS.md §Concurrent PRs, standing authority): "
-                   "`node tools/ci/merge-gate.mjs --pr <n>` must exit 0 (open, ready-gate 0, CI green on the head, no MERGE-HOLD, "
-                   "gen:check on a local merge onto the current tip, game pacing from the bus), then merge with merge_method "
-                   "merge and expectedHeadSha pinned to the gated head.")
+DENY_GATE_MERGE = ("No session merges or arms (AGENTS.md §Coordination, docs/WORKERS.md §The contract): flip the PR "
+                   "ready and add the `land` label; land.yml runs `merge-gate.mjs --check` as the `gate` check (no `hold` "
+                   "label, Plan closed, CI green on the head, gen:check and ratchets on the merge result, base distance) "
+                   "and arms auto-merge with the merge method. The gate writes no receipt, so this door stays shut.")
 DENY_GATE_READY = ("A draft→ready flip needs a fresh ready-gate receipt: `node tools/ci/ready-gate.mjs --pr <n>` must exit 0 "
                    "on the tip (Structural guards green, Plan closed, memory marker) — it starts the full CI tier.")
 ASK_MERGE = ("This gh call merges or arms outside the receipt check (a GraphQL or REST merge by id). Before confirming, " + GATE +
-             "; never a draft, DIRTY/CONFLICTING or MERGE-HOLD PR.")
+             "; never a draft, DIRTY/CONFLICTING or `hold`-labelled PR.")
 ASK_READY = "Marking a draft ready starts the full CI tier. Before the flip, " + GATE + "."
 ASK_DESK_METHOD = ("Arm auto-merge with the MERGE method named explicitly: an omitted method uses "
                    "the repository default, which may be squash. Pass mergeMethod: MERGE.")
@@ -52,11 +52,11 @@ DENY_REF = ("writes a git ref through the API — shared safety ban 6 (Transcrip
             "with `gh api -X DELETE …/git/refs/heads/…` to get around the push hook). A branch moves only by `git push` "
             "to your own cursor/<topic>-<hash> branch (never forced, never deleted) and lands only through a PR; ask "
             "your orchestrator, or Bryce, to delete a branch.")
-DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Concurrent PRs, 2026-10-15): a queued run holds no slot, so a "
+DENY_CANCEL = ("NEVER CANCEL AN ACTIONS RUN (AGENTS.md §Coordination, 2026-10-15): a queued run holds no slot, so a "
                "cancel only throws away its queue position and the branch owner pushes a retrigger commit — 306 of 401 PR "
                "runs died that way on 2026-10-15. Your own superseded run is replaced by your next push; a closed PR's runs "
                "are cancelled by the close. APEX_RUN_CANCEL_OK=1 only when the user asked for this cancel.")
-ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Concurrent PRs). A re-run "
+ASK_RERUN = ("Re-run a failed job at most once, and only for a timeout or infra error (AGENTS.md §Coordination). A re-run "
              "of a SUPERSEDED run joins the branch's ci-<head.ref> group and cancels the live run; prefer "
              "`node tools/ci/ci-rerun.mjs`. Confirm by hand.")
 
@@ -123,20 +123,30 @@ def gate_files_check(root, receipt):
     rec = (receipt or {}).get("gateFiles") if isinstance(receipt, dict) else None
     if not isinstance(rec, dict):
         return False, "the receipt records no gate-file hashes (written by an older gate): re-run the gate"
+    # pass 4 (verify #2 / tools T4): the gate's verdict depends on everything it imports (pr-board's hasMergeHold
+    # among 18 files), so every file the receipt records is verified, not only the three fixed names. A gate from
+    # audit4 A1 also lists its static import closure as `gateClosure`: every file in it must carry a hash.
+    closure = receipt.get("gateClosure")
+    closure = [k for k in closure if isinstance(k, str)] if isinstance(closure, (list, tuple)) else []
+    missing = [k for k in closure if k not in rec]
+    if missing:
+        return False, "the receipt lists %s in the gate's import closure without a hash: re-run the gate" % missing[0]
+    files = tuple(sorted(set(GATE_FILES) | set(closure)
+                         | {k for k in rec if isinstance(k, str) and k.endswith((".mjs", ".js", ".cjs"))}))
     roots = [root]
     gr = receipt.get("gateRoot")
     if isinstance(gr, str) and gr and os.path.realpath(gr) != os.path.realpath(root) and os.path.isdir(gr):
         roots.append(gr)
     for r in roots:
-        for f in GATE_FILES:
+        for f in files:
             h = _sha256(os.path.join(r, f))
             if not h:
                 return False, "%s is missing in %s" % (f, r)
             if rec.get(f) != h:
                 return False, "%s in %s is not the file that wrote this receipt: re-run the gate from this checkout" % (f, r)
-        if not _git_ok(r, "ls-files", "--error-unmatch", "--", *GATE_FILES):
+        if not _git_ok(r, "ls-files", "--error-unmatch", "--", *files):
             return False, "the gate files are not tracked in %s" % r
-        if not _git_ok(r, "diff", "--quiet", "HEAD", "--", *GATE_FILES):
+        if not _git_ok(r, "diff", "--quiet", "HEAD", "--", *files):
             return False, ("the gate files in %s differ from HEAD (an uncommitted gate edit, the 2026-10-20 O23 incident): "
                            "commit or revert, then re-run the gate" % r)
     return True, ""
@@ -168,17 +178,22 @@ def receipt_check(root, kind, pr, head=None, now=None, verify_files=False):
     if at is None:
         return False, "the %s receipt for #%d has no timestamp; re-run the gate" % (tool, n)
     age_min = ((now if now is not None else time.time()) - at) / 60.0
+    if age_min < -1:   # pass-4 red-team R3: a receipt dated in the future never expired
+        return False, "the %s receipt for #%d is dated %d min in the future; re-run the gate" % (tool, n, round(-age_min))
     if age_min > RECEIPT_MAX_MIN:
         return False, "the %s receipt for #%d is %d min old (max %d); re-run the gate on the current head" % (
             tool, n, round(age_min), RECEIPT_MAX_MIN)
-    if kind == "merge":
-        a = str(head or "").strip().lower()
-        b = str(r.get("head") or "").strip().lower()
-        if not a:
-            return False, ("pin expectedHeadSha to the gated head %s (role-merge-holder.md: a merge is pinned to the sha "
-                           "the gate passed)" % b[:12])
-        if not (a.startswith(b) or b.startswith(a)) or min(len(a), len(b)) < 7:
-            return False, "expectedHeadSha %s is not the gated head %s; re-run merge-gate on the head you merge" % (a[:12], b[:12])
+    a = str(head or "").strip().lower()
+    b = str(r.get("head") or "").strip().lower()
+    if kind == "merge" and not a:
+        return False, ("pin expectedHeadSha (gh: --match-head-commit) to the gated head %s (a merge "
+                       "is pinned to the sha the gate passed)" % b[:12])
+    # A merge pin must be the gated head; a ready flip whose caller knows the PR's live head (github-mcp-guard
+    # reads it) is held to the same rule (audit4 A1 G7: the gate passed one head, the flip lands another).
+    if a and (not (a.startswith(b) or b.startswith(a)) or min(len(a), len(b)) < 7):
+        return False, "%s %s is not the gated head %s; re-run %s on the head you %s" % (
+            "expectedHeadSha" if kind == "merge" else "the PR head", a[:12], b[:12], tool,
+            "merge" if kind == "merge" else "flip")
     if verify_files:
         ok, why = gate_files_check(root, r)
         if not ok:

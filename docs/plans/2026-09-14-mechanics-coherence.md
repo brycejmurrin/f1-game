@@ -1,5 +1,7 @@
 # Mechanics coherence implementation
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — its implemented items live in js/physics/collide.js, contact-geometry.js and wall-clamp.js; the survey's hypotheses stay hypotheses.
+
 Baseline: `b8eb25af8f984396128f0636c0fe9611eabb3f36` on
 `claude/f1-game-project-26h3ng`. Work branch: `claude/mechanics-coherence`.
 

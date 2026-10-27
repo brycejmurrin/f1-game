@@ -1,6 +1,6 @@
 ---
 name: input-controls
-description: "Use when steering, gamepad (stick dead zone, saturation, drift, calibrate centre, axis map), touch steer, tilt/gyro, keyboard leaks into menus, on-screen steer buttons, driving-help/racing-line assists, GRIP STEER, or input.js / steer-tuning.js change. Handling forces (understeer/grip/pace) → tune-physics; menu Escape/focus → ui-menu-a11y."
+description: "Use when steering, touch steer or stuck on-screen buttons on iPhone, the phone controller, gamepad (stick dead zone, saturation, drift, calibrate centre, axis map), tilt/gyro, keyboard leaks into menus, driving-help/racing-line assists, the GRIP STEER slider, or input.js / steer-tuning.js change. Handling forces (understeer/grip/pace) → tune-physics; menu Escape/focus → ui-menu-a11y."
 ---
 
 # Driving input — devices, not forces
@@ -12,6 +12,16 @@ The STEER LOCK / LINEARITY / SPEED STEER sliders (`maxSlip` / `expo` / `speedRef
 are owned HERE as player settings; **tune-physics** owns them only as `setPhysics`
 A/B knobs. Phone pairing/connection (QR, room code) → **multiplayer-debug**; the
 roll once paired stays here.
+
+## Phone first (Bryce: iPhone, 844×390 landscape, touch)
+
+Reproduce at that profile before any desk device. Touch steering is on-screen
+buttons (`hold-buttons.js`), canvas drag, or tilt; stuck buttons and drag →
+`references/menu-leak-touch.md`. Specs: `touch-buttons`, `touch-steer`,
+`touch-pedals`, `tilt-pipeline`. iOS user activation comes only from
+`touchend` / `pointerup` / `click` (not a touch `pointerdown` or `touchstart`),
+so a gyro or audio request tied to `input.js`'s pointerdown handlers fails on
+the first tap.
 
 ## Source priority (`Input.steer()`)
 
@@ -38,7 +48,9 @@ together resolve last-key-wins.
 | `steer-tuning.js` | `applySteerTuning`, `STEER_SCHEMA` migrations; pad dead zone / saturation / curve |
 | `pad-menu.js` | Menu stick → arrow keys (`PAD_NAV_DEADZONE`) |
 | `tilt-roll.js` | Tilt filter + `steerToTilt` / recalibrate shared with `controller.html` |
-| `phone-pad.js` | VS FRIEND phone samples → `remoteSample` |
+| `phone-pad.js` | PHONE AS CONTROLLER: phone samples → `remoteSample`; the send path caps at `MIN_SAMPLE_GAP_MS` (~66 Hz) and forces a send only on edges; pins `phone-pad.test.mjs`, `phone-touch-surface.test.mjs`, `phone-pad-netplay-vm.test.mjs` |
+| `controller.html` (repo root) | the phone's own page: tilt via `tilt-roll.js`, steering strip, CONNECT tap (gyro permission) |
+| `controller-profiles.js` | `ControllerProfiles`: per-device pad maps (`padProfiles`, bounded); pin `controller-profiles.test.mjs` |
 | `hold-buttons.js` | On-screen hold/toggle gas and look-back when enabled |
 | `haptics.js` | `Input.vibrate` / `rumble` throttles |
 
@@ -54,7 +66,7 @@ Settings UI: `js/ui/key-binds.js`, `js/ui/settings-export.js` sliders (`pm-*` id
 | `raceLine` (slider id `pm-line`) | pull to line / push wide; 0 = off. `G.raceLineAssist = raceLine / 5` |
 | `adaptiveButtons` | digital-steer rate half of SPEED STEER (keys + on-screen arrows). v1 = OFF, **unset default 5**; migrated since STEER_SCHEMA step 4. The drag range follows the same mix when DRAG AT SPEED (`touchDragSpeed`, default 10) is above OFF. Not the stick or tilt |
 | `brakeCue` | pulse-rate brake warning. v1 = OFF, unset default 1. Never writes throttle/brake |
-| `gripSteer` (slider `pm-gripsteer`) | GRIP STEER: notch 1 = OFF; own-state steering cap at the front's peak slip, `js/physics/grip-steer.js`. Its maths and A/B are **tune-physics** |
+| `gripSteer` (slider `pm-gripsteer`) | GRIP STEER: notch 1 = OFF. This skill owns the slider, its default and migration only; the cap maths, A/B and which lock it receives (the shaped `og.shaped`, so expo/maxSlip reach it) are **tune-physics** |
 | `STEER_SCHEMA` | per-version migration ladder in `steer-tuning.js` — do not flatten to one gate |
 
 Changing an assist **default** does not reach existing players
@@ -77,19 +89,13 @@ Player knobs, all in `js/input/steer-tuning.js` (`applySteerTuning` + `wireTune`
 - Pins: node `tests/unit/ui-improve-pass.test.mjs` "stick dead zone and saturation are adjustable",
   `tests/unit/key-binds.test.mjs` (calibrate persists, full lock both sides); browser
   `tests/specs/gamepad.spec.js` "centre dead zone", `sliders.spec.js`.
-- Drifting stick triage (read `inputState()`, wheel vs pad, per-pad rest) → `references/pad-drift.md`.
-- No added lag: `padAxisShape` (`input.js`) is STATELESS (rest → dead zone →
-  saturation, no filter), so a drift fix belongs there or in `padRest`, never a
-  smoothing/slew stage; the response curve is `analogShape` (same file). Full lock:
-  each side is divided by its own travel (`1 ± rest`, `|rest| ≤ 0.5` so neither
-  divisor is below 0.5) and `span = max(0.05, 1 − dz − sat)` — a worn pad that
-  tops out short needs SATURATION, not a bigger rest.
+- Drifting stick triage, the stateless `padAxisShape` and full-lock maths → `references/pad-drift.md`.
 
 ## Sharp edges
 
 - Gamepad has **no change events** — `Input.poll()` once per frame.
-- iOS tilt: `requestGyro()` only from a user gesture (the start tap); the
-  phone page asks inside its CONNECT tap for the same reason.
+- iOS tilt: `requestGyro()` only from an activating gesture (the start tap's
+  `touchend`/`click`, §Phone first); the phone page asks inside its CONNECT tap.
 - A phone cannot pair over Bluetooth from a web page (no peripheral/HID role
   in any browser): PHONE AS CONTROLLER rides the VS FRIEND wire — room code
   on Nostr, WebRTC DataChannel — see `docs/MULTIPLAYER.md` §Phone as controller.
@@ -99,8 +105,10 @@ Player knobs, all in `js/input/steer-tuning.js` (`applySteerTuning` + `wireTune`
   (`docs/research/PLATFORM-INPUT-NOTES.md`).
 
 ```sh
-npm test -- tests/specs/tilt-pipeline.spec.js   # prefer ONE spec (touch-buttons/touch-steer/touch-pedals/gamepad/steering), background
-node tools/ci/test-bg.mjs input   # whole browser group test:input (also camera specs); background it (AGENTS rule 4)
+npm test -- tests/specs/tilt-pipeline.spec.js   # ONE spec (touch-buttons/touch-steer/touch-pedals/gamepad/steering); session only, background
+# a subagent runs the node pins above and reports the spec unverified. The whole group
+# (test:input, camera specs too) only when one spec is not enough: remote-group.mjs input, or
+# node tools/ci/test-bg.mjs input (background, when Actions is jammed; AGENTS.md rule 4)
 ```
 
 ## Load on demand

@@ -16,7 +16,7 @@ Use when launching a Cursor cloud agent for the Apex (f1-game) repo.
 - Topic heads: `cursor/<topic>-<hash>` (Cursor often supplies the suffix). No new `claude/<topic>` feature branches; legacy `claude/<topic>` PRs stay mid-flight.
 - Model: `default` (Auto) **only**. Never invent other model ids. Do **not** fall back to an alternate model if Auto is blocked — tell the user and stop.
 - Never clone the repo onto the box; cloud agent does coding.
-- Launch caps, quota checks, and role permissions: use the current `.claude/skills/agent-fleet/references/launch-policy.md`. `queue-depth.mjs` is informational and returns exit 0 for either queue verdict; its output does not block a launch or push.
+- Launch caps, quota checks, and role permissions: use `docs/WORKERS.md` §The dispatcher and `tools/ci/dispatch.json` (the hourly dispatcher launches; caps and quota live there). `queue-depth.mjs` is informational and returns exit 0 for either queue verdict; its output does not block a launch or push.
 - Ship-checkpoint freeze: no sync **pushes** or **merges** while freeze is on.
 
 ## Prompt template (fill gaps)

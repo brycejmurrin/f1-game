@@ -136,8 +136,8 @@ def check(where, remote, branch):
     more = f"  … and {len(found) - 5} more\n" if len(found) > 5 else ""
     return (f"BLOCKED: {branch} gained {len(found)} commit(s) on the remote from another author since this "
             f"checkout last pushed it (shared safety ban 3, the #3517 foreign pusher):\n{lines}{more}"
-            "Another session or a person is pushing to your branch. Do not push over it: stand down and tell your "
-            "orchestrator (skill agent-fleet, worker.md: a sibling that pushed to your PR branch is live). When the "
+            "Another session or a person is pushing to your branch. Do not push over it: stand down and say so in one PR "
+            "comment (docs/WORKERS.md: comments are the only inter-agent message; a takeover worker may own it now). When the "
             "branch is confirmed yours again, fetch and merge it, then push once with APEX_FOREIGN_PUSH_OK=1; that "
             "push moves the baseline.\n")
 

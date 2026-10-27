@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # PreToolUse guard on mcp__claude-code-remote__create_session: the quota gate.
 #
-# orchestrator.md §Pre-launch quota check says "at `allowed_warning` or worse,
+# the retired orchestrator.md §Pre-launch quota check said "at `allowed_warning` or worse,
 # launch nothing", and OrchA 33 launched 7 sessions into a 75 % weekly quota
 # anyway (docs/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7). Bryce,
 # 2026-10-25 ~21:00 PT, "Do all": the gate is a hook with a typed-override path.
@@ -18,11 +18,11 @@
 # hook never stalls a fleet. Output is the documented PreToolUse JSON
 # (hookSpecificOutput.permissionDecision, https://code.claude.com/docs/en/hooks,
 # read 2026-10-26). Tests: tests/unit/launch-gate.test.mjs.
-import calendar, json, os, sys, time
+import calendar, json, os, re, sys, time
 
 MAX_AGE_S = 120  # tools/ci/launch-gate.mjs MAX_AGE_S
 FIX = ('run `node tools/ci/launch-gate.mjs <saved get_session result>` (exit 0) first; a launch Bryce typed while '
-       'the quota warns: add `--override "<his words, quoted>"` (audit 2026-10-26 #5, orchestrator.md §Pre-launch quota check)')
+       'the quota warns: add `--override "<his words, quoted>"` (audit 2026-10-26 #5; docs/WORKERS.md §The dispatcher: launch only when quota allows)')
 
 
 def deny(why):
@@ -39,6 +39,10 @@ def main():
     if not isinstance(d, dict) or not str(d.get("tool_name") or "").endswith("create_session"):
         return
     root = os.environ.get("CLAUDE_PROJECT_DIR") or d.get("cwd") or os.getcwd()
+    ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+    # pass-4 red-team R10: a session whose outcome_branch is the deploy branch pushes it directly.
+    if str(ti.get("outcome_branch") or "").strip() in ("claude/f1-game-project-26h3ng", "refs/heads/claude/f1-game-project-26h3ng"):
+        return deny("outcome_branch is the deploy branch; work lands only through a PR (AGENTS.md §Git branch & deploy)")
     f = os.path.join(root, "artifacts", "launch-gate", "receipt.json")
     try:
         with open(f, encoding="utf8") as fh:
@@ -49,6 +53,11 @@ def main():
         return deny("the launch-gate receipt is unreadable")
     if not isinstance(r, dict) or not r.get("ok"):
         return deny("the last launch-gate run refused (%s)" % (r.get("why") if isinstance(r, dict) else "bad receipt"))
+    # pass 4 (verify #1 / tx T2): a two-field `{"ok":true,"at":…}` file passed. The receipt must say what it gated:
+    # kind "launch" and the sha256 of the saved get_session page it read (written by tools/ci/launch-gate.mjs).
+    page = r.get("page") if isinstance(r.get("page"), dict) else {}
+    if r.get("kind") != "launch" or not re.fullmatch(r"[0-9a-f]{64}", str(page.get("sha256") or "")):
+        return deny("the launch-gate receipt names no gated page (kind/page.sha256): re-run `node tools/ci/launch-gate.mjs <saved get_session>`")
     try:
         at = calendar.timegm(time.strptime(str(r.get("at"))[:19], "%Y-%m-%dT%H:%M:%S"))
     except Exception:

@@ -2,7 +2,7 @@
 
 **Use when:** this recipe family is the narrowest match for the question.
 
-**Verification:** record the exact command, target (local or deployed), and returned evidence.
+**Verification:** record the exact command, the local target, and returned evidence (the deployed site → agent `deploy-research`).
 
 **Writes/ownership:** read-only; the parent owns browser startup and serialized MCP use.
 

@@ -4,7 +4,8 @@
     "Only this known test may pass on retry. Other tests in the spec remain blocking.",
     "owner is the accountable GitHub user; evidence links the observed failed run.",
     "expires is inclusive UTC; after this date flakes block again. Review before expiry using the measured exit criteria; never extend automatically.",
-    "Missing or invalid policy fields fail closed. The spec still gets an isolated retrying shard while its exact-test policy is active."
+    "Missing or invalid policy fields fail closed. The spec still gets an isolated retrying shard while its exact-test policy is active.",
+    "signature (optional; required on rows since 2026-10-26): a case-sensitive regex source starting with ^, matched against the retried attempt's first error line with ANSI codes and a leading 'Error: ' removed (flaky-policy.mjs errorLine). The row then exempts only that failure; the same test failing with any other message still blocks. Several rows may name one spec, one per exact title."
   ],
   "quarantine": [
     {
@@ -46,6 +47,83 @@
       "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39572745503/job/119136972411",
       "expires": "2026-11-04",
       "review": "By 2026-11-04, A/B apex26.tlxRoadSplit=0 vs 1 on gpu-census macOS to see whether #3396's road split changes the image-grade frame; fix the cause and remove this row once the exact test passes without retry on three macOS real-GPU runs. No automatic extension; a new deadline needs fresh failed-run evidence."
+    },
+    {
+      "spec": "tests/specs/hud-layout.spec.js",
+      "since": "2026-10-26",
+      "owner": "brycejmurrin",
+      "why": "Red on four Pages trains 2026-10-19/20 after green PR runs (ci-7d C4: train jobs 118093373414, 118349107252, 118404125100, 118415890248), plus three PR flakes; the gear-box width at HUD SIZE 200 read ~1 px under the 100 reading on llvmpipe. Exempts only the monotonic HUD SIZE assertion message.",
+      "title": "buttons steer: controls ignore HUD SIZE (phone-667x375, BUTTON SIZE 100) \u203a control rects are identical at HUD SIZE min / default / max",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39261018030/job/118093373414",
+      "signature": "^monotonic HUD SIZE \\d+ -> \\d+ \\{",
+      "expires": "2026-11-09",
+      "review": "By 2026-11-09, make the gear-box width monotonic across HUD SIZE on llvmpipe (or measure it after fitHud settles); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/hud-layout.spec.js",
+      "since": "2026-10-26",
+      "owner": "brycejmurrin",
+      "why": "Red on four Pages trains 2026-10-19/20 after green PR runs (ci-7d C4: train jobs 118093373414, 118349107252, 118404125100, 118415890248), plus three PR flakes; the gear-box width at HUD SIZE 200 read ~1 px under the 100 reading on llvmpipe. Exempts only the monotonic HUD SIZE assertion message.",
+      "title": "buttons steer: controls ignore HUD SIZE (phone-844x390, BUTTON SIZE 100) \u203a control rects are identical at HUD SIZE min / default / max",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39336318393/job/118349107252",
+      "signature": "^monotonic HUD SIZE \\d+ -> \\d+ \\{",
+      "expires": "2026-11-09",
+      "review": "By 2026-11-09, make the gear-box width monotonic across HUD SIZE on llvmpipe (or measure it after fitHud settles); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/garage-out-before-card.spec.js",
+      "since": "2026-10-26",
+      "owner": "brycejmurrin",
+      "why": "Red on four Pages trains 2026-10-22 to 10-26 after green PR runs (ci-7d C4: jobs 119600056579, 120287437809, 121481491670, 121570343143), two messages: the 180 s waitForFunction with the intro snapshot, and the #3591 'START released after PREPARING with no garage-out' guard. #3795 (10-26 13:59Z) targets the cause; this row covers those two messages only until it is proven.",
+      "title": "garage-out before race/session card \u203a DAILY from the menu: garage-out before the session card",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/40322290836/job/121570343143",
+      "signature": "^(START released after PREPARING with no garage-out \\(#3591\\)|page\\.waitForFunction: Timeout 180000ms exceeded\\. snapshot=\\{)",
+      "expires": "2026-11-09",
+      "review": "By 2026-11-09, confirm #3795 fixed the DAILY intro race (no garage-out before the card); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/parts-livery-zones.spec.js",
+      "since": "2026-10-26",
+      "owner": "brycejmurrin",
+      "why": "Train 39876864967 (2026-10-23, job 120164711934) failed two parts-livery-zones tests and one parts-livery-designs test with the same awaitSoftPresent 8 s timeout on llvmpipe; the PR runs were green. Note: ci-7d's claim that this spec shares garage-livery-churn's GPU-texture message is refuted by job 118597833101's log, where the failing test is garage-livery-churn itself (already quarantined).",
+      "title": "detail finishes: phone controls refinish the fitted parts and save all four choices",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39876864967/job/120164711934",
+      "signature": "^page\\.evaluate: Error: awaitSoftPresent timeout after 8000 ms",
+      "expires": "2026-11-09",
+      "review": "By 2026-11-09, find why the soft present stalls past 8 s after a refinish on llvmpipe; remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/parts-livery-zones.spec.js",
+      "since": "2026-10-26",
+      "owner": "brycejmurrin",
+      "why": "Train 39876864967 (2026-10-23, job 120164711934): second parts-livery-zones test with the same awaitSoftPresent 8 s timeout as the row above.",
+      "title": "finish controls explain absent fins and deflectors without discarding the fin choice",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39876864967/job/120164711934",
+      "signature": "^page\\.evaluate: Error: awaitSoftPresent timeout after 8000 ms",
+      "expires": "2026-11-09",
+      "review": "By 2026-11-09, find why the soft present stalls past 8 s after a refinish on llvmpipe; remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/parts-livery-designs.spec.js",
+      "since": "2026-10-26",
+      "owner": "brycejmurrin",
+      "why": "Train 39876864967 (2026-10-23, job 120164712203) failed this test with the awaitSoftPresent 8 s timeout also seen in parts-livery-zones on the same train; the PR runs were green.",
+      "title": "all catalog part styles and body shapes are reachable, previewed and saved independently of fitted parts",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/39876864967/job/120164712203",
+      "signature": "^page\\.evaluate: Error: awaitSoftPresent timeout after 8000 ms",
+      "expires": "2026-11-09",
+      "review": "By 2026-11-09, find why the soft present stalls past 8 s on llvmpipe; remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
+    },
+    {
+      "spec": "tests/specs/garage-pick-cost.spec.js",
+      "since": "2026-10-26",
+      "owner": "brycejmurrin",
+      "why": "Red on three trains 2026-10-24 (jobs 120727767999, 120787689026, 120791576239; ci-7d listed them as parts-* because the leg log's running line named a parts spec, but the failing test is this one) with 'livery atlas textures seen across the picks' after green PR runs.",
+      "title": "garage livery pick cost \u203a a livery pick blits its cards and keeps car / atlas / texture work under a ceiling",
+      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/40066723043/job/120791576239",
+      "signature": "^livery atlas textures seen across the picks",
+      "expires": "2026-11-09",
+      "review": "By 2026-11-09, make the livery pick reuse its atlas texture (the TLX texture pool, as in the garage-livery-churn row); remove this row once the exact test passes without retry on three cold CI runs. No automatic extension; a further deadline needs a fresh failed-run link. Every other test and any other failure message in the spec stays blocking."
     }
   ]
 }

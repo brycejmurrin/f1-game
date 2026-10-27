@@ -18,8 +18,8 @@ uses. `def._sceneryShift` is the single arc number between them.
 - **Racing frac → authored frac.** A frac read off a rendered lap or `__apex`
   hook is the engine frame; `docs/tracks/<id>.md` tables and `circuits/scenery/<id>.js`
   literals are authored. Engine ≈ (authored + `def._sceneryShift`) mod 1 (Spa: shift
-  0.958, so Blanchimont racing 0.862 ≈ authored 0.904). Print it: build with
-  `tools/lib/track-build-vm.cjs` `buildContext()`, read `def._sceneryShift`.
+  0.958, so Blanchimont racing 0.862 ≈ authored 0.904 — numbers drift; print them). Print it (no browser):
+  `node -e 'const T=require("./tools/track/verify-track.cjs").buildContext(),d=T.LIST.find(x=>x.id==="spa");T.buildCenterline(d,{line:false});console.log(d.sceneryStartFrac,d._sceneryShift)'`
 - **`K(s)` is authored-frame and passes straight through.** Never pre-shift it.
   The wrapped `(k, side, …)` helpers (`anchor`, `tree`, `place`, `building`, …)
   apply the shift themselves, exactly once.

@@ -129,7 +129,7 @@ test("verify-change --plan on a docs-only change selects no browser batches", ()
   const plan = JSON.parse(run(["tools/ci/verify-change.mjs", "--plan", "docs/TESTING.md"]).out);
   assert.equal(plan.fast.toolingFast, true, "docs integrity is a real test");
   assert.equal(plan.fast.toolingFastReason, "docs-only");
-  assert.equal(plan.fast.toolingFastFiles, 8, "docs-only edits should run the focused docs integrity set (8: agent-fleet.test.mjs was merged into agent-config.test.mjs)");
+  assert.equal(plan.fast.toolingFastFiles, 7, "docs-only edits should run the focused docs integrity set (7 since the audit4 E1 carve moved environment-json to its always-on group; 8 before, when agent-fleet.test.mjs was merged into agent-config.test.mjs)");
   assert.ok(plan.fast.toolingFastEstimatedMs > 0, "the plan should expose a measured timing estimate");
   assert.ok(plan.fast.toolingFastCriticalPathMs > 0);
   assert.ok(plan.fast.toolingFastCriticalPathMs <= plan.fast.toolingFastEstimatedMs);

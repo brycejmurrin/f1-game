@@ -137,8 +137,6 @@ test("previously-fat skills stay split (index + references/)", () => {
     ["agent-view", "references/debug-tracks-sweeps.md"],
     // 2026-10-14 folds (skills renewal B1/B2a/B2b/B5).
     ["f1-animation-cameras", "references/replay.md"],
-    ["steward", "references/ownership.md"],
-    ["agent-fleet", "references/comms.md"],
     ["survey-track", "references/campaign.md"],
   ];
   for (const [name, ref] of splits) {
@@ -230,7 +228,6 @@ test("a folded skill's trigger words live in the hub description", () => {
     "agent-view": [/geometry/i, /curvature/i, /groundY/i],
     "f1-animation-cameras": [/replay/i, /anchor/i, /seek/i],
     "steward": [/own, pick up or are handed a PR/i, /push once per green cycle/i],
-    "agent-fleet": [/send_message/i, /subscriptions/i, /claims/i, /merge, arm/i],
     "survey-track": [/multi-circuit/i, /campaign/i],
   };
   for (const [hub, res] of Object.entries(need)) {

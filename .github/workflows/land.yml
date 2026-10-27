@@ -1,0 +1,245 @@
+name: Land
+
+# GITHUB LANDS PRS; AGENTS NEVER MERGE (docs/plans/2026-10-27-orchestration-redesign.md §3 and §4.3; the worker
+# page is docs/WORKERS.md). A worker asks for landing by flipping its PR ready and adding the `land` label. This
+# workflow then runs `tools/ci/merge-gate.mjs --pr <n> --check` as the check run `gate` and, on a pass, arms
+# GitHub's own auto-merge pinned to the gated head. The deploy branch's ruleset (requires `CI` and `gate`, merge
+# commits only, binds administrators) performs the merge; nothing here calls the merge API.
+#
+# TRIGGERS. `pull_request` carries the draft flag and the labels in its payload, so a label flip, a ready flip, a
+# push or a reopen re-evaluates at once. Re-evaluation after CI finishes is `workflow_run`, not `check_suite`:
+# "To prevent recursive workflows, [check_suite] does not trigger workflows if the check suite was created by
+# GitHub Actions", and ci.yml's suites are — so `check_suite` alone would never re-gate a PR whose CI went green
+# after the label (https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#check_suite,
+# read 2026-10-27). `check_suite: completed` stays for suites other apps create. A Pages train finishing also
+# re-evaluates, because merge-gate's "base not more than N game merges behind" row can only pass once the train
+# is green. Both `workflow_run` and `check_suite` "only trigger a workflow run if the workflow file exists on the
+# default branch", which is the deploy branch. Their `pull_requests` arrays are the Pull Request Minimal shape
+# (`number`, `head.sha`, `base.ref`; empty for forks — https://docs.github.com/en/rest/checks/suites), so `resolve`
+# reads each PR's draft flag and labels itself, and lists the open `land` PRs when the triggering run was the
+# train (a deploy-branch run belongs to no PR).
+#
+# THE CHECK NAMED `gate`. On a `pull_request` event the `gate` job's own check run sits on the PR head, which is
+# where the ruleset reads it. On a `workflow_run` / `check_suite` event the run's commit is the default-branch
+# tip, so the job posts the verdict as a check run named `gate` on the PR head through the Checks API instead
+# (https://docs.github.com/en/rest/checks/runs#create-a-check-run; `checks: write`). Same name, same app, the
+# newest one on a commit wins. A skipped `gate` (no label, draft, `hold`) is "not asked", not "refused".
+#
+# AUTO-MERGE. `gh pr merge --auto --merge --match-head-commit <sha>`: "Automatically merge only after necessary
+# requirements are met"; "Commit SHA that the pull request head must match to allow merge"
+# (https://cli.github.com/manual/gh_pr_merge, read 2026-10-27). The repository must have auto-merge enabled
+# (https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/automatically-merging-a-pull-request).
+# TOKEN. "events triggered by the GITHUB_TOKEN will not create a new workflow run"
+# (https://docs.github.com/en/actions/concepts/security/github_token), so a merge made with it starts no
+# pages.yml train. `LAND_TOKEN` (a fine-grained PAT or GitHub App token with contents: write and pull-requests:
+# write on this repository) arms the merge when it is set; the fallback to `GITHUB_TOKEN` still lands the PR
+# but prints the notice below and leaves the 6-hourly Pages cron (or a manual dispatch) to ship it.
+#
+# A `hold` label or a removed `land` label DISARMS an armed auto-merge (`gh pr merge --disable-auto`), so a hold
+# set after the gate passed still holds.
+
+on:
+  pull_request:
+    types: [labeled, unlabeled, ready_for_review, synchronize, reopened]
+    branches: [claude/f1-game-project-26h3ng]
+  check_suite:
+    types: [completed]
+  # workflow_run re-gates after ci.yml (check_suite skips Actions-made suites, see the header). No job checks out
+  # the PR: `gate` checks out the deploy branch, and the merge result's scripts run under merge-gate.mjs untrustedEnv
+  # (no token, no GITHUB_OUTPUT/STEP_SUMMARY path); `resolve` keeps only PRs into the deploy branch.
+  workflow_run:   # zizmor: ignore[dangerous-triggers] see the three lines above: no PR checkout, PR scripts get no token
+    workflows: ["CI", "Deploy to GitHub Pages"]
+    types: [completed]
+
+env:
+  DEPLOY_BRANCH: claude/f1-game-project-26h3ng
+
+# One evaluation per PR at a time; a newer event for the same PR replaces the older one. A deploy-branch run
+# (the train, or a check suite of the tip) re-evaluates every `land` PR, so it gets its own group.
+concurrency:
+  group: land-${{ github.event.pull_request.number || github.event.workflow_run.head_sha || github.event.check_suite.head_sha || github.run_id }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  # Which PRs does this event concern, and are they asking to land? Seconds, no checkout.
+  resolve:
+    name: resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      pull-requests: read
+    outputs:
+      landable: ${{ steps.pick.outputs.landable }}
+      prs: ${{ steps.pick.outputs.prs }}
+      disarm: ${{ steps.pick.outputs.disarm }}
+    steps:
+      - name: Resolve the PRs and their state
+        id: pick
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion || github.event.check_suite.conclusion }}
+          RUN_BRANCH: ${{ github.event.workflow_run.head_branch || github.event.check_suite.head_branch }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha || github.event.check_suite.head_sha }}
+          CANDIDATES: ${{ toJSON(github.event.workflow_run.pull_requests || github.event.check_suite.pull_requests) }}
+        run: |
+          set -euo pipefail
+          numbers=()
+          if [ "$EVENT" = pull_request ]; then
+            numbers=("$PR_NUMBER")
+          elif [ "$RUN_CONCLUSION" != success ]; then
+            echo "::notice::$EVENT concluded '$RUN_CONCLUSION' — nothing to re-gate"
+          elif [ "$RUN_BRANCH" = "$DEPLOY_BRANCH" ]; then
+            # The train (or the tip's own suite) finished: every open `land` PR may now pass the pacing row.
+            mapfile -t numbers < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --label land --limit 50 --json number --jq '.[].number')
+          else
+            mapfile -t numbers < <(jq -r --arg base "$DEPLOY_BRANCH" '(. // [])[] | select(.base.ref == $base) | .number' <<<"$CANDIDATES")
+            if [ "${#numbers[@]}" -eq 0 ] && [ -n "$RUN_SHA" ]; then
+              mapfile -t numbers < <(gh api "repos/$GITHUB_REPOSITORY/commits/$RUN_SHA/pulls" --jq ".[] | select(.base.ref == \"$DEPLOY_BRANCH\") | .number")
+            fi
+          fi
+          prs='[]'
+          disarm='[]'
+          for n in "${numbers[@]}"; do
+            [ -n "$n" ] || continue
+            pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
+            state=$(jq -r .state <<<"$pr"); draft=$(jq -r .draft <<<"$pr"); base=$(jq -r .base.ref <<<"$pr")
+            head=$(jq -r .head.sha <<<"$pr"); armed=$(jq -r '.auto_merge != null' <<<"$pr")
+            labels=$(jq -r '[.labels[].name] | join(" ")' <<<"$pr")
+            has() { [[ " $labels " == *" $1 "* ]]; }
+            echo "PR #$n: state=$state draft=$draft base=$base head=${head:0:12} armed=$armed labels=[$labels]"
+            if [ "$state" = open ] && [ "$base" = "$DEPLOY_BRANCH" ] && [ "$draft" = false ] && has land && ! has hold; then
+              prs=$(jq -c --argjson n "$n" --arg h "$head" '. + [{number: $n, head: $h}]' <<<"$prs")
+            elif [ "$state" = open ] && [ "$armed" = true ]; then
+              disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm")
+            fi
+          done
+          landable=false; [ "$prs" != '[]' ] && landable=true
+          {
+            echo "landable=$landable"
+            echo "prs=$prs"
+            echo "disarm=$disarm"
+          } >> "$GITHUB_OUTPUT"
+          echo "landable=$landable prs=$prs disarm=$disarm"
+
+  # THE GATE: merge-gate.mjs --check on each landable PR (open, ready, `land`, no `hold`, Plan closed, `CI`
+  # green on the head, gen:check + ratchets on a throwaway merge with the current tip, base not too far behind).
+  # No receipt is written and no bus is read in --check mode.
+  gate:
+    name: gate
+    needs: resolve
+    if: needs.resolve.outputs.landable == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+      checks: write
+      actions: read
+    outputs:
+      passed: ${{ steps.run.outputs.passed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DEPLOY_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: merge-gate --check on each landable PR
+        id: run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRS: ${{ needs.resolve.outputs.prs }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -uo pipefail
+          git config user.name "land.yml"
+          git config user.email "land@users.noreply.github.com"
+          passed='[]'
+          refused=0
+          for row in $(jq -c '.[]' <<<"$PRS"); do
+            n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row")
+            echo "::group::gate PR #$n @ ${head:0:12}"
+            out=$(node tools/ci/merge-gate.mjs --pr "$n" --sha "$head" --check 2>&1); code=$?
+            echo "$out"
+            echo "::endgroup::"
+            verdict=$(grep -E '^= merge-gate ' <<<"$out" | tail -n 1)
+            if [ "$code" -eq 0 ]; then
+              conclusion=success; passed=$(jq -c --argjson n "$n" --arg h "$head" '. + [{number: $n, head: $h}]' <<<"$passed")
+            else
+              conclusion=failure; refused=$((refused + 1))
+            fi
+            # shellcheck disable=SC2016 # the backticks are Markdown for the job summary, not a command substitution
+            printf '### gate PR #%s\n\n`%s`\n\n```\n%s\n```\n' "$n" "${verdict:-= merge-gate unknown (exit $code)}" "$out" >> "$GITHUB_STEP_SUMMARY"
+            # Off a pull_request event this run's own check sits on the deploy tip, not the PR head: post one there.
+            if [ "$EVENT" != pull_request ]; then
+              jq -n --arg h "$head" --arg c "$conclusion" --arg t "${verdict:-merge-gate exit $code}" --arg s "$(tail -c 60000 <<<"$out")" \
+                '{name: "gate", head_sha: $h, status: "completed", conclusion: $c, output: {title: $t, summary: $s}}' \
+                | gh api --method POST "repos/$GITHUB_REPOSITORY/check-runs" --input - --jq '.html_url'
+            fi
+          done
+          echo "passed=$passed" >> "$GITHUB_OUTPUT"
+          echo "passed=$passed refused=$refused"
+          # On a pull_request event the job IS the PR's `gate` check: refused means red.
+          if [ "$EVENT" = pull_request ] && [ "$refused" -gt 0 ]; then exit 1; fi
+
+  # ARM: GitHub merges when `CI` and `gate` are green on exactly this head; the ruleset does the rest.
+  arm:
+    name: arm
+    needs: [resolve, gate]
+    if: needs.gate.outputs.passed != '' && needs.gate.outputs.passed != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Enable auto-merge pinned to the gated head
+        env:
+          LAND_TOKEN: ${{ secrets.LAND_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+          PASSED: ${{ needs.gate.outputs.passed }}
+        run: |
+          set -euo pipefail
+          if [ -n "$LAND_TOKEN" ]; then
+            export GH_TOKEN="$LAND_TOKEN"; who="LAND_TOKEN"
+          else
+            export GH_TOKEN="$GITHUB_TOKEN"; who="GITHUB_TOKEN"
+            msg="a merge made by GITHUB_TOKEN will not start pages.yml; set LAND_TOKEN, see docs/WORKERS.md"
+            echo "::warning::$msg"
+            printf '> **%s**\n\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          for row in $(jq -c '.[]' <<<"$PASSED"); do
+            n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row")
+            gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --auto --merge --match-head-commit "$head"
+            echo "armed #$n @ ${head:0:12} with $who" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+
+  # DISARM: an open PR that is armed but no longer asks to land (`hold` added, `land` removed, back to draft).
+  disarm:
+    name: disarm
+    needs: resolve
+    if: needs.resolve.outputs.disarm != '' && needs.resolve.outputs.disarm != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Disable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.LAND_TOKEN || github.token }}
+          DISARM: ${{ needs.resolve.outputs.disarm }}
+        run: |
+          set -euo pipefail
+          for n in $(jq -r '.[]' <<<"$DISARM"); do
+            gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --disable-auto
+            echo "disarmed #$n" | tee -a "$GITHUB_STEP_SUMMARY"
+          done

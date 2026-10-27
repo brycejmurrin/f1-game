@@ -1,6 +1,8 @@
 # Load-time and download weight — plan (2026-09-30)
 
-Status: **PLAN** — docs-only PR first; implementation as one small PR per
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — attribution instruments exist (js/perf/race-entry-profile.js, group perf-race-entry); the warm-under-handoff and SW-trim slices were not verified.
+
+Status when written: **PLAN** — docs-only PR first; implementation as one small PR per
 slice against `claude/f1-game-project-26h3ng`. Owner claim:
 `load-download-weight` on the ship branch. Upscaling stays plan-only unless
 slices 1–2 ship.

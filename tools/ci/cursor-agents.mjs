@@ -2,7 +2,7 @@
 // cursor-agents.mjs — Cursor Cloud Agents client: read (list, status, dump, digest) and control agents this tool launched (launch, followup, cancel, archive, delete).
 // @doc Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched.
 // Full description: Cursor Cloud Agents API v1 client (`CURSOR_API_KEY` from the environment, never printed). Reads: `list`, `status <id>`, `dump [<id>...]` (SSE run streams, rate-limit safe, into ignored artifacts/), `digest`. Writes: `launch` (client-minted agentId, so a retry never duplicates), `followup`, `cancel`, `archive`, `delete`: each refuses an agent id that `launch` did not record in artifacts/cursor-launched.json (the key reaches every agent its owner has). `allowed` lists the recorded ids. Also: `wait`, `artifacts`/`artifact` (presigned download), `usage`.
-// @skill agent-fleet
+// @skill steward
 //
 // Evidence: docs/notes/CURSOR-AGENTS-API-PROBE-2026-10-19.md. The run stream
 // (GET /v1/agents/{id}/runs/{runId}/stream) is the only full-transcript door:
@@ -340,23 +340,44 @@ const MAX_ENV = 50;
 const BUILTIN_SUBAGENTS = ["explore", "shell", "debug", "computeruse", "cursorguide"];
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const isObj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
+// Security audit 4 X1: a launch can carry our env off-box, so only these NAMES may leave it — as `--env` / `--env-file`
+// variables or as `${NAME}` placeholders. Never AWS_*, FLEET_*, GROK_*, ANTHROPIC_*, GITHUB_*, HTTPS_PROXY. CURSOR_API_KEY
+// is a placeholder source only (the API reserves CURSOR_* variable names).
+export const LAUNCH_ENV_ALLOW = Object.freeze(["APEX_FLEET_AS", "APEX_SESSION_ID", "APEX_AGENT_WEBHOOK_URL", "APEX_AGENT_WEBHOOK_AUTH", "CURSOR_API_KEY"]);
+const notAllowed = (n) => `${n} is not in the launch env allowlist (${LAUNCH_ENV_ALLOW.join(", ")})`;
+// Remote MCP hosts a launch may name: Cursor's API, GitHub, and the host of our own APEX_AGENT_WEBHOOK_URL (read from env).
+export const MCP_HOST_ALLOW = Object.freeze(["api.cursor.com", "github.com", "*.github.com"]);
+export function mcpHostAllowed(host, env = process.env) {
+  const h = String(host).toLowerCase().replace(/\.$/, "");
+  const hook = (() => {
+    try {
+      return env.APEX_AGENT_WEBHOOK_URL ? new URL(env.APEX_AGENT_WEBHOOK_URL).hostname.toLowerCase() : "";
+    } catch {
+      return "";
+    }
+  })();
+  if (hook && h === hook) return true;
+  return MCP_HOST_ALLOW.some((a) => (a.startsWith("*.") ? h.endsWith(a.slice(1)) : h === a));
+}
 
 function noExtra(o, allowed, where) {
   const bad = Object.keys(o).filter((k) => !allowed.includes(k));
   if (bad.length) throw new Error(`${where}: unknown field ${bad.join(", ")}`);
 }
 
-/** Fill `${NAME}` from env. A missing variable is named, its value (or a value's absence) never echoed. */
-export function interpolate(value, env = process.env, where = "value") {
+/** Fill `${NAME}` from env, NAME in LAUNCH_ENV_ALLOW only. A missing variable is named, its value never echoed. `refs` collects the names used. */
+export function interpolate(value, env = process.env, where = "value", refs = null) {
   return String(value).replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_, n) => {
+    if (!LAUNCH_ENV_ALLOW.includes(n)) throw new Error(`${where} references \${${n}}: ${notAllowed(n)}`);
     if (!env[n]) throw new Error(`${where} references \${${n}} but it is not set in the environment`);
+    refs?.add(n);
     return env[n];
   });
 }
 
-function strMap(m, env, where) {
+function strMap(m, env, where, refs) {
   if (!isObj(m) || !Object.values(m).every((v) => typeof v === "string")) throw new Error(`${where} must be an object of strings`);
-  return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, interpolate(v, env, `${where}.${k}`)]));
+  return Object.fromEntries(Object.entries(m).map(([k, v]) => [k, interpolate(v, env, `${where}.${k}`, refs)]));
 }
 
 /** Validate and normalise an `mcpServers` array (<= 50). Stdio runs in the VM (its env is readable there); remote keeps headers and OAuth with Cursor's backend. */
@@ -364,7 +385,8 @@ export function parseMcpServers(list, env = process.env) {
   if (!Array.isArray(list)) throw new Error("mcp file must be a JSON array of servers");
   if (list.length > MAX_MCP) throw new Error(`mcp: ${list.length} servers, over ${MAX_MCP}`);
   const seen = new Set();
-  return list.map((sv, i) => {
+  const refs = new Set();
+  const out = list.map((sv, i) => {
     const where = `mcp[${i}]`;
     if (!isObj(sv)) throw new Error(`${where} must be an object`);
     if (typeof sv.name !== "string" || !sv.name) throw new Error(`${where}: name is required`);
@@ -379,7 +401,7 @@ export function parseMcpServers(list, env = process.env) {
       if (sv.args !== undefined && !(Array.isArray(sv.args) && sv.args.every((a) => typeof a === "string"))) throw new Error(`${where}: args must be an array of strings`);
       const out = { name: sv.name, type: "stdio", command: sv.command };
       if (sv.args) out.args = sv.args;
-      if (sv.env) out.env = strMap(sv.env, env, `${where}.env`);
+      if (sv.env) out.env = strMap(sv.env, env, `${where}.env`, refs);
       return out;
     }
     noExtra(sv, ["name", "type", "url", "headers", "auth"], where);
@@ -393,14 +415,15 @@ export function parseMcpServers(list, env = process.env) {
     }
     if (!/^https?:$/.test(u.protocol)) throw new Error(`${where}: url must be http or https`);
     if (u.username || u.password) throw new Error(`${where}: url must not carry credentials; put them in headers`);
+    if (!mcpHostAllowed(u.hostname, env)) throw new Error(`${where}: url host ${u.hostname} is not allowed (${MCP_HOST_ALLOW.join(", ")}, or the APEX_AGENT_WEBHOOK_URL host)`);
     const out = { name: sv.name, type: "http", url: sv.url };
-    if (sv.headers) out.headers = strMap(sv.headers, env, `${where}.headers`);
+    if (sv.headers) out.headers = strMap(sv.headers, env, `${where}.headers`, refs);
     if (sv.auth) {
       if (!isObj(sv.auth)) throw new Error(`${where}.auth must be an object`);
       noExtra(sv.auth, ["CLIENT_ID", "CLIENT_SECRET", "scopes"], `${where}.auth`);
       if (typeof sv.auth.CLIENT_ID !== "string" || !sv.auth.CLIENT_ID) throw new Error(`${where}.auth.CLIENT_ID is required`);
-      out.auth = { CLIENT_ID: interpolate(sv.auth.CLIENT_ID, env, `${where}.auth.CLIENT_ID`) };
-      if (sv.auth.CLIENT_SECRET !== undefined) out.auth.CLIENT_SECRET = interpolate(sv.auth.CLIENT_SECRET, env, `${where}.auth.CLIENT_SECRET`);
+      out.auth = { CLIENT_ID: interpolate(sv.auth.CLIENT_ID, env, `${where}.auth.CLIENT_ID`, refs) };
+      if (sv.auth.CLIENT_SECRET !== undefined) out.auth.CLIENT_SECRET = interpolate(sv.auth.CLIENT_SECRET, env, `${where}.auth.CLIENT_SECRET`, refs);
       if (sv.auth.scopes !== undefined) {
         if (!(Array.isArray(sv.auth.scopes) && sv.auth.scopes.every((x) => typeof x === "string" && x))) throw new Error(`${where}.auth.scopes must be an array of non-empty strings`);
         out.auth.scopes = sv.auth.scopes;
@@ -408,6 +431,9 @@ export function parseMcpServers(list, env = process.env) {
     }
     return out;
   });
+  // The env NAMES the placeholders read (never values), for the LAUNCH/FOLLOWUP line; not serialised into the body.
+  Object.defineProperty(out, "envRefs", { value: [...refs].sort(), enumerable: false });
+  return out;
 }
 
 /** Validate a `customSubagents` array (<= 20; names unique and not a built-in; prompt <= 8192 chars). */
@@ -441,6 +467,7 @@ export function parseSubagents(list) {
 function checkEnvName(n) {
   if (!ENV_NAME.test(n) || Buffer.byteLength(n) > 255) throw new Error(`env name ${JSON.stringify(String(n).slice(0, 40))} is not a valid variable name`);
   if (/^CURSOR_/i.test(n)) throw new Error(`env name ${n} is reserved: names cannot start with CURSOR_`);
+  if (!LAUNCH_ENV_ALLOW.includes(n)) throw new Error(`env name ${notAllowed(n)}`);
 }
 
 /** Session `envVars` (<= 50, values <= 4096 bytes): `--env NAME` values come from our environment, `--env-file` lines are NAME=VALUE. */
@@ -473,6 +500,7 @@ export function maskBody(body) {
   if (mcpServers) out.mcpServers = mcpServers.map((m) => ({ name: m.name, type: m.type, ...(m.headers && { headerNames: Object.keys(m.headers) }), ...(m.env && { envNames: Object.keys(m.env) }), ...(m.auth && { auth: Object.keys(m.auth) }) }));
   if (customSubagents) out.customSubagents = customSubagents.map((a) => a.name);
   if (envVars) out.envVars = Object.keys(envVars);
+  if (mcpServers?.envRefs?.length) out.mcpEnvRefs = mcpServers.envRefs;
   return out;
 }
 
@@ -519,6 +547,10 @@ async function apiError(r) {
   return { status: r.status, code, message };
 }
 
+/** ` envNames=A,B mcpEnvRefs=C`: the env NAMES a launch forwards (X1 audit trail); values never print. */
+export const envNamesNote = (envVars, mcpServers) =>
+  `${envVars && Object.keys(envVars).length ? ` envNames=${Object.keys(envVars).join(",")}` : ""}${mcpServers?.envRefs?.length ? ` mcpEnvRefs=${mcpServers.envRefs.join(",")}` : ""}`;
+
 const fail = (e, what) => new Error(`${what}: HTTP ${e.status} ${e.code}${e.message ? ` — ${e.message.slice(0, 200)}` : ""}`);
 
 /** Launch one agent. Records the id BEFORE the request so a crash mid-flight still leaves it manageable; a failed create un-records it. */
@@ -526,7 +558,7 @@ export async function launchAgent(opts, { file = allowFile() } = {}) {
   const body = buildLaunchBody(opts);
   const hasEnv = !!body.envVars;
   const meta = { launchedAt: new Date().toISOString(), model: body.model.id, repo: body.repos[0].url, name: body.name };
-  const extras = `mcp=${body.mcpServers?.length || 0} subagents=${body.customSubagents?.length || 0} env=${Object.keys(body.envVars || {}).length}`;
+  const extras = `mcp=${body.mcpServers?.length || 0} subagents=${body.customSubagents?.length || 0} env=${Object.keys(body.envVars || {}).length}${envNamesNote(body.envVars, body.mcpServers)}`;
   if (opts.dryRun) return [`DRYRUN ${body.agentId || "(server-minted)"} promptChars=${body.prompt.text.length} ${JSON.stringify(maskBody(body))}`];
   if (!opts.allowTwin) {
     // Six near-identical "Mcp ... listing" agents ran ~600 tool calls on one question in a day (2026-10-20 transcripts).
@@ -585,7 +617,7 @@ export async function followUp(id, text, mode, { file = allowFile(), mcpServers 
   }
   if (!r.ok) throw fail(await apiError(r), "followup");
   const d = await r.json();
-  return [`FOLLOWUP ${id} run=${d.run?.id || "-"} HTTP ${r.status}`];
+  return [`FOLLOWUP ${id} run=${d.run?.id || "-"} HTTP ${r.status}${envNamesNote(null, body.mcpServers)}`];
 }
 
 export async function cancelRun(id, runId, { file = allowFile() } = {}) {

@@ -41,6 +41,13 @@
  *
  * The file list is the source of truth for coverage (test-coverage-audit
  * imports TOOLING_FAST_FILES). Keep package.json as `node tools/ci/tooling-fast.mjs`.
+ *
+ * NOT IN THE FLOOR, ON PURPOSE (audit4 E1, 2026-10-26): the files of node-plan's
+ * ALWAYS_ON_TOPICAL groups (net-unit, state-unit, audio-unit, garage-unit, mcp …).
+ * Those groups run on EVERY CI run as their own job, so CI's always-on node groups
+ * are their gate; 199 of them used to sit here too and ran twice (−470 s local /
+ * −599 s CI CPU per floor run once removed). `--changed` still selects them from
+ * that pool when the diff's pins point at them, so the edit loop keeps them.
  */
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
@@ -56,6 +63,9 @@ import { loadGroups, filesOnly } from "../gen/gen-test-groups.mjs";
 import { workTreeId } from "../lib/work-tree-id.mjs";
 import { DEPLOY_BRANCH, selectionReceipt } from "./pick-tests.mjs";
 import { TRACKED, circuitsTouched, isDocsOnly } from "./select-specs.mjs";
+// Cycle-safe: node-plan reads TOOLING_FAST_FILES only inside functions, and this
+// module reads ALWAYS_ON_TOPICAL only inside topicalPool().
+import { ALWAYS_ON_TOPICAL } from "./node-plan.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const LOGDIR = path.join(ROOT, "artifacts/logs");
@@ -507,7 +517,9 @@ const TOOLING_FAST_CHANGED_RUN_ALL = [
 
 const PATH_PIN_RE = /["'`]((?:js|css|tools|types|desktop|docs|tests\/|index\.html|AGENTS\.md|CLAUDE\.md|README\.md|\.claude\/|\.cursor\/|sw\.js|version\.json)[^"'`]+)["'`]/g;
 
-const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|environment-json|comment-citations|agent-surface)\.test\.mjs$/;
+// environment-json left this set with the audit4 E1 floor carve (2026-10-26): its always-on topical group runs it
+// on every CI run, and a docs-only change cannot touch .cursor/environment.json.
+const DOCS_FAST_TESTS = /\/(docs-integrity|agent-config|skill-progressive|hooks-documented|generated-docs|comment-citations|agent-surface)\.test\.mjs$/;
 
 let _pinIndex = null;
 
@@ -539,7 +551,8 @@ function buildToolingFastPinIndex(files = TOOLING_FAST_FILES, root = ROOT) {
 }
 
 function pinIndex() {
-  if (!_pinIndex) _pinIndex = buildToolingFastPinIndex();
+  // The floor plus the always-on topical pool: --changed may select either.
+  if (!_pinIndex) _pinIndex = buildToolingFastPinIndex([...TOOLING_FAST_FILES, ...topicalPool()]);
   return _pinIndex;
 }
 
@@ -729,10 +742,21 @@ export function classifyNarrowableInfra(file, opts = {}) {
   return { benign: false, widenReason: `${norm} infra change` };
 }
 
+/** The always-on topical groups' files that are NOT in the floor: `--changed`
+ *  may select them (edit loop), the full run never does (CI runs their groups). */
+export function topicalPool(groups = loadGroups().groups, floor = TOOLING_FAST_FILES) {
+  const tf = new Set(floor);
+  const out = new Set();
+  for (const g of ALWAYS_ON_TOPICAL) for (const f of groups[g]?.files || []) if (!tf.has(f)) out.add(f);
+  return [...out].sort();
+}
+
 /** Select tooling-fast unit files for a changed-path list; fail-safe → full suite. */
 export function selectToolingFastChanged(changed, opts = {}) {
   const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
   const tfSet = new Set(allFiles);
+  const pool = (opts.topicalFiles || (opts.allFiles ? [] : topicalPool())).filter((f) => !tfSet.has(f));
+  const poolSet = new Set(pool);
   // `changed` is the real diff size on EVERY path (it used to exist only on `empty`/`matched`, so a whole-floor
   // fallback printed `changed=0`); `because` names the first path that forced the fallback (#2663 follow-up).
   // `widened` is the human fragment for the first-line `WIDENED:` notice (#2890).
@@ -817,7 +841,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
   for (const f of changed) {
     const norm = f.replace(/\\/g, "/");
     if (benignNarrow.has(norm)) continue;
-    if (tfSet.has(norm)) selected.add(norm);
+    if (tfSet.has(norm) || poolSet.has(norm)) selected.add(norm);
     // A file edit has a precise dependency key and may also inherit its
     // nearest directory pins. Do not fall through to the bare top-level
     // `js`/`css`/`tools` key: those generic pins describe the whole tree and
@@ -839,7 +863,7 @@ export function selectToolingFastChanged(changed, opts = {}) {
 
   if (!selected.size) return full("no-pin-match");
 
-  const files = allFiles.filter((f) => selected.has(f));
+  const files = [...allFiles, ...pool].filter((f) => selected.has(f));
   if (!files.length) return full("no-listed-match");
   return { files, reason: narrowSeeds.size && files.every((f) => narrowSeeds.has(f)) ? "narrow-infra" : "matched",
     shards: shardsCoveringFiles(files, allFiles), changed: changed.length,

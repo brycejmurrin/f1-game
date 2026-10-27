@@ -12,7 +12,7 @@ Use before launching or steering any garage-related cloud agent or UI/Cars work 
 - **UI Survey** — garage sheet chrome, tabs layout, dismiss/scroll (not part ids)
 - **Cars** — meshes, wings, liveries presentation, garage lighting presentation
 - **Defaults agent / Grok Bot** — shipping `GarageDefaults` / apex26-garage-v1 export (#1021 lane)
-- **CI Watch** — CI/Pages watcher; read-only watcher; merge authority follows `AGENTS.md` §Concurrent PRs and `.claude/rules/fleet-core.md`
+- **CI Watch** — CI/Pages watcher; read-only watcher; merge authority follows `AGENTS.md` §Coordination and `docs/WORKERS.md`
 
 ## Before launch
 1. List open PRs whose titles/branches mention garage, livery, headrest, chrome, defaults.

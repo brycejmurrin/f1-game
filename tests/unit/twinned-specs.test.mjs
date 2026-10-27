@@ -274,3 +274,22 @@ test("the gated slice stops at its job — the bare-`run:` swallow", () => {
     for (const f of (groups.groups[g] || {}).files || [])
       assert.ok(gated.has(f), `${f} is run by ${g} in the node-suites job but is missing from the gated set`);
 });
+
+test("the train runs the twins of every spec its plan drops (ci-7d C2): read from the jobs' if:, not assumed", async () => {
+  const { trainCoverage, trainTwinPlan, TWINNED } = await import("../../tools/ci/twinned-specs.mjs");
+  const yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8");
+  const live = trainCoverage(yml);
+  assert.equal(live.nodeJob, false, "node-suites skips the train today (D2); if that changed, this test's premise did too");
+  assert.equal(live.twinJob, true, "train-twins must run on a Pages call, consume select's twins/adapted and feed ci-verdict");
+  // Bites: drop the job from ci-verdict's needs, or narrow its if: off the train, and coverage is gone.
+  assert.equal(trainCoverage(yml.replace("      - train-twins\n", "")).covered, false);
+  assert.equal(trainCoverage(yml.replace(/(\n  train-twins:[\s\S]*?\n    if: .*?)inputs\.concurrency_key != ''/, "$1inputs.concurrency_key == ''")).covered, false);
+  // ...and a node job that reaches the train is coverage on its own.
+  assert.equal(trainCoverage(yml.replace(/(\n  node-suites:[\s\S]*?\n    if: .*?)inputs\.concurrency_key == '' && /, "$1")).nodeJob, true);
+  // The plan: hand twins as files, adapted specs as themselves, circuits passed through.
+  const [spec] = Object.keys(TWINNED);
+  const plan = trainTwinPlan({ circuits: ["monza"], coveredByVmTwin: [
+    { file: spec }, { file: spec }, { file: "tests/specs/pit-lane.spec.js" }, { file: "tests/specs/not-a-twin.spec.js" }] });
+  assert.deepEqual(plan, { twins: [TWINNED[spec]], adapted: ["tests/specs/pit-lane.spec.js"], circuits: "monza" });
+  assert.deepEqual(trainTwinPlan({}), { twins: [], adapted: [], circuits: "" });
+});

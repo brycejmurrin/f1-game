@@ -1,7 +1,5 @@
 # Reproduce, pause, inspect, resume
 
-Moved out of `SKILL.md` on 2026-10-26 to keep the skill body an index.
-
 ## Reproduce → pause → inspect → resume
 
 1. Call `debugger_targets` with the real CDP `endpoint`; attach its exact

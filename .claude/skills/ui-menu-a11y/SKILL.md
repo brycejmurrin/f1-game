@@ -27,7 +27,9 @@ Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `
 
 ## Default-first visual verification
 
-Shipped settings and the touch profile first, stress cases labelled separately: the procedure is
+Bryce's profile first — 844×390 landscape, touch (`.claude/rules/fleet-core.md`): one cell is
+`node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens=<id>` (parent only; the default
+`ios-iphone-landscape` is 852×393, not his phone). Then shipped settings, stress cases labelled separately:
 **survey-ui-matrix** §Default-first visual verification (one copy).
 
 ## Quick Reference
@@ -40,15 +42,15 @@ and `ScrollFade` (all `js/ui/<kebab>.js`): contracts in workflow steps 1-6 below
 ```sh
 node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
 node --test tests/unit/menu-a11y-audit.test.mjs   # Escape/door/layer pins, no browser
-npm test -- tests/specs/menu-keyboard.spec.js   # BROWSER, background (AGENTS.md rules 4-5); also ui-button-touch, ui-scale
+npm test -- tests/specs/menu-keyboard.spec.js   # BROWSER, one spec, backgrounded (AGENTS.md rule 4); also ui-button-touch, ui-scale
 node tools/ci/remote-group.mjs ui          # the whole `ui` group, on the PUSHED branch
-node tools/ci/test-bg.mjs gallery          # BROWSER: ui-audit captures — read the PNGs
+npm test -- tests/specs/ui-audit.spec.js   # BROWSER: ui-audit captures — read the PNGs (a subagent reports browser runs not run)
 npm run test:tooling-fast
 ```
 
 `tests/specs/ui-audit.spec.js` asserts nothing — it is a capture harness.
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
-`docs/notes/ARCHITECTURE-REVIEW.md` (repo root).
+`docs/notes/ARCHITECTURE-REVIEW.md`. First tap silent on iPhone (audio unlock on a user gesture) → **audio-debug**.
 
 ## Load on demand
 

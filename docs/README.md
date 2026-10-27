@@ -35,6 +35,7 @@ your change touches → the skill that drives it.
 | [MULTIPLAYER.md](MULTIPLAYER.md) | The `js/net/` wire, rendezvous, snapshots, phone as controller. |
 | [UI-MAP.md](UI-MAP.md) / [UI-EXPLORER.md](UI-EXPLORER.md) / [ui-experience-studio.md](ui-experience-studio.md) | Navigation web and screens; browser exploration toolkit; appearance and Photo Studio contracts. |
 | [COMPONENTS.md](COMPONENTS.md) / [CODE-STANDARDS.md](CODE-STANDARDS.md) | CSS class families and owners; JavaScript house style. |
+| [WORKERS.md](WORKERS.md) | The worker contract: claim, draft PR, local floor, `land` label, cost cap, labels, the dispatcher, per-vendor notes. |
 | [TRACK-DESIGNER.md](TRACK-DESIGNER.md) | Player guide to the in-game track designer. |
 | [PLATFORM.md](PLATFORM.md) / [PACKAGING.md](PACKAGING.md) | iOS/Safari and static-host limits; Electron and Capacitor packaging. |
 | [BUGS.md](BUGS.md) | The current verified bug shortlist. |

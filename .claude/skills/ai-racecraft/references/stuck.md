@@ -12,7 +12,8 @@ while dig-out remains active and uses the shorter rescue delay. This prevents
 permanent wall-piles where dig-out used to veto rescue.
 `beachedAt(c)` tests offroad plus a pace-scaled slow-speed threshold; it has no
 half-second `offT` gate. Pit-box and red-held states remain exempt. A queued
-pit-lane car can escalate after failed dig-out and is rescued onto `pits.laneX`.
+pit-lane car can escalate after failed dig-out and is rescued onto `pits.laneX`
+(pit paths run only with `ai-race.mjs ... --wear light|real`; the default `off` has no stops).
 Road rescue preserves existing speed with a pace-scaled floor; pit-lane rescue
 uses its own lane/floor rule.
 A kerb is NOT off-road (`c.offroad = … && !c.onKerb` in game.js): a car wedged on a kerb

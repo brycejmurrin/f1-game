@@ -34,24 +34,24 @@
 // pattern is to do other work and come back; --wait is for CI or a final gate.
 // This tool runs test groups, so run IT in the background too (AGENTS.md
 // no-foreground-blocking rule applies to the driver as much as the driven).
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pick, DEPLOY_BRANCH, validateSelectionArgs, selectionReceipt } from "./pick-tests.mjs";
 import { estimateToolingFast, loadTimings, selectToolingFastChanged, TOOLING_FAST_FILES } from "./tooling-fast.mjs";
-import { proxyFetch } from "../lib/proxy-fetch.mjs";
+import { liveCiRuns } from "./live-run-check.mjs";
+import { gitOut } from "../lib/git-run.mjs";
 import { changedPaths } from "../lib/changed-files.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
+const USAGE = "Usage: verify-change.mjs [paths…] [--since ref | --staged] [--plan] [--fast] [--wait] [--keep-going] [--json]\n"
+  + "  exit 0 pass / 1 fail / 2 unmatched, refused or a usage error (an unknown flag prints this usage)";
+if (argv.includes("--help") || argv.includes("-h")) { console.log(USAGE); process.exit(0); }
 try { validateSelectionArgs(argv, ["--staged", "--json", "--plan", "--fast", "--wait", "--keep-going", "--help", "-h"]); }
-catch (e) { console.error(e.message); process.exit(1); }
-if (argv.includes("--help") || argv.includes("-h")) {
-  console.log("Usage: verify-change.mjs [paths…] [--since ref | --staged] [--plan] [--fast] [--wait] [--keep-going] [--json]");
-  process.exit(0);
-}
+catch (e) { console.error(`${e.message}\n${USAGE}`); process.exit(2); }
 const flag = (name) => argv.includes(name);
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
 const JSON_OUT = flag("--json");
@@ -65,7 +65,7 @@ const loadavgLine = () => {
   }
 };
 
-const git = (args) => execFileSync("git", args, { cwd: ROOT, encoding: "utf8" }).trim();
+const git = (args) => gitOut(args, { cwd: ROOT });   // throws on failure (tools/lib/git-run.mjs)
 
 // The ref the default selection diffs against: merge-base with the deploy
 // branch (HEAD~1 last). Also graph-parity's BASE: without one it diffs only the
@@ -239,24 +239,12 @@ if (plan.fast.toolingFast) {
 // cap, and silent on any failure — an advisory, never a gate. Through
 // proxyFetch (#2188): a bare Node fetch ignores HTTPS_PROXY, was rate-limited
 // in cloud containers and returned null, so this warning never fired there.
-async function liveCiRuns() {
-  try {
-    const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
-    const url = git(["remote", "get-url", "origin"]);
-    const m = url.match(/github\.com[:/]([^/]+\/[^/.]+)/);
-    if (!m || !branch || branch === "HEAD") return null;
-    const api = `https://api.github.com/repos/${m[1]}/actions/runs?branch=${encodeURIComponent(branch)}&status=in_progress&per_page=5`;
-    const res = await proxyFetch(api, { signal: AbortSignal.timeout(3000), timeoutMs: 3000, headers: { Accept: "application/vnd.github+json", "User-Agent": "apex26-verify-change" } });
-    if (!res.ok) return null;
-    const runs = ((await res.json()).workflow_runs || []).filter((r) => /ci\.yml$/.test(r.path || ""));
-    return { branch, runs: runs.map((r) => ({ id: r.id, sha: (r.head_sha || "").slice(0, 8), url: r.html_url })) };
-  } catch (_) { return null; }
-}
+// The one copy lives in live-run-check.mjs (audit3 T3: two copies had drifted).
 
 // Looked up ONCE, before the verdict, so finish() stays synchronous: its call
 // sites exit the process, and an awaited fetch inside it would let the batch
 // code below run on past an "unmatched" or a red fast gate.
-const live = await liveCiRuns();
+const live = await liveCiRuns({ userAgent: "apex26-verify-change" });
 
 const finish = (verdict, extra = {}) => {
   const out = { verdict, phases, batches, notRun: extra.notRun || [], ...extra };

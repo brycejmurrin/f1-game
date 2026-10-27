@@ -1,5 +1,7 @@
 # Skilltest — probe-debug
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — a 2026-10-01 audit report; its fix #690 was cut separately and its findings were not re-run.
+
 Hands-on audit of the probe/debug skill + tool surface (2026-10-01). Ship tip at
 start: `cd4ec4c6f` (later `6434ac25b`). Branch work: `cursor/skilltest-probe-debug-6483`
 (report) and `cursor/probe-cli-help-guards-6483` (fix #690).

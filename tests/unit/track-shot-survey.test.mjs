@@ -40,6 +40,7 @@ test("buildTrackShotSurveyPlan: scenery preset yields 12 orbit shots", () => {
   assert.equal(p.shots.length, 12);
   assert.equal(p.shots[0].cam, "orbit");
   assert.match(p.shots[0].name, /^survey-/);
+  assert.equal(p.shots[0].clear, false, "orbit stays opt-in");
 });
 
 test("buildTrackShotSurveyPlan: quick / dual_lite / night_pass presets", () => {
@@ -64,6 +65,7 @@ test("buildTrackShotSurveyPlan: custom shots list", () => {
   });
   assert.equal(p.shots.length, 1);
   assert.equal(p.shots[0].cam, "trackside");
+  assert.equal(p.shots[0].clear, true, "#3313: trackside shots re-site the eye out of scenery");
 });
 
 test("buildTrackShotSurveyPlan rejects >32 shots", () => {

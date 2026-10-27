@@ -31,7 +31,7 @@ surface without hand-wiring:
 | Piece | Path | Auto? |
 |---|---|---|
 | Rules | `AGENTS.md` | Yes (Cursor + Cloud + Codex). Claude Code via `CLAUDE.md` → `@AGENTS.md`. |
-| Claude stub | `CLAUDE.md` | Must stay a one-line import; never duplicate rules. |
+| Claude stub | `CLAUDE.md` | A short stub (7 lines on 2026-10-26: a pointer plus the `@AGENTS.md` import); never duplicate rules. |
 | Skills (canonical) | `.claude/skills/*/SKILL.md` | Yes for Claude Code + Cursor (compat). Do **not** copy into `.cursor/skills/`. |
 | Skills (Codex mirror) | `.agents/skills/<name>` → `../../.claude/skills/<name>` | Yes. Codex scans `.agents/skills` (symlinks OK — OpenAI docs). Keep lockstep; never fork bodies. |
 | Personas / subagents | `.claude/agents/*.md` | Claude and Cursor load these directly. Codex hosts may expose collaboration agents; when they do not, use the same persona contracts through launch prompts and `AGENTS.md`. Never create a second Codex persona tree. |
@@ -47,8 +47,7 @@ agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
 the task with an explicit persona label, OWNED paths, forbidden actions,
 allowed tools, and the required hand-back format. Claude frontmatter such as
 `readonly`, `tools`, `background` and `model` is reference metadata in Codex;
-repeat the safety limits in the launch prompt. Keep Merge Desk authority with
-the explicitly designated parent session. Delegate bounded read-only evidence
+repeat the safety limits in the launch prompt. Landing is GitHub's (`land.yml`, docs/WORKERS.md).
 work (for example `deploy-research`), never ready/arm/merge authority.
 
 The doctor catalog warning is host metadata, not a repository failure. If the
@@ -156,7 +155,7 @@ auto-load them — then use the Fallback column.
 | Was | Why it left the catalog | The CLI that remains |
 |---|---|---|
 | **playwright** (the wrapper under its old name) | Its 2026-09 `run` combined `--isolated` with `--user-data-dir` and failed to connect; the bare package replaced it, then failed to launch in the container (above). Since 2026-10-05 the fixed `run` IS **playwright-official**. | `tools/mcp/playwright-mcp.sh status\|play\|dom` (css-play) |
-| **chrome-devtools-official** | Duplicate of **chrome-devtools** minus the WebGPU flags; two Chrome MCPs fought over one box. | `npx -y chrome-devtools-mcp@1.7.0` by hand |
+| **chrome-devtools-official** | Duplicate of **chrome-devtools** minus the WebGPU flags; two Chrome MCPs fought over one box. | `npx -y chrome-devtools-mcp@1.11.0` by hand (the pin in `tools/mcp/chrome-devtools-mcp.sh`) |
 | **tinyfish** (`127.0.0.1:3711`) and the `tinyfish_*` half of **probe** | Container egress blocks `agent.tinyfish.ai`, so the in-repo proxy can never answer here. The hosted TinyFish connector in the main session and the host fetch tool can. The non-attachment is pinned by `tests/unit/agent-config.test.mjs` (the lockstep guard), not prose alone — re-attaching starts there, with fresh egress evidence. | `tools/mcp/tinyfish-mcp.sh` on a box with egress; key from shell / gitignored `.env` only (no tracked fallback) |
 | **probe** (`chrome_*` + `tinyfish_*` bridge) | Its `chrome_*` half duplicates **chrome-devtools**; its `tinyfish_*` half is dead in-container. | `python3 tools/mcp/probe-mcp.py chrome-start` / `call` — the persistent-daemon flow has no MCP equivalent and stays |
 
@@ -314,7 +313,7 @@ scenario preparation), `apex_garage_plan` (browser-free camera/design matrix) an
 `apex_diagnostics` (capabilities, background memory/GPU/renderer/VM probes, and
 saved report queries). Browser diagnostics use the existing job lock; planning
 and report comparison do not launch Chromium.
-40 → 42 by 2026-10-22 for `apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) and `apex_who_is_on_it` (the claims/branches board); the table below is the count's source.
+`apex_cursor_agents` (2026-10-20, Cursor cloud-agent launch/status over `cursor-agents.mjs`) and `apex_who_is_on_it` (the claims/branches board) are in the table below. The table is the count's source: 40 rows on 2026-10-26, equal to the live server's tool list (an earlier revision of this line said "40 → 42"; that sum did not match the table).
 
 <!-- WRAP-MAP -->
 | MCP tool | CLI | Kind | Skill |
@@ -336,9 +335,8 @@ and report comparison do not launch Chromium.
 | `apex_rotate_markings_check` | `track/rotate-markings.cjs` | tree | new-track |
 | `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
-| `apex_who_is_on_it` | `ci/who-is-on-it.mjs` | tree | steward |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
-| `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | agent-fleet |
+| `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | steward |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
 | `apex_job_status` | `mcp/apex-extras.mjs` | tree | check-changes |
@@ -388,7 +386,6 @@ Pins the wrap always applies (you cannot override them):
   existing JSON file under `artifacts/` or `scratch/` (symlinks resolved); never
   `--out` / `--fleet` / `--diff` / `--pose`. The fleet sweep
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
-- `apex_who_is_on_it` → `--json`, never `--claim` / `--release` (they push refs);
   `paths` that start with `-` are refused so none reaches the CLI as a flag
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
 - `apex_cursor_agents` → `cursor-agents.mjs <verb>`: ONE tool with a `verb` argument, only `verb`, `id`, `options` and

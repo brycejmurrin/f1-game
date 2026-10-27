@@ -489,6 +489,12 @@
       ]
     },
     {
+      "path": "tools/check/dup-functions.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/check/dup-keys.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -745,21 +751,13 @@
       ]
     },
     {
-      "path": "tools/ci/agent-history.mjs",
+      "path": "tools/ci/archive-sessions.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "page-results",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--json",
-        "--out",
-        "--summary"
+        "--json"
       ]
-    },
-    {
-      "path": "tools/ci/agent-msg.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "node"
     },
     {
       "path": "tools/ci/assert-audit.mjs",
@@ -864,16 +862,6 @@
       ]
     },
     {
-      "path": "tools/ci/claude-usage.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json",
-        "--limit"
-      ]
-    },
-    {
       "path": "tools/ci/coverage-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -920,6 +908,20 @@
       ]
     },
     {
+      "path": "tools/ci/dispatch.json",
+      "classification": "data",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ci/dispatch.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "page-results",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/ci/fixture-consumer-audit.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -932,96 +934,6 @@
       "interpreter": "node",
       "nativeOutputFlagMentions": [
         "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/fleet-archive.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/fleet-board-snapshot.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "targeted-summary",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--out",
-        "--quiet"
-      ]
-    },
-    {
-      "path": "tools/ci/fleet-board.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "targeted-summary",
-      "interpreter": "node"
-    },
-    {
-      "path": "tools/ci/fleet-brief.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json",
-        "--out"
-      ]
-    },
-    {
-      "path": "tools/ci/fleet-bus-mirror.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "targeted-summary",
-      "interpreter": "node"
-    },
-    {
-      "path": "tools/ci/fleet-bus.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--format",
-        "--json",
-        "--quiet"
-      ]
-    },
-    {
-      "path": "tools/ci/fleet-flags.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/fleet-owner.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json",
-        "--quiet"
-      ]
-    },
-    {
-      "path": "tools/ci/fleet-queue.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/fleet-tick.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "targeted-summary",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json",
-        "--summary"
       ]
     },
     {
@@ -1050,21 +962,6 @@
       "npmScripts": [
         "test:guards"
       ]
-    },
-    {
-      "path": "tools/ci/handback.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/incident-lift.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node"
     },
     {
       "path": "tools/ci/inputs-hash.mjs",
@@ -1105,17 +1002,6 @@
       ]
     },
     {
-      "path": "tools/ci/launch-lane.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--format",
-        "--json",
-        "--quiet"
-      ]
-    },
-    {
       "path": "tools/ci/live-run-check.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1134,32 +1020,11 @@
       ]
     },
     {
-      "path": "tools/ci/merge-attribution.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--format",
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/merge-done.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--format",
-        "--json"
-      ]
-    },
-    {
       "path": "tools/ci/merge-gate.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--format",
         "--json",
         "--quiet"
       ]
@@ -1234,12 +1099,6 @@
     },
     {
       "path": "tools/ci/poll-live-shell.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node"
-    },
-    {
-      "path": "tools/ci/post-merge.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
@@ -1421,15 +1280,6 @@
       "interpreter": "node"
     },
     {
-      "path": "tools/ci/session-ledger.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
       "path": "tools/ci/session-status.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1578,17 +1428,6 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
-    },
-    {
-      "path": "tools/ci/who-is-on-it.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "page-results",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--format",
-        "--json",
-        "--quiet"
-      ]
     },
     {
       "path": "tools/desktop/minify-worker.mjs",
@@ -2596,6 +2435,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/fleet-block.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/flicker-metric.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2644,6 +2488,11 @@
     },
     {
       "path": "tools/lib/generated-paths.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/git-run.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -4451,7 +4300,7 @@
     },
     {
       "name": "test:node-slow",
-      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/cover-legibility.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/livery-contrast.test.mjs tests/unit/slider-effect.test.mjs"
+      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/car-mesh-anchors.test.mjs tests/unit/cockpit-crest-stripe.test.mjs tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/cover-legibility.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/livery-contrast.test.mjs tests/unit/slider-effect.test.mjs"
     },
     {
       "name": "test:perf-budget",
@@ -4503,7 +4352,7 @@
     },
     {
       "name": "test:sweeps",
-      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/baked-model-road-guard.test.mjs tests/unit/build-steps.test.mjs tests/unit/build-worker.test.mjs tests/unit/car-front-wing-width.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/driving-line-opts.test.mjs tests/unit/driving-line.test.mjs tests/unit/grid-boxes.test.mjs tests/unit/kerb-berm-surface.test.mjs tests/unit/kerb-stripes.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/pit-complex.test.mjs tests/unit/pit-signs.test.mjs tests/unit/prop-clipping.test.mjs tests/unit/props-over-road.test.mjs tests/unit/props-tri-ratchet.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/scenery-ground-audit.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/spline-project-height.test.mjs tests/unit/track-build-vm-release.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-validate-fleet.test.mjs tests/unit/water-local-level.test.mjs"
+      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/baked-model-road-guard.test.mjs tests/unit/barrier-runoff-jumps.test.mjs tests/unit/build-steps.test.mjs tests/unit/build-worker.test.mjs tests/unit/car-front-wing-width.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/driving-line-opts.test.mjs tests/unit/driving-line.test.mjs tests/unit/elevation-smoothness.test.mjs tests/unit/grid-boxes.test.mjs tests/unit/kerb-berm-surface.test.mjs tests/unit/kerb-stripes.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/pit-complex.test.mjs tests/unit/pit-signs.test.mjs tests/unit/prop-clipping.test.mjs tests/unit/props-over-road.test.mjs tests/unit/props-tri-ratchet.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/scenery-ground-audit.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/spline-project-height.test.mjs tests/unit/track-build-vm-release.test.mjs tests/unit/track-line-circuits.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-validate-fleet.test.mjs tests/unit/water-local-level.test.mjs"
     },
     {
       "name": "test:sweeps-parts",

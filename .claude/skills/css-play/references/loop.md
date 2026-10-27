@@ -66,6 +66,13 @@ are tokens `--slider`/`--tap` (`css/tokens.css`). Enumerated rows are `.set-row`
 Monza race first) is `#pausemenu` in `css/dialogs.css`, compact-density rules
 included; `css/menus.css` is the title chrome, not the pause sheet.
 
+**Sizing tokens** (`css/tokens.css`; read live values from `dom.json`, never
+quote numbers): `--safe-t/r/b/l` and `--safe-w/h` are the notch/safe-area box;
+`--tap` is the interactive floor (a 44 px base on `:root`, raised to a 52 px touch
+ladder on `body:not(.desktop)`, so read it off `body`), with `--chip-h`, `--tap-sm`
+and `--tap-min` for secondary sizes; `--vhz`/`--svhz` are `vh`/`svh` divided by
+the UI scale.
+
 ## 2. DOM dump (`dom.json`)
 
 Written every run. `--no-shot` / `playwright-mcp.sh dom` skips the PNG.

@@ -23,6 +23,15 @@ name: Spec timings
 # merged file lands on a side branch for a human or agent to read and merge.
 # Timings are evidence, and evidence that edits the branch it describes without
 # anyone looking is how a budget drifts silently in the other direction.
+#
+# NOT FOLDED INTO pages.yml (audit4 D1 / ci-train F10, 2026-10-26): it merges the
+# junit of EVERY completed train, red ones included, which a post-publish job
+# (it runs only after a green publish) would drop; and a contents: write job in
+# the train's workflow is one more startup check on the release path (#2241).
+# THE FRESH COPY IS ALREADY READ: ci.yml's select step overlays
+# bot/spec-timings via APEX_SPEC_TIMINGS (tools/ci/ci-select-specs-step.sh;
+# logged "timings: committed record + bot/spec-timings overlay"), so the planner
+# does not wait for a hand merge of tests/data/spec-timings.json.
 on:
   workflow_run:   # zizmor: ignore[dangerous-triggers] trusted-only: the job's `if` admits the deploy branch (checked out by name, never the triggering PR's head) or a dispatch
     # "Deploy to GitHub Pages" too (2026-09-24): pages.yml runs ci.yml as a
