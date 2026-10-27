@@ -42,8 +42,9 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
    progress ("waiting") and re-evaluates when CI ends. Going back to draft or removing `land` turns `gate` red. A
    red or a conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
 
-   How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation (the next
-   event re-gates it); `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
+   How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation; its `retry`
+   job then dispatches an immediate re-gate of that PR (at most 3 per head, then the next train or CI run re-gates);
+   `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
    progress ("error, will retry"), never red.
 6. **Stop at the cap.** The brief's caps are its `STOP AT` line (context) and $10 soft (cost). At either, or when
    stuck: finish the current unit, push, refresh the Plan and the Hand-off block, add `needs-owner`, send_message
