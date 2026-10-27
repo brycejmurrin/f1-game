@@ -38,6 +38,40 @@ const RaceSettings = (function () {
       '<p id="rs-aipace-help" class="adv-help">SCRIPTED keeps each rival on a fixed target pace from car and driver ratings. CATCH-UP is the old rubber band: cars behind you speed up toward your gap.</p>';
     diff.parentNode.insertBefore(row, diff.nextSibling);
   }
+  // ERS PLAN (#1580, js/race/energy-plan.js): one policy per timing sector, injected
+  // after TYRE WEAR like AI PACE. MANUAL ×3 is today's game.
+  const RS_ERS = [["manual", "MANUAL"], ["deploy", "DEPLOY"], ["save", "SAVE"]];
+  const ersRows = [];   // the three rows once built; read by element, never looked up by id
+  function ensureErsRows($) {
+    if (ersRows.length || typeof EnergyPlan === "undefined") return;
+    let after = $("rs-tyres");
+    if (!after || !after.parentNode) return;
+    for (let i = 1; i <= 3; i++) {
+      const id = "rs-ers" + i, row = document.createElement("div");
+      row.id = id;
+      row.className = "set-row";
+      row.setAttribute("role", "group");
+      row.setAttribute("aria-labelledby", id + "-label");
+      // A constant skeleton; ids and labels go in through attributes below, never markup.
+      row.innerHTML = '<span class="tune-label"></span><div><button type="button" data-step="-1">&lsaquo;</button>' +
+        '<select></select><button type="button" data-step="1">&rsaquo;</button></div>';
+      const label = row.querySelector("span"), [prev, next] = row.querySelectorAll("button"), sel = row.querySelector("select");
+      label.id = id + "-label"; label.textContent = "ERS SECTOR " + i;
+      prev.id = id + "-prev"; prev.setAttribute("aria-label", "Previous sector " + i + " ERS policy");
+      next.id = id + "-next"; next.setAttribute("aria-label", "Next sector " + i + " ERS policy");
+      sel.id = id + "-sel"; sel.setAttribute("aria-labelledby", id + "-label");
+      if (i === 3) {
+        const help = document.createElement("p");
+        help.id = "rs-ers-help"; help.className = "adv-help";
+        help.textContent = "At each sector start, DEPLOY switches BOOST on and SAVE switches it off so the battery harvests. MANUAL leaves BOOST to you. You can still press BOOST to override.";
+        sel.setAttribute("aria-describedby", help.id);
+        row.append(help);
+      }
+      after.parentNode.insertBefore(row, after.nextSibling);
+      after = row;
+      ersRows.push(row);
+    }
+  }
   /** WIND (js/race/wind.js, off/real) after DIRTY AIR, injected like AI PACE:
    *  wind moves top speed ±4 km/h and a phone player has no other way off. */
   function ensureWindRow($) {
@@ -159,6 +193,7 @@ const RaceSettings = (function () {
       GameAudio, Tracks, SettingRow, DrivingLine, SeasonCal,
       qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro, previewWxPlan,
     } = deps;
+    if (typeof EnergyPlan !== "undefined") EnergyPlan.fromStore(store);   // #1580: the stored sector plan, default MANUAL ×3
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
     const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (G.raceQuali && !isTimeTrial()));
@@ -178,6 +213,7 @@ const RaceSettings = (function () {
     function buildRaceSettings() {
       ensureAiPaceRow($);
       ensureWindRow($);
+      ensureErsRows($);
       const qualifies = !isTimeTrial() && !qualiResults() &&
         (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
       const qName = isChampionship() && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
@@ -246,6 +282,7 @@ const RaceSettings = (function () {
       // there: a lap against the clock is not a set anybody is asked to manage.
       $("rs-tyres").hidden = tt;
       SettingRow.paint("rs-tyres", G.raceTyreWear, RS_TYRES);
+      ersRows.forEach((row, i) => { row.hidden = tt; SettingRow.paint(row.id, EnergyPlan.plan()[i], RS_ERS); });
       $("rs-dirty").hidden = tt;
       SettingRow.paint("rs-dirty", G.raceDirtyAir, RS_DIRTY);
       if ($("rs-wind")) { $("rs-wind").hidden = !hasWind(); if (hasWind()) SettingRow.paint("rs-wind", Wind.level(), RS_WIND); }
@@ -408,6 +445,10 @@ const RaceSettings = (function () {
       wire("rs-caution", () => (G.cautionInfo().enabled ? "on" : "off"), (v) => setCautionEnabled(v === "on"));
       wire("rs-reliab", () => G.raceReliability, (v) => { G.raceReliability = v; store.set("reliability", v); });
       wire("rs-tyres", () => G.raceTyreWear, (v) => { G.raceTyreWear = v; });
+      ersRows.forEach((row, i) => wire(row.id, () => EnergyPlan.plan()[i], (v) => {
+        const p = EnergyPlan.plan(); p[i] = v;
+        if (EnergyPlan.setPlan(p)) store.set("ersPlan", p);
+      }));
       wire("rs-dirty", () => G.raceDirtyAir, (v) => { G.raceDirtyAir = v; });
       if ($("rs-wind") && hasWind()) wire("rs-wind", () => Wind.level(), (v) => { store.set("wind", Wind.setLevel(v)); });
       wire("rs-line", () => DrivingLine.mode(), setDrivingLine);

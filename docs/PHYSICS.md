@@ -166,6 +166,15 @@ with it, a 12 % smoothstep on `tanh`, was superseded by the peaked curve
 above in the same day's merge; `tests/unit/physics-rows-vm.test.mjs` pins
 both.)
 
+**SECTOR ERS PLAN (#1580, `js/race/energy-plan.js`).** The player may set a
+policy per timing sector in Race Settings (ERS SECTOR 1–3): MANUAL, DEPLOY or
+SAVE. At each sector entry, DEPLOY switches BOOST on and SAVE switches it off,
+so the battery harvests. Either way it asks for the same toggle a BOOST press
+makes, so the battery, box, caution and limiter gates still apply, the input
+ghost records the flip, and the player can press BOOST to override until the
+next entry. MANUAL ×3 ships and changes nothing. Time trial ignores the plan.
+`__apex.ersPlan()` reads it and sets it for the session.
+
 **ACTIVE AERO (X-mode / Z-mode)** is the THIRD straight-line lever, next to
 BOOST (spends the battery) and OVERTAKE (an extra 0.5 MJ allowance earned at the detection line). It adds
 NO thrust and spends NO energy — it trades **downforce for drag**, the 2026

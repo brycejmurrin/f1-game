@@ -35,6 +35,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
+| `ersPlan` | `ersPlan(plan?)` | THE SECTOR ERS PLAN — ['manual'\|'deploy'\|'save'] × 3; at each sector start DEPLOY switches BOOST on, SAVE off. Read it, or set it for this session |
 | `objective` | `objective()` | WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once |
 | `rollout` | `rollout({seconds,dt,input,policy,policyHz,samples})` | drive an interval, return a digest instead of every frame |
 | `terminal` | `terminal()` | {done, reason} — retired\|finished\|wrong_way\|rescued\|null |
