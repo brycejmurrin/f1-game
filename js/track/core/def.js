@@ -184,10 +184,10 @@ const TrackDef = (function () {
       // therefore read as undefined at every consumer — silently, because
       // every consumer's fallback is a legitimate value:
       //   sunAzimBias           atmosphere.js — hand-tuned sun geography, inert
-      //   sceneryTheme          tracks.js:~815 — Qatar fell back to `desert`,
+      //   sceneryTheme          build-props.js — Qatar fell back to `desert`,
       //                           Albert Park to `permanent`
-      //   sceneryThemeOverrides tracks.js:~819 — Singapore's, always undefined
-      //   ownPitStraight        tracks.js:~1816 — the generic 7-box pit fallback
+      //   sceneryThemeOverrides build-props.js — Singapore's, always undefined
+      //   ownPitStraight        build-props.js — the generic 7-box pit fallback
       //                           kept landing on Monza's Tribuna Centrale, the
       //                           exact thing the field was added to stop
       //   undulate              buildCenterline — the opt-out could not be taken

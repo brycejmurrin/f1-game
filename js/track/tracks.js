@@ -126,7 +126,10 @@ const Tracks = (function () {
     const dress = def._sceneryShift || 0;
     const bridges = def.bridges;
     if (bridges) for (const b of bridges) {
-      const cs = ((b.s + dress) % 1) * total;
+      // wrap01 — same idiom as TrackSurface.profile's bridge carve; bare `% 1`
+      // is fine for the authored [0,1) range but disagrees if a float ever
+      // undershoots (JS % keeps the dividend's sign).
+      const cs = TrackSpace.wrap01(b.s + dress) * total;
       for (let k = 0; k < n; k++) {
         let d = Math.abs(k * ds - cs);
         d = Math.min(d, total - d);                 // wrap-around distance
@@ -136,7 +139,7 @@ const Tracks = (function () {
     // elevation changes — terrain follows road (unlike BRIDGES where gY stays flat)
     const elevs = def.elevations;
     if (elevs) for (const e of elevs) {
-      const cs = ((e.s + dress) % 1) * total;
+      const cs = TrackSpace.wrap01(e.s + dress) * total;
       for (let k = 0; k < n; k++) {
         let d = Math.abs(k * ds - cs);
         d = Math.min(d, total - d);

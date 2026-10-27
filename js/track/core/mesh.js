@@ -226,6 +226,11 @@ const TrackMesh = (function () {
       // rather than apex, and re-seating it can only make it worse. It does
       // CLAIM its nearest apex, though, so a loose zone cannot be re-seated
       // onto a corner it already banks (strongest-wins would merge the two).
+      // A LOOSE zone that stays put (≤ BANK_RESEAT_M from an apex) must NOT
+      // claim that apex: it is banking the straight, not the corner, and a
+      // farther loose zone that should re-seat there would be pushed onto the
+      // wrong apex (measured: 50 m approach + far zone → far zone landed on
+      // the opposite corner while the intended apex stayed flat).
       const loose = [];
       const apexGap = (tf, f) => { const d = Math.abs(wrap01(tf) - f); return d > 0.5 ? 1 - d : d; };
       zones.forEach((z, i) => {
@@ -247,8 +252,12 @@ const TrackMesh = (function () {
         const seated = new Set();
         for (const c of cand) {
           if (seated.has(c.i) || taken.has(c.ti)) continue;
-          seated.add(c.i); taken.add(c.ti);
-          if (c.d * track.total > BANK_RESEAT_M) centre[c.i] = wrap01(turns[c.ti]);
+          seated.add(c.i);
+          // Claim the apex only when we actually move onto it.
+          if (c.d * track.total > BANK_RESEAT_M) {
+            taken.add(c.ti);
+            centre[c.i] = wrap01(turns[c.ti]);
+          }
         }
       }
 
@@ -812,10 +821,10 @@ const TrackMesh = (function () {
         // smooth, and giving it aggregate relief makes the lines look gritty.
         // The painted markings are NO LONGER vertex colour — roadMarkings() in
         // the lit fragment shader draws the edge lines and the dashed centre
-        // line analytically from the (s, x, hw) in `trk`. Columns 2/3/10/11 and
-        // 6/7 still exist geometrically (they are removed in a follow-up) but
-        // now carry plain asphalt, so the shader owns the paint outright and
-        // the two cannot disagree.
+        // line analytically from the (s, x, hw) in `trk`. The edge-step columns
+        // (2..4 / 9..11) and the centre pair (5..8) stay in the ribbon as plain
+        // asphalt geometry so the shader owns the paint outright and the two
+        // cannot disagree.
         let c, m;
         if (v <= 1 || v >= 12) {
           if (pitPaved(k, v <= 1 ? -1 : 1)) {
