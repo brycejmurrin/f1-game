@@ -283,6 +283,48 @@ test("clearance: a return straight inside the pit opening is not a green save", 
   assert.ok(j.issues.some((i) => i.level === "red" && i.code === "clearance"));
 });
 
+/** A synthetic built road along a closed polyline at 4 m nodes, flat, half-width hwAt(x, z). */
+function polyTrack(corners, hwAt) {
+  const xs = [], zs = [], hs = [];
+  for (let c = 0; c < corners.length; c++) {
+    const a = corners[c], b = corners[(c + 1) % corners.length], len = Math.hypot(b[0] - a[0], b[1] - a[1]), m = Math.max(1, Math.round(len / 4));
+    for (let k = 0; k < m; k++) { const t = k / m, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t; xs.push(x); zs.push(z); hs.push(hwAt(x, z)); }
+  }
+  const n = xs.length;
+  let total = 0; for (let k = 0; k < n; k++) total += Math.hypot(xs[(k + 1) % n] - xs[k], zs[(k + 1) % n] - zs[k]);
+  return { n, total, px: Float64Array.from(xs), pz: Float64Array.from(zs), py: new Float64Array(n), curv: new Float64Array(n), hw: Float64Array.from(hs) };
+}
+
+test("clearance: the pit-opening red applies only inside the pit window round the start, not to a hairpin's straights mid-lap (WP-G1)", () => {
+  const { V } = bootEditor();
+  // A 700 m pocket mid-lap: C→D at z = 400 and E→F at z = 422, 22 m apart
+  // (hw 7: amber, inside the pit opening's reach), ~1400 m from the line.
+  const pocket = [[0, 0], [1000, 0], [1000, 400], [300, 400], [300, 422], [1000, 422], [1000, 800], [-200, 800], [-200, 0]];
+  const tr = polyTrack(pocket, () => 7);
+  const d = { pts: [[0, 0], [1, 0]], pit: { mode: "full", side: 1 } };
+  const j = V.judge(tr, d, d);
+  const cl = j.issues.filter((i) => i.code === "clearance");
+  assert.equal(cl.length, 1, JSON.stringify(cl));
+  assert.equal(cl[0].level, "amber", "a close pair far from the pit window is advice, not a pit RED: " + cl[0].msg);
+  assert.ok(cl[0].s > 1000 && cl[0].s < tr.total - 1000, `the flagged pair is the mid-lap pocket (s ${cl[0].s})`);
+});
+
+test("clearance: the most severe pair is reported — a closer narrow amber pair does not mask a farther wide red one (WP-G1)", () => {
+  const { V } = bootEditor();
+  // Two mid-lap pockets: A (hw 5, centres 15 m apart: edge gap 5 m → amber) and
+  // B (hw 8, centres 17 m apart: edge gap 1 m → overlap RED). A is the closer by centreline.
+  const shape = [[0, 0], [3000, 0], [3000, 300], [2400, 300], [2400, 317], [3000, 317], [3000, 1200],
+    [1700, 1200], [1700, 300], [1000, 300], [1000, 315], [1600, 315], [1600, 1400], [-300, 1400], [-300, 0]];
+  const hwAt = (x, z) => (z > 250 && z < 350 && x >= 2300 ? 8 : 5);
+  const tr = polyTrack(shape, hwAt);
+  const j = V.judge(tr, {}, {});
+  const cl = j.issues.filter((i) => i.code === "clearance");
+  assert.equal(cl.length, 1, JSON.stringify(cl));
+  assert.equal(cl[0].level, "red", "the overlap RED wins over the closer amber pair: " + cl[0].msg);
+  const k = Math.round(cl[0].s / (tr.total / tr.n)) % tr.n;
+  assert.ok(tr.px[k] >= 2300 && hwAt(tr.px[k], tr.pz[k]) === 8, `the flagged pair is the wide pocket B (node ${k} at ${tr.px[k]}, ${tr.pz[k]})`);
+});
+
 // ── SPIRAL: clothoid entry / exit on the curved stamps (TrackStamps.spiralSweep) ──
 // https://en.wikipedia.org/wiki/Euler_spiral — curvature linear in arc length.
 const CURVED = { corner: { R: 60, deg: 90 }, hairpin: { R: 18 }, chicane: { R: 40, deg: 35 }, sbend: { R: 60, deg: 45 } };
