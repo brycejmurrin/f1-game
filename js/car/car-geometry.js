@@ -420,6 +420,28 @@ const CarGeometry = (function () {
     return res;
   }
 
-  return { create, weld, decimate };
+  // SHARED RIVAL LOD. One mesh is instanced for every rival past FieldLod's
+  // no-decal distance (car-draw sharedRivalBodyMesh; TLX coalesces it). On
+  // Teams.LIST[0] factory parts with smooth off that mesh was 6148 tris,
+  // 12857 verts and six surface ids, carbon the majority. Clustering to
+  // SHARED_BODY_TRIS keeps the box within 3% and a 48 px silhouette (Jaccard
+  // 0.987 side / 0.985 front / 0.996 top, measured 2026-10-27) and drops the
+  // vertex buffer to about 2700. Paint only: at that range the carbon weave
+  // and the metal env boost are past their fade, and one surface keeps the
+  // instanced fragment on the paint path (three.js draws one material per
+  // instanced batch). The 250 m step still decimates this result to 1500.
+  // Collapses mats on `out` and replaces its arrays in place (callers keep
+  // the same object, including the silhouette release flag). Returns `out`.
+  const SHARED_BODY_TRIS = 4500;
+  const SHARED_PAINT = 20;   // CarMaterials.SURFACES.paint — this file loads first
+  function presentShared(out) {
+    if (!out || !out.idx || !out.mat) return out;
+    for (let i = 0; i < out.mat.length; i++) out.mat[i] = SHARED_PAINT;
+    const d = decimate(out, SHARED_BODY_TRIS);
+    if (d !== out) { out.pos = d.pos; out.nrm = d.nrm; out.col = d.col; out.idx = d.idx; out.mat = d.mat; }
+    return out;
+  }
+
+  return { create, weld, decimate, presentShared, SHARED_BODY_TRIS, SHARED_PAINT };
 })();
 Object.freeze(CarGeometry);
