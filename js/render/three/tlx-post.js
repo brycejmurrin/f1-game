@@ -675,14 +675,17 @@
     /** Resolve the HDR scene to the canvas — the glx/post.js present() port.
      * F = tlx.js's latched frame state (proj/invProj/invVP/sunVS/upVS/skyHi/
      * skyLo/viewProj/sunDir/sunColor/eye/time/cloud/cloudSpeed/lights). */
+    // Knob read with the TUNE_DEFS default (PostCommon.knob), never a literal.
+    // Hoisted with the call's tune in _gkT: present() runs every frame (#3104 F5).
+    let _gkT = null;
+    const gk = (id) => PostCommon.knob(_gkT, id);
     function present(opts, F) {
       const S = shadow ? shadow.S : null;
       // Lamp-map snapshot BEFORE tlx.js clears the armed flags (see header).
       const lampArmed = !!(S && S.lampArmed);
       const o = opts || {};
       const GT = o.tune || null;
-      // Knob read with the TUNE_DEFS default (PostCommon.knob), never a literal.
-      const gk = (id) => PostCommon.knob(GT, id);
+      _gkT = GT;   // gk() reads this call's tune
       const prevAutoClear = renderer.autoClear;
       renderer.autoClear = false;   // runPass sets it per pass (overwrite clears, UP/mirror load)
       let dest = null;

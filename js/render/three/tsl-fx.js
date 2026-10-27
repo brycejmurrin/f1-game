@@ -391,11 +391,12 @@
 
     /** begin(frame) -> decal-pass uniforms (js/render/glx/glx.js semantics: the
      * AMBIENT and KEY LIGHT sliders re-light the sponsor marks too). */
+    // The knob read, hoisted: updateFrame runs every frame (#3104 F5, as tsl-lit's _tk).
+    const _tk = (T, id, def) => (T && T[id] != null ? T[id] : def);
     function updateFrame(frame) {
       _decalFrame++;   // new frame: last frame's decal mats are evictable again
       const T = (frame && frame.tune) || null;
-      const k = (id, def) => (T && T[id] != null ? T[id] : def);
-      const kM = k("keyMul", 1), aM = k("ambientMul", 1);
+      const kM = _tk(T, "keyMul", 1), aM = _tk(T, "ambientMul", 1);
       const d = frame.sunDir;
       if (d) U.sunDir.value.set(d[0], d[1], d[2]);
       const s = frame.sunColor;
@@ -406,7 +407,7 @@
       U.ambGround.value.set(ag[0] * aM, ag[1] * aM, ag[2] * aM);
       const fc = frame.fogColor;
       if (fc) U.fogColor.value.set(fc[0], fc[1], fc[2]);
-      U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * k("fogDensityMul", 1);
+      U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * _tk(T, "fogDensityMul", 1);
     }
 
     return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, linePalette, lineOpacity,
