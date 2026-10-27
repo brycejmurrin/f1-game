@@ -16,7 +16,7 @@
 //   open      the PR is open and not a draft, and its head is the `--sha` the workflow gated (when given)
 //   hold      no `hold` label (replaces the body line `MERGE-HOLD:`, which is no longer read)
 //   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored)
-//   ci        the `CI` check-run is `success` on the PR's current head, newest attempt
+//   ci        the `CI` check-run from the GitHub Actions app is `success` on the PR's current head, newest attempt
 //   gen       the head merges clean onto the current base tip in a throw-away worktree, and `gen:check` passes there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
@@ -38,6 +38,9 @@ import { exitIfHelp } from "../lib/cli-args.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 /** The deploy branch's required CI check (ci.yml `ci-verdict`, Bryce 2026-10-15). */
 export const REQUIRED_CHECK = "CI";
+/** The only app whose `CI` check-run counts: ci.yml runs under GitHub Actions. Any token with `checks: write` can
+ * create a check-run named `CI`, but only under its OWN app, so a run from another app (or none) is ignored. */
+export const CI_APP = "github-actions";
 /** The label that vetoes a landing (plan §4.1: whoever sets it removes it; Bryce can always remove it). */
 export const HOLD_LABEL = "hold";
 /** Game merges are the ones a Pages train ships; the distance row counts them. */
@@ -78,11 +81,11 @@ export function planRow(body) {
   return row(true, p.state === "none" ? "no ## Plan checklist in the body" : `Plan closed (${p.items} items)`);
 }
 
-/** ci: the required check-run on the head, newest attempt (highest id), success only. Pure. */
-export function ciVerdict(checkRuns, name = REQUIRED_CHECK) {
+/** ci: the required check-run on the head from `app` (CI_APP), newest attempt (highest id), success only. Pure. */
+export function ciVerdict(checkRuns, name = REQUIRED_CHECK, app = CI_APP) {
   let best = null;
   for (const c of checkRuns || []) {
-    if (!c || c.name !== name) continue;
+    if (!c || c.name !== name || c.app?.slug !== app) continue;
     if (!best || (c.id || 0) > (best.id || 0)) best = c;
   }
   // Not finished is "waiting", not "refused": a `land` label added while CI still runs must not paint `gate` red.
@@ -160,7 +163,8 @@ export function distanceFor({ head, tip, cwd = ROOT, max = MAX_BEHIND, run = git
 /**
  * The environment for code from the merge result (gen:check, the ratchet tests): the PR's own scripts run there, so
  * no token and none of the runner's file-command paths (GITHUB_OUTPUT, GITHUB_ENV, …) a script could write a forged
- * gate verdict or a check run through. land.yml's `gate` job holds `checks: write`. Pure.
+ * verdict through. Defence in depth only: the parent's environment is readable by the same uid, so land.yml runs this
+ * gate in a job whose token is read-only (`land-gate`), and a separate job with no repo code posts the check. Pure.
  */
 export function untrustedEnv(env = process.env) {
   const out = { ...env };
