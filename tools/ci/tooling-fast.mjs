@@ -230,10 +230,9 @@ export function tapFailureDetail(text) {
  * the job reports `cancelled` with every START line but no verdict — the shape
  * AGENTS.md rule 8 teaches everyone to read as a busy runner. Two layers:
  *   --test-timeout   node's own bound (ms, default Infinity:
- *                    https://nodejs.org/api/cli.html#--test-timeout). MEASURED:
- *                    under `node --test <file>` the FILE is itself a test of
- *                    the runner and inherits it, so this bounds each test AND
- *                    the file's tests as a whole — a stuck one fails as
+ *                    https://nodejs.org/api/cli.html#--test-timeout). It bounds
+ *                    each test (isolation "none", below: the file is no longer
+ *                    a test of its own) — a stuck one fails as
  *                    `not ok … test timed out after Nms` with its name;
  *   the file timer   a hard wall per FILE, a minute later, because the
  *                    timeout cannot see work outside a test (a handle that
@@ -244,6 +243,28 @@ export function tapFailureDetail(text) {
  * 540 s; the 600 s wall still lands inside ci.yml's 15-minute guards job for a
  * file that starts first, which longest-first makes the slow ones do.
  * APEX_TOOLING_TEST_TIMEOUT_S / APEX_TOOLING_FILE_TIMEOUT_S override both. */
+/* NO SECOND PROCESS PER FILE (#3885). This runner already gives each file its
+ * own process, so node's default `--test-isolation=process` only adds a
+ * grandchild whose results reach `node --test` as a v8-serialized stream on
+ * stdout. Node 22's parser of that stream (lib/internal/test_runner/runner.js,
+ * FileTest.parseMessage) defers a chunk's trailing 0xFF as a possible header
+ * byte, then re-appends it AFTER the next chunk whenever the buffer head is
+ * shorter than a frame header — a pipe read that ends 5 bytes into a frame
+ * whose next byte is 0xFF scrambles the frame, and #drainRawBuffer then loops
+ * forever on a message that can never complete: 100 % of one core, SIGTERM
+ * unhandled (the handler is JS), no --test-timeout (the tests already ended).
+ * Read sizes follow load, so it struck at random: perf-governor.test.mjs,
+ * loadavg 7, ok 64 then silence until the 600 s wall (run 40411198783).
+ * Repro: a test whose last stdout bytes are FF 0F 00 hangs `node --test`;
+ * tooling-fast-runner.test.mjs pins it. Fixed upstream on main
+ * (#pendingPartialV8Header), in no release as of v26.0.0. Isolation "none"
+ * runs the file inside the runner, so no stream exists to misparse; the
+ * per-test timeout still names a stuck test. Spelled --experimental-test-isolation
+ * before v23.6 (https://nodejs.org/api/cli.html#--test-isolationmode). */
+const [NODE_MAJOR, NODE_MINOR] = process.versions.node.split(".").map(Number);
+export const TEST_ISOLATION_FLAG = NODE_MAJOR > 23 || (NODE_MAJOR === 23 && NODE_MINOR >= 6)
+  ? "--test-isolation=none" : "--experimental-test-isolation=none";
+
 const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
 const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
 
@@ -335,12 +356,12 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     }
 
     // detached: the child leads its own process group, so the file timer can
-    // kill `node --test` AND the per-file subprocess it spawns in one signal.
+    // kill `node --test` and anything the file spawned in one signal.
     // The failure parser below consumes TAP. Node 23+ defaults to spec even
     // when stdout is piped, so the wire format must be explicit.
     // https://nodejs.org/api/test.html#test-reporters
     const child = spawn(process.execPath,
-                        ["--test", "--test-reporter=tap", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
+                        ["--test", TEST_ISOLATION_FLAG, "--test-reporter=tap", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
                         { cwd: ROOT, env: childEnv, detached: true });
     live.add(child);
     let out = "", err = "", timedOut = false;
