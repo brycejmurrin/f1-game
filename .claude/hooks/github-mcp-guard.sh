@@ -103,7 +103,7 @@ def deploy_ref():
 def truthy(v):
     return v is True or str(v).strip().lower() in ("true", "1", "yes", "on")
 DENY_GITDATA = ("writes files through the GitHub Git Data / contents API, which skips .githooks/pre-push: files reach "
-                "GitHub by `git push` (AGENTS.md); see docs/notes/CODEX-ARCHIVE-MINING-2026-10-26.md R2-2.")
+                "GitHub by `git push` (AGENTS.md).")
 decision, reason = None, None
 merging = tool in ("merge_pull_request", "enable_pr_auto_merge")
 if name == "unknown":

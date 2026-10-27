@@ -201,7 +201,8 @@ test("Codex connector shape: merge/ready need receipts, forced or deploy-branch 
     for (const t of ["create_blob", "create_tree", "create_commit", "update_file"]) {
       const out = mcp(C + t, { content: "x" });
       assert.equal(out?.permissionDecision, "deny", t);
-      assert.ok(/git push.*R2-2/s.test(out.permissionDecisionReason), `${t}: ${out.permissionDecisionReason}`);
+      assert.equal(out.permissionDecisionReason, `github-mcp-guard: ${t} writes files through the GitHub Git Data / contents API, ` +
+        "which skips .githooks/pre-push: files reach GitHub by `git push` (AGENTS.md).", t);
     }
     assert.equal(mcp("github.push_files", { branch: "cursor/x-1" })?.permissionDecision, "deny", "dotted name, push_files");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
