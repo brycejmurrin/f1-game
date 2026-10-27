@@ -36,9 +36,13 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
 5. **Land.** When `node tools/ci/ready-gate.mjs --pr <n>` exits 0: flip the PR ready, add the `land` label, refresh
    the Hand-off block. Then the session ENDS. `land.yml` runs `merge-gate.mjs --check` as the check named `gate`
    and arms auto-merge pinned to your head; the ruleset merges when `gate` is green (its ci row requires the newest
-   check named exactly `CI` green on your head). Adding `land`
-   while CI still runs is fine: `gate` shows in progress ("waiting") and re-evaluates when CI ends. A red or a
-   conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
+   check named exactly `CI` green on your head). Adding `land` while CI still runs is fine: `gate` shows in
+   progress ("waiting") and re-evaluates when CI ends. Going back to draft or removing `land` turns `gate` red. A
+   red or a conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
+
+   How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation (the next
+   event re-gates it); `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
+   progress ("error, will retry"), never red.
 6. **Stop at the cost cap.** The brief's cap is $10 soft. At the cap: finish the current unit, leave the Plan and
    the Hand-off block current, add `needs-owner`, and end. The $15 hard-cap archive is NOT built (`dispatch.mjs`
    reads no cost), so the soft cap is yours to keep.
@@ -81,11 +85,11 @@ starts from this block and the Plan; it reads nothing else.
 | `priority` | issue, PR | Bryce's one steering word: launched or landed first |
 | `run-ci` | draft PR | run the fast tier on the draft |
 | `land` | PR | the worker asks GitHub to land it: `gate` check, then auto-merge |
-| `hold` | PR | do not land; whoever set it removes it, Bryce always can; disarms an armed merge |
+| `hold` | PR | do not land; whoever set it removes it, Bryce always can; adding it turns an existing `gate` red ("not asked") and disables auto-merge |
 | `needs-owner` | PR | no live worker; the dispatcher launches a takeover |
 | `lane:claude` / `lane:cursor` / `lane:codex` | PR | which host owns it |
 | `dispatch:pause` | Dispatch issue | launch nothing |
-| `dispatch:merge-pause` | Dispatch issue | arm nothing |
+| `dispatch:merge-pause` | Dispatch issue | arm nothing: `land.yml` posts `gate` in progress ("paused"); removing the label takes effect on each PR's next event |
 | `deploy:red` | Board issue | the latest Pages train failed; one fixer is launched |
 | `epic` | issue | a parent; the work is in its sub-issues, so never take the epic itself |
 | `bug` | issue | something is broken (GitHub's default label) |
@@ -143,8 +147,9 @@ arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and bin
 
 ## `LAND_TOKEN`
 
-`land.yml` arms auto-merge with the repository secret `LAND_TOKEN` (a fine-grained PAT or GitHub App token with
-`contents: write` and `pull-requests: write` on this repository). Without it the workflow falls back to
+`land.yml` arms auto-merge with the repository secret `LAND_TOKEN` (a fine-grained PAT on this repository with
+Contents, Pull requests and Workflows, each read and write; Workflows is needed to merge a PR that touches
+`.github/workflows/`). Without it the workflow falls back to
 `GITHUB_TOKEN`, which still lands the PR, but "events triggered by the GITHUB_TOKEN will not create a new workflow
 run": the merge starts no Pages train, and the change ships on the 6-hourly cron or a manual dispatch. The job
 summary says so when it fell back. The deploy branch ruleset "Deploy-reset" (set in the GitHub UI by Bryce; since
