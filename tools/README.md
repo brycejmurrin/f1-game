@@ -489,6 +489,7 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/explorer/inspector.mjs** | Read-only UI inspection: semantic controls, explicit live bindings, hit tests, CDP styles and state differences. | — |
 | **ui/explorer/modes.mjs** | Eight UI exploration modes sharing bounded evidence, replay and a real navigation graph. | — |
 | **ui/explorer/report.mjs** | Offline UI explorer evidence report with native navigation, linked state graph and safe local artifacts. | — |
+| **ui/explorer/summary.mjs** | Offline summaries of saved explorer JSON (replay bundles, inspections); no browser, no inference beyond the data. | — |
 | **ui/explorer/transitions.mjs** | Bounded adaptive classification histories and forward/reverse viewport path comparisons. | — |
 | **ui/fit-audit.mjs** | The NUMBERS fit audit over viewports × interface scales: tap targets, legibility floor, clipped-without-scroll. | ui-menu-a11y |
 | **ui/layout-audit.mjs** | ONE CLI for menu geometry + PNG/DOM capture: clip/tap/overflow matrix, `--gallery`, `--screen=ID`, `--survey`. | survey-ui-matrix |

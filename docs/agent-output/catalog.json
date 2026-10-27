@@ -4021,6 +4021,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ui/explorer/summary.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/ui/explorer/transitions.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
