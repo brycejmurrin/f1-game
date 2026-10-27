@@ -12,7 +12,7 @@
 //   node tools/perf/first-race-census.mjs [--track monza] [--tod day] [--lap 100] [--cam helmet] [--no-lavapipe]
 //        [--ls "apex26.k=v ..."] [--json artifacts/perf/first-race-census.json]
 //
-// Output: `= first-race-census track=… api=… warm=… pre=N post=M misses=K dist=…m` and one line per pipeline built
+// Output: `= first-race-census track=… api=… warm=… pre=N post=M sync=S misses=K dist=…m` and one line per pipeline built
 // after lights-out: `  +<s> <state> key=<matCache key|-> <obj> <mat> rt=<target> sx=<±1> attrs=<…> <build ms>`.
 import { startStaticServer, launchChromium, WEBGPU_LAVAPE_CHROMIUM_ARGS, WEBGPU_LAVAPE_ENV } from "../lib/harness.mjs";
 import { gotoGame } from "../shot/probe-page.mjs";
@@ -126,7 +126,7 @@ async function main() {
   const { late, groups } = latePipelines(pipes, post.lightsAt);
   const missNew = (post.matMissKeys || []).filter((k) => !((r.pre || {}).matMissKeys || []).includes(k));
   console.log(`= first-race-census track=${o.track} tod=${o.tod || "default"} hook=${r.hook} lavapipe=${o.lavapipe} pre=${pipes.length - late.length} ` +
-    `post=${late.length} groups=${groups.length} misses=${missNew.length} dist=${post.dist}m`);
+    `post=${late.length} sync=${late.filter((p) => !p.async).length} groups=${groups.length} misses=${missNew.length} dist=${post.dist}m`);
   for (const p of groups) console.log(`  +${((p.at - (post.lightsAt || p.at)) / 1000).toFixed(1)}s x${p.n} ${p.state} key=${p.key || "-"} ${p.obj} ${p.mat} ` +
     `rt=${p.rt} sx=${p.sx} tr=${p.transparent} attrs=${p.attrs}${p.indexed ? " idx" : ""} ${p.ms}ms${p.async ? " async" : ""}`);
   for (const k of missNew) console.log(`  miss ${k}`);
