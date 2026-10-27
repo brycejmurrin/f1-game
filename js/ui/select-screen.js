@@ -221,6 +221,35 @@ if ($("ctx-lost-retry")) $("ctx-lost-retry").onclick = () => {
   hideCtxLostNotice();
   if (G.startRace) G.startRace();
 };
+// Title/menu only: any race entry or state hop off "menu" must drop the card —
+// RETRY/DISMISS are not the only ways out (RACE!, Data Hub daily, quali sheet…).
+const bindCtxLostNoticeOnMenuExit = () => {
+  if (G.startRace) {
+    const raceStart = G.startRace;
+    Object.defineProperty(G, "startRace", {
+      configurable: true,
+      enumerable: true,
+      value(...args) {
+        hideCtxLostNotice();
+        return raceStart.apply(G, args);
+      },
+    });
+  }
+  const stateDesc = Object.getOwnPropertyDescriptor(G, "state");
+  if (stateDesc && stateDesc.get && stateDesc.set) {
+    Object.defineProperty(G, "state", {
+      configurable: true,
+      enumerable: stateDesc.enumerable,
+      get() { return stateDesc.get.call(G); },
+      set(v) {
+        const wasMenu = stateDesc.get.call(G) === "menu";
+        stateDesc.set.call(G, v);
+        if (wasMenu && v !== "menu") hideCtxLostNotice();
+      },
+    });
+  }
+};
+bindCtxLostNoticeOnMenuExit();
 showCtxLostNotice();
 
 /** Title menu after quitToMenuAfterCtxLost: screens, inert, doors, home preview latch. */
