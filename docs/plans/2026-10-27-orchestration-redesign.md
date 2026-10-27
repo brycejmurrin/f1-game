@@ -235,7 +235,9 @@ Steps 1–3 are three PRs; the `.claude/**` and `.github/**` edits in them need 
 
 1. Ruleset: yes — `CI` + `gate` required, merge commits only, no bypass list (admins bound). Applied by Bryce after
    this PR merges, so the PR that adds `land.yml` is not blocked by its own `gate`.
-2. Token: a fine-grained PAT as `LAND_TOKEN` (contents, pull requests, checks: write; this repository only).
+2. Token: a fine-grained PAT as `LAND_TOKEN` (Contents and Pull requests: read and write; this repository only). It
+   only arms and disarms auto-merge; the `gate` check run is posted by the job's own `GITHUB_TOKEN` (`checks: write`),
+   since only GitHub Apps can create check runs.
 3. Stay user-owned: a transfer changes the Pages URL Bryce plays on; the base-distance row covers the risk.
 4. At most one console session per account (Bryce's own); every other session is a dispatcher launch.
 5. Sonnet is the default worker model (`tools/ci/dispatch.json` `model`); a brief names Opus/Fable when needed.
