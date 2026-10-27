@@ -1,0 +1,1 @@
+Fixed: TLX submits the visible chunks of one scenery record as a single mesh when that set is unchanged, instead of one draw per chunk. The triangles and the opaque depth test stay the same; a repeated view does not re-upload the index. `apex26.tlxChunkMerge=0` restores one draw per chunk; values 1–4 stay the build-time chunk merge.
