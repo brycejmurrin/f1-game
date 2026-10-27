@@ -34,7 +34,7 @@ test.describe.parallel("Career — the modes screen", () => {
     await expect(page).toHaveTitle(/Apex 26/);
     const errors = [];
     page.on("pageerror", e => errors.push(e.message));
-    const expected = await page.evaluate(() => {
+    const expected = await page.evaluate(async () => {
       window.__apex.career({ teamId: "haas", seat: 1, seed: 7 });
       const day = "2026-10-16", key = i => JSON.stringify({ bias: i });
       const daily = DailyChallenge.create({ store: GameStore.store });
@@ -43,7 +43,8 @@ test.describe.parallel("Career — the modes screen", () => {
       const envelope = CareerBackup.build();
       envelope.daily = { days: { [day]: { best: 80, laps: 1,
         classes: { [key(8)]: { best: 80, laps: 1 } } } } };
-      const result = CareerBackup.apply(envelope);
+      // Overwriting the live slot keeps a "before-import" restore point first.
+      const result = await CareerBackup.applyWithUndo(envelope);
       if (!result.ok) throw new Error("Daily merge refused: " + result.reason);
       return GameStore.store.get("daily.v1");
     });
@@ -59,7 +60,7 @@ test.describe.parallel("Career — the modes screen", () => {
     expect(saved.slots).toHaveLength(6);
     expect(saved.daily).toEqual(expected);
     expect(Object.keys(saved.daily.days["2026-10-16"].classes)).toHaveLength(9);
-    const restored = await page.evaluate(saved => CareerBackup.apply(saved), saved);
+    const restored = await page.evaluate(saved => CareerBackup.applyWithUndo(saved), saved);
     expect(restored.ok).toBe(true);
     expect(errors).toEqual([]);
     await info.attach("Daily backup after class merge", { path, contentType: "application/json" });

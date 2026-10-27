@@ -439,6 +439,36 @@ test("an insert / delete / stamp keeps zones before the edit at their distance f
   samePlace(pointAt(d3.pts, d3.elevations[0].s), pointAt(d2.pts, d2.elevations[0].s), 1e-6, "…and an upstream one");
 });
 
+test("a stamp over a span that wraps the start line, and deleting point 0, keep every zone on its road (WP-G1)", () => {
+  const b = bootScreen();
+  const d0 = openGreen(b);
+  const N = d0.pts.length;
+  const cum = (p) => { const c = [0]; for (let i = 0; i < p.length; i++) { const a = p[i], q = p[(i + 1) % p.length]; c.push(c[i] + Math.hypot(q[0] - a[0], q[1] - a[1])); } return c; };
+  const c0 = cum(d0.pts), L0 = c0[N], f = (k) => c0[k] / L0;
+  const a = Math.floor(N / 3), m = Math.floor(N / 2), z = Math.floor((2 * N) / 3);
+  const zones = { bankZones: [{ frac: f(m), angleDeg: 8, widthM: 100 }], bridges: [{ s: f(z), halfM: 60, rise: 6 }], elevations: [{ s: f(a), halfM: 60, rise: 2 }],
+    props: [{ kind: "trees", s: f(m + 2), side: 1 }] };
+  const loaded = Object.assign({}, d0, zones);
+  b.D.load(loaded);
+  const z0 = plain(b.D.state().design);
+  const keep = (dn, what, tol) => {
+    assert.notDeepEqual(dn.pts[0], z0.pts[0], `${what}: the start moved (the case under test)`);
+    samePlace(pointAt(dn.pts, dn.bankZones[0].frac), pointAt(z0.pts, z0.bankZones[0].frac), tol, `${what}: bank`);
+    samePlace(pointAt(dn.pts, dn.bridges[0].s), pointAt(z0.pts, z0.bridges[0].s), tol, `${what}: bridge`);
+    samePlace(pointAt(dn.pts, dn.elevations[0].s), pointAt(z0.pts, z0.elevations[0].s), tol, `${what}: elevation`);
+    if (z0.props && z0.props.length) samePlace(pointAt(dn.pts, dn.props[0].s), pointAt(z0.pts, z0.props[0].s), tol, `${what}: prop`);
+  };
+  // Shift-click span from N-3 round to 2: the splice keeps the road from its rejoin up to N-3, makes
+  // that rejoin point the new index 0 and (past 200 points) RDP-thins the survivors at 1 m — hence 1.5 m.
+  b.D.setTool("corner");
+  assert.equal(b.D.applyStamp(N - 3, 2), true);
+  keep(plain(b.D.state().design), "wrapped stamp", 1.5);
+  // DELETE on the start point: old pts[1] becomes the start.
+  b.D.load(loaded);
+  assert.equal(b.D.deletePoint(0), true);
+  keep(plain(b.D.state().design), "delete point 0", 1e-6);
+});
+
 test("full-lap width survives REVERSE and START HERE through storage and engine rebuild", () => {
   const b = bootScreen();
   b.D.init(b.G, { custom: b.C, root: b.root });

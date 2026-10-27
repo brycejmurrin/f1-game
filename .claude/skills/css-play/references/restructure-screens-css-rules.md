@@ -107,7 +107,7 @@ context overrides beats N variant classes.
 
 **13. Do not split a monolithic HTML file on node count alone — but this shell
 has now crossed the line it used to sit under.** Lighthouse warns at ~800 body
-nodes and errors at ~1,400; the shell measured ~969 when this rule was written and has grown well past it (run
+nodes and errors at ~1,400; the shell is past the warning line (run
 `node tools/check/tree-counts.mjs` for the ratchet's `shellNodes`, or
 `grep -oE '<[a-zA-Z][a-zA-Z0-9-]*' index.html | wc -l`). The original argument
 was "comfortably under the error line, so leave it alone"; that premise is
@@ -128,17 +128,9 @@ count.
 **14. Express height responsiveness as at most TWO breakpoints, resolved once
 into a single `data-density` attribute.** *Prevents:* N media queries asking the
 same question N slightly different ways, which is exactly how they drift.
-Material ships three height tiers from two breakpoints; this repo measured
-eight thresholds (500/520/560/599/600/620/640/700 across five files) when this
-rule was written (2026-08-08) — that consolidation has since happened: as of
-2026-08-21 the live set was **three height queries across three files** (2026-09-30: `max-height` 560/699/740/956 and `min-height: 600` remain — re-count with the restructure.md command):
-`(orientation: landscape) and (max-height: 560px)` in `css/tokens.css`
-(spacing-only density), `max-height: 699px` in `css/menus.css` (title-screen
-compact zoom cap, paired with a width arm), and `min-height: 600px` in
-`css/track-detail.css`; `css/data.css` and `css/responsive.css` now carry
-none (`css/tuner.css` still records the deliberately removed 620px). Already
-at the target this rule argues for. Re-run the measurement before treating
-this as an open problem.
+Material ships three height tiers from two breakpoints. Target: at most two
+height breakpoints. Count the live set with the restructure.md command before
+treating this as an open (or closed) problem; never quote an old count.
 
 **15. `container-type: size` IS usable when the element has an explicit block
 size — do not assume container queries are inline-only.** Baseline widely
@@ -189,7 +181,6 @@ entries there — that test is how you prove the count went down.
 
 - `docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md` — every screen measured at 852x393
 - `docs/archive/research/UI-REDESIGN-2026-08.md` — the scale/type/container proposal (read §9 first)
-- `../../../../docs/COMPONENTS.md` — the seven axes and which mechanism owns each
-- `docs/COMPONENTS.md` — the class-family inventory
+- `docs/COMPONENTS.md` — the component inventory (class families, owners) and the layout axes (which mechanism owns each)
 - `ui-menu-a11y` skill — per-bug menu/dialog/Escape/focus workflow
 - `check-changes` skill — picking and running the validation groups

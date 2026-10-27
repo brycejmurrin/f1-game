@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: "Use when files, docs or the tree grow too large — saturated size ratchet, dead or duplicate code, dead CSS selectors, repeated docs rules, stale comments, extract/split candidates, too much context. CSS restructure → css-play; fat skill → agent-config."
+description: "Use when files, docs or the tree grow too large — saturated or OVER size ratchet (commit blocked), dead or duplicate code, dead CSS selectors, repeated docs rules, stale comments, extract/split candidates, too much context. CSS restructure → css-play; fat skill → agent-config."
 ---
 
 # Cut bloat — shrink, split, dedupe, prove dead
@@ -14,13 +14,23 @@ quirk — the measured list is [references/do-not.md](references/do-not.md).
 ```sh
 node tools/check/bloat-scan.mjs --json              # size + ratchet slack (evidence, NOT candidates)
 node tools/check/ratchets.mjs --json                # per-metric lines/codeLines/gMembers/topLets slack
-node tools/check/extract-module.mjs js/game.js <start> <end>   # free refs of ONE whole function: take its line range from grep -n first
+node tools/check/extract-module.mjs js/game.js <start> <end>   # free refs of ONE whole function: its range from apex-lsp lsp_outline (skill code-nav)
 #   write mode: … [--mutable a,b] [--out <file>] [--g-out <file>]  (carves.md §1)
 ```
 
+`ratchets.mjs` is the verdict; `bloat-scan` only ranks (it reads `ratchets.json` `lines`, not the branch's
+`ratchets.d` delta or the other metrics).
+
+**Over the ceiling** (an `OVER` row; the commit is blocked): the commit hook's absorb is
+`tools/hooks/ratchet-reason.mjs` (a small silent allowance, a larger one with a `Ratchet-Reason:` trailer — read
+the constants there); past it every commit on the branch blocks until the carve lands. Run
+`node tools/check/ratchets.mjs --base origin/claude/f1-game-project-26h3ng` (your own raise vs an inherited one),
+then carve until value ≤ ceiling and `--update --lower-only`: a carve that is too small prints `SKIP RAISE` and the
+row stays OVER. The raise `ratchets.mjs` suggests is Bryce's alone (`.claude/rules/game-code.md`); never type it.
+
 Slack 0 on every row = saturated: the scan names no block. First `node tools/check/ratchets.mjs --base origin/<ship>` (`<ship>` = the deploy branch, `claude/f1-game-project-26h3ng`)
 (names raises: a blocked commit may be a raise, not saturation). Seed the auditor with
-`docs/ARCHITECTURE.md` §Deferred follow-ups / §Extraction lessons (sort by boundary crossings). Candidates come
+`docs/notes/DEFECT-LEDGER.md` §8 and `docs/ARCHITECTURE.md` §Extraction lessons (sort by boundary crossings). Candidates come
 only from `bloat-auditor` (a cohesive block with few free names — `extract-module`
 prints them as `name×count`; `let`s are the `G` accessors the carve costs).
 Done = ratchet `--update` lowers the ceiling; `ratchets.mjs` ends `all at or under`.
@@ -46,7 +56,7 @@ locksteps; if `tools/manifest.cjs` changed, run `npm run gen`
 1. **One carve per commit.** Extraction leftovers are the measured failure
    (`ARCHITECTURE.md` §Reorg — copied constants, leftover `_cautionOn`).
 2. **Ratchets only go down here** (`.claude/rules/game-code.md`): `node tools/check/ratchets.mjs --update --lower-only`
-   in the same commit as the extract.
+   in the same commit as the extract (two calls, AGENTS.md rule 12: the hook reads the working tree).
 3. **Never convert IIFE → ESM**; a carved-out file follows the new-file recipe in
    `.claude/rules/game-code.md`.
 4. **Never hand the auditor a browser run** (AGENTS.md rule 10, `bash-guard.sh`).

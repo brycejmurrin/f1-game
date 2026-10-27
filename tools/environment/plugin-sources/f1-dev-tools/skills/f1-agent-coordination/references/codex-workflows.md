@@ -1,6 +1,6 @@
 # Codex-native coordination
 
-Use this route for the current Codex task and its native children. Use [transport adapters](transports.md) for independent provider sessions or the existing fleet bus. The bus records coordination; it does not create an agent, prove delivery or grant authority.
+Use this route for the current Codex task and its native children. Use [transport adapters](transports.md) for independent provider sessions or GitHub coordination (`docs/WORKERS.md`). A GitHub comment records coordination; it does not create an agent, prove delivery or grant authority.
 
 ## Host and ownership preflight
 
@@ -61,7 +61,7 @@ The parent reviews the result and verifies the integrated candidate. Child compl
 
 ## Read-only integration test plan
 
-This plan does not itself claim a live test passed. Use the current host's real schemas and run native probes when the requested agent/setup work covers them; otherwise report the live steps as not run. No fleet writes, PR changes, browser launches, source edits or external-session launches are needed.
+This plan does not itself claim a live test passed. Use the current host's real schemas and run native probes when the requested agent/setup work covers them; otherwise report the live steps as not run. No GitHub comments, PR changes, browser launches, source edits or external-session launches are needed.
 
 1. **Discovery:** Verify that the chosen native controls are actually exposed, with usable schemas. If only configuration is visible, return unknown/unverified attachment rather than inventing a call.
 2. **Round trip:** Reuse a suitable worker or create one read-only child with one source/policy inspection. Receive READY, send `SETUP-PING <fresh nonce>` through the supported follow-up, and verify exact `SETUP-PONG <nonce>`. Retain the actual child ID and replies; do not promise a fixed global worker limit.

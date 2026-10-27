@@ -218,7 +218,7 @@ test("RENDER_SPECS / XR_SPECS partition root specs — every named project entry
   assert.match(cfg, /name:\s*"xr-emulated"/, "xr-emulated Playwright project required for IWER suite");
   assert.match(cfg, /const WEBKIT_SPECS = \[/, "WEBKIT_SPECS list required for the iPhone-path proxy project");
   assert.match(cfg, /APEX_WEBKIT === "1"/, "webkit project is opt-in via APEX_WEBKIT (default npm test must not require WebKit)");
-  assert.match(cfg, /name:\s*"webkit"/, "webkit Playwright project required for webkit-leg.yml");
+  assert.match(cfg, /name:\s*"webkit"/, "webkit Playwright project required for test:webkit");
   assert.match(cfg, /testIgnore: \[\.\.\.RENDER_SPECS, \.\.\.XR_SPECS, \.\.\.WEBKIT_SPECS, \.\.\.MANUAL_IGNORE\]/,
     "headless must ignore WEBKIT_SPECS so default Chromium runs never select them");
 });
@@ -410,7 +410,7 @@ test("Playwright collects tests/specs/*.spec.js by default — no unit file, no 
   const specs = fs.readdirSync(path.join(ROOT, "tests/specs")).filter((f) => f.endsWith(".spec.js")).map((f) => `tests/specs/${f}`);
   // WEBKIT_SPECS are opt-in (APEX_WEBKIT=1): the webkit project is absent by
   // default so bare `npm test` never needs a WebKit binary (#2705). They stay
-  // on disk and in test:webkit / webkit-leg.yml.
+  // on disk and in test:webkit.
   const webkitOptIn = specs.filter((f) => /\/webkit-[^/]+\.spec\.js$/.test(f));
   const expectedDefault = specs.filter((f) => !webkitOptIn.includes(f));
   assert.deepEqual([...collected].sort(), expectedDefault.sort(),

@@ -1,0 +1,1 @@
+Fixed: importing a career backup over a saved slot now keeps a local restore point of that save first, and refuses the import (nothing changes) when the restore point cannot be saved, instead of replacing the save with no undo.

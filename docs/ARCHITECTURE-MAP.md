@@ -105,11 +105,11 @@ never hand-edit those (see `AGENTS.md` rule 11).
 | `npx serve -l 3456 .` | Local play |
 | `node tools/ci/verify-change.mjs --fast --json` | Diff-aware edit-loop gate; reports selected tooling files and critical-path budget |
 | `node tools/ci/tooling-fast.mjs --changed --jobs=3` | Diff-aware structural edit-loop runner |
-| `npm run test:tooling-fast` | Full structural floor before a code push |
-| `node tools/ci/verify-change.mjs` | Fast gate + planned browser groups (full pre-push/deploy gate remains authoritative) |
+| `npm run test:tooling-fast` | The whole structural rung; runs on the PR as `Structural guards` |
+| `node tools/ci/verify-change.mjs` | Fast gate + planned browser groups |
 | `node tools/track/verify-track.cjs <id>` | One circuit build check |
 | `node tools/ci/pick-tests.mjs` | Which browser GROUPS this diff needs |
-| `node tools/ci/deploy.mjs --gate-only` | Full pre-push gate (no push) |
+| `node tools/ci/deploy.mjs --gate-only` | Optional: the deploy's node half, to reproduce a gate-only red (no push) |
 
 Ship branch: `claude/f1-game-project-26h3ng` → Pages release train (`pages.yml`)
 → reusable CI release gate → publication at
@@ -117,8 +117,8 @@ https://brycejmurrin.github.io/f1-game/. Feature work: `cursor/<topic>-<hash>`
 branches; sync with `node tools/ci/sync-pr.mjs`, not hand merges.
 See [VERIFICATION.md](VERIFICATION.md#ci-and-pages) for PR, Pages, and live-site evidence.
 
-Verification scales to the change — one browser group is expensive on
-SwiftShader. Details: [TESTING.md](TESTING.md).
+The pre-push floor is `AGENTS.md` rule 3. Verification scales to the change —
+one browser group is expensive on SwiftShader. Details: [TESTING.md](TESTING.md).
 
 ## Where to edit what
 
@@ -133,8 +133,9 @@ SwiftShader. Details: [TESTING.md](TESTING.md).
 
 ### Where new code goes (ratchet headroom)
 
-Every size ratchet in `tests/data/ratchets.json` is saturated (`slack: 0`),
-especially `js/game.js` (lines / codeLines / gMembers / topLets). **Do not grow
+Many size ratchets in `tests/data/ratchets.json` run at or near `slack: 0`
+(check `node tools/check/ratchets.mjs --json` for today's headroom), `js/game.js`
+(lines / codeLines / gMembers / topLets) above all. **Do not grow
 `game.js` to land a feature.** Put new logic in the domain directory that owns
 it (`js/physics/`, `js/ui/`, `js/race/`, `js/camera/`, …) as a hyphenated IIFE
 with `Module.create(G)` only when session state is required; prefer explicit

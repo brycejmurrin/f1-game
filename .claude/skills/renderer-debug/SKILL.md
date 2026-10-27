@@ -13,12 +13,23 @@ backend is not evidence that it runs (`docs/ARCHITECTURE.md` §Boot evidence).
 
 **Bryce's path first.** He plays TLX on **WebGPU** on an iPhone (Metal) — `THREE PATH: WEBGPU`.
 Probes here pin `apex26.tlxForceGL=1` (TLX's WebGL2 leg) because three's WebGPU path dies under
-SwiftShader, so a container probe is NOT his path and no evidence about his GPU. Measure his path
-on a real GPU: `gpu-census.yml` on `macos-latest` (the Metal leg; read its `path:` row and the Verdict
-step). Agent tokens cannot `workflow_dispatch` it (403): edit `.github/gpu-census-request.json`
-(bump `rev`, set `images`/`track`/`tod`…) on your `cursor/**` branch and PUSH — that runs the
-branch's tree with the file's inputs; a session with a dispatch-capable token may use the GitHub MCP
-`actions_run_trigger` instead.
+SwiftShader, so a container probe is NOT his path and no evidence about his GPU.
+
+**A report from the phone — ladder, cheapest first:**
+1. Ask for the on-device overlay: open the game with `?gfxdebug=1` (or set `apex26.gfxDebug="1"`)
+   and paste its Copy line (`js/perf/gfx-debug-overlay.js`). Free, and it is HIS device: read
+   the backend, the `three api=… pin=… soft=…` row (which TLX leg bound) and `gpuErrors`.
+2. `gpu-census.yml` on `macos-latest`: a real GPU, but **Chromium/Dawn on Metal, not WebKit/Safari**
+   (read its `path:` row and the Verdict step). A green census does not clear a WebKit-only failure
+   (derivative uniformity, `uncapturederror`, the `var<private>` cap: the WGSL rules below).
+3. A real iPhone Safari: the `browserstack` MCP (`docs/AGENT-SURFACE.md`; real iOS devices,
+   outward and metered).
+4. A software probe here: WGSL/pipeline validation only, never a verdict on his GPU.
+
+Dispatch the census on your pushed branch: `gh workflow run gpu-census.yml --ref <branch> -f track=… -f tod=…`
+(or the GitHub MCP `actions_run_trigger`); agent tokens dispatch fine. Only a request-only leg (`leg`,
+`lf_*`, `lrm_*` in `.github/gpu-census-request.json`; the form is at the 25-input cap) still goes by
+editing that file on your branch and pushing.
 
 ## Where things live (rendering stack)
 
@@ -37,7 +48,7 @@ branch's tree with the file's inputs; a session with a dispatch-capable token ma
 
 Pick the backend section below from `env.backend`; cross-backend parity → `tests/unit/backend-surface-parity.test.mjs`.
 
-## Step 0 — which backend answered (BROWSER-ONLY: needs a live page)
+## Step 0 — which backend answered (BROWSER-ONLY: needs a live page; a phone → the gfxdebug line above)
 
 ```js
 __apex.diag({download:false}).env.backend   // "three" | "webgl2" | "webgpu"
@@ -62,7 +73,7 @@ read the backend first, then go to its section; `hdrMode()` is GLX's.
 
 | `env.backend` | Section | Reference |
 |---|---|---|
-| `three` | TLX, below | `.claude/rules/render-tlx.md` |
+| `three` | TLX, below; both TLX legs read `three`, so read `backendState().forceWebGL` / `pin` (or the gfxdebug `three api=` row) first | `.claude/rules/render-tlx.md` |
 | `webgl2` | GLX, below | [references/glx.md](references/glx.md), [references/glx-failures.md](references/glx-failures.md) |
 | `webgpu` | WGX, below | [references/wgx.md](references/wgx.md), [references/wgx-defects.md](references/wgx-defects.md) |
 
@@ -78,8 +89,12 @@ or `three`. Three picks its own WebGL2 or WebGPU path:
   on purpose. `apex26.tlxForceHw=env|sky|batches|chunked|shadow` runs the
   content paths a real GPU takes on a software adapter. `backendState().pin` /
   `forceWebGL` say which path bound; a failed init records `apex26.gfxTlxFail`.
+- TLX on WebGPU in Safari compiles TSL to WGSL in WebKit, so the five WGSL rules in
+  `.claude/rules/render-wgx.md` (the "Five WGSL rules" bullet) apply to this leg too: a black TLX WebGPU
+  canvas on an iPhone checks them before any shader edit.
 - Probe: `node tools/gfx/gfx-probe.mjs --backend three [--tlx-webgpu --lavapipe]
-  <track>` — `gpuErrors` must be 0 (parent session only: it launches Chromium).
+  <track>` — `gpuErrors` must be 0 (parent session only: it launches Chromium). The rule's gate
+  runs the WebGPU leg on lavapipe on purpose; `--hardware` refuses a fallback adapter.
   `--tod night` for a lighting-dependent defect.
 - Transparent / see-through cars: opaque canvas alpha is required —
   [references/tlx-transparent-cars.md](references/tlx-transparent-cars.md). Never compare the census's two TLX legs on frames or luma
@@ -122,4 +137,4 @@ textured-vs-procedural material look on WGX is **asset-pack**.
 `js/xr/` (ENTER VR, `XrBoot` / `XrSession`, the WebGL2-default VR path, Quest
 controllers, `test:xr` under IWER): [references/xr.md](references/xr.md).
 
-Chrome DevTools heap/LCP playbook: [references/chrome-devtools-perf.md](references/chrome-devtools-perf.md). Census tools: skill **mcp-probe** §Census tools.
+Chrome DevTools heap/LCP playbook: [references/chrome-devtools-perf.md](references/chrome-devtools-perf.md). Memory census tools (heap, meshes; not `gpu-census`): skill **mcp-probe** §Census tools.
