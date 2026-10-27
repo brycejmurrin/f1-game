@@ -29,8 +29,16 @@ const GfxRecovery = (() => {
     let occurrences = 0, reason = "", lastKind = "", dismissed = false;
     let snapshot = null;
 
+    function insideCard(node) {
+      for (let n = node; n; n = n.parentNode) if (n === card) return true;
+      return false;
+    }
     function raiseCard(opening) {
       if (!card || dismissed) return;
+      // DETAILS lives in the card. Its toggle (and the open attribute) used to
+      // hidePopover+showPopover, which dropped scroll position and focus.
+      // https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/toggle_event
+      if (opening && insideCard(opening)) return;
       let host = doc.body;
       // A body-level popover becomes inert when a modal opens above it. Put
       // recovery INSIDE that modal, then promote it to the top layer again.
@@ -50,11 +58,16 @@ const GfxRecovery = (() => {
       // dialog implementations. Repeated graphics errors do not raise it.
       // https://developer.mozilla.org/en-US/docs/Web/API/HTMLElement/showPopover
       if (doc.addEventListener) doc.addEventListener("toggle", (event) => {
-        if (event.target !== card) raiseCard(event.newState === "open" ? event.target : null);
+        if (event.target === card || insideCard(event.target)) return;
+        raiseCard(event.newState === "open" ? event.target : null);
       }, true);
       if (typeof MutationObserver === "function") {
         const observer = new MutationObserver((records) => {
-          for (const record of records) if (record.target !== card && record.attributeName === "open") { raiseCard(record.target.open ? record.target : null); break; }
+          for (const record of records) {
+            if (record.target === card || insideCard(record.target) || record.attributeName !== "open") continue;
+            raiseCard(record.target.open ? record.target : null);
+            break;
+          }
         });
         observer.observe(doc.body, { subtree: true, attributes: true, attributeFilter: ["open"] });
       }
@@ -119,5 +132,31 @@ const GfxRecovery = (() => {
     return { handle, diagnostics, state: () => ({ occurrences, dismissed }) };
   }
   const live = create();
+  // The shell's error overlay is registered in the bubble phase. A known
+  // WebGPU failure is claimed here, in capture, so the player gets the
+  // WebGL2 card instead of a raw stack. Anything else falls through.
+  const w = typeof window !== "undefined" ? window : null;
+  if (w && typeof w.addEventListener === "function" && !w.__apexGfxRecovery) {
+    w.__apexGfxRecovery = true;
+    const route = (event) => {
+      const error = event && (event.error || event.reason);
+      if (!error) return;
+      let claimed = false;
+      try { claimed = live.handle(event.reason ? "rejection" : "error", error); }
+      catch (e) { claimed = false; /* a broken card must not swallow the shell */ }
+      if (!claimed) return;
+      try {
+        if (w.__apexErrors && w.__apexErrors.push) {
+          w.__apexErrors.push({ t: Date.now(), kind: event.reason ? "rejection" : "error",
+            msg: String(error.message || error).slice(0, 400), detail: String(error.stack || "").slice(0, 800) });
+          if (w.__apexErrors.length > 40) w.__apexErrors.shift();
+        }
+      } catch (e) { /* the ring is optional; the card already has the message */ }
+      if (event.preventDefault) event.preventDefault();
+      if (event.stopImmediatePropagation) event.stopImmediatePropagation();
+    };
+    w.addEventListener("error", route, true);
+    w.addEventListener("unhandledrejection", route, true);
+  }
   return { create, knownFailure, handle: live.handle, diagnostics: live.diagnostics };
 })();

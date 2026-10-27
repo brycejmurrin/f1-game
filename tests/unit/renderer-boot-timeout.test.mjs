@@ -180,6 +180,11 @@ test("known asynchronous GPU failure gets one compatibility card with explicit g
   assert.equal(ui.state().occurrences, 9);
   const modal = doc.createElement("dialog"); modal.open = true; dialogs.push(modal); doc.body.appendChild(modal);
   toggleLayer({ target: modal, newState: "open" });
+  const layersBeforeDetails = layers.length;
+  const details = card.children[card.children.length - 1];
+  toggleLayer({ target: details, newState: "open" });
+  toggleLayer({ target: details, newState: "closed" });
+  assert.equal(layers.length, layersBeforeDetails, "DETAILS inside the card does not hide and reshow the popover");
   assert.equal(card.parentNode, modal, "recovery is inside the modal, not inert behind it");
   assert.equal(layers[layers.length - 1], card, "recovery is promoted above a later modal");
   const otherPopover = doc.createElement("aside"); otherPopover.showPopover();
@@ -204,6 +209,40 @@ test("known asynchronous GPU failure gets one compatibility card with explicit g
   assert.equal(reloads, 1);
   backend = { api: "webgl2" };
   assert.equal(ui.handle("rejection", err), false, "no universal GPU-failure classification");
+});
+
+test("a known WebGPU failure is claimed in capture so the raw overlay does not also run", () => {
+  const listeners = [];
+  const context = vm.createContext({
+    console, Promise, Log: { info() {} },
+    GLX: { backendState: () => ({ api: "webgpu" }) },
+    document: {
+      body: { appendChild() {}, children: [] },
+      createElement() {
+        return { style: {}, dataset: {}, children: [], hidden: false, setAttribute() {}, appendChild() {}, focus() {},
+          showPopover() {}, hidePopover() {} };
+      },
+      addEventListener() {},
+      querySelectorAll: () => [],
+    },
+    addEventListener(type, fn, capture) { listeners.push({ type, fn, capture }); },
+    __apexErrors: [],
+  });
+  context.window = context;
+  vm.runInContext(readFileSync(new URL("../../js/render/shared/compatibility-recovery.js", import.meta.url), "utf8"), context, { filename: absSrc("js/render/shared/compatibility-recovery.js") });
+  const hook = listeners.find((l) => l.type === "unhandledrejection" && l.capture === true);
+  assert.ok(hook, "the recovery hook listens in the capture phase");
+  let stopped = false;
+  hook.fn({
+    reason: { message: "Instance dropped in popErrorScope", stack: "at vendor/three-0.186.1/three.webgpu.min.js:2:10" },
+    preventDefault() {},
+    stopImmediatePropagation() { stopped = true; },
+  });
+  assert.equal(stopped, true, "a known failure stops the shell's bubble overlay");
+  assert.equal(context.__apexErrors.length, 1, "the diagnostic ring still records the failure");
+  stopped = false;
+  hook.fn({ reason: new Error("ordinary rejection"), preventDefault() {}, stopImmediatePropagation() { stopped = true; } });
+  assert.equal(stopped, false, "an unrelated rejection still reaches the shell");
 });
 
 // #2285: a WGX/TLX pick that lands on GLX must say WHY, on the console and in
