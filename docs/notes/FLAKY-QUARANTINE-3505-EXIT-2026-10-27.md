@@ -32,12 +32,17 @@ the row first, so each run below is a blocking run of the spec:
 
 | # | run | head | verdict |
 |---|---|---|---|
-| 1 | _pending_ | | |
-| 2 | _pending_ | | |
-| 3 | _pending_ | | |
+| 1 | [40434845441](https://github.com/brycejmurrin/f1-game/actions/runs/40434845441) | ae9895b5 | `= group passed` 4/4 shards; spec `+ pass` first try |
+| 2 | [40546559179](https://github.com/brycejmurrin/f1-game/actions/runs/40546559179) | ae9895b5 | `= group passed (4/4 shards done, 0 failed)` |
+| 3 | [40548339428](https://github.com/brycejmurrin/f1-game/actions/runs/40548339428) | ae9895b5 | `= group passed (4/4 shards done, 0 failed)` |
 
 A run counts only if its log has no `! retry` line for the spec and ends in
 `= run passed`.
+Every shard ran with `APEX_FAIL_ON_FLAKY=1`, so a pass that needed a retry
+would have failed the shard. Runs 40434826142, 40434835826 and 40546536484
+show `cancelled`: `browser-group.yml` cancels an in-progress run of the same
+branch and group (`cancel-in-progress`), so dispatches overlapped. They were
+superseded, not red. Dispatch exit runs one at a time.
 
 ## Left as is
 
