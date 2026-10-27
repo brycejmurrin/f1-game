@@ -462,9 +462,13 @@ const jobsWhere = (pred) => Object.keys(LAND.jobs).filter((k) => pred(LAND.jobs[
 function ghExpr(src, github) {
   const inner = String(src).trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "");
   const js = inner.replace(/!=/g, "!==").replace(/([^!=])==(?!=)/g, "$1===")
-    .replace(/\bgithub((?:\.[\w-]+|\[\d+\])+)/g, (m, rest) => "ctx" + rest.replace(/\./g, "?.").replace(/\[/g, "?.["));
+    .replace(/\bgithub((?:\.[\w-]+|\[\d+\])+)/g, (m, rest) => "ctx" + rest.replace(/\./g, "?.").replace(/\[/g, "?.["))
+    .replace(/\.\*\.(\w+)/g, ".map?.((x) => x.$1)"); // object filter `labels.*.name`
   const format = (f, ...a) => f.replace(/\{(\d+)\}/g, (_, i) => String(a[i] ?? ""));
-  return new Function("ctx", "format", `return (${js});`)(github, format);
+  const contains = (hay, x) => (Array.isArray(hay) ? hay.includes(x) : String(hay ?? "").includes(x));
+  const startsWith = (a, b) => String(a ?? "").startsWith(b);
+  const cancelled = () => false;
+  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs);
 }
 
 test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
@@ -472,12 +476,14 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
   assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
+  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt"], "the immediate re-gate: one PR, the head its budget counts against, the attempt");
+  assert.equal(on.repository_dispatch, undefined);
   assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
   assert.deepEqual(LAND.permissions, {}, "the workflow-level token has no permissions; each job states its own");
 });
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
-  assert.deepEqual(jobsWhere(writes), ["post", "arm"]);
+  assert.deepEqual(jobsWhere(writes), ["post", "arm", "retry"]);
   assert.deepEqual(jobsWhere(usesSecret), ["post", "arm"]);
   assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
   const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
@@ -532,4 +538,115 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   assert.equal(runGate("2026-10-27T10:00:04Z"), "POSTED", "an older status is replaced");
   assert.equal(runGate("2026-10-27T10:00:05Z"), "POSTED", "same second as AT: the old string compare kept it (`Z` > `.`)");
   assert.notEqual(runGate("2026-10-27T10:00:06Z"), "POSTED", "a status newer than this run's read is kept");
+});
+
+// ---- the immediate re-gate: a gate passed on a tip that moved is re-dispatched at once, bounded per head ---------
+
+/** Runs one land.yml step script under bash with `gh` stubbed: GH_LOG records each call; FAKE_PR answers pulls/<n>. */
+function runStep(script, env) {
+  const stub = [
+    `gh() { echo "gh $*" >> "$GH_LOG"; local q="" a args=("$@");`,
+    `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
+    `  case " \${args[*]} " in *" --method POST "*) return "\${GH_POST_RC:-0}" ;; *"/issues"*) echo "\${PAUSED:-false}"; return 0 ;; *"/branches/"*) echo "$NOW_TIP"; return 0 ;; *" pr merge "*) return 0 ;; esac;`,
+    `  if [ -n "$q" ]; then jq -r "$q" <<<"$FAKE_PR"; else echo "$FAKE_PR"; fi; }`,
+  ].join("\n");
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "land-step-"));
+  const files = { GH_LOG: path.join(dir, "gh.log"), GITHUB_OUTPUT: path.join(dir, "out"), GITHUB_STEP_SUMMARY: path.join(dir, "summary") };
+  for (const f of Object.values(files)) fs.writeFileSync(f, "");
+  const r = spawnSync("bash", ["-c", `${stub}\n${script}`], { encoding: "utf8",
+    env: { ...process.env, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH, RETRY_MAX: String(LAND.env.RETRY_MAX), ...files, ...env } });
+  const out = Object.fromEntries(fs.readFileSync(files.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+  const calls = fs.readFileSync(files.GH_LOG, "utf8").split("\n").filter(Boolean);
+  fs.rmSync(dir, { recursive: true, force: true });
+  return { ...r, out, calls };
+}
+fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+const HEAD7 = "a".repeat(40), TIP_A = "b".repeat(40), TIP_B = "c".repeat(40);
+const pr7 = (o = {}) => JSON.stringify({ number: 7, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: HEAD7 }, auto_merge: null, created_at: "2026-10-27T10:00:00Z", labels: [{ name: "land" }], ...o });
+
+test("land.yml retry: workflow_dispatch on the deploy branch only, in the PR's own group, never cancelling", () => {
+  const disp = (ref, pr = "7") => ({ event_name: "workflow_dispatch", ref, run_id: 9, event: { inputs: { pr, head: HEAD7, attempt: "1" } } });
+  assert.equal(ghExpr(LAND.jobs.resolve.if, disp(`refs/heads/${DEPLOY_BRANCH}`)), true);
+  assert.equal(ghExpr(LAND.jobs.resolve.if, disp("refs/heads/cursor/x")), false, "a dispatch on another ref runs that ref's copy of this file: refused");
+  assert.equal(ghExpr(LAND.concurrency.group, disp(`refs/heads/${DEPLOY_BRANCH}`)), "land-7", "queues with the PR's events and CI re-gates");
+  assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], disp(`refs/heads/${DEPLOY_BRANCH}`)), false, "a dispatched re-gate never cancels the PR's CI re-gate");
+  assert.ok(Number(LAND.env.RETRY_MAX) >= 1 && Number(LAND.env.RETRY_MAX) <= 5, "a small, finite budget per head");
+});
+
+test("land.yml retry job: actions write only, no checkout, no repo code, no secret; runs after post and arm", () => {
+  const j = LAND.jobs.retry;
+  assert.deepEqual(j.permissions, { actions: "write" });
+  assert.deepEqual(j.needs, ["resolve", "post", "arm"]);
+  assert.equal(runsRepoCode(j), false);
+  assert.equal(usesSecret(j), false, "GITHUB_TOKEN: its workflow_dispatch is one of the two events it may start");
+  const needs = (post, arm) => ({ needs: { resolve: { result: "success" }, post: { outputs: { retry: post } }, arm: { outputs: { retry: arm } } } });
+  assert.equal(ghExpr(j.if, needs("[]", "")), false);
+  assert.equal(ghExpr(j.if, needs("", "")), false, "post skipped");
+  assert.equal(ghExpr(j.if, needs('[{"number":7}]', "")), true);
+  assert.equal(ghExpr(j.if, needs("[]", '{"number":7}')), true);
+});
+
+test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other veto is not", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const ARM = JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A });
+  const go = (pr, now) => runStep(run, { ARM, FAKE_PR: pr, NOW_TIP: now, LAND_TOKEN: "", GITHUB_TOKEN: "t" });
+  let r = go(pr7(), TIP_B);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 });
+  assert.ok(!r.calls.some((c) => /pr merge/.test(c)), "never arms onto an ungated tip");
+  r = go(pr7({ labels: [{ name: "land" }, { name: "hold" }] }), TIP_B);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.retry, undefined, "`hold` set: no re-gate");
+  r = go(pr7({ head: { sha: "d".repeat(40) } }), TIP_B);
+  assert.equal(r.out.retry, undefined, "head moved: its push re-gates");
+  r = go(pr7(), TIP_A);
+  assert.equal(r.out.retry, undefined);
+  assert.ok(r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`)), "same tip: arms as before");
+});
+
+test("land.yml post: the trusted-rows/land-gate tip split is handed to retry; other errors are not", () => {
+  const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
+  assert.match(run, /the deploy tip moved between trusted-rows[^\n]*\n\s*#[^\n]*\n\s*retry=\$\(jq -c --argjson n "\$n" --arg h "\$head" '\. \+ \[\{number: \$n, head: \$h\}\]'/,
+    "the retry append sits in the tip-split branch only");
+  assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "no other branch asks for a re-gate");
+  assert.match(run, /echo "retry=\$retry"/);
+});
+
+test("land.yml retry: dispatches each PR once on the deploy branch with attempt+1, and stops at RETRY_MAX", () => {
+  const run = LAND.jobs.retry.steps[0].run;
+  const go = (attempt, post, arm, extra = {}) => runStep(run, { ATTEMPT: attempt, POST_RETRY: post, ARM_RETRY: arm, ...extra });
+  const item = JSON.stringify({ number: 7, head: HEAD7 });
+  let r = go("0", `[${item}]`, item);
+  assert.equal(r.status, 0, r.stderr);
+  const posts = r.calls.filter((c) => c.includes("--method POST"));
+  assert.equal(posts.length, 1, "post and arm naming one PR dispatch once");
+  assert.equal(posts[0], `gh api --method POST repos/o/r/actions/workflows/land.yml/dispatches -f ref=${DEPLOY_BRANCH} -f inputs[pr]=7 -f inputs[head]=${HEAD7} -f inputs[attempt]=1`);
+  r = go(String(Number(LAND.env.RETRY_MAX) - 1), "", item);
+  assert.match(r.calls.find((c) => c.includes("--method POST")) || "", new RegExp(`inputs\\[attempt\\]=${LAND.env.RETRY_MAX}$`));
+  r = go(String(LAND.env.RETRY_MAX), `[${item}]`, "");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.calls.length, 0, "budget spent: nothing dispatched, the next train re-gates");
+  r = go("junk; rm -rf /", `[${item}]`, "");
+  assert.match(r.calls[0], /inputs\[attempt\]=1$/, "a malformed attempt counts as 0, never runs");
+  r = go("0", `[${item}]`, "", { GH_POST_RC: "1" });
+  assert.equal(r.status, 0, "a failed dispatch warns and leaves the next train to re-gate");
+});
+
+test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budget resets when the head moved", () => {
+  const run = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const go = (env) => runStep(run, { EVENT: "workflow_dispatch", PR_NUMBER: "", RUN_CONCLUSION: "", RUN_BRANCH: "", RUN_REPO: "", RUN_SHA: "", CANDIDATES: "null", FAKE_PR: pr7(), ...env });
+  let r = go({ IN_PR: "7", IN_HEAD: HEAD7, IN_ATTEMPT: "2" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.landable, "true");
+  assert.deepEqual(JSON.parse(r.out.prs), [{ number: 7, head: HEAD7 }]);
+  assert.equal(r.out.attempt, "2");
+  r = go({ IN_PR: "7", IN_HEAD: "e".repeat(40), IN_ATTEMPT: "2" });
+  assert.equal(r.out.attempt, "0", "a new head starts a new budget");
+  r = go({ IN_PR: "7", IN_HEAD: HEAD7, IN_ATTEMPT: "2", FAKE_PR: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) });
+  assert.equal(r.out.landable, "false");
+  assert.equal(JSON.parse(r.out.notasked)[0].why, "the `hold` label is set", "resolved like a label event: a hold turns gate red");
+  r = go({ IN_PR: "7; echo pwned", IN_HEAD: "", IN_ATTEMPT: "0" });
+  assert.notEqual(r.status, 0, "a non-numeric pr input is refused");
+  r = go({ EVENT: "pull_request_target", PR_NUMBER: "7", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "" });
+  assert.equal(r.out.attempt, "0", "every other event starts at 0");
 });
