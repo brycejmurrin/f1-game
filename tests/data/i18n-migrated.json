@@ -8,6 +8,8 @@
     "Empty on purpose until Slice 4+ migrates a screen (plan 2026-10-04-localisation)."
   ],
   "files": [
+    "js/audio/radio-voice.js",
+    "js/race/radio-lines.js",
     "js/ui/hud-damage.js",
     "js/ui/hud-inputs.js",
     "js/ui/hud-relative.js",
