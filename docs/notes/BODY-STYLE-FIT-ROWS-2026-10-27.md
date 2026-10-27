@@ -122,3 +122,15 @@ must move the SAME vertex in every quad that shares it (board, band, ERS strips,
 +4 mm); and the GAP limit (3 mm) bounds the lift from above. Next step: author ONE shared `flankPoint(z,f,side,lift)`
 used by car3d `addPodFlankSpan` and car-mesh `podDecal`, with the lift taken along the facet normal and the first
 segment started at a pod station (0.50) with its UV range clipped, then re-run the six-body baseline.
+
+## Row 3: shared `flankPoint` tried, NOT landed (2026-10-27)
+Added `anchors.flankPoint(z,f,lift)` (podFlank lifted along the facet's outward normal) and used it in car3d
+`addPodFlankSpan` (4 mm) and car-mesh `podDecal` (6 mm). Six-body `--baseline` (from the pre-change tip, 76 s per run):
+```
+engineCover~sidepods ZFIGHT   rows kept, max cm2 down (anteater 299 -> 19; z 0.38 strip 60 -> 25-30), none reach 0
+elsewhere                     88 WORSE / 51 NEW: OPEN engineCover (3735 -> 4022 mm, 1308 -> 5969 mm), OPEN livery
+                              (542 -> 1297 mm, 258 -> 1534 mm, 36 NEW), GAP livery~engineCover 4.5 mm x4
+```
+Reverted. A uniform lift fixes the coplanar band but moves every decal rim off the weld distance the OPEN metric reads
+(and the z 0.38 strip needs the first segment on a pod station, which changes the board's UV). The fix needs the board,
+band, ERS strips and livery quads re-meshed together, not a vertex offset. #3959 stays open; this PR is `Refs`.
