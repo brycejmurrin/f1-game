@@ -42,6 +42,6 @@ Coordinates are +Y up, arc position `s` in metres (0 → `track.total`), lateral
 ## Load on demand
 
 - Every def field, annotated → [references/schema.md](references/schema.md).
-- Add/edit workflow and the measured gotchas → [references/workflow.md](references/workflow.md). Start at its step 0: check the id is not already registered (madrid is).
+- Add/edit workflow and the measured gotchas → [references/workflow.md](references/workflow.md). Start at its step 0: check the id is not already registered (madrid is). A NEW circuit is the def + `scenery/<id>.js` + a `tests/data/def-factory-golden.json` row, its id appended LAST in `CIRCUITS` (steps 1-2).
 - The in-game TRACK DESIGNER (`js/editor/`: custom circuits, share codes, the WYSIWYG validator, themes/props) → [references/editor.md](references/editor.md).
 - Siblings: corner/grade diagnosis → agent-view; a realism or grounding pass → survey-track; props → scenery-dress.

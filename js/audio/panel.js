@@ -112,6 +112,9 @@ var AudioPanel = (() => {
     const chatNow = () => (rr() ? rr().chat() : store.get("radioChat", "normal"));
     const commNow = () => (rr() ? rr().comm() : store.get("commentary", "tv"));
     const PACK_VALUES = [["rec", "RECORDED"], ["sys", "SYSTEM"]];
+    // The language the system voice speaks (RadioVoice.spokenLang); captions follow the UI language, not this.
+    const SLANG_VALUES = [["auto", "AUTO"], ["en", "ENGLISH"], ["es", "ESPAÑOL"], ["pt", "PORTUGUÊS"], ["it", "ITALIANO"], ["de", "DEUTSCH"], ["fr", "FRANÇAIS"], ["ja", "日本語"], ["nl", "NEDERLANDS"]];
+    const slangNow = () => { const v = String(store.get("spokenLang", "auto")); return SLANG_VALUES.some((x) => x[0] === v) ? v : "auto"; };
     const packNow = () => ((G.radio && G.radio.pack ? G.radio.packOn() : store.get("radioPack", true) !== false) ? "rec" : "sys");
     const recordedFor = (ch) => ch === "announcer" && G.radio && G.radio.announcerPackOn ? G.radio.announcerPackOn() : packNow() === "rec";
     const spotNow = () => (store.get("spotter", false) !== false ? "on" : "off");
@@ -441,6 +444,7 @@ var AudioPanel = (() => {
       SettingRow.paint($("as-chat"), chatNow(), CHAT_VALUES);
       SettingRow.paint($("as-comm"), commNow(), COMM_VALUES);
       SettingRow.paint($("as-rpack"), packNow(), PACK_VALUES);
+      SettingRow.paint($("as-slang"), slangNow(), SLANG_VALUES);
       if (GameAudio.radioPresets) SettingRow.paint($("as-rpreset"), GameAudio.radioPreset(), GameAudio.radioPresets());
       SettingRow.paint($("as-spot"), spotNow(), ONOFF);
       SettingRow.paint($("as-focus"), focusNow(), FOCUS_VALUES);
@@ -526,6 +530,16 @@ var AudioPanel = (() => {
       write: (v) => { if (v === "on") { setRadio(true); GameAudio.uiTick(); } else { GameAudio.uiTick(); setRadio(false); } } });
     SettingRow.wire("as-chat", { values: CHAT_VALUES, read: chatNow,
       write: (v) => { if (rr()) rr().setChat(v); else store.set("radioChat", v); GameAudio.uiTick(); syncAudioPanel(); } });
+    // Built here, not in index.html: the shell's node count is a shrink-only ratchet.
+    const rpreset = $("as-rpreset");
+    if (rpreset && rpreset.parentNode && !$("as-slang")) {
+      const label = typeof I18n !== "undefined" ? I18n.t("settings.spokenLang", null, "SPOKEN LANGUAGE") : "SPOKEN LANGUAGE";
+      const built = SettingRow.build("as-slang", label, SLANG_VALUES);
+      built.label.setAttribute("data-i18n", "settings.spokenLang");
+      rpreset.parentNode.insertBefore(built.row, rpreset.nextSibling);
+    }
+    SettingRow.wire("as-slang", { values: SLANG_VALUES, read: slangNow,
+      write: (v) => { store.set("spokenLang", v); GameAudio.uiTick(); syncAudioPanel(); } });
     SettingRow.wire("as-rpack", { values: PACK_VALUES, read: packNow,
       write: (v) => { if (G.radio && G.radio.setPackOn) G.radio.setPackOn(v === "rec"); store.set("radioPack", v === "rec"); GameAudio.uiTick(); syncAudioPanel(); } });
     if (GameAudio.radioPresets) SettingRow.wire("as-rpreset", { values: GameAudio.radioPresets(), read: () => GameAudio.radioPreset(),
