@@ -326,3 +326,25 @@ test("repeated recorder downloads release superseded blobs and keep the current 
   assert.equal(live.size, 0);
   assert.equal(revoked.length, 40);
 });
+
+test("Device Farm hitch rows attribute a stall: per-stage ms, GC canary, long timer callbacks (#3673 hitch 2)", () => {
+  const farm = readFileSync(join(ROOT, "tools/perf/devicefarm-iphone.mjs"), "utf8");
+  const hitchJs = farm.slice(farm.indexOf("const HITCH_JS ="), farm.indexOf("// Page-side probes."));
+  let now = 0, timers = [];
+  const PerfSpans = { begin() {}, end() {} };
+  const sb = { PerfSpans, performance: { now: () => now }, WeakRef, __apex: { info: () => ({ state: "race" }) },
+    setTimeout: (fn) => { timers.push(fn); return timers.length; } };
+  sb.window = sb;
+  const src = vm.runInNewContext(hitchJs + ";HITCH_JS", {}, { filename: "vm-snippet:devicefarm-hitch-source" });
+  vm.runInNewContext("(() => {" + src + ";window.__hitchFn = hitch; })()", sb, { filename: "vm-snippet:devicefarm-hitch" });
+  const H = sb.__dfHitch;
+  PerfSpans.begin("frame"); PerfSpans.begin("physics"); now = 40; PerfSpans.begin("ai"); now = 60; PerfSpans.end("ai"); now = 65; PerfSpans.end("physics");
+  sb.setTimeout(function drain() { now += 30; }); timers.shift()();
+  H.gcRef = { deref: () => undefined }; now = 110; PerfSpans.begin("frame");
+  sb.__hitchFn(117, 117, 0);
+  const row = H.rows[0];
+  assert.deepEqual(JSON.parse(JSON.stringify(row.ms)), { physics: 65, ai: 20 });
+  assert.equal(row.gc, 1, "the canary cleared since the last frame is a GC inside the window");
+  assert.ok(row.gcRate > 0);
+  assert.deepEqual([...row.tasks], ["timeout:drain:30"]);
+});

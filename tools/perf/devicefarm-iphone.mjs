@@ -154,11 +154,30 @@ const TOUCH_READ = (win, from, to) => `
 // game state, the PerfSpans that began or ended inside that frame, and the material-cache misses (count + new keys)
 // since the previous hitch. memState() runs only on a hitch, so the recorder costs nothing on a healthy frame.
 const HITCH_JS = `
-  const H = window.__dfHitch = { rows: [], ring: [], miss0: null };
-  try { const ms = GLX.__tlx.memState(); H.miss0 = ms.matMiss; H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
+  const H = window.__dfHitch = { rows: [], ring: [], miss0: null, gcRef: null, gcAt: [], gcN: 0, frames: 0, tasks: [], loaf: [] };
+  // #3673 hitch 2 (210 ms, matMiss 0, no game span open): what ran OUTSIDE the game's own stages. WebKit has neither
+  // performance.memory nor longtask, so GC is a WeakRef canary re-armed at every frame begin: a cleared one means a
+  // collection ran since the last frame (gcAt keeps when it was seen; frames/gcAt.length is the baseline rate).
+  // tasks: timer / idle callbacks over 8 ms. loaf: long-animation-frame scripts where the browser has them (Chromium).
+  H.gcTick = () => { H.frames++; if (H.gcRef && H.gcRef.deref() === undefined) { H.gcN++; H.gcAt.push(performance.now()); if (H.gcAt.length > 200) H.gcAt.shift(); }
+    try { H.gcRef = new WeakRef({}); } catch (_) {} };
+  if (!window.__dfTaskWrap && typeof setTimeout === "function") { window.__dfTaskWrap = 1;
+    const wrap = (name, fn) => typeof fn !== "function" ? fn : function () { const a = performance.now();
+      try { return fn.apply(this, arguments); } finally { const d = performance.now() - a; const T = window.__dfHitch && window.__dfHitch.tasks;
+        if (T && d > 8) { T.push([name + ":" + (fn.name || "anon"), a, d]); if (T.length > 100) T.shift(); } } };
+    const st0 = window.setTimeout; window.setTimeout = function (fn, ...r) { return st0.call(this, wrap("timeout", fn), ...r); };
+    if (typeof window.requestIdleCallback === "function") { const ri0 = window.requestIdleCallback; window.requestIdleCallback = function (fn, ...r) { return ri0.call(this, wrap("idle", fn), ...r); }; } }
+  try { if (typeof PerformanceObserver === "function" && (PerformanceObserver.supportedEntryTypes || []).includes("long-animation-frame"))
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) { H.loaf.push([e.startTime, e.duration, e.blockingDuration,
+      (e.scripts || []).slice(0, 3).map((x) => (x.invoker || "") + "@" + String(x.sourceURL || "").split("/").pop() + ":" + Math.round(x.duration))]); if (H.loaf.length > 50) H.loaf.shift(); } })
+      .observe({ type: "long-animation-frame", buffered: false }); } catch (_) {}
+  // rebase(): the samplers call it at their window's first race frame. Armed only here (before the race entry), the
+  // first hitch's miss delta carried the whole entry warm's mints: #3954's "+11 at the first race frame" (#3673).
+  H.rebase = () => { try { const ms = GLX.__tlx.memState(); H.miss0 = ms.matMiss; H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {} };
+  H.rebase();
   if (!window.__dfSpanWrap && typeof PerfSpans !== "undefined") { window.__dfSpanWrap = 1;
     const b0 = PerfSpans.begin, e0 = PerfSpans.end;
-    PerfSpans.begin = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 0, performance.now()]); if (R.length > 400) R.shift(); } return b0.apply(this, arguments); };
+    PerfSpans.begin = function (n) { const H = window.__dfHitch, R = H && H.ring; if (R) { R.push([n, 0, performance.now()]); if (R.length > 400) R.shift(); if (n === "frame") H.gcTick(); } return b0.apply(this, arguments); };
     PerfSpans.end = function (n) { const R = window.__dfHitch && window.__dfHitch.ring; if (R) { R.push([n, 1, performance.now()]); if (R.length > 400) R.shift(); } return e0.apply(this, arguments); }; }
   const hitch = (t, dt, t0) => { if (H.rows.length >= 20) return;
     let st = null, miss = null, keys = null; try { st = __apex.info().state; } catch (_) {}
@@ -167,7 +186,13 @@ const HITCH_JS = `
     const spans = H.ring.filter((r) => r[2] >= t - dt && r[2] <= t).map((r) => r[0] + (r[1] ? ">" : "<") + Math.round(r[2] - (t - dt)));
     // active: the PerfSpans stages still open when the frame stalled (begun, not ended, before its end) — the stage it landed in.
     const open = []; for (const r of H.ring) { if (r[2] > t) break; if (!r[1]) open.push(r[0]); else { const j = open.lastIndexOf(r[0]); if (j >= 0) open.splice(j, 1); } }
-    H.rows.push({ at: Math.round(t - t0), dt: Math.round(dt), state: st, active: open.slice(-4), spans: spans.slice(0, 24), miss, keys }); };`;
+    // ms: total time per stage inside the frame (a 5-step physics frame overflowed the 24-entry spans list), nested stages included.
+    const ms = {}, at = {}; for (const r of H.ring) { if (r[2] < t - dt || r[2] > t) continue; if (!r[1]) at[r[0]] = r[2]; else if (at[r[0]] != null) { ms[r[0]] = Math.round((ms[r[0]] || 0) + r[2] - at[r[0]]); at[r[0]] = null; } }
+    const inWin = (a) => a >= t - dt && a <= t;
+    H.rows.push({ at: Math.round(t - t0), dt: Math.round(dt), state: st, active: open.slice(-4), spans: spans.slice(0, 24), ms, miss, keys,
+      gc: H.gcAt.filter(inWin).length, gcRate: H.frames ? +(H.gcN / H.frames).toFixed(3) : null,
+      tasks: H.tasks.filter((x) => x[1] + x[2] >= t - dt && x[1] <= t).map((x) => x[0] + ":" + Math.round(x[2])),
+      loaf: H.loaf.filter((x) => x[0] + x[1] >= t - dt && x[0] <= t).map((x) => [Math.round(x[1]), Math.round(x[2] || 0), x[3]]) }); };`;
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
 const PROBE = `
   const R = typeof RendererPicker !== "undefined" ? RendererPicker : null;
@@ -435,7 +460,7 @@ const HITCH_ARM = `${HITCH_JS}
   const t0 = performance.now(); let last = 0, started = 0; const d = [];
   const tick = (t) => {
     let st = null; try { st = __apex.info().state; } catch (_) {}
-    if (st === "race") { if (!started) started = t; else { d.push(t - last); if (t - last > 100) hitch(t, t - last, started); } last = t; sampleRate(t); }
+    if (st === "race") { if (!started) { started = t; H.rebase(); } else { d.push(t - last); if (t - last > 100) hitch(t, t - last, started); } last = t; sampleRate(t); }
     if (started && t - started > 15000) { d.sort((a, b) => a - b);
       window.__dfFrames = { metric: "raf-callback", callbackHz: Math.round(d.length * 10000 / (t - started)) / 10, renderRate: finishRate(t), n: d.length, max: Math.round(d[d.length - 1] || 0), p99: Math.round(d[Math.floor(d.length * 0.99)] || 0),
         n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, n100: d.filter((x) => x > 100).length, hitches: H.rows }; return; }
@@ -499,7 +524,7 @@ const SAMPLE = `${HITCH_JS}
   const tick = (t) => {
     let st = null; try { st = __apex.info().state; } catch (_) {}
     // Hitches count from the first race frame (#3673's two land early); callback cadence and render-gate samples skip the first 5 s.
-    if (st === "race") { if (!t0) t0 = t; if (last) { if (t - last > 100) hitch(t, t - last, t0); if (t - t0 > 5000) d.push(t - last); } last = t; if (t - t0 > 5000) sampleRate(t); }
+    if (st === "race") { if (!t0) { t0 = t; H.rebase(); } if (last) { if (t - last > 100) hitch(t, t - last, t0); if (t - t0 > 5000) d.push(t - last); } last = t; if (t - t0 > 5000) sampleRate(t); }
     if (t0 && t - t0 > 25000) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
       const callbackHz = Math.round(d.length / 20 * 10) / 10;
       window.__dfSample = { metric: "raf-callback", callbackHz, fps: callbackHz, renderRate: finishRate(t), n: d.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
@@ -550,7 +575,7 @@ async function racesScenario(ctx, pins, report, out) {
 const WIN_FOR = (ms, delay = 3000) => `${HITCH_JS}
   ${RENDER_RATE_SAMPLE}
   window.__dfWin = null; const d = []; let last = 0, t0 = 0;
-  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (last) { d.push(t - last); if (t - last > 100) hitch(t, t - last, t0); } last = t; sampleRate(t); }
+  const tick = (t) => { if (!t0) t0 = t; if (t - t0 > ${delay}) { if (!last) H.rebase(); if (last) { d.push(t - last); if (t - last > 100) hitch(t, t - last, t0); } last = t; sampleRate(t); }
     if (t - t0 > ${delay + ms}) { d.sort((a, b) => a - b); const q = (f) => Math.round(d[Math.min(d.length - 1, Math.floor(d.length * f))] * 10) / 10;
       const callbackHz = Math.round(d.length / ${ms / 1000} * 10) / 10;
       window.__dfWin = { metric: "raf-callback", callbackHz, fps: callbackHz, renderRate: finishRate(t), n: d.length, p50: q(0.5), p95: q(0.95), p99: q(0.99), max: Math.round(d[d.length - 1] || 0),
