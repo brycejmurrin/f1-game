@@ -984,15 +984,6 @@
       "outputPolicy": "protocol-only"
     },
     {
-      "path": "tools/ci/lane-preamble.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--quiet"
-      ]
-    },
-    {
       "path": "tools/ci/launch-gate.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1003,15 +994,6 @@
     },
     {
       "path": "tools/ci/live-run-check.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
-        "--json"
-      ]
-    },
-    {
-      "path": "tools/ci/measure-pr-ci-after-close.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node",
@@ -1113,12 +1095,6 @@
       ]
     },
     {
-      "path": "tools/ci/pr-body.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node"
-    },
-    {
       "path": "tools/ci/process-dashboard.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -1136,15 +1112,6 @@
       "nativeOutputFlagMentions": [
         "--format",
         "--json",
-        "--quiet"
-      ]
-    },
-    {
-      "path": "tools/ci/publish-shots.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "targeted-summary",
-      "interpreter": "node",
-      "nativeOutputFlagMentions": [
         "--quiet"
       ]
     },
@@ -1419,12 +1386,6 @@
     },
     {
       "path": "tools/ci/wait-for.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node"
-    },
-    {
-      "path": "tools/ci/webkit-leg-summary.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
@@ -1743,11 +1704,6 @@
       "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/apex-tools-bridge.mjs",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"
-    },
-    {
-      "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/github-fleet.cjs",
-      "classification": "ambiguous",
-      "outputPolicy": "no-direct-output"
     },
     {
       "path": "tools/environment/plugin-sources/f1-dev-tools/scripts/readiness.mjs",
@@ -2435,11 +2391,6 @@
       "outputPolicy": "no-direct-output"
     },
     {
-      "path": "tools/lib/fleet-block.mjs",
-      "classification": "library",
-      "outputPolicy": "no-direct-output"
-    },
-    {
       "path": "tools/lib/flicker-metric.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2845,12 +2796,6 @@
       "interpreter": "node"
     },
     {
-      "path": "tools/mcp/check-doctor-catalog.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node"
-    },
-    {
       "path": "tools/mcp/chrome-devtools-mcp.sh",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"
@@ -2975,12 +2920,6 @@
       "path": "tools/mcp/lsp-mcp.sh",
       "classification": "protocol-entrypoint",
       "outputPolicy": "protocol-only"
-    },
-    {
-      "path": "tools/mcp/lsp-navigation-bench.mjs",
-      "classification": "entrypoint-candidate",
-      "outputPolicy": "keep-native",
-      "interpreter": "node"
     },
     {
       "path": "tools/mcp/mcp-cli.mjs",
