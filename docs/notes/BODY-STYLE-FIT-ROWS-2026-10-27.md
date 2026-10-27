@@ -58,3 +58,19 @@ body (derive from `n.top - n.bottom`) rather than a constant. Reverted; no geome
 Tip: a body audit is ~1 s per car (`--bodies=brick --team=ferrari --checks=PENETRATION,GAP`), the six-body baseline
 run ~60 s foreground.
 Rows 2 (bolsters) and 3 (engineCover~sidepods) were not started.
+
+## Row 1 seat sweep (third worker), NOT landed
+Constant podSculpt seat vs the six-body `--baseline` audit and `tests/unit/body-styles.test.mjs`
+("expanded wing supports penetrate the nose", which requires the emitted upper cap INSIDE the nose section):
+```
+seat     audit frontWing~chassis rows (ferrari+mclaren, 6 bodies)   baseline gate        body-styles test
+-0.030   0                                                          14 NEW / 11 WORSE    (not run)
+-0.012   0                                                          PASS (0 NEW, 154 s)  FAIL mercedes/hammerhead/flat
+-0.008   0                                                          (not run)            FAIL mercedes/hammerhead/flat
+-0.004   2                                                          (not run)            FAIL mercedes/hammerhead/flat
+ 0.000   4                                                          (not run)            FAIL mercedes/hammerhead/rounded
+```
+-0.012 clears the audit with 0 NEW/WORSE, but the existing test pins the upper cap inside the nose hull on hammerhead
+(a design assertion that contradicts the audit's PENETRATION limit). Landing it needs either a per-body seat that keeps
+hammerhead's cap inside (hammerhead is outside the six-body audit set) or Bryce relaxing that test. Left as the
+decision; no geometry committed.
