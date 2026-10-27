@@ -4783,6 +4783,8 @@
         "tests/unit/i18n.test.mjs"
       ],
       "*": [
+        "tests/specs/browser-ui-hunt.spec.js",
+        "tests/specs/data-lifecycle.spec.js",
         "tests/specs/telemetry-compare.spec.js"
       ]
     },
