@@ -16,8 +16,10 @@ A/Bryce lifts launch_pause. Train 3 #3888 @a1c1dfff: ready, CI success, clean �
 ## B lanes — NONE LIVE (list_sessions 01:23Z, artifacts/fleet/sessions-20261027T0123Z.json)
 All 96 fleet-b sessions on page 1 are ARCHIVED, incl. never-archive seed 01KLkpSQ, relay B·R1 01PfAQjr and
 B·R-sys 01E4f2wT (archived ~01:11Z; cost $524 — flagged to Bryce). B·O5 01MTd78B archived ~01:10Z.
-No live seed → successor path = paste-in prompt for Bryce. Unarchiving is Bryce's call (asked).
-B·R-sys check-in trig_01JQ7Ypu (01:34Z) targets an archived session.
+Bryce ~01:30Z (typed in 01T14HCB): "Unarchive seed+R1" → done: seed 01KLkpSQ + B·R1 01PfAQjr unarchived (both idle).
+Seed says it is near its 200k cap and wants a fresh [Seed] B·S0 (role-seed.md §Launch) — Bryce's paste-in.
+B·R1 needs APEX_B_RELAY_URL/TOKEN in Fleet A's env to retest. B·R-sys stays archived; its check-in trig_01JQ7Ypu deleted.
+Bryce: "Wait for ORCH A" — no B launches until A agrees the split and lifts launch_pause.
 
 ## Proposed B queue once launch_pause lifts (sent to A + D for agreement; not binding)
 1. #3505 flaky quarantine deadlines — garage-churn row due TODAY 10-27 (tests/specs/**, tests/data/flaky-quarantine.json). Sonnet.
