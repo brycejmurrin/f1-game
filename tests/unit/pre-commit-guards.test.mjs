@@ -476,3 +476,267 @@ test("the default guard runner executes every file even inside another Node test
     else process.env.NODE_TEST_CONTEXT = inherited;
   }
 });
+
+/** Real Git commits through the shipped hook and real verdict helper; only the
+ * unrelated ratchet/target generators are fixture stubs. */
+function nativeHookRepo(t) {
+  const repo = scratchRepo("guards-native-index-");
+  t.after(repo.rm);
+  for (const dir of [".githooks", "tools/ci", "tools/lib", "tools/check", "tools/gen", "tests/unit", "node_modules"]) {
+    fs.mkdirSync(path.join(repo.dir, dir), { recursive: true });
+  }
+  for (const rel of [".githooks/pre-commit", "tools/ci/guards-verdict.mjs", "tools/lib/cli-args.mjs"]) {
+    fs.copyFileSync(path.join(ROOT, rel), path.join(repo.dir, rel));
+  }
+  fs.chmodSync(path.join(repo.dir, ".githooks/pre-commit"), 0o755);
+  fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), 'process.exit(0);');
+  fs.writeFileSync(path.join(repo.dir, "tools/gen/targets.mjs"), 'process.exit(0);');
+  fs.writeFileSync(path.join(repo.dir, ".gitignore"), "artifacts/\nnode_modules/\n");
+  fs.writeFileSync(path.join(repo.dir, "package.json"), JSON.stringify({ scripts: { "test:guards": "node tools/ci/guards-verdict.mjs run" } }));
+  // These paths belong to the throwaway repository, not the project tree.
+  const testFile = path.posix.join("tests/unit", "actual-guard.test.mjs");
+  fs.writeFileSync(path.join(repo.dir, testFile), `import { test } from "node:test";
+import assert from "node:assert/strict";
+import fs from "node:fs";
+test("guard reads actual source", () => {
+  fs.mkdirSync("artifacts", { recursive: true });
+  fs.writeFileSync("artifacts/guard-saw", fs.readFileSync("code.js"));
+  assert.equal(fs.readFileSync("code.js", "utf8").trim(), "good");
+});`);
+  guardRoster(repo.dir, [testFile]);
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good\n");
+  fs.writeFileSync(path.join(repo.dir, "other.txt"), "original\n");
+  repo.g("add", "-A");
+  repo.g("commit", "-qm", "init");
+  repo.g("config", "core.hooksPath", ".githooks");
+  repo.commit = (...args) => spawnSync("git", ["commit", "-qm", "fixture", ...args], {
+    cwd: repo.dir, encoding: "utf8", env: repo.env,
+  });
+  return repo;
+}
+
+test("native hook refuses a partially staged failing source hidden by an unstaged passing correction", (t) => {
+  const repo = nativeHookRepo(t);
+  const head = repo.g("rev-parse", "HEAD");
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "bad\n");
+  repo.g("add", "code.js");
+  const staged = repo.g("write-tree");
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good\n");
+  const refused = repo.commit();
+  assert.equal(refused.status, 1, refused.stderr);
+  assert.match(refused.stderr, /working tree.*does not match the commit index/);
+  assert.equal(repo.g("rev-parse", "HEAD"), head);
+  assert.equal(repo.g("write-tree"), staged, "refusal must not restage the passing worktree");
+  assert.equal(repo.g("show", ":code.js"), "bad");
+  assert.equal(fs.existsSync(path.join(repo.dir, "artifacts/guard-saw")), false, "refuse before a suite can certify different bytes");
+
+  // A clean red remains red; a clean passing change commits after the repair.
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "bad\n");
+  assert.equal(repo.commit().status, 1);
+  assert.equal(fs.readFileSync(path.join(repo.dir, "artifacts/guard-saw"), "utf8"), "bad\n");
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good \n");
+  repo.g("add", "code.js");
+  const repaired = repo.commit();
+  assert.equal(repaired.status, 0, repaired.stderr);
+  assert.equal(repo.g("show", "HEAD:code.js"), "good");
+});
+
+test("native hook honours commit -a's temporary index without committing the stale staged source", (t) => {
+  const repo = nativeHookRepo(t);
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "bad\n");
+  repo.g("add", "code.js");
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good  \n");
+  fs.writeFileSync(path.join(repo.dir, "other.txt"), "included by -a\n");
+  const result = repo.commit("-a");
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(repo.g("show", "HEAD:code.js"), "good");
+  assert.equal(repo.g("show", "HEAD:other.txt"), "included by -a");
+  assert.equal(repo.g("status", "--porcelain"), "");
+  assert.equal(fs.readFileSync(path.join(repo.dir, "artifacts/guard-saw"), "utf8"), "good  \n");
+});
+
+test("pathspec commit cannot reuse a verdict for the original index; rejection preserves both indexes", (t) => {
+  const repo = nativeHookRepo(t);
+  const head = repo.g("rev-parse", "HEAD");
+  const index = repo.g("write-tree");
+  writeOk(okPath(repo.dir), index);
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "bad\n");
+  const result = repo.commit("--", "code.js");
+  assert.equal(result.status, 1, result.stderr);
+  assert.doesNotMatch(result.stdout, /cache hit/, "cache lookup must inspect Git's pathspec index");
+  assert.equal(repo.g("rev-parse", "HEAD"), head);
+  assert.equal(repo.g("write-tree"), index, "failed pathspec commit preserves the original index");
+  assert.equal(fs.readFileSync(path.join(repo.dir, "code.js"), "utf8"), "bad\n");
+  assert.equal(fs.readFileSync(path.join(repo.dir, "artifacts/guard-saw"), "utf8"), "bad\n");
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good \n");
+  const repaired = repo.commit("--", "code.js");
+  assert.equal(repaired.status, 0, repaired.stderr);
+  assert.equal(repo.g("show", "HEAD:code.js"), "good");
+});
+
+test("matching native-hook cache remains valid for its staged tree despite a later unstaged edit", (t) => {
+  const repo = nativeHookRepo(t);
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good \n");
+  repo.g("add", "code.js");
+  const verdict = runGuards({ root: repo.dir, spawn: spawnTests });
+  assert.equal(verdict.wrote, true);
+  fs.rmSync(path.join(repo.dir, "artifacts/guard-saw"));
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "bad unstaged\n");
+  const result = repo.commit();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout + result.stderr, /cache hit/);
+  assert.equal(repo.g("show", "HEAD:code.js"), "good");
+  assert.equal(fs.readFileSync(path.join(repo.dir, "code.js"), "utf8"), "bad unstaged\n");
+  assert.equal(fs.existsSync(path.join(repo.dir, "artifacts/guard-saw")), false);
+});
+
+test("native hook refuses worktree provenance lost during an otherwise green suite", (t) => {
+  const repo = nativeHookRepo(t);
+  const rel = path.posix.join("tests/unit", "actual-guard.test.mjs");
+  fs.appendFileSync(path.join(repo.dir, rel), '\ntest("mutates after the guard", () => { fs.writeFileSync("code.js", "bad after guard\\n"); });\n');
+  repo.g("add", rel);
+  const index = repo.g("write-tree");
+  const head = repo.g("rev-parse", "HEAD");
+  const result = repo.commit();
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /working tree.*does not match the commit index/);
+  assert.equal(repo.g("rev-parse", "HEAD"), head);
+  assert.equal(repo.g("write-tree"), index);
+  assert.equal(fs.existsSync(okPath(repo.dir)), false);
+});
+
+function realRatchetHookRepo(t, { fragment } = {}) {
+  const repo = nativeHookRepo(t);
+  fs.mkdirSync(path.join(repo.dir, "tools/hooks"), { recursive: true });
+  fs.mkdirSync(path.join(repo.dir, "tests/data/ratchets.d"), { recursive: true });
+  for (const rel of ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs", "tools/hooks/ratchet-reason.mjs"]) {
+    fs.copyFileSync(path.join(ROOT, rel), path.join(repo.dir, rel));
+  }
+  fs.writeFileSync(path.join(repo.dir, "tests/data/ratchets.json"), JSON.stringify({ files: { "code.js": { lines: 2 } }, tree: {} }));
+  // Ratchet fragments and checks below exist only in this scratch repository.
+  const topic = path.posix.join("tests/data/ratchets.d", "main.json");
+  if (fragment !== undefined) fs.writeFileSync(path.join(repo.dir, topic), JSON.stringify(fragment));
+  // This committed unrelated fragment must never be rewritten or restaged.
+  fs.writeFileSync(path.join(repo.dir, "tests/data/ratchets.d", "other.json"), JSON.stringify({ files: {} }));
+  const check = path.posix.join("tests/unit", "effective-ratchet.test.mjs");
+  fs.writeFileSync(path.join(repo.dir, check), `import { test } from "node:test";
+import assert from "node:assert/strict";
+import { load, measure, verdict } from "../../tools/check/ratchets.mjs";
+test("the real effective ratchet covers the source", async () => assert.equal(verdict(await measure(load())).ok, true));`);
+  guardRoster(repo.dir, [path.posix.join("tests/unit", "actual-guard.test.mjs"), check]);
+  repo.g("add", "-A");
+  repo.g("-c", "core.hooksPath=/dev/null", "commit", "-qm", "real ratchet fixture");
+  repo.env.APEX_RATCHETS_BASE = "HEAD";
+  return { ...repo, topic };
+}
+
+test("native auto-raise commits a new topic fragment and leaves unrelated untracked files alone", (t) => {
+  const repo = realRatchetHookRepo(t);
+  fs.writeFileSync(path.join(repo.dir, "unrelated.txt"), "leave untracked\n");
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good\n\n");
+  repo.g("add", "code.js");
+  const beforeOther = repo.g("rev-parse", `HEAD:${path.posix.join("tests/data/ratchets.d", "other.json")}`);
+  const result = repo.commit();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(repo.g("show", `HEAD:${repo.topic}`)).files["code.js"].lines, 1);
+  assert.equal(repo.g("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"), `code.js\n${repo.topic}`);
+  assert.equal(repo.g("rev-parse", `HEAD:${path.posix.join("tests/data/ratchets.d", "other.json")}`), beforeOther);
+  assert.equal(repo.g("ls-files", "--", "unrelated.txt"), "");
+  assert.equal(repo.g("diff", "--cached", "--name-only"), "");
+});
+
+test("native auto-raise updates a tracked topic fragment through commit -a's active index", (t) => {
+  const repo = realRatchetHookRepo(t, { fragment: { files: { "code.js": { lines: 1 } } } });
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good\n\n\n");
+  const result = repo.commit("-a");
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(JSON.parse(repo.g("show", `HEAD:${repo.topic}`)).files["code.js"].lines, 2);
+  assert.equal(repo.g("status", "--porcelain"), "");
+  assert.equal(repo.g("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"), `code.js\n${repo.topic}`);
+});
+
+test("native pathspec auto-generation refuses without changing the user's index or committing a missing ceiling", (t) => {
+  const repo = realRatchetHookRepo(t);
+  fs.writeFileSync(path.join(repo.dir, "pending.txt"), "keep staged for later\n");
+  repo.g("add", "pending.txt");
+  const index = repo.g("write-tree"), head = repo.g("rev-parse", "HEAD");
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good\n\n");
+  const result = repo.commit("--", "code.js");
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /pathspec commit needs generated outputs that Git cannot reconcile/);
+  assert.ok(result.stderr.includes(repo.topic), "refusal identifies the exact generated output");
+  assert.match(result.stderr, /stage these outputs.*retry git commit without pathspecs/);
+  assert.equal(repo.g("rev-parse", "HEAD"), head, "no commit can omit its effective ceiling");
+  assert.equal(repo.g("write-tree"), index, "do not mutate a guessed original or pending index");
+  assert.equal(repo.g("show", ":pending.txt"), "keep staged for later");
+  assert.equal(repo.g("diff", "--cached", "--name-only"), "pending.txt", "no staged deletion of a hook-generated ceiling");
+  assert.equal(repo.g("ls-files", "--", repo.topic), "", "leave the generated fragment for the user's staged retry");
+  assert.equal(JSON.parse(fs.readFileSync(path.join(repo.dir, repo.topic))).files["code.js"].lines, 1);
+});
+
+test("a clean no-generation pathspec commit preserves an unrelated staged path", (t) => {
+  const repo = realRatchetHookRepo(t);
+  fs.writeFileSync(path.join(repo.dir, "pending.txt"), "keep staged for later\n");
+  repo.g("add", "pending.txt");
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good \n");
+  const result = repo.commit("--", "code.js");
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(repo.g("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"), "code.js");
+  assert.equal(repo.g("diff", "--cached", "--name-only"), "pending.txt");
+  assert.equal(fs.existsSync(path.join(repo.dir, repo.topic)), false);
+});
+
+test("native auto-lowering stages deletion of an emptied tracked topic fragment", (t) => {
+  const repo = realRatchetHookRepo(t, { fragment: { files: { "code.js": { lines: 100 } } } });
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good \n");
+  repo.g("add", "code.js");
+  const result = repo.commit();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(repo.g("ls-tree", "HEAD", "--", repo.topic), "");
+  assert.equal(repo.g("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"), `code.js\n${repo.topic}`);
+  assert.equal(repo.g("status", "--porcelain"), "");
+});
+
+test("a no-change ratchet run stages no ratchet paths or unrelated files", (t) => {
+  const repo = realRatchetHookRepo(t, { fragment: { files: { "code.js": { lines: 1 } } } });
+  const topicBlob = repo.g("rev-parse", `HEAD:${repo.topic}`);
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good \n");
+  fs.writeFileSync(path.join(repo.dir, "unrelated.txt"), "leave untracked\n");
+  repo.g("add", "code.js");
+  const result = repo.commit();
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(repo.g("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD"), "code.js");
+  assert.equal(repo.g("rev-parse", `HEAD:${repo.topic}`), topicBlob);
+  assert.equal(repo.g("ls-files", "--", "unrelated.txt"), "");
+});
+
+test("a red ratchet run leaves the user's staged tree and unrelated files intact", (t) => {
+  const repo = realRatchetHookRepo(t);
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good\n" + "\n".repeat(60));
+  fs.writeFileSync(path.join(repo.dir, "unrelated.txt"), "leave untracked\n");
+  repo.g("add", "code.js");
+  const index = repo.g("write-tree"), head = repo.g("rev-parse", "HEAD");
+  const result = repo.commit();
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /OVER/);
+  assert.equal(repo.g("rev-parse", "HEAD"), head);
+  assert.equal(repo.g("write-tree"), index);
+  assert.equal(fs.existsSync(path.join(repo.dir, repo.topic)), false);
+  assert.equal(repo.g("ls-files", "--", "unrelated.txt"), "");
+});
+
+test("pre-existing untracked ratchet inputs refuse before generation and are never auto-staged", (t) => {
+  const repo = realRatchetHookRepo(t);
+  const untracked = path.posix.join("tests/data/ratchets.d", "unrelated.json");
+  fs.writeFileSync(path.join(repo.dir, untracked), JSON.stringify({ files: {} }));
+  fs.writeFileSync(path.join(repo.dir, "code.js"), "good\n\n");
+  repo.g("add", "code.js");
+  const index = repo.g("write-tree"), head = repo.g("rev-parse", "HEAD");
+  const result = repo.commit();
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stderr, /untracked guard inputs must be staged or stashed first/);
+  assert.equal(repo.g("rev-parse", "HEAD"), head);
+  assert.equal(repo.g("write-tree"), index);
+  assert.equal(repo.g("ls-files", "--", untracked), "");
+  assert.equal(fs.existsSync(path.join(repo.dir, repo.topic)), false);
+});

@@ -1,6 +1,6 @@
 ---
 name: renderer-debug
-description: "Use when TLX/GLX/WGX/WebGPU looks wrong: black/NaN canvas, WGSL validation, shaders, shadows, bloom, HDR, GL_INVALID_OPERATION, GL errors, device lost, silent WebGL2 fallback, WebXR/VR/Quest black frame. Night washout → lighting-tuner; MAT garble → asset-pack; driving shimmer → playwright-probe."
+description: "Use when TLX/GLX/WGX/WebGPU looks wrong: black/NaN canvas, WGSL validation, shaders, shadows, bloom, HDR, GL errors, device lost, silent WebGL2 fallback, iPhone/Safari/Metal, a ghost visor overlay, WebXR/VR/Quest black frame. Night washout → lighting-tuner; MAT garble → asset-pack; driving shimmer → playwright-probe."
 ---
 
 # Debug the renderer — TLX, GLX or WGX
@@ -10,6 +10,26 @@ the DEFAULT), **GLX** (`js/render/glx/`, explicit WebGL2 and the universal
 fallback) and **WGX** (`js/render/webgpu/`, opt-in WebGPU, DEFERRED). Most
 black-canvas reports start with "which one am I on?" — and a unit test of a
 backend is not evidence that it runs (`docs/ARCHITECTURE.md` §Boot evidence).
+
+**Bryce's path first.** He plays TLX on **WebGPU** on an iPhone (Metal) — `THREE PATH: WEBGPU`.
+Probes here pin `apex26.tlxForceGL=1` (TLX's WebGL2 leg) because three's WebGPU path dies under
+SwiftShader, so a container probe is NOT his path and no evidence about his GPU.
+
+**A report from the phone — ladder, cheapest first:**
+1. Ask for the on-device overlay: open the game with `?gfxdebug=1` (or set `apex26.gfxDebug="1"`)
+   and paste its Copy line (`js/perf/gfx-debug-overlay.js`). Free, and it is HIS device: read
+   the backend, the `three api=… pin=… soft=…` row (which TLX leg bound) and `gpuErrors`.
+2. `gpu-census.yml` on `macos-latest`: a real GPU, but **Chromium/Dawn on Metal, not WebKit/Safari**
+   (read its `path:` row and the Verdict step). A green census does not clear a WebKit-only failure
+   (derivative uniformity, `uncapturederror`, the `var<private>` cap: the WGSL rules below).
+3. A real iPhone Safari: the `browserstack` MCP (`docs/AGENT-SURFACE.md`; real iOS devices,
+   outward and metered).
+4. A software probe here: WGSL/pipeline validation only, never a verdict on his GPU.
+
+Dispatch the census on your pushed branch: `gh workflow run gpu-census.yml --ref <branch> -f track=… -f tod=…`
+(or the GitHub MCP `actions_run_trigger`); agent tokens dispatch fine. Only a request-only leg (`leg`,
+`lf_*`, `lrm_*` in `.github/gpu-census-request.json`; the form is at the 25-input cap) still goes by
+editing that file on your branch and pushing.
 
 ## Where things live (rendering stack)
 
@@ -22,11 +42,13 @@ backend is not evidence that it runs (`docs/ARCHITECTURE.md` §Boot evidence).
 | Shared assets | `js/render/shared/assets.js` | PBR pack layers — **asset-pack** |
 | Soft present (CI) | `js/render/gfx.js` + `#game-soft` | Headless blit; probes use `awaitSoftPresent()` |
 | Scene bridge | `js/game.js` | Per-frame `gfx` draw/update; garage uses the same `gfx` in `js/garage/scene.js` |
+| Screen-space FX overlays | `js/fx/visor-optics.js`, `js/fx/droplets.js` | DOM canvases `#fx-visor` / `#fx-droplets` over `#game`: `VisorOptics.clear()`, `VisorOptics.stats()` |
+| Car body meshes | `js/car/car-body-geom.js`, `js/car/car3d.js` | geometry the backends draw; not a shader layer |
 | Diagnose | `js/agent/apex.js` | `__apex.diag().env.backend`, `texCensus()`, `assets()` |
 
 Pick the backend section below from `env.backend`; cross-backend parity → `tests/unit/backend-surface-parity.test.mjs`.
 
-## Step 0 — which backend answered (BROWSER-ONLY: needs a live page)
+## Step 0 — which backend answered (BROWSER-ONLY: needs a live page; a phone → the gfxdebug line above)
 
 ```js
 __apex.diag({download:false}).env.backend   // "three" | "webgl2" | "webgpu"
@@ -40,13 +62,18 @@ probe with `tools/shot/apex-eval.mjs <track> <expr> --backend three|webgl2|webgp
 `GLX.*()` / `WGX.*()` expression silently answers for TLX without it).
 Headless/software adapters blit onto `#game-soft` (`awaitSoftPresent()`): a
 black `#game` is that overlay's gap, not yet a shader miss. A software probe
-is no evidence about a player's GPU — `gpu-census.yml` on `macos-latest`, read
-its Verdict step. "Black screen after an HDR format change" is decided here:
+is no evidence about a player's GPU — the census route above.
+**Canvas fine, but a ghost glint or haze over a menu or results screen?** That is a DOM
+overlay, not a shader: check `#fx-visor` / `#fx-droplets` in a DOM snapshot and
+`VisorOptics.stats()` (`shown`) before touching a shader; an overlay nobody cleared on race
+exit (no `VisorOptics.clear()` call on that path) is the usual cause.
+Before editing a car/body function, `lsp_definition` it: a hoisted duplicate declaration in
+the same IIFE silently wins (skill code-nav). "Black screen after an HDR format change" is decided here:
 read the backend first, then go to its section; `hdrMode()` is GLX's.
 
 | `env.backend` | Section | Reference |
 |---|---|---|
-| `three` | TLX, below | `.claude/rules/render-tlx.md` |
+| `three` | TLX, below; both TLX legs read `three`, so read `backendState().forceWebGL` / `pin` (or the gfxdebug `three api=` row) first | `.claude/rules/render-tlx.md` |
 | `webgl2` | GLX, below | [references/glx.md](references/glx.md), [references/glx-failures.md](references/glx-failures.md) |
 | `webgpu` | WGX, below | [references/wgx.md](references/wgx.md), [references/wgx-defects.md](references/wgx-defects.md) |
 
@@ -62,8 +89,12 @@ or `three`. Three picks its own WebGL2 or WebGPU path:
   on purpose. `apex26.tlxForceHw=env|sky|batches|chunked|shadow` runs the
   content paths a real GPU takes on a software adapter. `backendState().pin` /
   `forceWebGL` say which path bound; a failed init records `apex26.gfxTlxFail`.
+- TLX on WebGPU in Safari compiles TSL to WGSL in WebKit, so the five WGSL rules in
+  `.claude/rules/render-wgx.md` (the "Five WGSL rules" bullet) apply to this leg too: a black TLX WebGPU
+  canvas on an iPhone checks them before any shader edit.
 - Probe: `node tools/gfx/gfx-probe.mjs --backend three [--tlx-webgpu --lavapipe]
-  <track>` — `gpuErrors` must be 0 (parent session only: it launches Chromium).
+  <track>` — `gpuErrors` must be 0 (parent session only: it launches Chromium). The rule's gate
+  runs the WebGPU leg on lavapipe on purpose; `--hardware` refuses a fallback adapter.
   `--tod night` for a lighting-dependent defect.
 - Transparent / see-through cars: opaque canvas alpha is required —
   [references/tlx-transparent-cars.md](references/tlx-transparent-cars.md). Never compare the census's two TLX legs on frames or luma
@@ -90,10 +121,9 @@ blow-out, the Playwright probe pattern and apex-eval one-liners:
 
 Opt-in (`apex26.gfxBackend="webgpu"`). Every WGX failure must degrade to GLX,
 never a dead canvas. **ALWAYS first, no browser:**
-`node tools/gfx/wgx-validate.mjs --static` — the only command a subagent or
-verify-agent may run; the full Dawn pass (`wgx-validate.mjs [track]`,
-`--lite`, `--no-rg11b10`) and `gfx-probe.mjs --backend webgpu` launch Chromium:
-parent session only. Gate every WGSL/pipeline edit with it plus
+`node tools/gfx/wgx-validate.mjs --static` (no browser, so a subagent may run it); the full
+Dawn pass (`wgx-validate.mjs [track]`, `--lite`, `--no-rg11b10`) and `gfx-probe.mjs --backend
+webgpu` launch Chromium (parent only: AGENTS.md rule 10). Gate every WGSL/pipeline edit with it plus
 `tests/unit/webgpu-lifecycle.test.mjs`. `WGX.gpuErrors()` must be 0;
 `WGX.lastFailure()` explains a refusal. Steps, the fallback trace, SwiftShader
 limits and live pokes: [references/wgx.md](references/wgx.md); late-sky /
@@ -107,4 +137,4 @@ textured-vs-procedural material look on WGX is **asset-pack**.
 `js/xr/` (ENTER VR, `XrBoot` / `XrSession`, the WebGL2-default VR path, Quest
 controllers, `test:xr` under IWER): [references/xr.md](references/xr.md).
 
-Chrome DevTools heap/LCP playbook: [references/chrome-devtools-perf.md](references/chrome-devtools-perf.md). Census tools: skill **mcp-probe** §Census tools.
+Chrome DevTools heap/LCP playbook: [references/chrome-devtools-perf.md](references/chrome-devtools-perf.md). Memory census tools (heap, meshes; not `gpu-census`): skill **mcp-probe** §Census tools.

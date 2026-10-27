@@ -24,6 +24,7 @@
  * Needs the merge base: a shallow clone must be deep enough for `git merge-tree`.
  */
 import { spawnSync } from "node:child_process";
+import { gitRun } from "../lib/git-run.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEPLOY } from "./github-api.mjs";
@@ -50,10 +51,8 @@ export function decideSync(f) {
   return { verdict: "no", why: `behind with no conflict (${red}): clean-behind is not a reason` };
 }
 
-function git(args, run = spawnSync) {
-  const r = run("git", args, { cwd: ROOT, encoding: "utf8", maxBuffer: 64 << 20 });
-  return { code: r.status, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() };
-}
+// The {code,out,err} git helper is tools/lib/git-run.mjs (audit3 T11).
+function git(args, run = spawnSync) { return gitRun(args, { cwd: ROOT, run }); }
 
 /**
  * Gather facts and decide. `readGit` / `request` injectable.

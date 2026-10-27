@@ -2,8 +2,8 @@
 
 The 15 rules live in restructure-screens-css-rules.md; each with the failure it prevents and the measurement that
 justifies it. Sourced from shipped code (Pico, USWDS, Phaser, GOV.UK,
-typebot.io, medplum), the HTML/CSS specs, and this repo's own history —
-2026-08-08. **Every rule here is checkable; none is a matter of taste.**
+typebot.io, medplum), the HTML/CSS specs, and this repo's own history.
+Re-measure with the commands below; never quote an old figure. **Every rule here is checkable; none is a matter of taste.**
 
 The governing question for any restructure: **does it reduce a COUNT, or does
 it rename things?** Renaming is not restructuring.
@@ -13,7 +13,7 @@ it rename things?** Renaming is not restructuring.
 ## Before you touch anything
 
 ```sh
-node tools/ui/layout-audit.mjs                    # the screen x viewport matrix
+node tools/ui/layout-audit.mjs                    # the screen x viewport matrix, ONCE as the before-count (never per edit)
 node tools/ci/pick-tests.mjs --staged             # which groups this change needs
 node tools/ci/tooling-fast.mjs --changed --jobs=3 # diff-aware no-browser guard suite
 ```

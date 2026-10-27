@@ -9,7 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
-import { loadQuarantine, flakyVerdict, armed, QUARANTINE } from "../helpers/flaky-policy.mjs";
+import { loadQuarantine, flakyVerdict, armed, QUARANTINE, signatureOk, errorLine } from "../helpers/flaky-policy.mjs";
 import { shards, fit } from "../../tools/ci/select-specs.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -24,10 +24,16 @@ test("every quarantine row names a spec that exists and carries since/owner/why"
     assert.match(row.since || "", /^\d{4}-\d{2}-\d{2}$/, `${row.spec}: since must be an ISO date`);
     assert.ok((row.owner || "").length >= 8, `${row.spec}: owner names who fixes it`);
     assert.ok((row.why || "").length >= 40, `${row.spec}: why must say what was measured`);
-    assert.ok(row.title.includes(" › "), "quarantine identifies the exact suite and test");
+    // A root-level test (no describe) has no " › "; the --list test below
+    // proves every title names exactly one runnable test either way.
+    assert.ok((row.title || "").trim().length > 0, "quarantine identifies the exact test");
     assert.match(row.expires, /^\d{4}-\d{2}-\d{2}$/);
-    assert.ok(!seen.has(row.spec), `${row.spec}: listed twice`);
-    seen.add(row.spec);
+    const id = `${row.spec} › ${row.title}`;
+    assert.ok(!seen.has(id), `${id}: listed twice`);
+    seen.add(id);
+    // Rows since 2026-10-26 (audit4 D1) must name the failure, not only the test.
+    if (row.since >= "2026-10-26") assert.ok(typeof row.signature === "string", `${id}: a new row carries a signature`);
+    if (row.signature !== undefined) assert.ok(signatureOk(row), `${id}: signature must be a regex source anchored with ^ that compiles`);
   }
 });
 
@@ -59,7 +65,8 @@ test("every exact quarantine title is collected by the real browser runner", () 
 test("the loader returns the quarantined spec paths, and an empty set for a missing file", () => {
   const q = loadQuarantine(QUARANTINE, new Date("2026-10-16T00:00:00Z"));
   for (const row of FILE.quarantine) assert.ok(q.has(row.spec));
-  assert.equal(q.size, FILE.quarantine.length);
+  assert.equal(q.size, new Set(FILE.quarantine.map((r) => r.spec)).size);
+  assert.equal(q.policies.length, FILE.quarantine.length, "one active policy per row (several rows may share a spec)");
   assert.equal(loadQuarantine(path.join(ROOT, "scratch", "no-such-quarantine.json")).size, 0);
 });
 
@@ -141,7 +148,7 @@ test("the verdict line counts skips apart, and a run that executed nothing is RE
     r.write = (l) => lines.push(l);
     r.startHeartbeat = () => {};
     const tests = statuses.map((st, i) => ({ retries: 0, results: [{}], titlePath: () => ["headless", "x.spec.js", `t${i}`],
-      location: { file: "/repo/tests/specs/x.spec.js" }, outcome: () => (st === "skipped" ? "skipped" : "expected") }));
+      location: { file: "/repo/" + ["tests", "specs", "x.spec.js"].join("/") }, outcome: () => (st === "skipped" ? "skipped" : "expected") }));
     r.onBegin({ workers: 1 }, { allTests: () => tests });
     tests.forEach((t, i) => r.onTestEnd(t, { status: statuses[i], duration: 10 }));
     const override = r.onEnd({ status: "passed" });
@@ -256,4 +263,44 @@ test("invalid quarantine identity or review metadata cannot waive a failure", ()
     }
     assert.equal(flakyVerdict([{spec: row.spec, title: row.title}], new Set([row.spec])).fail, true, "spec membership alone cannot waive a test");
   } finally { fs.rmSync(dir, {recursive: true, force: true}); }
+});
+
+test("a signature row waives only its own failure: the same test failing with another message still blocks", () => {
+  // audit4 D1 (ci-7d C4/C5): a quarantine keyed on the test alone also spares
+  // every NEW regression in that test. The signature narrows it to the
+  // measured failure; anchored, case-sensitive, matched on the first line.
+  const row = fixtureRow({ signature: "^monotonic HUD SIZE \\d+ -> \\d+ \\{" });
+  withLedger([row], (file) => {
+    const q = loadQuarantine(file, new Date("2026-01-15T00:00:00Z"));
+    const at = (error) => flakyVerdict([{ spec: row.spec, title: row.title, error }], q).fail;
+    assert.equal(at('Error: monotonic HUD SIZE 100 -> 200 {"gearW":{}}\n\nexpect(received).toBeGreaterThan'), false, "the measured failure is spared");
+    assert.equal(at("\u001b[31mError: monotonic HUD SIZE 70 -> 100 {}\u001b[39m"), false, "colour codes do not hide it");
+    assert.equal(at("Error: control rects moved at HUD SIZE 200"), true, "another error in the same test blocks");
+    assert.equal(at("Error: page.waitForFunction: Timeout 5000ms exceeded.\nmonotonic HUD SIZE 100 -> 200 {"), true, "anchored: a later line cannot match");
+    assert.equal(at("Error: MONOTONIC HUD SIZE 100 -> 200 {"), true, "case-sensitive");
+    assert.equal(at(""), true, "no recorded error cannot match a signature");
+    assert.equal(flakyVerdict([{ spec: row.spec, title: "Fixture suite › TLX › other", error: "Error: monotonic HUD SIZE 1 -> 2 {" }], q).fail, true,
+      "the signature never widens the row to a sibling test");
+  });
+  for (const bad of ["monotonic HUD SIZE", "^(unclosed", 42]) {
+    withLedger([fixtureRow({ signature: bad })], (file) => {
+      const q = loadQuarantine(file, new Date("2026-01-15T00:00:00Z"));
+      assert.equal(q.policies.length, 0, `${JSON.stringify(bad)}: an unanchored or broken signature disables the row (fail closed)`);
+    });
+  }
+  assert.equal(errorLine("\n  Error: first\nsecond"), "first");
+});
+
+test("the reporter hands the first failed attempt's error to the verdict", async () => {
+  const { default: LiveReporter } = await import("../helpers/live-reporter.js");
+  const r = new LiveReporter();
+  r.write = () => {};
+  r.startHeartbeat = () => {};
+  const t = { id: "t1", retries: 1, results: [{}], titlePath: () => ["headless", "x.spec.js", "S", "wobbles"],
+    location: { file: "/repo/" + ["tests", "specs", "x.spec.js"].join("/") }, outcome: () => "flaky" };
+  r.onBegin({ workers: 1 }, { allTests: () => [t] });
+  r.onTestEnd(t, { status: "failed", duration: 5, error: { message: "Error: first try\nstack" } });
+  t.results.push({});
+  r.onTestEnd(t, { status: "passed", duration: 5 });
+  assert.deepEqual(r.flakyTests, [{ spec: ["tests", "specs", "x.spec.js"].join("/"), title: "S › wobbles", error: "Error: first try\nstack" }]);
 });

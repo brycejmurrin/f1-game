@@ -12,12 +12,9 @@ The player guide is `docs/TRACK-DESIGNER.md`; the HOW TO tab text is
 - FULL (boot): `track-themes.js`, `props.js`, `custom-tracks.js` — so a stored
   custom `trackId` resolves at boot.
 - `LAZY_EDITOR` (behind the title-menu TRACK DESIGNER door,
-  `CustomTracks.ensureEditor()`), in order: `shape.js` → `stamps.js` →
-  `randomise.js` → `validate.js` → `insight.js` → `fixes.js` → `codec.js` →
-  `scenery-preview.js` → `canvas.js` → `elev-presets.js` → `profile.js` →
-  `selection-panel.js` → `scenery-panel.js` → `designer.js` (last; reads every
-  module above at init). Most destructure `TrackShape` at eval
-  (`LAZY_EDITOR_EDGES`).
+  `CustomTracks.ensureEditor()`): the ORDER is the array in `tools/manifest.cjs` — read it
+  there, do not copy it. `designer.js` is last (it reads every module above at init); most
+  modules destructure `TrackShape` at eval (`LAZY_EDITOR_EDGES`).
 
 ## Files
 
@@ -38,6 +35,9 @@ The player guide is `docs/TRACK-DESIGNER.md`; the HOW TO tab text is
 | `track-themes.js` | `TrackThemes` | theme presets (def fields + generated scenery closure); list order is the share-code index — append only |
 | `props.js` | `TrackDesignerProps` | capped trackside props (kind order = codec index, append only) |
 | `scenery-panel.js` / `scenery-preview.js` | `DesignerScenery` / `DesignerSceneryPreview` | theme/atmosphere/prop inspector; live overhead footprint preview |
+| `followup-tools.js` | `DesignerFollowup` | review proposals, scenery recipes and learning cards |
+| `bridge-panel.js` | `DesignerBridges` | authored road-overpass controls |
+| `workspace.js` | `DesignerWorkspace` | inspector disclosures and navigation state |
 | `custom-tracks.js` | `CustomTracks` | registry + sanitiser: every stored field rebuilt to `LIMITS` on load (a share code is untrusted input), drafts, EXPORT ALL / IMPORT LIBRARY (`apex26.tracks` format) |
 
 ## Check a design without a browser
@@ -66,5 +66,5 @@ LAZY_EDITOR files). A validator rule change must keep the fleet oracle green.
 - Never reorder `TrackThemes`, prop kinds or codec flag bits — old share codes
   decode by index. A new field rides a new bit or a trailing byte.
 - Judge geometry on the BUILT road (TrackValidate), never the control polygon.
-- A custom circuit is not a `js/circuits/` file: `verify-track.cjs` covers the
-  shipped fleet; a designer bug is tested through the editor VM.
+- A custom circuit is not a `js/circuits/` file: `node tools/track/verify-track.cjs --custom <code|file>`
+  builds one design headlessly (share code or exported file); a designer bug is tested through the editor VM.

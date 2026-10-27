@@ -6,5 +6,6 @@
 {"query":"In career mode, parts I already bought still show a buy button and the price in the GARAGE sheet after I reload the save. Trace how owned parts are rendered in the career owned-part UI and fix the state so it shows as fitted/owned.","expect":"garage-parts-livery"},
 {"query":"Take isolated studio screenshots of the car from carview.html at front-three-quarter and rear, before and after my livery change, and compare the sponsor decals and wing geometry in both frames.","expect":"playwright-probe"},
 {"query":"After fitting the high-downforce rear wing the car understeers badly in slow corners and the lap times got worse. Run an A/B with the headless obs/act/reset loop to see if aeroLoad changed the handling and tune it back.","expect":"tune-physics"},
-{"query":"The lap-time digits and position number in the HUD are hard to read on the bright daytime track and get clipped on small phones. Fix the contrast and sizing of the HUD digits on that single screen.","expect":"ui-menu-a11y"}
+{"query":"The lap-time digits and position number in the HUD are hard to read on the bright daytime track and get clipped on small phones. Fix the contrast and sizing of the HUD digits on that single screen.","expect":"ui-menu-a11y"},
+{"query": "Take before/after studio screenshots of the new livery in the car studio", "expect": "playwright-probe"}
 ]

@@ -1,5 +1,7 @@
 # Cleanup roadmap — dedupe and extract (2026-09)
 
+Status: **SUPERSEDED** (checked against the code 2026-10-26) — by 2026-09-24-refactor-readability.md; kept as the shipped carve log.
+
 > **Superseded as the ranked backlog** by
 > [`2026-09-24-refactor-readability.md`](2026-09-24-refactor-readability.md)
 > (impact×risk hotspots + Phase 0–2 sequence). Keep this page as the **shipped

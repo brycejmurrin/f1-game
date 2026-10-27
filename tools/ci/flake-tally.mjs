@@ -32,7 +32,7 @@
  * ≥ 2 runs, or failed on ≥ 3 distinct branches (a red that follows the test,
  * not the change). `.github/workflows/flake-tally.yml` runs it daily and keeps
  * one open issue; the quarantine file itself stays a human/agent commit, so
- * the ledger keeps an owner and an evidence URL (AGENTS.md §Concurrent PRs).
+ * the ledger keeps an owner and an evidence URL (AGENTS.md §Coordination).
  *   node tools/ci/flake-tally.mjs --runs 7
  *   node tools/ci/flake-tally.mjs --runs 3 --json
  *   node tools/ci/flake-tally.mjs --help
@@ -208,6 +208,36 @@ export function parseLiveLogFlakes(text, runId) {
 }
 
 /**
+ * NODE JOBS (audit4 D1 / audit3 #35, 2026-10-26): the tally read browser legs
+ * only, so a unit-test flake (census-verdict ENOTEMPTY, safety-bans-hook at
+ * load, agent-output.test x2 in 7 d) never reached the table. tooling-fast and
+ * run-node-group print one `[<tag>] FAIL  n/m <file> …` line per red file and
+ * echo its TAP as `[<tag>]   | not ok k - <title>`; each such pair is a
+ * first-try `fail` on that unit file. Node tests have no retry, so a node
+ * "flake" shows up the way base-red does: the same title failing on several
+ * branches (proposeRows' failBranches rule).
+ */
+export function parseNodeLogFails(text, runId) {
+  /** @type {FlakeEvent[]} */
+  const out = [];
+  let file = null;
+  for (const raw of String(text || "").split("\n")) {
+    const line = raw.replace(/^\S+Z\s/, "");
+    const head = /^\[[\w:-]+\]\s+FAIL\s+\d+\/\d+\s+(tests\/\S+\.test\.[cm]?js)\b/.exec(line);
+    if (head) { file = head[1]; continue; }
+    const sub = /^\[[\w:-]+\]\s+\|\s+not ok \d+ - (.+?)\s*$/.exec(line);
+    if (sub && file) { out.push({ spec: file, title: sub[1], kind: "fail", runId }); continue; }
+    if (/^\[[\w:-]+\]\s+(PASS|FAIL|ok)\b/.test(line)) file = null;
+  }
+  return out;
+}
+
+/** Job names whose logs carry node-test output (parseNodeLogFails). */
+export const NODE_JOB = /structural guards|pure-node|unit suites|tooling|sweeps|census|lints/i;
+/** Job names whose logs carry live-reporter (Playwright) output. */
+export const BROWSER_JOB = /smoke|selected|driving|renderer|playwright|browser|gfx|xr|staged/i;
+
+/**
  * Junit with one <testcase> per attempt: first failed + last passed → flaky;
  * last still failed → fail. (Playwright often omits attempts; report/log preferred.)
  */
@@ -367,7 +397,9 @@ export async function syncBaseRedIssue(suspects, body, { token } = {}) {
 export function quarantineRows(proposals, { schemaKeys = ["spec", "since", "owner", "why"], today = new Date(), owner = "brycejmurrin", repo = REPO, expireDays = 30 } = {}) {
   const day = (d) => d.toISOString().slice(0, 10);
   const exact = schemaKeys.includes("title");
-  return (proposals || []).map((r) => {
+  // The ledger quarantines Playwright specs only; a unit file's repeat
+  // failure is a fix, never a row (its proposal still prints in the table).
+  return (proposals || []).filter((r) => /^tests\/specs\//.test(r.spec)).map((r) => {
     const evidence = `https://github.com/${repo}/actions/runs/${r.lastSeenRunId}`;
     const row = { spec: r.spec, since: day(today), owner,
       why: `flake-tally ${day(today)}: ${r.reason}; fails ${r.fails}, flaky-passes ${r.flakyPasses}, runs seen ${r.runsSeen}; last ${evidence}` };
@@ -688,9 +720,11 @@ async function collectRunEvents(run, {
       notes.push(`jobs: ${jobs.error}`);
     } else {
       for (const job of jobs.jobs) {
-        // Browser jobs upload playwright artifacts or run npm test / playwright.
+        // Browser jobs upload playwright artifacts or run npm test / playwright;
+        // node jobs print tooling-fast / run-node-group FAIL blocks.
         const name = String(job.name || "");
-        if (!/smoke|selected|driving|renderer|playwright|browser|gfx|xr/i.test(name)) continue;
+        const browser = BROWSER_JOB.test(name), node = NODE_JOB.test(name);
+        if (!browser && !node) continue;
         if (job.conclusion === "skipped" || job.conclusion === "cancelled") continue;
         if (failedJobsOnly && job.conclusion !== "failure") continue;
         const log = await fetchJobLogText(job.id, { token });
@@ -698,7 +732,8 @@ async function collectRunEvents(run, {
           notes.push(`log ${job.id}: ${log.error}`);
           continue;
         }
-        events.push(...parseLiveLogFlakes(log.text, runId));
+        if (browser) events.push(...parseLiveLogFlakes(log.text, runId));
+        if (node) events.push(...parseNodeLogFails(log.text, runId));
       }
     }
   }
@@ -727,7 +762,7 @@ to stdout and appends it to $GITHUB_STEP_SUMMARY when set.
 
 --events all   every FAILED ci.yml / pages.yml run of the last --days N
                (default ${DEFAULT_DAYS}) on any branch, newest ${MAX_ALL_RUNS} at most;
-               only the logs of its failed browser jobs are read
+               only the logs of its failed browser and node jobs are read
 --propose      also print the repeat offenders as quarantine rows (JSON) in
                the ledger's current shape; nothing is written
 --issue        create or rewrite the open \`${ISSUE_LABEL}\`-labelled issue

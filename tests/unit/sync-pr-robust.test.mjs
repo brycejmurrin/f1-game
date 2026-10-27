@@ -5,7 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import { staleSyncBranch, remoteMoved, foreignClaims } from "../../tools/ci/sync-pr.mjs";
+import { staleSyncBranch, remoteMoved } from "../../tools/ci/sync-pr.mjs";
 import { parseToolingFastArgv } from "../../tools/ci/tooling-fast.mjs";
 import { register, stop } from "../../tools/lib/run-pid.mjs";
 
@@ -67,16 +67,3 @@ test("stop kills a real registered process tree and nothing else", async () => {
     try { process.kill(+fs.readFileSync(pidFile, "utf8"), "SIGKILL"); } catch { /* already gone */ } child.kill("SIGKILL"); bystander.kill("SIGKILL"); }
 });
 
-test("Q6: foreignClaims names live claims on the branch held by another session", () => {
-  const me = "a".repeat(24), other = "b".repeat(24);
-  const c = (slug, over = {}) => ({ slug, who: "w", text: "t", ageMin: 5, stale: false, released: false, ...over });
-  const claims = [
-    c(`cursor--topic-1234-${other}`), c(`cursor--topic-1234-${me}`), c(`cursor--topic-1234-${other}`, { stale: true }),
-    c(`cursor--topic-1234-${other}`, { released: true }), c(`cursor--topic-12345-${other}`), c(`other-branch-${other}`),
-  ];
-  assert.equal(foreignClaims(claims, "cursor/topic-1234", me).length, 1, "one live foreign claim on that branch only");
-  assert.equal(foreignClaims(claims, "cursor/topic-1234", other).length, 1, "now mine is the other, and the first is foreign");
-  assert.equal(foreignClaims(claims.slice(1, 2), "cursor/topic-1234", me).length, 0, "my own claim never blocks");
-  assert.equal(foreignClaims([c("x-" + other)], "claude/x", null).length, 1, "claude/ prefix folded like claimSlug");
-  assert.deepEqual(foreignClaims(null, "x"), []);
-});

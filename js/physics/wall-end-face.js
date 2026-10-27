@@ -17,7 +17,8 @@ const WallEndFace = (function () {
   "use strict";
 
   const FACE_DROP = 1.5;      // m: a limit that tightens by more than this in one step is a face
-  const FACE_KEEP = 0.2;      // fraction of speed kept on the tick a face is met
+  const FACE_KEEP = 0.2;      // fraction of speed kept per FIXED_DT tick at the face (scaled by dt, so a 1/30 step keeps 0.04)
+  const FIXED_DT = 1 / 60;    // PhysicsConsts.FIXED_DT
   const _prev = { r: 0, l: 0, laneMin: 0, side: 0 };
   const _post = { r: 1e9, l: 1e9, minOut: 0, side: 0 };
 
@@ -36,8 +37,9 @@ const WallEndFace = (function () {
     if (!(oldLim - newLim > FACE_DROP)) return false;
     if (Math.abs(c.x) > oldLim) return false;            // already outside the old wall: an ordinary pin
     c.s = c._prevS;                                       // the face stops the car where it was
-    c.speed *= FACE_KEEP;
+    c.speed *= Number.isFinite(dt) && dt > 0 ? Math.pow(FACE_KEEP, dt / FIXED_DT) : FACE_KEEP;   // pow(x, 1) === x: 60 Hz bit-identical
     c.wallT = 0.35;
+    c.wasOnWall = true;                                   // on a wall: a side wall next tick is not a second first strike
     return true;
   }
 

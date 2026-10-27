@@ -7,8 +7,8 @@ Generic trauma-shake math: [feedback-recipes.md](feedback-recipes.md).
 
 | Feedback | Start here | Notes |
 |---|---|---|
-| Screen shake | `js/game.js` `shake` (grep `shake = Math.min`) | Wall: `addShake(0.1 + incidence * 0.3)` from `js/physics/wall-clamp.js`. Car-car: `collideFx()`. Kerb: `KERB_SHAKE`. Lines drift — grep the symbol. |
-| Kerb strike | `js/game.js` `kerbCueT` block (grep `KERB_SHAKE`); numbers `KERB_SHAKE` 0.22 / `KERB_CUE_HOLD` 0.10 in `js/physics/consts.js` | **Not particles.** The cue block holds shake + `GameAudio.rumble` (`js/audio/engine.js`, 70 ms throttle) + haptics (`Input.vibrate/rumble`, 120 ms). Cue-only tuning: those consts, the throttles, `rumble()`. The lines just above it (the `c.speed` cut `6 * (1 - kerbGripSm) / 0.3 * dt`, `kerbGripSm` → 0.7) are PHYSICS — never touch them for feel. |
+| Screen shake | accumulator `feel.shake` in `js/game.js`; applied by `CamFeel.shake` (`js/camera/feel.js`) via `CamTune.shakeOffset` (`js/camera/offsets.js`, zero under comfort) | Wall: `addShake` from `js/physics/wall-clamp.js`. Car-car: `collideFx()`. Kerb: `KERB_SHAKE`. Decay and curve: read `feel.shake` in game.js and `shakeOffset`. |
+| Kerb strike | `js/game.js` `kerbCueT` block (grep `KERB_SHAKE`); `KERB_SHAKE` / `KERB_CUE_HOLD` in `js/physics/consts.js` | **Not particles.** `KERB_SHAKE` is a HELD FLOOR (`Math.max(feel.shake, KERB_SHAKE)` while the cue holds): raising it makes a steadier buzz, not punch. PUNCH = a one-off add on the kerb-ENTRY edge (`kerbCueT` rising from 0), with a cooldown, scaled by speed; keep the floor. AUDIO = the continuous kerb loop in `js/audio/engine.js` (`kerbSrc`/`kerbGain`, `setEngine`'s `onKerb`); `GameAudio.rumble()` is a no-op while `kerbLive`. Haptics `Input.vibrate/rumble` (none on iOS). Onboard shiver: `js/camera/vantage.js` `onboardAttitude`. The lines just above the cue block (the `c.speed` cut and `kerbGripSm`) are PHYSICS — never touch them for feel. |
 | Collision / wall sfx | `GameAudio.collision()` | Gate with `collideT` / `wallT`. |
 | Wall/car-car sparks | `Particles.sparks` | Wall scrape from `Tracks.wallAt` proximity; collision via `c.fxSparkI`. |
 | Off-track kickup | `Particles.kickup` | Only when `c.offroad` (`Math.abs(c.x) > hw && !c.onKerb`). Kerbs never get kickup. |
@@ -27,20 +27,20 @@ compare equal sim time and equal wall time separately.
 
 ## Common mistakes
 
-- Hunting `js/camera/vantage.js` for shake — it only defines modes; `shake`
-  lives in `js/game.js`.
+- Adding a second shake accumulator — feed `feel.shake`; `vantage.js` owns only the onboard kerb shiver.
+- Shipping a kerb "punch" as shake or vibrate only — touch comfort zeroes shake and iOS has no vibrate.
 - Using `Particles.sparks`/`kickup` to fix kerb feel — kerb is `onKerb`.
 - Editing physics constants because an impact feels soft. Layer audio/shake
   first; **tune-physics** only when measured behaviour is wrong.
-- Allocating FX inside `updateCar`. Emit `c.fxSparkI` / bump `shake`, consume
-  in render/audio.
+- Allocating FX or drawing RNG inside `updateCar`. Setting flags/scalars there is fine:
+  emit `c.fxSparkI` / bump `feel.shake`, consume in render/audio.
 - Applying shake to car/track/heading/collision. Camera/view only.
 - A NEW hit-stop that touches the sim clock. The one exception already exists:
-  `feel.hitStop` (game.js, `simTime = dt * 0.15`) slows the sim, fed only by
-  car-to-car `collideFx` (`impact * 0.015` s); wall impacts add shake, not hitStop.
+  `feel.hitStop` (game.js, grep `feel.hitStop > 0`; skipped under NetPlay) slows the sim, fed only by
+  car-to-car `collideFx`; wall impacts add shake, not hitStop.
   Leave it as the only sim-slowing cue and never feed it from kerbs or walls.
   For any other "freeze" (the "hit-stop with no lap-time change" ask), hold the
   render instead: freeze the camera/particle/audio update for 1–3 frames while
   `updateCar` keeps stepping, so `obs()` and lap times are unchanged.
 - Random effects that change headless runs. Isolate RNG from the sim stream.
-- Ignoring reduce-intensity / low-end: cap shake/flash, decay quickly.
+- Ignoring reduce-intensity / low-end (`motionReduced()` / `camComfort()`): cap shake/flash, decay quickly.

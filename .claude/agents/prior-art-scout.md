@@ -7,6 +7,7 @@ maxTurns: 12
 readonly: true
 is_background: true
 background: true
+disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob
 ---
 
@@ -22,8 +23,16 @@ item is still true — that is agent `finding-verifier`'s job.
   (note names are upper-case), then `Grep` them for the slice.
 - `git log --oneline -i --grep '<topic>' -30` and
   `git log --oneline -30 -- <slice>`; merged PR titles show up as
-  `(#NNNN)` in those subjects. Local git only — no GitHub tools.
-- `.claude/agent-memory/*/MEMORY.md` for rejected carves on the slice.
+  `(#NNNN)` in those subjects. Local git only — no GitHub tools. The
+  checkout is a SHALLOW clone (`git rev-parse --is-shallow-repository`;
+  history starts ~2026-10-18), so an empty `git log` means "unknown before
+  the graft", not "nothing known": say so on `not read:`.
+- `.claude/agent-memory/*/MEMORY.md`, where present, for rejected carves.
+
+Only DEFECT-LEDGER §7 and §8 are numbered; cite any other ledger row as
+`DEFECT-LEDGER:<line>` or by its dated `###` heading. Over 30 rows: keep
+OPEN / DEFERRED first, drop FIXED first, and name the count dropped on
+`not read:`.
 
 Batch your greps within the one-command rule below: ONE `grep` per call
 over SEVERAL files with an alternation pattern, e.g.
@@ -60,4 +69,4 @@ so far plus `not read:` beats silence; hitting `maxTurns` mid-tool-call
 returns NOTHING to the parent.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
-Run one simple command per Bash call (no `&&`, `|`, `;`, `$()` or `git -C`) so an allowlist can approve it. If a Bash call is denied, mark only that item UNREAD and continue with Read/Grep/Glob; if every route is denied, return your contract block marked UNREAD/UNKNOWN. Never route around a denial.
+Run one simple command per Bash call (no `&&`, `|`, `;`, `$()` or `git -C`) so an allowlist can approve it. If a Bash call is denied, mark only that item UNREAD and continue with Read/Grep/Glob; if every route is denied, return your contract block marked UNREAD. Never route around a denial.

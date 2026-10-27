@@ -183,7 +183,7 @@ function xformDir(m, p) {   // rotation/scale only — for normals (good enough;
 
 // Load a material's base colour, and — when it points at a texture — the decoded
 // pixels so a vertex can be tinted by its UV (the low-poly palette convention).
-function materialColour(gltf, matIdx) {
+function materialColour(gltf, matIdx, images) {
   const { json, dir } = gltf;
   const m = json.materials && json.materials[matIdx];
   const pbr = (m && m.pbrMetallicRoughness) || {};
@@ -193,8 +193,16 @@ function materialColour(gltf, matIdx) {
     try {
       const t = json.textures[pbr.baseColorTexture.index];
       const img = json.images[t.source];
-      if (img && img.uri && !img.uri.startsWith("data:") && /\.png$/i.test(img.uri))
-        tex = decodePNG(fs.readFileSync(path.join(dir, decodeURIComponent(img.uri))));
+      if (img && img.uri && !img.uri.startsWith("data:") && /\.png$/i.test(img.uri)) {
+        const file = path.resolve(dir, decodeURIComponent(img.uri));
+        if (!images.has(file)) {
+          // The decoded palette is read-only: material factors apply only to
+          // vertex colours below. Cache failed reads too, for factor fallback.
+          images.set(file, null);
+          images.set(file, decodePNG(fs.readFileSync(file)));
+        }
+        tex = images.get(file);
+      }
       // JPG and embedded images are skipped — factor colour is used instead.
     } catch (_) { tex = null; }
   }
@@ -205,6 +213,9 @@ function importFile(file, opts) {
   const gltf = parseGLTF(file);
   const { json } = gltf;
   const pos = [], nrm = [], col = [], idx = [];
+  // A model owns its material/image caches. Distinct factors share immutable
+  // pixels, while the next file starts fresh even when it uses the same URI.
+  const materials = new Map(), images = new Map();
 
   const walk = (nodeIdx, parent) => {
     const node = json.nodes[nodeIdx];
@@ -215,7 +226,9 @@ function importFile(file, opts) {
         const P = accessor(gltf, prim.attributes.POSITION);
         const N = prim.attributes.NORMAL != null ? accessor(gltf, prim.attributes.NORMAL) : null;
         const UV = prim.attributes.TEXCOORD_0 != null ? accessor(gltf, prim.attributes.TEXCOORD_0) : null;
-        const { factor, tex } = materialColour(gltf, prim.material);
+        if (!materials.has(prim.material))
+          materials.set(prim.material, materialColour(gltf, prim.material, images));
+        const { factor, tex } = materials.get(prim.material);
         const I = accessor(gltf, prim.indices);
         // Emit only the vertices THIS primitive references. A kit GLB shares one
         // POSITION accessor across its primitives (one per material), so copying

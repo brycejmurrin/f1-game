@@ -49,6 +49,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { request } from "./github-api.mjs";
+import { strictFlags } from "../lib/cli-args.mjs";
+import { gitTry } from "../lib/git-run.mjs";
 import { defaultRemoteWorkers } from "../lib/browser-workers.mjs";
 import { CI_BUCKETS, MIN_SAMPLES, declaredTests, specSecPerTest } from "./select-budget.mjs";
 import { specsOf } from "./select-specs.mjs";
@@ -275,7 +277,7 @@ function api(method, pathQs, body, { raw = false } = {}) {
   return { code: r.status, json: r.json };
 }
 
-const git = (...a) => (spawnSync("git", a, { cwd: ROOT, encoding: "utf8" }).stdout || "").trim();
+const git = (...a) => gitTry(a, { cwd: ROOT });   // "" on failure (tools/lib/git-run.mjs)
 /** Refresh origin/<branch> before anything reads it (the sha, the "already green" lookup, the workflow check). */
 export function fetchOrigin(branch, spawn = spawnSync, cwd = ROOT) {
   return spawn("git", ["fetch", "-q", "origin", branch], { cwd });
@@ -319,7 +321,9 @@ export const USAGE = `usage: node tools/ci/remote-group.mjs <group> [--shards N]
        node tools/ci/remote-group.mjs --plan          # GROUP=/SHARDS= env: print the shard plan JSON (what the dispatch sends)
        node tools/ci/remote-group.mjs --run-shard     # GROUP=/PLAN=/SHARD=/TOTAL=/WORKERS= env (the workflow's shard step)
        node tools/ci/remote-group.mjs --watch <run-id>
-       node tools/ci/remote-group.mjs --help`;
+       node tools/ci/remote-group.mjs --help
+  --interval <s> poll period (min 10, default 30). An unknown flag prints this usage and exits 2, before any dispatch.`;
+export const KNOWN_FLAGS = ["--shards", "--gl", "--workers", "--ref", "--no-wait", "--force", "--timeout", "--interval", "--plan", "--run-shard", "--watch"];
 
 async function main() {
   if (argv.includes("--help") || argv.includes("-h")) {
@@ -417,5 +421,6 @@ async function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  strictFlags(argv, KNOWN_FLAGS, USAGE);
   process.exit(await main());
 }

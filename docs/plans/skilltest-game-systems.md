@@ -1,5 +1,7 @@
 # Skill / tool audit — game-systems
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — a 2026-10-01 audit report; its fixes were cut as separate PRs and its findings were not re-run.
+
 Hands-on audit of the **game-systems** skill and tool group (2026-10-01).
 Branch tip at start: `origin/claude/f1-game-project-26h3ng` @ `5fa849bb1` (later
 moved while fixes were cut). Each item was exercised by following its
@@ -56,7 +58,7 @@ GPU / secret-gated work is marked **not testable**.
 | `tools/net/nostr-probe.mjs` | not testable | — | Needs public WSS + `@noble/curves`. | — |
 | `tools/archive/net/rtc-sync-probe.mjs` | not testable | — | Shares port 4468 with rtc-e2e-3p; long; skipped. | — |
 | `tools/ci/ci-watch.mjs` (steward) | broken → fixed | without env token: `= ci unknown`; with `gh auth token`: lists jobs | Env-only auth | #679 |
-| `tools/ci/who-is-on-it.mjs` / `session-status.mjs` | works | both print useful handoff | `@skill` on who-is-on-it is `check-changes` (steward documents it) — intentional split. | — |
+| who-is-on-it.mjs / `session-status.mjs` | works | both print useful handoff | `@skill` on who-is-on-it is `check-changes` (steward documents it) — intentional split. | — |
 
 ## Fix PRs opened this audit
 

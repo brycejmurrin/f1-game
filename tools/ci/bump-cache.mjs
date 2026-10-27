@@ -39,13 +39,14 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
-import { exitIfHelp } from "../lib/cli-args.mjs";
+import { strictFlags } from "../lib/cli-args.mjs";
 import { fileURLToPath } from "node:url";
 
 const argv = process.argv.slice(2);
-exitIfHelp(argv, `usage: node tools/ci/bump-cache.mjs [--check] [--json]            # in the repo: assert every tag reads ?v=dev
+strictFlags(argv, ["--check", "--json", "--apply", "--at", "--root", "--advance", "--merge"], `usage: node tools/ci/bump-cache.mjs [--check] [--json]            # in the repo: assert every tag reads ?v=dev
        node tools/ci/bump-cache.mjs --apply --at <N> --root <dir>   # deploy-side (pages.yml): hash a STAGED shell
-  There is no cache bump in development; --apply refuses without --root.`);
+       node tools/ci/bump-cache.mjs --apply --root <dir> (--advance | --merge <ref>)   # pick the build number from the tip / a merge
+  There is no cache bump in development; --apply refuses without --root. An unknown flag prints this usage and exits 2.`);
 const flag = (name) => argv.includes(name);
 const opt = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : null; };
 // --root is RESOLVED: pages.yml passes the relative `_site`, and the asset-path
@@ -79,15 +80,13 @@ const META_RE = /(<meta\s+name="apex-build"\s+content=")([1-9][0-9]*)("\s*\/?>)/
 const LAZY_V_ID = "apex-lazy-v";
 const LAZY_INTEGRITY_ID = "apex-lazy-integrity";
 
-// Every file the page injects WITHOUT a tag, from the roster's own source.
-// js/workers/bitmap-decode-worker.js stays build-keyed: its client
-// (js/workers/bitmap-decode-client.js) still builds `?v=<build>` itself, and the
-// SW must precache it under the key that client asks for.
+// Every file the page injects WITHOUT a tag, from the roster's own source (the bitmap worker included since
+// audit4 I3 B6: its client takes the key from ScriptLoader.url like every other lazy file).
 function lazyFiles() {
   const M = createRequire(import.meta.url)("../manifest.cjs");
   const lists = [...Object.values(M.DEFERRED || {}), M.LAZY_AGENT, M.LAZY_RACE, M.LAZY_RACE_SESSION, M.LAZY_AUDIO,
     M.LAZY_DATA, M.LAZY_NET, M.LAZY_EDITOR, M.LAZY_XR, M.LAZY_CAM_EDITOR, M.LAZY_CAREER_UI, M.LAZY_TRACK_BUILD, M.LAZY_CIRCUIT, M.LAZY_SCENERY,
-    (M.LAZY_WORKER || []).filter((f) => f !== "js/workers/bitmap-decode-worker.js")];
+    (M.LAZY_WORKER || [])];
   return [...new Set(lists.flat().filter((f) => typeof f === "string"))].sort();
 }
 // The map for the files this root actually holds (a fixture shell holds none).

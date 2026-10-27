@@ -568,6 +568,6 @@ test("the GLX and TLX chunked builders bin through ChunkBins (no private copy of
     .filter((f) => readFileSync(join(ROOT, f), "utf8").split("\n").some((l) => !/^\s*(\/\/|\*)/.test(l) && COPY.test(l)));
   assert.deepEqual(copies.filter((f) => !allowed.has(f)), [], "bin through ChunkBins.bin / ChunkBins.key instead");
   for (const f of ["js/render/glx/chunked.js", "js/render/three/tlx-chunked.js"]) {
-    assert.match(readFileSync(join(ROOT, f), "utf8"), /ChunkBins\.bin\(pos, srcIdx, cell\)/, f);
+    assert.match(readFileSync(join(ROOT, f), "utf8"), /ChunkBins\.bin(?:Steps)?\(pos, srcIdx, cell\)/, f);
   }
 });

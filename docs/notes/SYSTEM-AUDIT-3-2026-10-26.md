@@ -184,7 +184,7 @@ them. Passes one and two: [`SYSTEM-AUDIT-2-2026-10-26.md`](SYSTEM-AUDIT-2-2026-1
     tools T8).
 32. Hand-maintained `~NNN` line anchors drift (21 in skills a–l; two Cursor lanes spent on ±1 fixes) (a-l S7).
 33. The ratchet read-ban residue: a read-only `node -e` naming `ratchets.json` is still refused (G8, H4; STILL OPEN).
-34. `dup-keys` exits 1 on `tests/unit/event-journal.test.mjs:41` and nothing gates the tree scan (G7).
+34. `dup-keys` exits 1 on `event-journal.test.mjs:41` (the test left with its module, audit4 I3 B1) and nothing gates the tree scan (G7).
 35. Unit-test flakes have no quarantine path and tooling-fast bails on the first failure (135 of 225 files unstarted);
     `output-surface` and the TESTING.md count test were red 4 and 3 times in 24 h and belong in `test:guards` (F3, F6).
 36. `code-hunter` lacks `omitClaudeMd` (~12.4k tokens per spawn); the worker card's browser line is stale; three deny-only

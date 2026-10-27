@@ -85,7 +85,8 @@ const SportingRegs = (function () {
    *  was never going to make the stop it had planned. */
   function compoundVerdict(c, o) {
     if (!c || !o || !o.applies || c.retired) return null;
-    if (!compoundShort(c.tyreLog)) return null;
+    const short = c.finished && typeof c.compoundShortAtFinish === "boolean" ? c.compoundShortAtFinish : compoundShort(c.tyreLog);
+    if (!short) return null;
     return o.suspended ? { penaltyS: SUSPENDED_PEN_S } : { dsq: DSQ_WHY };
   }
   /** Apply the verdict to every car: `c.dsq` names the reason, a suspended

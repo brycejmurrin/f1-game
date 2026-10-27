@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# @doc F1 build plugins: canonical F1 environment and plugin support.
+set -euo pipefail
+exec python3 /workspace/f1-game/tools/environment/build-plugins.py "$@"

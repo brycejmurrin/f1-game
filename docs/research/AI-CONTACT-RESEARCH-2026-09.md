@@ -1,5 +1,7 @@
 # AI racecraft and car-to-car contact — research (2026-09)
 
+Status: partly adopted, checked 2026-10-26 - oriented contact geometry is js/physics/contact-geometry.js and the AI lane model js/physics/ai-corridor.js; the proposals were not audited one by one. The 'Nothing here is implemented' line below is the state when written.
+
 Web research into how to make the AI and the contact model better, run as a
 six-lens workflow (`racecraft-ml`, `overtake-game-theory`, `rubber-band`,
 `pbd-contact`, `frenet-vs-world`, `netcode-determinism`) and synthesised by a

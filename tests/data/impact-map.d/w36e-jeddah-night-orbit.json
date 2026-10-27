@@ -1,0 +1,9 @@
+{
+  "pins": {
+    "js/circuits/scenery/jeddah.js": {
+      "narrow": [
+        "tests/unit/jeddah-night-orbit.test.mjs"
+      ]
+    }
+  }
+}

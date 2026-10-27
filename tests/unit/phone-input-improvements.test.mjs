@@ -97,6 +97,8 @@ test('old peer keeps v1 samples; touch requires explicit advertised capability, 
   assert.equal(JSON.parse(w.sent.filter((m) => m.c === 'state').at(-1).data)[0], 1);
   w.receive('event', h.P.encodeHello('host', false, true)); assert.equal(ctl.setSteeringMode('touch'), true);
   emit(dom.steer, 'pointerdown', { pointerId: 2, clientX: 50 }); emit(dom.steer, 'pointermove', { pointerId: 2, clientX: 110 });
+  // A drag is coalesced under the 15 ms sample gap (audit4 UB4): the next frame's pump sends it.
+  h.clock.t += 16; ctl.pump();
   let sample = h.P.decodeSample(w.sent.filter((m) => m.c === 'state').at(-1).data); assert.equal(sample.steer, 0.75); assert.equal(sample.roll, null);
   emit(h.document, 'pointerup', { pointerId: 2 }); sample = h.P.decodeSample(w.sent.filter((m) => m.c === 'state').at(-1).data); assert.equal(sample.steer, 0);
   emit(dom.steer, 'keydown', { key: 'ArrowLeft' }); assert.equal(ctl.state().steer, -1);

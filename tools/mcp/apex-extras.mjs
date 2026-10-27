@@ -37,6 +37,7 @@ import { processTree, killTreeAndWait, alive } from "../lib/process-tree.mjs";
 export { processTree, killTreeAndWait } from "../lib/process-tree.mjs";
 import { DIAGNOSTIC_JOB_KINDS, diagnosticsJobSpec } from "./diagnostics-tools.mjs";
 import { carFilterArgv } from "./catalog-discovery.mjs";
+import { jobOwnerGone, publishJobManifest, takeJobAdmission } from "./job-admission.mjs";
 
 /** An MCP image block for a PNG: a 640-px JPEG thumbnail, so an agent sees the
  *  frame in the result instead of spending a Read on it. */
@@ -357,6 +358,7 @@ export function createExtras(ctx) {
   // ── apex_job_*: long CLIs in the background ───────────────────────────────
   const JOB_DIR = path.join(ROOT, "artifacts", "logs", "apex-jobs");
   const jobs = new Map();
+  let failedAdmissionRelease = null;
   const list = (v, what) => {
     if (v == null || v === "") return null;
     const s = Array.isArray(v) ? v.join(",") : String(v);
@@ -488,15 +490,17 @@ export function createExtras(ctx) {
   const callCli = process.argv[2] === "call";
   const jobManifestPath = (id) => path.join(JOB_DIR, `${id}.json`);
   const jobCancelPath = (id) => path.join(JOB_DIR, `${id}.cancelled`);
+  const publishManifest = (id, meta) => publishJobManifest(jobManifestPath(id), meta);
   const writeJobManifest = (j) => {
     reconcileCancellation(j);
     try {
-      fs.writeFileSync(jobManifestPath(j.id), JSON.stringify({
+      publishManifest(j.id, {
         id: j.id, kind: j.kind, state: j.state, exit: j.exit, pid: j.child?.pid || j.pid || null,
         browser: j.browser, started: j.started, ended: j.ended, argv: j.argv,
         log: path.relative(ROOT, j.log), stderr: path.relative(ROOT, j.err),
-      }, null, 2) + "\n");
-    } catch (e) { log(`job manifest write failed: ${e.message}`); }
+      });
+      return true;
+    } catch (e) { log(`job manifest write failed: ${e.message}`); return false; }
   };
   const readJobManifest = (id) => {
     try { return JSON.parse(fs.readFileSync(jobManifestPath(id), "utf8")); } catch { return null; }
@@ -526,6 +530,11 @@ export function createExtras(ctx) {
       return start ? `ps-utc-v1:${start}` : null;
     } catch { return null; }
   };
+  const ownerGone = (owner) => jobOwnerGone(owner, processBirth);
+  const takeAdmission = () => {
+    if (failedAdmissionRelease) { failedAdmissionRelease(); failedAdmissionRelease = null; }
+    return takeJobAdmission(path.join(JOB_DIR, ".admission"), { pid: process.pid, birth: processBirth(process.pid) }, processBirth);
+  };
   const ownedCleanup = (cleanup) => {
     const owned = [], unknown = [];
     for (const pid of cleanup.pids || []) {
@@ -538,7 +547,7 @@ export function createExtras(ctx) {
     }
     return { owned, unknown };
   };
-  const jobActive = (j) => j.state === "running" || cleanupPending(j);
+  const jobActive = (j) => j.state === "starting" || j.state === "running" || cleanupPending(j);
   const releaseJobLock = (j) => {
     if (!j.browser || j.lockReleased) return;
     if (!cleanupPending(j)) {
@@ -564,6 +573,11 @@ export function createExtras(ctx) {
   const exitFileFor = (log) => log.replace(/\.log$/, ".exit");
   const refreshDiskJob = (meta) => {
     reconcileCancellation(meta);
+    if (meta?.state === "starting") {
+      if (!ownerGone(meta.owner)) return meta;
+      Object.assign(meta, { state: "failed", exit: "job owner exited before launch", ended: Date.now() });
+      publishManifest(meta.id, meta);
+    }
     if (!meta || meta.state !== "running") return meta;
     // The one-shot caller may die before its exit handler runs. The wrapper's
     // .exit is authoritative even when its orphaned shell remains a zombie:
@@ -584,7 +598,7 @@ export function createExtras(ctx) {
     meta.state = jobExitOk(meta.kind, exit) ? "done" : "failed";
     meta.exit = exit ?? 1;
     meta.ended = meta.ended || Date.now();
-    try { fs.writeFileSync(jobManifestPath(meta.id), JSON.stringify(meta, null, 2) + "\n"); } catch { /* */ }
+    try { publishManifest(meta.id, meta); } catch { /* */ }
     return meta;
   };
   const loadDiskJob = (id) => {
@@ -708,17 +722,29 @@ export function createExtras(ctx) {
       return toolResult({ ok: true, dryRun: true, kind, argv: plan.argv, env: plan.env, browser: plan.browser, ...(est || {}) });
     }
     if (mockMode()) return toolResult({ ok: true, mock: true, kind, argv: plan.argv, env: plan.env, ...(est || {}) });
-    const memRunning = [...jobs.values()].map(reconcileCancellation).filter(jobActive);
-    const diskRunning = listDiskJobs().filter((j) => jobActive(j) && !jobs.has(j.id));
-    if (memRunning.length + diskRunning.length >= 2) {
-      // Name them: "2 jobs already running" sent the caller to a second tool call just to learn which, and for how long.
-      const who = [...memRunning, ...diskRunning].map((j) => `${j.id} (${j.kind}, ${Math.round((Date.now() - (j.started || Date.now())) / 1000)}s)`).join(", ");
-      return refuse("jobs_busy", `${memRunning.length + diskRunning.length} jobs already running: ${who}`, "At most 2 run at once. apex_job_status {jobId} to watch one; apex_job_cancel {jobId} to free a slot.");
-    }
-    if (plan.browser) { const took = acquireLock(`apex_job:${kind}`); if (took) return took; }
-    let id, log, err, manifestFd, logFd, errFd, child;
+    let admission;
+    try { admission = takeAdmission(); }
+    catch (e) { return refuse("job_spawn_failed", String(e.message || e), "Check the job artifact directory, then retry."); }
+    if (!admission) return refuse("jobs_busy", "another owner is admitting a job", "Retry after that short admission finishes.");
+    let browserLocked = false;
+    let id, log, err, manifestFd, logFd, errFd, child, started;
     const ownedFiles = [];
+    const cleanupPrelaunch = () => {
+      for (const fd of [manifestFd, logFd, errFd]) if (fd != null) try { fs.closeSync(fd); } catch { /* */ }
+      manifestFd = logFd = errFd = undefined;
+      for (const file of ownedFiles) try { fs.rmSync(file, { force: true }); } catch { /* retry before releasing failed admission */ }
+      if (browserLocked) { browserLocked = false; releaseLock(); }
+    };
+    const spawnFailed = (e) => { cleanupPrelaunch(); return refuse("job_spawn_failed", String(e.message || e), "Check the job executable and artifact directory, then retry."); };
     try {
+      const memRunning = [...jobs.values()].map(reconcileCancellation).filter(jobActive);
+      const diskRunning = listDiskJobs().filter((j) => jobActive(j) && !jobs.has(j.id));
+      if (memRunning.length + diskRunning.length >= 2) {
+        // Name them: "2 jobs already running" sent the caller to a second tool call just to learn which, and for how long.
+        const who = [...memRunning, ...diskRunning].map((j) => `${j.id} (${j.kind}, ${Math.round((Date.now() - (j.started || Date.now())) / 1000)}s)`).join(", ");
+        return refuse("jobs_busy", `${memRunning.length + diskRunning.length} jobs already running: ${who}`, "At most 2 run at once. apex_job_status {jobId} to watch one; apex_job_cancel {jobId} to free a slot.");
+      }
+      if (plan.browser) { const took = acquireLock(`apex_job:${kind}`); if (took) return took; browserLocked = true; }
       fs.mkdirSync(JOB_DIR, { recursive: true });
       for (let attempt = 0; attempt < 8; attempt++) {
         id = `${kind}-${Date.now().toString(36)}-${process.pid}-${randomUUID().replaceAll("-", "").slice(0, 12)}`;
@@ -737,24 +763,38 @@ export function createExtras(ctx) {
           if (e.code !== "EEXIST" || attempt === 7) throw e;
         }
       }
+      started = Date.now();
+      fs.writeFileSync(manifestFd, JSON.stringify({ id, kind, state: "starting", exit: null, pid: null,
+        owner: { pid: process.pid, birth: processBirth(process.pid) }, browser: plan.browser, started, ended: null,
+        argv: plan.argv, log: path.relative(ROOT, log), stderr: path.relative(ROOT, err) }));
       fs.closeSync(manifestFd); manifestFd = undefined;
+    } catch (e) { return spawnFailed(e); }
+    finally {
+      try { admission(); }
+      catch (e) { failedAdmissionRelease = () => { cleanupPrelaunch(); admission(); }; return spawnFailed(e); }
+    }
+    try {
       const env = plan.env ? { ...process.env, ...plan.env } : process.env;
       const exitFile = exitFileFor(log);
-      child = spawnJob("/bin/sh", ["-c", '"$@"; c=$?; printf %s "$c" > "$APEX_JOB_EXIT_FILE"; exit $c', "sh", ...plan.argv],
-        { cwd: ROOT, detached: true, env: { ...env, APEX_JOB_EXIT_FILE: exitFile }, stdio: ["ignore", logFd, errFd] });
-    } catch (e) {
-      for (const fd of [manifestFd, logFd, errFd]) if (fd != null) try { fs.closeSync(fd); } catch { /* */ }
-      for (const file of ownedFiles) try { fs.rmSync(file); } catch { /* */ }
-      if (plan.browser) releaseLock();
-      return refuse("job_spawn_failed", String(e.message || e), "Check the job executable and artifact directory, then retry.");
-    }
+      child = spawnJob("/bin/sh", ["-c", 'read -r gate || exit 125; [ "$gate" = go ] || exit 125; "$@"; c=$?; printf %s "$c" > "$APEX_JOB_EXIT_FILE"; exit $c', "sh", ...plan.argv],
+        { cwd: ROOT, detached: true, env: { ...env, APEX_JOB_EXIT_FILE: exitFile }, stdio: ["pipe", logFd, errFd] });
+    } catch (e) { return spawnFailed(e); }
     // sh records the child's real exit code beside the log: a one-shot `call` parent dies before the exit handler below
     // runs, and refreshDiskJob would otherwise have to guess the verdict from the log's last line.
     fs.closeSync(logFd); fs.closeSync(errFd);
     try { child.unref(); } catch { /* */ }
-    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, pid: child.pid, state: "running", exit: null, started: Date.now(), ended: null, log, err };
+    const j = { id, kind, argv: plan.argv, browser: plan.browser, child, pid: child.pid, state: "running", exit: null, started, ended: null, log, err };
     jobs.set(id, j);
-    writeJobManifest(j);
+    // The wrapper waits on stdin until running publication succeeds. If the
+    // owner dies in the spawn/publication window, EOF prevents any workload.
+    if (!writeJobManifest(j)) {
+      child.stdin?.on("error", () => {}); child.stdin?.end();
+      jobs.delete(id);
+      fs.rmSync(jobManifestPath(id), { force: true });
+      if (browserLocked) releaseLock();
+      child.on("error", () => {});
+      return refuse("job_spawn_failed", "could not publish running job", "Check the job artifact directory, then retry.");
+    }
     child.on("exit", (code, sig) => {
       j.ended = Date.now();
       j.exit = code ?? sig;
@@ -770,6 +810,8 @@ export function createExtras(ctx) {
       writeJobManifest(j);
       releaseJobLock(j);
     });
+    child.stdin?.on("error", () => {});
+    child.stdin?.end(j.state === "running" ? "go\n" : undefined);
     return toolResult({
       ok: true, ...jobView(j),
       hint: "apex_job_status {jobId} for progress (works across call processes via disk manifest); result in out when done.",

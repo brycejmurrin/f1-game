@@ -1,23 +1,26 @@
 #!/bin/bash
 # PreToolUse guard for the GitHub MCP tools that change a PR's merge state.
 #
-# AGENTS.md §Concurrent PRs (MERGE-COMMIT-ONLY, #1458; standing authority,
-# 2026-10-19): every PR lands as a merge commit, a merge or an arm needs a fresh
-# merge-gate receipt pinned to the head it merges, and a draft goes ready only
-# with a fresh ready-gate receipt. Until 2026-10-14 that was prose only; until
+# AGENTS.md §Coordination (MERGE-COMMIT-ONLY, #1458): every PR lands as a merge
+# commit; since 2026-10-27 no session merges or arms (land.yml does, and
+# merge-gate.mjs writes no receipt, so the merge door stays shut); a draft goes
+# ready only with a fresh ready-gate receipt. Until 2026-10-14 that was prose only; until
 # 2026-10-19 the receipt was a human word per session (docs/plans/
 # 2026-10-19-fleet-redesign.md §1). This hook:
 #
 #   merge_pull_request / enable_pr_auto_merge with a squash or rebase method
 #                                                  -> "deny" (merge commits only)
-#   enable_pr_auto_merge without mergeMethod MERGE  -> "ask" (the repo default may be squash)
-#   merge_pull_request / enable_pr_auto_merge       -> "deny" unless artifacts/merge-gate/<pr>.json
-#                                                     is ok, < 10 min old and its head is the call's
-#                                                     expectedHeadSha (merge_policy.receipt_check)
+#   merge_pull_request / enable_pr_auto_merge       -> "deny", always (WP-L4, 2026-10-27: no session merges or
+#                                                     arms; land.yml does. The old receipt path opened only to a
+#                                                     hand-written artifacts/merge-gate/<pr>.json.)
 #   update_pull_request draft falsy (false/0/"no"/"off", any case: draft->ready)
 #                                                  -> "deny" unless artifacts/ready-gate/<pr>.json
-#                                                     is ok and < 10 min old
+#                                                     is ok, < 10 min old and its head is the PR's LIVE head
+#                                                     (merge_policy.live_head: gh api …/pulls/<n>); an
+#                                                     unknown live head denies
 #   update_pull_request state "closed"            -> "ask" (2026-10-26: closing a PR was neither denied nor hooked)
+#   issue_write whose `labels` drop `hold` (the list REPLACES the labels; the live labels come from gh api)
+#                                                  -> "ask" (WP-L4: `hold` is the only veto; unknown labels ask)
 #   any other update_pull_request (title/body/base) -> silent pass
 #   push_files / create_or_update_file / create_branch / delete_file
 #                                                  -> "deny" (settings.json denies them too; this is the
@@ -30,19 +33,14 @@
 #                                                  -> "deny" (a queued run holds no slot; a sweep
 #                                                     only buys a retrigger push — 2026-10-15), unless
 #                                                     APEX_RUN_CANCEL_OK=1 (the user asked for it)
-#   actions_run_trigger rerun_*                      -> "ask" (at most once, infra only; never a superseded run);
-#                                                     silent under APEX_MERGE_DESK=1 (Bryce 2026-10-15:
-#                                                     "all tools and mcps enabled", "Fix for me")
+#   actions_run_trigger rerun_*                      -> "ask" (at most once, infra only; never a superseded run)
 #
 # Receipts: merge_policy.receipt_check(..., verify_files=True) also refuses a
 # receipt whose gate files (merge-gate.mjs, ready-gate.mjs, gate-receipt.mjs)
 # differ from this checkout's committed tree (the 2026-10-20 O23 incident).
 #
-# APEX_MERGE_DESK=1 no longer decides merges or ready flips: the receipt does,
-# whoever asks. It only skips the re-run prompt, and since 2026-10-26 it is no
-# longer in the shared settings.json `env` — the orchestrator's environment sets
-# it (user grant, Bryce 2026-10-26 ~23:00 PT: "Fix hook or guard or perm";
-# docs/notes/HOOKS-SECURITY-2026-10-26.md). The reason texts and the receipt check
+# No environment variable silences any of these (the merge desk's re-run pass
+# went with the merge desk, WP-D1 2026-10-27). The reason texts and the receipt check
 # live in merge_policy.py, shared with bash-guard.sh's `gh` rule. Output is
 # the documented PreToolUse JSON (hookSpecificOutput.permissionDecision,
 # https://code.claude.com/docs/en/hooks). Exit 0 always; settings.json sets
@@ -67,7 +65,6 @@ if isinstance(d.get("tool_input"), str):
     except Exception:
         name = "unknown"
 ti = d.get("tool_input") or {}
-desk = os.environ.get("APEX_MERGE_DESK") == "1"
 root = d.get("cwd") if not os.environ.get("CLAUDE_PROJECT_DIR") and d.get("cwd") else P.project_root()
 def first(*keys):
     for k in keys:
@@ -85,29 +82,38 @@ elif merging:
     method = str(raw or "").strip().lower()
     if P.squash_or_rebase(raw):
         decision, reason = "deny", P.DENY_METHOD
-    elif name.endswith("__enable_pr_auto_merge") and method != "merge":
-        decision, reason = "ask", P.ASK_DESK_METHOD
     else:
-        head = first("expectedHeadSha", "expected_head_sha", "headSha", "head_sha", "sha")
-        ok, why = P.receipt_check(root, "merge", pr, head, verify_files=True)
-        if not ok:
-            decision, reason = "deny", P.DENY_GATE_MERGE + " (" + why + ")"
+        decision, reason = "deny", P.DENY_GATE_MERGE
 elif re.search(r"__(push_files|create_or_update_file|create_branch|delete_file)$", name):
     decision, reason = "deny", "github-mcp-guard: " + name.rsplit("__", 1)[-1] + " " + P.DENY_WRITE
 elif name.endswith("__update_pull_request"):
     draft = ti.get("draft")
     falsy = draft is not None and draft is not True and str(draft).strip().lower() in ("false", "0", "no", "off", "")
     if falsy:
-        ok, why = P.receipt_check(root, "ready", pr, verify_files=True)
+        live = P.live_head(root, pr, ti.get("owner"), ti.get("repo"))
+        ok, why = P.receipt_check(root, "ready", pr, live, verify_files=True, require_head=True)
         if not ok:
             decision, reason = "deny", P.DENY_GATE_READY + " (" + why + ")"
     if decision is None and str(ti.get("state") or "").strip().lower() == "closed":
         decision, reason = "ask", P.ASK_CLOSE
+elif name.endswith("__issue_write"):
+    # `labels` REPLACES the list (the 2026-10-27 clobber of #3263-#3267), so a list without `hold` removes it
+    # when the issue or PR carries it now; labels the hook cannot read ask too.
+    labels = ti.get("labels")
+    number = first("issue_number", "issueNumber", "number")
+    if labels is not None and number is not None and str(ti.get("method") or "update").strip().lower() != "create":
+        names = [str(x).strip().lower() for x in (labels if isinstance(labels, (list, tuple)) else [labels])]
+        if "hold" not in names:
+            cur = P.live_labels(root, number, ti.get("owner"), ti.get("repo"))
+            if cur is None:
+                decision, reason = "ask", P.ASK_HOLD + " (the current labels could not be read)"
+            elif "hold" in cur:
+                decision, reason = "ask", P.ASK_HOLD
 elif name.endswith("__actions_run_trigger"):
     method = str(ti.get("method") or "").strip().lower()
     if "cancel" in method and os.environ.get("APEX_RUN_CANCEL_OK") != "1":
         decision, reason = "deny", P.DENY_CANCEL
-    elif method in ("rerun_workflow_run", "rerun_failed_jobs") and not desk:
+    elif method in ("rerun_workflow_run", "rerun_failed_jobs"):
         decision, reason = "ask", P.ASK_RERUN
     elif method == "run_workflow" and P.gated_workflow(ti.get("workflow_id")):
         decision, reason = "ask", P.ASK_DISPATCH + " (" + str(ti.get("workflow_id")) + " on " + str(ti.get("ref") or "?") + ")"

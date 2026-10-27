@@ -22,6 +22,9 @@ Load from the SKILL.md index when the task needs this detail.
    - It must not write `px`, `pz`, `head`, speed, or `(s,x)`.
    - Gameplay-adjacent outputs are read-only scalars/state: hazards, panels,
      marble grip. The bespoke collision/barrier model remains authoritative.
+   - Marble grip is the exception that FEEDS THE PLAYER (SKILL.md, Marbles): its
+     input must be AI car state, never curvature; classify any change against
+     docs/PHYSICS.md's marble row.
 
 3. **Treat IncidentSim as the bounded exception.**
    - A takeover starts from a clear trigger and always hands back by settle or
@@ -42,7 +45,7 @@ Load from the SKILL.md index when the task needs this detail.
        stays false up to a lap after GREEN; a yellow or VSC disables neither
        overtake nor active aero. LOW GRIP (wet: `TyreModel.treadFor` > 0) also
        disables it (B7.2.2(d)) and halves the active-aero trade (`aeroWetK` in
-       game.js). Overtake itself is `js/race/overtake-mode.js` (detection line,
+       `js/race/pace-math.js`). Overtake itself is `js/race/overtake-mode.js` (detection line,
        0.5 MJ allowance).
      - SPEED CAP: race control never slows a car. game.js applies it live from
        `raceCtl.level` (`cautionV`; AI `holdCap`): VSC 0.6 × vTop; under the SC
@@ -74,9 +77,9 @@ Load from the SKILL.md index when the task needs this detail.
      `collisions-deep-vm.test.mjs` switch every takeover OFF via
      `incident({flags})` to test the bespoke clamp, so a takeover change can
      break them through that hook.
-   - Browser coverage: a single spec (`npm test -- tests/specs/<file>.spec.js`, background) or, for the whole
+   - Browser coverage: a single spec (`node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js`) or, for the whole
      `physics-core` group, `node tools/ci/remote-group.mjs physics-core` on the pushed branch (AGENTS.md verification table).
-   - Use `test:tooling-fast` (background, AGENTS.md rule 4) for docs/hooks/unit inventory checks.
+   - Use `node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet` for docs/hooks/unit inventory checks.
 
 ## Traces
 
@@ -88,12 +91,12 @@ All in `js/physics/incident-sim.js`; `__apex.incident()` is `status()`.
 1. `incident().count` / `incidents[].ticks` / `owned`: count 0 means no live
    takeover — the car is bespoke-stuck (next section), not owned.
 2. `postStep(dt)` is the only progress path and game.js calls it EVERY tick,
-   even with debris off (`js/game.js` ~4523-4534; `preStep` only while
-   `DebrisWorld.active()`). A paused or non-race state that skips the physics
+   even with debris off (the unconditional `postStep(dt)` call in `js/game.js`;
+   `preStep` only while `DebrisWorld.active()`). A paused or non-race state that skips the physics
    step also freezes the takeover.
 3. Normal exit per car: settle (`pose.sleeping` or speed < `SETTLE_V` and spin
    < `SETTLE_W`) for `SETTLE_HOLD_S` (0.30 s), or `inc.elapsed >= WINDOW_MAX_S`
-   (3.0 s hard cap) → `handbackCar(inc, i, false, pose)` (~381-382).
+   (3.0 s hard cap) → `handbackCar(inc, i, false, pose)`.
    `elapsed` advances by `dt`; a NaN/0 `dt` from the caller is the first suspect.
 4. Anomaly exits → `handbackCar(…, true)` restores last-good `inc.good`/`snap`
    (`_fallbacks++`): world inactive or `worldGen()` changed, no/NaN body pose,
@@ -122,9 +125,20 @@ Moved to [reliability-trace.md](reliability-trace.md) (team-car retirements, `__
 ### SC never deploys
 
 **"SC never deploys" checklist** (steps 1-3 also run through `createGame()` in `tools/lib/game-vm.cjs`; browser presentation is separate; the gating logic is pinned by `node --test tests/unit/race-control.test.mjs`, focused rules tests, <1 s):
+0. `RaceControl.update` early exits: not racing (`G.state` other than race), Time Trial or quali → reset, no
+   flag ever (a T1 pile-up in quali flies nothing); a WATCH replay owns the snapshot; a peer that does not
+   `ownsRaceControl()` computes nothing; and the hazard query runs only every `QUERY_EVERY` (4 Hz).
 1. `caution().enabled` — **`apex26.caution` defaults OFF** (`race-control.js` `enabled` init), so a fresh page never throws a flag; `caution(true)` or the CAUTIONS race setting turns it on. The switch also gates OVERTAKE lock-out.
 2. `debris().active` — flags are computed ONLY from `DebrisWorld.hazards()`, and `update()` returns early (level frozen, only the hard cap ages) while `DebrisWorld.active()` is false: `apex26.debris` is `"1"`, and the Rapier wasm must have loaded (`_loadState === 2`; a trapped step latches it off).
-3. `caution({hazards:true})` — hazard `total` vs thresholds in `js/race/race-control.js`: YELLOW_MIN=3 (one sector), VSC_MIN=6, SC_MIN=10, RED_MIN=16 on `redTotal` (needs >= 2 source cars). Queried at ~4 Hz, so wait 0.25 s+. A pile-up that leaves fewer settled hazards than SC_MIN yields VSC/yellow, not SC.
+3. `caution({hazards:true})` — hazard `total` vs `YELLOW_MIN` (one sector) / `VSC_MIN` / `SC_MIN`, and `RED_MIN` on
+   `redTotal` (needs ≥ 2 source cars), all in `js/race/race-control.js` (read the values there).
+   3a. What counts and when it drops out (`DebrisWorld.hazards`): only SLEEPING shards, disturbed cones and broken
+   panels on the road surface within `HAZARD_Y_TOL` of road height — never the stopped or pile-up CARS. A shard
+   leaves `REST_DESPAWN_S` after it sleeps (or past `FAR_DESPAWN_M` from the player); the pool is
+   `CAP_DESKTOP`/`CAP_MOBILE` with oldest-recycle. So sample `caution({hazards:true})` every 0.25 s through the
+   settle window and report the PEAK; a below-`SC_MIN` peak after a big pile-up is a hazards() design gap (cars
+   are not hazards), not "works as designed" — say so instead of retuning a threshold.
+   3b. `debris({burst:n})` spawns at the PLAYER with NO `sourceCars`: a burst repro can reach SC but never RED.
 4. Multiplayer: only the **host** computes flags; guests adopt host `apply()`.
    **`__apex.net()` does NOT carry caution** — compare `__apex.caution()` on
    BOTH peers. Guest green while host shows VSC (roles correct via

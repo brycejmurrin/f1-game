@@ -2033,3 +2033,52 @@ test("phone controls ignore secondary mouse presses while keeping primary and to
     }
   } finally { ctl.cancel(); }
 });
+
+test("continuous input keeps the 15 ms cap: slides coalesce into the next pump, edges go at once (audit4 UB4/UB5)", () => {
+  const sent = [], clock = { t: 1000 }, health = [];
+  let thr = 0;
+  const transport = { status: "open", onMessage() {}, onOpen() {}, onClose() {}, pump() { return 0; }, close() {},
+    send(ch, data) { if (ch === NetTransport.STATE) sent.push(data); return true; } };
+  const sess = PhonePad.padSession(transport, { roll: () => null, thr: () => thr, brk: () => 0, held: () => 0 },
+    { now: () => clock.t, heartbeat: false, onHealth: (h) => health.push(h) });
+  thr = 1; sess.sample(true);
+  assert.equal(sent.length, 1, "a press edge is sent at once");
+  for (let i = 0; i < 10; i++) { thr = 0.9 - i * 0.05; clock.t += 1; sess.sample(false); }
+  assert.equal(sent.length, 1, "ten slide moves inside 15 ms send nothing yet");
+  clock.t += 6; sess.pump();
+  assert.equal(sent.length, 2, "the next pump past the gap sends ONE coalesced sample");
+  const dec = PhonePad.decodeSample(sent[1]);
+  assert.ok(dec && Math.abs(dec.thr - 0.45) < 1e-6, "the coalesced sample carries the LATEST travel, got " + (dec && dec.thr));
+  clock.t += 20; sess.pump();
+  assert.equal(sent.length, 2, "nothing pending: a pump sends nothing");
+  thr = 0; sess.sample(true);
+  assert.equal(sent.length, 3, "a lift edge ignores the gap");
+  assert.equal(health.length, 2, "without a heartbeat, each pump still reports health");
+});
+
+test("touch steering: strip width read once per gesture, aria-valuenow an integer percent (audit4 UB4)", async () => {
+  let receive, closed, rects = 0;
+  const transport = { status: "open", onMessage(f) { receive = f; }, onOpen() {}, onClose(f) { closed = f; }, send() { return true; }, pump() {}, close() { this.status = "closed"; if (closed) closed("local"); } };
+  const steer = fakeEl(), aria = [];
+  steer.getBoundingClientRect = () => { rects++; return { top: 0, height: 50, left: 0, width: 300 }; };
+  steer.setAttribute = (k, v) => { if (k === "aria-valuenow") aria.push(v); };
+  const ctl = PhonePad.pad({ steer }, { deps: {
+    rtc: () => transport, prefetchIce: async () => null, normalise: (c) => c, valid: () => true,
+    privateRelay: () => false, swap: async () => ({ ok: true }),
+  } });
+  try {
+    await ctl.connect("ABC234");
+    receive("event", PhonePad.encodeHello("host", false, true));
+    assert.equal(ctl.setSteeringMode("touch"), true);
+    steer.dispatch("pointerdown", { pointerId: 5, pointerType: "touch", button: 0, clientX: 100 });
+    const r0 = rects;
+    for (let x = 101; x <= 140; x++) steer.dispatch("pointermove", { pointerId: 5, clientX: x });
+    assert.equal(rects, r0, "40 moves must not call getBoundingClientRect");
+    assert.ok(Math.abs(ctl.state().steer - 40 / 120) < 1e-9);
+    for (const v of aria) assert.ok(Number.isInteger(Number(v)) && String(Number(v)) === v, "aria-valuenow must be an integer percent, got " + v);
+    assert.equal(aria[aria.length - 1], "33");
+    assert.ok(aria.length <= 34, "an unchanged percent is not rewritten");
+    steer.dispatch("pointerup", { pointerId: 5 });
+    assert.equal(aria[aria.length - 1], "0");
+  } finally { ctl.cancel(); }
+});

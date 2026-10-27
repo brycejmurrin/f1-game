@@ -69,8 +69,9 @@ Process lifecycle reference: https://nodejs.org/api/child_process.html#event-clo
 
 The `Capture gallery` workflow runs the same native matrix and exporter on
 `macos-latest`, matching the repository's existing garage-before capture route.
-Edit `.github/capture-gallery-request.json` on a `cursor/` branch to request a
-run, or dispatch the workflow from that branch. The runner captures the exact
+Commit `.github/capture-gallery-request.json` on your branch, then dispatch the
+workflow from it (`gh workflow run capture-gallery.yml --ref <branch>`); a push
+alone no longer starts a run. The runner captures the exact
 workflow SHA, limits the request to 24 images and the job to 15 minutes, and
 uploads PNGs, source/camera receipts and a portable gallery for seven days.
 It grants only read access to repository contents and does not cancel a running

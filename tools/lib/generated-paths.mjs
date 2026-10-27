@@ -1,12 +1,12 @@
 // generated-paths.mjs — the committed files a generator rewrites from the tree.
-// @doc Generator outputs, one list: fleet-owner reports them GENERATED (never HELD); deploy.mjs regenerates them at merge.
+// @doc Generator outputs, one list: deploy.mjs regenerates them at merge.
 // A merge conflict in one is two stale renderings, and `tools/ci/deploy.mjs` cures it by taking a side and regenerating.
 //
-// One home for that list (system audit second pass, 2026-10-26, finding 5): `tools/ci/fleet-owner.mjs`
+// One home for that list (system audit second pass, 2026-10-26, finding 5): deploy.mjs
 // used to mark these HELD whenever an open PR's diff touched them, so `tools/shot/scenery-locations.json`
 // (every circuit PR), `tests/data/impact-map.json` (14 open PRs) and `docs/agent-index.json` blocked lanes
 // on a file nobody authors — five BLOCKED bus lines in ten minutes, cleared only by a LEND. A generated file
-// is owned by its generator: fleet-owner reports it GENERATED, never HELD, and the push guard does not warn
+// is owned by its generator, and the push guard does not warn
 // about it. `tests/unit/deploy-tool.test.mjs` keeps this list inside deploy.mjs's cure (every path here must
 // be cureable), so the two never drift. `tests/groups.json` and `index.html` are authored and stay out;
 // `tests/data/ratchets.d/<branch>.json` is per branch and never shared, so it needs no rule.

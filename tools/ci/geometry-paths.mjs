@@ -132,6 +132,14 @@ export const PARTS_ERE = () => {
  *  measures the boxes the TRACK build paints and only mentions gridUp() in a
  *  comment — so a game.js edit needs no sweep, and that is the diff class
  *  that was paying for ten fleet rebuilds. */
+function workerExtraPattern() {
+  const mods = MANIFEST.TRACK_WORKER_EXTRA;
+  if (!Array.isArray(mods) || !mods.length || mods.some((m) => typeof m !== "string" || !/^js\/[\w/-]+\.js$/.test(m))) {
+    throw new Error("geometry-paths: TRACK_WORKER_EXTRA must name source modules — refusing an incomplete worker trigger");
+  }
+  return "^(" + mods.map((f) => ere(f) + "$").join("|") + ")";
+}
+
 export const TARGETED = [
   { ere: "^(js/lighting/|js/render/shared/light-budget\\.js$|js/race/start-lights\\.js$)",
     suites: ["tests/unit/lamp-fixture-anchor.test.mjs"],
@@ -139,9 +147,12 @@ export const TARGETED = [
   { ere: "^js/garage/pit-signs\\.js$",
     suites: ["tests/unit/pit-signs.test.mjs"],
     why: "the pit bay signs' atlas + decal (pick-tests routes this file to sweeps; the fleet trigger never did)" },
-  { ere: "^js/render/shared/assets\\.js$",
+  { ere: workerExtraPattern(),
     suites: ["tests/unit/build-worker.test.mjs"],
-    why: "the build worker imports assets.js (manifest TRACK_WORKER_EXTRA) and the suite runs the real loader on both sides to prove a worker world stamps the same baked models" },
+    why: "the build worker imports TRACK_WORKER_EXTRA after TRACK_VM; its suite checks baked assets and transferable render chunks against the page build" },
+  { ere: "^tools/gfx/gpu-game-check\\.mjs$",
+    suites: ["tests/unit/build-worker.test.mjs"],
+    why: "the worker profile test executes the GPU probe summary to verify worker CPU is counted once" },
   { ere: "^js/physics/debris-world\\.js$",
     suites: ["tests/unit/debris-hazard-hint.test.mjs"],
     why: "the hazard projection reads debris-world.js's source and builds the circuits it names" },

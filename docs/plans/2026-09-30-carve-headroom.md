@@ -1,5 +1,7 @@
 # Carve headroom — size-ratchet extractions (2026-09-30)
 
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — slices A and B exist as js/physics/player-forces.js and wall-clamp.js; C-E were not verified.
+
 **Workstream:** open slack on saturated size ratchets so parallel feature agents
 can land without raising ceilings. **Not** a physics rewrite, scenery wave, or
 renderer parity pass.

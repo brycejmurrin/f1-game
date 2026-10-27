@@ -44,10 +44,9 @@
 #  Transcript Auditor batch 9 (2026-10-24), also in guard(): ban 5 refuses
 #    turning commit signing off (`-c commit.gpgsign=false`, `--no-gpg-sign`,
 #    `git config … gpgsign false|--unset`); ban 6 refuses a git ref written
-#    through `gh api` (DELETE/PATCH/PUT/POST …/git/refs). Advisories, never blocks (additionalContext): a
-#    cursor/* push whose diff touches another open PR's paths (fleet-owner.mjs;
-#    APEX_HELD_CHECK=0 skips it), and ready-gate/merge-gate piped without
-#    `set -o pipefail`. A push to a cursor/* branch whose every PR is merged
+#    through `gh api` (DELETE/PATCH/PUT/POST …/git/refs). Advisory, never a block (additionalContext):
+#    ready-gate/merge-gate piped without `set -o pipefail` (the held-file push advisory over
+#    fleet-owner.mjs was retired 2026-10-27). A push to a cursor/* branch whose every PR is merged
 #    or closed is refused (one REST call; APEX_CLOSED_PR_PUSH_OK=1 as the
 #    push's own prefix when Bryce reopened it; an API error fails open).
 #  GitHub API through ANY client (2026-10-26 system audit §10; user grant, Bryce
@@ -72,6 +71,12 @@
 # flow decide.
 
 INPUT=$(cat)
+# pass-4 red-team R14: without python3 every rule below is skipped. The other gates fail closed
+# (settings.json onFailure block); so does this one.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "BLOCKED: bash-guard needs python3 to read the command and run the push/commit/kill rules; none ran. Install python3 (tools/env/cloud-agent-install.sh) before continuing." >&2
+  exit 2
+fi
 CMD=$(printf '%s' "$INPUT" | python3 -c '
 import json,sys
 try:
@@ -110,7 +115,7 @@ fi
 # the former 14 `if: Bash(*word*)` filters, the agent runner, wget/sleep (the
 # API and poll-loop rules), `github` (a run-cancel URL in data) and the browser
 # launchers run as bare scripts.
-GUARD_TRIGGER='\b(git|github|gh|kill|pkill|killall|pgrep|curl|wget|node|nodejs|npm|npx|pnpm|pnpx|yarn|bun|bunx|deno|tsx|playwright|chrome|chromium|google-chrome|python|python3|sh|bash|dash|zsh|eval|exec|source|xargs|sleep|agent-run|test-bg|test-solo|run-playwright|verify-change|probe-mcp|apex-tools-mcp|js-debugger-mcp)\b'
+GUARD_TRIGGER='\b(git|github|gh|push|merge|commit|config|kill|pkill|killall|pgrep|curl|wget|node|nodejs|npm|npx|pnpm|pnpx|yarn|bun|bunx|deno|tsx|playwright|chrome|chromium|google-chrome|python|python3|perl|ruby|sh|bash|dash|zsh|eval|exec|source|xargs|sleep|agent-run|test-bg|test-solo|run-playwright|verify-change|probe-mcp|apex-tools-mcp|js-debugger-mcp)\b'
 if ! printf '%s' "$CMD" | grep -Eq "$GUARD_TRIGGER"; then
   exit 0
 fi
@@ -186,12 +191,12 @@ PRE='((sudo|env|exec|nice|nohup|command|setsid|doas|stdbuf([[:space:]]+-[^[:spac
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 # A `git stash` while a merge is in progress drops MERGE_HEAD, and the next commit lands
 # with ONE parent (2026-10-26: a sync merge of the deploy tip was committed as a squash and
-# caught only by a manual `%p` check; fleet-core rule 1 needs two parents). Reading forms
+# caught only by a manual `%p` check; AGENTS.md §Coordination needs two parents). Reading forms
 # (list/show) and the ones that restore state (pop/apply/drop) pass.
 if [ -n "$ROOT" ] && git -C "$ROOT" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
    && printf '%s' "$SCAN" | grep -qE '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+stash([[:space:]]|$)' \
    && ! printf '%s' "$SCAN" | grep -qE 'git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+stash[[:space:]]+(list|show|pop|apply|drop|branch)'; then
-  echo "BLOCKED: \`git stash\` while a merge is in progress drops MERGE_HEAD, and the next commit lands with ONE parent (fleet-core: merge commits only). Commit the merge or \`git merge --abort\` first; stash afterwards." >&2
+  echo "BLOCKED: \`git stash\` while a merge is in progress drops MERGE_HEAD, and the next commit lands with ONE parent (AGENTS.md §Coordination: merge commits only). Commit the merge or \`git merge --abort\` first; stash afterwards." >&2
   exit 2
 fi
 [ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"
@@ -303,6 +308,10 @@ fi
 # Text the parser cannot tokenise (an unbalanced quote) falls back to the regexes
 # on SCAN below: it would not run as written, so a false positive costs nothing.
 HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
+# pass 4 (H5): an escape hatch that exists is announced on every guarded call, so it cannot stay lifted unnoticed.
+for _h in allow-protected allow-context-cap allow-stop; do
+  [ -e "$ROOT/.claude/$_h" ] && echo "bash-guard: hatch active: .claude/$_h — remove it when the assigned edit is done."
+done
 GUARD_OUT=$(printf '%s' "$INPUT" | python3 "$HOOKDIR/shellparse.py" guard "$ROOT"); GUARD_RC=$?
 [ "$GUARD_RC" = 2 ] && exit 2
 COMMIT_LINE=$(printf '%s\n' "$GUARD_OUT" | sed -n 1p)

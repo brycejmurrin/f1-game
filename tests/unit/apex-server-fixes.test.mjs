@@ -88,12 +88,31 @@ test("durable jobs have exclusive cross-owner identities and cancellation conver
 test("job reservation failure removes owned files and releases a browser lock", async () => {
   const f = await fixture();
   try {
-    const x = f.make({ spawnJob() { throw new Error("injected spawn failure"); } }).handlers;
-    const r = body(x.apex_job_start({ kind: "survey_track", track: "monza" }));
-    assert.equal(r.error, "job_spawn_failed");
-    assert.equal(f.locks(), 0);
+    let attempts = 0;
+    const failingOwner = () => f.make({ spawnJob() { attempts++; throw new Error("injected spawn failure"); } }).handlers;
+    const x = failingOwner();
     const dir = path.join(f.root, "artifacts/logs/apex-jobs");
-    assert.deepEqual(fs.existsSync(dir) ? fs.readdirSync(dir) : [], [], "only this failed start's reservations are removed");
+    for (let attempt = 1; attempt <= 4; attempt++) {
+      // Re-enter through both the original handler and independent owners.
+      const owner = attempt % 2 ? x : failingOwner();
+      const r = body(owner.apex_job_start({ kind: "survey_track", track: "monza" }));
+      assert.equal(r.error, "job_spawn_failed");
+      assert.equal(attempts, attempt, "released admission permits another spawn attempt");
+      assert.equal(f.locks(), 0, "failed reservation releases its browser lock");
+      assert.deepEqual(fs.readdirSync(dir), [".admission"], "no starting manifest, job log or reservation remains");
+      const coordination = path.join(dir, ".admission");
+      const epochs = fs.readdirSync(coordination).sort();
+      const expected = Array.from({ length: Math.min(attempt, 2) }, (_, i) => `${attempt - Math.min(attempt, 2) + i + 1}.json`);
+      assert.deepEqual(epochs, expected, "only the latest two coordination epochs survive; no temporary files leak");
+      for (const epoch of epochs) {
+        const claim = JSON.parse(fs.readFileSync(path.join(coordination, epoch), "utf8"));
+        assert.equal(claim.state, "released", "persistent coordination cannot leave admission held");
+        assert.equal(claim.owner.pid, process.pid);
+        assert.equal(typeof claim.owner.birth, "string");
+        assert.ok(claim.owner.birth.length > 0);
+        assert.match(claim.token, /^[0-9a-f-]{36}$/i, "each released epoch retains complete ownership identity");
+      }
+    }
   } finally { f.cleanup(); }
 });
 

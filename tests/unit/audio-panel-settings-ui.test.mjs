@@ -17,7 +17,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const read = (name) => fs.readFileSync(path.join(ROOT, name), "utf8");
 const panelSrc = () => read("js/audio/panel.js").replace(/^const\b/gm, "var");
 
-function bootPanelOnAudioInner() {
+function bootPanelOnAudioInner(radioGlobals = null) {
   const dom = makeDom();
   const inner = dom.makeElement("div", "audioset-inner");
   dom.body.appendChild(inner);
@@ -70,6 +70,7 @@ function bootPanelOnAudioInner() {
     document: dom.document, window: null,
     GameAudio, SettingRow, G,
     ScrollFade: { refresh: () => scrollFadeCalls.push("refresh") },
+    ...(radioGlobals || {}),
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
@@ -77,8 +78,13 @@ function bootPanelOnAudioInner() {
   seedDom(ctx);
   vm.runInContext(read("js/ui/setting-row.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/setting-row.js") });
   vm.runInContext(`${panelSrc()}; globalThis.__audioPanel = AudioPanel;`, ctx, { filename: absSrc("js/audio/panel.js") });
+  if (radioGlobals) {
+    vm.runInContext(read("js/audio/radio-voice.js"), ctx, { filename: absSrc("js/audio/radio-voice.js") });
+    G.state = "race"; G.paused = true;
+    G.radio = vm.runInContext("RadioVoice.create(G)", ctx);
+  }
   ctx.__audioPanel.create(G);
-  return { dom, details, foldBody, scrollCalls: () => scrollCalls, scrollOpts: () => scrollOpts, scrollFadeCalls };
+  return { dom, G, ctx, details, foldBody, scrollCalls: () => scrollCalls, scrollOpts: () => scrollOpts, scrollFadeCalls };
 }
 
 test("opening a fold inside #audioset-inner scrolls its body into view and refreshes ScrollFade", () => {
@@ -127,4 +133,76 @@ test("ENGINE TONE PITCH CURVE help describes team factory readouts, not 100 on e
   assert.match(block, /restores that profile/i,
     "help names what RESET TO TEAM SOUND does (setProfile team via panel.js)");
   assert.match(block, /factory mix/i);
+});
+
+function bootRecordedPanel() {
+  const leaves = [], observers = [], speaks = [], stops = [], loads = [];
+  let ready = false;
+  const pack = { load: () => new Promise(resolve => loads.push(resolve)), ready: () => ready, remaining: () => 0, ensure() {},
+    stop() { stops.push(true); }, speak(id, text) { speaks.push({ id, text }); return true; }, releaseExcept() {}, debug: () => ({}) };
+  const h = bootPanelOnAudioInner({ SettingsNav: { onLeave(fn) { leaves.push(fn); } }, VoicePack: { create: () => pack, choices: () => [] },
+    setTimeout: () => 1, clearTimeout() {},
+    MutationObserver: class { constructor(fn) { this.fn = fn; } observe(el) { observers.push({ el, fn: this.fn }); } },
+    speechSynthesis: { speak() {}, cancel() {}, resume() {}, getVoices: () => [] }, SpeechSynthesisUtterance: function(text) { this.text = text; } });
+  // The settings dialog stays open and its pause card stays hidden throughout.
+  h.dom.byId("pmsettings").hidden = false; h.dom.byId("audioset").hidden = false; h.dom.byId("pausemenu").hidden = true;
+  h.dom.document.createTextNode = text => { const node = h.dom.makeElement("span"); node.nodeType = 3; node.textContent = text; return node; };
+  for (const id of ["as-mvol", "as-svol", "as-rvol", "as-rfx"]) {
+    const row = h.dom.makeElement("label"); row.className = "tune-row"; row.appendChild(h.dom.byId(id));
+  }
+  h.dom.dispatch(h.dom.byId("pm-audio"), { type: "click" });
+  return { ...h, leaves, observers, speaks, stops, loads, ready() { ready = true; } };
+}
+
+test("leaving audio retires its pending recorded TEST while settings remains open", async () => {
+  for (const ending of ["back", "other-page", "panel-hidden", "dialog-hidden", "close", "cancel", "stay"]) {
+    const h = bootRecordedPanel(), button = h.dom.byId("as-v-radio-test");
+    assert.equal(typeof button.onclick, "function", "the actual panel TEST button owns the preview");
+    button.onclick();
+    assert.equal(h.loads.length, 1);
+    const generation = h.G.radio.previewGeneration();
+    if (ending === "back" || ending === "other-page") h.leaves.forEach(fn => fn("audio"));
+    else if (ending === "panel-hidden" || ending === "dialog-hidden") {
+      const el = h.dom.byId(ending === "panel-hidden" ? "audioset" : "pmsettings"); el.hidden = true;
+      h.observers.filter(o => o.el === el).forEach(o => o.fn([]));
+    } else if (ending === "close" || ending === "cancel") h.dom.dispatch(h.dom.byId("pmsettings"), { type: ending });
+    else h.leaves.forEach(fn => fn("display")); // leaving another page is unrelated
+    h.ready(); h.loads.forEach(resolve => resolve(true));
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    assert.equal(h.speaks.length, ending === "stay" ? 1 : 0, ending);
+    assert.equal(h.G.radio.previewGeneration() === generation, ending === "stay", ending);
+    if (["back", "other-page", "stay"].includes(ending)) {
+      assert.equal(h.dom.byId("pmsettings").hidden, false);
+      assert.equal(h.dom.byId("pausemenu").hidden, true);
+    }
+    assert.equal(h.G.store.get("radioVoice", false), false, "TEST works independently of automatic radio policy");
+  }
+});
+
+test("audio page leave preserves a later independent voice and does not stop unowned race radio", async () => {
+  const h = bootRecordedPanel();
+  h.dom.byId("as-v-radio-test").onclick();
+  const panelGeneration = h.G.radio.previewGeneration();
+  assert.equal(h.G.radio.preview("control", "Independent later test"), true);
+  const newer = h.G.radio.previewGeneration(), stopped = h.stops.length;
+  assert.notEqual(newer, panelGeneration);
+  h.leaves.forEach(fn => fn("audio"));
+  assert.equal(h.G.radio.previewGeneration(), newer);
+  assert.equal(h.stops.length, stopped, "stale panel ownership cannot stop a newer voice");
+  h.ready(); h.loads.forEach(resolve => resolve(true));
+  for (let i = 0; i < 4; i++) await Promise.resolve();
+  assert.equal(h.speaks.length, 1, "only the independent newer preview plays");
+  for (const hadPanelPreview of [false, true]) {
+    const race = bootRecordedPanel();
+    if (hadPanelPreview) race.dom.byId("as-v-radio-test").onclick();
+    race.ready(); race.G.paused = false; race.G.radio.setEnabled(true);
+    assert.equal(race.G.radio.say("BOX BOX BOX", 3, "info"), true);
+    const raceGeneration = race.G.radio.previewGeneration(), raceStops = race.stops.length;
+    race.leaves.forEach(fn => fn("audio"));
+    race.loads.forEach(resolve => resolve(true));
+    for (let i = 0; i < 4; i++) await Promise.resolve();
+    assert.equal(race.G.radio.previewGeneration(), raceGeneration);
+    assert.equal(race.stops.length, raceStops, "page cleanup never halts newer/unowned live race radio");
+    assert.equal(race.speaks.length, 1, "the actual race transmission survives without a stale TEST playing");
+  }
 });

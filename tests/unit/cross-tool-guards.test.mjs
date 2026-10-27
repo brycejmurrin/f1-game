@@ -107,7 +107,7 @@ function committedGate(dir) {
 
 // 2026-10-15: run cancels under the owner's account kept landing after both
 // Claude doors refused them; Cursor's MCP door had no guard at all.
-test("Cursor's MCP door: a run cancel is denied (exit 2), a merge needs the gate receipt, a read passes", () => {
+test("Cursor's MCP door: a run cancel is denied (exit 2), every merge is denied, a read passes", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "cursor-mcp-"));
   const mcp = (tool_name, input, env = {}) => {
     const r = spawnSync("bash", [path.join(ROOT, ".cursor/hooks/mcp-guard.sh")],
@@ -124,7 +124,7 @@ test("Cursor's MCP door: a run cancel is denied (exit 2), a merge needs the gate
     assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), { status: 2, permission: "deny" }, "no merge-gate receipt");
     fs.mkdirSync(path.join(dir, "artifacts/merge-gate"), { recursive: true });
     fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString(), gateRoot: dir, gateFiles: committedGate(dir) }));
-    assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), { status: 0, permission: "allow" }, "gated merge passes");
+    assert.deepEqual(mcp("merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), { status: 2, permission: "deny" }, "a hand-written merge receipt opens nothing (WP-L4)");
     assert.deepEqual(mcp("pull_request_read", { method: "get", pullNumber: 1 }), { status: 0, permission: "allow" });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
@@ -132,7 +132,7 @@ test("Cursor's MCP door: a run cancel is denied (exit 2), a merge needs the gate
 // Codex had only a Bash hook, so an MCP merge skipped the gate (fleet redesign §8; Bryce approved the
 // hook 2026-10-19). Codex reads Claude's hookSpecificOutput JSON but cannot "ask" (it fails the hook
 // and continues the call: https://learn.chatgpt.com/docs/hooks), so the wrapper turns every ask into a deny.
-test("Codex's MCP door guards legacy and hosted GitHub operations, preserving receipt and ask policy", () => {
+test("Codex's MCP door guards legacy and hosted GitHub operations: an ask becomes a deny, every merge is denied", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "codex-mcp-"));
   const mcp = (tool_name, input, env = {}) => {
     const r = spawnSync("bash", [path.join(ROOT, ".codex/hooks/mcp-guard.sh")],
@@ -172,10 +172,16 @@ test("Codex's MCP door guards legacy and hosted GitHub operations, preserving re
     fs.mkdirSync(path.join(dir, "artifacts/merge-gate"), { recursive: true });
     fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString(), gateRoot: dir, gateFiles: committedGate(dir) }));
     for (const prefix of prefixes) {
-      assert.equal(mcp(prefix + "merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), null, prefix + "gated merge passes");
-      assert.equal(mcp(prefix + "merge_pull_request", { pr_number: 1, merge_method: "merge", expectedHeadSha: head }), null, prefix + "gated merge passes with pr_number");
-      assert.equal(mcp(prefix + "update_pull_request", JSON.stringify({ pullNumber: 1, body: "x" })), null, prefix + "JSON-object string remains supported");
+      assert.equal(mcp(prefix + "merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), "deny", prefix + "a hand-written merge receipt opens nothing (WP-L4)");
+      assert.equal(mcp(prefix + "update_pull_request", JSON.stringify({ pullNumber: 1, body: "x" })), null, prefix + "a JSON-object string body edit passes");
     }
+    // the hosted connector names the PR `pr_number`: the ready door must see it as #1, not "no PR number"
+    const r = spawnSync("bash", [path.join(ROOT, ".codex/hooks/mcp-guard.sh")],
+      { input: JSON.stringify({ tool_name: "mcp__codex_apps__github_update_pull_request", tool_input: { pr_number: 1, draft: false } }),
+        encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: dir } });
+    const why = JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason;
+    assert.match(why, /#1/, why);
+    assert.doesNotMatch(why, /no PR number/, why);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

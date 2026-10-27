@@ -9,8 +9,14 @@
  * WHY. Each spec below is a pure `__apex`-hook reader: no locator, no
  * screenshot, no DOM. Its twin under tests/unit/ is a VERBATIM port that runs
  * the same launch constants and the same step counts against
- * tools/lib/game-vm.cjs, in about a second, in a node group that the Pages gate
- * runs UNCONDITIONALLY and blocking. Running the browser copy on the selected
+ * tools/lib/game-vm.cjs, in about a second, in a node group that ci.yml's
+ * pure-node job runs on a READY PR, the nightly and a dispatch. THE TRAIN DOES
+ * NOT RUN THAT JOB (`inputs.concurrency_key == ''` in its `if:`, decision D2,
+ * 2026-10-16), so on a Pages call the twins of the specs the train's plan drops
+ * run in ci.yml's `train-twins` job instead, diff-scoped (trainTwinPlan below;
+ * audit4 D1 / ci-7d C2: 354 of 354 trains skipped the node job while this
+ * header said "unconditionally"). verify() parses both jobs' `if:`, so the day
+ * either stops covering the train the check reds. Running the browser copy on the selected
  * gate too buys nothing and costs SwiftShader minutes that the gate's
  * budget then denies to a spec with no twin at all.
  *
@@ -315,6 +321,47 @@ export function ungatedNodeFiles() {
   return [...out].sort();
 }
 
+/** One job's text out of a workflow: from `  <id>:` to the next top-level job. */
+export function jobBlock(yml, id) {
+  const m = new RegExp(`\n  ${id}:\n`).exec(yml);
+  if (!m) return "";
+  const rest = yml.slice(m.index + 1);
+  const next = rest.slice(1).search(/\n  [a-z][\w-]*:\n/);
+  return next < 0 ? rest : rest.slice(0, next + 1);
+}
+/** A job's own `if:` expression (the 4-space `if:` line), or "" when it has none. */
+export function jobIf(yml, id) {
+  return /^ {4}if: (.+)$/m.exec(jobBlock(yml, id))?.[1] || "";
+}
+export const TRAIN_TWIN_JOB = "train-twins";
+/** Does each job reach the train (a Pages call, `concurrency_key` set)?
+ *  `nodeJob` false is the D2 state; the twins then need `train-twins`, which
+ *  must run on a Pages call and execute the plan's output. Read from the
+ *  job's `if:`, never assumed: the header used to say "unconditionally". */
+export function trainCoverage(yml = fs.readFileSync(path.join(ROOT, ".github/workflows/ci.yml"), "utf8")) {
+  const nodeIf = jobIf(yml, "node-suites");
+  const nodeJob = !!nodeIf && !/inputs\.concurrency_key == ''/.test(nodeIf);
+  const block = jobBlock(yml, TRAIN_TWIN_JOB);
+  const twinIf = jobIf(yml, TRAIN_TWIN_JOB);
+  const twinJob = !!block && /inputs\.concurrency_key != ''/.test(twinIf)
+    && /needs\.select\.outputs\.twins/.test(block) && /needs\.select\.outputs\.adapted/.test(block)
+    && /twinned-specs\.mjs --train-plan/.test(yml)
+    && new RegExp(`\\n {6}- ${TRAIN_TWIN_JOB}\\n`).test(jobBlock(yml, "ci-verdict"));
+  return { nodeJob, twinJob, covered: nodeJob || twinJob };
+}
+
+/** What a Pages call must run in node for the browser specs its plan dropped
+ *  as VM-twinned: hand twins as files, adapted specs as themselves under
+ *  APEX_VM_PAGE=1, plus the plan's circuit scope. `sel` is select-specs --json. */
+export function trainTwinPlan(sel) {
+  const twins = new Set(), adapted = new Set();
+  for (const r of sel?.coveredByVmTwin || []) {
+    if (isAdapted(r.file)) adapted.add(r.file);
+    else if (TWINNED[r.file]) twins.add(TWINNED[r.file]);
+  }
+  return { twins: [...twins].sort(), adapted: [...adapted].sort(), circuits: (sel?.circuits || []).join(",") };
+}
+
 /** Every entry: both files present, same declared test count, twin in a group
  *  the gate always runs. Returns the problems; empty means the substitution
  *  still holds. */
@@ -352,10 +399,31 @@ export function verify() {
       `${twin} is in no group the Pages gate runs unconditionally (tooling-fast, or a test:* named by ` +
       `ci.yml's "Pure-node unit suites" step) — a twin only substitutes for a blocking spec if it BLOCKS`);
   }
-  return { ok: problems.length === 0, problems, rows };
+  const train = trainCoverage();
+  if (!train.covered) problems.push(
+    `the train runs neither ci.yml's node-suites job (its if: excludes concurrency_key) nor a \`${TRAIN_TWIN_JOB}\` job ` +
+    `that runs \`twinned-specs.mjs --train-plan\` on a Pages call and feeds ci-verdict — every twinned spec the train's plan ` +
+    `drops would be checked nowhere before publish (ci-7d C2)`);
+  return { ok: problems.length === 0, problems, rows, train };
 }
 
 async function main() {
+  const tp = process.argv.indexOf("--train-plan");
+  if (tp >= 0) {
+    const file = process.argv[tp + 1];
+    if (!file) { console.error("usage: node tools/ci/twinned-specs.mjs --train-plan <select-specs.json> [--github-output]"); process.exitCode = 2; return; }
+    const plan = trainTwinPlan(JSON.parse(fs.readFileSync(file, "utf8")));
+    console.log(`train twins: ${plan.twins.length} hand twin(s), ${plan.adapted.length} adapted spec(s)` +
+      `${plan.circuits ? `, APEX_CIRCUITS=${plan.circuits}` : ""}${[...plan.twins, ...plan.adapted].map((f) => `\n  ${f}`).join("")}`);
+    if (process.argv.includes("--github-output") && process.env.GITHUB_OUTPUT)
+      fs.appendFileSync(process.env.GITHUB_OUTPUT,
+        `twins=${plan.twins.join(" ")}\nadapted=${plan.adapted.join(" ")}\ntwin_circuits=${plan.circuits}\n`);
+    return;
+  }
+  if (process.argv.includes("--help")) {
+    console.log("usage: node tools/ci/twinned-specs.mjs [--json] | --train-plan <select-specs.json> [--github-output]");
+    return;
+  }
   const r = verify();
   if (process.argv.includes("--json")) {
     console.log(JSON.stringify(r, null, 2));
@@ -363,7 +431,7 @@ async function main() {
     return;
   }
   for (const p of r.problems) console.log(`DRIFT  ${p}`);
-  if (r.ok) console.log(`twinned-specs: ${r.rows.length} browser specs covered test-for-test by a VM twin on the unconditional node gate ` +
+  if (r.ok) console.log(`twinned-specs: ${r.rows.length} browser specs covered test-for-test by a VM twin (node-suites on a PR, ${r.train.nodeJob ? "node-suites" : "train-twins"} on the train) ` +
     `(${r.rows.reduce((n, x) => n + x.specTests, 0)} tests; ${r.rows.filter((x) => x.adapted).length} run as themselves under the adapter)`);
   const debt = await twinDebt();
   console.log(`twin debt: ${debt.length} portable spec(s) still on the browser gate` + (debt.length ? `\n  ${debt.join("\n  ")}` : ""));

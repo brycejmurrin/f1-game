@@ -285,7 +285,15 @@ const Collide = (() => {
     let track = null, player = null, netPlay = null;   // bound at resolveCollisions entry
     let motion = new WeakMap(), motionTrack = null, motionTime = -1;
     let sweepGeneration = 0;
-    const _fxStep = new WeakMap();   // car → sweepGeneration its rear-end contact last fired FX / debris / notify
+    const _fxPairs = new WeakMap();   // car → WeakMap(other car → last notified generation), retained weakly across steps
+    function firstPairFx(a, b) {
+      let peers = _fxPairs.get(a);
+      const reverse = _fxPairs.get(b);
+      if ((peers && peers.get(b) === sweepGeneration) || (reverse && reverse.get(a) === sweepGeneration)) return false;
+      if (!peers) { peers = new WeakMap(); _fxPairs.set(a, peers); }
+      peers.set(b, sweepGeneration);
+      return true;
+    }
     const _swP = [];   // sweepContacts: motion.get(ranked[i]), read ONCE per car per step
     const geom = {}, swept = {}, impulse = {}, bodyA = {}, bodyB = {};
     function deltaS(d) { const L = track.total; return ((d + L / 2) % L + L) % L - L / 2; }
@@ -600,7 +608,8 @@ const Collide = (() => {
         if (corr > CORR_EPS) {
           if (a.human || b.human) a.contactT = b.contactT = 0.22;
           // The next corner (kTurn, AI-only) owns a level pair only between AI cars: a curvature read must not decide a PLAYER's scrub.
-          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
+          // ONE k for the pair (the sharper of the two, as cornerK): taking a's k first let bucket order pick the yielder (audit4 F10).
+          if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }
           else { if (last) b.speed = scrub(b.speed, rubScrub); b.contactT = 0.22; }
           // INSIDE the guard, like everything else in this branch. It was the
           // one statement outside it, so a settled side-by-side rub — two cars
@@ -662,8 +671,7 @@ const Collide = (() => {
           // restitution impulse above leaves the pair separating, so a `last`-pass
           // gate never saw relV > 0 and a 73 m/s shunt fired no FX, debris or
           // incident candidate (live debugger, 2026-10-16).
-          const fx = _fxStep.get(a) !== sweepGeneration || _fxStep.get(b) !== sweepGeneration;
-          if (fx) { _fxStep.set(a, sweepGeneration); _fxStep.set(b, sweepGeneration); }
+          const fx = firstPairFx(a, b);
           if (fx) collideFx(a, b, clamp(relV * 0.03 + penLong * 0.05, 0.15, 1));
           // Debris hook (render-only side-world): closing speed = severity.
           if (fx && DebrisWorld.active()) DebrisWorld.carImpact(a, b, relV);

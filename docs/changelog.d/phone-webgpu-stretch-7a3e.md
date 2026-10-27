@@ -1,0 +1,1 @@
+Fixed: on phones running the WebGPU renderer every camera (HELMET, CHASE, cockpit…) was stretched about 2× vertically, with the halo filling the screen — the phone orientation cover is now off on WebGPU, where three dropped its draw viewport.

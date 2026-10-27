@@ -7,8 +7,8 @@
    builds with), so the build is the unchanged Tracks.build. Its gfx is a
    RECORDER: each createMesh / createChunkedMesh / createInstancedBatch stores
    its arguments and returns a token, and the page replays the tokens against
-   the real backend (TrackBuildClient.replay) — packing and upload stay on the
-   main thread, where the GPU context is. Everything the page cannot receive is
+   the real backend (TrackBuildClient.replay) — immutable TLX packing and bins are prepared here when requested;
+   THREE containers and GPU ownership stay on the main thread. Everything the page cannot receive is
    stripped before the post: the gfx handle, the surface sampler (rebuilt by
    the page from the def) and the lazy node grid.
 
@@ -29,15 +29,15 @@ function importScriptUrl(u, bust) {
 }
 async function importScriptsRetry(urls) {
   const list = Array.isArray(urls) ? urls : [urls];
-  const max = IMPORT_RETRY_MS.length + 1;
-  for (let attempt = 0; attempt < max; attempt++) {
+  // importScripts evaluates in order. Retry only the failed URL: replaying a
+  // successful prefix redeclares its top-level consts in this worker global.
+  for (const u of list) for (let attempt = 0; ; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, IMPORT_RETRY_MS[attempt - 1]));
-    try {
-      if (attempt === 0) importScripts(...list);
-      else importScripts(...list.map((u) => importScriptUrl(u, attempt)));
-      return;
-    } catch (e) {
-      if (attempt === max - 1) throw e;
+    try { importScripts(importScriptUrl(u, attempt)); break; }
+    catch (e) {
+      // Evaluation may already have changed the global. Only a failed fetch is
+      // safe to retry in place; syntax/runtime failures use the page fallback.
+      if (!e || e.name !== "NetworkError" || attempt >= IMPORT_RETRY_MS.length) throw e;
     }
   }
 }
@@ -142,12 +142,33 @@ async function build(m, job) {
   // (structured clone keeps shared references) — the page's first terrainY
   // (flyby groundAt, lamp bake) no longer rebuilds it in a 10-60 ms long task.
   typedRibbon(track.roadGeo); typedRibbon(track.terrainGeo);
+  const prepareStart = performance.now();
+  const S = self.TLXShaders, config = m.prepare;
+  // Bound additional typed payload across this reply, retaining raw inputs for
+  // a safe old-client/config-change fallback. No extra worker or record clones.
+  let preparationBytes = 0;
+  if (S && S.validPrepareConfig(config)) {
+    // Spend the bounded extra storage on the largest CPU operation first:
+    // terrain can precede props in replay order and otherwise crowd it out.
+    const candidates = recs.filter(r => r.op === "chunked").map(r => ({ r,
+      estimate: r.args[0].pos.length / 3 * 60 + r.args[0].idx.length * 64 }));
+    candidates.sort((a, b) => b.estimate - a.estimate);
+    for (const { r, estimate } of candidates) {
+      if (estimate > 64 * 1048576 - preparationBytes) continue;
+      r.prepared = S.prepareChunks(r.args[0], r.args[1], config);
+      r.prepared.workerPacking = true;
+      preparationBytes += estimate;
+    }
+  }
+  const prepareMs = performance.now() - prepareStart;
   // def._sceneryShift is written onto the WORKER's def copy by buildCenterline
   // (tracks.js); the main-thread def never sees it, so every later reader there
   // (scenery reloads, frac-keyed tables, agent hooks) read 0. Send it back,
   // with _startFrac (same story, tracks.js).
-  const msg = { type: "built", id: m.id, seq: m.seq, track, recs, ms, sceneryShift: def._sceneryShift, startFrac: def._startFrac, models: residentModels(src) };
-  self.postMessage(msg, transferables(msg));
+  const msg = { type: "built", id: m.id, seq: m.seq, track, recs, ms, prepareMs, preparationBytes, sceneryShift: def._sceneryShift, startFrac: def._startFrac, models: residentModels(src) };
+  const transfers = transferables(msg);
+  msg.cpuMs = performance.now() - t0;
+  self.postMessage(msg, transfers);
 }
 
 self.onmessage = async (e) => {

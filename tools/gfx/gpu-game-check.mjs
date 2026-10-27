@@ -1226,11 +1226,20 @@ try {
   out.buildProfile = await bounded(() => page.evaluate(() => {
     const p = window.__apex && window.__apex.buildProfile && window.__apex.buildProfile();
     if (!p || !p.length) return { note: "no buildProfile — this build predates it, or the track never built" };
-    const total = p.reduce((a, b) => a + b.ms, 0);
-    const geo = p.filter((r) => r.k === "geo").reduce((a, b) => a + b.ms, 0);
-    const top = p.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map((r) => `${r.n}/${r.k}=${r.ms}`);
-    return { totalMs: +total.toFixed(1), geoMs: +geo.toFixed(1), upMs: +(total - geo).toFixed(1),
-      geoShare: total ? +(geo / total).toFixed(3) : null, top, rows: p };
+    const legacyWorker = p.some(r => r.k === "off" && !r.thread);
+    const additive = p.filter(r => r.additive !== false && (!legacyWorker || r.k === "off"));
+    const sum = rows => rows.reduce((a, r) => a + (Number.isFinite(r.ms) ? r.ms : 0), 0);
+    const main = additive.filter(r => r.thread !== "worker" && r.k !== "off");
+    const worker = additive.filter(r => r.thread === "worker" || r.k === "off");
+    const mainCpu = sum(main), geo = sum(main.filter(r => r.k === "geo"));
+    const rounded = n => +n.toFixed(1);
+    const top = additive.slice().sort((a, b) => b.ms - a.ms).slice(0, 4).map(r => `${r.n}/${r.k}=${r.ms}`);
+    return { totalMs: rounded(sum(additive)), mainCpuMs: legacyWorker ? null : rounded(mainCpu),
+      workerCpuMs: rounded(sum(worker)), workerPrepareMs: rounded(sum(worker.filter(r => r.k === "prepare"))),
+      mainPrepareMs: rounded(sum(main.filter(r => r.k === "prepare"))), gpuWaitMs: null,
+      geoMs: rounded(geo), upMs: rounded(sum(main.filter(r => r.k === "up"))),
+      geoShare: mainCpu ? +(geo / mainCpu).toFixed(3) : null, top, rows: p,
+      attribution: legacyWorker ? "legacy worker profile omits main replay CPU" : "CPU phases; GPU wait is not measured" };
   }), 20000, "build-profile");
   // ONE LEVEL OUT. buildProfile says which part of the BUILD costs; this says
   // whether the build is the part of RACE ENTRY that costs at all. On real

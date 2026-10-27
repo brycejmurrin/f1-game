@@ -669,6 +669,43 @@ test("a heavy rear-end fires the contact FX and the incident candidate once", as
   assert.ok(st.rejected.inactive + st.rejected.belowThreshold + st.seq > before, "IncidentSim.notifyCar was never reached by the shunt");
 });
 
+test("a three-car pileup notifies every distinct unordered pair once per solver step", () => {
+  const car = (id, prog, speed) => ({ id, prog, s: prog, speed, x: 0, human: false });
+  const cluster = () => [car("front", 103, 0), car("middle", 102, 10), car("rear", 101, 80)];
+  const run = (n) => {
+    const fx = [], incident = [], debris = [];
+    const ctx = vm.createContext({ Math, Number, Object, WeakMap,
+      Log: { info() {}, enabled: () => false }, Tracks: { wallAt: () => 100 },
+      IncidentSim: { owns: () => false, notifyCar: (a, b, v) => incident.push([a.id, b.id, v]) },
+      DebrisWorld: { active: () => true, carImpact: (a, b, v) => debris.push([a.id, b.id, v]) } });
+    for (const file of ["js/core/mat4.js", "js/physics/ai-drive.js", "js/physics/contact-geometry.js", "js/physics/collide.js"])
+      vm.runInContext(readFileSync(join(ROOT_C, file), "utf8"), ctx, { filename: absSrc(file) });
+    const cars = cluster().slice(0, n).concat(Array.from({ length: Math.max(0, n - 3) }, (_, i) => car("other" + i, 200 + i * 200, 40)));
+    const G = { track: { total: 6000 }, player: null, netPlay: { owns: () => false }, PACE: 1, raceT: 0,
+      wrapS: s => (s % 6000 + 6000) % 6000, worldFromTrack: (s, x) => ({ x, z: s }) };
+    const solver = vm.runInContext("Collide", ctx).create(G, (a, b, v) => fx.push([a.id, b.id, v]));
+    solver.resolveCollisions(cars, DT);
+    const contacts = [["front", "middle", 10], ["front", "rear", 74.5], ["middle", "rear", 34.525]].slice(0, n === 2 ? 1 : 3);
+    assert.deepEqual(incident, contacts, n + " cars: every closing edge survives");
+    assert.deepEqual(debris, incident, "debris and incident hooks receive the same distinct contacts");
+    assert.deepEqual(fx.map(e => e.slice(0, 2)), incident.map(e => e.slice(0, 2)), "FX fires once per pair across relaxation passes");
+    G.raceT += DT; solver.resolveCollisions(cars, DT);
+    // Frozen pre-fix numeric outputs: notification bookkeeping must not change
+    // Gauss-Seidel solver order, correction, impulse or contact flags.
+    const expected = n === 3
+      ? [[106.54182889242384, 106.54182889242439], [102.02587503816994, 102.02587503817013], [97.43229606940622, 97.43229606940548]]
+      : [[106.54185929479536, 106.54185929479499], [102.02568503807743, 102.0256850380778], [97.43245566712721, 97.43245566712721]];
+    const speeds = [46.475, 23.48875, 20.03625];
+    if (n > 2) cars.slice(0, 3).forEach((c, i) => assert.deepEqual([c.s, c.prog, c.x, c.speed, c.contactT], [...expected[i], 0, speeds[i], 0.22], "physics unchanged"));
+    assert.equal(incident.length, contacts.length, "separating pairs do not gain extra notifications");
+    // Reuse these same car identities in a later step: generation marks expire.
+    cluster().slice(0, n).forEach((c, i) => Object.assign(cars[i], c));
+    G.raceT += DT; solver.resolveCollisions(cars, DT);
+    assert.deepEqual(incident.slice(contacts.length), incident.slice(0, contacts.length), "later contacts of the same pairs notify again");
+  };
+  run(2); run(3); run(22);   // two-car control, all-pairs and arc-bucket paths
+});
+
 // #2565, live-verified 2026-10-16: an AI car hitting a PARKED human sheds almost
 // all its closing speed in one tick while the human gains only the capped punt.
 // That is deliberate (the AI behind pays its whole share, the human is never

@@ -1,6 +1,5 @@
 # Multi-circuit realism campaign
 
-Folded from the retired `track-realism` skill (2026-10-14) into **survey-track**.
 Run this workflow in the parent session. It deliberately has no fork: browser
 captures, integration and shared-file decisions belong to the parent.
 
@@ -11,6 +10,7 @@ with one pilot, then batches of two or three circuits once the approach works.
 Arguments: `$ARGUMENTS` — the circuit ids (and an optional target year) typed
 after `/survey-track`; every id must be in `Tracks.LIST`. Empty ids → ask before
 step 1. No year → take the era from the `docs/tracks/<id>.md` header, else ask once.
+In a worker, asking is `needs-decision` plus one comment with your pick (docs/WORKERS.md §7).
 
 1. Read repository and nested circuit guidance, current briefs and source.
    Pin the starting SHA; select circuit ids, target era and 3–5 observable
@@ -36,7 +36,3 @@ step 1. No year → take the era from the `docs/tracks/<id>.md` header, else ask
 6. Follow [check-changes](../../check-changes/SKILL.md) for the required gates,
    verified commit, push, draft PR and CI watch. Report demonstrated changes,
    remaining accuracy gaps and unverified browser/device coverage explicitly.
-
-The offline contract (`node --test --test-name-pattern "sceneryApi surface" tests/unit/scenery-api-contract.test.mjs`)
-checks only the scenery API surface. It does
-not certify real-world accuracy, successful campaign execution or performance.

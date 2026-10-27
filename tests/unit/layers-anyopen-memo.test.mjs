@@ -75,3 +75,18 @@ test("anyOpen consuming the dirty flag does not leave navOpen on a stale answer"
   assert.equal(t.U.anyOpen(), false, "overlay is gate:false, so anyOpen stays false");
   assert.equal(t.U.navOpen(), true, "navOpen must still see the overlay opened before anyOpen ran");
 });
+
+test("a record pending at recompute never turns the fresh answer into undefined/null", () => {
+  // top() and navOpen() used to drain AFTER computing; the drain drops the memo it
+  // had just stored, so the caller got `undefined` (top) or `null` (navOpen).
+  // custom-tracks' door and experience's photo swap compare top() before/after a
+  // load, so `undefined !== null` read as "another screen took over" (#3888).
+  const t = boot();
+  t.mutate(t.els.get("pausemenu"));
+  assert.strictEqual(t.U.top(), null, "top() with nothing open is null, never undefined");
+  t.advance(1000); t.mutate(t.els.get("pausemenu"));
+  assert.strictEqual(t.U.top(), null, "an expired memo plus a pending record still answers null");
+  const overlay = t.els.get("overlay");
+  overlay.shown = true; t.advance(1000); t.mutate(overlay);
+  assert.strictEqual(t.U.navOpen(), true, "navOpen returns the fresh answer, not the memo the drain dropped");
+});

@@ -73,7 +73,12 @@ const RaceControl = (function () {
     const { c, cross, time, target, cars } = e;
     // Temporary AI motion cannot declare a connected owner finished or raise the flag.
     cross.flagged = !c._nFallback && target > 0 && (c.lap > target || (c.lap > 1 && flagOut(cars, time)));
-    if (cross.flagged) { c.finished = true; c.finishT = time; }
+    if (cross.flagged) {
+      // The pit machine can still fit a set while a flagged car clears its
+      // box. Freeze sporting compliance once, at this car's actual flag.
+      if (!c.finished && typeof SportingRegs !== "undefined") c.compoundShortAtFinish = SportingRegs.compoundShort(c.tyreLog);
+      c.finished = true; c.finishT = time;
+    }
   }
   function deferLine(c, cross, newS, callback) {
     if (!lineCars || !cross || cross.direction < 0) return false;
