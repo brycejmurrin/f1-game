@@ -135,6 +135,20 @@ async function consumeGhostHash() {
           vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
           G.scheduleFlybyTrack(true);
         },
+        // A card's lap link (#share=APXC1): today's Daily goes through openDaily;
+        // any other day stages the circuit in free-play time trial.
+        today: DailyChallenge.dayKey(),
+        openTrack: (decoded) => {
+          const idx = Tracks.LIST.findIndex((entry) => entry.id === decoded.track);
+          if (idx < 0) return;
+          G.flow = "gp"; G.session = "tt";
+          G.daily.stop();
+          restoreFreePlaySelection();
+          G.trackIdx = idx;
+          G.buildSelect();
+          vt(() => { els.overlay.hidden = true; els.select.hidden = false; });
+          G.scheduleFlybyTrack(true);
+        },
       }),
       notify: (message, result) => {
         if (started.n) Log.warn("game", "share apply tried startRace — ignored");

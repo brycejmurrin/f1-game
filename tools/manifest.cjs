@@ -444,6 +444,7 @@ const FULL = [
   "js/share/share-card-data.js",
   "js/share/share-card-layout.js",
   "js/share/share-card.js",
+  "js/share/share-card-chips.js", // ShareCardChips: the SHARE CARD chip on results, standings, champion and THE YEAR
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",

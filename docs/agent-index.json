@@ -4738,6 +4738,12 @@
       "roster": "tag"
     },
     {
+      "path": "js/share/share-card-chips.js",
+      "global": "ShareCardChips",
+      "order": 277,
+      "roster": "tag"
+    },
+    {
       "path": "js/share/share-card-data.js",
       "global": "ShareCardData",
       "order": 275,
