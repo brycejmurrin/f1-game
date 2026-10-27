@@ -9,7 +9,7 @@ const ShareCardLayout = (function () {
   });
   const PALETTE = Object.freeze({
     bg: "#0b0d14", panel: "#151927", text: "#f7f8fb", muted: "#adb5c8",
-    accent: "#e10600", gold: "#d9b64c", silver: "#b8c1cc", bronze: "#bd7b48", you: "#2a3048",
+    accent: "#e10600", gold: "#d9b64c", silver: "#b8c1cc", bronze: "#bd7b48", you: "#2a3048", faster: "#3ccf6e",
   });
   const MEDAL_COLOUR = [PALETTE.gold, PALETTE.silver, PALETTE.bronze];
   const fallbackMeasure = (text, size) => String(text).length * size * 0.56;
@@ -47,6 +47,32 @@ const ShareCardLayout = (function () {
     });
   }
 
+  // A polyline over `box`: xs in 0..1, ys already in card pixels.
+  function path(id, xs, ys, box, color, lineWidth) {
+    const points = [];
+    for (let i = 0; i < xs.length; i++) points.push(Math.round((box.x + xs[i] * box.width) * 10) / 10, Math.round(ys[i] * 10) / 10);
+    return { op: "path", id, x: box.x, y: box.y, width: box.width, height: box.height, points, color, lineWidth };
+  }
+  // Ghost card: the speed traces (yours over the ghost's) and, with a ghost, the
+  // running delta under them around a zero line — green when the lap finished ahead.
+  function chart(ops, c, box, h, measure) {
+    const label = Math.max(14, Math.round(h * 0.022)), speedH = c.d ? Math.round(box.height * 0.62) : box.height;
+    const speed = { x: box.x, y: box.y, width: box.width, height: speedH };
+    const all = c.a.concat(c.b || []), lo = Math.min.apply(null, all) * 0.95, hi = Math.max.apply(null, all) * 1.02;
+    const ys = (vals) => vals.map((v) => speed.y + speed.height * (1 - (v - lo) / Math.max(1e-6, hi - lo)));
+    ops.push(textOp("chart-speed", "SPEED", box.x, box.y + label, box.width, label, 12, PALETTE.muted, "left", measure));
+    if (c.b) ops.push(path("trace-ghost", c.s, ys(c.b), speed, PALETTE.muted, 3));
+    ops.push(path("trace-you", c.s, ys(c.a), speed, PALETTE.accent, 4));
+    if (!c.d) return;
+    const gap = Math.round(box.height * 0.04);
+    const delta = { x: box.x, y: box.y + speedH + gap, width: box.width, height: box.height - speedH - gap };
+    const span = Math.max(0.05, Math.max.apply(null, c.d.map(Math.abs))), mid = delta.y + delta.height / 2;
+    ops.push({ op: "line", id: "delta-zero", x: delta.x, y: Math.round(mid), x2: delta.x + delta.width, y2: Math.round(mid), color: PALETTE.you, lineWidth: 2 });
+    ops.push(textOp("chart-delta", "DELTA", box.x, delta.y + label, box.width, label, 12, PALETTE.muted, "left", measure));
+    ops.push(path("trace-delta", c.s, c.d.map((v) => mid + (v / span) * (delta.height / 2)), delta,
+      c.d[c.d.length - 1] <= 0 ? PALETTE.faster : PALETTE.accent, 3));
+  }
+
   function layout(model, specName, measure) {
     const spec = typeof specName === "string" ? SPECS[specName] : specName;
     if (!spec || !(spec.width > 0) || !(spec.height > 0)) throw new Error("Unknown share-card spec");
@@ -65,7 +91,19 @@ const ShareCardLayout = (function () {
       textOp("subtitle", model.subtitle, pad, pad + Math.round(h * 0.07), w - pad * 2, Math.round(h * 0.028), 18, PALETTE.muted, "left", measure),
       textOp("track", model.trackName, pad, Math.round(h * 0.25), w - pad * 2, Math.round(h * 0.065), 24, PALETTE.text, "left", measure),
     ];
-    if (rows.length) {
+    const plot = model.chart && Array.isArray(model.chart.s) && model.chart.s.length > 1 ? model.chart : null;
+    if (plot) {
+      // Ghost card: the lap times and delta in a strip, the chart filling the rest.
+      const right = model.link ? w - pad - qrSize - Math.round(pad * 0.5) : w - pad, inner = right - pad;
+      const stripH = Math.round(panelH * 0.34), gap = Math.round(pad * 0.4);
+      table(ops, rows, { x: pad, y: panelY, width: Math.round(inner * 0.62), height: stripH }, h, measure);
+      const cx = pad + Math.round(inner * 0.81), cw = Math.round(inner * 0.36);
+      if (model.hero) ops.push(
+        textOp("hero-label", model.hero.label, cx, panelY + Math.round(stripH * 0.25), cw, Math.round(h * 0.026), 14, PALETTE.muted, "center", measure),
+        textOp("hero-value", model.hero.value, cx, panelY + Math.round(stripH * 0.65), cw, Math.round(h * 0.07), 24,
+          /^−/.test(model.hero.value) ? PALETTE.faster : PALETTE.text, "center", measure));
+      chart(ops, plot, { x: pad + gap, y: panelY + stripH + gap, width: inner - gap * 2, height: panelH - stripH - gap * 2 }, h, measure);
+    } else if (rows.length) {
       // A table card: an optional hero line on top of the panel, the rows under it;
       // a QR (when linked) takes the panel's bottom-right corner, so rows stop short of it.
       let top = panelY;
@@ -83,11 +121,11 @@ const ShareCardLayout = (function () {
         textOp("hero-label", model.hero && model.hero.label, w / 2, Math.round(h * 0.42), w - pad * 2, Math.round(h * 0.028), 18, PALETTE.muted, "center", measure),
         textOp("hero-value", model.hero && model.hero.value, w / 2, Math.round(h * 0.56), w - pad * 2, Math.round(h * 0.13), 42, PALETTE.text, "center", measure));
     }
-    if (!rows.length && model.hero && model.hero.medal) {
+    if (!rows.length && !plot && model.hero && model.hero.medal) {
       const color = PALETTE[String(model.hero.medal).toLowerCase()] || PALETTE.text;
       ops.push(textOp("medal", model.hero.medal, w / 2, Math.round(h * 0.66), w - pad * 2, Math.round(h * 0.045), 22, color, "center", measure));
     }
-    if (!rows.length && model.hero && model.hero.streak) {
+    if (!rows.length && !plot && model.hero && model.hero.streak) {
       ops.push(textOp("streak", "STREAK " + model.hero.streak, pad, h - footerH - pad * 0.7,
         w - pad * 2, Math.round(h * 0.035), 20, PALETTE.text, "left", measure));
     }

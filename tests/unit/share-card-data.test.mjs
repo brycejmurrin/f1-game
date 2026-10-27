@@ -152,3 +152,48 @@ test("fromCareerYear reads a real rollover() history entry", () => {
   assert.equal(empty.hero.value, "—");
   assert.equal(empty.display.name, "DRIVER");
 });
+
+// A synthetic lap: 5 km at a speed that dips through two corners, sampled at 10 Hz.
+function ghostLap(scale, tail) {
+  const t = [], s = [], x = [];
+  let at = 0, dist = 0;
+  while (dist < 5000) {
+    t.push(+at.toFixed(3)); s.push(+dist.toFixed(2)); x.push(0);
+    const v = (70 - 35 * Math.exp(-(((dist - 1500) / 200) ** 2)) - 30 * Math.exp(-(((dist - 3800) / 150) ** 2))) / scale;
+    dist += v * 0.1; at += 0.1;
+  }
+  return { time: +(at + (tail || 0)).toFixed(3), t, s, x };
+}
+
+test("fromGhost resamples to <= 120 points and ends on the exact finish delta", () => {
+  const data = load();
+  const a = ghostLap(1), b = ghostLap(1.01, 0.0004);
+  const model = data.fromGhost(a, b, { trackId: "spa", trackName: "Spa", link: "https://example.test/#share=APXC1.l.spa~-~81345", rivalName: "rival" });
+  assert.deepEqual(Object.keys(model), Array.from(data.MODEL_KEYS));
+  assert.equal(model.kind, "ghost");
+  assert.equal(model.title, "LAP VS RIVAL");
+  const c = model.chart;
+  assert.ok(c.s.length <= data.CHART_POINTS && c.s.length >= 100);
+  assert.equal(c.a.length, c.s.length); assert.equal(c.b.length, c.s.length); assert.equal(c.d.length, c.s.length);
+  assert.equal(c.s[0], 0); assert.equal(c.s.at(-1), 1);
+  assert.ok(c.s.every((v, i) => i === 0 || v > c.s[i - 1]), "distance is monotonic");
+  assert.ok(Math.abs(c.d.at(-1) - (a.time - b.time)) <= 0.001, "finish delta = a.time - b.time within 1 ms");
+  assert.ok(c.d[Math.floor(c.d.length / 2)] < 0, "the faster lap is ahead mid-lap");
+  assert.ok(Math.min(...c.a) < 140 && Math.max(...c.a) > 240, "speed is ds/dt in km/h (35 → 70 m/s) and shows the corners");
+  assert.match(model.hero.value, /^−\d\.\d{3}$/);
+  assert.deepEqual(plain(model.rows.map((r) => [r.name, r.value])), [["YOU", data.lapTime(a.time)], ["RIVAL", data.lapTime(b.time)]]);
+  assert.ok(Object.isFrozen(c) && Object.isFrozen(c.a));
+});
+
+test("fromGhost alone draws one trace; a broken lap yields no chart", () => {
+  const data = load();
+  const solo = data.fromGhost(ghostLap(1), null, {});
+  assert.equal(solo.title, "PERSONAL BEST LAP");
+  assert.equal(solo.chart.b, null); assert.equal(solo.chart.d, null);
+  assert.equal(solo.hero.value, data.lapTime(ghostLap(1).time));
+  const broken = data.fromGhost({ time: 80, t: [0, 2, 1], s: [0, 1, 2] }, null, {});
+  assert.equal(broken.chart, null);
+  assert.equal(broken.rows.length, 0);
+  assert.equal(broken.hero.value, "NO LAP");
+  assert.doesNotMatch(JSON.stringify(data.fromGhost(ghostLap(1), null, { trackName: "Formula 1 GP" })), /FORMULA\s*1/i);
+});

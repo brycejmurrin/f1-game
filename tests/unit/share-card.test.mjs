@@ -289,3 +289,12 @@ test("ShareCardChips: a failed draw says UNAVAILABLE and logs; a cancel restores
   assert.equal(vm.runInContext("ShareCardChips.append({ appendChild() { throw new Error('drawn'); } }, 'z', () => ({}), 'n')", missing), null,
     "no chip when the card modules are absent");
 });
+
+test("paint strokes a path op as one polyline", () => {
+  const card = load(), ctx = recordingContext();
+  ctx.lineJoin = "";
+  card.paint(ctx, [{ op: "path", points: [0, 0, 5, 5, 10, 0], color: "#e10600", lineWidth: 3 }]);
+  const names = ctx.calls.map((c) => c[0]);
+  assert.deepEqual(names.filter((n) => n === "moveTo" || n === "lineTo"), ["moveTo", "lineTo", "lineTo"]);
+  assert.ok(names.includes("stroke"));
+});

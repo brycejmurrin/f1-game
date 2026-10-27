@@ -8,6 +8,7 @@ const ShareCardData = (function () {
   ]);
   const MEDALS = ["gold", "silver", "bronze"];
   const MAX_ROWS = 10;
+  const CHART_POINTS = 120;
 
   function text(value, max) {
     return String(value == null ? "" : value)
@@ -26,7 +27,10 @@ const ShareCardData = (function () {
       if (Array.isArray(value)) {
         for (const item of value) if (item && typeof item === "object") Object.freeze(item);
         Object.freeze(value);
-      } else if (value && typeof value === "object") Object.freeze(value);
+      } else if (value && typeof value === "object") {
+        for (const inner of Object.values(value)) if (Array.isArray(inner)) Object.freeze(inner);
+        Object.freeze(value);
+      }
     }
     return Object.freeze(model);
   }
@@ -122,6 +126,77 @@ const ShareCardData = (function () {
     return freezeModel(Object.assign(model, common(opts)));
   }
 
+  // A ghost lap {time, t[], s[]}: valid when its arrays are finite and monotonic.
+  function lap(g) {
+    if (!g || typeof g !== "object" || !(g.time > 0) || !isFinite(g.time)) return null;
+    const t = g.t, s = g.s;
+    if (!Array.isArray(t) || !Array.isArray(s) || t.length < 2 || t.length !== s.length) return null;
+    for (let i = 0; i < t.length; i++) {
+      if (!isFinite(t[i]) || !isFinite(s[i]) || (i && (t[i] < t[i - 1] || s[i] < s[i - 1]))) return null;
+    }
+    return g;
+  }
+  // Time at arc distance `at`, linear between samples (Ghost.timeAt's rule).
+  function timeAt(g, at) {
+    const s = g.s, t = g.t, n = s.length;
+    if (at <= s[0]) return t[0];
+    if (at >= s[n - 1]) return t[n - 1];
+    let lo = 0, hi = n - 1;
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (s[mid] <= at) lo = mid; else hi = mid; }
+    const span = s[hi] - s[lo];
+    return t[lo] + (span > 1e-6 ? (t[hi] - t[lo]) * (at - s[lo]) / span : 0);
+  }
+  const round = (v, p) => Math.round(v * p) / p;
+  function signed(v) {
+    const r = round(v, 1000);
+    return (r >= 0 ? "+" : "−") + Math.abs(r).toFixed(3);
+  }
+
+  // Your lap `a` against ghost `b` (or alone), resampled to <= 120 points over the
+  // shared distance: speed is ds/dt between samples (km/h), delta is a - b at
+  // each point and its last point is exactly the finish delta a.time - b.time.
+  function fromGhost(a, b, opts) {
+    opts = obj(opts);
+    a = lap(a); b = lap(b);
+    let chart = null, delta = null;
+    if (a) {
+      const s0 = Math.max(a.s[0], b ? b.s[0] : -Infinity);
+      const s1 = Math.min(a.s[a.s.length - 1], b ? b.s[b.s.length - 1] : Infinity);
+      if (s1 > s0) {
+        const n = Math.max(2, Math.min(CHART_POINTS, a.s.length)), step = (s1 - s0) / (n - 1);
+        const at = (k) => s0 + step * k;
+        const speed = (g, k) => {
+          const lo = Math.min(k, n - 2), dt = timeAt(g, at(lo + 1)) - timeAt(g, at(lo));
+          return dt > 1e-6 ? round(step / dt * 3.6, 10) : 0;
+        };
+        chart = { s: [], a: [], b: b ? [] : null, d: b ? [] : null };
+        for (let k = 0; k < n; k++) {
+          chart.s.push(round((at(k) - s0) / (s1 - s0), 1000));
+          chart.a.push(speed(a, k));
+          if (b) {
+            chart.b.push(speed(b, k));
+            chart.d.push(k === n - 1 ? round(a.time - b.time, 1000) : round(timeAt(a, at(k)) - timeAt(b, at(k)), 1000));
+          }
+        }
+      }
+      if (b) delta = round(a.time - b.time, 1000);
+    }
+    const rival = text(opts.rivalName, 24).toUpperCase() || "GHOST";
+    const rows = a ? [row(null, "", text(opts.name, 24).toUpperCase() || "YOU", null, lapTime(a.time), true)] : [];
+    if (a && b) rows.push(row(null, "", rival, null, lapTime(b.time)));
+    const model = {
+      v: 1, kind: "ghost",
+      title: b ? "LAP VS " + rival : "PERSONAL BEST LAP",
+      subtitle: text(opts.subtitle, 48).toUpperCase(),
+      trackId: text(opts.trackId, 48), trackName: text(opts.trackName || opts.trackId || "CIRCUIT", 72),
+      dayKey: /^\d{4}-\d{2}-\d{2}$/.test(opts.day || "") ? opts.day : null, weather: text(opts.weather, 24) || null,
+      rows,
+      hero: { label: b ? "DELTA" : "LAP", value: delta != null ? signed(delta) : lapTime(a && a.time), medal: null, streak: null },
+      chart,
+    };
+    return freezeModel(Object.assign(model, common(opts)));
+  }
+
   function fromDaily(plan, entry, medal, streak, opts) {
     plan = plan && typeof plan === "object" ? plan : {};
     entry = entry && typeof entry === "object" ? entry : {};
@@ -147,6 +222,6 @@ const ShareCardData = (function () {
     return freezeModel(Object.assign(model, common(opts)));
   }
 
-  return Object.freeze({ MODEL_KEYS, MAX_ROWS, text, lapTime, fromDaily, fromRace, fromSeason, fromCareerYear });
+  return Object.freeze({ MODEL_KEYS, MAX_ROWS, CHART_POINTS, text, lapTime, fromDaily, fromGhost, fromRace, fromSeason, fromCareerYear });
 })();
 Object.freeze(ShareCardData);

@@ -84,3 +84,32 @@ test("table cards (race, ten-row season, career with hero, linked) stay in bound
     }
   }
 });
+
+test("ghost chart card keeps traces inside the panel, clear of the QR, on every spec", () => {
+  const layout = load();
+  const measure = (text, size) => String(text).length * size * 0.62;
+  const n = 120, s = Array.from({ length: n }, (_, i) => i / (n - 1));
+  const chart = { s, a: s.map((v) => 200 + 100 * Math.sin(v * 9)), b: s.map((v) => 195 + 100 * Math.sin(v * 9)), d: s.map((v) => -0.4 * v) };
+  const model = { ...MODEL, kind: "ghost", chart, link: "https://example.test/#share=APXC1.l.spa~-~81345",
+    rows: [{ pos: null, code: "", name: "YOU", teamColor: null, value: "1:21.345", you: true },
+      { pos: null, code: "", name: "RIVAL", teamColor: null, value: "1:21.745", you: false }],
+    hero: { label: "DELTA", value: "−0.400", medal: null, streak: null } };
+  for (const [name, spec] of Object.entries(layout.SPECS)) {
+    const ops = layout.layout(model, name, measure);
+    const panel = ops.find((op) => op.id === "panel"), qr = ops.find((op) => op.op === "qr");
+    const paths = ops.filter((op) => op.op === "path");
+    assert.deepEqual(JSON.parse(JSON.stringify(paths.map((op) => op.id))), ["trace-ghost", "trace-you", "trace-delta"], name);
+    for (const op of paths) {
+      assert.equal(op.points.length, n * 2, name + " one point per sample");
+      for (let i = 0; i < op.points.length; i += 2) {
+        assert.ok(op.points[i] >= op.x - 0.1 && op.points[i] <= op.x + op.width + 0.1, `${name} ${op.id} x`);
+        assert.ok(op.points[i + 1] >= op.y - 0.1 && op.points[i + 1] <= op.y + op.height + 0.1, `${name} ${op.id} y`);
+      }
+      assert.ok(op.y >= panel.y && op.y + op.height <= panel.y + panel.height, `${name} ${op.id} in the panel`);
+      assert.ok(op.x + op.width <= qr.x, `${name} ${op.id} clear of the QR`);
+    }
+    assert.equal(ops.find((op) => op.id === "trace-delta").color, layout.PALETTE.faster, "finished ahead reads green");
+    for (const op of ops) if (op.op === "text") assert.ok(measure(op.text, op.size) <= op.maxWidth + 0.001, `${name} ${op.id} fit`);
+    assert.ok(ops.every((op) => op.x >= 0 && (op.width == null || op.x + op.width <= spec.width)), name);
+  }
+});

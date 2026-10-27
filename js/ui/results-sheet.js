@@ -653,6 +653,11 @@ function buildTTResults() {
       context: Ghost.context(),
       day: activeDaily && activeDaily.day ? activeDaily.day : null,
     };
+    if (typeof ShareCardChips !== "undefined") ShareCardChips.append(els.resultsTable, "res-ghost-card", () => {
+      const lap = typeof ShareCode !== "undefined" ? ShareCode.encode("lap", { track: track.def.id, day: shareOpts.day, time: shareGhost.time }) : {};
+      return ShareCardData.fromGhost(shareGhost, guestGhost ? GhostShare.guest().ghost : null, { trackId: track.def.id,
+        trackName: track.def.name, day: shareOpts.day, link: lap.ok ? lap.url : null, rivalName: guestGhost ? "RIVAL" : "" });
+    }, "lap-" + track.def.id);
     const encoded = GhostShare.encode(shareGhost, shareOpts);
     const fallback = (btn, value, label) => {
       const box = document.createElement("textarea");

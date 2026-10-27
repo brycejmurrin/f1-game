@@ -9642,7 +9642,8 @@
       "encode": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-qr.test.mjs",
-        "tests/unit/share-card.test.mjs"
+        "tests/unit/share-card.test.mjs",
+        "tests/unit/share-code.test.mjs"
       ],
       "*": [
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -15411,10 +15412,16 @@
       "fromDaily": [
         "tests/unit/share-card-data.test.mjs"
       ],
+      "fromGhost": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
       "fromRace": [
         "tests/unit/share-card-data.test.mjs"
       ],
       "fromSeason": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "lapTime": [
         "tests/unit/share-card-data.test.mjs"
       ],
       "text": [
@@ -17547,6 +17554,9 @@
         "tests/unit/share-code.test.mjs"
       ],
       "lastSession": [
+        "tests/unit/share-code.test.mjs"
+      ],
+      "messageFor": [
         "tests/unit/share-code.test.mjs"
       ],
       "recordSession": [
