@@ -4781,6 +4781,9 @@
       ],
       "pluralCategories": [
         "tests/unit/i18n.test.mjs"
+      ],
+      "*": [
+        "tests/specs/telemetry-compare.spec.js"
       ]
     },
     "js/core/lazy-bundles.js": {
