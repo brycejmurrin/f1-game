@@ -53,6 +53,8 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
   "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
+  // #1628 wheel state: rim speeds and slip ratios re-seed from c.speed (WheelState.ensure) on the next step.
+  "vwF", "vwR", "kappaF", "kappaR", "_wsV",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
   // the node window; refilled lazily by updateCarBrakePlan, so a cold car is
   // simply without it (CarFields predeclares it undefined).
@@ -578,6 +580,7 @@ const api = {
       maxTilt: Input.maxTilt,          // TILT SENSITIVITY (deg for full lock)
       deadzone: Input.deadzone,        // fixed dead zone (deg) — no longer a slider
       tiltCutoff: Input.minCutoff,     // STEER SMOOTHING (One-Euro min-cutoff, Hz)
+      wheelState: typeof WheelState !== "undefined" && WheelState.enabled(),   // #1628 opt-in torque-balanced wheels
     };
   },
   physState() {
@@ -720,6 +723,8 @@ const api = {
     if (o.maxTilt != null) Input.setTiltSensitivity(o.maxTilt);
     if (o.deadzone != null) Input.setTiltDeadzone(o.deadzone);
     if (o.tiltCutoff != null) Input.setTiltSmoothing(o.tiltCutoff);
+    // #1628: the wheel-state gate for this session only (the player's stored choice is untouched).
+    if (o.wheelState != null && typeof WheelState !== "undefined") WheelState.setEnabled(o.wheelState === true, false);
     return this.tuning();
   },
 

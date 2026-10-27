@@ -116,6 +116,36 @@ unchanged; over-circle lock stops longer; grass spin pulls slower).
    heuristic `WHEEL_LOCK_ONSET` path once characterization is re-baselined.
 5. Only then claim brake temperature / fade on top of real lock.
 
+## Closing slice — option B, opt-in by decision (2026-10-27)
+
+Decision (dispatcher, on Bryce's 2026-10-27 delegation; issue #1628): the wheel
+state **stays opt-in**. This slice finishes the mirror and records the
+integrated evidence; turning it on by default, with ABS/TC and a re-baseline,
+is #3983.
+
+| What | Where |
+|---|---|
+| `vwF`, `vwR`, `kappaF`, `kappaR`, `_wsV` registered (born `undefined`, shape-stable) | `js/race/car-fields.js` |
+| Same fields in `EPISODE_TRANSIENTS`: `__apex.reset()` clears them; `ensure()` re-seeds from `c.speed` | `js/agent/apex.js` |
+| `tuning().wheelState`; `setPhysics({wheelState})` toggles for the session without rewriting `apex26.wheelState` (`setEnabled(v, false)`) | `js/agent/apex.js`, `wheel-state.js` |
+| `DriveTune.WHEEL_STATE` documented as the default (false), not a dead mirror | `js/physics/drive-tune.js` |
+| Pin: session-only toggle, `tuning()` report, reset clears the rims | `tests/unit/player-dynamics-vm.test.mjs` |
+
+Integrated evidence on the 2026-10-27 tip. VM, monza, player-dyn `measure()`
+plus a straight stop from 200 km/h; storm = slicks, BB 0.75:
+
+| | stop 200 km/h | lock | skidpad 30 m/s, 0.6 | 60 m/s, 0.6 | 72 m/s, 0.8 |
+|---|---|---|---|---|---|
+| dry OFF | 70.6 m | 0 | 1.50 g | 2.99 g | 3.63 g |
+| dry ON | 70.6 m | 0 | 1.54 g | 3.07 g | 3.64 g |
+| storm OFF | 95.2 m | 1 (heuristic) | 1.47 g | 1.30 g | 1.21 g |
+| storm ON | 97.2 m | 1 (κ) | 1.59 g | 1.01 g | 1.17 g |
+
+Dry is unchanged within 3 %. In the storm, ON locks for real and stops 2 m
+longer, and at 60 m/s grip falls further once κ spends the ellipse. That is the
+physical behaviour the issue asked for; whether players want it by default is
+#3983.
+
 ## SWEEP-N/A
 
 Merge desk owns merge; no sweep message from this hunter.

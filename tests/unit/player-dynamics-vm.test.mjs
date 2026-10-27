@@ -494,6 +494,20 @@ test("wheel state ON: over the circle the front locks and the stop gets longer",
   assert.ok(d.on.kF < -0.5 && d.on.lock > 0.5, `locked: ${JSON.stringify(d.on)}`);
   assert.ok(d.on.d > d.off.d + 0.5, `a sliding tyre stops longer: ${d.off.d} → ${d.on.d}`);
 });
+test("wheel state mirror (#1628): setPhysics is session-only, tuning() reports it, reset() clears the rims", () => {
+  const w = dry.w, P = w.G.player, store = () => vm.runInContext('localStorage.getItem("apex26.wheelState")', w.ctx);
+  dry.set(false);
+  const stored = store();
+  assert.equal(w.apex.tuning().wheelState, false, "OFF by decision (option B)");
+  assert.equal(w.apex.setPhysics({ wheelState: true }).wheelState, true);
+  assert.equal(store(), stored, "a dev toggle never rewrites the player's stored choice");
+  const b = bench(w, 0); b.reset(40); b.step({ steer: 0, brake: true });
+  assert.ok(Number.isFinite(P.vwF) && Number.isFinite(P.kappaF), "ON: the rims are live");
+  w.apex.reset(0.1, 0);
+  for (const k of ["vwF", "vwR", "kappaF", "kappaR", "_wsV"]) assert.equal(P[k], undefined, k + " is an episode transient");
+  assert.equal(w.apex.setPhysics({ wheelState: false }).wheelState, false);
+  dry.set(false);
+});
 test("wheel state ON: full throttle on grass spins the rear and pulls slower", () => {
   const w = dry.w, P = w.G.player, v = {};
   for (const on of [false, true]) {

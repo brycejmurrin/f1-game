@@ -51,9 +51,11 @@ const WheelState = (function () {
   /** Live opt-in. Default OFF. Tests / __apex use setEnabled. */
   function enabled() { return resolveEnabled(); }
 
-  function setEnabled(v) {
+  /** `persist` false = this session only (__apex.setPhysics({wheelState})); default persists. */
+  function setEnabled(v, persist = true) {
     _resolved = true;
     _enabled = !!v;
+    if (!persist) return;
     // Writer for apex26.wheelState (store-registry ratchet). Persistence is
     // best-effort; private mode keeps the in-memory flag for the session.
     try {
