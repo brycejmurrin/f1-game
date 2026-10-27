@@ -28,6 +28,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const TOOLS = ["tools/check/ratchets.mjs", "tools/check/merge-hygiene.mjs", "tools/hooks/ratchet-reason.mjs"];
 
+const rmTemp = (dir) => fs.rmSync(dir, { recursive: true, force: true, maxRetries: 8, retryDelay: 150 });
+
 function repo() {
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "ratchet-hotspot-"));
@@ -37,6 +39,11 @@ function repo() {
     { cwd: dir, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, GITHUB_EVENT_NAME: "", GITHUB_ACTIONS: "", APEX_RATCHETS_BASE: "ship" } });
   git("init", "-q", "-b", "ship");
   git("config", "user.email", "t@example.invalid"); git("config", "user.name", "t"); git("config", "commit.gpgsign", "false");
+  // No background writer: an auto gc / maintenance child of `git commit` still
+  // filling .git/objects/pack made the cleanup's rmSync throw ENOTEMPTY on a
+  // passing test (PR #3976's Structural guards D; deploy-tool.test.mjs has the
+  // same story). rmTemp's retries cover anything that still outlives the test.
+  git("config", "gc.auto", "0"); git("config", "maintenance.auto", "false");
   for (const t of TOOLS) write(t, fs.readFileSync(path.join(ROOT, t), "utf8"));
   // Two modules, 200 lines each; a 4-line block comment at the top keeps
   // lines != codeLines so both metrics move.
@@ -71,7 +78,7 @@ function repo() {
 
 test("two PRs auto-raising the SAME module's ceiling merge clean, in either order", (t) => {
   const r = repo();
-  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  t.after(() => rmTemp(r.dir));
   r.pr("cursor/a-1111", "js/ui/hud.js", 7, 50);
   r.pr("cursor/b-2222", "js/ui/hud.js", 12, 150);
   assert.deepEqual(r.conflicts("cursor/a-1111", "cursor/b-2222"), [], "A and B both raised js/ui/hud.js — the measured #2231/#2242 shape (two PRs growing game.js)");
@@ -88,7 +95,7 @@ test("two PRs auto-raising the SAME module's ceiling merge clean, in either orde
 
 test("PRs raising different modules, and a tip that LOWERED one, never share a hunk", (t) => {
   const r = repo();
-  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  t.after(() => rmTemp(r.dir));
   r.pr("cursor/c-3333", "js/agent/apex.js", 3, 180);
   r.pr("cursor/d-4444", "js/car/car3d.js", 5, 100);
   // The #2254/#2289 shape: the tip extracted lines out of apex.js (a lowered
@@ -108,7 +115,7 @@ test("PRs raising different modules, and a tip that LOWERED one, never share a h
 
 test("--fold sums the fragments into ratchets.json and deletes them, ceilings unchanged", (t) => {
   const r = repo();
-  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  t.after(() => rmTemp(r.dir));
   r.pr("cursor/e-6666", "js/ui/hud.js", 4, 100);
   r.git("merge", "-q", "--no-ff", "-m", "land E", "cursor/e-6666");
   const before = JSON.parse(r.tool("--json")).rows.map((x) => `${x.file} ${x.metric} ${x.ceiling}`);
@@ -136,7 +143,7 @@ const commitAll = (r, msg) => { r.git("add", "-A"); r.git("commit", "-qm", msg);
 
 test("--update on a topic branch writes a ratchets.d delta and leaves ratchets.json alone", (t) => {
   const r = repo();
-  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  t.after(() => rmTemp(r.dir));
   const base = fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8");
   slim(r, "cursor/lower-7777", "js/ui/hud.js", 30);
   const out = r.tool("--update");
@@ -151,7 +158,7 @@ test("--update on a topic branch writes a ratchets.d delta and leaves ratchets.j
 
 test("two branches that each --update the SAME ceiling merge clean and sum", (t) => {
   const r = repo();
-  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  t.after(() => rmTemp(r.dir));
   slim(r, "cursor/x-8888", "js/ui/hud.js", 30); r.tool("--update"); commitAll(r, "x");
   slim(r, "cursor/y-9999", "js/ui/hud.js", 40, "ship", 120); r.tool("--update"); commitAll(r, "y");
   assert.deepEqual(r.conflicts("cursor/x-8888", "cursor/y-9999"), [], "old behaviour: both rewrote the same absolute line");
@@ -160,7 +167,7 @@ test("two branches that each --update the SAME ceiling merge clean and sum", (t)
 
 test("--update --absolute snaps ratchets.json in place; a detached HEAD does too", (t) => {
   const r = repo();
-  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  t.after(() => rmTemp(r.dir));
   const lines = () => JSON.parse(r.tool("--json")).rows.find((x) => x.file === "js/ui/hud.js" && x.metric === "lines");
   slim(r, "cursor/abs-aaaa", "js/ui/hud.js", 30);
   r.tool("--update", "--absolute");
@@ -178,7 +185,7 @@ test("--update --absolute snaps ratchets.json in place; a detached HEAD does too
 // delta, so two PRs that both add bare catches (the cssClasses shape) never share a ratchets.json hunk.
 test("two PRs raising the same TREE metric as fragments merge clean in either order, leaving ratchets.json alone", (t) => {
   const r = repo();
-  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  t.after(() => rmTemp(r.dir));
   const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(r.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(r.dir, rel), text); };
   for (const rel of ["tools/check/tree-counts.mjs", "tools/lib/css-source.mjs"]) write(rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
   const cur = JSON.parse(fs.readFileSync(path.join(r.dir, "tests/data/ratchets.json"), "utf8"));
@@ -220,7 +227,7 @@ test("two PRs raising the same TREE metric as fragments merge clean in either or
 // double-lowered shared ceilings. Only files the branch changed may be lowered.
 test("--update on a topic branch lowers only files the branch changed", (t) => {
   const r = repo();
-  t.after(() => fs.rmSync(r.dir, { recursive: true, force: true }));
+  t.after(() => rmTemp(r.dir));
   // Headroom the branch did not create: the tip shrank apex.js past its ceiling.
   const apex = path.join(r.dir, "js/agent/apex.js");
   fs.writeFileSync(apex, fs.readFileSync(apex, "utf8").split("\n").slice(0, 150).join("\n") + "\n");
