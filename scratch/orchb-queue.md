@@ -6,7 +6,7 @@ session_01T14HCB and chose "Replace ORCH B"; asked to "rebuild queue in coordina
 Predecessor B·O5 session_01MTd78B was already inactive (send_message: session_inactive); bus ROTATE 86157c3.
 
 ## Cross-fleet state (ORCH A PLAN v1, bus 15972cc, Bryce approved 12:40 PT 10-26)
-ORCH A (session_01TVoReZ) is the ONLY merger; launch_pause + merge_pause ON (DAD HB 73264fe). B launches nothing until
+ORCH A (session_01EAw3obfa2KyU4yeSKy9xGb, LIVE a49b5d00 01:22Z; not reachable by send_message from this account — bus only) is the ONLY merger; launch_pause + merge_pause ON (DAD HB 73264fe). B launches nothing until
 A/Bryce lifts launch_pause. Train 3 #3888 @a1c1dfff: ready, CI success, clean — A merges.
 
 ## B-owned open PRs
