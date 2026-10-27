@@ -55,7 +55,8 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
    pushes nothing, dirty tree fine; `docs/notes/PREPUSH-GATE-LADDER.md`). THE PRE-PUSH FLOOR (its one home) before a
    code push is `tooling-fast --changed --jobs=3 --quiet` plus the ONE spec `pick-tests`/`select-specs` names, run in
    the background as `test-bg.mjs --spec <file>` (`verify-track` for a circuit; prose: the docs-only fast path). The
-   full `test:tooling-fast` runs on the PR as `Structural guards` A–D, beside the other tiers and the landing gate
+   full `test:tooling-fast` runs as `Structural guards` A–D on a PR touching tools/, tests/, .github/ or package.json
+   (any other PR: `--changed`; the train is always full), beside the other tiers and the landing gate
    (`ci.yml`, `browser-group.yml`, `land.yml`); `--gate-only` is optional, to reproduce a gate-only red. Never run
    either in the foreground to prove what CI will prove.
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards`, one `node --test`, `verify-track`, `pick-tests`).

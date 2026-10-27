@@ -10069,7 +10069,8 @@
       ],
       "*": [
         "tests/specs/image-grade-visual.spec.js",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/tooling-fast-runner.test.mjs"
       ]
     },
     "js/perf/gpu-test-run.js": {
