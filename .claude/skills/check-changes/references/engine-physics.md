@@ -3,7 +3,7 @@
 `verify-change --plan <paths>` lists more browser groups than AGENTS.md §Verification allows.
 Cap: two browser groups, the two most specific, and the rest named not-run in the PR.
 
-0. Before the edit: `node tools/ci/who-is-on-it.mjs --claim "<text>"` (required for `js/game.js`, AGENTS.md §Concurrent PRs; `--release` after).
+0. Before the edit: check `node tools/ci/pr-board.mjs --json` for an open PR already on `js/game.js` (docs/WORKERS.md: one owner per path).
 1. Plan: `node tools/ci/verify-change.mjs --plan js/physics/consts.js js/game.js`
    (a consts/game.js edit lists circuits, collisions, hooks, physics-core, tiny, tooling-fast).
 2. Run `physics-core` and `collisions` (`node tools/ci/test-bg.mjs <group>`, one at a time, AGENTS.md rules 4-5).

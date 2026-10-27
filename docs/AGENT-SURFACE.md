@@ -47,8 +47,7 @@ agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
 the task with an explicit persona label, OWNED paths, forbidden actions,
 allowed tools, and the required hand-back format. Claude frontmatter such as
 `readonly`, `tools`, `background` and `model` is reference metadata in Codex;
-repeat the safety limits in the launch prompt. Keep Merge Desk authority with
-the explicitly designated parent session. Delegate bounded read-only evidence
+repeat the safety limits in the launch prompt. Landing is GitHub's (`land.yml`, docs/WORKERS.md).
 work (for example `deploy-research`), never ready/arm/merge authority.
 
 The doctor catalog warning is host metadata, not a repository failure. If the
@@ -336,9 +335,8 @@ and report comparison do not launch Chromium.
 | `apex_rotate_markings_check` | `track/rotate-markings.cjs` | tree | new-track |
 | `apex_graph_parity` | `track/graph-parity.cjs` | tree | scenery-dress |
 | `apex_frame_report` | `shot/frame-report.mjs` | tree | playwright-probe |
-| `apex_who_is_on_it` | `ci/who-is-on-it.mjs` | tree | steward |
 | `apex_debug_chrome` | `mcp/debug-chrome.mjs` | tree | mcp-probe |
-| `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | agent-fleet |
+| `apex_cursor_agents` | `ci/cursor-agents.mjs` | tree | steward |
 | `apex_track` | `shot/track-session.mjs` | browser | survey-track |
 | `apex_job_start` | `mcp/apex-extras.mjs` | tree | check-changes |
 | `apex_job_status` | `mcp/apex-extras.mjs` | tree | check-changes |
@@ -388,7 +386,6 @@ Pins the wrap always applies (you cannot override them):
   existing JSON file under `artifacts/` or `scratch/` (symlinks resolved); never
   `--out` / `--fleet` / `--diff` / `--pose`. The fleet sweep
   (`frame-report.mjs --fleet`, ~10 min) and `--diff old.json new.json` stay CLI.
-- `apex_who_is_on_it` → `--json`, never `--claim` / `--release` (they push refs);
   `paths` that start with `-` are refused so none reaches the CLI as a flag
   token / API down) is a tool error. Watching a run stays a Monitor on the CLI
 - `apex_cursor_agents` → `cursor-agents.mjs <verb>`: ONE tool with a `verb` argument, only `verb`, `id`, `options` and

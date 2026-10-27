@@ -9,21 +9,21 @@ description: "Use when you own, pick up or are handed a PR, or a PR or the deplo
 are right about most things and wrong about the specifics below, each of
 which has cost a session before. Everything not listed here: `AGENTS.md`.
 
-Routes: owning PRs (claim → ready → report, spawn prompt) → `agent-fleet` `references/role-pr-owner.md` §The steward loop ([`references/ownership.md`](references/ownership.md) is its forwarding stub). A red `ci.yml` / `pages.yml` run → agent `ci-red-triage` (read-only, returns
+Routes: the worker contract (claim, draft PR, land) → `docs/WORKERS.md`.
 the status line). Pre-push validation → `check-changes`. Live `version.json` or
 anything on github.io → agent `deploy-research` (the only thing here that reaches it).
 Review, hunt or survey findings on the PR → agent `finding-verifier` before you fix any of them.
 
 ## Drive to green — the loop
 
-1. Check out the PR's branch, then claim it (§3).
+1. Check out the PR's branch; if the PR has no live owner, comment `claims #<n> — <host>:<id>` on it and add `claimed` (§3).
 2. Read CI on the current tip: `node tools/ci/ci-watch.mjs --sha <head> --once` (§1 for `cancelled`, §8 for `running`).
 3. Triage a red: agent `ci-red-triage` names the job, test and assertion.
 4. Fix on the branch; sync only when §2 says you must.
 5. Gate: `node tools/ci/deploy.mjs --gate-only` (§6).
 6. ONE push per verified batch; refresh the PR body's Plan and Status.
-7. Draft → ready → READY → merged: §12 (the rule: `.claude/rules/fleet-core.md`).
-8. Watch (§7, §9) until `= ci passed`; then `who-is-on-it.mjs --release`.
+7. Draft → ready → `land`: §12.
+8. Watch (§7, §9) until `= ci passed` on your head; the lane ends when `land` is on.
 
 ## 1. `cancelled`: read the jobs, not the conclusion
 
@@ -66,13 +66,11 @@ answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `n
 
 ## 3. A red you did not cause → find out who is on it FIRST
 
-    node tools/ci/who-is-on-it.mjs                  # pushes, paths, live claims
-    node tools/ci/who-is-on-it.mjs --claim "<text>" # before you start
-    node tools/ci/who-is-on-it.mjs --release        # after
+    node tools/ci/pr-board.mjs --json      # open PRs, their heads and what each is fixing
 
-The rule is AGENTS.md §Git branch & deploy (claim before a shared fix); it
-**overrides "port the fix now and push"** (three sessions fixed one bug on
-2026-09-18 and the result was a revert). Also search open PR titles/branches for the failing test name: first claimant fixes, the rest wait.
+Search open PR titles, branches and the Board issue for the failing test name, and the `deploy:red` label on
+the Board issue (docs/WORKERS.md): the first claimant fixes, the rest wait. This **overrides "port the fix now
+and push"** (three sessions fixed one bug on 2026-09-18 and the result was a revert).
 
 ## 4. Never push to the deploy branch
 
@@ -128,11 +126,12 @@ the **current** tip — not the notification commit (two commands):
 Ending the turn on mid-run `0 failed` is how tip reds sit until a human clicks
 Fix with Agent.
 
-## 9. Host-neutral watch and claims
+## 9. Host-neutral watch
 
-Use `--session <unique-id>` with `who-is-on-it.mjs --claim/--release` on hosts without a Claude session variable.
-Subscription and timer per host (Claude Code `subscribe_pr_activity` + `send_later`; Cursor `subscribe_github_ci` +
-`subscribe_github_pr` + `subscribe_timer`): AGENTS.md rule 13. Without subscription or timers: `references/host-watch.md`. Record missing capabilities as unverified.
+A claim is a PR or issue comment (`claims #<n> — <host>:<id>`) plus the `claimed` label on any host.
+Subscription per host (Claude Code `subscribe_pr_activity`; Cursor `subscribe_github_ci` + `subscribe_github_pr`)
+while CI runs on your head: AGENTS.md rule 13. Without a subscription: `references/host-watch.md`. Record missing
+capabilities as unverified.
 
 ## 10. Sweeping many PRs
 
@@ -144,18 +143,16 @@ arm → `disable_pr_auto_merge` (retired methods).
 
 Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one run, `--stop`, never in a subagent).
 
-## 12. Draft → ready → READY → merged
+## 12. Draft → ready → `land` (the steps that broke on 2026-10-26)
 
 1. **Push** with `git push -u origin <branch>` alone — no output pipe (a piped push went to the
    permission classifier and was denied; the same push bare passed). Commit first in two calls (AGENTS.md rule 12).
 2. **Mergeable first**: a ready flip on a CONFLICTING/DIRTY head starts no CI (AGENTS.md rule 13); `needs-sync.mjs`,
    then `sync-pr.mjs`, then flip.
-3. **Flip**, then call `subscribe_pr_activity` again on the same PR: the subscription can die at the
-   draft→ready flip, and then no CI or merge event arrives.
-4. **READY** goes out only after `node tools/ci/ready-gate.mjs --pr <n> --wait` exits 0 on the SAME head you
-   name in the line (`agent-msg.mjs` refuses a head that differs from the receipt). The Plan's open terminal item
-   `- [ ] READY to ORCH <L> via agent-msg …` is exempt from the gate (`.github/pull_request_template.md`).
-   A READY line never carries "do not merge" wording; holds and their shape: `.claude/rules/fleet-core.md`.
-   Ownership is never a hold — routing uses the `fleet:` line.
-5. **Merge watch**: `node tools/ci/wait-for.mjs --merged <sha>` as ONE background Bash task — never a hand-rolled
-   `while … sleep` loop; then `--release` the claim. The full signal list is AGENTS.md rule 13.
+3. **Flip**, then call `subscribe_pr_activity` again on the same PR: the subscription died at the draft→ready
+   flip on #3785 and no CI or merge event arrived after it.
+4. **Land**: `node tools/ci/ready-gate.mjs --pr <n>` exit 0 on the SAME head, then add the `land` label and refresh
+   the Hand-off block. The Plan's open terminal item `- [ ] land: …` is exempt from the gate
+   (`.github/pull_request_template.md`). A veto is the `hold` label, never body wording.
+5. `land.yml` runs the `gate` check and arms auto-merge; GitHub merges. Nothing in this session merges, arms or
+   waits for the merge: the lane ends at `land` (docs/WORKERS.md).

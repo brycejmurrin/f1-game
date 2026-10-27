@@ -2,7 +2,7 @@
 // launch-gate.mjs — the quota gate before a create_session: reads a saved get_session, writes the receipt the launch hook requires.
 // @doc Quota gate for create_session: saved get_session page -> launch-gate receipt (rate_limit allowed, or typed override).
 // @section runner
-// @skill agent-fleet
+// @skill steward
 //
 // Why (docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7/Q1): orchestrator.md
 // §Pre-launch quota check says "at `allowed_warning` or worse, launch nothing",
@@ -120,7 +120,7 @@ export function verdict(session, { override = "" } = {}) {
   if (status === "allowed") return { ok: true, status, why: "rate_limit_info.status allowed" };
   if (quote) return { ok: true, status, override: quote, why: `status ${status}; launch on Bryce's typed ask: "${quote}"` };
   const reset = rl && rl.resetsAt ? ` (resets ${new Date(rl.resetsAt * 1000).toISOString()})` : "";
-  return { ok: false, status, why: `rate_limit_info.status ${status}${reset}: launch nothing (orchestrator.md §Pre-launch quota check); a launch Bryce typed goes through --override "<his words>"` };
+  return { ok: false, status, why: `rate_limit_info.status ${status}${reset}: launch nothing (docs/WORKERS.md §The dispatcher); a launch Bryce typed goes through --override "<his words>"` };
 }
 
 /** Write the receipt under `root`; returns its path. */

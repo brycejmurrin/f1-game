@@ -10,7 +10,6 @@ import { spawnSync } from "node:child_process";
 import vm from "node:vm";
 import { selectionReceipt, validateSelectionArgs } from "../../tools/ci/pick-tests.mjs";
 import { cachedPlan, returnTo, verifyStages, runStages, runStage, VERIFY_MODES } from "../../tools/ci/sync-pr.mjs";
-import { sessionId, main as whoMain } from "../../tools/ci/who-is-on-it.mjs";
 import { episodeLeaks } from "../../tools/check/episode-diff.mjs";
 import { update, updateReceipt, DATA } from "../../tools/check/ratchets.mjs";
 import { project, meanError, main as importMain } from "../../tools/track/import-circuit-path.mjs";
@@ -116,18 +115,6 @@ else if (args[0] !== 'merge-base') process.exit(90);
   assert.equal(JSON.parse(result.stdout).source, "cached-remote-refs");
   const calls = fs.readFileSync(log, "utf8").trim().split("\n").map(JSON.parse);
   assert.deepEqual(calls.map((args) => args[0]), ["rev-parse", "rev-parse", "merge-base", "log"]);
-});
-
-test("claims require stable host-neutral identity before any git or network operation", () => {
-  assert.equal(sessionId({}), null);
-  assert.equal(sessionId({ APEX_SESSION_ID: "thread-1" }), sessionId({ CODEX_THREAD_ID: "thread-1" }));
-  assert.notEqual(sessionId({ APEX_SESSION_ID: "thread-1" }), sessionId({ APEX_SESSION_ID: "thread1" }));
-  const result = cli("tools/ci/who-is-on-it.mjs", ["--claim", "fixture"], {
-    APEX_SESSION_ID: "", CODEX_THREAD_ID: "", CLAUDE_CODE_SESSION_ID: "", CLAUDE_SESSION_ID: "",
-  });
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /requires --session/);
-  assert.equal(whoMain(["--session"]), 1);
 });
 
 const mockGame = (overrides = {}) => {

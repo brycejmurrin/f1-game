@@ -12,4 +12,4 @@ Bryce (2026-10-26 ~13:55 PT, AskUserQuestion in ORCH A session_011vDv23PCX8yBuQ1
 
 **Why:** the per-case ask cost a full CI round on mega train W2 (#3870) for a +1 he approved anyway.
 
-**How to apply:** only for train/wave combination effects of +1..+3 on a tree metric; a bigger raise, a raise from one member's own growth, or a FILE metric past the 20-line auto-raise still goes to Bryce. File metrics within 20 lines use `--auto-raise` as always. Related: [[orchestrator-dispatches-pages]].
+**How to apply:** only for train/wave combination effects of +1..+3 on a tree metric; a bigger raise, a raise from one member's own growth, or a FILE metric past the 20-line auto-raise still goes to Bryce. File metrics within 20 lines use `--auto-raise` as always.

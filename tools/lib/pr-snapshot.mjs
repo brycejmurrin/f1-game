@@ -1,7 +1,7 @@
 // @doc Shared per-PR GitHub reads (list, PR, files, checks, runs, jobs, comments) behind one ETag cache on disk.
 //
 // WHY (system audit 2026-10-26 §7, docs/notes/TOOLING-CONSOLIDATION-2026-10-26.md).
-// pr-board, session-status --pr, needs-sync, queue-depth and fleet-owner each
+// pr-board, session-status --pr, needs-sync and queue-depth each
 // built their own "my PR" view out of the same five GETs, uncached, so one
 // pr-board sweep at 44 open PRs cost ~133–220 requests and every agent paid it
 // again a minute later. Every read here is a CONDITIONAL GET through

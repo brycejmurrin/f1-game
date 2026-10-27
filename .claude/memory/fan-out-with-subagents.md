@@ -12,4 +12,4 @@ Bryce (2026-10-26 ~10:50 PT, while building PR trains and testing relays): "Use 
 
 **Why:** serial investigation of 65 PRs was slow; independent trains and fixes can run in parallel.
 
-**How to apply:** after a short survey, split independent work (one train, one fix each) across `worker` subagents with `isolation: "worktree"`; keep the coordinator on messaging and decisions. Respect AGENTS.md rule 4/5 load limits (no browser run in a subagent). Related: [[idle-lanes-parallel-work]].
+**How to apply:** after a short survey, split independent work (one train, one fix each) across `worker` subagents with `isolation: "worktree"`; keep the coordinator on messaging and decisions. Respect AGENTS.md rule 4/5 load limits (no browser run in a subagent). Related: idle lanes doing parallel work.

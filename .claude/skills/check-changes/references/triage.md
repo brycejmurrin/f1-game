@@ -75,7 +75,7 @@ Do not re-dispatch CI until gen is clean. (Folded from the gen-regen skill,
 
 ## One red shard outside the diff — flake or base red?
 
-Before one re-run (AGENTS.md §Concurrent PRs: at most once, timeout/infra,
+Before one re-run (AGENTS.md §Coordination: at most once, timeout/infra,
 `node tools/ci/ci-rerun.mjs`): name the test and assertion (agent `ci-red-triage`),
 confirm the sibling shards on the same `head_sha` are green, and check the deploy
 tip — the same test red there is base red, not your flake; an unselected or unread

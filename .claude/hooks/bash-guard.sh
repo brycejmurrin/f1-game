@@ -44,10 +44,9 @@
 #  Transcript Auditor batch 9 (2026-10-24), also in guard(): ban 5 refuses
 #    turning commit signing off (`-c commit.gpgsign=false`, `--no-gpg-sign`,
 #    `git config … gpgsign false|--unset`); ban 6 refuses a git ref written
-#    through `gh api` (DELETE/PATCH/PUT/POST …/git/refs). Advisories, never blocks (additionalContext): a
-#    cursor/* push whose diff touches another open PR's paths (fleet-owner.mjs;
-#    APEX_HELD_CHECK=0 skips it), and ready-gate/merge-gate piped without
-#    `set -o pipefail`. A push to a cursor/* branch whose every PR is merged
+#    through `gh api` (DELETE/PATCH/PUT/POST …/git/refs). Advisory, never a block (additionalContext):
+#    ready-gate/merge-gate piped without `set -o pipefail` (the held-file push advisory over
+#    fleet-owner.mjs was retired 2026-10-27). A push to a cursor/* branch whose every PR is merged
 #    or closed is refused (one REST call; APEX_CLOSED_PR_PUSH_OK=1 as the
 #    push's own prefix when Bryce reopened it; an API error fails open).
 #  GitHub API through ANY client (2026-10-26 system audit §10; user grant, Bryce
@@ -192,12 +191,12 @@ PRE='((sudo|env|exec|nice|nohup|command|setsid|doas|stdbuf([[:space:]]+-[^[:spac
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 # A `git stash` while a merge is in progress drops MERGE_HEAD, and the next commit lands
 # with ONE parent (2026-10-26: a sync merge of the deploy tip was committed as a squash and
-# caught only by a manual `%p` check; fleet-core rule 1 needs two parents). Reading forms
+# caught only by a manual `%p` check; AGENTS.md §Coordination needs two parents). Reading forms
 # (list/show) and the ones that restore state (pop/apply/drop) pass.
 if [ -n "$ROOT" ] && git -C "$ROOT" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 \
    && printf '%s' "$SCAN" | grep -qE '(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+stash([[:space:]]|$)' \
    && ! printf '%s' "$SCAN" | grep -qE 'git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+stash[[:space:]]+(list|show|pop|apply|drop|branch)'; then
-  echo "BLOCKED: \`git stash\` while a merge is in progress drops MERGE_HEAD, and the next commit lands with ONE parent (fleet-core: merge commits only). Commit the merge or \`git merge --abort\` first; stash afterwards." >&2
+  echo "BLOCKED: \`git stash\` while a merge is in progress drops MERGE_HEAD, and the next commit lands with ONE parent (AGENTS.md §Coordination: merge commits only). Commit the merge or \`git merge --abort\` first; stash afterwards." >&2
   exit 2
 fi
 [ -n "$ROOT" ] || ROOT="${CLAUDE_PROJECT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}"

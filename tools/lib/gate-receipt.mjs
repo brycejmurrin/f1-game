@@ -1,6 +1,6 @@
 // gate-receipt.mjs — the receipt a gate writes and a hook reads (2026-10-19).
 // @doc Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one, github-mcp-guard.sh requires it.
-// @skill agent-fleet
+// @skill steward
 //
 // Why: merging, arming and draft→ready were gated by a human word ("Level 3",
 // a re-granted AskUserQuestion per orchestrator rotation) while no hook checked
@@ -141,7 +141,7 @@ export function receiptVerdict(receipt, { kind, pr, head = "", now = Date.now(),
   const pin = headPinProblem(head, receipt.head);
   if (kind === "ready" && hex(head) && pin) return { ok: false, why: `the PR head is ${hex(head).slice(0, 12)}, but ready-gate passed on ${hex(receipt.head).slice(0, 12)}: re-run ready-gate on the current head` };
   if (kind === "merge") {
-    if (!hex(head)) return { ok: false, why: `pin expectedHeadSha to the gated head ${hex(receipt.head).slice(0, 12)} (role-merge-holder.md: a merge is pinned to the sha the gate passed)` };
+    if (!hex(head)) return { ok: false, why: `pin expectedHeadSha to the gated head ${hex(receipt.head).slice(0, 12)} (a merge is pinned to the sha the gate passed)` };
     if (pin) return { ok: false, why: `expectedHeadSha ${hex(head).slice(0, 12)} is not the gated head ${hex(receipt.head).slice(0, 12)}; re-run merge-gate on the head you merge` };
   }
   return { ok: true, why: "" };

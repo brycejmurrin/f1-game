@@ -10,11 +10,8 @@ A new session starts with no memory and an unfetched branch, so the prompt
 carries everything it needs. Output it in chat in one code block. Never write a
 `HANDOFF` file to the repo root: a cold clone cannot see it.
 
-When: at the size stop for your role (agent-fleet `references/launch-policy.md`
-§Size stop holds the figures; `context-cap.py` names your live context) or when
-the user asks. A fleet ORCHESTRATOR does not use this prompt: its successor
-goes through `node tools/ci/fleet-brief.mjs` and the seed (agent-fleet
-`references/orchestrator.md` §Hand-off).
+When: at the size stop for your role (`context-cap.py` names your live context;
+the worker cost cap is in docs/WORKERS.md) or when the user asks.
 
 1. **Push first.** A dirty tree or unverified work: commit it as WIP anyway,
    in two calls (`git add <paths>`, then `git commit`; AGENTS.md rule 12), and
@@ -37,8 +34,9 @@ goes through `node tools/ci/fleet-brief.mjs` and the seed (agent-fleet
      `node tools/ci/session-status.mjs --pr`
    - skills to load (`.claude/skills/README.md`), and the user's grants quoted
      with their time; no merge grant is implied
-   - the rest of AGENTS.md `# Compact instructions` that applies: any
-     `MERGE-HOLD:` line, a run in flight and its log path
-     (`artifacts/logs/<group>.log`), armed Monitor / trigger ids (so the
-     successor can stop or delete them), OWNED / FORBIDDEN paths and live claims
-4. Under ~25 lines. Link the PR for detail instead of pasting it.
+   - the rest of AGENTS.md `# Compact instructions` that applies: the `hold`,
+     `needs-decision` and `claimed` labels you set, a run in flight and its log
+     path (`artifacts/logs/<group>.log`), armed Monitor / trigger ids (so the
+     successor can stop or delete them), OWNED / FORBIDDEN paths
+4. Under ~25 lines. Link the PR for detail instead of pasting it. The PR body's
+   Hand-off block (docs/WORKERS.md) is the one hand-off a lane leaves behind.

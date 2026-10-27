@@ -29,7 +29,7 @@ outcome on a reachable path; low = cosmetic or rare.
 - One PR per batch below, on a `cursor/<topic>-<hash>` branch, opened as a
   DRAFT into the ship branch (AGENTS.md rule 12). Batches are cut by subsystem
   so each stays inside one lane; `js/game.js` edits need
-  `node tools/ci/who-is-on-it.mjs --claim` first.
+  `node who-is-on-it.mjs --claim` first.
 - Every fix lands with the unit test named beside it (most are `*-vm.test.mjs`
   twins that run in `test:tooling-fast`). The browser group per batch is what
   `node tools/ci/pick-tests.mjs` names, capped at two.

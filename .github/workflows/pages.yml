@@ -62,7 +62,9 @@ permissions:
 # gate mid-flight. Job-level pages-gate / pages groups remain as belt-and-
 # braces for the ci and deploy jobs. A push to the deploy branch queues here
 # too (2026-10-16): one running, one pending, the newest push replaces the
-# pending one.
+# pending one. This key IS the "one train running, one queued, never
+# dual-dispatch" rule (docs/plans/2026-10-27-orchestration-redesign.md §4.3,
+# docs/WORKERS.md): a workflow key, not a convention anyone has to remember.
 concurrency:
   group: pages-train-${{ github.ref }}
   cancel-in-progress: false

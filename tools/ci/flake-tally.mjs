@@ -32,7 +32,7 @@
  * ≥ 2 runs, or failed on ≥ 3 distinct branches (a red that follows the test,
  * not the change). `.github/workflows/flake-tally.yml` runs it daily and keeps
  * one open issue; the quarantine file itself stays a human/agent commit, so
- * the ledger keeps an owner and an evidence URL (AGENTS.md §Concurrent PRs).
+ * the ledger keeps an owner and an evidence URL (AGENTS.md §Coordination).
  *   node tools/ci/flake-tally.mjs --runs 7
  *   node tools/ci/flake-tally.mjs --runs 3 --json
  *   node tools/ci/flake-tally.mjs --help

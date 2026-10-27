@@ -2,7 +2,7 @@
 // cursor-agents.mjs — Cursor Cloud Agents client: read (list, status, dump, digest) and control agents this tool launched (launch, followup, cancel, archive, delete).
 // @doc Cursor agents client: read, wait, artifacts, usage; launch/followup/cancel/archive/delete of agents it launched.
 // Full description: Cursor Cloud Agents API v1 client (`CURSOR_API_KEY` from the environment, never printed). Reads: `list`, `status <id>`, `dump [<id>...]` (SSE run streams, rate-limit safe, into ignored artifacts/), `digest`. Writes: `launch` (client-minted agentId, so a retry never duplicates), `followup`, `cancel`, `archive`, `delete`: each refuses an agent id that `launch` did not record in artifacts/cursor-launched.json (the key reaches every agent its owner has). `allowed` lists the recorded ids. Also: `wait`, `artifacts`/`artifact` (presigned download), `usage`.
-// @skill agent-fleet
+// @skill steward
 //
 // Evidence: docs/notes/CURSOR-AGENTS-API-PROBE-2026-10-19.md. The run stream
 // (GET /v1/agents/{id}/runs/{runId}/stream) is the only full-transcript door:

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // lane-preamble.mjs — the TOOLING block for a UI-survey launch prompt: exact commands, names checked, no exploring.
 // @doc Prints the TOOLING block for a UI-survey launch prompt: exact audit commands with names checked against the catalog.
-// @skill agent-fleet
+// @skill steward
 //
 // Why: measured 2026-10-20 on nine live Cursor runs, survey agents spent their first minutes reading code and the 39,000-
 // character survey SKILL.md (one agent read it five times) to find which script to run, then wrote throwaway `node -e`
