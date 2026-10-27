@@ -11,7 +11,7 @@ The rules modules that turn a lap into a weekend. Each is one
 | File | Global | Owns |
 |---|---|---|
 | `js/physics/tyre-model.js` | `TyreModel` | wear `LEVELS` (`off`/`light`/`real`, `G.raceTyreWear`), `gripMul`, `spent`, `lapsLeft`, `planLaps` (life scales with the race DISTANCE), `fit` (writes the stint log), fuel burn |
-| `js/race/pit-lane.js` | `PitLane` | the driven lane (a state, not a cutaway): limit, box, `lossS`, `estimate`, the AI's `planFor`/`replan`, `twoCompoundRule`; its curvature use (`entryRunM`) is classed **surface** in docs/PHYSICS.md's legitimate-columns table |
+| `js/race/pit-lane.js` | `PitLane` | the driven lane (a state, not a cutaway): limit, box, `lossS`, `estimate`, the AI's `planFor`/`replan`, `twoCompoundApplies()`/`compoundDue()` (instance; `twoCompoundRule` is closure-private); its curvature use (`entryRunM`) is classed **surface** in docs/PHYSICS.md's legitimate-columns table |
 | `js/track/core/pit.js` | `TrackPit` | the pit-complex geometry bands every consumer reads (circuit shape → new-track) |
 | `js/race/quali-model.js` | `Quali` | one flying lap vs the simulated field: `simulate`, `rows`, `referencePole` |
 | `js/race/quali-net.js` | `QualiNet` | VS FRIEND quali gate (rival times on NetPlay `EV.QUALI`) |
@@ -32,10 +32,13 @@ Rules modules stay out of `game.js`; the entry file **wires** them. Open these s
   `onRaceSessionReady` recreates `pits = PitLane.create(G)`. `pits.think` and the human pit UI
   read the same `PitLane` state the AI `planFor` uses.
 - `wxArc` / `trackWetness()` / `gripMult(c)` — weather arc vs `TyreModel` wetness for grip and pits.
-- `gridFromQuali()` / `openQuali()` — whether a race grids from quali; the finish applies
-  `SportingRegs.applyCompoundRule`.
+- `gridFromQuali()` / `openQuali()` — whether a race grids from quali.
+- The finish (`endRace`): `cmpApplies = pits.twoCompoundApplies()` read AT THE FLAG, then the
+  `cmpOn` gate (find it with apex-lsp / grep `cmpOn` in game.js), then `SportingRegs.applyCompoundRule`
+  (realRace WATCH skips it).
 
-Flags, SC/blue-flag calls, `raceCtl`, finish order/delay, scripted holds → **race-incidents-control**.
+SC/VSC pass penalty (`SportingRegs.createPassWatch`) is here; SC/VSC DEPLOYMENT, flags, blue-flag calls,
+`raceCtl`, finish order/delay, scripted holds → **race-incidents-control**. Sprint legs inside a Season → season-mode.
 
 ## Hooks (live page)
 
@@ -48,6 +51,9 @@ __apex.pit()                         // lane geometry, limit, this car's state; 
 __apex.weatherArc()                  // live arc or null; weatherArc("dry","rain",60) arms one
 ```
 
+No hook reads the two-compound state. Probe it: `__apex.tyres({level:"real"})` + a dry race of
+≥ `TWO_COMPOUND_MIN_LAPS`, one compound, finish; the console shows `DSQ car=… why=…` (`Log.info("game", …)`).
+
 ## Tests
 
 ```sh
@@ -56,9 +62,10 @@ node --test tests/unit/tyre-model.test.mjs tests/unit/tyre-strategy-vm.test.mjs 
   tests/unit/weather-arc-rain.test.mjs tests/unit/flying-start.test.mjs tests/unit/start-lights.test.mjs \
   tests/unit/hud-strategy.test.mjs tests/unit/hud-tyres.test.mjs tests/unit/quali-persist.test.mjs
 APEX_VM_PAGE=1 node --test tests/specs/pit-lane.spec.js   # NO browser: pit-lane.spec is VM-adapted (test:vm-page-b)
-npm test -- tests/specs/quali.spec.js    # BROWSER, one spec (or time-trial / real-race), background it (AGENTS.md rule 4)
+node tools/ci/test-bg.mjs --spec tests/specs/quali.spec.js   # BROWSER, one spec (or time-trial / real-race), backgrounded (AGENTS.md rule 4)
 ```
 
+The list above can drift: `node tools/ci/pick-tests.mjs` / `select-specs.mjs` are authoritative.
 One spec, never a whole group, per change (AGENTS.md verification table); a whole group is
 `node tools/ci/remote-group.mjs <group>` on the pushed branch, ONE group per batch (rule 5). A subagent
 reports browser specs as not run.
@@ -69,9 +76,12 @@ reports browser specs as not run.
   tyre-free by design. Per-compound life comes from `lifeOf()` / `deriveLife()`
   (`LIFE_MID`/`LIFE_K`/`LIFE_MIN`/`LIFE_MAX` in `tyre-model.js`, a row's own
   `life` in `js/car/parts.js` wins). Speed comparisons: AGENTS.md §Physics.
-- The two-compound test is `PitLane.twoCompoundRule`, shared with the AI
-  planner; a spec that ends with `finishRace()` meets it via `tyres({fit})`.
+- "Two-compound rule not enforced": the test is `G.pits.twoCompoundApplies()` =
+  `enabled()` (a lane AND tyre wear on) && `twoCompoundRule(lapsTarget)` (laps ≥
+  `TWO_COMPOUND_MIN_LAPS`, dry tread from `TyreModel.treadFor(raceWeather, trackWetness())` judged
+  at the flag, not a season sprint leg), shared with the AI planner; then the finish's `cmpOn`
+  (not NetPlay, practice or duel, ≥ 1 classified finisher). Most likely cause: TYRE WEAR off,
+  persisted as `apex26.tyreWear`. A spec that ends with `finishRace()` meets it via `tyres({fit})`.
 - Quali/results sheets never compute order; a wrong classification is the
   model (`Quali.rows`, `RaceControl.finishOrder`), not the DOM.
 - Sprint points / quali-on-off inside a career save → career-mode (a standalone Season → season-mode).
-- Pit stops exist: an "there are no pit stops" comment (e.g. in `ai-drive.js`) is stale history, not a rule.

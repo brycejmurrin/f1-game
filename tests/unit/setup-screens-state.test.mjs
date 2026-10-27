@@ -186,7 +186,7 @@ function backupPickerUi(readerKind) {
       MAX_BYTES: 1024,
       validate: (envelope) => { validated.push(envelope); return { ok: true }; },
       preview: () => ({ slots: [], extras: [] }),
-      apply: (envelope) => { applied.push(envelope); return { ok: true }; },
+      applyWithUndo: async (envelope) => { applied.push(envelope); return { ok: true }; },
     },
     FileReader: class {
       readAsText(file) {

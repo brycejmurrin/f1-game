@@ -389,5 +389,335 @@
   "parts.wheels.taped.label": "Taped Rim",
   "parts.wheels.taped_dish.label": "Taped Dish",
   "parts.wheels.works_rim.label": "Works Rim",
+  "radio.eng.attack": [
+    "{gap} TO {ahead}. YOU'RE IN RANGE",
+    "WITHIN A SECOND OF {ahead}. GO FOR IT",
+    "{ahead} IS {gap} AHEAD. ATTACK",
+    "{gap} TO {ahead}. LINE IT UP",
+    "CLOSING ON {ahead}. {gap} BACK"
+  ],
+  "radio.eng.attackOt": [
+    "OVERTAKE IS ARMED. {gap} TO {ahead}",
+    "USE THE OVERTAKE ON {ahead}",
+    "{ahead} {gap} AHEAD. OVERTAKE IS YOURS"
+  ],
+  "radio.eng.battFull": [
+    "BATTERY FULL. USE IT ON {ahead}",
+    "FULL CHARGE. DEPLOY ON {ahead}"
+  ],
+  "radio.eng.battLow": [
+    "BATTERY LOW. LIFT AND COAST",
+    "ENERGY LOW, HARVEST THIS LAP"
+  ],
+  "radio.eng.catchIn": [
+    "YOU'LL CATCH {ahead} IN {laps} LAPS",
+    "AT THIS PACE, {ahead} IN {laps} LAPS"
+  ],
+  "radio.eng.clear": [
+    "GOOD DEFENDING. {behind} DROPPING BACK",
+    "{behind} FALLING AWAY, {gap} NOW. NICE"
+  ],
+  "radio.eng.closing": [
+    "GAP TO {ahead} {gap}. CLOSING {rate} A LAP",
+    "{ahead} {gap} AHEAD, YOU'RE {rate} QUICKER",
+    "KEEP PUSHING. {gap} TO {ahead}, CLOSING",
+    "YOU'RE {rate} A LAP ON {ahead}. {gap} NOW",
+    "{gap} TO {ahead}. KEEP THE PRESSURE ON"
+  ],
+  "radio.eng.defend": [
+    "{behind} IS {gap} BEHIND. DEFEND",
+    "{behind} CLOSING, {gap}. COVER THE INSIDE",
+    "MIRRORS. {behind} IS {gap} BACK",
+    "{behind} WITHIN A SECOND. STAY TIGHT"
+  ],
+  "radio.eng.fastest": [
+    "FASTEST LAP OF THE RACE! {time}",
+    "PURPLE! FASTEST LAP, {time}",
+    "{time}. THAT'S FASTEST LAP"
+  ],
+  "radio.eng.finish": [
+    "P{pos}. WE'LL LEARN FROM THAT ONE",
+    "CHEQUERED FLAG, P{pos}. THANKS FOR THE EFFORT"
+  ],
+  "radio.eng.gain": [
+    "P{pos}. NICE MOVE",
+    "GOOD JOB, THAT'S P{pos}",
+    "YES! P{pos}, KEEP IT CLEAN",
+    "P{pos} NOW. GOOD PASS ON {passed}",
+    "THAT'S P{pos}. NEXT ONE"
+  ],
+  "radio.eng.gainMany": [
+    "UP {n} PLACES! P{pos}",
+    "P{pos}. THAT'S {n} PLACES GAINED",
+    "GREAT WORK. P{pos}, UP {n}"
+  ],
+  "radio.eng.green": [
+    "GREEN FLAG. RACE ON",
+    "GREEN, GREEN. GO GO GO",
+    "TRACK IS CLEAR. PUSH NOW"
+  ],
+  "radio.eng.grid": [
+    "P{pos}. SETTLE IN",
+    "P{pos}. STAY CALM",
+    "P{pos}. STAY FOCUSED",
+    "P{pos}. NO MISTAKES"
+  ],
+  "radio.eng.hit": [
+    "BIG HIT. ARE YOU OKAY?",
+    "THAT WAS A BIG ONE. CHECK THE CAR",
+    "CONTACT. KEEP IT CALM"
+  ],
+  "radio.eng.hurt": [
+    "STAY CALM. LONG RACE STILL",
+    "KEEP YOUR HEAD. IT'S A LONG RACE"
+  ],
+  "radio.eng.lap1Down": [
+    "TOUGH START. P{pos}, KEEP FIGHTING",
+    "P{pos} AFTER LAP ONE. STAY CALM"
+  ],
+  "radio.eng.lap1Same": [
+    "P{pos} AFTER LAP ONE. SETTLE IN",
+    "CLEAN START. P{pos}"
+  ],
+  "radio.eng.lap1Up": [
+    "GOOD START! P{pos}, UP {n}",
+    "GREAT FIRST LAP. P{pos}, GAINED {n}"
+  ],
+  "radio.eng.lastAttack": [
+    "{gap} TO {ahead}. EVERYTHING YOU'VE GOT",
+    "LAST ONE. {ahead} IS {gap} AHEAD, GO"
+  ],
+  "radio.eng.lastCalm": [
+    "LAST LAP. BRING HOME P{pos}",
+    "ONE TO GO. KEEP IT ON THE ROAD"
+  ],
+  "radio.eng.lastDefend": [
+    "HOLD {behind} OFF, {gap} BEHIND",
+    "LAST ONE. {behind} IS {gap} BACK, NO MISTAKES"
+  ],
+  "radio.eng.lastLead": [
+    "LAST LAP, YOU'RE LEADING. BRING IT HOME",
+    "ONE MORE. NICE AND CLEAN FOR THE WIN"
+  ],
+  "radio.eng.lead": [
+    "YOU'RE LEADING THE RACE!",
+    "P1! CLEAR AIR, BRING IT HOME",
+    "P1. YOU ARE LEADING, WELL DONE"
+  ],
+  "radio.eng.leadLost": [
+    "{by} TAKES THE LEAD. P2, STAY IN TOUCH",
+    "P2. {by} IS AHEAD, KEEP THE PRESSURE ON"
+  ],
+  "radio.eng.lost": [
+    "{by} IS THROUGH. P{pos}, STAY CLOSE",
+    "LOST ONE TO {by}. P{pos}, REGROUP",
+    "P{pos}. HEADS DOWN, WE GO AGAIN",
+    "{by} GOT BY. P{pos}, STAY IN THE FIGHT"
+  ],
+  "radio.eng.lostMany": [
+    "P{pos}. LOST {n} PLACES, KEEP GOING",
+    "DOWN {n} TO P{pos}. RESET AND GO AGAIN"
+  ],
+  "radio.eng.manage": [
+    "GAP {gap} TO {behind}. MANAGE IT",
+    "{gap} IN HAND. NO RISKS",
+    "COMFORTABLE, {gap} BEHIND. KEEP IT CLEAN",
+    "{behind} IS {gap} BACK. HOLD THE GAP",
+    "MIRRORS. {behind} IS {gap} BACK"
+  ],
+  "radio.eng.out": [
+    "WE'RE STOPPING THE CAR. SORRY",
+    "THAT'S THE END OF OUR RACE. SORRY"
+  ],
+  "radio.eng.outOfReach": [
+    "{ahead} IS {gap} AHEAD. HOLD P{pos}",
+    "TOO FAR TO {ahead}. BRING HOME P{pos}"
+  ],
+  "radio.eng.pb": [
+    "PERSONAL BEST, {time}",
+    "GOOD LAP. {time}, YOUR BEST",
+    "THAT'S A {time}. PERSONAL BEST"
+  ],
+  "radio.eng.podium": [
+    "P{pos}! PODIUM, GREAT JOB",
+    "ON THE PODIUM! P{pos}, WELL DRIVEN"
+  ],
+  "radio.eng.points": [
+    "P{pos}. GOOD POINTS TODAY",
+    "P{pos}, SOLID RESULT. THANK YOU"
+  ],
+  "radio.eng.pulling": [
+    "{ahead} IS PULLING AWAY. {gap} NOW",
+    "LOSING {rate} A LAP TO {ahead}. DIG IN"
+  ],
+  "radio.eng.recover": [
+    "P{pos} FROM P{grid}. GREAT RECOVERY",
+    "UP FROM P{grid} TO P{pos}. MEGA"
+  ],
+  "radio.eng.red": [
+    "RED FLAG, RED FLAG. SLOW DOWN",
+    "RED FLAG. BACK OFF, THE RACE IS STOPPED"
+  ],
+  "radio.eng.repass": [
+    "BACK AHEAD OF {passed}! P{pos}",
+    "{passed} SORTED. P{pos}",
+    "THAT'S PAYBACK. P{pos}"
+  ],
+  "radio.eng.rivalErr": [
+    "{name} AHEAD. PUSH NOW",
+    "{name} AHEAD. ATTACK",
+    "{name} IS AHEAD. GO FOR IT",
+    "{name} AHEAD. LINE IT UP"
+  ],
+  "radio.eng.rivalOut": [
+    "{name} IS OUT. THAT'S P{pos}",
+    "{name} HAS RETIRED. UP TO P{pos}"
+  ],
+  "radio.eng.rivalPit": [
+    "{name} HAS PITTED. PUSH NOW",
+    "{name} IN THE PITS. CLEAR AIR, GO",
+    "THAT'S {name} IN THE PITS. PUSH",
+    "{name} IN THE PITS. GO NOW",
+    "PUSH NOW. {name} HAS PITTED"
+  ],
+  "radio.eng.sc": [
+    "SAFETY CAR, SAFETY CAR. NO OVERTAKING",
+    "SAFETY CAR DEPLOYED. HOLD POSITION"
+  ],
+  "radio.eng.slow": [
+    "{time}, {delta} OFF. RESET",
+    "LOST TIME THERE, {delta}. REFOCUS"
+  ],
+  "radio.eng.status": [
+    "P{pos}. {gapA} AHEAD, {gapB} BEHIND",
+    "GAP AHEAD {gapA}, BEHIND {gapB}",
+    "P{pos}. {gapA} TO THE CAR AHEAD, {gapB} BACK",
+    "YOU'RE P{pos}. {gapA} AHEAD, {gapB} BEHIND",
+    "P{pos}. AHEAD BY {gapA}, BEHIND BY {gapB}"
+  ],
+  "radio.eng.steady": [
+    "GOOD RHYTHM. KEEP THOSE LAPS COMING",
+    "NICE AND CONSISTENT. KEEP IT UP"
+  ],
+  "radio.eng.threat": [
+    "{behind} IS CLOSING, {rate} A LAP",
+    "{behind} {gap} BEHIND AND QUICKER. PUSH"
+  ],
+  "radio.eng.toGo": [
+    "{left} LAPS TO GO. P{pos}",
+    "{left} TO GO, P{pos}. STAY FOCUSED",
+    "{left} LAPS LEFT. KEEP IT TIDY"
+  ],
+  "radio.eng.tyres": [
+    "MANAGE THE TYRES, {left} TO GO",
+    "SAVE THE TYRES. P{pos}",
+    "PLAN THE STOP, P{pos}",
+    "{ahead} IS QUICKER. MANAGE THE TYRES",
+    "LIFT AND COAST, P{pos}"
+  ],
+  "radio.eng.vsc": [
+    "VSC, VSC. SLOW DOWN, HOLD POSITION",
+    "VIRTUAL SAFETY CAR. BACK OFF"
+  ],
+  "radio.eng.win": [
+    "YES! YOU WIN THE RACE!",
+    "GET IN THERE! RACE WINNER!",
+    "P1! WHAT A DRIVE!"
+  ],
+  "radio.eng.yellow": [
+    "YELLOW FLAG AHEAD. CAREFUL",
+    "YELLOWS IN THE NEXT SECTOR. TAKE CARE"
+  ],
+  "radio.tv.battle": [
+    "{a} AND {b}, {gap} APART FOR P{pos}",
+    "WHAT A SCRAP FOR P{pos}. {a} AND {b}",
+    "{b} HUNTING {a} FOR P{pos}"
+  ],
+  "radio.tv.charge": [
+    "{a} IS ON A CHARGE. P{pos} FROM P{grid}",
+    "{a} CARVING THROUGH, UP TO P{pos}"
+  ],
+  "radio.tv.closeWin": [
+    "BY JUST {gap}! {a} WINS IT!",
+    "{a} HOLDS ON BY {gap}!"
+  ],
+  "radio.tv.fastest": [
+    "FASTEST LAP FOR {a}. {time}",
+    "{a} GOES FASTEST, A {time}"
+  ],
+  "radio.tv.green": [
+    "GREEN FLAG, WE'RE RACING AGAIN!",
+    "AND WE ARE GREEN AGAIN"
+  ],
+  "radio.tv.lastLap": [
+    "LAST LAP! {a} LEADS BY {gap}",
+    "FINAL LAP. {a} HAS {gap} IN HAND"
+  ],
+  "radio.tv.lead": [
+    "{a} LEADS {b} BY {gap}",
+    "{a} IN CONTROL, {gap} CLEAR OF {b}"
+  ],
+  "radio.tv.leadChange": [
+    "{a} TAKES THE LEAD FROM {b}!",
+    "AND {a} IS THROUGH INTO THE LEAD!",
+    "CHANGE AT THE FRONT. {a} LEADS"
+  ],
+  "radio.tv.mistake": [
+    "OH! {a}",
+    "{a}. OH!",
+    "OH! {a}!"
+  ],
+  "radio.tv.pass": [
+    "{a} GETS PAST {b} FOR P{pos}",
+    "{a} MAKES THE MOVE ON {b}",
+    "GREAT MOVE FROM {a} ON {b}. P{pos}",
+    "{a} TAKES P{pos} FROM {b}",
+    "{a} MAKES THE MOVE ON {b} FOR P{pos}"
+  ],
+  "radio.tv.pit": [
+    "{a} PITS FROM P{pos}",
+    "PIT STOP FOR {a}, RUNNING P{pos}",
+    "PIT STOP FOR {a} FROM P{pos}",
+    "AND {a} PITS FROM P{pos}",
+    "PIT STOP FOR {a}, P{pos}"
+  ],
+  "radio.tv.red": [
+    "RED FLAG! THE RACE IS STOPPED",
+    "AND THAT'S A RED FLAG"
+  ],
+  "radio.tv.repass": [
+    "{a} TAKES P{pos} BACK FROM {b}",
+    "{a} RETURNS THE FAVOUR ON {b}"
+  ],
+  "radio.tv.retire": [
+    "{a} IS OUT OF THE RACE. {why}",
+    "HEARTBREAK FOR {a}. {why}"
+  ],
+  "radio.tv.sc": [
+    "THE SAFETY CAR IS OUT!",
+    "SAFETY CAR! THE FIELD BUNCHES UP"
+  ],
+  "radio.tv.start": [
+    "AND IT'S LIGHTS OUT AND AWAY WE GO!",
+    "LIGHTS OUT! {leader} LEADS THEM AWAY"
+  ],
+  "radio.tv.toGo": [
+    "{left} LAPS TO GO. {a} LEADS BY {gap}",
+    "{left} TO GO, {a} {gap} CLEAR"
+  ],
+  "radio.tv.vsc": [
+    "VIRTUAL SAFETY CAR. THE FIELD SLOWS",
+    "VSC DEPLOYED"
+  ],
+  "radio.tv.win": [
+    "{a} WINS THE RACE!",
+    "AND IT'S {a} WHO TAKES THE FLAG!"
+  ],
+  "radio.why.accident": "A BIG ACCIDENT",
+  "radio.why.damage": "TOO MUCH DAMAGE",
+  "radio.why.engine": "ENGINE FAILURE",
+  "radio.why.gearbox": "GEARBOX TROUBLE",
+  "radio.why.mechanical": "MECHANICAL TROUBLE",
+  "settings.spokenLang": "SPOKEN LANGUAGE",
   "settings.title": "SETTINGS"
 }

@@ -13,7 +13,10 @@ Write captures under `artifacts/` and return paths plus explicit unverified cell
 
 The SessionStart hook installs deps and the headless shell (AGENTS.md
 §Verification 1); `browserType.launch: Executable doesn't exist` means it did
-not run — `bash tools/env/cloud-agent-install.sh`. Backend pinning, the
+not run — `bash tools/env/cloud-agent-install.sh`. A multi-minute capture (a GLX
+`webgl2` boot, `backend-compare`, `motion-capture`, `profile.mjs --repeat`) runs as ONE
+`run_in_background` task logging to `artifacts/logs/`, after the loadavg check and never
+beside a test-bg run or a live chrome-devtools / `browser_*` session (AGENTS.md rules 4, 5, 7). Backend pinning, the
 soft-present (`#game-soft`) capture rule and a dead `DISPLAY`:
 [references/recipes.md](references/recipes.md) §Backends and display.
 
@@ -49,7 +52,8 @@ node tools/shot/apex-capture.mjs modes   [outdir]
 node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
 
 # SAME framed scene on GLX vs TLX (+ numeric pixel diff, per-backend console errors):
-node tools/shot/backend-compare.mjs monaco 0.52 park --backends webgl2,three --out artifacts/cmp/before --label tunnel-exit
+# Inside a bore use `eye` at a mid-bore frac (flicker-gate --list), never `park` (the chase rig):
+node tools/shot/backend-compare.mjs monaco 0.47 eye --backends webgl2,three --out artifacts/cmp/before --label tunnel-mid
 ```
 
 ## Single framed screenshot (`shot.mjs`)
@@ -77,7 +81,7 @@ Speed notes: `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md`.
 racing 0.449-0.524) or `node tools/shot/flicker-gate.mjs --list` (sites carry racing/scenery fracs).
 
 **Before/after:** the tools serve the working tree, and rule 2 forbids source edits while a
-capture runs. Edit already made: `git stash push -m pp-<tag>` → shoot BEFORE → `git stash apply <sha>`
+capture runs. Edit already made: `git stash push -m pp-<tag>`, `git stash list --format='%H %gs'` (its sha) → shoot BEFORE → `git stash apply <sha>`
 (never `pop`; the stack is shared) → shoot AFTER with the SAME args. Name the out path per state:
 `artifacts/cmp/{before,after}/<track>-T1.png`. Several corners: one `--batch` file per state,
 `[{"track":"bahrain","frac":0.1038,"cam":"park","out":"artifacts/cmp/before/bahrain-T1.png"}, …]`
@@ -117,7 +121,7 @@ both references say what the numbers mean before you A/B on them.
   [references/car-studio.md](references/car-studio.md), preset views and the
   `CARVIEW` API in
   [references/car-viewer-presets.md](references/car-viewer-presets.md).
-- **Camera semantics** — the 20 built-in modes, `orbit()` vs `snapCam()` (the
+- **Camera semantics** — the built-in modes (`CAM_MODES`, `js/camera/mode-switch.js`), `orbit()` vs `snapCam()` (the
   trap that costs a shot), `camState()`/`viewState()`, measuring lag (measured here, FIXED in
   f1-animation-cameras) →
   [references/cameras.md](references/cameras.md), free-cam table and framing

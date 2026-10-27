@@ -42,10 +42,12 @@ Catalog (`node tools/ui/css-play.mjs --list`):
 | datahub | `#datahub` | `#mb-data` |
 | howtoplay | `#howtoplay` | `#mb-help` |
 | vsfriend | `#vsfriend` | `#mb-vs` |
-| pause | `#pausemenu` | `__apex.race` → `#pausebtn` |
+| pause | `#pausemenu` | `__apex.race` → `#pausebtn` (boots a Monza race) |
+| hud / hudpause | `#hud` / `#pausemenu` | `?APEX_SURVEY_HUD=1`, no race (cheaper for pause-sheet work) |
 
 Aliases: `overlay`/`menu` → title, `pmsettings` → settings, `carsetup` →
-garage, `help` → howtoplay, `vs` → vsfriend.
+garage, `help` → howtoplay, `vs` → vsfriend, `paused`/`pausemenu` → pause.
+`--list` is the truth when this table drifts.
 
 Anything else: `--click "#mb-settings,#pm-advanced" --root "#advanced"`
 (`--click` replaces the catalog path, so include `#mb-settings`).
@@ -62,9 +64,14 @@ Settings sliders (`label.tune-row` > `.tune-label` + `input[type=range]`): base
 `css/tuner.css`, sheet override `.pm-group .tune-row` in `css/settings.css`,
 DISPLAY panel `#pm-panel-display .tune-row` in `css/settings-controls.css`; sizes
 are tokens `--slider`/`--tap` (`css/tokens.css`). Enumerated rows are `.set-row`
-(`css/settings-controls.css`). The pause menu (`--screen pause`, which boots a
-Monza race first) is `#pausemenu` in `css/dialogs.css`, compact-density rules
-included; `css/menus.css` is the title chrome, not the pause sheet.
+(`css/settings-controls.css`). The pause menu (`--screen pause` or `hudpause`) is
+`#pausemenu`: its sheet and compact-density rules are in `css/dialogs.css` (`@layer
+components`), but the tray chips (`#pm-quick-doors button`, `#pm-checkpoint summary`) are
+owned by `css/experience.css` (base plus a `landscape and max-height: 500px` block) and
+`css/overlays.css` (the `max-height: 400px` 2-col grid and `--tap` floor), both `@layer
+overlays`, which beats components. At 844×390 both media blocks apply. `css/menus.css` is
+the title chrome, not the pause sheet. Always `grep -n '<element id>' css/*.css` and read
+each hit's `@layer` before editing.
 
 **Sizing tokens** (`css/tokens.css`; read live values from `dom.json`, never
 quote numbers): `--safe-t/r/b/l` and `--safe-w/h` are the notch/safe-area box;
@@ -106,9 +113,12 @@ order as boot. The shell tag is left alone ([shell/cache](../../check-changes/re
 `--inject ".sheet{max-height:80vh}"` writes `#apex-css-play` for a snippet
 that is not a file yet. Prefer `--css` once the rule belongs in a sheet.
 
-If the swap "did nothing": the `<link>` was not found (wrong `--css` path),
-or you edited a file the screen does not load. `index.html` `<link>` order
-is `MANIFEST.CSS`.
+If the swap "did nothing": (1) the `<link>` was not found (wrong `--css` path);
+(2) you edited a file the screen does not load (`index.html` `<link>` order
+is `MANIFEST.CSS`); (3) a LATER LAYER or a MORE SPECIFIC rule wins — layer order
+is `reset, base, components, hud, overlays` (`css/tokens.css`), so a components-layer
+edit loses to any overlays rule, and a few blocks sit outside every layer on purpose.
+Probe the computed value with `--sel <element>` (dom.json `hits`) or `--tokens`.
 
 ## 4. Screenshot
 
@@ -118,8 +128,8 @@ shot as UI evidence.
 
 ## 5. Ship
 
-When the look is right: `node tools/gen/gen-shell.mjs --check` ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump) (last edit),
-then the ui / gallery group if the change is more than a token. One-screen
+When the look is right: `node tools/gen/gen-shell.mjs --check` (last edit),
+then the groups `node tools/ci/pick-tests.mjs` names if the change is more than a token. One-screen
 play is not a matrix proof.
 
 ## Mistakes
