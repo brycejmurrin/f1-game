@@ -128,7 +128,9 @@ archive scope are its own; one account cannot archive or message the other's ses
 
 1. A `ready` issue with no `claimed`, `blocked` or `needs-decision` gets one worker (`priority` first), up to the
    caps, when the account's quota allows. The script reads one page of 100 open issues (a known gap; a hand
-   search with `search_issues` sees them all).
+   search with `search_issues` sees them all). Landing backpressure: while `landQueueMax` (tools/ci/dispatch.json,
+   15) or more open non-draft PRs carry `land`, it starts no issue worker and records one skip line ("issue
+   launches paused: N PRs waiting to land"); rules 2 and 3 still launch, since they drain the queue.
 2. An open PR whose `updated_at` is older than 2 h (6 h for `lane:codex`), or that already carries `needs-owner`
    (its worker stopped at the cap: no 2 h wait), with no `hold` or `needs-decision`, gets `needs-owner` and ONE
    takeover worker launched with `CONTINUE PR #<n>` (contract step 8). Never re-owned: a
@@ -143,7 +145,7 @@ archive scope are its own; one account cannot archive or message the other's ses
    `needs-owner`, `hold` or `needs-decision`, gets one `NUDGE_SESSION` ("Continue …: subscribe to the PR, finish
    the Plan; questions go to @parent or `needs-decision`, never the user"), at most once an hour.
 6. It rewrites the Board comment: open PRs, state, age, owner, launches, waiting children, nudges (the hourly
-   record), quota per host, caps.
+   record), quota per host, caps and the land queue depth.
 
 `node tools/ci/pr-board.mjs` suggests LAND (the `land` label) for a PR that is ready to go, never ARM: no session
 arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and binds nothing.
