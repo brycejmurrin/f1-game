@@ -11,9 +11,10 @@
 
 const LightBudget = (function () {
   const MAX = 48;          // lit-shader uLight[] / SBO rows on GLX, WGX and desktop TLX
-  const MOBILE = 24;       // phone per-fragment budget (frame-lights lampCap)
+  const MOBILE = 24;       // phone per-fragment budget. 22 flashes the mirror on a 12 m street.
   const LITE = 16;         // TLX _liteGpu: vec3[48] x4 overruns the 224-row WebGL2 floor
   const CHUNK = 24;        // per-chunk lamp cap (LampChunks): each chunk binds its own set
+  const MIRROR = 8;        // rear-view inset (mirror-pass): nearest lamps, then tail-lights
   const TAIL_RESERVE = 5;  // at most five car tail-lights are appended per frame
   let _slots = MAX;        // the bound backend's live slot count
 
@@ -26,6 +27,6 @@ const LightBudget = (function () {
   }
   function slots() { return _slots; }
 
-  return { MAX, MOBILE, LITE, CHUNK, TAIL_RESERVE, setSlots, slots };
+  return { MAX, MOBILE, LITE, CHUNK, MIRROR, TAIL_RESERVE, setSlots, slots };
 })();
 Object.freeze(LightBudget);

@@ -45,10 +45,11 @@ function rig(lamps) {
   const track = { _lights: lamps.flat(), meshes: { props: {} } };
   const frame = { sunColor: [0.12, 0.14, 0.22], sunDir: [0, 0.97, 0.24] };   // night: the moon key
   const built = [];   // the lamp (by x) every full rebuild drew
+  const kept = [];    // a cadence keep: the map stayed armed and was not redrawn
   const noop = () => {};
   const gfx = {
     lampShadowBegin: (vp, idx) => { built.push(frame.lights[idx * 15]); },
-    lampShadowEnd: noop, lampShadowKeep: noop, castShadow: noop, castShadowChunked: noop,
+    lampShadowEnd: noop, lampShadowKeep: (idx) => { kept.push(frame.lights[idx * 15]); }, castShadow: noop, castShadowChunked: noop,
   };
   const player = { team: {}, speed: 0 };
   const G = { gfx, track, player, state: "race", _studioRig: null, camEye: [0, 1.2, 0], camTgt: [0, 1, 30] };
@@ -65,7 +66,7 @@ function rig(lamps) {
   // built[] keeps only the lamp in use at the end of it.
   const settle = () => { for (let t = 0; t <= 10; t += 0.25) step(t); built.splice(0, built.length - 1); return 10; };
   const handovers = () => built.reduce((n, x, i) => n + (i > 0 && x !== built[i - 1] ? 1 : 0), 0);
-  return { ctx, G, frame, track, built, step, settle, handovers, sp };
+  return { ctx, G, frame, track, built, kept, step, settle, handovers, sp };
 }
 
 test("the shipped LAMP FLICKER is on, so the parked case below exercises it", () => {
@@ -161,4 +162,49 @@ test("a tail-light or a small mover nearer than every flood never takes the lamp
   r.G.camEye[0] = 0;
   r.sp.lampPass(r.frame, 0, false);
   assert.deepEqual(r.built, [-20], "only the flood is eligible; the nearer tail-light and mover are skipped");
+});
+
+test("a flood past its pool plus the far pad builds no lamp map", () => {
+  const r = rig([FLOOD(0)]);
+  r.G.camEye[0] = 400;
+  r.settle();
+  assert.equal(r.built.length, 0, "outside the pool: no depth pass");
+  assert.equal(r.kept.length, 0, "and the previous map is not kept armed");
+  r.G.camEye[0] = 0;
+  r.step(11);
+  assert.deepEqual(r.built, [0], "entering the pool builds the map");
+});
+
+test("leaving the pool uses the wider pad, so the boundary does not flicker", () => {
+  const r = rig([FLOOD(0)]);
+  r.G.camEye[0] = 0;
+  const t0 = r.settle();
+  assert.deepEqual(r.built, [0]);
+  r.built.length = 0; r.kept.length = 0;
+  // ~91 m from the lamp: outside the 36 m enter pad, inside the 72 m leave pad.
+  r.G.camEye[0] = 90;
+  r.step(t0 + 1 / 60);
+  assert.ok(r.kept.length + r.built.length >= 1, "a lamp already held stays on through the leave pad");
+  r.built.length = 0; r.kept.length = 0;
+  r.G.camEye[0] = 200;
+  r.step(t0 + 2 / 60);
+  assert.equal(r.built.length, 0);
+  assert.equal(r.kept.length, 0, "past the leave pad the pass stops");
+});
+
+test("without a static/cars split, a car-only change redraws on even frames only", () => {
+  const r = rig([FLOOD(0)]);
+  r.G.camEye[0] = 0;
+  const t0 = r.settle();
+  r.built.length = 0; r.kept.length = 0;
+  for (let i = 1; i <= 8; i++) {
+    const m = new Float32Array(16);
+    m[0] = m[5] = m[10] = m[15] = 1;
+    m[12] = 0; m[13] = 0; m[14] = i;
+    r.sp.beginFrame();
+    r.sp.pushCaster(m, {}, { id: 1 }, true);
+    r.step(t0 + i / 60);
+  }
+  assert.equal(r.built.length, 4, `even frames redraw (built ${r.built.join(",")})`);
+  assert.equal(r.kept.length, 4, "odd frames keep the map armed");
 });

@@ -53,11 +53,11 @@ test("a phone's governor cannot make the mirror flash: the target ignores render
   const h = boot({ mode: "on", tier: 2 });
   h.render();
   const size = () => { const b = h.calls.filter((c) => c[0] === "begin").pop(); return [b[1], b[2]]; };
-  assert.deepEqual(size(), [400, 114], "low rung: half of the 400x114 frame, x2 supersampled");
+  assert.deepEqual(size(), [200, 57], "low rung: half of the 400x114 frame, no extra supersample");
   // Dynamic resolution rescales the render buffer; the mirror target does not move.
   h.gfx.width = 640; h.gfx.height = 360;
   for (let i = 0; i < 4; i++) h.render();
-  assert.deepEqual(size(), [400, 114], "sized from the frame's CSS box, not the render buffer");
+  assert.deepEqual(size(), [200, 57], "sized from the frame's CSS box, not the render buffer");
   // A tier blip shorter than the dwell never swaps the rung…
   h.setTier(4);
   for (let i = 0; i < 30; i++) h.render();

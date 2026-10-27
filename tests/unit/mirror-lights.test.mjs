@@ -99,7 +99,7 @@ function drive({ spacing, mobile, mirror }) {
 }
 
 for (const [spacing, mobile] of [[25, 1], [12, 0], [12, 1]]) {
-  test(`mirror light is steady: ${spacing} m lamps, ${mobile ? "phone (24 slots)" : "desktop"}`, () => {
+  test(`mirror light is steady: ${spacing} m lamps, ${mobile ? "phone" : "desktop"}`, () => {
     const fwd = drive({ spacing, mobile, mirror: false });
     const rear = drive({ spacing, mobile, mirror: true });
     assert.ok(fwd.jumps > 20, `the forward set must reproduce the flash in the mirror window (${fwd.jumps} jumps)`);

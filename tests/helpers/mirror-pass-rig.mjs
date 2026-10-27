@@ -7,7 +7,7 @@ import { absSrc } from "./abs-src.mjs";
 
 export const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null } = {}) {
+export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null, rankLights = false } = {}) {
   const writes = { cls: 0, prop: 0 };   // <body> class toggles and custom-property writes
   const stored = {};
   if (mode) stored.hudMirror = mode;
@@ -55,6 +55,11 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
   const profileMarks = [];   // RaceEntryProfile.mark() names, in order (the programWarm sub-span)
   ctx.RaceEntryProfile = { mark: (n) => profileMarks.push(n) };
   vm.runInContext(read("js/core/mat4.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/core/mat4.js") });
+  if (rankLights) {
+    ctx.LightKnobs = { LT: { lampWarmup: 0, lampFlicker: 0 } };
+    vm.runInContext(read("js/render/shared/light-budget.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/light-budget.js") });
+    vm.runInContext(read("js/lighting/frame-lights.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/lighting/frame-lights.js") });
+  }
   vm.runInContext(read("js/render/shared/mirror-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/mirror-pass.js") });
   const calls = [];
   let st = { dead: false, ready: false };
@@ -79,7 +84,8 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
     // tune: the knobs read BY NAME, the way every backend reads frame.tune (the mirror's is a prototype view).
     drawWorldMeshes: (frame) => { const t = frame.tune;
       calls.push(["world", frame.viewProj, frame.mirrorLite, !!frame.mirrorFreezeInstanced,
-        { carSunGlint: t.carSunGlint, carSparkle: t.carSparkle, windowSunFlash: t.windowSunFlash, shadowStr: t.shadowStr, keyMul: t.keyMul }, t]);
+        { carSunGlint: t.carSunGlint, carSparkle: t.carSparkle, windowSunFlash: t.windowSunFlash, shadowStr: t.shadowStr, keyMul: t.keyMul }, t,
+        frame.lights ? (frame.lights.length / 15) | 0 : 0, frame.tailStart | 0, frame.tailCount | 0]);
       if (throwInWorld) throw new Error("boom"); },
     drawCar: (c, m) => gfx.draw("mesh:" + c.team, m),   // CarDraw.drawMirrorCar in the game (the real one: the test below)
     renderPosOf: (c) => ({ world: true, x: 0, z: c.s }),
@@ -97,5 +103,6 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
   const frameSky = { invViewProj: mainInv };
   const render = () => mp.render(frame, frameSky, false, false, 0);
   return { mp, G, gfx, calls, profileMarks, stored, classes, props, writes, clock, frameEl, chipEl, pipEl, vant, pooled, frame, frameSky, mainVP, mainInv, render, timers,
+    FL: rankLights ? ctx.FrameLights : null,
     press: () => { mirrorPressed = true; }, setTier: (t) => { tier = t; } };
 }

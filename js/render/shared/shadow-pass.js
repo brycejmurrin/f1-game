@@ -94,6 +94,12 @@ const ShadowPass = (function () {
     // wins) beats the current lamp's by 20% — ~10% in range, well past the
     // flicker's few percent (tests/unit/lamp-shadow-pick.test.mjs).
     const LAMP_HANDOVER = 1.2;   // a parked car near the midline of two floods keeps one
+    // The map is one flood's pool. Past the pool plus a pad, the carved
+    // shadow is the cone the other lamps already use, so the prop depth
+    // pass stays off. The wider pad is the leave distance: a car on the
+    // boundary does not rebuild the map every frame.
+    const LAMP_PAD_IN = 36, LAMP_PAD_OUT = 72;
+    let _lampNear = false;
     const _shadowCtr = [0, 0, 0];   // unsnapped shadow anchor (glides) — the shader fades by distance from this
 
     // Deferred blob-shadow batch: instead of interleaving shadow↔body per car (which
@@ -173,6 +179,7 @@ const ShadowPass = (function () {
       _shadowSnapX = _shadowSnapZ = _shadowBox = null;
       _shadowSunX = _shadowSunY = _shadowSunZ = null;
       _lampShX = _lampShY = _lampShZ = null; _lampShR = _lampShC = _lampShDx = _lampShDy = _lampShDz = null; _lampShCarKey = 0;
+      _lampNear = false;
       // The caster list is "last frame's field": without this the first frame
       // after loadTrack casts the PREVIOUS track's cars (and keeps them alive).
       // _shadowMats stays pooled — pushCaster overwrites it slot by slot.
@@ -403,8 +410,12 @@ const ShadowPass = (function () {
         // keeps last frame's map (one frame of lag, the lamp defer's trade).
         // apex26.moonShadowCadence=0 restores the per-frame pass for the A/B.
         const _carSpd = G.player ? Math.abs(G.player.speed) : 0;
+        // Tier 2+ (phone shed, GRAPHICS low) keeps the map on the odd frame
+        // at any speed. carShadowKeep leaves it armed, so the lit pass does
+        // not strobe; the even frame redraws. Tier 0-1 daylight stays per frame.
+        const _carTier = PerfGov.tier();
         const _carShadowFrame = (_frameNo & 1) === 0 ||
-            (deps.vStd(_carSpd) > 0.15 && !(MOON_CADENCE && _shKeyG <= 0.28));
+            (_carTier < 2 && deps.vStd(_carSpd) > 0.15 && !(MOON_CADENCE && _shKeyG <= 0.28));
         // The skip on the line above is a CADENCE skip, and the renderer cannot tell
         // it from a stop. Every backend clears its armed flag in present(), which is
         // correct when this pass stops for real (knob off, tier shed, menu, key
@@ -560,6 +571,13 @@ const ShadowPass = (function () {
           if (flBest >= 0) {
             const o = flBest * 15;
             const rad = L[o + 6];
+            const _camDx = L[o] - G.camEye[0], _camDy = L[o + 1] - G.camEye[1], _camDz = L[o + 2] - G.camEye[2];
+            const _camD2 = _camDx * _camDx + _camDy * _camDy + _camDz * _camDz;
+            const _pad = _lampNear ? LAMP_PAD_OUT : LAMP_PAD_IN;
+            const _lim = rad + _pad;
+            if (_camD2 > _lim * _lim) _lampNear = false;
+            else {
+            _lampNear = true;
             // WHAT THIS MAP CONTAINS: the props (chunked + instanced), culled to the
             // LAMP's frustum, plus every car within rad + 8 of the lamp. So it is a
             // function of exactly two things — WHICH LAMP, and WHERE THOSE CARS ARE.
@@ -628,8 +646,14 @@ const ShadowPass = (function () {
             // keep and skips the pass outright, so 60 content changes cost 30
             // rebuilds. The difference is whether the skipped frame does the work.
             const _carOnly = _sameLamp && _carKey !== _lampShCarKey;
-            if ((_sameLamp && _carKey === _lampShCarKey) ||
-                (_carOnly && PerfGov.tier() >= 1 && (_frameNo & 1) === 1)) {
+            // TLX copies the static map and redraws the cars (lampCarsBegin).
+            // GLX and WGX have no split, so a car-only change redraws the
+            // props. That redraw takes the odd frame off at every tier.
+            // Tier >= 1 already deferred; tier 0 now does too when the
+            // backend would redraw the scenery to move the cars.
+            const _deferCars = _carOnly && (_frameNo & 1) === 1 &&
+                (PerfGov.tier() >= 1 || typeof G.gfx.lampCarsBegin !== "function");
+            if ((_sameLamp && _carKey === _lampShCarKey) || _deferCars) {
               // Provably current, or one frame behind on car positions only. Skip
               // the pass and ARM: a cadence skip is not a stop, and only this side
               // knows which it is — the renderer clears the flag every present().
@@ -709,6 +733,7 @@ const ShadowPass = (function () {
             }
             G.gfx.lampShadowEnd();
             } // end lamp-shadow snap rebuild
+            } // end near-pool gate
           }
         }
       }

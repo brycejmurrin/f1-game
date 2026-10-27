@@ -199,6 +199,22 @@ function dynamicShadowFixture(matrixProbe = false) {
   return { sp, calls, enabled, frame, G, LT: ctx.LightTune.LT, gov: ctx.PerfGov, M4: ctx.M4, realM4, vps };
 }
 
+test("tier 2 redraws the car map on even frames only and keeps it on the odd frame", () => {
+  const { sp, calls, enabled, frame, G, gov } = dynamicShadowFixture();
+  enabled.car = true;
+  gov.tier = () => 2;
+  G.player.speed = 30;
+  const day = frame(false);
+  sp.sunPass(day, 0, true);
+  const began = calls.car;
+  assert.ok(began >= 1, "the even frame draws the car map");
+  sp.sunPass(day, 1, true);
+  assert.equal(calls.car, began, "the odd frame does not redraw");
+  assert.ok(calls.keep >= 1, "the kept map stays armed");
+  sp.sunPass(day, 2, true);
+  assert.equal(calls.car, began + 1, "the next even frame redraws");
+});
+
 test("cockpit casters follow live knobs, governor tiers, capabilities and consumer hooks", () => {
   const { sp, calls, enabled, G, LT, gov } = dynamicShadowFixture();
   enabled.car = enabled.lamp = true;

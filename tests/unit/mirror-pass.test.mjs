@@ -179,9 +179,29 @@ test("only governor tier 2 halves the cadence", () => {
   assert.equal(h.calls.filter((c) => c[0] === "begin").length, 3);
 });
 
+test("a rear-ranked mirror keeps eight lamps plus its tail-lights", () => {
+  const h = boot({ mode: "on", rankLights: true });
+  const lamps = [];
+  for (let i = 0; i < 60; i++) lamps.push(i % 2 ? 8 : -8, 8, 90 - i * 4, 1, 0.9, 0.7, 40, 0, -1, 0, 0.5, 0.2, 0, 0, 1);
+  h.frame.time = 0;
+  h.FL.setFrameLights(h.frame, { _lights: lamps }, [{}, {}], [0, 1.2, 100], 1, [0, 0, 1], false);
+  const full = (h.frame.lights.length / 15) | 0;
+  assert.ok(full > 8, "the forward cull filled more than the mirror cap");
+  h.frame.tailStart = full;
+  h.frame.tailCount = 1;
+  h.frame.lights.push(0, 0.5, 80, 4, 0.1, 0.1, 8, 0, 0, -1, 0.5, -0.2, 0, 0, 0.4);
+  h.render();
+  const world = h.calls.find((c) => c[0] === "world");
+  assert.equal(h.mp.state().lampCap, 8);
+  assert.equal(world[6], 9, "eight nearest rear lamps plus the tail-light");
+  assert.equal(world[7], 8);
+  assert.equal(world[8], 1);
+  assert.equal((h.frame.lights.length / 15) | 0, full + 1, "the main list is restored after the pass");
+});
+
 test("the quality ladder: full, lite, low (tier 2-3, half rate), min (tier 4+, a third)", () => {
   const cases = [[{ tier: 0 }, "full", 800, 228], [{ mobile: true }, "lite", 480, 137],
-    [{ tier: 3 }, "low", 400, 114], [{ tier: 4 }, "min", 320, 91]];
+    [{ tier: 3 }, "low", 200, 57], [{ tier: 4 }, "min", 160, 46]];
   for (const [opt, q, w, ht] of cases) {
     const h = boot(Object.assign({ mode: "on" }, opt));
     h.render();
