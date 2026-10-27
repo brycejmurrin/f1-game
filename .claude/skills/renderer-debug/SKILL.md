@@ -15,10 +15,10 @@ backend is not evidence that it runs (`docs/ARCHITECTURE.md` §Boot evidence).
 Probes here pin `apex26.tlxForceGL=1` (TLX's WebGL2 leg) because three's WebGPU path dies under
 SwiftShader, so a container probe is NOT his path and no evidence about his GPU. Measure his path
 on a real GPU: `gpu-census.yml` on `macos-latest` (the Metal leg; read its `path:` row and the Verdict
-step). Agent tokens cannot `workflow_dispatch` it (403): edit `.github/gpu-census-request.json`
-(bump `rev`, set `images`/`track`/`tod`…) on your `cursor/**` branch and PUSH — that runs the
-branch's tree with the file's inputs; a session with a dispatch-capable token may use the GitHub MCP
-`actions_run_trigger` instead.
+step). Dispatch it on your pushed branch: `gh workflow run gpu-census.yml --ref <branch> -f track=… -f tod=…`
+(or the GitHub MCP `actions_run_trigger`); agent tokens dispatch fine. Only a request-only leg (`leg`,
+`lf_*`, `lrm_*` in `.github/gpu-census-request.json`; the form is at the 25-input cap) still goes by
+editing that file on your branch and pushing.
 
 ## Where things live (rendering stack)
 

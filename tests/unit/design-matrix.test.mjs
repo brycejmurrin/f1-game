@@ -207,9 +207,9 @@ test("CI requests bound work, reject output/command injection and retain mixed r
   assert.throws(()=>captureRequest({...request,command:"sh"}));
 });
 
-test("capture workflow is opt-in, read-only and pins the captured source without cancelling active jobs", () => {
+test("capture workflow is dispatch-only, read-only and pins the captured source without cancelling active jobs", () => {
   const w=parseYAML(fs.readFileSync(".github/workflows/capture-gallery.yml","utf8"));
   assert.deepEqual(w.permissions,{contents:"read"});assert.equal(w.concurrency["cancel-in-progress"],false);assert.equal(w.jobs.capture["runs-on"],"macos-latest");assert.equal(w.jobs.capture["timeout-minutes"],15);
-  assert.deepEqual(w.on.push.paths,[".github/capture-gallery-request.json"]);assert.equal(w.jobs.capture.steps[0].with.ref,"${{ github.sha }}");assert.equal(w.jobs.capture.steps[0].with["persist-credentials"],false);
+  assert.deepEqual(Object.keys(w.on),["workflow_dispatch"],"dispatch only: no push-request relay");assert.equal(w.jobs.capture.steps[0].with.ref,"${{ github.sha }}");assert.equal(w.jobs.capture.steps[0].with["persist-credentials"],false);
   assert.ok(w.jobs.capture.steps.some(s=>s.run==="node tools/shot/run-capture-request.mjs"));assert.ok(w.jobs.capture.steps.some(s=>s.with?.["retention-days"]===7));
 });
