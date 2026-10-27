@@ -472,6 +472,7 @@ test("on a two-guest host, each guest's QUALI is accepted for its own seat only"
 
 globalThis.NetPlay = NetPlay;
 globalThis.NetBytes = eval(src("js/net/bytes.js") + ";NetBytes");   // transport/handshake bind it at call time
+const NetIce = eval(src("js/net/ice.js") + ";NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetTransport = NetTransport;
 const NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");

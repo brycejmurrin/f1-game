@@ -23,6 +23,7 @@ const load = (rel, name) => eval(fs.readFileSync(path.join(ROOT, rel), "utf8") +
 // (a strict-mode direct eval keeps its own declarations to itself).
 globalThis.M4 = load("js/core/mat4.js", "M4");
 globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");   // transport.js binds it at call time
+const NetIce = load("js/net/ice.js", "NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = load("js/net/transport.js", "NetTransport");
 // session.js shares NetSnapshot's ONE toView() rather than keeping a second
 // copy that can drift. Loading it is not optional decoration: without it every

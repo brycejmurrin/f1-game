@@ -691,6 +691,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `sdp.js` | `NetSdp` | LAZY_NET | NetSdp — the invite code's payload, as bytes instead of prose. |
 | `qr.js` | `NetQr` | LAZY_NET | NetQr — an invite you point a camera at. |
 | `scan.js` | `NetScan` | LAZY_NET | NetScan — reading a QR code with the device camera, in the page. |
+| `ice.js` | `NetIce` | LAZY_NET | NetIce — the STUN/TURN list NetTransport.rtc() gathers with. |
 | `transport.js` | `NetTransport` | LAZY_NET | NetTransport — the wire under multiplayer, and the seam that keeps the netcode testable. |
 | `handshake.js` | `NetHandshake` | LAZY_NET | NetHandshake — getting two browsers connected with NO server of ours. |
 | `lobby-codes.js` | `LobbyCodes` | LAZY_NET | lobby invite/answer paste, copy, share, scan, and QR helpers. |

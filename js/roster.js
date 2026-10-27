@@ -512,6 +512,7 @@
     "js/net/sdp.js",
     "js/net/qr.js",
     "js/net/scan.js",
+    "js/net/ice.js",
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
@@ -525,6 +526,10 @@
     "js/input/phone-pad.js"
   ],
     LAZY_NET_EDGES: [
+    [
+      "js/net/ice.js",
+      "js/net/transport.js"
+    ],
     [
       "js/net/snapshot.js",
       "js/net/session.js"

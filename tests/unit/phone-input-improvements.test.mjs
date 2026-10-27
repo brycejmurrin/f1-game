@@ -27,7 +27,7 @@ function boot() {
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     RTCPeerConnection: class { constructor() { this.connectionState = 'new'; } close() {} },
   });
-  for (const f of ['js/net/bytes.js', 'js/net/transport.js', 'js/input/tilt-roll.js', 'js/input/phone-pad.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  for (const f of ['js/net/bytes.js', 'js/net/ice.js', 'js/net/transport.js', 'js/input/tilt-roll.js', 'js/input/phone-pad.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const { P, T } = vm.runInContext('({P:PhonePad,T:NetTransport})', ctx);
   return { ctx, P, T, clock, document, window, beat: () => { for (const fn of intervals.values()) fn(); } };
 }

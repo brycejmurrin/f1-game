@@ -17,6 +17,7 @@ globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 globalThis.NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 globalThis.NetBytes = eval(src("js/net/bytes.js") + ";NetBytes");
+const NetIce = eval(src("js/net/ice.js") + ";NetIce");
 const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetTransport = NetTransport;
 globalThis.NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");

@@ -9281,6 +9281,29 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/net/ice.js": {
+      "create": [
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/net-transport.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "hasRelay": [
+        "tests/unit/net-transport.test.mjs"
+      ],
+      "iceServers": [
+        "tests/unit/net-transport.test.mjs"
+      ],
+      "prefetchIce": [
+        "tests/unit/net-transport.test.mjs"
+      ],
+      "*": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ]
+    },
     "js/net/lobby-codes.js": {
       "codeFrom": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
@@ -9855,12 +9878,6 @@
         "tests/unit/net-lobby-friend-quali.test.mjs",
         "tests/unit/net-transport.test.mjs"
       ],
-      "hasRelay": [
-        "tests/unit/net-transport.test.mjs"
-      ],
-      "iceServers": [
-        "tests/unit/net-transport.test.mjs"
-      ],
       "loopback": [
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -9870,9 +9887,6 @@
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
-      ],
-      "prefetchIce": [
-        "tests/unit/net-transport.test.mjs"
       ],
       "seededRnd": [
         "tests/unit/net-session.test.mjs",

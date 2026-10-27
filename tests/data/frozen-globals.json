@@ -111,6 +111,7 @@
     "NativeDownload",
     "NetBytes",
     "NetHandshake",
+    "NetIce",
     "NetLobby",
     "NetNostr",
     "NetPlay",

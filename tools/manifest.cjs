@@ -1283,6 +1283,7 @@ const LAZY_NET = [
   "js/net/sdp.js",
   "js/net/qr.js",
   "js/net/scan.js",
+  "js/net/ice.js",        // NetIce: STUN/TURN list; create() per transport evaluation
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
@@ -1334,6 +1335,7 @@ const CONTROLLER = [
   "js/net/nostr.js",
   "js/net/rendezvous.js",
   "js/net/sdp.js",
+  "js/net/ice.js",          // before transport: rtc() calls NetIce.create() at eval
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
@@ -1345,6 +1347,7 @@ const CONTROLLER = [
 // sdp, session needs snapshot, the lobby needs qr/scan/rendezvous/lobby-codes),
 // not one module gathering the rest.
 const LAZY_NET_EDGES = [
+  ["js/net/ice.js", "js/net/transport.js"], // transport calls NetIce.create() while evaluating
   ["js/net/snapshot.js", "js/net/session.js"],
   ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],

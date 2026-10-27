@@ -13,9 +13,9 @@ host corrections.
 
 1. Capture BOTH sides before classifying: the lobby's status text, `__apex.logs({ns:"net"})` and
    `await __apex.lobbyPairs()` on the game page; `window.__apexPad.state()` plus `#status` on a pad.
-2. TURN is NOT configured by default. `js/net/transport.js` ships `TURN_API = ""` (honest STUN-only);
+2. TURN is NOT configured by default. `js/net/ice.js` ships `TURN_API = ""` (honest STUN-only);
    a relay exists only through `localStorage` `apex26.turnApi` (your credentials URL), `apex26.turn`
-   (one static server) or the opt-in `apex26.freeTurn` (measured dead; the transport.js comment says
+   (one static server) or the opt-in `apex26.freeTurn` (measured dead; the ice.js comment says
    why). A guest behind carrier/symmetric NAT on STUN-only never connects: check the TURN config
    before anything in `sdp.js` ([references/workflow.md](references/workflow.md) step 6).
 

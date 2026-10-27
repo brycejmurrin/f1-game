@@ -11,9 +11,9 @@ The pad is VS FRIEND's wire with one seat (`docs/MULTIPLAYER.md` §Phone as cont
    page exposes `window.__apexPad` (`state()` returns `linked` and session `stats`); its `#status` text is the
    user-facing error.
 4. Corporate or carrier NAT usually blocks UDP: only TURN over TCP/443 works. NO relay ships: the default
-   is STUN-only (`TURN_API = ""` in `js/net/transport.js`). Point `localStorage` key `apex26.turnApi` at your
+   is STUN-only (`TURN_API = ""` in `js/net/ice.js`). Point `localStorage` key `apex26.turnApi` at your
    own credentials URL (Metered-style) or `apex26.turn` at your own server; the free `:443?transport=tcp`
-   relays sit behind the opt-in `apex26.freeTurn` and were measured dead (the transport.js comment;
+   relays sit behind the opt-in `apex26.freeTurn` and were measured dead (the ice.js comment;
    `docs/MULTIPLAYER.md`, `docs/DEBUG-HOOKS.md` TURN rows).
 5. Prove the relay leg on one machine: `node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass`
    against your own TURN. A bare `npm run rtc:e2e-3p-relay` sets relay-only with no TURN server, so on the

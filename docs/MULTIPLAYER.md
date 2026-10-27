@@ -32,7 +32,9 @@ loss are reproducible rather than wall-clock. No TURN credential ships in the
 client: browser-visible provider keys are reusable by anyone who downloads the
 game. Configure a player-owned, short-lived credentials endpoint through
 `apex26.turnApi` when relay service is needed; the default is honest STUN-only
-operation. `prefetchIce()` must be AWAITED BEFORE a connection is built
+operation. The server list itself is `js/net/ice.js` (`NetIce.create()`, one
+cache per `NetTransport` evaluation); `prefetchIce`, `iceServers`, `hasRelay`
+and `STUN` stay on `NetTransport`. `prefetchIce()` must be AWAITED BEFORE a connection is built
 (lobby's `readyIce()`): `iceServers` are fixed at construction, so a fetch that
 lands 200 ms later gathers STUN-only.
 
