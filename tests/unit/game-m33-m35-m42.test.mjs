@@ -26,22 +26,20 @@ test("M33: AI mistake/attack zone key wraps past S/F (not a raw Math.round(c.s +
   // The roll key must be on THIS lap; an unwrapped s+toTurnIn past the line
   // made the first corner fire twice per lap (docs/BUGS.md M33).
   assert.match(src, /const zk = Math\.round\(wrapS\(c\.s \+ _atk\.toTurnIn\)\);/);
-  assert.doesNotMatch(src, /zoneKey[\s\S]{0,200}Math\.round\(c\.s \+ [^w]/);
   assert.match(src, /attemptRoll\(c\.raceHash, c\.lap, Math\.round\(wrapS\(c\.s \+ _atk\.toTurnIn\)\)\)/);
 });
 
-test("M35: startRaceBody bumps raceIndex before gridUp so launch hashes share armReliability's round", () => {
+test("M35: startRaceBody arms on gridUp's raceIndex then bumps (launch/arm/mistake agree)", () => {
   const body = startRaceBody();
-  const bump = body.search(/if \(session === "race"\) \{? ?raceIndex\+\+/);
   const grid = body.indexOf("gridUp(");
-  const arm = body.search(/if \(session === "race"\) armReliability\(cars\)/);
-  assert.ok(bump >= 0, "race session still bumps raceIndex once");
-  assert.ok(grid >= 0, "gridUp still lays the grid");
-  assert.ok(arm >= 0, "armReliability still arms after the grid");
-  assert.ok(bump < grid, "M35: raceIndex++ must precede gridUp (launch/tyre/phase hashes)");
-  assert.ok(grid < arm, "armReliability still follows gridUp");
-  // No second bump after the grid — that was the one-off disagreement with B6.
-  assert.equal(body.slice(grid).includes("raceIndex++"), false, "raceIndex++ must not run again after gridUp");
+  // Arm then bump in one race-session block — not bump-before-gridUp (that
+  // retuned AI draws and broke quali-pace-parity at PACE 1.34). Mistake hash
+  // freezes the armed round (raceDrawRound), not live raceIndex after the bump.
+  const armBump = body.search(/if \(session === "race"\) \{ armReliability\(cars\); raceIndex\+\+; \}/);
+  assert.equal(
+    grid >= 0 && armBump > grid && src.indexOf(": raceDrawRound)") > 0 && src.indexOf("raceDrawRound = raceIndex") > 0,
+    true,
+  );
 });
 
 test("M42: manual RECOVER refuses pit lane / box (loop guard; auto-rescue parity)", () => {

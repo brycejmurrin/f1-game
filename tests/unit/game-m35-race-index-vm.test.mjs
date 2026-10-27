@@ -12,13 +12,14 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { createGame } = require("../../tools/lib/game-vm.cjs");
 
-test("M35: AI raceHash matches luckSeed:raceRound:gridSlot:skill after startRace", async () => {
+test("M35: AI raceHash matches luckSeed:drawRound:gridSlot:skill (arm's round, pre-bump)", async () => {
   const g = await createGame({ track: "monza" });
   try {
     const G = g.G, ctx = g.ctx;
-    // Boot already ran startRace once; raceRound is the post-bump value gridUp hashed on.
+    // Boot already ran startRace once: raceRound is post-bump; draws used raceRound-1.
     assert.ok(G.raceRound >= 1, `precondition: a race was armed (raceRound=${G.raceRound})`);
     assert.equal(G.session, "race");
+    const drawRound = G.raceRound - 1; // armReliability ran before raceIndex++
     const hash32 = ctx.DriverRatings.hash32;
     const seed = G.simSeed(); // no career / season in this harness → luckSeed() === simSeed()
     let checked = 0;
@@ -26,11 +27,11 @@ test("M35: AI raceHash matches luckSeed:raceRound:gridSlot:skill after startRace
       if (c.human || c.raceHash == null) continue;
       const slot = (c.gridPos | 0) - 1;
       assert.ok(slot >= 0, `${c.code}: gridPos set`);
-      const expect = hash32(seed + ":" + G.raceRound + ":" + slot + ":" + c.skill);
+      const expect = hash32(seed + ":" + drawRound + ":" + slot + ":" + c.skill);
       assert.equal(
         c.raceHash,
         expect,
-        `${c.code}: raceHash must use raceRound=${G.raceRound} (armReliability's round), not raceRound-1`,
+        `${c.code}: raceHash must use drawRound=${drawRound} (gridUp + armReliability), not post-bump raceRound=${G.raceRound}`,
       );
       checked++;
     }

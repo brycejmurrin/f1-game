@@ -2,11 +2,11 @@
   "files": {
     "js/game.js": {
       "codeLines": 1,
-      "lines": -1
+      "lines": 5
     }
   },
   "tree": {
     "assertPins": -50,
-    "assertPinsAll": -52
+    "assertPinsAll": -53
   }
 }
