@@ -1,6 +1,6 @@
 ---
 name: career-mode
-description: "Use when DRIVER CAREER, MY TEAM, career saves or slots, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs, career hooks/tests change — including season, sprint and quali behaviour INSIDE a career save (it races its stamped calendar, Career.calendar()). The standalone Season screen with no career save open → season-mode."
+description: "Use when DRIVER CAREER, MY TEAM, career saves/slots, contracts, sponsors, R&D economy, career qualifying, DNF money, career hooks/tests change — including season, sprint and quali INSIDE a career save (its stamped calendar, Career.calendar()). Season screen with no career save → season-mode; reliability plans → race-incidents-control."
 ---
 
 ## Overview
@@ -16,8 +16,8 @@ Use this for:
 - DRIVER CAREER or MY TEAM setup, hub, saves, slot switching, or delete flows.
 - Credits, R&D ownership, fitted budget cap, research facility, sponsors, offers,
   contracts, driver/team development, or MY TEAM hires.
-- Career weekend flow: qualifying, race, reliability/DNFs, settlement, standings,
-  rollover.
+- Career weekend flow: qualifying, race, settlement (incl. what a DNF pays), standings,
+  rollover. WHY a car retired (the reliability plan) → **race-incidents-control**.
 - Debugging `__apex.career*`, `qualiSim`, `ratings`, or career persistence.
 
 Do **not** use this for:
@@ -26,7 +26,7 @@ Do **not** use this for:
   into them (standalone Season → **season-mode**).
 - Generic parts physics; use this only for the economy/cap that buys and fits
   parts in career.
-- Race-control/debris incidents except the reliability retirement plan surface.
+- Race-control/debris incidents and the reliability retirement plan (`Reliability.plan`) → **race-incidents-control**.
 
 ## Quick Reference
 
@@ -53,18 +53,21 @@ Hooks: `__apex.career*` (`careerState`, `careerSim`, `careerSlots`, `careerFacil
 `careerAmbition`, `careerEra`, `careerRollover`, …), `persistState`, `qualiSim`, `retirements`, `ratings` —
 arguments and returns in `docs/DEBUG-HOOKS.md` §Career & qualifying (`__apex.agentHelp()` at runtime).
 Gotchas: `careerState().owned` is a COUNT (part ids: `__apex.career().owned` / `Career.isOwned()`);
-`careerSim(n)` settles through the real `Career.settleRound()` and needs a loaded track/grid first.
+`careerSim(n)` settles through the real `Career.scoreRound()` → `settleRound()` (rolls the whole career back when the
+save is refused) and needs a loaded track/grid first; each row returns `sponsorPay` and `sponsorVerdict`.
 
 Sponsor "just paid" / double pay, and research or facility credits that do not add up: traces in
-[references/workflow.md](references/workflow.md) (no hook exposes `sponsorPay`).
+[references/workflow.md](references/workflow.md) (`careerSim(n)` rows carry `sponsorPay`; a driven race
+stashes it in `G.careerSettlement`).
 
 Commands:
 
 ```sh
 node tools/car/career-economy.mjs            # launches Chromium: session only (AGENTS.md rule 10)
 node tools/car/career-economy.mjs --years 3
-node tools/ci/test-bg.mjs modes              # career + quali + season + TT — there is no test:career
-npm run test:tooling-fast
+node tools/ci/test-bg.mjs --spec tests/specs/career-hub.spec.js   # one spec (or career.spec.js); background, session only
+node tools/ci/remote-group.mjs modes         # the whole group (career + quali + season + TT) on the pushed branch
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
 node --test tests/unit/season-cal.test.mjs     # ~1 s, VM: the calendar/format gates (career neutral)
 node --test tests/unit/career-settle.test.mjs  # VM: settleRound, mid-weekend `stage`
 ```

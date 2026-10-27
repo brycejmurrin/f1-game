@@ -3,16 +3,20 @@
 // @skill phone-browser
 /**
  *   node tools/mcp/browser-http-up.mjs
+ *   node tools/mcp/browser-http-up.mjs --stop   # stop the recorded server + tunnel, forget the token
  *
  * Prints one line:
  *   phone-browser reuse https://…/mcp?token=…
  *   phone-browser new https://…/mcp?token=…
  * reuse means the connector the user already added still works. new means
  * the public host changed and they must paste that one URL again.
+ * --stop is teardown AND token rotation: the running server keeps the token it
+ * was started with, so a new token needs the old server (and the old tunnel,
+ * whose URL still answers) stopped first. Run --stop, then run again.
  */
 import { spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmodSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -20,6 +24,7 @@ const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const DIR = path.join(ROOT, "scratch/browser-http");
 const STATE = path.join(DIR, "state.json");
 const LOG = path.join(DIR, "cloudflared.log");
+const SERVER_LOG = path.join(DIR, "server.log");
 const PORT = 3001;
 const CLOUDFLARED = path.join(DIR, "cloudflared");   // regenerable download: scratch/, never /tmp (AGENTS.md)
 
@@ -77,6 +82,20 @@ function detach(cmd, args, env, log) {
     stdio: ["ignore", out, out],
   });
   child.unref();
+  return child.pid;
+}
+
+// Kill the recorded server and tunnel. `kill` is injectable for the unit test.
+// A PID that is already gone is fine; it is reported, not thrown.
+export function stopRecorded(state, kill = (pid) => process.kill(pid, "SIGTERM")) {
+  const out = [];
+  for (const key of ["tunnelPid", "serverPid"]) {
+    const pid = state && state[key];
+    if (!Number.isInteger(pid) || pid <= 0) continue;
+    try { kill(pid); out.push(`${key} ${pid} stopped`); }
+    catch (e) { out.push(`${key} ${pid} not running (${e && e.code || e})`); }
+  }
+  return out;
 }
 
 async function waitFor(label, probe) {
@@ -95,30 +114,41 @@ export async function bringUp() {
   const action = decide({ localOk, publicOk, url: prior.url });
   if (action === "reuse") return { kind: "reuse", url: prior.url };
 
+  // A live server with no recorded token was started by a run whose state is
+  // gone: its token is unknown, so a fresh one would answer 401. Refuse.
+  if (localOk && !prior.token) throw new Error("a server is live on :" + PORT + " with no recorded token: stop it (its PID: ps), then re-run");
   const token = prior.token || randomBytes(18).toString("hex");
+  let serverPid = prior.serverPid;
   if (!localOk) {
     mkdirSync(DIR, { recursive: true });
-    detach(process.execPath, ["tools/mcp/browser-http.mjs", "--port", String(PORT)], {
+    serverPid = detach(process.execPath, ["tools/mcp/browser-http.mjs", "--port", String(PORT)], {
       ...process.env,
       APEX_MCP_TOKEN: token,
-    });
+    }, SERVER_LOG);
     await waitFor("browser mcp", () => ping(`http://127.0.0.1:${PORT}/healthz`));
   }
+  if (Number.isInteger(prior.tunnelPid)) stopRecorded({ tunnelPid: prior.tunnelPid });   // the dead tunnel's process, if any
   mkdirSync(DIR, { recursive: true });
   writeFileSync(LOG, "");
   const bin = await ensureCloudflared();
-  detach(bin, ["tunnel", "--url", `http://127.0.0.1:${PORT}`, "--no-autoupdate"], process.env, LOG);
+  const tunnelPid = detach(bin, ["tunnel", "--url", `http://127.0.0.1:${PORT}`, "--no-autoupdate"], process.env, LOG);
   const host = await waitFor("tunnel", () => {
     try { return tunnelUrlFromLog(readFileSync(LOG, "utf8")); }
     catch { return null; }
   });
   const url = connectorUrl(host, token);
   await waitFor("public mcp", () => ping(host + "/healthz"));
-  writeState({ token, port: PORT, url, host });
+  writeState({ token, port: PORT, url, host, serverPid, tunnelPid });
   return { kind: "new", url };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  if (process.argv.includes("--stop")) {
+    for (const line of stopRecorded(readState())) console.log("phone-browser " + line);
+    rmSync(STATE, { force: true });
+    console.log("phone-browser stopped; the next run mints a new token and URL");
+    process.exit(0);
+  }
   const result = await bringUp();
   console.log(`phone-browser ${result.kind} ${result.url}`);
 }

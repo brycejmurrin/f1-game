@@ -32,7 +32,7 @@ Everything else = cache-first (network-first on a dev host, where every tag read
 `?v=dev`). Deploy stamps **content hashes and shell generation** together; source tags
 stay `?v=dev` (`.claude/rules/game-code.md`). Check with `npm run gen:check`.
 
-**Measured on live (2026-10-26).** GitHub Pages serves every response with `max-age=600`; the edge is
-purged on deploy; the shell revalidates via 304; first visit ~3.3 MB gz, SW install +~1.45 MB gz. So
-`?v=<sha256>` assets are "immutable" only inside the SW: a browser with no SW (or Safari before
-install) revalidates them every 10 min. Re-measure before quoting these numbers.
+**Hashed assets on a browser with no SW.** GitHub Pages serves every response with a short
+`max-age` (not configurable), so `?v=<sha256>` assets are "immutable" only inside the SW: a browser
+with no SW (or Safari before install) revalidates them. Measured headers and payload sizes:
+`docs/notes/system-audit-4/live-site.md` (L3, L5); re-measure before quoting them.

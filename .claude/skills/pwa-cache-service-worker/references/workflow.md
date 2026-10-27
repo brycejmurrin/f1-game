@@ -38,7 +38,7 @@ Playwright hang after a mid-run `version.json` bump.
    npm run gen:check      # after a tools/manifest.cjs change: npm run gen
    ```
    Tags in the committed shell read `?v=dev` (cache busting is the deploy's job:
-   `.claude/rules/game-code.md`). In repo mode `bump-cache.mjs` only checks; `--apply`
+   `.claude/rules/game-code.md`). In repo mode `tools/ci/bump-cache.mjs` only checks; `--apply`
    needs `--root` on a staged copy (its header). `version.json` is a generated file
    (the edit hook blocks a hand edit).
    **Mid-run reloads:** the shell guard compares the page's `<meta name="apex-build">`
@@ -69,7 +69,7 @@ Playwright hang after a mid-run `version.json` bump.
 - Adding a DEFERRED file to `index.html` — breaks the opt-in load model.
 - Forgetting the `sw.js` optional entry — first TLX/WGX boot misses cache.
 - Promoting vendor/fonts to essential — the install fails on one unreachable
-  optional path (GLX is required; TLX/vendor are critical optional dependencies).
+  optional path (GLX and the career UI are required via `isRequiredLazy`; TLX/vendor are critical optional dependencies).
 - Judging "still stale" from the committed `version.json` / `apex-build` meta — the deploy
   restamps both (`2000 + commit count`); read the LIVE shell's `apex-sha` meta (`bash tools/ci/pages-live-sha.sh <url>`,
   **deploy-research**), and remember the guard reloads once per session per build
@@ -83,7 +83,7 @@ Playwright hang after a mid-run `version.json` bump.
 
 ## Trace: "WGX/TLX not available offline after install"
 
-`sw.js` `install`: GLX (`js/render/glx/`) → `required` (aborts install on miss);
+`sw.js` `install`: GLX (`js/render/glx/`) and the career UI (`isRequiredLazy`) → `required` (aborts install on miss);
 everything else in `optional` (WGX, TLX, vendor, fonts) → `stamped` (`?v=<build>`
 key for `js/render/{glx,webgpu,three}/` etc.), pooled, misses swallowed and
 logged once as `precache: N of M optional assets not cached`. The seed is the
@@ -97,17 +97,27 @@ clean = precache list is fine; a remaining miss is a stamping/timeout
 
 ## Diagnose: players still get the old shell until hard-refresh
 
-Run in order; stop at the first mismatch. Live URL: https://brycejmurrin.github.io/f1-game/
+Run in order; stop at the first mismatch. Live URL: AGENTS.md §Git branch & deploy.
 1. `bash tools/ci/pages-live-sha.sh <url>` = the deployed commit. Not the tip? Pages has not
    published it yet (deploy-research); nothing to fix in the shell.
-2. `curl -s <url>/version.json` vs `curl -s <url>/index.html | grep apex-build`: build in
-   version.json should be >= the meta. Equal = clients are current; a higher json build
-   means the guard should reload them once.
-3. Guard fired? In the page, `sessionStorage['apex26.shellReloadedTo']` holds the build it
+2. The PHONE's booted build vs the live `version.json` build (`curl -s <url>/version.json`).
+   Read the phone's build from the error-overlay footer ("build N"), `__apex.diag()` (`build`,
+   from `window.__APEX_BUILD`) or `document.querySelector('meta[name=apex-build]').content`.
+   Equal = the phone is current. Lower = it has not updated: go on. Do NOT compare the live
+   `index.html` meta with the live `version.json`: `pages.yml` stamps both in one step, so they
+   are always equal; a mismatch there is a broken publish (deploy-research).
+3. Resumed, not relaunched? An iOS home-screen app usually resumes, so only `UpdateCheck`
+   (`js/ui/update-check.js`) can notice: the UPDATE READY chip should show within `THROTTLE_MS`
+   of foregrounding, outside a race (hidden while racing); tapping it reloads (`apply()`).
+4. Guard fired (cold boot)? `sessionStorage['apex26.shellReloadedTo']` holds the build it
    already tried; a stale value equal to the live build means one reload was spent (clear it
    to retest). The reload URL gains `?b=<build>`.
-4. Registered worker: `navigator.serviceWorker.getRegistration()` → `active.scriptURL` should
+5. Registered worker: `navigator.serviceWorker.getRegistration()` → `active.scriptURL` should
    end `sw.js?v=<build>`; the cache `apex26-<build>` should exist.
-5. Fixed only by hard-refresh = the navigation came from the HTTP cache or CDN, not the worker
+6. Fixed only by hard-refresh = the navigation came from the HTTP cache or CDN, not the worker
    (hard-refresh skips both): compare `curl -sI <url>/index.html` cache headers, and check the
    guard's `version.json` fetch is `no-store`.
+
+Reaching an installed iPhone PWA's console (steps 3–5): this container has no iOS. Use Safari Web
+Inspector from a Mac, a BrowserStack real-iOS session, or ask the user for the error-overlay
+footer build and an `__apex.diag()` export.
