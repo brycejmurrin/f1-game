@@ -1,0 +1,2 @@
+Fixed: Lit shaders compile the GGX distribution, Smith visibility and Schlick Fresnel once per program, instead of pasting a fresh copy at every lamp lobe, sun lobe and environment Fresnel.
+Fixed: A lit surface or track decal created while the scene is already writing the reflection tag is born on that multi-target shader, instead of compiling the single-target shader and then the multi-target one on the next frame.

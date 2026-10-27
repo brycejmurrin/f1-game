@@ -538,28 +538,37 @@
     }
 
     /* BRDF leaves (js/render/glx/shaders/glsl-lit.js) — plain node composition, inlined */
-    const D_GGX = (NoH, a) => {
+    // LAYOUT, not style. Each lobe (lamp, lamp clearcoat, sun, sun clearcoat)
+    // and both env Fresnels inlined its own copy, and the fx program inlined
+    // the set again. Pure arguments only — the same rule as apexMatBumpHeight.
+    const D_GGX = Fn(([NoH, a]) => {
       const a2 = a.mul(a);
       const d = NoH.mul(NoH).mul(a2.sub(1.0)).add(1.0);
       return a2.div(max(d.mul(d).mul(PI), 1e-6));
-    };
+    }).setLayout({ name: "apexGgx", type: "float", inputs: [
+      { name: "NoH", type: "float" }, { name: "a", type: "float" }] });
     // Height-correlated Smith visibility (folds in 1/(4 NoL NoV)).
+    // The view root stays a JS arrow: the lamp loop caches it in a sentinel
+    // and passes it in, so a layout here would compile the sqrt twice.
     const smithViewRoot = (NoV, a) => {
       const a2 = a.mul(a);
       return sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2));
     };
-    const V_SmithGGX = (NoV, NoL, a, viewRoot) => {
+    const V_SmithGGX = Fn(([NoV, NoL, a, viewRoot]) => {
       const a2 = a.mul(a);
-      const gv = NoL.mul(viewRoot || sqrt(NoV.mul(NoV).mul(a2.oneMinus()).add(a2)));
+      const gv = NoL.mul(viewRoot);
       const gl = NoV.mul(sqrt(NoL.mul(NoL).mul(a2.oneMinus()).add(a2)));
       return float(0.5).div(max(gv.add(gl), 1e-5));
-    };
+    }).setLayout({ name: "apexSmithGGX", type: "float", inputs: [
+      { name: "NoV", type: "float" }, { name: "NoL", type: "float" },
+      { name: "a", type: "float" }, { name: "viewRoot", type: "float" }] });
     // Roughness-aware Schlick (f90 capped by the caller — Frostbite trick).
-    const F_Schlick = (VoH, f0, f90) => {
+    const F_Schlick = Fn(([VoH, f0, f90]) => {
       const v = VoH.oneMinus();
       const v2 = v.mul(v);
       return f0.add(vec3(f90).sub(f0).mul(v2.mul(v2).mul(v)));
-    };
+    }).setLayout({ name: "apexSchlick", type: "vec3", inputs: [
+      { name: "VoH", type: "float" }, { name: "f0", type: "vec3" }, { name: "f90", type: "float" }] });
 
     /* cloud shadows (js/render/glx/shaders/glsl-lit.js) */
     // 2-octave FBM (per-pass tuning — matches LIT's cloudFBM, unrolled).
@@ -2083,7 +2092,7 @@
         // sun Cook-Torrance specular, soft-clipped (js/render/glx/shaders/glsl-lit.js)
         If(NoL.greaterThan(0.0), () => {
           const D = D_GGX(NoH, a);
-          const Vis = V_SmithGGX(NoV, NoL, a);
+          const Vis = V_SmithGGX(NoV, NoL, a, smithViewRoot(NoV, a));
           const F = F_Schlick(VoH, f0, clamp(rough.oneMinus(), 0.0, 1.0));
           const specCol = F.mul(D.mul(Vis)).mul(vec3(U.sunColor)).mul(litNoL).toVar();
           // soft knee, asymptote U.specKnee (def 4): sun glints can reach bloom (GLX)
@@ -2108,7 +2117,7 @@
           If(NoLg.greaterThan(0.0), () => {
             const ccA = min(sqrt(ccSaaVar.mul(0.25).add(0.035 * 0.035)), 0.30);
             const Dc = D_GGX(NoHg, ccA);
-            const Vc = V_SmithGGX(NoVg, NoLg, ccA);
+            const Vc = V_SmithGGX(NoVg, NoLg, ccA, smithViewRoot(NoVg, ccA));
             const Fc = F_Schlick(max(dot(V, Hg), 0.0), vec3(0.05), float(1.0)).x;
             const ccCol = vec3(U.sunColor).mul(Dc.mul(Vc).mul(Fc)).mul(NoLg)
               .mul(shadow).mul(U.keyMul).mul(clearcoat).toVar();
@@ -2728,6 +2737,10 @@
       m.outputNode = packed.out;
       m.positionNode = _sharedPos || (_sharedPos = vertexMotionNode());
       pinProgram(m, (o.instanced ? "tlx-lit-instanced" : (o.chunked ? "tlx-lit-ch" : "tlx-lit")) + (ud.tlxFx ? "-fx" : ""));
+      // Born on the program the pass already wants. setSsrMrt() only walks
+      // materials that exist when it runs; one created mid-frame used to
+      // compile the single-target key, then the MRT key on the next present.
+      if (_ssrOn) m.mrtNode = ud.tlxKeepSsrTag ? packed.mrtKeep : packed.mrt;
       m.transparent = alpha < 1;
       // GLX: draw() -> depthMask(alpha>=1); drawChunked() -> depthMask(true).
       m.depthWrite = o.chunked ? true : alpha >= 1;
@@ -2849,8 +2862,10 @@
     // Arm the second HDR attachment (ssrTag) only for the main scene render.
     // Env faces and the canvas fallback must keep mrtNode null — same
     // material, one color target.
+    let _ssrOn = false;
     function setSsrMrt(on) {
       if (!SSR_TAG) return;
+      _ssrOn = !!on;
       for (let i = 0; i < _mats.length; i++) {
         const m = _mats[i];
         const g = sharedFragment(!!m.userData.tlxChunked, !!m.userData.tlxInstanced, !!m.userData.tlxFx);
