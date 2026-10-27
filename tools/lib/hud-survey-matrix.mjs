@@ -728,7 +728,11 @@ export function expectedVisibility(cell, ctx = {}) {
     want("rotateDevice", portraitBlock, gateWhy);
     return E;
   }
-  want("tower", true, "no setting hides the timing tower (css/hud.css)");
+  // The tower is a container: with POS, LAP, TIME and BEST all toggled off (DELTA shows only with a
+  // best lap or ghost, never at the start) it has no children and a zero box by design (#3268).
+  const towerEmpty = ["pos", "lap", "time", "best"].every((t) => (cell.off || []).includes(t));
+  if (towerEmpty) want("tower", false, "every tower plate is toggled off (HudElements), so the empty tower has no box (css/hud.css)");
+  else want("tower", true, "no setting hides the timing tower (css/hud.css)");
   for (const k of ["pos", "lap", "time"]) want(k, true, "the timing tower's POS / LAP / TIME plates");
   want("best", !(minimal || broadcast || lay === "driver" || lay === "compact"),
     "BEST drops under MINIMAL / BROADCAST / layout DRIVER|COMPACT (css/hud.css)");
