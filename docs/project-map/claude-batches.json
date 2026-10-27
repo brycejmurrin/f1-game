@@ -160,7 +160,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "assigned"
     },
     {
       "id": "02",

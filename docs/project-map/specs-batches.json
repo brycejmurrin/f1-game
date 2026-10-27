@@ -69,7 +69,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "02",
@@ -167,7 +167,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "03",
@@ -230,7 +230,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "04",
@@ -321,7 +321,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "05",
@@ -419,7 +419,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "06",
@@ -496,7 +496,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "07",
@@ -636,7 +636,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "08",
@@ -727,7 +727,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "assigned"
     },
     {
       "id": "09",
@@ -825,7 +825,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "assigned"
     },
     {
       "id": "10",

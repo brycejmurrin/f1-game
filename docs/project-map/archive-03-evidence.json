@@ -1,0 +1,638 @@
+{
+  "group": "03",
+  "date": "2026-10-27",
+  "plan": {
+    "path": "docs/project-map/archive-batches.json",
+    "sha256": "45c79d5dfbe20976a87dabd9cada12c604de55827dc38a7b326f069571b5fe1c"
+  },
+  "coverage": {
+    "assigned_bytes": 160000,
+    "read_bytes": 160000,
+    "sources": 25,
+    "chunks": 32,
+    "half_open": true
+  },
+  "scope": "Historical provenance only; no tests, browser, network, runtime, source edits, stage or commit. Source 1 begins mid-document; source 25 ends mid-document.",
+  "backlink_method": "Literal source basename search across docs/**/*.md excluding archive and project-map; absence is not proof of no runtime or external use.",
+  "sources": [
+    {
+      "id": 1,
+      "path": "docs/archive/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md",
+      "start": 136,
+      "end": 3680,
+      "kind": "text",
+      "sha256": "f21b6802d3c1fff7bbea0fc8c0f023cdf833d8f957ec923fb1cab8d45d88c37d",
+      "whole_file_bytes": 3680,
+      "whole_file_sha256": "f21b6802d3c1fff7bbea0fc8c0f023cdf833d8f957ec923fb1cab8d45d88c37d",
+      "plan_hash_matches": true,
+      "part_sha256": "94c3801f103be0723399f0c7f17ee67cb890617b4edb1be535a875071707c7bb",
+      "chunks": [
+        {
+          "start": 136,
+          "end": 3680,
+          "bytes": 3544,
+          "sha256": "94c3801f103be0723399f0c7f17ee67cb890617b4edb1be535a875071707c7bb",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/ASSET-COMPRESSION-2026-10-24.md"
+      ]
+    },
+    {
+      "id": 2,
+      "path": "docs/archive/notes/AUTOCOMPACT-TRIAL-2026-10-19.md",
+      "start": 0,
+      "end": 1729,
+      "kind": "text",
+      "sha256": "0eb5337cb967eca620ae7a2f1d32c358e27f41fad9999a1ea54f1bce0db49422",
+      "whole_file_bytes": 1729,
+      "whole_file_sha256": "0eb5337cb967eca620ae7a2f1d32c358e27f41fad9999a1ea54f1bce0db49422",
+      "plan_hash_matches": true,
+      "part_sha256": "0eb5337cb967eca620ae7a2f1d32c358e27f41fad9999a1ea54f1bce0db49422",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1729,
+          "bytes": 1729,
+          "sha256": "0eb5337cb967eca620ae7a2f1d32c358e27f41fad9999a1ea54f1bce0db49422",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 3,
+      "path": "docs/archive/notes/BACKEND-DRAWCALL-RESEARCH-2026-09-16.md",
+      "start": 0,
+      "end": 5316,
+      "kind": "text",
+      "sha256": "a06e91294a333bebbfd287722424afb5dde4dd1d9cfd983b1e9ca795e8764174",
+      "whole_file_bytes": 5316,
+      "whole_file_sha256": "a06e91294a333bebbfd287722424afb5dde4dd1d9cfd983b1e9ca795e8764174",
+      "plan_hash_matches": true,
+      "part_sha256": "a06e91294a333bebbfd287722424afb5dde4dd1d9cfd983b1e9ca795e8764174",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5316,
+          "bytes": 5316,
+          "sha256": "a06e91294a333bebbfd287722424afb5dde4dd1d9cfd983b1e9ca795e8764174",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/RENDER-PERF-PLAN-2026-09-16.md"
+      ]
+    },
+    {
+      "id": 4,
+      "path": "docs/archive/notes/BASH-GUARD-TIMEOUT-MEASURE-2026-10-18.md",
+      "start": 0,
+      "end": 1714,
+      "kind": "text",
+      "sha256": "fddbb7f8f3107af34a29ecb389d7be0ecebcd04ef07f0f8540614ef612509322",
+      "whole_file_bytes": 1714,
+      "whole_file_sha256": "fddbb7f8f3107af34a29ecb389d7be0ecebcd04ef07f0f8540614ef612509322",
+      "plan_hash_matches": true,
+      "part_sha256": "fddbb7f8f3107af34a29ecb389d7be0ecebcd04ef07f0f8540614ef612509322",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1714,
+          "bytes": 1714,
+          "sha256": "fddbb7f8f3107af34a29ecb389d7be0ecebcd04ef07f0f8540614ef612509322",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 5,
+      "path": "docs/archive/notes/BOOST-EVERY-PRESS-2026-10-24.md",
+      "start": 0,
+      "end": 4428,
+      "kind": "text",
+      "sha256": "ee4934bef17482d70259f7c9f2d0b4c9e0d362bf1dc4f815541c9d2051cdfcc9",
+      "whole_file_bytes": 4428,
+      "whole_file_sha256": "ee4934bef17482d70259f7c9f2d0b4c9e0d362bf1dc4f815541c9d2051cdfcc9",
+      "plan_hash_matches": true,
+      "part_sha256": "ee4934bef17482d70259f7c9f2d0b4c9e0d362bf1dc4f815541c9d2051cdfcc9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4428,
+          "bytes": 4428,
+          "sha256": "ee4934bef17482d70259f7c9f2d0b4c9e0d362bf1dc4f815541c9d2051cdfcc9",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 6,
+      "path": "docs/archive/notes/BOOT-LOAD-TOOLING-RESEARCH-2026-10-21.md",
+      "start": 0,
+      "end": 11636,
+      "kind": "text",
+      "sha256": "dd95457ebf4c421faa77a3e4718527a56343ea563b22eb1e7d75ebb6cd695b41",
+      "whole_file_bytes": 11636,
+      "whole_file_sha256": "dd95457ebf4c421faa77a3e4718527a56343ea563b22eb1e7d75ebb6cd695b41",
+      "plan_hash_matches": true,
+      "part_sha256": "dd95457ebf4c421faa77a3e4718527a56343ea563b22eb1e7d75ebb6cd695b41",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "c053ad9a9f05e4d58d1cfdcac1aeb74917fbd2d6aa037a9df7884d6c97c54c78",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        },
+        {
+          "start": 8500,
+          "end": 11636,
+          "bytes": 3136,
+          "sha256": "0ffaa3974a78be4daa0c973546f104ce78d528d1bceeb7aa3bf7b288772d9fe9",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 7,
+      "path": "docs/archive/notes/CAR-LIVERY-TOOLING-RESEARCH-2026-10-21.md",
+      "start": 0,
+      "end": 6169,
+      "kind": "text",
+      "sha256": "17ab25cd6ada640fc27db102d1cc394f92675786e90737de290e640ac321e215",
+      "whole_file_bytes": 6169,
+      "whole_file_sha256": "17ab25cd6ada640fc27db102d1cc394f92675786e90737de290e640ac321e215",
+      "plan_hash_matches": true,
+      "part_sha256": "17ab25cd6ada640fc27db102d1cc394f92675786e90737de290e640ac321e215",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6169,
+          "bytes": 6169,
+          "sha256": "17ab25cd6ada640fc27db102d1cc394f92675786e90737de290e640ac321e215",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 8,
+      "path": "docs/archive/notes/CAR-MESH-BUDGET-H13-2026-10-20.md",
+      "start": 0,
+      "end": 7703,
+      "kind": "text",
+      "sha256": "7f7b6e85a9fdca96e59845461cf94c5a4575e8b0626704e19fe2733cf3727c2e",
+      "whole_file_bytes": 7703,
+      "whole_file_sha256": "7f7b6e85a9fdca96e59845461cf94c5a4575e8b0626704e19fe2733cf3727c2e",
+      "plan_hash_matches": true,
+      "part_sha256": "7f7b6e85a9fdca96e59845461cf94c5a4575e8b0626704e19fe2733cf3727c2e",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7703,
+          "bytes": 7703,
+          "sha256": "7f7b6e85a9fdca96e59845461cf94c5a4575e8b0626704e19fe2733cf3727c2e",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 9,
+      "path": "docs/archive/notes/CENTRELINE-KINKS-2026-10-18.md",
+      "start": 0,
+      "end": 2596,
+      "kind": "text",
+      "sha256": "00edc9d512610a382a3e2b838724ac48e75facb17c3d6f94a07fae36856b4d1e",
+      "whole_file_bytes": 2596,
+      "whole_file_sha256": "00edc9d512610a382a3e2b838724ac48e75facb17c3d6f94a07fae36856b4d1e",
+      "plan_hash_matches": true,
+      "part_sha256": "00edc9d512610a382a3e2b838724ac48e75facb17c3d6f94a07fae36856b4d1e",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2596,
+          "bytes": 2596,
+          "sha256": "00edc9d512610a382a3e2b838724ac48e75facb17c3d6f94a07fae36856b4d1e",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 10,
+      "path": "docs/archive/notes/CHUNK-MIRROR-PROBE-2026-10-17.md",
+      "start": 0,
+      "end": 4800,
+      "kind": "text",
+      "sha256": "556f55909bc6d5c5ba100da8fcba74f4ee2620867c22ee31617446b81cefeb13",
+      "whole_file_bytes": 4800,
+      "whole_file_sha256": "556f55909bc6d5c5ba100da8fcba74f4ee2620867c22ee31617446b81cefeb13",
+      "plan_hash_matches": true,
+      "part_sha256": "556f55909bc6d5c5ba100da8fcba74f4ee2620867c22ee31617446b81cefeb13",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4800,
+          "bytes": 4800,
+          "sha256": "556f55909bc6d5c5ba100da8fcba74f4ee2620867c22ee31617446b81cefeb13",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 11,
+      "path": "docs/archive/notes/CI-PAGES-SINGLE-FLIGHT-2026-10-06.md",
+      "start": 0,
+      "end": 1164,
+      "kind": "text",
+      "sha256": "11f573c807ed0e9e4d7ed0361d86194928518dfe2775dceb1e91d98f0b967171",
+      "whole_file_bytes": 1164,
+      "whole_file_sha256": "11f573c807ed0e9e4d7ed0361d86194928518dfe2775dceb1e91d98f0b967171",
+      "plan_hash_matches": true,
+      "part_sha256": "11f573c807ed0e9e4d7ed0361d86194928518dfe2775dceb1e91d98f0b967171",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1164,
+          "bytes": 1164,
+          "sha256": "11f573c807ed0e9e4d7ed0361d86194928518dfe2775dceb1e91d98f0b967171",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/CI-CLOG-SURVEY-2026-10-15.md"
+      ]
+    },
+    {
+      "id": 12,
+      "path": "docs/archive/notes/CI-PR-LIFECYCLE-REMEASURE-2026-10-18.md",
+      "start": 0,
+      "end": 1715,
+      "kind": "text",
+      "sha256": "d61ddbcb7c5e9f319c9dd242a19b97a4cc22e5d702705f2f1e07584e327ac7f0",
+      "whole_file_bytes": 1715,
+      "whole_file_sha256": "d61ddbcb7c5e9f319c9dd242a19b97a4cc22e5d702705f2f1e07584e327ac7f0",
+      "plan_hash_matches": true,
+      "part_sha256": "d61ddbcb7c5e9f319c9dd242a19b97a4cc22e5d702705f2f1e07584e327ac7f0",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1715,
+          "bytes": 1715,
+          "sha256": "d61ddbcb7c5e9f319c9dd242a19b97a4cc22e5d702705f2f1e07584e327ac7f0",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 13,
+      "path": "docs/archive/notes/CI-TOOLING-RESEARCH-2026-10-21.md",
+      "start": 0,
+      "end": 11752,
+      "kind": "text",
+      "sha256": "c2bbbb53d65c8fe57444f6f61d7b8c116bd21d5b7532f3700b407e8ff2abc7f1",
+      "whole_file_bytes": 11752,
+      "whole_file_sha256": "c2bbbb53d65c8fe57444f6f61d7b8c116bd21d5b7532f3700b407e8ff2abc7f1",
+      "plan_hash_matches": true,
+      "part_sha256": "c2bbbb53d65c8fe57444f6f61d7b8c116bd21d5b7532f3700b407e8ff2abc7f1",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "52304c1662051d3d2eff7193500d83126b3c97a6168746aca29c6387d1bed629",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        },
+        {
+          "start": 8500,
+          "end": 11752,
+          "bytes": 3252,
+          "sha256": "2f72060a590e3cf6b34bc1a51e452408e892a0c231c7d3fb988cd6abb5a94dab",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/BUILD-HUNT-2026-10-24.md"
+      ]
+    },
+    {
+      "id": 14,
+      "path": "docs/archive/notes/CI-WALL-TIME-HUNT-2026-10-21.md",
+      "start": 0,
+      "end": 6831,
+      "kind": "text",
+      "sha256": "4be8bee2dd4d3b3a5b09b5c89575e78ac7a7f4d56c00cfdf238ca6cac16fb8e9",
+      "whole_file_bytes": 6831,
+      "whole_file_sha256": "4be8bee2dd4d3b3a5b09b5c89575e78ac7a7f4d56c00cfdf238ca6cac16fb8e9",
+      "plan_hash_matches": true,
+      "part_sha256": "4be8bee2dd4d3b3a5b09b5c89575e78ac7a7f4d56c00cfdf238ca6cac16fb8e9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6831,
+          "bytes": 6831,
+          "sha256": "4be8bee2dd4d3b3a5b09b5c89575e78ac7a7f4d56c00cfdf238ca6cac16fb8e9",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/BUILD-HUNT-2026-10-24.md"
+      ]
+    },
+    {
+      "id": 15,
+      "path": "docs/archive/notes/CLAUDE-HOST-EFFICIENCY-2026-10-19.md",
+      "start": 0,
+      "end": 10207,
+      "kind": "text",
+      "sha256": "c44d0cfcca3dbc5d3599b8c65f2152c881ef3721d115cbf28a21f6cd76ea4c49",
+      "whole_file_bytes": 10207,
+      "whole_file_sha256": "c44d0cfcca3dbc5d3599b8c65f2152c881ef3721d115cbf28a21f6cd76ea4c49",
+      "plan_hash_matches": true,
+      "part_sha256": "c44d0cfcca3dbc5d3599b8c65f2152c881ef3721d115cbf28a21f6cd76ea4c49",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "c0effb65361fceb7ff6823affb151c0c156c9ba3b4b4ed7c9c3d336db734da36",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        },
+        {
+          "start": 8500,
+          "end": 10207,
+          "bytes": 1707,
+          "sha256": "eb75292dccf5b1cef88b693fa62b213ffeb50539f69df7e011a433f11d648e12",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 16,
+      "path": "docs/archive/notes/CLAUDE-TRANSCRIPT-MINING-2026-10-19.md",
+      "start": 0,
+      "end": 6758,
+      "kind": "text",
+      "sha256": "c7cf64f5d6a0105cc501a6b16baec08ddb3d897de4c64a8b76d80f427c6bd18a",
+      "whole_file_bytes": 6758,
+      "whole_file_sha256": "c7cf64f5d6a0105cc501a6b16baec08ddb3d897de4c64a8b76d80f427c6bd18a",
+      "plan_hash_matches": true,
+      "part_sha256": "c7cf64f5d6a0105cc501a6b16baec08ddb3d897de4c64a8b76d80f427c6bd18a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6758,
+          "bytes": 6758,
+          "sha256": "c7cf64f5d6a0105cc501a6b16baec08ddb3d897de4c64a8b76d80f427c6bd18a",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 17,
+      "path": "docs/archive/notes/CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md",
+      "start": 0,
+      "end": 18734,
+      "kind": "text",
+      "sha256": "c7d50c7db892d3e203bd3cef414a0df6c4944053091fa0301005170ed4f77559",
+      "whole_file_bytes": 18734,
+      "whole_file_sha256": "c7d50c7db892d3e203bd3cef414a0df6c4944053091fa0301005170ed4f77559",
+      "plan_hash_matches": true,
+      "part_sha256": "c7d50c7db892d3e203bd3cef414a0df6c4944053091fa0301005170ed4f77559",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "c546d34c9853a3f046f536af04344f6bdd52fa9b0d6884304cbd734e72d31514",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "91c50d751f2877f19528cc00daade41730a3dc8ad024d310b0cbda65f901e037",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        },
+        {
+          "start": 17000,
+          "end": 18734,
+          "bytes": 1734,
+          "sha256": "a739649483c1ceb61619596ceec6d6710d6e1f71e0417ec834200d6180c9e8cd",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 18,
+      "path": "docs/archive/notes/COCKPIT-REAR-MIRROR-DESIGN.md",
+      "start": 0,
+      "end": 8434,
+      "kind": "text",
+      "sha256": "af542461fd6aecc7bbf1f6065a1e0dba35dbeb265fc60e330cdfc7e6b5f824c2",
+      "whole_file_bytes": 8434,
+      "whole_file_sha256": "af542461fd6aecc7bbf1f6065a1e0dba35dbeb265fc60e330cdfc7e6b5f824c2",
+      "plan_hash_matches": true,
+      "part_sha256": "af542461fd6aecc7bbf1f6065a1e0dba35dbeb265fc60e330cdfc7e6b5f824c2",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8434,
+          "bytes": 8434,
+          "sha256": "af542461fd6aecc7bbf1f6065a1e0dba35dbeb265fc60e330cdfc7e6b5f824c2",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/COCKPIT-MODEL-REFERENCES.md"
+      ]
+    },
+    {
+      "id": 19,
+      "path": "docs/archive/notes/COLD-FIRST-RACE-WARM-2026-10-23.md",
+      "start": 0,
+      "end": 5495,
+      "kind": "text",
+      "sha256": "fec705a2828ccc5cd5578d4423238dc5f27588ea79d2f781754825a6bada66fa",
+      "whole_file_bytes": 5495,
+      "whole_file_sha256": "fec705a2828ccc5cd5578d4423238dc5f27588ea79d2f781754825a6bada66fa",
+      "plan_hash_matches": true,
+      "part_sha256": "fec705a2828ccc5cd5578d4423238dc5f27588ea79d2f781754825a6bada66fa",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5495,
+          "bytes": 5495,
+          "sha256": "fec705a2828ccc5cd5578d4423238dc5f27588ea79d2f781754825a6bada66fa",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/MIRROR-WARM-2026-10-24.md"
+      ]
+    },
+    {
+      "id": 20,
+      "path": "docs/archive/notes/COMMIT-GUARD-CACHE-2026-10-19.md",
+      "start": 0,
+      "end": 2773,
+      "kind": "text",
+      "sha256": "0fe4a51a40dba1e46b247d9b4d4880d1f544e5acbfce421d90dd45e14b013d12",
+      "whole_file_bytes": 2773,
+      "whole_file_sha256": "0fe4a51a40dba1e46b247d9b4d4880d1f544e5acbfce421d90dd45e14b013d12",
+      "plan_hash_matches": true,
+      "part_sha256": "0fe4a51a40dba1e46b247d9b4d4880d1f544e5acbfce421d90dd45e14b013d12",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2773,
+          "bytes": 2773,
+          "sha256": "0fe4a51a40dba1e46b247d9b4d4880d1f544e5acbfce421d90dd45e14b013d12",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/BUILD-HUNT-2026-10-24.md"
+      ]
+    },
+    {
+      "id": 21,
+      "path": "docs/archive/notes/COMPILE-CACHE-TRIAL-2026-10-18.md",
+      "start": 0,
+      "end": 1521,
+      "kind": "text",
+      "sha256": "5210403ba7be6cbd036cccec6a81f20fd3658bdaecf6628a0fa5aa2fa7b78042",
+      "whole_file_bytes": 1521,
+      "whole_file_sha256": "5210403ba7be6cbd036cccec6a81f20fd3658bdaecf6628a0fa5aa2fa7b78042",
+      "plan_hash_matches": true,
+      "part_sha256": "5210403ba7be6cbd036cccec6a81f20fd3658bdaecf6628a0fa5aa2fa7b78042",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1521,
+          "bytes": 1521,
+          "sha256": "5210403ba7be6cbd036cccec6a81f20fd3658bdaecf6628a0fa5aa2fa7b78042",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/notes/BUILD-HUNT-2026-10-24.md"
+      ]
+    },
+    {
+      "id": 22,
+      "path": "docs/archive/notes/CREW-ANIM-2026-10-24.md",
+      "start": 0,
+      "end": 4372,
+      "kind": "text",
+      "sha256": "b5e037f6a3bc45c0480efc0a657556c142f26863f547ea5e987608dfff12df12",
+      "whole_file_bytes": 4372,
+      "whole_file_sha256": "b5e037f6a3bc45c0480efc0a657556c142f26863f547ea5e987608dfff12df12",
+      "plan_hash_matches": true,
+      "part_sha256": "b5e037f6a3bc45c0480efc0a657556c142f26863f547ea5e987608dfff12df12",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4372,
+          "bytes": 4372,
+          "sha256": "b5e037f6a3bc45c0480efc0a657556c142f26863f547ea5e987608dfff12df12",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 23,
+      "path": "docs/archive/notes/CROSS-ACCOUNT-INBOX-2026-10-25.md",
+      "start": 0,
+      "end": 4459,
+      "kind": "text",
+      "sha256": "72624c4fdfb946d0c72bb1f1957fe62075d9b0708207bc7ae7d305ba769a1bea",
+      "whole_file_bytes": 4459,
+      "whole_file_sha256": "72624c4fdfb946d0c72bb1f1957fe62075d9b0708207bc7ae7d305ba769a1bea",
+      "plan_hash_matches": true,
+      "part_sha256": "72624c4fdfb946d0c72bb1f1957fe62075d9b0708207bc7ae7d305ba769a1bea",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4459,
+          "bytes": 4459,
+          "sha256": "72624c4fdfb946d0c72bb1f1957fe62075d9b0708207bc7ae7d305ba769a1bea",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": [
+        "docs/NOTES-INDEX.md"
+      ]
+    },
+    {
+      "id": 24,
+      "path": "docs/archive/notes/CURSOR-SDK-RESEARCH-2026-10-20.md",
+      "start": 0,
+      "end": 18438,
+      "kind": "text",
+      "sha256": "ce8e9c955eda6dbd4ea285c61a3eb7cd12f8a2cd554ad992b78196b536439bd4",
+      "whole_file_bytes": 18438,
+      "whole_file_sha256": "ce8e9c955eda6dbd4ea285c61a3eb7cd12f8a2cd554ad992b78196b536439bd4",
+      "plan_hash_matches": true,
+      "part_sha256": "ce8e9c955eda6dbd4ea285c61a3eb7cd12f8a2cd554ad992b78196b536439bd4",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "548e75cc67143844ea154312c1c1efd32c34db1ec173dbcbe3d593d000a7f46f",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "0df3038f957673ce35b5c4269745a4b61fc000864ac7272ff7e43af6c5aae619",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        },
+        {
+          "start": 17000,
+          "end": 18438,
+          "bytes": 1438,
+          "sha256": "eba486599ee598f074ac2a75295181406c8496870fa8f80dd8e95b072236cf7f",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    },
+    {
+      "id": 25,
+      "path": "docs/archive/notes/CURSOR-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md",
+      "start": 0,
+      "end": 7712,
+      "kind": "text",
+      "sha256": "70f6db42270aa0d3e4589b4ee6438e144f1ed15b1382435c250df2dc18c98df4",
+      "whole_file_bytes": 18988,
+      "whole_file_sha256": "70f6db42270aa0d3e4589b4ee6438e144f1ed15b1382435c250df2dc18c98df4",
+      "plan_hash_matches": true,
+      "part_sha256": "5ba51b6248f8d5982a67c7c204e9a7ef37fd1308fb226139fe238a39e3a7613d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7712,
+          "bytes": 7712,
+          "sha256": "5ba51b6248f8d5982a67c7c204e9a7ef37fd1308fb226139fe238a39e3a7613d",
+          "read": "individually returned, untruncated <=8500-byte text slice"
+        }
+      ],
+      "live_markdown_basename_backlinks": []
+    }
+  ]
+}

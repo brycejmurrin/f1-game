@@ -1,0 +1,3500 @@
+{
+  "schemaVersion": 1,
+  "group": "06",
+  "rangeConvention": "UTF-8 bytes half-open; lines one-based inclusive",
+  "method": "All assigned text spans read in individually returned bounded chunks. Whole-file AST provides structural case bounds, not raw-read evidence outside assignment. Assertion spans locate expect calls; lexical sites, not execution counts. No binary parts.",
+  "files": [
+    {
+      "path": "tests/specs/hud-layout.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 106339,
+        "sha256": "164340a787ddb27d75ea0224f9a493c3deb80a2b1bb81d4ae74d3a3609ab7975",
+        "manifestSha256": "164340a787ddb27d75ea0224f9a493c3deb80a2b1bb81d4ae74d3a3609ab7975",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 44921,
+        "end": 106339,
+        "bytes": 61418,
+        "sha256": "70458a328963e8094024c1fa0e8ad82070f70cf9489a1dfa1d320684bc9a6766",
+        "partial": true
+      },
+      "chunks": [
+        {
+          "start": 44921,
+          "end": 52921,
+          "bytes": 8000,
+          "sha256": "b7b251d4212374cd3ea8469e058a7be36a0c44c97b62375b0ea5df5ddfef2cad",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "42a278"
+        },
+        {
+          "start": 52921,
+          "end": 60921,
+          "bytes": 8000,
+          "sha256": "72cee75581afb2d75937c050a4a2ebc3999a2caff153c1d78925fcccf4f68b55",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "a9c266"
+        },
+        {
+          "start": 60921,
+          "end": 68921,
+          "bytes": 8000,
+          "sha256": "063aa2b9d6231251809954f391b24ccf68e4d4f0cbf7a3ef29b0d191f752b7b6",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "6eb13d"
+        },
+        {
+          "start": 68921,
+          "end": 76921,
+          "bytes": 8000,
+          "sha256": "301aa1973699a30fb0dea1669bfdb3d666efb0b6b49ba527d8f244d452918a6c",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "d68325"
+        },
+        {
+          "start": 76921,
+          "end": 84921,
+          "bytes": 8000,
+          "sha256": "be96a7c1a655c44204de642430a0d2e94a55a987d041910d7c186e81dfdc30f6",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "bed9e6"
+        },
+        {
+          "start": 84921,
+          "end": 92921,
+          "bytes": 8000,
+          "sha256": "c39b2b8bcedbf091e42e0477f0047c0c7ad8aa371b5003af4198f869728759e4",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "a4fe8a"
+        },
+        {
+          "start": 92921,
+          "end": 100921,
+          "bytes": 8000,
+          "sha256": "cdc4b1df99ca6c4d159c8c36afc5aab100b80ad4340a4bd4696d427f3c2afff6",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "c76459"
+        },
+        {
+          "start": 100921,
+          "end": 106339,
+          "bytes": 5418,
+          "sha256": "226dcd1f219614c52527d9aa28b5ed69960e116cba068ab42b4e05a0ee6b8204",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "1e015d"
+        }
+      ],
+      "imports": [],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "numeric HUD edits keep focused drafts visible and commit only valid completed values",
+          "start": 42104,
+          "end": 46306,
+          "lineStart": 727,
+          "lineEnd": 802,
+          "partial": true,
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "title": "Bring Into View recovers only the selected offscreen widget and survives Done and Resume",
+          "start": 46311,
+          "end": 49582,
+          "lineStart": 804,
+          "lineEnd": 856,
+          "partial": false,
+          "assertionIds": [
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21
+          ]
+        },
+        {
+          "title": "COMPACT drops both metric halves and leaves MAP and GAPS alone",
+          "start": 50048,
+          "end": 51606,
+          "lineStart": 866,
+          "lineEnd": 893,
+          "partial": false,
+          "assertionIds": [
+            22,
+            23,
+            24
+          ]
+        },
+        {
+          "title": "sector plate clears BOOST and OT (notched landscape, ~140%)",
+          "start": 52459,
+          "end": 53251,
+          "lineStart": 909,
+          "lineEnd": 921,
+          "partial": false,
+          "assertionIds": [
+            25
+          ]
+        },
+        {
+          "title": "control rects are identical at HUD SIZE min / default / max",
+          "start": 54268,
+          "end": 59805,
+          "lineStart": 938,
+          "lineEnd": 1008,
+          "partial": false,
+          "assertionIds": [
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32
+          ]
+        },
+        {
+          "title": "keeps its width and does not resize across ticks",
+          "start": 60405,
+          "end": 64345,
+          "lineStart": 1019,
+          "lineEnd": 1066,
+          "partial": false,
+          "assertionIds": [
+            33,
+            34,
+            35,
+            36
+          ]
+        },
+        {
+          "title": "small sectors right of Boost survive arranger Done and Resume",
+          "start": 64350,
+          "end": 68573,
+          "lineStart": 1068,
+          "lineEnd": 1133,
+          "partial": false,
+          "assertionIds": [
+            37,
+            38,
+            39,
+            40,
+            41
+          ]
+        },
+        {
+          "title": "sector plate clears BOOST (phone landscape, 150%)",
+          "start": 68949,
+          "end": 70517,
+          "lineStart": 1142,
+          "lineEnd": 1170,
+          "partial": false,
+          "assertionIds": [
+            42
+          ]
+        },
+        {
+          "title": "HUD ${\u2026}%: announce/flag/limits/tyre/rel clear each other and touch controls",
+          "start": 73086,
+          "end": 76688,
+          "lineStart": 1219,
+          "lineEnd": 1279,
+          "partial": false,
+          "assertionIds": [
+            43,
+            44
+          ]
+        },
+        {
+          "title": "RELATIVE clears left steer / BRAKE; INPUTS clears right dock (buttons 150%)",
+          "start": 76859,
+          "end": 78070,
+          "lineStart": 1286,
+          "lineEnd": 1305,
+          "partial": false,
+          "assertionIds": [
+            45
+          ]
+        },
+        {
+          "title": "INPUTS clears SPEED & GEAR at HUD 150% chase",
+          "start": 78232,
+          "end": 78985,
+          "lineStart": 1311,
+          "lineEnd": 1324,
+          "partial": false,
+          "assertionIds": [
+            46
+          ]
+        },
+        {
+          "title": "tilt HUD 150%: tyre/plan clear gear; gear clears AERO/OT",
+          "start": 79663,
+          "end": 81941,
+          "lineStart": 1338,
+          "lineEnd": 1376,
+          "partial": false,
+          "assertionIds": [
+            47
+          ]
+        },
+        {
+          "title": "HUD ${\u2026}%: the card stays on screen and clears the map, timing row and RELATIVE",
+          "start": 82691,
+          "end": 86064,
+          "lineStart": 1391,
+          "lineEnd": 1447,
+          "partial": false,
+          "assertionIds": [
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54
+          ]
+        },
+        {
+          "title": "HUD 150%: tower and sectors stay \u2265 10 CSS px and clear dash/plan/announce",
+          "start": 86805,
+          "end": 90050,
+          "lineStart": 1463,
+          "lineEnd": 1526,
+          "partial": false,
+          "assertionIds": [
+            55,
+            56,
+            57
+          ]
+        },
+        {
+          "title": "clears the touch dock when a warning shows",
+          "start": 90205,
+          "end": 91736,
+          "lineStart": 1533,
+          "lineEnd": 1561,
+          "partial": false,
+          "assertionIds": [
+            58,
+            59,
+            60,
+            61
+          ]
+        },
+        {
+          "title": "hides the whole touch stack, keeping only the pause button",
+          "start": 91851,
+          "end": 92335,
+          "lineStart": 1566,
+          "lineEnd": 1575,
+          "partial": false,
+          "assertionIds": [
+            62
+          ]
+        },
+        {
+          "title": "two fits publish the same zTop and #minimap zoom matches it",
+          "start": 93363,
+          "end": 96143,
+          "lineStart": 1594,
+          "lineEnd": 1647,
+          "partial": false,
+          "assertionIds": [
+            63,
+            64,
+            65
+          ]
+        },
+        {
+          "title": "cockpit wheel LCD and HUD speed show one number in the same frame",
+          "start": 99228,
+          "end": 101348,
+          "lineStart": 1709,
+          "lineEnd": 1750,
+          "partial": false,
+          "assertionIds": [
+            66,
+            67
+          ]
+        },
+        {
+          "title": "all widgets keep offscreen geometry through Done, Resume and rotation",
+          "start": 101510,
+          "end": 106333,
+          "lineStart": 1757,
+          "lineEnd": 1831,
+          "partial": false,
+          "assertionIds": [
+            68,
+            69,
+            70,
+            71,
+            72,
+            73,
+            74,
+            75,
+            76,
+            77,
+            78,
+            79
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 45199,
+          "end": 45227,
+          "lineStart": 782,
+          "lineEnd": 782
+        },
+        {
+          "id": 2,
+          "start": 45282,
+          "end": 45353,
+          "lineStart": 783,
+          "lineEnd": 783
+        },
+        {
+          "id": 3,
+          "start": 45603,
+          "end": 45664,
+          "lineStart": 789,
+          "lineEnd": 789
+        },
+        {
+          "id": 4,
+          "start": 45820,
+          "end": 45891,
+          "lineStart": 793,
+          "lineEnd": 793
+        },
+        {
+          "id": 5,
+          "start": 45925,
+          "end": 45937,
+          "lineStart": 794,
+          "lineEnd": 794
+        },
+        {
+          "id": 6,
+          "start": 46051,
+          "end": 46112,
+          "lineStart": 798,
+          "lineEnd": 798
+        },
+        {
+          "id": 7,
+          "start": 46174,
+          "end": 46209,
+          "lineStart": 800,
+          "lineEnd": 800
+        },
+        {
+          "id": 8,
+          "start": 46228,
+          "end": 46289,
+          "lineStart": 801,
+          "lineEnd": 801
+        },
+        {
+          "id": 9,
+          "start": 47268,
+          "end": 47369,
+          "lineStart": 821,
+          "lineEnd": 821
+        },
+        {
+          "id": 10,
+          "start": 47754,
+          "end": 47779,
+          "lineStart": 828,
+          "lineEnd": 828
+        },
+        {
+          "id": 11,
+          "start": 47806,
+          "end": 47864,
+          "lineStart": 829,
+          "lineEnd": 829
+        },
+        {
+          "id": 12,
+          "start": 47894,
+          "end": 47954,
+          "lineStart": 830,
+          "lineEnd": 830
+        },
+        {
+          "id": 13,
+          "start": 47984,
+          "end": 48008,
+          "lineStart": 831,
+          "lineEnd": 831
+        },
+        {
+          "id": 14,
+          "start": 48065,
+          "end": 48089,
+          "lineStart": 832,
+          "lineEnd": 832
+        },
+        {
+          "id": 15,
+          "start": 48145,
+          "end": 48192,
+          "lineStart": 833,
+          "lineEnd": 833
+        },
+        {
+          "id": 16,
+          "start": 48247,
+          "end": 48295,
+          "lineStart": 834,
+          "lineEnd": 834
+        },
+        {
+          "id": 17,
+          "start": 48435,
+          "end": 48499,
+          "lineStart": 836,
+          "lineEnd": 836
+        },
+        {
+          "id": 18,
+          "start": 48814,
+          "end": 48873,
+          "lineStart": 844,
+          "lineEnd": 844
+        },
+        {
+          "id": 19,
+          "start": 48904,
+          "end": 48979,
+          "lineStart": 845,
+          "lineEnd": 845
+        },
+        {
+          "id": 20,
+          "start": 49134,
+          "end": 49212,
+          "lineStart": 848,
+          "lineEnd": 848
+        },
+        {
+          "id": 21,
+          "start": 49441,
+          "end": 49500,
+          "lineStart": 854,
+          "lineEnd": 854
+        },
+        {
+          "id": 22,
+          "start": 51302,
+          "end": 51352,
+          "lineStart": 888,
+          "lineEnd": 888
+        },
+        {
+          "id": 23,
+          "start": 51440,
+          "end": 51478,
+          "lineStart": 890,
+          "lineEnd": 890
+        },
+        {
+          "id": 24,
+          "start": 51538,
+          "end": 51581,
+          "lineStart": 892,
+          "lineEnd": 892
+        },
+        {
+          "id": 25,
+          "start": 53160,
+          "end": 53233,
+          "lineStart": 920,
+          "lineEnd": 920
+        },
+        {
+          "id": 26,
+          "start": 57681,
+          "end": 57753,
+          "lineStart": 983,
+          "lineEnd": 983
+        },
+        {
+          "id": 27,
+          "start": 57976,
+          "end": 58043,
+          "lineStart": 985,
+          "lineEnd": 985
+        },
+        {
+          "id": 28,
+          "start": 58752,
+          "end": 58870,
+          "lineStart": 994,
+          "lineEnd": 994
+        },
+        {
+          "id": 29,
+          "start": 59182,
+          "end": 59271,
+          "lineStart": 1000,
+          "lineEnd": 1000
+        },
+        {
+          "id": 30,
+          "start": 59391,
+          "end": 59488,
+          "lineStart": 1004,
+          "lineEnd": 1004
+        },
+        {
+          "id": 31,
+          "start": 59556,
+          "end": 59656,
+          "lineStart": 1006,
+          "lineEnd": 1006
+        },
+        {
+          "id": 32,
+          "start": 59712,
+          "end": 59783,
+          "lineStart": 1007,
+          "lineEnd": 1007
+        },
+        {
+          "id": 33,
+          "start": 63184,
+          "end": 63264,
+          "lineStart": 1054,
+          "lineEnd": 1054
+        },
+        {
+          "id": 34,
+          "start": 63954,
+          "end": 63987,
+          "lineStart": 1062,
+          "lineEnd": 1062
+        },
+        {
+          "id": 35,
+          "start": 64002,
+          "end": 64034,
+          "lineStart": 1063,
+          "lineEnd": 1063
+        },
+        {
+          "id": 36,
+          "start": 64243,
+          "end": 64317,
+          "lineStart": 1065,
+          "lineEnd": 1065
+        },
+        {
+          "id": 37,
+          "start": 67287,
+          "end": 67354,
+          "lineStart": 1114,
+          "lineEnd": 1114
+        },
+        {
+          "id": 38,
+          "start": 67371,
+          "end": 67440,
+          "lineStart": 1115,
+          "lineEnd": 1115
+        },
+        {
+          "id": 39,
+          "start": 67547,
+          "end": 67679,
+          "lineStart": 1117,
+          "lineEnd": 1117
+        },
+        {
+          "id": 40,
+          "start": 68391,
+          "end": 68458,
+          "lineStart": 1131,
+          "lineEnd": 1131
+        },
+        {
+          "id": 41,
+          "start": 68480,
+          "end": 68555,
+          "lineStart": 1132,
+          "lineEnd": 1132
+        },
+        {
+          "id": 42,
+          "start": 70432,
+          "end": 70499,
+          "lineStart": 1169,
+          "lineEnd": 1169
+        },
+        {
+          "id": 43,
+          "start": 76398,
+          "end": 76553,
+          "lineStart": 1275,
+          "lineEnd": 1277
+        },
+        {
+          "id": 44,
+          "start": 76573,
+          "end": 76668,
+          "lineStart": 1278,
+          "lineEnd": 1278
+        },
+        {
+          "id": 45,
+          "start": 77985,
+          "end": 78052,
+          "lineStart": 1304,
+          "lineEnd": 1304
+        },
+        {
+          "id": 46,
+          "start": 78900,
+          "end": 78967,
+          "lineStart": 1323,
+          "lineEnd": 1323
+        },
+        {
+          "id": 47,
+          "start": 81854,
+          "end": 81921,
+          "lineStart": 1375,
+          "lineEnd": 1375
+        },
+        {
+          "id": 48,
+          "start": 85411,
+          "end": 85470,
+          "lineStart": 1437,
+          "lineEnd": 1437
+        },
+        {
+          "id": 49,
+          "start": 85491,
+          "end": 85512,
+          "lineStart": 1438,
+          "lineEnd": 1438
+        },
+        {
+          "id": 50,
+          "start": 85549,
+          "end": 85569,
+          "lineStart": 1439,
+          "lineEnd": 1439
+        },
+        {
+          "id": 51,
+          "start": 85606,
+          "end": 85628,
+          "lineStart": 1440,
+          "lineEnd": 1440
+        },
+        {
+          "id": 52,
+          "start": 85667,
+          "end": 85690,
+          "lineStart": 1441,
+          "lineEnd": 1441
+        },
+        {
+          "id": 53,
+          "start": 85729,
+          "end": 85794,
+          "lineStart": 1442,
+          "lineEnd": 1442
+        },
+        {
+          "id": 54,
+          "start": 86027,
+          "end": 86044,
+          "lineStart": 1446,
+          "lineEnd": 1446
+        },
+        {
+          "id": 55,
+          "start": 89329,
+          "end": 89380,
+          "lineStart": 1511,
+          "lineEnd": 1511
+        },
+        {
+          "id": 56,
+          "start": 89415,
+          "end": 89464,
+          "lineStart": 1512,
+          "lineEnd": 1512
+        },
+        {
+          "id": 57,
+          "start": 90010,
+          "end": 90030,
+          "lineStart": 1525,
+          "lineEnd": 1525
+        },
+        {
+          "id": 58,
+          "start": 91401,
+          "end": 91465,
+          "lineStart": 1557,
+          "lineEnd": 1557
+        },
+        {
+          "id": 59,
+          "start": 91483,
+          "end": 91546,
+          "lineStart": 1558,
+          "lineEnd": 1558
+        },
+        {
+          "id": 60,
+          "start": 91571,
+          "end": 91644,
+          "lineStart": 1559,
+          "lineEnd": 1559
+        },
+        {
+          "id": 61,
+          "start": 91662,
+          "end": 91704,
+          "lineStart": 1560,
+          "lineEnd": 1560
+        },
+        {
+          "id": 62,
+          "start": 92294,
+          "end": 92307,
+          "lineStart": 1574,
+          "lineEnd": 1574
+        },
+        {
+          "id": 63,
+          "start": 95790,
+          "end": 95872,
+          "lineStart": 1641,
+          "lineEnd": 1641
+        },
+        {
+          "id": 64,
+          "start": 95898,
+          "end": 95981,
+          "lineStart": 1643,
+          "lineEnd": 1643
+        },
+        {
+          "id": 65,
+          "start": 96009,
+          "end": 96126,
+          "lineStart": 1645,
+          "lineEnd": 1646
+        },
+        {
+          "id": 66,
+          "start": 101106,
+          "end": 101218,
+          "lineStart": 1748,
+          "lineEnd": 1748
+        },
+        {
+          "id": 67,
+          "start": 101235,
+          "end": 101330,
+          "lineStart": 1749,
+          "lineEnd": 1749
+        },
+        {
+          "id": 68,
+          "start": 102383,
+          "end": 102394,
+          "lineStart": 1767,
+          "lineEnd": 1767
+        },
+        {
+          "id": 69,
+          "start": 103358,
+          "end": 103374,
+          "lineStart": 1783,
+          "lineEnd": 1783
+        },
+        {
+          "id": 70,
+          "start": 103953,
+          "end": 103969,
+          "lineStart": 1794,
+          "lineEnd": 1794
+        },
+        {
+          "id": 71,
+          "start": 104887,
+          "end": 104904,
+          "lineStart": 1809,
+          "lineEnd": 1809
+        },
+        {
+          "id": 72,
+          "start": 104921,
+          "end": 104938,
+          "lineStart": 1809,
+          "lineEnd": 1809
+        },
+        {
+          "id": 73,
+          "start": 104963,
+          "end": 104980,
+          "lineStart": 1810,
+          "lineEnd": 1810
+        },
+        {
+          "id": 74,
+          "start": 105027,
+          "end": 105048,
+          "lineStart": 1811,
+          "lineEnd": 1811
+        },
+        {
+          "id": 75,
+          "start": 105068,
+          "end": 105091,
+          "lineStart": 1811,
+          "lineEnd": 1811
+        },
+        {
+          "id": 76,
+          "start": 105113,
+          "end": 105135,
+          "lineStart": 1812,
+          "lineEnd": 1812
+        },
+        {
+          "id": 77,
+          "start": 105177,
+          "end": 105252,
+          "lineStart": 1814,
+          "lineEnd": 1814
+        },
+        {
+          "id": 78,
+          "start": 105888,
+          "end": 105909,
+          "lineStart": 1826,
+          "lineEnd": 1826
+        },
+        {
+          "id": 79,
+          "start": 106240,
+          "end": 106315,
+          "lineStart": 1830,
+          "lineEnd": 1830
+        }
+      ],
+      "fixturesAndSetup": "Plain Playwright, page fixture; BOOT_MS/awaitTrackBuild/awaitApexBoot and hud-geometry helpers. Most races freeze physics/headless and inject safe-area CSS; selected cases keep normal HUD cadence or real GLX draw frames.",
+      "semantics": "HUD arrangement, fit and DOM/CSS geometry: valid numeric draft commits, selected recovery, compact metrics, independent HUD/button scales, moved sectors, opt-in readouts, portrait status/readability, warning chip, desktop controls, fit determinism, LCD parity and all 19 manual widgets.",
+      "limits": "Only assigned tail; first case is a suffix. Synthetic text/visibility forces transient plates, not sporting events. Geometry uses half-pixel tolerances; LCD case collects 12 same-frame pairs at race pace. Previous appearance is pinned in shared race helper; moved-widget cases explicitly use shipped appearance.",
+      "cleanup": "Transient status HTML/hidden flags restored in same evaluate; density restored; GLX draw wrapper restores after 12 samples; sample interval cleared after 3s. Browser/page lifecycle owns storage and freeze changes."
+    },
+    {
+      "path": "tests/specs/hud-mirror.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 24572,
+        "sha256": "f18db29dc92d79c827822fb45bd15556bc341765bb02f38355f5e82e2404f6b0",
+        "manifestSha256": "f18db29dc92d79c827822fb45bd15556bc341765bb02f38355f5e82e2404f6b0",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 24572,
+        "bytes": 24572,
+        "sha256": "f18db29dc92d79c827822fb45bd15556bc341765bb02f38355f5e82e2404f6b0",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "47cf06953f27dbe906ab6d11ef012471d3305a7f98b42728ba1c107ef54179d0",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "f378da"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "7bcacc2500f204dc35d27019d727cd0931d343598ab5e74e0027373bb34d3d7e",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "2b9979"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "77c0536b3d8291737c86ca6827c8e1f1ac7392244a939409b7303b4d5f8d7c45",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "785488"
+        },
+        {
+          "start": 24000,
+          "end": 24572,
+          "bytes": 572,
+          "sha256": "9dc9f1fd3177533fd0a8fafcc09b8325250ed3c2519a4fca8318d95751e8e283",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "808a02"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 679,
+          "end": 769,
+          "lineStart": 12,
+          "lineEnd": 12
+        },
+        {
+          "source": "../helpers/presented-canvas.js",
+          "start": 770,
+          "end": 839,
+          "lineStart": 13,
+          "lineEnd": 13
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.beforeEach",
+          "start": 20104,
+          "end": 20409,
+          "lineStart": 362,
+          "lineEnd": 370
+        }
+      ],
+      "cases": [
+        {
+          "title": "GLX renders the mirror pass, composites it into #hud-mirror, and the key turns it off",
+          "start": 19533,
+          "end": 20066,
+          "lineStart": 352,
+          "lineEnd": 359,
+          "partial": false,
+          "assertionIds": [
+            46
+          ]
+        },
+        {
+          "title": "TLX prepares an enabled mirror before the countdown advances and reuses its target in the race",
+          "start": 20415,
+          "end": 23598,
+          "lineStart": 371,
+          "lineEnd": 427,
+          "partial": false,
+          "assertionIds": [
+            47,
+            48,
+            49,
+            50,
+            51,
+            52,
+            53,
+            54,
+            55,
+            56,
+            57,
+            58,
+            59,
+            60,
+            61,
+            62,
+            63,
+            64,
+            65,
+            66,
+            67
+          ]
+        },
+        {
+          "title": "TLX renders the mirror pass, composites it into #hud-mirror, and the key turns it off",
+          "start": 23604,
+          "end": 23795,
+          "lineStart": 428,
+          "lineEnd": 431,
+          "partial": false,
+          "assertionIds": []
+        },
+        {
+          "title": "TLX reuses the mirror target for WATCH PiP and restores the rear view on exit",
+          "start": 24030,
+          "end": 24560,
+          "lineStart": 435,
+          "lineEnd": 444,
+          "partial": false,
+          "assertionIds": []
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 6159,
+          "end": 6232,
+          "lineStart": 121,
+          "lineEnd": 121
+        },
+        {
+          "id": 2,
+          "start": 6892,
+          "end": 6950,
+          "lineStart": 137,
+          "lineEnd": 137
+        },
+        {
+          "id": 3,
+          "start": 6969,
+          "end": 6986,
+          "lineStart": 138,
+          "lineEnd": 138
+        },
+        {
+          "id": 4,
+          "start": 7621,
+          "end": 7641,
+          "lineStart": 152,
+          "lineEnd": 152
+        },
+        {
+          "id": 5,
+          "start": 7656,
+          "end": 7684,
+          "lineStart": 153,
+          "lineEnd": 153
+        },
+        {
+          "id": 6,
+          "start": 7700,
+          "end": 7723,
+          "lineStart": 154,
+          "lineEnd": 154
+        },
+        {
+          "id": 7,
+          "start": 7740,
+          "end": 7771,
+          "lineStart": 155,
+          "lineEnd": 155
+        },
+        {
+          "id": 8,
+          "start": 7787,
+          "end": 7815,
+          "lineStart": 156,
+          "lineEnd": 156
+        },
+        {
+          "id": 9,
+          "start": 7846,
+          "end": 7874,
+          "lineStart": 157,
+          "lineEnd": 157
+        },
+        {
+          "id": 10,
+          "start": 7996,
+          "end": 8035,
+          "lineStart": 160,
+          "lineEnd": 160
+        },
+        {
+          "id": 11,
+          "start": 8058,
+          "end": 8073,
+          "lineStart": 161,
+          "lineEnd": 161
+        },
+        {
+          "id": 12,
+          "start": 8096,
+          "end": 8115,
+          "lineStart": 162,
+          "lineEnd": 162
+        },
+        {
+          "id": 13,
+          "start": 8291,
+          "end": 8319,
+          "lineStart": 165,
+          "lineEnd": 165
+        },
+        {
+          "id": 14,
+          "start": 8334,
+          "end": 8379,
+          "lineStart": 166,
+          "lineEnd": 166
+        },
+        {
+          "id": 15,
+          "start": 8452,
+          "end": 8483,
+          "lineStart": 168,
+          "lineEnd": 168
+        },
+        {
+          "id": 16,
+          "start": 9864,
+          "end": 9945,
+          "lineStart": 191,
+          "lineEnd": 191
+        },
+        {
+          "id": 17,
+          "start": 9960,
+          "end": 9998,
+          "lineStart": 192,
+          "lineEnd": 192
+        },
+        {
+          "id": 18,
+          "start": 10040,
+          "end": 10082,
+          "lineStart": 193,
+          "lineEnd": 193
+        },
+        {
+          "id": 19,
+          "start": 10119,
+          "end": 10183,
+          "lineStart": 194,
+          "lineEnd": 194
+        },
+        {
+          "id": 20,
+          "start": 11535,
+          "end": 11565,
+          "lineStart": 218,
+          "lineEnd": 218
+        },
+        {
+          "id": 21,
+          "start": 11593,
+          "end": 11634,
+          "lineStart": 219,
+          "lineEnd": 219
+        },
+        {
+          "id": 22,
+          "start": 12269,
+          "end": 12298,
+          "lineStart": 228,
+          "lineEnd": 228
+        },
+        {
+          "id": 23,
+          "start": 12566,
+          "end": 12614,
+          "lineStart": 231,
+          "lineEnd": 231
+        },
+        {
+          "id": 24,
+          "start": 12753,
+          "end": 12812,
+          "lineStart": 236,
+          "lineEnd": 236
+        },
+        {
+          "id": 25,
+          "start": 13275,
+          "end": 13387,
+          "lineStart": 245,
+          "lineEnd": 245
+        },
+        {
+          "id": 26,
+          "start": 13418,
+          "end": 13502,
+          "lineStart": 247,
+          "lineEnd": 247
+        },
+        {
+          "id": 27,
+          "start": 14229,
+          "end": 14289,
+          "lineStart": 262,
+          "lineEnd": 262
+        },
+        {
+          "id": 28,
+          "start": 14537,
+          "end": 14585,
+          "lineStart": 267,
+          "lineEnd": 267
+        },
+        {
+          "id": 29,
+          "start": 14600,
+          "end": 14675,
+          "lineStart": 268,
+          "lineEnd": 268
+        },
+        {
+          "id": 30,
+          "start": 14877,
+          "end": 14925,
+          "lineStart": 271,
+          "lineEnd": 271
+        },
+        {
+          "id": 31,
+          "start": 15465,
+          "end": 15501,
+          "lineStart": 284,
+          "lineEnd": 284
+        },
+        {
+          "id": 32,
+          "start": 15517,
+          "end": 15561,
+          "lineStart": 285,
+          "lineEnd": 285
+        },
+        {
+          "id": 33,
+          "start": 16127,
+          "end": 16180,
+          "lineStart": 295,
+          "lineEnd": 295
+        },
+        {
+          "id": 34,
+          "start": 16281,
+          "end": 16329,
+          "lineStart": 297,
+          "lineEnd": 297
+        },
+        {
+          "id": 35,
+          "start": 16342,
+          "end": 16405,
+          "lineStart": 298,
+          "lineEnd": 298
+        },
+        {
+          "id": 36,
+          "start": 16936,
+          "end": 17000,
+          "lineStart": 306,
+          "lineEnd": 306
+        },
+        {
+          "id": 37,
+          "start": 17162,
+          "end": 17235,
+          "lineStart": 310,
+          "lineEnd": 310
+        },
+        {
+          "id": 38,
+          "start": 18440,
+          "end": 18464,
+          "lineStart": 335,
+          "lineEnd": 335
+        },
+        {
+          "id": 39,
+          "start": 18532,
+          "end": 18561,
+          "lineStart": 336,
+          "lineEnd": 336
+        },
+        {
+          "id": 40,
+          "start": 18576,
+          "end": 18602,
+          "lineStart": 337,
+          "lineEnd": 337
+        },
+        {
+          "id": 41,
+          "start": 18618,
+          "end": 18644,
+          "lineStart": 338,
+          "lineEnd": 338
+        },
+        {
+          "id": 42,
+          "start": 18661,
+          "end": 18692,
+          "lineStart": 339,
+          "lineEnd": 339
+        },
+        {
+          "id": 43,
+          "start": 18708,
+          "end": 18739,
+          "lineStart": 340,
+          "lineEnd": 340
+        },
+        {
+          "id": 44,
+          "start": 18799,
+          "end": 18844,
+          "lineStart": 341,
+          "lineEnd": 341
+        },
+        {
+          "id": 45,
+          "start": 19345,
+          "end": 19420,
+          "lineStart": 346,
+          "lineEnd": 346
+        },
+        {
+          "id": 46,
+          "start": 19681,
+          "end": 19757,
+          "lineStart": 354,
+          "lineEnd": 354
+        },
+        {
+          "id": 47,
+          "start": 21889,
+          "end": 21917,
+          "lineStart": 398,
+          "lineEnd": 398
+        },
+        {
+          "id": 48,
+          "start": 21939,
+          "end": 21965,
+          "lineStart": 399,
+          "lineEnd": 399
+        },
+        {
+          "id": 49,
+          "start": 21987,
+          "end": 22014,
+          "lineStart": 400,
+          "lineEnd": 400
+        },
+        {
+          "id": 50,
+          "start": 22033,
+          "end": 22059,
+          "lineStart": 401,
+          "lineEnd": 401
+        },
+        {
+          "id": 51,
+          "start": 22083,
+          "end": 22115,
+          "lineStart": 402,
+          "lineEnd": 402
+        },
+        {
+          "id": 52,
+          "start": 22135,
+          "end": 22166,
+          "lineStart": 403,
+          "lineEnd": 403
+        },
+        {
+          "id": 53,
+          "start": 22185,
+          "end": 22213,
+          "lineStart": 404,
+          "lineEnd": 404
+        },
+        {
+          "id": 54,
+          "start": 22233,
+          "end": 22265,
+          "lineStart": 405,
+          "lineEnd": 405
+        },
+        {
+          "id": 55,
+          "start": 22284,
+          "end": 22308,
+          "lineStart": 406,
+          "lineEnd": 406
+        },
+        {
+          "id": 56,
+          "start": 22328,
+          "end": 22364,
+          "lineStart": 407,
+          "lineEnd": 407
+        },
+        {
+          "id": 57,
+          "start": 22383,
+          "end": 22418,
+          "lineStart": 408,
+          "lineEnd": 408
+        },
+        {
+          "id": 58,
+          "start": 22438,
+          "end": 22476,
+          "lineStart": 409,
+          "lineEnd": 409
+        },
+        {
+          "id": 59,
+          "start": 22503,
+          "end": 22535,
+          "lineStart": 410,
+          "lineEnd": 410
+        },
+        {
+          "id": 60,
+          "start": 22570,
+          "end": 22602,
+          "lineStart": 411,
+          "lineEnd": 411
+        },
+        {
+          "id": 61,
+          "start": 22636,
+          "end": 22671,
+          "lineStart": 412,
+          "lineEnd": 412
+        },
+        {
+          "id": 62,
+          "start": 22690,
+          "end": 22731,
+          "lineStart": 413,
+          "lineEnd": 413
+        },
+        {
+          "id": 63,
+          "start": 23254,
+          "end": 23279,
+          "lineStart": 422,
+          "lineEnd": 422
+        },
+        {
+          "id": 64,
+          "start": 23300,
+          "end": 23329,
+          "lineStart": 423,
+          "lineEnd": 423
+        },
+        {
+          "id": 65,
+          "start": 23362,
+          "end": 23416,
+          "lineStart": 424,
+          "lineEnd": 424
+        },
+        {
+          "id": 66,
+          "start": 23478,
+          "end": 23512,
+          "lineStart": 425,
+          "lineEnd": 425
+        },
+        {
+          "id": 67,
+          "start": 23544,
+          "end": 23578,
+          "lineStart": 426,
+          "lineEnd": 426
+        }
+      ],
+      "fixturesAndSetup": "Fixture-backed GLX; TLX beforeEach seeds three + tlxForceGL. Red Bull dry day cockpit; presented-canvas helper, low render scale.",
+      "semantics": "Mirror counters/rect/target, cockpit glass orientation, touch chip and M toggle, radio clearance; TLX countdown preparation and WATCH PiP target reuse/flip restoration.",
+      "limits": "WGX excluded; hardware behavior not established. GLX requires soft pixels; TLX orientation pixels conditional on available capture. Contrast must decide at least one glass; GLX PiP omitted. Helper assertions sit outside named test bodies.",
+      "cleanup": "Radio hidden after measuring; mirror disabled by key; PiP subject removed and bc-on removed. Page lifecycle handles backend preferences."
+    },
+    {
+      "path": "tests/specs/hungaroring-foundation.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 3951,
+        "sha256": "0f3199d4718068d27a96ce137d8402d91a31fabf63d4b83c3fa70fb9a72c6a12",
+        "manifestSha256": "0f3199d4718068d27a96ce137d8402d91a31fabf63d4b83c3fa70fb9a72c6a12",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 3951,
+        "bytes": 3951,
+        "sha256": "0f3199d4718068d27a96ce137d8402d91a31fabf63d4b83c3fa70fb9a72c6a12",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3951,
+          "bytes": 3951,
+          "sha256": "0f3199d4718068d27a96ce137d8402d91a31fabf63d4b83c3fa70fb9a72c6a12",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "787fb0"
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "start": 13,
+          "end": 61,
+          "lineStart": 2,
+          "lineEnd": 2
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 62,
+          "end": 111,
+          "lineStart": 3,
+          "lineEnd": 3
+        }
+      ],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "migrates terrain, models, dressing, and barriers onto track-owned contracts",
+          "start": 619,
+          "end": 3945,
+          "lineStart": 14,
+          "lineEnd": 83,
+          "partial": false,
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 1677,
+          "end": 1703,
+          "lineStart": 39,
+          "lineEnd": 39
+        },
+        {
+          "id": 2,
+          "start": 1724,
+          "end": 1749,
+          "lineStart": 40,
+          "lineEnd": 40
+        },
+        {
+          "id": 3,
+          "start": 1876,
+          "end": 1926,
+          "lineStart": 43,
+          "lineEnd": 43
+        },
+        {
+          "id": 4,
+          "start": 1943,
+          "end": 1972,
+          "lineStart": 44,
+          "lineEnd": 44
+        },
+        {
+          "id": 5,
+          "start": 1990,
+          "end": 2018,
+          "lineStart": 45,
+          "lineEnd": 45
+        },
+        {
+          "id": 6,
+          "start": 2188,
+          "end": 2212,
+          "lineStart": 48,
+          "lineEnd": 48
+        },
+        {
+          "id": 7,
+          "start": 2393,
+          "end": 2464,
+          "lineStart": 55,
+          "lineEnd": 55
+        },
+        {
+          "id": 8,
+          "start": 2870,
+          "end": 2886,
+          "lineStart": 62,
+          "lineEnd": 62
+        },
+        {
+          "id": 9,
+          "start": 2914,
+          "end": 2930,
+          "lineStart": 63,
+          "lineEnd": 63
+        },
+        {
+          "id": 10,
+          "start": 2955,
+          "end": 2968,
+          "lineStart": 64,
+          "lineEnd": 64
+        },
+        {
+          "id": 11,
+          "start": 2992,
+          "end": 3009,
+          "lineStart": 65,
+          "lineEnd": 65
+        },
+        {
+          "id": 12,
+          "start": 3037,
+          "end": 3054,
+          "lineStart": 66,
+          "lineEnd": 66
+        },
+        {
+          "id": 13,
+          "start": 3079,
+          "end": 3101,
+          "lineStart": 67,
+          "lineEnd": 67
+        },
+        {
+          "id": 14,
+          "start": 3127,
+          "end": 3149,
+          "lineStart": 68,
+          "lineEnd": 68
+        },
+        {
+          "id": 15,
+          "start": 3172,
+          "end": 3200,
+          "lineStart": 69,
+          "lineEnd": 69
+        },
+        {
+          "id": 16,
+          "start": 3370,
+          "end": 3435,
+          "lineStart": 72,
+          "lineEnd": 72
+        },
+        {
+          "id": 17,
+          "start": 3454,
+          "end": 3478,
+          "lineStart": 73,
+          "lineEnd": 73
+        },
+        {
+          "id": 18,
+          "start": 3517,
+          "end": 3544,
+          "lineStart": 76,
+          "lineEnd": 76
+        },
+        {
+          "id": 19,
+          "start": 3781,
+          "end": 3811,
+          "lineStart": 80,
+          "lineEnd": 80
+        },
+        {
+          "id": 20,
+          "start": 3843,
+          "end": 3873,
+          "lineStart": 81,
+          "lineEnd": 81
+        },
+        {
+          "id": 21,
+          "start": 3897,
+          "end": 3922,
+          "lineStart": 82,
+          "lineEnd": 82
+        }
+      ],
+      "fixturesAndSetup": "Raw Playwright page plus BOOT_MS; Hungaroring day dry.",
+      "semantics": "Racing coordinates, lighting exclusions, valid required hero models, sampled terrain/elevation basin and finite sufficiently open barriers.",
+      "limits": "20 off-road terrain probes and 100 profile samples; bounds characterize this circuit only. No screenshot or pageErrors fixture.",
+      "cleanup": "Page lifecycle only."
+    },
+    {
+      "path": "tests/specs/image-grade-visual.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 26263,
+        "sha256": "bd214017eb0c7fbd08a150c425b029812f5531349e31a3c06ed05e28756eb30c",
+        "manifestSha256": "bd214017eb0c7fbd08a150c425b029812f5531349e31a3c06ed05e28756eb30c",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 26263,
+        "bytes": 26263,
+        "sha256": "bd214017eb0c7fbd08a150c425b029812f5531349e31a3c06ed05e28756eb30c",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "855b9758db733d95845bd99817b9607b9037d1a3198507734aa337c493b98e7e",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "58b648"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "4be53b14d4293dc466f308b29b7cff27c33625a619a94bdc53891c842b061722",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "2d37ec"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "23d4221e5ba2daf3315160ab3888c9e0fce35b95a04f222dbf1ee7d5346aa346",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "8a2148"
+        },
+        {
+          "start": 24000,
+          "end": 26263,
+          "bytes": 2263,
+          "sha256": "01408b2de82c14fc4d875eebb9e983c29610261d2c05dc296e1a848109447c61",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "8a5d3a"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 368,
+          "end": 441,
+          "lineStart": 7,
+          "lineEnd": 7
+        },
+        {
+          "source": "../helpers/soft-capture.js",
+          "start": 442,
+          "end": 502,
+          "lineStart": 8,
+          "lineEnd": 8
+        },
+        {
+          "source": "node:fs",
+          "start": 503,
+          "end": 539,
+          "lineStart": 9,
+          "lineEnd": 9
+        },
+        {
+          "source": "node:path",
+          "start": 540,
+          "end": 573,
+          "lineStart": 10,
+          "lineEnd": 10
+        }
+      ],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "blacks visibly change the deepest image detail",
+          "start": 19546,
+          "end": 22111,
+          "lineStart": 362,
+          "lineEnd": 397,
+          "partial": false,
+          "assertionIds": [
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16
+          ]
+        },
+        {
+          "title": "shadows predominantly change dark pixels",
+          "start": 22116,
+          "end": 22705,
+          "lineStart": 399,
+          "lineEnd": 408,
+          "partial": false,
+          "assertionIds": [
+            17,
+            18,
+            19,
+            20
+          ]
+        },
+        {
+          "title": "highlights predominantly change bright pixels",
+          "start": 22710,
+          "end": 23090,
+          "lineStart": 410,
+          "lineEnd": 416,
+          "partial": false,
+          "assertionIds": [
+            21
+          ]
+        },
+        {
+          "title": "red gain predominantly changes the red channel",
+          "start": 23095,
+          "end": 23527,
+          "lineStart": 418,
+          "lineEnd": 425,
+          "partial": false,
+          "assertionIds": [
+            22,
+            23
+          ]
+        },
+        {
+          "title": "grade extremes keep the race canvas renderable and move the frame off neutral",
+          "start": 23532,
+          "end": 24869,
+          "lineStart": 427,
+          "lineEnd": 450,
+          "partial": false,
+          "assertionIds": [
+            24,
+            25,
+            26,
+            27,
+            28
+          ]
+        },
+        {
+          "title": "${\u2026} ${\u2026} ${\u2026} retains broad tonal range",
+          "start": 25448,
+          "end": 26259,
+          "lineStart": 464,
+          "lineEnd": 479,
+          "partial": false,
+          "assertionIds": [
+            29,
+            30,
+            31
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 18010,
+          "end": 18106,
+          "lineStart": 346,
+          "lineEnd": 346
+        },
+        {
+          "id": 2,
+          "start": 18124,
+          "end": 18263,
+          "lineStart": 347,
+          "lineEnd": 347
+        },
+        {
+          "id": 3,
+          "start": 18301,
+          "end": 18393,
+          "lineStart": 348,
+          "lineEnd": 348
+        },
+        {
+          "id": 4,
+          "start": 18425,
+          "end": 18556,
+          "lineStart": 349,
+          "lineEnd": 349
+        },
+        {
+          "id": 5,
+          "start": 18593,
+          "end": 18716,
+          "lineStart": 350,
+          "lineEnd": 350
+        },
+        {
+          "id": 6,
+          "start": 19303,
+          "end": 19470,
+          "lineStart": 358,
+          "lineEnd": 358
+        },
+        {
+          "id": 7,
+          "start": 19808,
+          "end": 19885,
+          "lineStart": 368,
+          "lineEnd": 368
+        },
+        {
+          "id": 8,
+          "start": 19910,
+          "end": 19987,
+          "lineStart": 369,
+          "lineEnd": 369
+        },
+        {
+          "id": 9,
+          "start": 20997,
+          "end": 21098,
+          "lineStart": 384,
+          "lineEnd": 384
+        },
+        {
+          "id": 10,
+          "start": 21116,
+          "end": 21220,
+          "lineStart": 385,
+          "lineEnd": 385
+        },
+        {
+          "id": 11,
+          "start": 21258,
+          "end": 21386,
+          "lineStart": 386,
+          "lineEnd": 386
+        },
+        {
+          "id": 12,
+          "start": 21423,
+          "end": 21550,
+          "lineStart": 387,
+          "lineEnd": 387
+        },
+        {
+          "id": 13,
+          "start": 21587,
+          "end": 21674,
+          "lineStart": 388,
+          "lineEnd": 388
+        },
+        {
+          "id": 14,
+          "start": 21954,
+          "end": 21980,
+          "lineStart": 394,
+          "lineEnd": 394
+        },
+        {
+          "id": 15,
+          "start": 22008,
+          "end": 22035,
+          "lineStart": 395,
+          "lineEnd": 395
+        },
+        {
+          "id": 16,
+          "start": 22060,
+          "end": 22088,
+          "lineStart": 396,
+          "lineEnd": 396
+        },
+        {
+          "id": 17,
+          "start": 22461,
+          "end": 22490,
+          "lineStart": 404,
+          "lineEnd": 404
+        },
+        {
+          "id": 18,
+          "start": 22518,
+          "end": 22549,
+          "lineStart": 405,
+          "lineEnd": 405
+        },
+        {
+          "id": 19,
+          "start": 22577,
+          "end": 22607,
+          "lineStart": 406,
+          "lineEnd": 406
+        },
+        {
+          "id": 20,
+          "start": 22634,
+          "end": 22658,
+          "lineStart": 407,
+          "lineEnd": 407
+        },
+        {
+          "id": 21,
+          "start": 23019,
+          "end": 23045,
+          "lineStart": 415,
+          "lineEnd": 415
+        },
+        {
+          "id": 22,
+          "start": 23424,
+          "end": 23441,
+          "lineStart": 423,
+          "lineEnd": 423
+        },
+        {
+          "id": 23,
+          "start": 23476,
+          "end": 23493,
+          "lineStart": 424,
+          "lineEnd": 424
+        },
+        {
+          "id": 24,
+          "start": 23906,
+          "end": 23985,
+          "lineStart": 433,
+          "lineEnd": 433
+        },
+        {
+          "id": 25,
+          "start": 24154,
+          "end": 24167,
+          "lineStart": 437,
+          "lineEnd": 437
+        },
+        {
+          "id": 26,
+          "start": 24188,
+          "end": 24208,
+          "lineStart": 438,
+          "lineEnd": 438
+        },
+        {
+          "id": 27,
+          "start": 24236,
+          "end": 24256,
+          "lineStart": 439,
+          "lineEnd": 439
+        },
+        {
+          "id": 28,
+          "start": 24794,
+          "end": 24838,
+          "lineStart": 448,
+          "lineEnd": 448
+        },
+        {
+          "id": 29,
+          "start": 26066,
+          "end": 26097,
+          "lineStart": 476,
+          "lineEnd": 476
+        },
+        {
+          "id": 30,
+          "start": 26148,
+          "end": 26179,
+          "lineStart": 477,
+          "lineEnd": 477
+        },
+        {
+          "id": 31,
+          "start": 26204,
+          "end": 26233,
+          "lineStart": 478,
+          "lineEnd": 478
+        }
+      ],
+      "fixturesAndSetup": "GLX fixtures, soft-capture JPEG decoder, serial grade block; 640x360 fixed fog=1 camera, neutral grade, frozen physics/clock, held governor, pack settle or disable fallback.",
+      "semantics": "Black/shadow/highlight/channel grade response, real slider extrema, five shipped-condition tonal histograms.",
+      "limits": "Pair premise checks tier/post path, newer present, env and exact owned camera; third blacks capture repeats premise. JPEG numerical deltas are coarse image tests, not visual approval. Extreme and representative histogram tests lack full capturePair premise guards. Five condition rows come from one parameterized source case.",
+      "cleanup": "JPEG attachments; optional capture directory; browser lifecycle clears tuning/governor/freeze. Module last-capture buffer overwritten."
+    },
+    {
+      "path": "tests/specs/imola-foundation.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 5378,
+        "sha256": "639e98358da0148739581c6f5954c86c149c3003f0c72d2d0beda873f19a4515",
+        "manifestSha256": "639e98358da0148739581c6f5954c86c149c3003f0c72d2d0beda873f19a4515",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 5378,
+        "bytes": 5378,
+        "sha256": "639e98358da0148739581c6f5954c86c149c3003f0c72d2d0beda873f19a4515",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5378,
+          "bytes": 5378,
+          "sha256": "639e98358da0148739581c6f5954c86c149c3003f0c72d2d0beda873f19a4515",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "d54395"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 13,
+          "end": 67,
+          "lineStart": 2,
+          "lineEnd": 2
+        }
+      ],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "required models and pit supersedes",
+          "start": 2205,
+          "end": 3684,
+          "lineStart": 54,
+          "lineEnd": 78,
+          "partial": false,
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "title": "terrain, elevation, walls and night rebuild",
+          "start": 3689,
+          "end": 5372,
+          "lineStart": 80,
+          "lineEnd": 111,
+          "partial": false,
+          "assertionIds": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 2339,
+          "end": 2357,
+          "lineStart": 56,
+          "lineEnd": 56
+        },
+        {
+          "id": 2,
+          "start": 2375,
+          "end": 2404,
+          "lineStart": 57,
+          "lineEnd": 57
+        },
+        {
+          "id": 3,
+          "start": 3261,
+          "end": 3325,
+          "lineStart": 69,
+          "lineEnd": 69
+        },
+        {
+          "id": 4,
+          "start": 3350,
+          "end": 3378,
+          "lineStart": 71,
+          "lineEnd": 71
+        },
+        {
+          "id": 5,
+          "start": 3499,
+          "end": 3515,
+          "lineStart": 73,
+          "lineEnd": 73
+        },
+        {
+          "id": 6,
+          "start": 3832,
+          "end": 3850,
+          "lineStart": 82,
+          "lineEnd": 82
+        },
+        {
+          "id": 7,
+          "start": 3868,
+          "end": 3905,
+          "lineStart": 83,
+          "lineEnd": 83
+        },
+        {
+          "id": 8,
+          "start": 3926,
+          "end": 3957,
+          "lineStart": 84,
+          "lineEnd": 84
+        },
+        {
+          "id": 9,
+          "start": 3973,
+          "end": 4010,
+          "lineStart": 85,
+          "lineEnd": 85
+        },
+        {
+          "id": 10,
+          "start": 4187,
+          "end": 4237,
+          "lineStart": 90,
+          "lineEnd": 90
+        },
+        {
+          "id": 11,
+          "start": 4254,
+          "end": 4327,
+          "lineStart": 91,
+          "lineEnd": 91
+        },
+        {
+          "id": 12,
+          "start": 4352,
+          "end": 4379,
+          "lineStart": 92,
+          "lineEnd": 92
+        },
+        {
+          "id": 13,
+          "start": 4397,
+          "end": 4427,
+          "lineStart": 93,
+          "lineEnd": 93
+        },
+        {
+          "id": 14,
+          "start": 4452,
+          "end": 4482,
+          "lineStart": 94,
+          "lineEnd": 94
+        },
+        {
+          "id": 15,
+          "start": 4509,
+          "end": 4556,
+          "lineStart": 95,
+          "lineEnd": 95
+        },
+        {
+          "id": 16,
+          "start": 4580,
+          "end": 4614,
+          "lineStart": 96,
+          "lineEnd": 96
+        },
+        {
+          "id": 17,
+          "start": 4640,
+          "end": 4678,
+          "lineStart": 97,
+          "lineEnd": 97
+        },
+        {
+          "id": 18,
+          "start": 4701,
+          "end": 4738,
+          "lineStart": 98,
+          "lineEnd": 98
+        },
+        {
+          "id": 19,
+          "start": 4764,
+          "end": 4796,
+          "lineStart": 99,
+          "lineEnd": 99
+        },
+        {
+          "id": 20,
+          "start": 4821,
+          "end": 4851,
+          "lineStart": 100,
+          "lineEnd": 100
+        },
+        {
+          "id": 21,
+          "start": 4877,
+          "end": 4942,
+          "lineStart": 101,
+          "lineEnd": 101
+        },
+        {
+          "id": 22,
+          "start": 5162,
+          "end": 5211,
+          "lineStart": 108,
+          "lineEnd": 108
+        },
+        {
+          "id": 23,
+          "start": 5228,
+          "end": 5354,
+          "lineStart": 109,
+          "lineEnd": 110
+        }
+      ],
+      "fixturesAndSetup": "racePage/pageErrors fixtures; Imola day diagnostic and night rebuild.",
+      "semantics": "Required Senna/bridge/nine water models, no suppressed ids; racing terrain/exclusions/water, corner-aligned elevation, shoulder gaps and walls; night required models remain valid.",
+      "limits": "Profile 500; shoulder 240x2 samples ignore null gaps. Diagnostic validity is not appearance approval.",
+      "cleanup": "Page lifecycle; rebuild changes same fixture race."
+    },
+    {
+      "path": "tests/specs/instanced-draw.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 6921,
+        "sha256": "2929b4a346e675c636e6f013095d8f1ee7e9348a74e2c67fbfef04eaee7e0a1e",
+        "manifestSha256": "2929b4a346e675c636e6f013095d8f1ee7e9348a74e2c67fbfef04eaee7e0a1e",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 6921,
+        "bytes": 6921,
+        "sha256": "2929b4a346e675c636e6f013095d8f1ee7e9348a74e2c67fbfef04eaee7e0a1e",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6921,
+          "bytes": 6921,
+          "sha256": "2929b4a346e675c636e6f013095d8f1ee7e9348a74e2c67fbfef04eaee7e0a1e",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "63bf1e"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 719,
+          "end": 773,
+          "lineStart": 14,
+          "lineEnd": 14
+        }
+      ],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "exposes the batches() consumer API",
+          "start": 1153,
+          "end": 1499,
+          "lineStart": 23,
+          "lineEnd": 30,
+          "partial": false,
+          "assertionIds": [
+            1
+          ]
+        },
+        {
+          "title": "a real track's batches() payload uploads as GL instance buffers",
+          "start": 1504,
+          "end": 3711,
+          "lineStart": 32,
+          "lineEnd": 73,
+          "partial": false,
+          "assertionIds": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "title": "culling packs the visible instances to the front of the buffer",
+          "start": 3716,
+          "end": 5870,
+          "lineStart": 75,
+          "lineEnd": 113,
+          "partial": false,
+          "assertionIds": [
+            9,
+            10,
+            11,
+            12,
+            13
+          ]
+        },
+        {
+          "title": "instanced geometry can cast shadows",
+          "start": 5875,
+          "end": 6124,
+          "lineStart": 115,
+          "lineEnd": 118,
+          "partial": false,
+          "assertionIds": [
+            14
+          ]
+        },
+        {
+          "title": "ordinary draws are unaffected \u2014 the scene still renders",
+          "start": 6129,
+          "end": 6915,
+          "lineStart": 120,
+          "lineEnd": 131,
+          "partial": false,
+          "assertionIds": [
+            15
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 1414,
+          "end": 1425,
+          "lineStart": 29,
+          "lineEnd": 29
+        },
+        {
+          "id": 2,
+          "start": 2892,
+          "end": 2974,
+          "lineStart": 61,
+          "lineEnd": 61
+        },
+        {
+          "id": 3,
+          "start": 3312,
+          "end": 3383,
+          "lineStart": 66,
+          "lineEnd": 66
+        },
+        {
+          "id": 4,
+          "start": 3408,
+          "end": 3427,
+          "lineStart": 67,
+          "lineEnd": 67
+        },
+        {
+          "id": 5,
+          "start": 3450,
+          "end": 3475,
+          "lineStart": 68,
+          "lineEnd": 68
+        },
+        {
+          "id": 6,
+          "start": 3492,
+          "end": 3528,
+          "lineStart": 69,
+          "lineEnd": 69
+        },
+        {
+          "id": 7,
+          "start": 3545,
+          "end": 3560,
+          "lineStart": 70,
+          "lineEnd": 70
+        },
+        {
+          "id": 8,
+          "start": 3663,
+          "end": 3681,
+          "lineStart": 72,
+          "lineEnd": 72
+        },
+        {
+          "id": 9,
+          "start": 5477,
+          "end": 5559,
+          "lineStart": 108,
+          "lineEnd": 108
+        },
+        {
+          "id": 10,
+          "start": 5577,
+          "end": 5648,
+          "lineStart": 109,
+          "lineEnd": 109
+        },
+        {
+          "id": 11,
+          "start": 5673,
+          "end": 5688,
+          "lineStart": 110,
+          "lineEnd": 110
+        },
+        {
+          "id": 12,
+          "start": 5713,
+          "end": 5770,
+          "lineStart": 111,
+          "lineEnd": 111
+        },
+        {
+          "id": 13,
+          "start": 5784,
+          "end": 5850,
+          "lineStart": 112,
+          "lineEnd": 112
+        },
+        {
+          "id": 14,
+          "start": 6030,
+          "end": 6101,
+          "lineStart": 117,
+          "lineEnd": 117
+        },
+        {
+          "id": 15,
+          "start": 6798,
+          "end": 6886,
+          "lineStart": 130,
+          "lineEnd": 130
+        }
+      ],
+      "fixturesAndSetup": "GLX racePage fixture, Monza TrackGraph batches.",
+      "semantics": "Instance API and largest-batch GPU upload, frustum-only all/none culling, shadow API, ordinary scene remains nonblank.",
+      "limits": "Math delegated to unit suite. Culling upload:false proves counts, not packed buffer order despite title. Shadow case checks function existence only; PNG >20KB is coarse nonblank heuristic.",
+      "cleanup": "Both temporary instanced batches freed explicitly. Browser lifecycle owns track buffers."
+    },
+    {
+      "path": "tests/specs/interlagos-foundation.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 5177,
+        "sha256": "b04106b5ae9bdc74d1618ce5cf5741ccff21a9454b6924ce1399b084117613a9",
+        "manifestSha256": "b04106b5ae9bdc74d1618ce5cf5741ccff21a9454b6924ce1399b084117613a9",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 5177,
+        "bytes": 5177,
+        "sha256": "b04106b5ae9bdc74d1618ce5cf5741ccff21a9454b6924ce1399b084117613a9",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5177,
+          "bytes": 5177,
+          "sha256": "b04106b5ae9bdc74d1618ce5cf5741ccff21a9454b6924ce1399b084117613a9",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "71b94e"
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "start": 13,
+          "end": 61,
+          "lineStart": 2,
+          "lineEnd": 2
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 62,
+          "end": 111,
+          "lineStart": 3,
+          "lineEnd": 3
+        }
+      ],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "uses racing coordinates and reproduces the finish plateau elevation",
+          "start": 663,
+          "end": 2105,
+          "lineStart": 14,
+          "lineEnd": 43,
+          "partial": false,
+          "assertionIds": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ]
+        },
+        {
+          "title": "emits required hero models and Guarapiranga lake",
+          "start": 2110,
+          "end": 3623,
+          "lineStart": 45,
+          "lineEnd": 76,
+          "partial": false,
+          "assertionIds": [
+            9,
+            10,
+            11,
+            12
+          ]
+        },
+        {
+          "title": "keeps track-owned dressing within a focused geometry budget",
+          "start": 3628,
+          "end": 4403,
+          "lineStart": 78,
+          "lineEnd": 91,
+          "partial": false,
+          "assertionIds": [
+            13
+          ]
+        },
+        {
+          "title": "keeps terrain grounded and collision barriers finite",
+          "start": 4408,
+          "end": 5171,
+          "lineStart": 93,
+          "lineEnd": 114,
+          "partial": false,
+          "assertionIds": [
+            14,
+            15,
+            16,
+            17,
+            18
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 1681,
+          "end": 1707,
+          "lineStart": 35,
+          "lineEnd": 35
+        },
+        {
+          "id": 2,
+          "start": 1728,
+          "end": 1748,
+          "lineStart": 36,
+          "lineEnd": 36
+        },
+        {
+          "id": 3,
+          "start": 1781,
+          "end": 1801,
+          "lineStart": 37,
+          "lineEnd": 37
+        },
+        {
+          "id": 4,
+          "start": 1831,
+          "end": 1889,
+          "lineStart": 38,
+          "lineEnd": 38
+        },
+        {
+          "id": 5,
+          "start": 1906,
+          "end": 1928,
+          "lineStart": 39,
+          "lineEnd": 39
+        },
+        {
+          "id": 6,
+          "start": 1956,
+          "end": 1978,
+          "lineStart": 40,
+          "lineEnd": 40
+        },
+        {
+          "id": 7,
+          "start": 2003,
+          "end": 2029,
+          "lineStart": 41,
+          "lineEnd": 41
+        },
+        {
+          "id": 8,
+          "start": 2055,
+          "end": 2079,
+          "lineStart": 42,
+          "lineEnd": 42
+        },
+        {
+          "id": 9,
+          "start": 3304,
+          "end": 3330,
+          "lineStart": 68,
+          "lineEnd": 68
+        },
+        {
+          "id": 10,
+          "start": 3470,
+          "end": 3489,
+          "lineStart": 73,
+          "lineEnd": 73
+        },
+        {
+          "id": 11,
+          "start": 3507,
+          "end": 3557,
+          "lineStart": 74,
+          "lineEnd": 74
+        },
+        {
+          "id": 12,
+          "start": 3574,
+          "end": 3598,
+          "lineStart": 75,
+          "lineEnd": 75
+        },
+        {
+          "id": 13,
+          "start": 4362,
+          "end": 4375,
+          "lineStart": 90,
+          "lineEnd": 90
+        },
+        {
+          "id": 14,
+          "start": 4917,
+          "end": 4938,
+          "lineStart": 109,
+          "lineEnd": 109
+        },
+        {
+          "id": 15,
+          "start": 4970,
+          "end": 4997,
+          "lineStart": 110,
+          "lineEnd": 110
+        },
+        {
+          "id": 16,
+          "start": 5015,
+          "end": 5040,
+          "lineStart": 111,
+          "lineEnd": 111
+        },
+        {
+          "id": 17,
+          "start": 5065,
+          "end": 5090,
+          "lineStart": 112,
+          "lineEnd": 112
+        },
+        {
+          "id": 18,
+          "start": 5113,
+          "end": 5143,
+          "lineStart": 113,
+          "lineEnd": 113
+        }
+      ],
+      "fixturesAndSetup": "Raw Playwright page and BOOT_MS; Interlagos day dry.",
+      "semantics": "Racing-frame finish plateau, required heroes/lake vertices, props budget below 620k, grounded terrain and finite collision walls.",
+      "limits": "1000 profile samples; 200x3 terrain samples ignore null. Geometry budget detects growth only, not missing content.",
+      "cleanup": "Page lifecycle only."
+    },
+    {
+      "path": "tests/specs/jump-start.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 7915,
+        "sha256": "14ec96fa502168a1c473b4df71aae272239db1c6792fa29f2516ec181a4e93e7",
+        "manifestSha256": "14ec96fa502168a1c473b4df71aae272239db1c6792fa29f2516ec181a4e93e7",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 7915,
+        "bytes": 7915,
+        "sha256": "14ec96fa502168a1c473b4df71aae272239db1c6792fa29f2516ec181a4e93e7",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7915,
+          "bytes": 7915,
+          "sha256": "14ec96fa502168a1c473b4df71aae272239db1c6792fa29f2516ec181a4e93e7",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "d546ab"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 249,
+          "end": 303,
+          "lineStart": 5,
+          "lineEnd": 5
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 304,
+          "end": 368,
+          "lineStart": 6,
+          "lineEnd": 6
+        }
+      ],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "throttle held at lights-out adds +5 s",
+          "start": 776,
+          "end": 1393,
+          "lineStart": 20,
+          "lineEnd": 36,
+          "partial": false,
+          "assertionIds": [
+            1,
+            2
+          ]
+        },
+        {
+          "title": "waiting for green before throttle accrues no false-start penalty",
+          "start": 1398,
+          "end": 2158,
+          "lineStart": 38,
+          "lineEnd": 56,
+          "partial": false,
+          "assertionIds": [
+            3,
+            4
+          ]
+        },
+        {
+          "title": "a manual launch inside the reaction window is a false start, and only when the car really moved",
+          "start": 2467,
+          "end": 4510,
+          "lineStart": 61,
+          "lineEnd": 92,
+          "partial": false,
+          "assertionIds": [
+            5,
+            6,
+            7
+          ]
+        },
+        {
+          "title": "auto-throttle is exempt through the reaction window, including a fast legal build",
+          "start": 4515,
+          "end": 7909,
+          "lineStart": 94,
+          "lineEnd": 152,
+          "partial": false,
+          "assertionIds": [
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 1301,
+          "end": 1318,
+          "lineStart": 34,
+          "lineEnd": 34
+        },
+        {
+          "id": 2,
+          "start": 1337,
+          "end": 1361,
+          "lineStart": 35,
+          "lineEnd": 35
+        },
+        {
+          "id": 3,
+          "start": 2084,
+          "end": 2101,
+          "lineStart": 54,
+          "lineEnd": 54
+        },
+        {
+          "id": 4,
+          "start": 2120,
+          "end": 2144,
+          "lineStart": 55,
+          "lineEnd": 55
+        },
+        {
+          "id": 5,
+          "start": 4133,
+          "end": 4152,
+          "lineStart": 88,
+          "lineEnd": 88
+        },
+        {
+          "id": 6,
+          "start": 4293,
+          "end": 4365,
+          "lineStart": 90,
+          "lineEnd": 90
+        },
+        {
+          "id": 7,
+          "start": 4389,
+          "end": 4493,
+          "lineStart": 91,
+          "lineEnd": 91
+        },
+        {
+          "id": 8,
+          "start": 7280,
+          "end": 7296,
+          "lineStart": 138,
+          "lineEnd": 138
+        },
+        {
+          "id": 9,
+          "start": 7342,
+          "end": 7359,
+          "lineStart": 139,
+          "lineEnd": 139
+        },
+        {
+          "id": 10,
+          "start": 7431,
+          "end": 7455,
+          "lineStart": 140,
+          "lineEnd": 140
+        },
+        {
+          "id": 11,
+          "start": 7474,
+          "end": 7495,
+          "lineStart": 141,
+          "lineEnd": 141
+        },
+        {
+          "id": 12,
+          "start": 7514,
+          "end": 7531,
+          "lineStart": 142,
+          "lineEnd": 142
+        },
+        {
+          "id": 13,
+          "start": 7550,
+          "end": 7579,
+          "lineStart": 143,
+          "lineEnd": 143
+        },
+        {
+          "id": 14,
+          "start": 7598,
+          "end": 7619,
+          "lineStart": 144,
+          "lineEnd": 144
+        },
+        {
+          "id": 15,
+          "start": 7636,
+          "end": 7652,
+          "lineStart": 145,
+          "lineEnd": 145
+        },
+        {
+          "id": 16,
+          "start": 7673,
+          "end": 7696,
+          "lineStart": 146,
+          "lineEnd": 146
+        },
+        {
+          "id": 17,
+          "start": 7716,
+          "end": 7735,
+          "lineStart": 147,
+          "lineEnd": 147
+        },
+        {
+          "id": 18,
+          "start": 7755,
+          "end": 7786,
+          "lineStart": 148,
+          "lineEnd": 148
+        },
+        {
+          "id": 19,
+          "start": 7816,
+          "end": 7838,
+          "lineStart": 149,
+          "lineEnd": 149
+        },
+        {
+          "id": 20,
+          "start": 7865,
+          "end": 7889,
+          "lineStart": 150,
+          "lineEnd": 150
+        }
+      ],
+      "fixturesAndSetup": "GLX fixtures plus shared-page toMenu/pinFreePlay; Monza count state stepped deterministically at 1/60.",
+      "semantics": "Held throttle incurs >=5s, delayed manual launch zero; first-green fast legal build crosses reaction speed gate and penalizes; stock/fast auto-throttle exempt.",
+      "limits": "Full 22-car field, real wear, legal exact parts and no contact/manual input positive controls. Tests launch penalty after green, not movement before green; bounded 600 countdown and 30 launch steps.",
+      "cleanup": "setInput cleared in manual cases and before auto launches; shared menu resets between stock/fast. Page lifecycle handles preferences."
+    },
+    {
+      "path": "tests/specs/lighting-ab.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 14626,
+        "sha256": "3b2a5ab2a42802f5055b95dd3cc032792bb6348d9ae9766459ddbae52aa2fdc1",
+        "manifestSha256": "3b2a5ab2a42802f5055b95dd3cc032792bb6348d9ae9766459ddbae52aa2fdc1",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 14626,
+        "bytes": 14626,
+        "sha256": "3b2a5ab2a42802f5055b95dd3cc032792bb6348d9ae9766459ddbae52aa2fdc1",
+        "partial": false
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "216cc29ee3deb76c3615eec07ad6f5f5366a350b8c31ce5edbb76f03bf82e170",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "6549d5"
+        },
+        {
+          "start": 8000,
+          "end": 14626,
+          "bytes": 6626,
+          "sha256": "c9c0aa121be70debe95745b12f83243d0c41ed96b50eeb64a6da7b9e6507b555",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "bbe945"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 769,
+          "end": 842,
+          "lineStart": 14,
+          "lineEnd": 14
+        },
+        {
+          "source": "../helpers/soft-capture.js",
+          "start": 843,
+          "end": 903,
+          "lineStart": 15,
+          "lineEnd": 15
+        }
+      ],
+      "hooks": [],
+      "cases": [
+        {
+          "title": "weather() applies lighting live (fog mutes sun + lifts exposure)",
+          "start": 5943,
+          "end": 6565,
+          "lineStart": 92,
+          "lineEnd": 101,
+          "partial": false,
+          "assertionIds": [
+            1,
+            2
+          ]
+        },
+        {
+          "title": "night fog GLOWS around lamps (the lamp-fog knobs add luminance to one fogged frame)",
+          "start": 6568,
+          "end": 9810,
+          "lineStart": 103,
+          "lineEnd": 150,
+          "partial": false,
+          "assertionIds": [
+            3,
+            4,
+            5
+          ]
+        },
+        {
+          "title": "night light budget: lamps on at night, off by day, exposure per table",
+          "start": 9813,
+          "end": 12001,
+          "lineStart": 152,
+          "lineEnd": 182,
+          "partial": false,
+          "assertionIds": [
+            6,
+            7,
+            8,
+            9,
+            10,
+            11
+          ]
+        },
+        {
+          "title": "PCSS contact-hardening rig is alive: SHADOW SOFTEN changes the shadow edges in the picture",
+          "start": 12004,
+          "end": 14196,
+          "lineStart": 184,
+          "lineEnd": 223,
+          "partial": false,
+          "assertionIds": [
+            12,
+            13,
+            14
+          ]
+        },
+        {
+          "title": "dark sessions keep their exposure floors in fog (night must stay night)",
+          "start": 14199,
+          "end": 14624,
+          "lineStart": 225,
+          "lineEnd": 231,
+          "partial": false,
+          "assertionIds": [
+            15,
+            16
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": 1,
+          "start": 6422,
+          "end": 6457,
+          "lineStart": 99,
+          "lineEnd": 99
+        },
+        {
+          "id": 2,
+          "start": 6510,
+          "end": 6532,
+          "lineStart": 100,
+          "lineEnd": 100
+        },
+        {
+          "id": 3,
+          "start": 8181,
+          "end": 8231,
+          "lineStart": 128,
+          "lineEnd": 128
+        },
+        {
+          "id": 4,
+          "start": 9710,
+          "end": 9727,
+          "lineStart": 148,
+          "lineEnd": 148
+        },
+        {
+          "id": 5,
+          "start": 9760,
+          "end": 9777,
+          "lineStart": 149,
+          "lineEnd": 149
+        },
+        {
+          "id": 6,
+          "start": 10493,
+          "end": 10516,
+          "lineStart": 161,
+          "lineEnd": 161
+        },
+        {
+          "id": 7,
+          "start": 10539,
+          "end": 10562,
+          "lineStart": 162,
+          "lineEnd": 162
+        },
+        {
+          "id": 8,
+          "start": 10590,
+          "end": 10612,
+          "lineStart": 163,
+          "lineEnd": 163
+        },
+        {
+          "id": 9,
+          "start": 11371,
+          "end": 11462,
+          "lineStart": 174,
+          "lineEnd": 174
+        },
+        {
+          "id": 10,
+          "start": 11485,
+          "end": 11508,
+          "lineStart": 175,
+          "lineEnd": 175
+        },
+        {
+          "id": 11,
+          "start": 11968,
+          "end": 11989,
+          "lineStart": 181,
+          "lineEnd": 181
+        },
+        {
+          "id": 12,
+          "start": 12338,
+          "end": 12390,
+          "lineStart": 188,
+          "lineEnd": 188
+        },
+        {
+          "id": 13,
+          "start": 14068,
+          "end": 14109,
+          "lineStart": 221,
+          "lineEnd": 221
+        },
+        {
+          "id": 14,
+          "start": 14124,
+          "end": 14171,
+          "lineStart": 222,
+          "lineEnd": 222
+        },
+        {
+          "id": 15,
+          "start": 14530,
+          "end": 14549,
+          "lineStart": 229,
+          "lineEnd": 229
+        },
+        {
+          "id": 16,
+          "start": 14582,
+          "end": 14601,
+          "lineStart": 230,
+          "lineEnd": 230
+        }
+      ],
+      "fixturesAndSetup": "GLX fixtures + soft-capture; headless for lighting-state-only cases, real rendering for lamp/PCSS cases.",
+      "semantics": "Live fog sun/exposure, lamp fog OFF/ON twice >3% luminance increase, <=48 night lights and day-off, palette-scaled flood emission, PCSS pixel response >0.1%, night-fog exposure [0.94,1.05).",
+      "limits": "Pinned clock/tier/physics for pixel A/B; full-fog fixed camera. PCSS measures changed picture, not exact edge shape; no TLX/WGX coverage here.",
+      "cleanup": "JSON diagnostic attachments; browser lifecycle owns settings. A/B glow ends on shipped knobs; no explicit PCSS reset."
+    },
+    {
+      "path": "tests/specs/lighting-tuner-grade.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 20046,
+        "sha256": "96be2816d96a9448c035b673f9ed4f284198518edb9c615bf6914e29ffc9d72c",
+        "manifestSha256": "96be2816d96a9448c035b673f9ed4f284198518edb9c615bf6914e29ffc9d72c",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 3779,
+        "bytes": 3779,
+        "sha256": "8842262042a804547aeb149c5f7ee2bda5a63618ce1ff09e7e9473c52b209b9f",
+        "partial": true
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3779,
+          "bytes": 3779,
+          "sha256": "8842262042a804547aeb149c5f7ee2bda5a63618ce1ff09e7e9473c52b209b9f",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "f521c1"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 175,
+          "end": 248,
+          "lineStart": 4,
+          "lineEnd": 4
+        }
+      ],
+      "hooks": [],
+      "cases": [],
+      "assertions": [],
+      "fixturesAndSetup": "Assigned prefix imports GLX fixtures and declares 300s collection-time budget.",
+      "semantics": "Introductory provenance explains expensive tuner menu actions and dispatched walk design; no executable case/hook/assertion in assigned prefix.",
+      "limits": "Ends mid-comment at byte 3779 of 20046; later tuner behavior belongs to next batch. Comments describe historical measurements, not runs in this mapping.",
+      "cleanup": "No executable resource acquired in prefix."
+    }
+  ],
+  "cleanup": "Static documentation only; no tests/browser/processes launched; no runtime or test edits.",
+  "productionNavigation": {
+    "method": "Attached apex-lsp references scoped js/, file counts; symbols fallback for facade member invisible to checker",
+    "results": [
+      {
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "29 references in 8 files (query at js/ui/hud.js:2:7; scope path \"js\": 29 of 29 resolved references)\njs/ui/hud-arrange.js 8\njs/ui/dock-layout.js 4\njs/ui/hud-layout.js 4\njs/ui/survey-hud.js 4\njs/ui/hud-elements.js 3\njs/ui/hud-relative.js 3\njs/ui/hud.js 2\njs/game.js 1"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "46 references in 5 files (query at js/ui/hud-layout.js:40:7; scope path \"js\": 46 of 46 resolved references)\njs/ui/hud-arrange.js 28\njs/ui/hud.js 10\njs/ui/hud-elements.js 4\njs/camera/mode-switch.js 2\njs/ui/hud-layout.js 2"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "43 references in 12 files (query at js/lighting/lighting.js:8:7; scope path \"js\": 43 of 43 resolved references)\njs/ui/photo-studio.js 16\njs/fx/particles.js 6\njs/track/scenery/build-props.js 5\njs/game.js 3\njs/garage/setup-camera.js 3\njs/car/car-draw.js 2\njs/lighting/atmosphere.js 2\njs/lighting/lighting.js 2\njs/agent/apex.js 1\njs/lighting/profiles.js 1\njs/lighting/tuner-panel.js 1\njs/render/shared/shadow-pass.js 1"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "24 references in 5 files (query at js/race/sporting-regs.js:53:7; scope path \"js\": 24 of 24 resolved references)\njs/race/jump-start-penalty.js 8\njs/race/pit-lane.js 8\njs/game.js 5\njs/race/race-control.js 2\njs/race/sporting-regs.js 1"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      },
+      {
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "GLX (js/render/shared/glx-facade.js:5) has no member createInstancedBatch the checker can see; try lsp_hover GLX or lsp_symbols createInstancedBatch"
+            }
+          ],
+          "structuredContent": {
+            "error_code": "INVALID_ARGUMENT"
+          },
+          "isError": true
+        }
+      },
+      {
+        "status": "fulfilled",
+        "value": {
+          "content": [
+            {
+              "type": "text",
+              "text": "539 references in 78 files (query at js/track/tracks.js:3:7; scope path \"js\": 539 of 539 resolved references)\njs/game.js 66\njs/agent/apex.js 37\njs/agent/agentview.js 25\njs/camera/flyby-seq.js 25\njs/race/pit-lane.js 21\njs/camera/vantage.js 19\njs/physics/debris-world.js 18\njs/track/build-client.js 17\njs/ui/select-screen.js 17\njs/agent/apex-cam.js 14\njs/camera/extra-rigs.js 13\njs/career/career.js 11\njs/net/lobby-settings.js 11\njs/track/scenery/nature.js 11\njs/agent/apex-track.js 9\njs/editor/custom-tracks.js 9\njs/career/season-cal.js 8\njs/core/lazy-bundles.js 8\njs/race/real-race.js 8\njs/agent/agentview-corners.js 7\njs/audio/driving-cues.js 7\njs/camera/results-cam.js 7\njs/ui/track-maps.js 7\njs/camera/flyby-sight.js 6\njs/car/ghost-share.js 6\njs/physics/incident-sim.js 6\njs/track/build-worker.js 6\njs/ui/home-world.js 6\njs/agent/agentview-raster.js 5\njs/camera/cam-avoid.js 5\njs/camera/trackside.js 5\njs/editor/designer.js 5\njs/lighting/lamp-bake.js 5\njs/physics/wall-clamp.js 5\njs/race/real-replay.js 5\njs/ui/share-code.js 5\njs/car/car-mesh.js 4\njs/editor/validate.js 4\njs/garage/setup-experiments.js 4\njs/perf/soak-run.js 4\njs/ui/photo-studio.js 4\njs/audio/rivals.js 3\njs/camera/director.js 3\njs/career/badges.js 3\njs/career/career-backup.js 3\njs/career/career-ui.js 3\njs/data/real-race-tab.js 3\njs/garage/scene.js 3\njs/garage/setup-camera.js 3\njs/lighting/tuner-panel.js 3\njs/net/lobby.js 3\njs/physics/contact-geometry.js 3\njs/render/shared/mirror-pass.js 3\njs/render/shared/shadow-pass.js 3\njs/ui/settings-export.js 3\njs/audio/crowd.js 2\njs/career/season-ui.js 2\njs/editor/followup-tools.js 2\njs/lighting/profiles.js 2\njs/physics/brake-cue.js 2\njs/race/daily-challenge.js 2\njs/track/scenery/build-props.js 2\njs/ui/screen-looks.js 2\njs/ui/title-menu.js 2\njs/camera/free-cam.js 1\njs/camera/tuner-panel.js 1\njs/career/experience.js 1\njs/circuits/scenery/spa.js 1\njs/editor/insight.js 1\njs/editor/scenery-preview.js 1\njs/lighting/frame-lights.js 1\njs/net/netplay.js 1\njs/physics/aero-zones.js 1\njs/race/flying-start.js 1\njs/race/quali-model.js 1\njs/track/scenery/structures.js 1\njs/track/tracks.js 1\njs/ui/title-flow.js 1"
+            }
+          ],
+          "structuredContent": null,
+          "isError": false
+        }
+      }
+    ],
+    "additional": [
+      {
+        "symbol": "MirrorPass",
+        "references": 30,
+        "files": [
+          "js/car/car-draw.js",
+          "js/perf/gpu-test-run.js",
+          "js/ui/hud-layout.js",
+          "js/game.js",
+          "js/garage/setup-camera.js",
+          "js/agent/apex.js",
+          "js/render/shared/mirror-pass.js"
+        ]
+      },
+      {
+        "query": "createInstancedBatch",
+        "definitions": [
+          "js/render/glx/glx.js:2079",
+          "js/render/three/tlx.js:2208",
+          "js/render/webgpu/wgx.js:5039"
+        ]
+      }
+    ]
+  }
+}

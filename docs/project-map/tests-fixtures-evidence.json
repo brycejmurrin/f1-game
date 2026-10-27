@@ -1,0 +1,496 @@
+{
+  "files": [
+    {
+      "path": "tests/fixtures/claude-usage/session-copy.jsonl",
+      "bytes": 756,
+      "lines": 4,
+      "sha256": "9481d71d8acf0aaa750d15adffb34e305a8d850492c2f6f63abae1b9314c8aba",
+      "method": "fully-read",
+      "validRows": 4,
+      "intentionallyMalformedLines": [],
+      "structure": {
+        "dict": 14,
+        "keys": 40,
+        "str": 22,
+        "list": 3,
+        "int": 8
+      }
+    },
+    {
+      "path": "tests/fixtures/claude-usage/session.jsonl",
+      "bytes": 2648,
+      "lines": 15,
+      "sha256": "d92d5fbfe6a5fbd0b6633a4d03edd73120f4bba747a344436c55ddbcaa0ea71d",
+      "method": "fully-read",
+      "validRows": 14,
+      "intentionallyMalformedLines": [
+        7
+      ],
+      "structure": {
+        "dict": 47,
+        "keys": 138,
+        "str": 76,
+        "list": 10,
+        "int": 27,
+        "bool": 3
+      }
+    },
+    {
+      "path": "tests/fixtures/fleet-board/api.json",
+      "bytes": 2573,
+      "lines": 30,
+      "sha256": "98a4fd16189037a8d6c22430ef7d87d8f0103486b35037b1b87eab8f490402cf",
+      "method": "fully-read",
+      "structure": {
+        "dict": 32,
+        "keys": 88,
+        "list": 13,
+        "int": 10,
+        "str": 47,
+        "bool": 2,
+        "NoneType": 2
+      },
+      "rootFields": [
+        "pulls?state=open&base=claude%2Ff1-game-project-26h3ng&per_page=100",
+        "pulls/7",
+        "pulls/7/files?per_page=100",
+        "issues/7/comments?per_page=100&page=1",
+        "actions/runs?head_sha=aaaaaaaa11112222&per_page=50",
+        "actions/runs/100/jobs?per_page=100",
+        "actions/runs/101/jobs?per_page=100",
+        "pulls/9",
+        "pulls/9/files?per_page=100",
+        "actions/runs?head_sha=bbbbbbbb33334444&per_page=50",
+        "actions/runs/200/jobs?per_page=100",
+        "commits/cccccccc55556666",
+        "actions/runs?head_sha=cccccccc55556666&per_page=50",
+        "actions/runs/300/jobs?per_page=100"
+      ]
+    },
+    {
+      "path": "tests/fixtures/fleet-board/bus.json",
+      "bytes": 563,
+      "lines": 6,
+      "sha256": "b961c8f3aed5e34b828f1ccbf5fc40d4fa83f1a620e1b020c5ebffffbf058390",
+      "method": "fully-read",
+      "structure": {
+        "dict": 5,
+        "keys": 26,
+        "str": 21,
+        "list": 1,
+        "int": 4
+      },
+      "rootFields": [
+        "tip",
+        "entries"
+      ]
+    },
+    {
+      "path": "tests/fixtures/ghost-monza-short.json",
+      "bytes": 169,
+      "lines": 6,
+      "sha256": "9249602e76dab0d232c9c297c581fdbb4ebe8ffcca6556b86a75651799837fec",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 4,
+        "float": 18,
+        "list": 3,
+        "int": 7
+      },
+      "rootFields": [
+        "time",
+        "t",
+        "s",
+        "x"
+      ]
+    },
+    {
+      "path": "tests/fixtures/grok-transcripts/sample.jsonl",
+      "bytes": 22722,
+      "lines": 12,
+      "sha256": "8c435894409426d2eed5a82289034877270502b3447f74f5d522b17c314e237c",
+      "method": "fully-read",
+      "validRows": 12,
+      "intentionallyMalformedLines": [],
+      "structure": {
+        "dict": 60,
+        "keys": 144,
+        "str": 101,
+        "list": 13,
+        "bool": 3,
+        "int": 3
+      }
+    },
+    {
+      "path": "tests/fixtures/grok-transcripts/with-bad-line.jsonl",
+      "bytes": 2111,
+      "lines": 5,
+      "sha256": "f986e2d336bebe45e4ad055936887346077a3d8834e51f36d601e29ffab1024b",
+      "method": "fully-read",
+      "validRows": 4,
+      "intentionallyMalformedLines": [
+        3
+      ],
+      "structure": {
+        "dict": 26,
+        "keys": 60,
+        "str": 42,
+        "list": 5,
+        "bool": 2,
+        "int": 1
+      }
+    },
+    {
+      "path": "tests/fixtures/i18n/bad-placeholder/en.json",
+      "bytes": 71,
+      "lines": 4,
+      "sha256": "ac9de60797383773be7b1e0f30509a8f0375d5d27574f93a10ab46e42797de9a",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 2,
+        "str": 2
+      },
+      "rootFields": [
+        "radio.overtake",
+        "greet"
+      ]
+    },
+    {
+      "path": "tests/fixtures/i18n/bad-placeholder/xx.json",
+      "bytes": 78,
+      "lines": 4,
+      "sha256": "b02829fb38e098c9e879195c3c1d038af8da5197c4892e657022376366447a97",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 2,
+        "str": 2
+      },
+      "rootFields": [
+        "radio.overtake",
+        "greet"
+      ]
+    },
+    {
+      "path": "tests/fixtures/i18n/missing-key/en.json",
+      "bytes": 112,
+      "lines": 5,
+      "sha256": "8989a2b83bea35cebe6b1428c1e5dfab2deacb729c647c4c1545a52363af4957",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 3,
+        "str": 3
+      },
+      "rootFields": [
+        "menu.title",
+        "menu.play",
+        "race.laps"
+      ]
+    },
+    {
+      "path": "tests/fixtures/i18n/missing-key/xx.json",
+      "bytes": 141,
+      "lines": 5,
+      "sha256": "6956b365190178a434039a1339b11a0cc4a86ccb78c94752f839aeef5e582dbb",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 3,
+        "str": 3
+      },
+      "rootFields": [
+        "menu.title",
+        "race.laps",
+        "menu.invented"
+      ]
+    },
+    {
+      "path": "tests/fixtures/i18n/valid/de.json",
+      "bytes": 136,
+      "lines": 5,
+      "sha256": "59fe14d331f720ec0f048d0c3435edc0e0bf23621edf9c7f3974bda51c3d8118",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 3,
+        "str": 3
+      },
+      "rootFields": [
+        "menu.title",
+        "race.laps",
+        "radio.overtake"
+      ]
+    },
+    {
+      "path": "tests/fixtures/i18n/valid/en.json",
+      "bytes": 130,
+      "lines": 5,
+      "sha256": "ea5a10914230e1d85cbcee9537762cdc25f5a420d86d3a578379cab7cba5e65e",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 3,
+        "str": 3
+      },
+      "rootFields": [
+        "menu.title",
+        "race.laps",
+        "radio.overtake"
+      ]
+    },
+    {
+      "path": "tests/fixtures/i18n/wrong-plural/en.json",
+      "bytes": 61,
+      "lines": 3,
+      "sha256": "5388bf975c06716cffaefc7ef69846c482cd48cd502de5db52d2f4e80031c139",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 1,
+        "str": 1
+      },
+      "rootFields": [
+        "race.laps"
+      ]
+    },
+    {
+      "path": "tests/fixtures/i18n/wrong-plural/ru.json",
+      "bytes": 74,
+      "lines": 3,
+      "sha256": "70746a0285633bfb3d5f9df39e684707e0230180cdbb10b2012ec5171ddbc912",
+      "method": "fully-read",
+      "structure": {
+        "dict": 1,
+        "keys": 1,
+        "str": 1
+      },
+      "rootFields": [
+        "race.laps"
+      ]
+    },
+    {
+      "path": "tests/fixtures/js-debugger/hang.fixture.mjs",
+      "bytes": 168,
+      "lines": 3,
+      "sha256": "145e245e89d209eb98e79d7f776357edfd3aae2f171d0d947e2e6da5c376e60a",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/js-debugger/lib.fixture.cjs",
+      "bytes": 169,
+      "lines": 6,
+      "sha256": "5d56ad3a2795a593f519e04e17673ef6cdaf2a3d538418d54982ad4917b149da",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/js-debugger/live.fixture.cjs",
+      "bytes": 220,
+      "lines": 7,
+      "sha256": "e7e59955ef4371b8f422925d3b2e473d63e215143a0ca723760257bfc117e382",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/js-debugger/sample.fixture.mjs",
+      "bytes": 473,
+      "lines": 11,
+      "sha256": "14cad0f6896974d6747382ead9e460e5d54eac37e7f55bd01ad3a630612a1ad8",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/js-debugger/spawner.fixture.mjs",
+      "bytes": 428,
+      "lines": 7,
+      "sha256": "fe0c2f74cbf79b9792b577b3eda265f6cc62f9f8c490eab65f4674becc03d74b",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/js-debugger/vm.fixture.mjs",
+      "bytes": 861,
+      "lines": 17,
+      "sha256": "45e4e4de027b56ae702a0b15c05a5822db9543a84a8ec96bd56906717ae2919f",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/js-debugger/vmlib.fixture.js",
+      "bytes": 174,
+      "lines": 6,
+      "sha256": "e130b83c928dc6e8126d67ac166044620ef8a3140a0429246512cbaa3354164d",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/launch-lane/get-session-allowed.json",
+      "bytes": 256,
+      "lines": 14,
+      "sha256": "864c388d0ed1244b6d3a2774a7475d1927562b9f6f0103a695cd4f9e4dc6ecae",
+      "method": "fully-read",
+      "structure": {
+        "dict": 4,
+        "keys": 9,
+        "str": 4,
+        "bool": 1,
+        "int": 1
+      },
+      "rootFields": [
+        "ccr"
+      ]
+    },
+    {
+      "path": "tests/fixtures/launch-lane/get-session-warning.json",
+      "bytes": 264,
+      "lines": 14,
+      "sha256": "ea33203b538eb3ebd3851b2052f08f8d31313f6d229e7b346d18e5c2055ab25a",
+      "method": "fully-read",
+      "structure": {
+        "dict": 4,
+        "keys": 9,
+        "str": 4,
+        "bool": 1,
+        "int": 1
+      },
+      "rootFields": [
+        "ccr"
+      ]
+    },
+    {
+      "path": "tests/fixtures/launch-lane/list-sessions.txt",
+      "bytes": 1241,
+      "lines": 4,
+      "sha256": "cfb9677d0cf75fedab9aa09ab29571d1a55c44eaaa341bc6e0d725cc83859ce0",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/openf1-baku-2026-race.json",
+      "bytes": 203289,
+      "lines": 1,
+      "sha256": "90733ce5cee211dd9fc470a883e802ce1a24cba3aa5768dbd17d3b8f7583df12",
+      "method": "structured-data-validated",
+      "structure": {
+        "dict": 1492,
+        "keys": 7731,
+        "int": 3756,
+        "str": 2050,
+        "bool": 1050,
+        "list": 190,
+        "float": 1059,
+        "NoneType": 340
+      },
+      "rootFields": [
+        "session",
+        "meeting_name",
+        "drivers",
+        "laps",
+        "stints",
+        "pits",
+        "raceControl",
+        "weather",
+        "result",
+        "positions",
+        "overtakes",
+        "teamRadio",
+        "locationExcerpt"
+      ]
+    },
+    {
+      "path": "tests/fixtures/session-ledger/permissions.jsonl",
+      "bytes": 234,
+      "lines": 2,
+      "sha256": "54719a5393b65e341359376b54c64338cd73db1371ff8669229e6467ac9d535e",
+      "method": "fully-read",
+      "validRows": 2,
+      "intentionallyMalformedLines": [],
+      "structure": {
+        "dict": 2,
+        "keys": 8,
+        "str": 8
+      }
+    },
+    {
+      "path": "tests/fixtures/session-ledger/transcript.jsonl",
+      "bytes": 3783,
+      "lines": 19,
+      "sha256": "25823ead3d60744d0edd8b853eda1220907473c8b4fee943742350b16c310648",
+      "method": "fully-read",
+      "validRows": 19,
+      "intentionallyMalformedLines": [],
+      "structure": {
+        "dict": 60,
+        "keys": 167,
+        "str": 118,
+        "list": 16,
+        "bool": 8
+      }
+    },
+    {
+      "path": "tests/fixtures/shader-validate/bad.frag",
+      "bytes": 210,
+      "lines": 7,
+      "sha256": "42f4824560ded8674da66c8038daab53e1c7782677878341614596e5544b50b6",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/shader-validate/bad.wgsl",
+      "bytes": 206,
+      "lines": 5,
+      "sha256": "bc5d94736781b4604d16363b66fb5cd6060eb0e86674b645569920cd1b6979c0",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/shader-validate/good.frag",
+      "bytes": 114,
+      "lines": 6,
+      "sha256": "e825b6e3d0dd3cf9aa459087eab9ea74ec6c88a536eb852bebf21c98c18c2002",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/shader-validate/good.wgsl",
+      "bytes": 94,
+      "lines": 4,
+      "sha256": "52676ca1eedbbb80c202d5525a666696f2fa2e7be8ca95569cf51381e10c4b22",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/stop-hook-git-check.sample.sh",
+      "bytes": 1445,
+      "lines": 34,
+      "sha256": "78cc4f321f91d86953eff5c7771081089fd4f8beeb3f1fa4dbb1a42159b2d7aa",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/workflow-lint/bad/.github/workflows/bad.yml",
+      "bytes": 501,
+      "lines": 14,
+      "sha256": "28172a30e85504b8779ec037456868ecdfb09b8a7bdee7ccd60aacd5b2b6eba0",
+      "method": "fully-read"
+    },
+    {
+      "path": "tests/fixtures/workflow-lint/good/.github/workflows/good.yml",
+      "bytes": 303,
+      "lines": 13,
+      "sha256": "a98f7790ffa42a3a11143f1aacbcff922df9c03da4bd3aa48da0b11121ebdea5",
+      "method": "fully-read"
+    }
+  ],
+  "openf1": {
+    "arrayCounts": {
+      "drivers": 22,
+      "laps": 983,
+      "stints": 58,
+      "pits": 36,
+      "raceControl": 141,
+      "weather": 14,
+      "result": 22,
+      "positions": 22,
+      "overtakes": 160,
+      "teamRadio": 31
+    },
+    "locationRows": 179,
+    "locationTupleSizes": {
+      "3": 179
+    },
+    "unknownDriverRefs": [],
+    "locationTimeMonotonic": true
+  }
+}

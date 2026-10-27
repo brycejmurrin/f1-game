@@ -1,0 +1,542 @@
+{
+  "group": "05",
+  "plan": {
+    "path": "docs/project-map/archive-batches.json",
+    "sha256": "45c79d5dfbe20976a87dabd9cada12c604de55827dc38a7b326f069571b5fe1c"
+  },
+  "coverage": {
+    "assignedBytes": 160000,
+    "readBytes": 160000,
+    "chunkCount": 28,
+    "maxChunkBytes": 8000,
+    "rangeConvention": "half-open byte offsets"
+  },
+  "sources": [
+    {
+      "path": "docs/archive/notes/FLEET-ROLES-2026-10-19.md",
+      "start": 13380,
+      "end": 34587,
+      "kind": "text",
+      "sha256": "844805312c041a1ae86af7c13d15ccc0a05cc3e3b4ea36070bd3901f6c87ce09",
+      "sourceId": "S01",
+      "actualSha256": "844805312c041a1ae86af7c13d15ccc0a05cc3e3b4ea36070bd3901f6c87ce09",
+      "partSha256": "eacbeeb412f88982dd0681bebc71aac5ee23aac183310607f837260522e9de7d",
+      "date": "2026-10-19; follow-up 2026-10-25",
+      "producer": "Fleet role audit; producer unnamed in assigned tail",
+      "topic": "Peer fleets, merge-lease retirement proposal, roles, tags and claim/message gaps",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 13380,
+          "end": 21380,
+          "bytes": 8000,
+          "sha256": "468f9d1301a2d8adf6d88b29786c567fee7ce629970f119530322f473ad78664",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 21380,
+          "end": 29380,
+          "bytes": 8000,
+          "sha256": "33c8f90f037be63a99b28b4ce76ff6e0467f0fe6a2b6c115e95b25a2e19e2c6e",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 29380,
+          "end": 34587,
+          "bytes": 5207,
+          "sha256": "e3c9c535dae368479e01fa7618d544564e4674e5e8bfd5072f6ec37900e466b3",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": [
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 39,
+          "text": "| docs/archive/notes/FLEET-ROLES-2026-10-19.md | 42 | 106 |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 59,
+          "text": "| 8 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:5 | .claude/agents/merge-desk.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 60,
+          "text": "| 9 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:72 | merge-desk.md:86 | path-missing | no file at this path or basename: retarget or drop |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 61,
+          "text": "| 10 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:74 | merge-desk.md:84-90 | path-missing | no file at this path or basename: retarget or drop |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 62,
+          "text": "| 11 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:122 | .claude/skills/ci-watch/SKILL.md:3 | path-missing | 45 files share this basename; cite the full path |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 63,
+          "text": "| 12 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:136 | merge-desk.md \u00a7Archiving | path-missing | no file at this path or basename: retarget or drop |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 64,
+          "text": "| 13 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:164 | .claude/skills/ci-watch/SKILL.md:3 | path-missing | 45 files share this basename; cite the full path |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 65,
+          "text": "| 14 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:165 | .claude/agents/merge-desk.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 66,
+          "text": "| 15 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:170 | .claude/memory/bryce-merges-manually.md:3 | path-missing | deleted in git 01442fcdb: no file at this path or basename: retarget or drop |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/anchors.md",
+          "line": 67,
+          "text": "| 16 | docs/archive/notes/FLEET-ROLES-2026-10-19.md:214 | merge-desk.md:81 | path-missing | no file at this path or basename: retarget or drop |"
+        },
+        {
+          "path": "docs/notes/system-audit-4/skills/agent-fleet.md",
+          "line": 5,
+          "text": "PATHS: OK \u2014 every tools/*.mjs, docs/* and hook the skill names exists (31 checked, incl. launch-gate.mjs, launch-lane.mjs, fleet-flags.mjs, FLEET-ROLES-2026-10-19.md). Not checked: ../../../../docs/agent-output/experiments.md resolves (exists)."
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/GARAGE-CAR-CAPTURE-PERFORMANCE.md",
+      "start": 0,
+      "end": 4180,
+      "kind": "text",
+      "sha256": "7283e14e0a590c119ca4fc8eaf2bbe8a9af046715ed7a2ca3426276ee9a420d2",
+      "sourceId": "S02",
+      "actualSha256": "7283e14e0a590c119ca4fc8eaf2bbe8a9af046715ed7a2ca3426276ee9a420d2",
+      "partSha256": "7283e14e0a590c119ca4fc8eaf2bbe8a9af046715ed7a2ca3426276ee9a420d2",
+      "date": "2026-10-16 measurement",
+      "producer": "Capture-stack implementer, unnamed",
+      "topic": "Garage/car capture throughput and strict presentation lifecycle",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4180,
+          "bytes": 4180,
+          "sha256": "7283e14e0a590c119ca4fc8eaf2bbe8a9af046715ed7a2ca3426276ee9a420d2",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    },
+    {
+      "path": "docs/archive/notes/GPU-MEM-CENSUS-2026-10-17.md",
+      "start": 0,
+      "end": 7887,
+      "kind": "text",
+      "sha256": "fe061eff51cf74e710269ef6737193cba7f709324fdbc90d3483cbb34566b49f",
+      "sourceId": "S03",
+      "actualSha256": "fe061eff51cf74e710269ef6737193cba7f709324fdbc90d3483cbb34566b49f",
+      "partSha256": "fe061eff51cf74e710269ef6737193cba7f709324fdbc90d3483cbb34566b49f",
+      "date": "2026-10-17",
+      "producer": "GPU census investigator; TinyFish and Context7 research",
+      "topic": "Allocation census and track-switch leak baseline",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7887,
+          "bytes": 7887,
+          "sha256": "fe061eff51cf74e710269ef6737193cba7f709324fdbc90d3483cbb34566b49f",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    },
+    {
+      "path": "docs/archive/notes/GRAPHICS-DETAIL-SURVEY-2026-10-01.md",
+      "start": 0,
+      "end": 25025,
+      "kind": "text",
+      "sha256": "8695ccfcfbb15945aef4daba073b5585e25b9b43d763f9ebffdb95c4ebcb04a3",
+      "sourceId": "S04",
+      "actualSha256": "8695ccfcfbb15945aef4daba073b5585e25b9b43d763f9ebffdb95c4ebcb04a3",
+      "partSha256": "8695ccfcfbb15945aef4daba073b5585e25b9b43d763f9ebffdb95c4ebcb04a3",
+      "date": "2026-10-01",
+      "producer": "Three read-only code hunts plus web research",
+      "topic": "Ranked rendering detail proposals, backend parity and validation routes",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "3da783e05a8e4abdfb68512b616b9d6fe8c905b97940b21122ea87d7ff4b20dd",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "da52ce16c5e32c07581d9448aa8f8059094d191d7b2b34056d1a2396e917aee2",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "39d098fe0f4f22c5cbd4bd812afaf4457565a7fa0ce7e6dc413f0faf6f63a7d3",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 24000,
+          "end": 25025,
+          "bytes": 1025,
+          "sha256": "c5b99ae508b478b5b6127fc43b0dc679ed83348b3d2134635c0fb17c605153d6",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": [
+        {
+          "path": "docs/notes/GRAPHICS-DETAIL-SURVEY-2-2026-10-01.md",
+          "line": 4,
+          "text": "[GRAPHICS-DETAIL-SURVEY-2026-10-01.md](../archive/notes/GRAPHICS-DETAIL-SURVEY-2026-10-01.md), whose"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/GRAPHICS-TEXTURE-HUNT-2026-10-21-7E31.md",
+      "start": 0,
+      "end": 14828,
+      "kind": "text",
+      "sha256": "8112824fb48f4cfd13d8b87436590e5a2d84cb3ff429e6177f72afd36ad3347a",
+      "sourceId": "S05",
+      "actualSha256": "8112824fb48f4cfd13d8b87436590e5a2d84cb3ff429e6177f72afd36ad3347a",
+      "partSha256": "8112824fb48f4cfd13d8b87436590e5a2d84cb3ff429e6177f72afd36ad3347a",
+      "date": "2026-10-21",
+      "producer": "Parent graphics/physics hunter plus six native worktree lanes",
+      "topic": "Assets readback/inflate, GLX constructor rollback and mirror cadence fixes; owner handoffs",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "b628c3462443917862bb0de1405285c0a397dd0d12a13f9b15344fd775a66226",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 14828,
+          "bytes": 6828,
+          "sha256": "949b5fe25a1fcdc7d6d496327daaa1df5155d6df59e45a3b306f3f55549d4cc1",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    },
+    {
+      "path": "docs/archive/notes/GROK-API-2026-10-22.md",
+      "start": 0,
+      "end": 24396,
+      "kind": "text",
+      "sha256": "e4bc233af8de352715560608192bca13674f867f882042eac65edef7d787ebec",
+      "sourceId": "S06",
+      "actualSha256": "e4bc233af8de352715560608192bca13674f867f882042eac65edef7d787ebec",
+      "partSha256": "e4bc233af8de352715560608192bca13674f867f882042eac65edef7d787ebec",
+      "date": "2026-10-22",
+      "producer": "Worker A\u00b7R1",
+      "topic": "xAI API research, paid probes and Grok/Cursor/Codex coordination boundaries",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "226d705b170b2e5b76fa90a5cde46f00632744fb4d7fc10111a81148cd1af31e",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "2937c470ac5f168d5d866b72bab822c9714f7af93a7a5a7f0b98a44ee28bf5d7",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "e7f34bc76d4177e0cf9bf7e3a4fb56ce3b078b17ba57d0346874c2f98014b866",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 24000,
+          "end": 24396,
+          "bytes": 396,
+          "sha256": "55e5b2de02bd8e85b20a801c398305d4b8c91da35cf5b8b053b96edf6721af92",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": [
+        {
+          "path": "docs/notes/system-audit-4/security.md",
+          "line": 24,
+          "text": "| X2 | **Long-lived third-party credentials sit in every session's env, and two are unused.** `AWS_ACCESS_KEY_ID` is an AKIA (IAM-user, long-lived) key with no session token, used by one perf tool. `GROK_API_KEY` (xai-) is referenced only by an archived note. `FLEET_A_OAUTH_TOKEN` (sk-ant-oat) is still referenced by no code. | env shape check (prefix and length only); `git grep`: AWS \u2192 tools/perf/devicefarm-iphone.mjs + 1 doc, GROK \u2192 docs/archive/notes/GROK-API-2026-10-22.md only, FLEET_A \u2192 audit notes only; AWS-DEVICE-FARM-IPHONE-2026-10-23.md:11-13 (IAM user apex-devicefarm-agent) | Every worker that reads untrusted text holds an AWS key, an xAI key and another account's OAuth token (~60 sessions/day). Leak cost: AWS bill or Device Farm abuse, Grok spend | Delete GROK_API_KEY and FLEET_A_OAUTH_TOKEN from env \"I\". Move the AWS pair to a perf-only env and confirm the IAM policy is `devicefarm:*` only | high | STILL OPEN (pass3 E3) + NEW (AWS, GROK) |"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/HARNESS-AUDIT-2026-10-18.md",
+      "start": 0,
+      "end": 6895,
+      "kind": "text",
+      "sha256": "afe17aff0ddc546003457b5c9501526a55b1f10acaef1f659c3a9087b52e1c95",
+      "sourceId": "S07",
+      "actualSha256": "afe17aff0ddc546003457b5c9501526a55b1f10acaef1f659c3a9087b52e1c95",
+      "partSha256": "afe17aff0ddc546003457b5c9501526a55b1f10acaef1f659c3a9087b52e1c95",
+      "date": "2026-10-18",
+      "producer": "Plugin-policy parent, siblings and read-only plugin reviewers",
+      "topic": "Harness audits, safe changes and deferred owner decisions",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6895,
+          "bytes": 6895,
+          "sha256": "afe17aff0ddc546003457b5c9501526a55b1f10acaef1f659c3a9087b52e1c95",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    },
+    {
+      "path": "docs/archive/notes/HEAP-CENSUS-MEASUREMENT-CONTRACT.md",
+      "start": 0,
+      "end": 3883,
+      "kind": "text",
+      "sha256": "4a5b59b2ab1346e66da146c8e20051dd7216e07ea6288dd7980330145dd1292d",
+      "sourceId": "S08",
+      "actualSha256": "4a5b59b2ab1346e66da146c8e20051dd7216e07ea6288dd7980330145dd1292d",
+      "partSha256": "4a5b59b2ab1346e66da146c8e20051dd7216e07ea6288dd7980330145dd1292d",
+      "date": "Undated measurement contract",
+      "producer": "Heap-census maintainer, unnamed",
+      "topic": "Post-GC completeness, resource counters, warm cycles and presentation receipts",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3883,
+          "bytes": 3883,
+          "sha256": "4a5b59b2ab1346e66da146c8e20051dd7216e07ea6288dd7980330145dd1292d",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    },
+    {
+      "path": "docs/archive/notes/HOOK-IF-FILTERS-2026-10-16.md",
+      "start": 0,
+      "end": 1132,
+      "kind": "text",
+      "sha256": "5650a314a9b28e7ab883ce31b6da5d3a29e4c25f8da21ed373fd9f0d73ea75f2",
+      "sourceId": "S09",
+      "actualSha256": "5650a314a9b28e7ab883ce31b6da5d3a29e4c25f8da21ed373fd9f0d73ea75f2",
+      "partSha256": "5650a314a9b28e7ab883ce31b6da5d3a29e4c25f8da21ed373fd9f0d73ea75f2",
+      "date": "2026-10-16",
+      "producer": "Hook-filter investigator, unnamed",
+      "topic": "PreToolUse single-rule if filters and parser limitations",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1132,
+          "bytes": 1132,
+          "sha256": "5650a314a9b28e7ab883ce31b6da5d3a29e4c25f8da21ed373fd9f0d73ea75f2",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    },
+    {
+      "path": "docs/archive/notes/HUD-ADAPT-2026-10-14.md",
+      "start": 0,
+      "end": 10174,
+      "kind": "text",
+      "sha256": "942613f88d058fe0eb42defc57d234952efb3bed077308dba0701f718447bab5",
+      "sourceId": "S10",
+      "actualSha256": "942613f88d058fe0eb42defc57d234952efb3bed077308dba0701f718447bab5",
+      "partSha256": "942613f88d058fe0eb42defc57d234952efb3bed077308dba0701f718447bab5",
+      "date": "2026-10-14; three rounds",
+      "producer": "HUD adaptation parent plus read-only Opus reviews",
+      "topic": "168-cell HUD sizing/readout regressions and residual stress cases",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "84f03b98172693ebb80cba08915112cfe691a6a1bc6cea47ec0828c327dccbaa",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 10174,
+          "bytes": 2174,
+          "sha256": "8964c8c276ca6711a1c8cc9d83b742f9a5fbf1ba6f5287540b4f05b2f74e11b6",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": [
+        {
+          "path": "docs/notes/CEILING-HISTORY.md",
+          "line": 83,
+          "text": "`docs/archive/notes/HUD-ADAPT-2026-10-14.md`). Nothing in either file was replaced wholesale, so there was nothing"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/HUD-ARRANGER-USABILITY-2026-10-19.md",
+      "start": 0,
+      "end": 1897,
+      "kind": "text",
+      "sha256": "8130ce1c2181c2c90c7fcd16c6a83d3b0ef64bb8c674d807770b354ad4b317a8",
+      "sourceId": "S11",
+      "actualSha256": "8130ce1c2181c2c90c7fcd16c6a83d3b0ef64bb8c674d807770b354ad4b317a8",
+      "partSha256": "8130ce1c2181c2c90c7fcd16c6a83d3b0ef64bb8c674d807770b354ad4b317a8",
+      "date": "2026-10-19",
+      "producer": "Parent plus recovery/numeric/browser worktree lanes",
+      "topic": "Unrestricted arranger recovery and transactional numeric editing",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1897,
+          "bytes": 1897,
+          "sha256": "8130ce1c2181c2c90c7fcd16c6a83d3b0ef64bb8c674d807770b354ad4b317a8",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    },
+    {
+      "path": "docs/archive/notes/HUD-BORDER-ZOOM-2026-10-20.md",
+      "start": 0,
+      "end": 3186,
+      "kind": "text",
+      "sha256": "efb5b71f5a094dd8a3d24dc2d846ceb278025e8f240efe3be814bb2846d91733",
+      "sourceId": "S12",
+      "actualSha256": "efb5b71f5a094dd8a3d24dc2d846ceb278025e8f240efe3be814bb2846d91733",
+      "partSha256": "efb5b71f5a094dd8a3d24dc2d846ceb278025e8f240efe3be814bb2846d91733",
+      "date": "2026-10-20",
+      "producer": "HUD zoom investigator, unnamed",
+      "topic": "Border quantization fix, forced-colors preservation and runtime caveats",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3186,
+          "bytes": 3186,
+          "sha256": "efb5b71f5a094dd8a3d24dc2d846ceb278025e8f240efe3be814bb2846d91733",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    },
+    {
+      "path": "docs/archive/notes/HUD-PHONE-LAYOUT-PLAN-2026-10-10.md",
+      "start": 0,
+      "end": 18694,
+      "kind": "text",
+      "sha256": "d160b913c4bc060a53934ae7ccfe75347357790426b5792ad83c2afea8aadc14",
+      "sourceId": "S13",
+      "actualSha256": "d160b913c4bc060a53934ae7ccfe75347357790426b5792ad83c2afea8aadc14",
+      "partSha256": "d160b913c4bc060a53934ae7ccfe75347357790426b5792ad83c2afea8aadc14",
+      "date": "2026-10-10",
+      "producer": "HUD planning investigator plus second review",
+      "topic": "Allocated bands plan, survey blind spots and revised work ordering",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "524215052ce3ad43bbcbda4be7fb40a46d9da7ba7ddafc1db12f465fd2c31610",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "224a763f8bed3e324ab6856b056d6ecc239ec99d902d48a6ccde2f0be57c830d",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 18694,
+          "bytes": 2694,
+          "sha256": "d72bf5058b1ea915b51cd132074fe0a94aab6f2b54af88fda0db7bc8a4b06bc5",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": [
+        {
+          "path": "docs/notes/CEILING-HISTORY.md",
+          "line": 84,
+          "text": "to delete against it; the structural shrink is the band allocator (`HUD-PHONE-LAYOUT-PLAN-2026-10-10.md`),"
+        },
+        {
+          "path": "docs/notes/HUD-CODE-AUDIT-2026-10-10.md",
+          "line": 6,
+          "text": "`HUD-PHONE-LAYOUT-PLAN-2026-10-10.md` (the phased allocator plan); a finding that plan"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/HUD-PR-REVIEW-2026-10-10.md",
+      "start": 0,
+      "end": 16616,
+      "kind": "text",
+      "sha256": "fb221b673cad6498e468b333d4d5586e80e3d3b6bb65c0be2efbc290e5ac9809",
+      "sourceId": "S14",
+      "actualSha256": "fb221b673cad6498e468b333d4d5586e80e3d3b6bb65c0be2efbc290e5ac9809",
+      "partSha256": "7d768877010c6038f1d6ee9be46adb0303dca73ec071eb5d8cbf6deeac94bb97",
+      "date": "2026-10-10",
+      "producer": "Read-only HUD PR reviewer, unnamed",
+      "topic": "Conflict/semantic review and merge-order recommendations with incomplete trailing addendum",
+      "readStatus": "fully read assigned half-open span",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "9088510953f880b1a5e874838ecdf831e26bed03fc696d437ef5094dcfa35a4d",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "37bad5171e2ec22f3e3d37235891cc128c6bfb587db4f1e9f18dbd3a9691cc65",
+          "returnedUntruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 16616,
+          "bytes": 616,
+          "sha256": "f2679c6f9124b94336962ad2f6b4a13d145b1f590493c6cafe933db0c0286802",
+          "returnedUntruncated": true
+        }
+      ],
+      "liveBacklinks": []
+    }
+  ],
+  "backlinkScope": "Markdown under docs excluding archive and project-map plus AGENTS.md; exact basename text matches only; no exhaustive code dependency claim",
+  "limitations": [
+    "S01 begins mid-document; no attribution inferred from excluded prefix",
+    "S14 source ends mid-sentence; no missing continuation inferred",
+    "Historical commands and instructions are provenance only",
+    "No tests, browser, network, runtime or source changes performed"
+  ]
+}

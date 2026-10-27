@@ -638,87 +638,87 @@ docs/agent-output/README.md	12688	a2c5d50aeab45c4eee1238b5f95bf7e1b660274242da7f
 docs/agent-output/catalog.json	149089	9cefaa83f4c7efabeba68e3ad8565b9ad0a2238b075b552a9df38fc64613e57f	unread	initial inventory only
 docs/agent-output/experiments.md	5771	8b9d0d084378f2e18de1646165e00638f39400561a8cb540e897aa18fdb37d7a	unread	initial inventory only
 docs/agent-output/policies.json	111100	e844c8d2ff6ad6726dc2b6a79f6eea3136456fe36b6c20b85862332dc1b3bdf9	unread	initial inventory only
-docs/archive/2026-08-architecture-review-journal.md	74486	7781e0da4f324eb3e0a296f9912e0dad28a34f0ff2581b992678bf8b80334b35	unread	initial inventory only
-docs/archive/2026-08-repo-audit.md	24771	1abb16f60e5d3d28264142899ce458473c1badc75b554924601b93a549147c8a	unread	initial inventory only
-docs/archive/ATTIC.md	10320	a0c20c59534a3cd12a77804163429c68237c3073358fbd460567491fe9d16959	unread	initial inventory only
-docs/archive/SCENERY-UPGRADE-PLAN.md	22134	8fc239fe5928d2e044eed00015a551866769663cb32ade720e561d183726b8db	unread	initial inventory only
-docs/archive/manual-probes/act-probe.spec.js	11332	638f71fa871841a96a8285afbd41a77b78005ca9854be034d725d94e4db20e9f	unread	initial inventory only
-docs/archive/manual-probes/banking-probe.spec.js	3844	5b698089af01f47f6f6783cde644513c813d17dda5db659630add2438de772d6	unread	initial inventory only
-docs/archive/manual-probes/skid-probe.spec.js	8874	1c63dc0cf0124ee07bc4b4bef6fe3ca38a298ac0c18166a9ffc23f3a8ad1f000	unread	initial inventory only
-docs/archive/manual-probes/throttle-rescue-probe.spec.js	8613	6961a41f09c23f183489887e0a12f5e16247f8a894af3e8b7b4b1295957032fe	unread	initial inventory only
-docs/archive/moves/README.md	373	a81fba81254147066078e7ae784c13fafa0384e39827361ebd44d00fddf8b6f9	unread	initial inventory only
-docs/archive/moves/batches/b1-foundation.json	955	43be75371add526adda9acb78fbd251ca8d78a2e9636d39a2b0da48e61de8dcc	unread	initial inventory only
-docs/archive/moves/batches/b2-presentation.json	1496	577e8b8992eef261215242ce09c9f4a6dbdad2a0a3bf403ec7869e62f89deaea	unread	initial inventory only
-docs/archive/moves/batches/b3-domain.json	1266	14a4a302261fb1e5bf2edd2bc8b0a9653c75f2ef14957f63f5d103875fd7a6af	unread	initial inventory only
-docs/archive/moves/batches/b4-render-track.json	1520	b68f7723f267a12451f611c986835d6102fba6d54891c2a025fbce317b09f981	unread	initial inventory only
-docs/archive/moves/phase2.json	4749	8c638ad9d6b33f6cbd1209fcb05c07b141438aa8e691e8721899538c788acfa5	unread	initial inventory only
-docs/archive/moves/phase4-tools-a.json	3622	222786cac7d4afb3106720b57f8bd641727613855fc0fd04a55cda75848da58d	unread	initial inventory only
-docs/archive/moves/phase4-tools-b.json	3271	5813c71228e456f7d1396b4f55402b7a531dc14207a2dd673751821ba53fd199	unread	initial inventory only
-docs/archive/moves/phase4-tools-c.json	2922	06f7343c23c1e1378e1846741c80b4dc12b824d1a0ceb7602dc9a8691159ecec	unread	initial inventory only
-docs/archive/moves/phase4-tools.json	10058	d1a75033d5513f4c7de9f1181444adc7793d80bc40c4d964f2a6d2120db487fa	unread	initial inventory only
-docs/archive/moves/spike-backends.json	4130	75474542a554102fa68f8a14cd1f28e312563cad3f2911c25a04088f595232d0	unread	initial inventory only
-docs/archive/notes/AGENT-HISTORY-2026-10-26.md	16426	84a3fc43404b79b34f146ff7769721bdf826c75b099f6b89fb0f78438cf8e2fd	unread	initial inventory only
-docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md	55857	f8b02e2e31e9a4bbb74d8700e80a5fc2adb08692baf115a55b7a69ea1613a333	unread	initial inventory only
-docs/archive/notes/AGENT-TOOLS-REVIEW-2026-10-17.md	12380	75de3ec182f11e1c3225d72101ce5cd214001bb7ca10aadcd968b73aadf3b191	unread	initial inventory only
-docs/archive/notes/AGENT-WORK-TRACKING-2026-10-14.md	22801	9c0c30723d968d99787e6df60be4dd07c4911e0c85b31e091be034dca29a3cf4	unread	initial inventory only
-docs/archive/notes/AGENT-WORKFLOW-EXPERIMENTS-2026-10-19.md	8513	108d3e181af3c76b04f7de963a852a48a674b8d895ec146ed8377ee13f9fe65d	unread	initial inventory only
-docs/archive/notes/AI-PASS-COMPLETE-LONGEST-EPISODE-2026-10-16.md	2062	10dba84ea74fdd1305b5e052a585dbabc5151e6366547942095e18f3d43c0884	unread	initial inventory only
-docs/archive/notes/AI-PASS-COMPLETION-2026-10-19.md	3089	a45ee9156e81a9ffb42958411187b348885624c13219a25841b933e0e022c20a	unread	initial inventory only
-docs/archive/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md	3680	f21b6802d3c1fff7bbea0fc8c0f023cdf833d8f957ec923fb1cab8d45d88c37d	unread	initial inventory only
-docs/archive/notes/AUTOCOMPACT-TRIAL-2026-10-19.md	1729	0eb5337cb967eca620ae7a2f1d32c358e27f41fad9999a1ea54f1bce0db49422	unread	initial inventory only
-docs/archive/notes/BACKEND-DRAWCALL-RESEARCH-2026-09-16.md	5316	a06e91294a333bebbfd287722424afb5dde4dd1d9cfd983b1e9ca795e8764174	unread	initial inventory only
-docs/archive/notes/BASH-GUARD-TIMEOUT-MEASURE-2026-10-18.md	1714	fddbb7f8f3107af34a29ecb389d7be0ecebcd04ef07f0f8540614ef612509322	unread	initial inventory only
-docs/archive/notes/BOOST-EVERY-PRESS-2026-10-24.md	4428	ee4934bef17482d70259f7c9f2d0b4c9e0d362bf1dc4f815541c9d2051cdfcc9	unread	initial inventory only
-docs/archive/notes/BOOT-LOAD-TOOLING-RESEARCH-2026-10-21.md	11636	dd95457ebf4c421faa77a3e4718527a56343ea563b22eb1e7d75ebb6cd695b41	unread	initial inventory only
-docs/archive/notes/CAR-LIVERY-TOOLING-RESEARCH-2026-10-21.md	6169	17ab25cd6ada640fc27db102d1cc394f92675786e90737de290e640ac321e215	unread	initial inventory only
-docs/archive/notes/CAR-MESH-BUDGET-H13-2026-10-20.md	7703	7f7b6e85a9fdca96e59845461cf94c5a4575e8b0626704e19fe2733cf3727c2e	unread	initial inventory only
-docs/archive/notes/CENTRELINE-KINKS-2026-10-18.md	2596	00edc9d512610a382a3e2b838724ac48e75facb17c3d6f94a07fae36856b4d1e	unread	initial inventory only
-docs/archive/notes/CHUNK-MIRROR-PROBE-2026-10-17.md	4800	556f55909bc6d5c5ba100da8fcba74f4ee2620867c22ee31617446b81cefeb13	unread	initial inventory only
-docs/archive/notes/CI-PAGES-SINGLE-FLIGHT-2026-10-06.md	1164	11f573c807ed0e9e4d7ed0361d86194928518dfe2775dceb1e91d98f0b967171	unread	initial inventory only
-docs/archive/notes/CI-PR-LIFECYCLE-REMEASURE-2026-10-18.md	1715	d61ddbcb7c5e9f319c9dd242a19b97a4cc22e5d702705f2f1e07584e327ac7f0	unread	initial inventory only
-docs/archive/notes/CI-TOOLING-RESEARCH-2026-10-21.md	11752	c2bbbb53d65c8fe57444f6f61d7b8c116bd21d5b7532f3700b407e8ff2abc7f1	unread	initial inventory only
-docs/archive/notes/CI-WALL-TIME-HUNT-2026-10-21.md	6831	4be8bee2dd4d3b3a5b09b5c89575e78ac7a7f4d56c00cfdf238ca6cac16fb8e9	unread	initial inventory only
-docs/archive/notes/CLAUDE-HOST-EFFICIENCY-2026-10-19.md	10207	c44d0cfcca3dbc5d3599b8c65f2152c881ef3721d115cbf28a21f6cd76ea4c49	unread	initial inventory only
-docs/archive/notes/CLAUDE-TRANSCRIPT-MINING-2026-10-19.md	6758	c7cf64f5d6a0105cc501a6b16baec08ddb3d897de4c64a8b76d80f427c6bd18a	unread	initial inventory only
-docs/archive/notes/CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md	18734	c7d50c7db892d3e203bd3cef414a0df6c4944053091fa0301005170ed4f77559	unread	initial inventory only
-docs/archive/notes/COCKPIT-REAR-MIRROR-DESIGN.md	8434	af542461fd6aecc7bbf1f6065a1e0dba35dbeb265fc60e330cdfc7e6b5f824c2	unread	initial inventory only
-docs/archive/notes/COLD-FIRST-RACE-WARM-2026-10-23.md	5495	fec705a2828ccc5cd5578d4423238dc5f27588ea79d2f781754825a6bada66fa	unread	initial inventory only
-docs/archive/notes/COMMIT-GUARD-CACHE-2026-10-19.md	2773	0fe4a51a40dba1e46b247d9b4d4880d1f544e5acbfce421d90dd45e14b013d12	unread	initial inventory only
-docs/archive/notes/COMPILE-CACHE-TRIAL-2026-10-18.md	1521	5210403ba7be6cbd036cccec6a81f20fd3658bdaecf6628a0fa5aa2fa7b78042	unread	initial inventory only
-docs/archive/notes/CREW-ANIM-2026-10-24.md	4372	b5e037f6a3bc45c0480efc0a657556c142f26863f547ea5e987608dfff12df12	unread	initial inventory only
-docs/archive/notes/CROSS-ACCOUNT-INBOX-2026-10-25.md	4459	72624c4fdfb946d0c72bb1f1957fe62075d9b0708207bc7ae7d305ba769a1bea	unread	initial inventory only
-docs/archive/notes/CURSOR-SDK-RESEARCH-2026-10-20.md	18438	ce8e9c955eda6dbd4ea285c61a3eb7cd12f8a2cd554ad992b78196b536439bd4	unread	initial inventory only
-docs/archive/notes/CURSOR-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md	18988	70f6db42270aa0d3e4589b4ee6438e144f1ed15b1382435c250df2dc18c98df4	unread	initial inventory only
-docs/archive/notes/DEEP-RESEARCH-CLAUDE-CODE-FLEET-2026-10-15.md	46382	d7d6e1e900ef3c45731884d60f203871b08754356272e57ee473a2a7b72701b0	unread	initial inventory only
-docs/archive/notes/DESIGN-MATRIX-TOOL.md	3360	c8b54dde7e1be8f0efe90d3f83046ef35c7752f7d797d1e59d4cbf9a88e527c2	unread	initial inventory only
-docs/archive/notes/DOCS-SURVEY-2026-10-06.md	15144	15863c7f2ae37acc6d09b1f8c0e0b6703b4dfe423245de7a73a0329ae8e904a6	unread	initial inventory only
-docs/archive/notes/F1-2026-REGS-REALISM-2026-10-18.md	5020	a397164e1436edb394179aa1b9c42e0883d675e7a17775508ce1ef753ffa9409	unread	initial inventory only
-docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md	24590	88f10e2746ea00cb8f96aadfdd209a8ac238f79054d2f0423993a2c5632e9aa7	unread	initial inventory only
-docs/archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md	9557	f9ac83ef0bd96d24a3ddeeaac8274da153648092acf0238ad27644d2f3641d7d	unread	initial inventory only
-docs/archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md	16487	5f7c91ab00279090ebfe47e3d288e492c6ef99aea29c332cbf86c908f3719b71	unread	initial inventory only
-docs/archive/notes/FLEET-BOARD-2026-10-19.md	3005	63274994972dfedb56faebe85443c436c0211e8a67516bef2e677a4a4fbf6d13	unread	initial inventory only
-docs/archive/notes/FLEET-BUS-2026-10-19.md	6896	c964b64202839cfac859fa23a097d2c671d8d977b3d27eb98d52ea5d406b24e1	unread	initial inventory only
-docs/archive/notes/FLEET-COST-2026-10-19.md	4903	e45998d8d57fd51722630fa044e81241cdb7e19d788393f24dd69f8c4b43c1af	unread	initial inventory only
-docs/archive/notes/FLEET-ROLES-2026-10-19.md	34587	844805312c041a1ae86af7c13d15ccc0a05cc3e3b4ea36070bd3901f6c87ce09	unread	initial inventory only
-docs/archive/notes/GARAGE-CAR-CAPTURE-PERFORMANCE.md	4180	7283e14e0a590c119ca4fc8eaf2bbe8a9af046715ed7a2ca3426276ee9a420d2	unread	initial inventory only
-docs/archive/notes/GPU-MEM-CENSUS-2026-10-17.md	7887	fe061eff51cf74e710269ef6737193cba7f709324fdbc90d3483cbb34566b49f	unread	initial inventory only
-docs/archive/notes/GRAPHICS-DETAIL-SURVEY-2026-10-01.md	25025	8695ccfcfbb15945aef4daba073b5585e25b9b43d763f9ebffdb95c4ebcb04a3	unread	initial inventory only
-docs/archive/notes/GRAPHICS-TEXTURE-HUNT-2026-10-21-7E31.md	14828	8112824fb48f4cfd13d8b87436590e5a2d84cb3ff429e6177f72afd36ad3347a	unread	initial inventory only
-docs/archive/notes/GROK-API-2026-10-22.md	24396	e4bc233af8de352715560608192bca13674f867f882042eac65edef7d787ebec	unread	initial inventory only
-docs/archive/notes/HARNESS-AUDIT-2026-10-18.md	6895	afe17aff0ddc546003457b5c9501526a55b1f10acaef1f659c3a9087b52e1c95	unread	initial inventory only
-docs/archive/notes/HEAP-CENSUS-MEASUREMENT-CONTRACT.md	3883	4a5b59b2ab1346e66da146c8e20051dd7216e07ea6288dd7980330145dd1292d	unread	initial inventory only
-docs/archive/notes/HOOK-IF-FILTERS-2026-10-16.md	1132	5650a314a9b28e7ab883ce31b6da5d3a29e4c25f8da21ed373fd9f0d73ea75f2	unread	initial inventory only
-docs/archive/notes/HUD-ADAPT-2026-10-14.md	10174	942613f88d058fe0eb42defc57d234952efb3bed077308dba0701f718447bab5	unread	initial inventory only
-docs/archive/notes/HUD-ARRANGER-USABILITY-2026-10-19.md	1897	8130ce1c2181c2c90c7fcd16c6a83d3b0ef64bb8c674d807770b354ad4b317a8	unread	initial inventory only
-docs/archive/notes/HUD-BORDER-ZOOM-2026-10-20.md	3186	efb5b71f5a094dd8a3d24dc2d846ceb278025e8f240efe3be814bb2846d91733	unread	initial inventory only
-docs/archive/notes/HUD-PHONE-LAYOUT-PLAN-2026-10-10.md	18694	d160b913c4bc060a53934ae7ccfe75347357790426b5792ad83c2afea8aadc14	unread	initial inventory only
-docs/archive/notes/HUD-PR-REVIEW-2026-10-10.md	29053	fb221b673cad6498e468b333d4d5586e80e3d3b6bb65c0be2efbc290e5ac9809	unread	initial inventory only
-docs/archive/notes/IDEAS-GAMEPLAY-2026-10-22.md	56593	9c745c385d76de1dbf3ac3528889b02055b968fc8dcba0257cda68716b610ff6	unread	initial inventory only
-docs/archive/notes/IDEAS-PHONE-UX-2026-10-22.md	26606	ac148f2974773bee6f1302e597e3e559690696627e1fa6c781123bc4262c8e16	unread	initial inventory only
-docs/archive/notes/IMPROVEMENT-CANDIDATES-2026-10-22.md	10794	0e51a82de25ddcf5a77bf78b45e76345fab4210c30a2d85f6bde55891ba08645	unread	initial inventory only
-docs/archive/notes/INPUT-HUD-TESTING-RESEARCH-2026-10-21.md	6579	95521f51bd0a6eabde502d93908055dec5015ad1a9c8f3c9634fa78880b541cf	unread	initial inventory only
-docs/archive/notes/IPHONE-TLX-WEBGPU-2026-10-23.md	16467	57ef1cdf701b7a665435a7ef67627711bdfcbc7b215b019aa45f79cf0b8f9496	unread	initial inventory only
-docs/archive/notes/ISSUE-TRIAGE-1518-2649-2026-10-22.md	35046	80947d2d110d83109e155716dd1e4791cad3ad37ca6297519bf56bfa27f88262	unread	initial inventory only
+docs/archive/2026-08-architecture-review-journal.md	74486	7781e0da4f324eb3e0a296f9912e0dad28a34f0ff2581b992678bf8b80334b35	fully-read	archive groups 01
+docs/archive/2026-08-repo-audit.md	24771	1abb16f60e5d3d28264142899ce458473c1badc75b554924601b93a549147c8a	fully-read	archive groups 01
+docs/archive/ATTIC.md	10320	a0c20c59534a3cd12a77804163429c68237c3073358fbd460567491fe9d16959	fully-read	archive groups 01
+docs/archive/SCENERY-UPGRADE-PLAN.md	22134	8fc239fe5928d2e044eed00015a551866769663cb32ade720e561d183726b8db	fully-read	archive groups 01
+docs/archive/manual-probes/act-probe.spec.js	11332	638f71fa871841a96a8285afbd41a77b78005ca9854be034d725d94e4db20e9f	fully-read	archive groups 01
+docs/archive/manual-probes/banking-probe.spec.js	3844	5b698089af01f47f6f6783cde644513c813d17dda5db659630add2438de772d6	fully-read	archive groups 01
+docs/archive/manual-probes/skid-probe.spec.js	8874	1c63dc0cf0124ee07bc4b4bef6fe3ca38a298ac0c18166a9ffc23f3a8ad1f000	fully-read	archive groups 01
+docs/archive/manual-probes/throttle-rescue-probe.spec.js	8613	6961a41f09c23f183489887e0a12f5e16247f8a894af3e8b7b4b1295957032fe	fully-read	archive groups 01,02
+docs/archive/moves/README.md	373	a81fba81254147066078e7ae784c13fafa0384e39827361ebd44d00fddf8b6f9	fully-read	archive groups 02
+docs/archive/moves/batches/b1-foundation.json	955	43be75371add526adda9acb78fbd251ca8d78a2e9636d39a2b0da48e61de8dcc	fully-read	archive groups 02
+docs/archive/moves/batches/b2-presentation.json	1496	577e8b8992eef261215242ce09c9f4a6dbdad2a0a3bf403ec7869e62f89deaea	fully-read	archive groups 02
+docs/archive/moves/batches/b3-domain.json	1266	14a4a302261fb1e5bf2edd2bc8b0a9653c75f2ef14957f63f5d103875fd7a6af	fully-read	archive groups 02
+docs/archive/moves/batches/b4-render-track.json	1520	b68f7723f267a12451f611c986835d6102fba6d54891c2a025fbce317b09f981	fully-read	archive groups 02
+docs/archive/moves/phase2.json	4749	8c638ad9d6b33f6cbd1209fcb05c07b141438aa8e691e8721899538c788acfa5	fully-read	archive groups 02
+docs/archive/moves/phase4-tools-a.json	3622	222786cac7d4afb3106720b57f8bd641727613855fc0fd04a55cda75848da58d	fully-read	archive groups 02
+docs/archive/moves/phase4-tools-b.json	3271	5813c71228e456f7d1396b4f55402b7a531dc14207a2dd673751821ba53fd199	fully-read	archive groups 02
+docs/archive/moves/phase4-tools-c.json	2922	06f7343c23c1e1378e1846741c80b4dc12b824d1a0ceb7602dc9a8691159ecec	fully-read	archive groups 02
+docs/archive/moves/phase4-tools.json	10058	d1a75033d5513f4c7de9f1181444adc7793d80bc40c4d964f2a6d2120db487fa	fully-read	archive groups 02
+docs/archive/moves/spike-backends.json	4130	75474542a554102fa68f8a14cd1f28e312563cad3f2911c25a04088f595232d0	fully-read	archive groups 02
+docs/archive/notes/AGENT-HISTORY-2026-10-26.md	16426	84a3fc43404b79b34f146ff7769721bdf826c75b099f6b89fb0f78438cf8e2fd	fully-read	archive groups 02
+docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md	55857	f8b02e2e31e9a4bbb74d8700e80a5fc2adb08692baf115a55b7a69ea1613a333	fully-read	archive groups 02
+docs/archive/notes/AGENT-TOOLS-REVIEW-2026-10-17.md	12380	75de3ec182f11e1c3225d72101ce5cd214001bb7ca10aadcd968b73aadf3b191	fully-read	archive groups 02
+docs/archive/notes/AGENT-WORK-TRACKING-2026-10-14.md	22801	9c0c30723d968d99787e6df60be4dd07c4911e0c85b31e091be034dca29a3cf4	fully-read	archive groups 02
+docs/archive/notes/AGENT-WORKFLOW-EXPERIMENTS-2026-10-19.md	8513	108d3e181af3c76b04f7de963a852a48a674b8d895ec146ed8377ee13f9fe65d	fully-read	archive groups 02
+docs/archive/notes/AI-PASS-COMPLETE-LONGEST-EPISODE-2026-10-16.md	2062	10dba84ea74fdd1305b5e052a585dbabc5151e6366547942095e18f3d43c0884	fully-read	archive groups 02
+docs/archive/notes/AI-PASS-COMPLETION-2026-10-19.md	3089	a45ee9156e81a9ffb42958411187b348885624c13219a25841b933e0e022c20a	fully-read	archive groups 02
+docs/archive/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md	3680	f21b6802d3c1fff7bbea0fc8c0f023cdf833d8f957ec923fb1cab8d45d88c37d	fully-read	archive groups 02,03
+docs/archive/notes/AUTOCOMPACT-TRIAL-2026-10-19.md	1729	0eb5337cb967eca620ae7a2f1d32c358e27f41fad9999a1ea54f1bce0db49422	fully-read	archive groups 03
+docs/archive/notes/BACKEND-DRAWCALL-RESEARCH-2026-09-16.md	5316	a06e91294a333bebbfd287722424afb5dde4dd1d9cfd983b1e9ca795e8764174	fully-read	archive groups 03
+docs/archive/notes/BASH-GUARD-TIMEOUT-MEASURE-2026-10-18.md	1714	fddbb7f8f3107af34a29ecb389d7be0ecebcd04ef07f0f8540614ef612509322	fully-read	archive groups 03
+docs/archive/notes/BOOST-EVERY-PRESS-2026-10-24.md	4428	ee4934bef17482d70259f7c9f2d0b4c9e0d362bf1dc4f815541c9d2051cdfcc9	fully-read	archive groups 03
+docs/archive/notes/BOOT-LOAD-TOOLING-RESEARCH-2026-10-21.md	11636	dd95457ebf4c421faa77a3e4718527a56343ea563b22eb1e7d75ebb6cd695b41	fully-read	archive groups 03
+docs/archive/notes/CAR-LIVERY-TOOLING-RESEARCH-2026-10-21.md	6169	17ab25cd6ada640fc27db102d1cc394f92675786e90737de290e640ac321e215	fully-read	archive groups 03
+docs/archive/notes/CAR-MESH-BUDGET-H13-2026-10-20.md	7703	7f7b6e85a9fdca96e59845461cf94c5a4575e8b0626704e19fe2733cf3727c2e	fully-read	archive groups 03
+docs/archive/notes/CENTRELINE-KINKS-2026-10-18.md	2596	00edc9d512610a382a3e2b838724ac48e75facb17c3d6f94a07fae36856b4d1e	fully-read	archive groups 03
+docs/archive/notes/CHUNK-MIRROR-PROBE-2026-10-17.md	4800	556f55909bc6d5c5ba100da8fcba74f4ee2620867c22ee31617446b81cefeb13	fully-read	archive groups 03
+docs/archive/notes/CI-PAGES-SINGLE-FLIGHT-2026-10-06.md	1164	11f573c807ed0e9e4d7ed0361d86194928518dfe2775dceb1e91d98f0b967171	fully-read	archive groups 03
+docs/archive/notes/CI-PR-LIFECYCLE-REMEASURE-2026-10-18.md	1715	d61ddbcb7c5e9f319c9dd242a19b97a4cc22e5d702705f2f1e07584e327ac7f0	fully-read	archive groups 03
+docs/archive/notes/CI-TOOLING-RESEARCH-2026-10-21.md	11752	c2bbbb53d65c8fe57444f6f61d7b8c116bd21d5b7532f3700b407e8ff2abc7f1	fully-read	archive groups 03
+docs/archive/notes/CI-WALL-TIME-HUNT-2026-10-21.md	6831	4be8bee2dd4d3b3a5b09b5c89575e78ac7a7f4d56c00cfdf238ca6cac16fb8e9	fully-read	archive groups 03
+docs/archive/notes/CLAUDE-HOST-EFFICIENCY-2026-10-19.md	10207	c44d0cfcca3dbc5d3599b8c65f2152c881ef3721d115cbf28a21f6cd76ea4c49	fully-read	archive groups 03
+docs/archive/notes/CLAUDE-TRANSCRIPT-MINING-2026-10-19.md	6758	c7cf64f5d6a0105cc501a6b16baec08ddb3d897de4c64a8b76d80f427c6bd18a	fully-read	archive groups 03
+docs/archive/notes/CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md	18734	c7d50c7db892d3e203bd3cef414a0df6c4944053091fa0301005170ed4f77559	fully-read	archive groups 03
+docs/archive/notes/COCKPIT-REAR-MIRROR-DESIGN.md	8434	af542461fd6aecc7bbf1f6065a1e0dba35dbeb265fc60e330cdfc7e6b5f824c2	fully-read	archive groups 03
+docs/archive/notes/COLD-FIRST-RACE-WARM-2026-10-23.md	5495	fec705a2828ccc5cd5578d4423238dc5f27588ea79d2f781754825a6bada66fa	fully-read	archive groups 03
+docs/archive/notes/COMMIT-GUARD-CACHE-2026-10-19.md	2773	0fe4a51a40dba1e46b247d9b4d4880d1f544e5acbfce421d90dd45e14b013d12	fully-read	archive groups 03
+docs/archive/notes/COMPILE-CACHE-TRIAL-2026-10-18.md	1521	5210403ba7be6cbd036cccec6a81f20fd3658bdaecf6628a0fa5aa2fa7b78042	fully-read	archive groups 03
+docs/archive/notes/CREW-ANIM-2026-10-24.md	4372	b5e037f6a3bc45c0480efc0a657556c142f26863f547ea5e987608dfff12df12	fully-read	archive groups 03
+docs/archive/notes/CROSS-ACCOUNT-INBOX-2026-10-25.md	4459	72624c4fdfb946d0c72bb1f1957fe62075d9b0708207bc7ae7d305ba769a1bea	fully-read	archive groups 03
+docs/archive/notes/CURSOR-SDK-RESEARCH-2026-10-20.md	18438	ce8e9c955eda6dbd4ea285c61a3eb7cd12f8a2cd554ad992b78196b536439bd4	fully-read	archive groups 03
+docs/archive/notes/CURSOR-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md	18988	70f6db42270aa0d3e4589b4ee6438e144f1ed15b1382435c250df2dc18c98df4	fully-read	archive groups 03,04
+docs/archive/notes/DEEP-RESEARCH-CLAUDE-CODE-FLEET-2026-10-15.md	46382	d7d6e1e900ef3c45731884d60f203871b08754356272e57ee473a2a7b72701b0	fully-read	archive groups 04
+docs/archive/notes/DESIGN-MATRIX-TOOL.md	3360	c8b54dde7e1be8f0efe90d3f83046ef35c7752f7d797d1e59d4cbf9a88e527c2	fully-read	archive groups 04
+docs/archive/notes/DOCS-SURVEY-2026-10-06.md	15144	15863c7f2ae37acc6d09b1f8c0e0b6703b4dfe423245de7a73a0329ae8e904a6	fully-read	archive groups 04
+docs/archive/notes/F1-2026-REGS-REALISM-2026-10-18.md	5020	a397164e1436edb394179aa1b9c42e0883d675e7a17775508ce1ef753ffa9409	fully-read	archive groups 04
+docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md	24590	88f10e2746ea00cb8f96aadfdd209a8ac238f79054d2f0423993a2c5632e9aa7	fully-read	archive groups 04
+docs/archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md	9557	f9ac83ef0bd96d24a3ddeeaac8274da153648092acf0238ad27644d2f3641d7d	fully-read	archive groups 04
+docs/archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md	16487	5f7c91ab00279090ebfe47e3d288e492c6ef99aea29c332cbf86c908f3719b71	fully-read	archive groups 04
+docs/archive/notes/FLEET-BOARD-2026-10-19.md	3005	63274994972dfedb56faebe85443c436c0211e8a67516bef2e677a4a4fbf6d13	fully-read	archive groups 04
+docs/archive/notes/FLEET-BUS-2026-10-19.md	6896	c964b64202839cfac859fa23a097d2c671d8d977b3d27eb98d52ea5d406b24e1	fully-read	archive groups 04
+docs/archive/notes/FLEET-COST-2026-10-19.md	4903	e45998d8d57fd51722630fa044e81241cdb7e19d788393f24dd69f8c4b43c1af	fully-read	archive groups 04
+docs/archive/notes/FLEET-ROLES-2026-10-19.md	34587	844805312c041a1ae86af7c13d15ccc0a05cc3e3b4ea36070bd3901f6c87ce09	fully-read	archive groups 04,05
+docs/archive/notes/GARAGE-CAR-CAPTURE-PERFORMANCE.md	4180	7283e14e0a590c119ca4fc8eaf2bbe8a9af046715ed7a2ca3426276ee9a420d2	fully-read	archive groups 05
+docs/archive/notes/GPU-MEM-CENSUS-2026-10-17.md	7887	fe061eff51cf74e710269ef6737193cba7f709324fdbc90d3483cbb34566b49f	fully-read	archive groups 05
+docs/archive/notes/GRAPHICS-DETAIL-SURVEY-2026-10-01.md	25025	8695ccfcfbb15945aef4daba073b5585e25b9b43d763f9ebffdb95c4ebcb04a3	fully-read	archive groups 05
+docs/archive/notes/GRAPHICS-TEXTURE-HUNT-2026-10-21-7E31.md	14828	8112824fb48f4cfd13d8b87436590e5a2d84cb3ff429e6177f72afd36ad3347a	fully-read	archive groups 05
+docs/archive/notes/GROK-API-2026-10-22.md	24396	e4bc233af8de352715560608192bca13674f867f882042eac65edef7d787ebec	fully-read	archive groups 05
+docs/archive/notes/HARNESS-AUDIT-2026-10-18.md	6895	afe17aff0ddc546003457b5c9501526a55b1f10acaef1f659c3a9087b52e1c95	fully-read	archive groups 05
+docs/archive/notes/HEAP-CENSUS-MEASUREMENT-CONTRACT.md	3883	4a5b59b2ab1346e66da146c8e20051dd7216e07ea6288dd7980330145dd1292d	fully-read	archive groups 05
+docs/archive/notes/HOOK-IF-FILTERS-2026-10-16.md	1132	5650a314a9b28e7ab883ce31b6da5d3a29e4c25f8da21ed373fd9f0d73ea75f2	fully-read	archive groups 05
+docs/archive/notes/HUD-ADAPT-2026-10-14.md	10174	942613f88d058fe0eb42defc57d234952efb3bed077308dba0701f718447bab5	fully-read	archive groups 05
+docs/archive/notes/HUD-ARRANGER-USABILITY-2026-10-19.md	1897	8130ce1c2181c2c90c7fcd16c6a83d3b0ef64bb8c674d807770b354ad4b317a8	fully-read	archive groups 05
+docs/archive/notes/HUD-BORDER-ZOOM-2026-10-20.md	3186	efb5b71f5a094dd8a3d24dc2d846ceb278025e8f240efe3be814bb2846d91733	fully-read	archive groups 05
+docs/archive/notes/HUD-PHONE-LAYOUT-PLAN-2026-10-10.md	18694	d160b913c4bc060a53934ae7ccfe75347357790426b5792ad83c2afea8aadc14	fully-read	archive groups 05
+docs/archive/notes/HUD-PR-REVIEW-2026-10-10.md	29053	fb221b673cad6498e468b333d4d5586e80e3d3b6bb65c0be2efbc290e5ac9809	fully-read	archive groups 05,06
+docs/archive/notes/IDEAS-GAMEPLAY-2026-10-22.md	56593	9c745c385d76de1dbf3ac3528889b02055b968fc8dcba0257cda68716b610ff6	fully-read	archive groups 06
+docs/archive/notes/IDEAS-PHONE-UX-2026-10-22.md	26606	ac148f2974773bee6f1302e597e3e559690696627e1fa6c781123bc4262c8e16	fully-read	archive groups 06
+docs/archive/notes/IMPROVEMENT-CANDIDATES-2026-10-22.md	10794	0e51a82de25ddcf5a77bf78b45e76345fab4210c30a2d85f6bde55891ba08645	fully-read	archive groups 06
+docs/archive/notes/INPUT-HUD-TESTING-RESEARCH-2026-10-21.md	6579	95521f51bd0a6eabde502d93908055dec5015ad1a9c8f3c9634fa78880b541cf	fully-read	archive groups 06
+docs/archive/notes/IPHONE-TLX-WEBGPU-2026-10-23.md	16467	57ef1cdf701b7a665435a7ef67627711bdfcbc7b215b019aa45f79cf0b8f9496	fully-read	archive groups 06
+docs/archive/notes/ISSUE-TRIAGE-1518-2649-2026-10-22.md	35046	80947d2d110d83109e155716dd1e4791cad3ad37ca6297519bf56bfa27f88262	partial	archive groups 06
 docs/archive/notes/ISSUE-TRIAGE-2026-10-19.md	4106	4a3119438c783d960417d0e8a3de1a506c2797790bf3641ad41f564afb434098	unread	initial inventory only
 docs/archive/notes/ISSUE-TRIAGE-2650-3304-2026-10-22.md	29218	48fddfc9fdeb8f8802a6ea03c179102c973c2f958b218faa08b1a71c749bad71	unread	initial inventory only
 docs/archive/notes/ISSUE-TRIAGE-3305-UP-2026-10-22.md	24082	e951e407d3c7dcb4ec826729d3344530f16d9f872aed590435353d4a1ccd9ba1	unread	initial inventory only
@@ -2888,262 +2888,262 @@ spike/spike-data.js	4067	335489da625fef3834d17a89dda559d3ce893ae20bef05510d02ef9
 spike/three-spike.html	3005	c38d6fc71f17f9ed3a9e417d77e824967d1b36dcc427349d7cc457dfc516e61b	unread	initial inventory only
 spike/three-spike.js	19009	5d77be6f2c1470ac6a1a5a80ed2e4446e8f9bc4e5b2b05678b0e0bec78218922	unread	initial inventory only
 sw.js	59855	c0a67ac4c85a33b9bf764670f196421f4fddbe20760ac18e8e54b84b54b4f164	fully-read	root-shell-complete.md + root-metadata-complete.md
-tests/data/agent-config-budgets.json	756	cd6bc08cfa36058fce30517e036b6cafc019980468d0fde7dd9916029c4249d7	unread	initial inventory only
-tests/data/car-wing-foil-tris.json	12647	93584dca4a13695fceff475e26e4ee4dde7b65fa238afa2c7bb23cdc2e8343ea	unread	initial inventory only
-tests/data/centreline-kinks.json	340	aa820445648b994c6503c03c1d75d0806e849e2c40cd59c164ba0620e9c3d1a3	unread	initial inventory only
-tests/data/def-factory-golden.json	4324	ba23911e6ff0e88da0eb4959404dad8869739d0534c7d410484370f313cb75cf	unread	initial inventory only
-tests/data/f1-circuit-reference.geojson	311738	2ec66166b719c5b5704805d04f41860f26ab926e923a95f8d5667fa3221e6d33	unread	initial inventory only
-tests/data/flaky-quarantine.json	14025	061335a90fbd5b62c133b80a71b0a82fd5c3871ae91f905e5c3a8a490bc09f7c	unread	initial inventory only
-tests/data/font-digits.json	4613	beb3baa9b6c8088a09b1285dede4f379088b8181587ff58685fbb5033d6a534a	unread	initial inventory only
-tests/data/frame-lights.pre-viewlights.txt	34424	3870b9958b1e9522920e7a7f0df8c30ccb6666a2d064bb641cb35ed9b0f147e3	unread	initial inventory only
-tests/data/frozen-globals.json	5382	d11bdf9a010099f9a67799438167882e22aca4301d785d6d6a6930c63cb2da35	unread	initial inventory only
-tests/data/garage-defaults-export.json	16032	cf258c814289b2ea5aa874de2e19537612648f38114ed66ebd367aecdcb0552c	unread	initial inventory only
-tests/data/html-sink-allowlist.json	3193	a65bbc89ce170c6d64673a5ae6f462975445545c52898972bed1c065d79d109a	unread	initial inventory only
-tests/data/i18n-lint-allowlist.json	552	b3a5f52bdc0dcbe8898115bda9e0d7e86a6506dbd076ea1be350d40b0468f3bf	unread	initial inventory only
-tests/data/i18n-migrated.json	564	6de96e4e7742a6753d9ed2fd9d0872333b3731d333cb251cae6a8e4c7cc5d2de	unread	initial inventory only
-tests/data/impact-map.d/cursor--w32b-monza-coplanar-409c.json	140	7c7defd559af4a4fdbbb6f4ab830ef538b2fb362e8bf48f4e4e998c14b18c1ff	unread	initial inventory only
-tests/data/impact-map.d/cursor--w34c-dijon-clips-0b82.json	141	ee527fac752e64d97b4672f18fb1227e0e8a86d7608dfbb149b928c8a7466318	unread	initial inventory only
-tests/data/impact-map.d/frame-lights-release.json	232	797517e8787fbf1a23025a6f68a3115436d25652d9fed4615bcca2ac3dd5493f	unread	initial inventory only
-tests/data/impact-map.d/garage-livery-witness.json	671	df07c2945febc037b2aca770cc8e641db25b85b9007ec73fc0533282bdbe388c	unread	initial inventory only
-tests/data/impact-map.d/ui-layers-reflow.json	124	41e13c6cca6d91106408ead21547c69e76b66f32363c1eb8b2608c7c2c85f790	unread	initial inventory only
-tests/data/impact-map.d/vegas-day-strip.json	383	6ff5327fd7b06e78bbaa36166f1f89f77f3bdaf8d24051bd6c8b99b3eac2346a	unread	initial inventory only
-tests/data/impact-map.d/w22b-boot-island-preload.json	147	7f13fe493ba1aca6e1c8402dcec382786ad2bd89e655a37f336a9852f8ff8d50	unread	initial inventory only
-tests/data/impact-map.d/w22c-garage-prebuild-phone.json	132	108c6bbb32e622f5f15374171cc0b6d3a2d383d9e8685a4d1762b04e282e3232	unread	initial inventory only
-tests/data/impact-map.d/w22d-vsfriend-head-200.json	125	987608e8525f1952cb8a30a151205b7eadfa18c841c3356ab1bd41193e663b30	unread	initial inventory only
-tests/data/impact-map.d/w22h-livery-tex-dispose.json	129	10e7186a1f0b263598d183ab156ce828ec1847418dcd5bc071a6d2ed8722e5ca	unread	initial inventory only
-tests/data/impact-map.d/w22i-hud-layout-hidden.json	284	7bdf83ce52e6774f17d3c6beda3d37ce95e61516ae54920e4b0d82b999e55bb4	unread	initial inventory only
-tests/data/impact-map.d/w23d-crowd-ctx-rebuild.json	558	b54b6442d336d83b77f2b3f072ffdff7685878fcb209581ad3823afa6e047cc1	unread	initial inventory only
-tests/data/impact-map.d/w30a-outwash-drs-rail.json	325	212ce00e98c3d64f75430aa11f8b4d3d778064fed00e7ac8df11c6ad6b615b2d	unread	initial inventory only
-tests/data/impact-map.d/w30b-suzuka-circuit-wheel.json	143	47cec7539dc979f36b07835c765ef40759c587beceb6837ffec1f927280aeda8	unread	initial inventory only
-tests/data/impact-map.d/w30c-qatar-day-sf.json	288	c2ddda84712ef105bd9ad4667bfd062084e7062612de95de974ad4c6c6066eff	unread	initial inventory only
-tests/data/impact-map.d/w30d-redbull-orbit-clear.json	137	4259394081e388e21fe8c7e7a7aa0697ee2bd494de03fdc8d0ce788a07ef7c5c	unread	initial inventory only
-tests/data/impact-map.d/w31b-shanghai-pudong-horizon.json	154	0ba7b0665c2d05b0d3cbf94c6cf61749f4bade95e461561f715cdbfcdc27c693	unread	initial inventory only
-tests/data/impact-map.d/w32a-mugello-arrabbiata.json	147	3b468be573078f77606bf436e6d5412f621454005d0f000dcce57b9ed5590e01	unread	initial inventory only
-tests/data/impact-map.d/w32c-nurburg-horizon.json	152	2e88dc93d2222e1d804233a9b500f4095bdb917af1cae62f99a63ea5aa2d054f	unread	initial inventory only
-tests/data/impact-map.d/w32e-monaco-fairmont-orbit.json	143	500bc9ee36ef539125d633f94074a3dbc0765a60edd6d8fdb45a6f1a59bb9560	unread	initial inventory only
-tests/data/impact-map.d/w35d-baku-night-orbit.json	136	72d12703c4ab6f695499021fb14c24e451e87786b126acc7ef0853b24c6fd08c	unread	initial inventory only
-tests/data/impact-map.d/w35g-kyalami-grandstand-orbit.json	147	00247b8d8f276128ee96b3b19a286ffd8f9576bf0b72e426a7912540781747ef	unread	initial inventory only
-tests/data/impact-map.d/w36e-jeddah-night-orbit.json	140	e2a0eb5dbe0248602dfb7e5b8201d4b0515e83780c6d7063baf8e58138cfc8e0	unread	initial inventory only
-tests/data/impact-map.d/w36g-miami-hard-rock-cam.json	142	8b2fb32ad9e09078c4545ed18532016a5367279e5f005a1e3c4e305a5990add1	unread	initial inventory only
-tests/data/impact-map.json	540623	e9ac681601a22e2cf2df818554628e09aaefdf5321a720035b7cf204b7c5838d	unread	initial inventory only
-tests/data/landmarks/abudhabi.json	366	111cdcb8c73ed05812689227fafd072ce2864dd22302aaa12a3d81891be39da0	unread	initial inventory only
-tests/data/landmarks/albert_park.json	176	5c7670736616264fb194d548df4a75cea2f20a67a1777ef24a841310ea07ad69	unread	initial inventory only
-tests/data/landmarks/anderstorp.json	422	1d2a0a769691b0b34887b6601b0245172c78469ef3168ca3abc9d11979ff14dd	unread	initial inventory only
-tests/data/landmarks/bahrain.json	343	af13cfa10f05e6d87b409f3c7617d355d70cd48b75aa6a39ce5a53a2c57e721b	unread	initial inventory only
-tests/data/landmarks/baku.json	161	14d241a895e20c5efa5e5ab3d6ad89fb40ded7b90120be927c697331d2a51ee7	unread	initial inventory only
-tests/data/landmarks/brands_hatch.json	243	1c84d8d1622ca68c5706ffd6d0fe4e9d7999529959ad4976c92a92653114d5d1	unread	initial inventory only
-tests/data/landmarks/buddh.json	385	93084f6317ef6eab2cb18fa088715cfdc3c455a283ba2b6c68cb42676daa481e	unread	initial inventory only
-tests/data/landmarks/buenos_aires.json	381	6db5c507c231f36321cb2d1123d1aa21f5dde53ad93645599815ddb2f59d1c66	unread	initial inventory only
-tests/data/landmarks/catalunya.json	200	be60d2a6f1de243a7a8b33c4bc4bfd530cb51b158019dd881908a2c986ba6ea4	unread	initial inventory only
-tests/data/landmarks/cota.json	97	8b2aeac1788b5782d8d7064e2a6dfc773144526b63d90988ade8e0e36bfd463c	unread	initial inventory only
-tests/data/landmarks/dijon.json	435	83f9391280846e33a483f724283fc49d5bab03542432699ab1776458aebdd52d	unread	initial inventory only
-tests/data/landmarks/donington.json	538	bee9544423f9c5cc7493d78f01aac050fe1da14b95383e3d217162e44b4a0660	unread	initial inventory only
-tests/data/landmarks/estoril.json	361	e58d3d05756a34693ec1b4069a56ed218eba117b6a3b63c1e92b58dcd3fd95df	unread	initial inventory only
-tests/data/landmarks/fuji.json	285	f0322868076553f13d9ed7df852516a4fc6664f6ac3398de9c2b27e35cc0c664	unread	initial inventory only
-tests/data/landmarks/hockenheim.json	294	1bed07ab00e4b61da954d0dcb9565c95858412effc598000f655815caf8c536c	unread	initial inventory only
-tests/data/landmarks/hungaroring.json	149	bb9b029cf96264d0e07242268cfdb4a40eafbeeeecc8fc1e1938d950d52392e4	unread	initial inventory only
-tests/data/landmarks/imola.json	248	b7c85fe9b01627964b3b064db61f6a669817d76e90a63b1d66647b162255946a	unread	initial inventory only
-tests/data/landmarks/indianapolis.json	252	ebadb88740c15bfd2699a7b45cda0b783a286371ee3e76d11cdfd69485f92b42	unread	initial inventory only
-tests/data/landmarks/interlagos.json	284	892230528538526e2b9189f0eb8c0a055f1572b685d0223ac014de094d7c1b78	unread	initial inventory only
-tests/data/landmarks/istanbul.json	194	d579bf239d6de03dc78b8ce11aa1112a1d131bfa7ab0241274ce7ba1a5c26a36	unread	initial inventory only
-tests/data/landmarks/jacarepagua.json	649	12b2343481a87e8d036d6a99f81edfb6fa278e58386e270436e488d9bc6df42e	unread	initial inventory only
-tests/data/landmarks/jeddah.json	419	bf2bf9f9ae094b12c3ba023c96cac4065b7d1d1905d01eaa00661f38bb052ad9	unread	initial inventory only
-tests/data/landmarks/jerez.json	265	d8475ed595158ee78c17a0cac41ca963ac911e75139a3ec2c656815aa56e65b3	unread	initial inventory only
-tests/data/landmarks/korea.json	349	57d68f26d5c5b5246d15d5f8ea1e7e76e688fce30ffbc9a18952e30722f52089	unread	initial inventory only
-tests/data/landmarks/kyalami.json	325	3d158858157d02d554f3e121fcb5eab2ea1b747cbd160245836e9919222dbae7	unread	initial inventory only
-tests/data/landmarks/madrid.json	137	daff4ba852a2e2f5a223034cae8bd7752ce919990d70432691e05fb3d720bcd0	unread	initial inventory only
-tests/data/landmarks/magny_cours.json	445	f20387dffc7cad6bfdff811cbcafb7519b6e1d921dee87ee82e5b6f861dbdada	unread	initial inventory only
-tests/data/landmarks/mexico.json	319	21cb76f62d18a0f8bc29ff283b1984f5ce71a40bb2d36577748ae84a3c29dc3d	unread	initial inventory only
-tests/data/landmarks/miami.json	274	e731f337547ccfdb66f90c1441013510d91aae05172e68927de9878b9202a095	unread	initial inventory only
-tests/data/landmarks/monaco.json	275	f6093848280d4260ded6abc6e3ddecd9e33fa1ebb5f79e7b1b299b39b816b013	unread	initial inventory only
-tests/data/landmarks/mont_tremblant.json	481	1512014cd0c0281d7fe503c0ea0732990c39d9c8f8f2284944542dbe898c0b81	unread	initial inventory only
-tests/data/landmarks/montreal.json	236	1faa64c233982d3b6ab56728920e60ba3811bb234a06c21ca7d0bd8f80e26bc6	unread	initial inventory only
-tests/data/landmarks/monza.json	428	3f1a154369d7d6aca7ab1666fa36d7d7a58428786ea889d2deba6f6ab43a484f	unread	initial inventory only
-tests/data/landmarks/mosport.json	329	ad0c8f1bb2ae4ac59eea7b28a904a3090ed01610e1ea7b515526fe1328f390ae	unread	initial inventory only
-tests/data/landmarks/mugello.json	266	5c07e4690ad15915ddb067f0700f351cda240a250e06bcba5d85e2fec8267a1e	unread	initial inventory only
-tests/data/landmarks/nurburgring.json	195	afc2d9460bc94773a4b8609b82c95c08cd6c4c4d4bcae353feb4f68668938bc0	unread	initial inventory only
-tests/data/landmarks/okayama.json	378	14656c96b3407f88521787d559e6d8bcbd54630fed285030983b5829c66840d4	unread	initial inventory only
-tests/data/landmarks/paul_ricard.json	422	ec0a3c810e1ecbf5f69aa01bf7ab26aa3f435f83ad524e91197673a2a2d5e118	unread	initial inventory only
-tests/data/landmarks/portimao.json	348	e381ae6acfda8b1eadbab543b2d86f98c656abe4286393c617e701708d11096c	unread	initial inventory only
-tests/data/landmarks/qatar.json	527	80e99259f2e18c973fe3889c54b1a7027884fcb06a32655d428a67cc36ebe914	unread	initial inventory only
-tests/data/landmarks/redbull.json	132	fd4fa783b13f8e6ab4dfab0fe948e65ca8c459f219462d82f491f1fd1cfe5f99	unread	initial inventory only
-tests/data/landmarks/sepang.json	276	db7b9984a59052df68fc0fdc2c385caa72c261ad4108c03827eb9eade4057e07	unread	initial inventory only
-tests/data/landmarks/shanghai.json	368	9047535e977cfbaeaa47a05d0cf5c419ae2fbc54c0ff911547bf5a1d72f65078	unread	initial inventory only
-tests/data/landmarks/silverstone.json	341	8b986d676c68ce4bc309ceb5144555fc7f5ff68e7c975a0ce73287e271ce033e	unread	initial inventory only
-tests/data/landmarks/singapore.json	255	88bbf769752ffca3b9ffd8b0d479d72f6ac666dd537e27fba0b46efad01ea568	unread	initial inventory only
-tests/data/landmarks/sochi.json	367	b3ed07b4721d3b416c59ce96ea3d712733cc00509feaa50a12cbfdc73bd9951c	unread	initial inventory only
-tests/data/landmarks/spa.json	245	fade5b14785f91d3419a5c909eefa2ae626c64c97066c9a1c3484bb578702396	unread	initial inventory only
-tests/data/landmarks/suzuka.json	160	393042ee1c5305e608495fb33a70a2bd8e2486650fb9adaa4f585dd986ca1085	unread	initial inventory only
-tests/data/landmarks/vegas.json	571	ad5a55e263bc64b25537a2d2bb4d6155c11f22deb0324bb8aa1cee72b86cde52	unread	initial inventory only
-tests/data/landmarks/watkins_glen.json	238	91941a42b53f9950c79b441d54c702a94c61c2d03d916cb9ca3a09da1b94e23d	unread	initial inventory only
-tests/data/landmarks/zandvoort.json	125	ec3d1306e94600d121cbbe44b4e7c47549e58235e5297a9e45c45a249c41a430	unread	initial inventory only
-tests/data/landmarks/zolder.json	349	016e8c6142ce6cfe98757403227177075ca8f7a68437aeb5d31c4753273de232	unread	initial inventory only
-tests/data/mutants.json	14064	af7bf8ee131edf0d6caf91068b108d8c10d9e240db433b3a121faff46fba9453	unread	initial inventory only
-tests/data/pace-math-golden.json	4988	cb9829571714253b9f886fe17c3bfb7fe7cef2fa00fc330c39b28af2a6417266	unread	initial inventory only
-tests/data/perf-frametime-baseline.json	781	cac7615bcc96c0bb4aaafb489bf65177dc98a8f7c836608ad350047412fa78ea	unread	initial inventory only
-tests/data/physics-baseline.json	8397	d5752d46f0ee3121c2d2c5ce8fa51b93ba10dd01f3449b86cb6ebe989ab525c4	unread	initial inventory only
-tests/data/ratchets.d/claude--f1-fleet-coordination-handoff-e3rqq4.json	69	58239490fda8ded9e79e31174e6b46f7e7a41fc3c01e8d39c307fd8c96614753	unread	initial inventory only
-tests/data/ratchets.d/claude--f1-game-bstack-perf-1wd2es.json	123	d8bf03704040bf4727834f8e8b915d2de853e4a343577dae3615ce33ef99e0c3	unread	initial inventory only
-tests/data/ratchets.d/claude--mega-w2-6b3f.json	152	bb4ced06482f53e2f3aa74ec7f609f27d09bcb5c20328c6fcb78be42b5c87e14	unread	initial inventory only
-tests/data/ratchets.d/cursor--a-train3-shell-w9l1.json	111	b4ac4b4d468d2ed50453e2e07aabaaa83ba1cdd0697a104c7db5047188cb9661	unread	initial inventory only
-tests/data/ratchets.d/cursor--astra-submit-o4c754.json	86	1bd4a9ee49a428db5eb3e3669e2657d96f53d6c966ab34b69dba874db35e1071	unread	initial inventory only
-tests/data/ratchets.d/cursor--body-style-fixes-cf81.json	124	ed25c9d77d7d7979ed58eaf177f471761916b5402a4e718817314eca3e88ea22	unread	initial inventory only
-tests/data/ratchets.d/cursor--car-mesh-h13a.json	69	22341751d8b6dd9d2db0ec3fcaff1947b62c14e80b12ece8677657b4e23d9881	unread	initial inventory only
-tests/data/ratchets.d/cursor--car3d-ceiling-5e2a.json	111	fe97fc3a48707ee9c62c666358542b48f4d1aab283813076b4fdc15bcdcba327	unread	initial inventory only
-tests/data/ratchets.d/cursor--cockpit-finish-settings-c8e2.json	114	5d1a51c22fbacdf31a685aa8cbe4fd16e6521f856a270caffbb7d3a5bff58013	unread	initial inventory only
-tests/data/ratchets.d/cursor--complete-concept-meshes-3d82.json	70	fda317ac5736c4eb0a3e0d069bd75309065ddf6adcae28afcc7d0f4bbb363429	unread	initial inventory only
-tests/data/ratchets.d/cursor--cpu-hunt-h13-5c1e.json	86	2502ca9a88aaed2a001d94d94c34043c8b6d50ec23dee20139f8bf2ff737c38a	unread	initial inventory only
-tests/data/ratchets.d/cursor--ctx-lost-menu-notice-271d.json	140	139fc8564a7f3e84e21e6ffc2ed8bd327e06cf9dd7af4d6593184b3701496be2	unread	initial inventory only
-tests/data/ratchets.d/cursor--ctx-lost-menu-recovery-463a.json	88	7c3b6d506264420b022738014aa954f3b62293c8416d1f9b77b55dc3a1c96ec6	unread	initial inventory only
-tests/data/ratchets.d/cursor--ddp5-race-select-hitches-ee7e.json	192	076aabda71447f1e8fb0e4cf4cbbd72e08f168543460245f63cf0e72f68fb6a7	unread	initial inventory only
-tests/data/ratchets.d/cursor--deep-review-fixes-95f8.json	184	fad88e2ca61856a84c226d0eac4cde120bde51cfecb0eeef665ffabaff764ce6	unread	initial inventory only
-tests/data/ratchets.d/cursor--design-aero-d3c-7e2a.json	70	506f349766757df3394b11fb619d0a7dcdc1db19ce97490b62641b841e27f83d	unread	initial inventory only
-tests/data/ratchets.d/cursor--design-bodies-aero-d1d-4047.json	142	8b2988f550c72848047b660856f663ed20572fb65356dbbb6aa7f77e273a196c	unread	initial inventory only
-tests/data/ratchets.d/cursor--design-preview-aero-a3e7.json	70	916ef8cd2b77d479602c84a3e27f4cc92bb3b540a607f871a384f7082c9c86ba	unread	initial inventory only
-tests/data/ratchets.d/cursor--design-preview-bodies-f0e0.json	70	855d98c16e827bfbe8fbaa2bc96225b3b6e5a4f3fe9f015b477be5887e084ca2	unread	initial inventory only
-tests/data/ratchets.d/cursor--design-preview-helmet-decal-8d1e.json	70	a00070f9b02133d7a06631cce41b361dfea04edf845d5ee065d74ef90082530d	unread	initial inventory only
-tests/data/ratchets.d/cursor--design-preview-mech-5d7e.json	70	2ea2c2f79b4a980cef2752d5e8bb56312465e1824e03565ec5ba91c87731db17	unread	initial inventory only
-tests/data/ratchets.d/cursor--design-preview-tyres-exh-6d4a.json	70	fda317ac5736c4eb0a3e0d069bd75309065ddf6adcae28afcc7d0f4bbb363429	unread	initial inventory only
-tests/data/ratchets.d/cursor--design-preview-wheels-c1da.json	70	aa32219489119b8f25df5590e5ff2505367b6aaf52f22f5eee0d81f1ad553972	unread	initial inventory only
-tests/data/ratchets.d/cursor--diag-webgpu-sniff-d6a3.json	92	143370df7b694357474a2f2b33d9aa6169a5562f7d3dea648e8d8d20e71cf8ed	unread	initial inventory only
-tests/data/ratchets.d/cursor--dip1-ultra-phone-cap-a8c1.json	18	62b405d88881f963e77d8b9452f6bd6de13151d866f980edd90e394f0ababe27	unread	initial inventory only
-tests/data/ratchets.d/cursor--dw8-settings-fixes-21d2.json	88	b42cc5fbf2944e680ba6303a4d54d1ab62b9d9887954818649b17a6dcdf31427	unread	initial inventory only
-tests/data/ratchets.d/cursor--fit-audit-420b.json	69	58239490fda8ded9e79e31174e6b46f7e7a41fc3c01e8d39c307fd8c96614753	unread	initial inventory only
-tests/data/ratchets.d/cursor--fit-residual-b25e.json	70	a00070f9b02133d7a06631cce41b361dfea04edf845d5ee065d74ef90082530d	unread	initial inventory only
-tests/data/ratchets.d/cursor--floor-smooth-d9a3.json	70	a36932b8aee395ec7ce67414a797c643a1d83917b43f94452e885101b34145eb	unread	initial inventory only
-tests/data/ratchets.d/cursor--garage-concept-bodies-f83a.json	70	08e79f4c1e3b9c857fd4eb9b6cf739afa6a6b4d8f61ab871fd5f8989e00017f0	unread	initial inventory only
-tests/data/ratchets.d/cursor--garage-mechanic-assets-4d7a.json	41	37ec8ea95aee2652cd595258115147b39b54a9e16e4e5ea5b62c716b3b3fc97a	unread	initial inventory only
-tests/data/ratchets.d/cursor--garage-out-daily-race-7c3e.json	148	164d4f647b6c9a493532f1bd281e397ca31be9de59d755756a5971969aa12236	unread	initial inventory only
-tests/data/ratchets.d/cursor--garage-photo-scene-b7g2.json	86	30695bf3293af393b36d44ef3b98ad9f409811102291cddd0cd94c1cfcc242ab	unread	initial inventory only
-tests/data/ratchets.d/cursor--garage-shader-fix-r1c7.json	138	8d48df7b84c36b52f8598a5e24b5ada3d4520adc9ab8042e314d5211aa2765cd	unread	initial inventory only
-tests/data/ratchets.d/cursor--garage-shape-refinement-3c9a.json	70	099fb72dae69aaa577321126fa746ddb87b598c51b799fe7fe8e00f28813cb0e	unread	initial inventory only
-tests/data/ratchets.d/cursor--gfx-budget-no-overlay-a992.json	75	1a9b6fc01efa689e825f29e7943c899f13a6137cccec5ee7066ca376d8dea071	unread	initial inventory only
-tests/data/ratchets.d/cursor--heap-census-integrity-8f2c.json	104	f6a7644f8f1b9030a7736737b32a22cd1a93073cba44f619f61133a8b6d4c95c	unread	initial inventory only
-tests/data/ratchets.d/cursor--helmet-visor-7e9c.json	113	b125f6bb707fa43531c696d814504c99e7b410fe1c0b2ca1416fd7ad5dd24880	unread	initial inventory only
-tests/data/ratchets.d/cursor--hud-tick-h11b.json	90	d5f0b940c1230197ed1691d0bf75eb66207c615b2bc94f749cf3a23ca0a711ae	unread	initial inventory only
-tests/data/ratchets.d/cursor--hud-time-mono-7c2e.json	87	6100c9881f8a5f1de2b5634c7119af2f467f09b4a5f8de6d8ba6aaefa17ac462	unread	initial inventory only
-tests/data/ratchets.d/cursor--improvement-sweep-a26f.json	64	a58c722a5296623b5fac27d0afb0cb23564fff052dd6303c9372ef0b4c270c37	unread	initial inventory only
-tests/data/ratchets.d/cursor--live-debug-audio-3-a1h3.json	69	9938adf69faa11cb477947a94774b9817172a6a99ec9c52f539a23d87688ea22	unread	initial inventory only
-tests/data/ratchets.d/cursor--live-input-h11a.json	155	efa83642fa7e8901e5e49e989b818efabe31c3f52cc455cd4945e0d83cb59fd6	unread	initial inventory only
-tests/data/ratchets.d/cursor--live-memory-h12a.json	86	d99876cee609a2899c2394293cbd7c7aa6ddeffebca18c4854cc18c995028e20	unread	initial inventory only
-tests/data/ratchets.d/cursor--livery-aero-controls-5c92.json	70	a06d911933d348cb9852dd4e4327647142661e3ea60c17aabc003156a0b804f1	unread	initial inventory only
-tests/data/ratchets.d/cursor--livery-menu-coverage-13c7.json	110	9393315f4444d68877e962b7b7b85dd632343091c65a6738b02805f2bfac14d5	unread	initial inventory only
-tests/data/ratchets.d/cursor--mega-train3-a9e2.json	254	ba07b156cacfd5e10d14afbf836d46b206ec4a37272e18bde8089c979af49e64	unread	initial inventory only
-tests/data/ratchets.d/cursor--net-custom-circuit-0e7f.json	128	18db413c92db36abd735a10f543adf57c47ec7fd5a461ad5412442dcf36eaa6c	unread	initial inventory only
-tests/data/ratchets.d/cursor--net-lobby-fixes-c7e2.json	70	4fe80ce3e957efb93244b501080c35ac47f9e54bc7df37a0568fa8052286f224	unread	initial inventory only
-tests/data/ratchets.d/cursor--orchestration-redesign-7c1d.json	94	cfa1ebfb888afc2cfaf16d0219cf76c1c3aeaa2173f3021c46dca51b7e113823	unread	initial inventory only
-tests/data/ratchets.d/cursor--pages-garage-out-flake-678a.json	87	89d2627b62de85ebdc35365a823a57f307323abce27e8f4359bada21cc7ad717	unread	initial inventory only
-tests/data/ratchets.d/cursor--perf-debug-e5b2.json	64	d380c27bb3eca55c37e7ca2203a27f8b8d6841a62943679e949a28dd15979ff4	unread	initial inventory only
-tests/data/ratchets.d/cursor--perf-parallel-8d51.json	204	90febc73700e1354438a0a39877866bd23a2c5bdf2e1723270c2e7ffd87b21ef	unread	initial inventory only
-tests/data/ratchets.d/cursor--photo-reset-sun-l1c4.json	68	7f90b0587106b1c1538d23cd294f12fe08f0de7223e68f1d6fafbf5fb2e3e278	unread	initial inventory only
-tests/data/ratchets.d/cursor--pin-convert-hud-w69a.json	109	1649eb7d6bc83506ca0a99bc5cd7df72f644275d4307f6960ff67e2e68a57154	unread	initial inventory only
-tests/data/ratchets.d/cursor--quit-menu-stall-088e.json	87	52feb944d6d080878c8fe2adaa2610bfbe2bc0692fc726dfb425ce37c4aa137c	unread	initial inventory only
-tests/data/ratchets.d/cursor--race-build-superseded-3571.json	86	abfa9d13ac6c585e1bc7baf057ecaed3b0c4e3a31e9a0bbb41e163bc355fe696	unread	initial inventory only
-tests/data/ratchets.d/cursor--race-entry-cover-h14.json	139	41497fafa29af070edae67b8fd9b6de9b6119036be42004264c9f3eebc31e32c	unread	initial inventory only
-tests/data/ratchets.d/cursor--race-entry-joins-h18.json	86	9a1e679a1aebae4762078f774dc0bceaefd0ac10dadabf544859b5e4496de2ee	unread	initial inventory only
-tests/data/ratchets.d/cursor--race-entry-readback-defer-28bb.json	141	aeed635ae599a07a4a2b714f2b1ef4cbb4462d048226ecd7d4965deff0320941	unread	initial inventory only
-tests/data/ratchets.d/cursor--race-retain-h12b.json	154	061078aadbe45960c0afd6e35a8eae9b5e9be7072dff35544fbf5d211b5b0adf	unread	initial inventory only
-tests/data/ratchets.d/cursor--ratchet-double-lower-7c3b.json	44	a3163d1be39c7ce343181ce7224eb37cfcfb08e57eae1443d6cbdb43ee2acd87	unread	initial inventory only
-tests/data/ratchets.d/cursor--rear-wing-aero-1800.json	86	1bd4a9ee49a428db5eb3e3669e2657d96f53d6c966ab34b69dba874db35e1071	unread	initial inventory only
-tests/data/ratchets.d/cursor--render-lifecycle-hooks-2572.json	92	f18362112b5ac672d43d2995572f81f5d3fd3cc014c12fed07427e880b87faca	unread	initial inventory only
-tests/data/ratchets.d/cursor--render-visibility-math-c7e4.json	86	30695bf3293af393b36d44ef3b98ad9f409811102291cddd0cd94c1cfcc242ab	unread	initial inventory only
-tests/data/ratchets.d/cursor--rig-warm-w56a.json	64	ade269f098a3449b116fa99a5782d4861a20fe1504f76c373442e8089e282937	unread	initial inventory only
-tests/data/ratchets.d/cursor--scenery-retry-a3570.json	86	d52d061430774f20222aee22de1f48b2c30b60eac2c407e31b83da872a4fe1e5	unread	initial inventory only
-tests/data/ratchets.d/cursor--sculpted-concepts-rename-8c41.json	70	d237098fec105f054745b1ecedaf1db4d61829e28d771917eef63bf705c2f852	unread	initial inventory only
-tests/data/ratchets.d/cursor--sim-perf-3109-31c3.json	86	c4ea7968cf328314b9fd9887e8e1dc97630c16d312d9aaf9a8b6e81dc0f4c7fd	unread	initial inventory only
-tests/data/ratchets.d/cursor--sim-perf-3109-w67-7c2e.json	86	c4ea7968cf328314b9fd9887e8e1dc97630c16d312d9aaf9a8b6e81dc0f4c7fd	unread	initial inventory only
-tests/data/ratchets.d/cursor--sol-deep-fixes-24-e8b1.json	87	6348b806654a340c664045680576a38ddc1821edae378321316fc9a5c9dc676d	unread	initial inventory only
-tests/data/ratchets.d/cursor--sw-race-entry-a3f2.json	88	bce86994d27a0f1ea39363276b4b3abeeca2e22c03481c19f83cdbd342894445	unread	initial inventory only
-tests/data/ratchets.d/cursor--swiftshader-race-ctx-9e45.json	162	c26b9ea9ddd4da819dfdf7c136635104bae96a3fe3d8b8d98ecb70772c887ce5	unread	initial inventory only
-tests/data/ratchets.d/cursor--title-warm-w50b.json	86	3c67a5b361350f00114514b57dc2b7141884844fe2d696ab72be5878daebafb9	unread	initial inventory only
-tests/data/ratchets.d/cursor--tlx-cockpit-warm-h6c3.json	86	3c67a5b361350f00114514b57dc2b7141884844fe2d696ab72be5878daebafb9	unread	initial inventory only
-tests/data/ratchets.d/cursor--track-perf-3113-7ad7.json	73	b94df0ee7346994e991e81d423345f17c546fa07104b0b5cdb771bab049c24f7	unread	initial inventory only
-tests/data/ratchets.d/cursor--train-b-ui-o7g3.json	64	ade269f098a3449b116fa99a5782d4861a20fe1504f76c373442e8089e282937	unread	initial inventory only
-tests/data/ratchets.d/cursor--train-bodies-897b.json	69	782135750cc00d1f302e7069b1c2e9ba971b62ba3c3cef7975ba48a07cb8d44c	unread	initial inventory only
-tests/data/ratchets.d/cursor--w13j-7adf.json	113	b125f6bb707fa43531c696d814504c99e7b410fe1c0b2ca1416fd7ad5dd24880	unread	initial inventory only
-tests/data/ratchets.d/cursor--wet-road-stability-6f2a.json	86	a067eb3bb7b687b40d61c4f0fa6f7806f15d86efd4e6e9f869839542586b40de	unread	initial inventory only
-tests/data/ratchets.d/cursor--wgx-debug-labels-7f5e.json	92	f18362112b5ac672d43d2995572f81f5d3fd3cc014c12fed07427e880b87faca	unread	initial inventory only
-tests/data/ratchets.d/cursor--wgx-race-warm-5e1a.json	124	c8d17d711700833bb51d498154763d6a9672d2912f425131dfa01ad880f1897d	unread	initial inventory only
-tests/data/ratchets.d/sync-pr-cursor-ddp5-race-select-hitches-ee7e.json	188	80358622a6348c4d4ce899b2953ebe17e66869937b07d25e37d14d6a7ecdc84c	unread	initial inventory only
-tests/data/ratchets.d/sync-pr-cursor-design-aero-d3c-7e2a.json	235	af40d0db8dcce0ff028c1c0b2e5916171dc8a11fc6c041e07947ec5ad40065b0	unread	initial inventory only
-tests/data/ratchets.d/wt--audit4-I3.json	197	ab35e6939261c2163e5b97a926016df1c0275960ac8f51b04fa44a5523a9bd70	unread	initial inventory only
-tests/data/ratchets.json	3698	b1c5a90b9b49cd0e37b68f307d189f62cfc932e2706034996e6f44ce85718cf6	unread	initial inventory only
-tests/data/scenery-audit-baseline.json	1293	20375f3a84981c57084331882c470de360199613cd08f80e0781d560c0d2d290	unread	initial inventory only
-tests/data/settings-defaults-export.json	149285	3a416033b0b9ca37982c377c957b3165a3e8f423c1c7f65395211eb78cb992dd	unread	initial inventory only
-tests/data/skill-routing/queries/agent-config.json	1906	5a40e9d06f0646976ca3bd1ad928bf0ce18d9716b7c822f80e4ec673d59765d5	unread	initial inventory only
-tests/data/skill-routing/queries/agent-view.json	1927	cd1916b698b8154f31e505df7c88ed85610d3d60df6739669f7c417f8db1aeba	unread	initial inventory only
-tests/data/skill-routing/queries/ai-racecraft.json	1977	99dfcad1017731a6bf1de184fb9916f726810cc1f27da2633f079c3ebd3b8987	unread	initial inventory only
-tests/data/skill-routing/queries/asset-pack.json	2460	2689fa57f05768f9e65b35ba37b36fbb64311abea86456171bfcc96b65f37859	unread	initial inventory only
-tests/data/skill-routing/queries/audio-debug.json	2077	1fa56a8b01eaaae1ddf3739bbad1a14f43d6125e76647cf3d79bccc5a2927419	unread	initial inventory only
-tests/data/skill-routing/queries/career-mode.json	2167	df2d68f04eebacf564b35ca0b7d59fb5e9abe6cfc6c3f49f845478e253b6f581	unread	initial inventory only
-tests/data/skill-routing/queries/check-changes.json	2210	3b6c40dfe6c0df27cf64f5c5dfd1ad5a23509e8f0705e69ecc731ac4de02ab33	unread	initial inventory only
-tests/data/skill-routing/queries/check.json	565	7e8068dc6a548d7646395a91aaa6844b81ac9b0a8483832835a16b74c4c7a701	unread	initial inventory only
-tests/data/skill-routing/queries/code-nav.json	1203	01cf0bb82fe1be5c0ea3b9a5884d84d242fff88acbd9546fc02f45016c34f277	unread	initial inventory only
-tests/data/skill-routing/queries/css-play.json	2172	21d3f69e363898dd808a0257b557fcde131e70c77c0854199668596772b1c225	unread	initial inventory only
-tests/data/skill-routing/queries/data-hub.json	2010	cfc067087dabd6c1bf2cf4d152e7fa18e50c8e8728533634564be79623c70c39	unread	initial inventory only
-tests/data/skill-routing/queries/f1-animation-cameras.json	3864	ba46840c2afadce398f8ecd249bb2d1685be9dc8530e2b7d4f82369a1b92c65c	unread	initial inventory only
-tests/data/skill-routing/queries/game-feel.json	1505	a5f51d9b491d5005b02e4349eacd255acf5f6a960903af6f5b38f7ebe1caf166	unread	initial inventory only
-tests/data/skill-routing/queries/garage-parts-livery.json	2260	02644251a99df5e4c7e83636a90516a53be9159d65d6f1dcaccb79bdbfafe503	unread	initial inventory only
-tests/data/skill-routing/queries/handoff.json	565	bbaad95ecee39222c34c471740d8f314f6fdac8d59e6852b7426331a5068e504	unread	initial inventory only
-tests/data/skill-routing/queries/input-controls.json	2501	d210c62a812f54d1f2368280b6fc5582109edd106ff406488835a331359bbbf0	unread	initial inventory only
-tests/data/skill-routing/queries/js-debugger.json	1565	77ba427b192b31cef3cfc760486af2631e4a99ad760ae9e02c976992516c3b0a	unread	initial inventory only
-tests/data/skill-routing/queries/lighting-tuner.json	2178	6343c581d60f58aaac59768108fcc017226191e07bdaeca393b6d97d3b4f4f9f	unread	initial inventory only
-tests/data/skill-routing/queries/mcp-probe.json	2531	d7b226d129a383d50f3e3c72d9ad097c61680496ab52fcccbea252b31e4d9363	unread	initial inventory only
-tests/data/skill-routing/queries/multiplayer-debug.json	2053	d8c1a684f1e14f82361daded1840e2fc8c561e638cf23c56536986b64d7f702b	unread	initial inventory only
-tests/data/skill-routing/queries/new-track.json	2265	8cb9b1eccbb0b4414cc16f612c31cbc1c43da88a0c37af2b9df50c898874b1ab	unread	initial inventory only
-tests/data/skill-routing/queries/phone-browser.json	1345	029b3b0e32e647dd978832c078d3b1b99108800873f25e309f7556e3c8704160	unread	initial inventory only
-tests/data/skill-routing/queries/playwright-probe.json	1887	c616c6b266f2eb294d65d274c050041d232cdce35ec67ebfa8ac5a3cc377d702	unread	initial inventory only
-tests/data/skill-routing/queries/pwa-cache-service-worker.json	2155	d44d55826a667d981900b4310447974763ac6b4d000627b90cbb8538e1b5c2de	unread	initial inventory only
-tests/data/skill-routing/queries/race-incidents-control.json	2182	88705ff9db67ddf2d40e61b8db40e9613606a43257be9eb5a410225e556d5287	unread	initial inventory only
-tests/data/skill-routing/queries/race-weekend.json	2039	034a4d2a13e9c80d818e9a425c0f2ec3a7d6d3ff0589a9524c0cc4964191fc16	unread	initial inventory only
-tests/data/skill-routing/queries/renderer-debug.json	4986	f305d76231c862d190d4839575ec876621c82165c4c6d82f2074ad741745f158	unread	initial inventory only
-tests/data/skill-routing/queries/scenery-dress.json	1931	469c104ca7cd60f8f6b92c4ddb4d43e51765b832b618d2d14ae19254a3819c86	unread	initial inventory only
-tests/data/skill-routing/queries/season-mode.json	2396	a0ae3eaf5bfe11c06411e115bdb21dfa90edaa2dc2a30ab0eaeeb65ca2c3e577	unread	initial inventory only
-tests/data/skill-routing/queries/ship.json	577	4b86eb915152c1f4e5f91452fe9d6efcd998f9232196dae6b121b348673901ef	unread	initial inventory only
-tests/data/skill-routing/queries/slim-bloat.json	1838	c96d7105d29f20dd037ebd5b5e1772d38162db1b7b940c8e6002b4de28f2ecf0	unread	initial inventory only
-tests/data/skill-routing/queries/steward.json	3056	c2d00bc3d774357e50c6591ce13372c1c012f211c827205d4e0a9cd208859612	unread	initial inventory only
-tests/data/skill-routing/queries/survey-track.json	2744	8fe15ddb2fbc18b7c7f4646557f157770fdeae4981e866195a3316f979b663e4	unread	initial inventory only
-tests/data/skill-routing/queries/survey-ui-matrix.json	2131	983e90ea2bf52902058673f709dc690518f86156501c80fe48a706ac18a33957	unread	initial inventory only
-tests/data/skill-routing/queries/tune-physics.json	1892	6662d5dc0e6dc341a6827175adf6d14d8c468a7d11db30145d976b8291b305e1	unread	initial inventory only
-tests/data/skill-routing/queries/ui-menu-a11y.json	2318	b07a7249bdde7f979d76e33ba2f4082bac7e9aaaba029d66f274f09222a9f7da	unread	initial inventory only
-tests/data/spec-timings.json	869093	d93ec8403236596804d5ec3227e9be9d1f2aedd35dec1f510fa90ba2da619e1e	unread	initial inventory only
-tests/data/tolerance-exceptions.json	962	ae712d57156bf42671bd83d5fb94a528d90284b39cb78292e1883c41d70e0017	unread	initial inventory only
-tests/data/tooling-fast-timings.json	43261	74c4e337974eb14d00130215ed018569081ba5d303b32ed9c8d96dd89e8b9ce2	unread	initial inventory only
-tests/fixtures/claude-usage/session-copy.jsonl	756	9481d71d8acf0aaa750d15adffb34e305a8d850492c2f6f63abae1b9314c8aba	unread	initial inventory only
-tests/fixtures/claude-usage/session.jsonl	2648	d92d5fbfe6a5fbd0b6633a4d03edd73120f4bba747a344436c55ddbcaa0ea71d	unread	initial inventory only
-tests/fixtures/fleet-board/api.json	2573	98a4fd16189037a8d6c22430ef7d87d8f0103486b35037b1b87eab8f490402cf	unread	initial inventory only
-tests/fixtures/fleet-board/bus.json	563	b961c8f3aed5e34b828f1ccbf5fc40d4fa83f1a620e1b020c5ebffffbf058390	unread	initial inventory only
-tests/fixtures/ghost-monza-short.json	169	9249602e76dab0d232c9c297c581fdbb4ebe8ffcca6556b86a75651799837fec	unread	initial inventory only
-tests/fixtures/grok-transcripts/sample.jsonl	22722	8c435894409426d2eed5a82289034877270502b3447f74f5d522b17c314e237c	unread	initial inventory only
-tests/fixtures/grok-transcripts/with-bad-line.jsonl	2111	f986e2d336bebe45e4ad055936887346077a3d8834e51f36d601e29ffab1024b	unread	initial inventory only
-tests/fixtures/i18n/bad-placeholder/en.json	71	ac9de60797383773be7b1e0f30509a8f0375d5d27574f93a10ab46e42797de9a	unread	initial inventory only
-tests/fixtures/i18n/bad-placeholder/xx.json	78	b02829fb38e098c9e879195c3c1d038af8da5197c4892e657022376366447a97	unread	initial inventory only
-tests/fixtures/i18n/missing-key/en.json	112	8989a2b83bea35cebe6b1428c1e5dfab2deacb729c647c4c1545a52363af4957	unread	initial inventory only
-tests/fixtures/i18n/missing-key/xx.json	141	6956b365190178a434039a1339b11a0cc4a86ccb78c94752f839aeef5e582dbb	unread	initial inventory only
-tests/fixtures/i18n/valid/de.json	136	59fe14d331f720ec0f048d0c3435edc0e0bf23621edf9c7f3974bda51c3d8118	unread	initial inventory only
-tests/fixtures/i18n/valid/en.json	130	ea5a10914230e1d85cbcee9537762cdc25f5a420d86d3a578379cab7cba5e65e	unread	initial inventory only
-tests/fixtures/i18n/wrong-plural/en.json	61	5388bf975c06716cffaefc7ef69846c482cd48cd502de5db52d2f4e80031c139	unread	initial inventory only
-tests/fixtures/i18n/wrong-plural/ru.json	74	70746a0285633bfb3d5f9df39e684707e0230180cdbb10b2012ec5171ddbc912	unread	initial inventory only
-tests/fixtures/js-debugger/hang.fixture.mjs	168	145e245e89d209eb98e79d7f776357edfd3aae2f171d0d947e2e6da5c376e60a	unread	initial inventory only
-tests/fixtures/js-debugger/lib.fixture.cjs	169	5d56ad3a2795a593f519e04e17673ef6cdaf2a3d538418d54982ad4917b149da	unread	initial inventory only
-tests/fixtures/js-debugger/live.fixture.cjs	220	e7e59955ef4371b8f422925d3b2e473d63e215143a0ca723760257bfc117e382	unread	initial inventory only
-tests/fixtures/js-debugger/sample.fixture.mjs	473	14cad0f6896974d6747382ead9e460e5d54eac37e7f55bd01ad3a630612a1ad8	unread	initial inventory only
-tests/fixtures/js-debugger/spawner.fixture.mjs	428	fe0c2f74cbf79b9792b577b3eda265f6cc62f9f8c490eab65f4674becc03d74b	unread	initial inventory only
-tests/fixtures/js-debugger/vm.fixture.mjs	861	45e4e4de027b56ae702a0b15c05a5822db9543a84a8ec96bd56906717ae2919f	unread	initial inventory only
-tests/fixtures/js-debugger/vmlib.fixture.js	174	e130b83c928dc6e8126d67ac166044620ef8a3140a0429246512cbaa3354164d	unread	initial inventory only
-tests/fixtures/launch-lane/get-session-allowed.json	256	864c388d0ed1244b6d3a2774a7475d1927562b9f6f0103a695cd4f9e4dc6ecae	unread	initial inventory only
-tests/fixtures/launch-lane/get-session-warning.json	264	ea33203b538eb3ebd3851b2052f08f8d31313f6d229e7b346d18e5c2055ab25a	unread	initial inventory only
-tests/fixtures/launch-lane/list-sessions.txt	1241	cfb9677d0cf75fedab9aa09ab29571d1a55c44eaaa341bc6e0d725cc83859ce0	unread	initial inventory only
-tests/fixtures/openf1-baku-2026-race.json	203289	90733ce5cee211dd9fc470a883e802ce1a24cba3aa5768dbd17d3b8f7583df12	unread	initial inventory only
-tests/fixtures/session-ledger/permissions.jsonl	234	54719a5393b65e341359376b54c64338cd73db1371ff8669229e6467ac9d535e	unread	initial inventory only
-tests/fixtures/session-ledger/transcript.jsonl	3783	25823ead3d60744d0edd8b853eda1220907473c8b4fee943742350b16c310648	unread	initial inventory only
-tests/fixtures/shader-validate/bad.frag	210	42f4824560ded8674da66c8038daab53e1c7782677878341614596e5544b50b6	unread	initial inventory only
-tests/fixtures/shader-validate/bad.wgsl	206	bc5d94736781b4604d16363b66fb5cd6060eb0e86674b645569920cd1b6979c0	unread	initial inventory only
-tests/fixtures/shader-validate/good.frag	114	e825b6e3d0dd3cf9aa459087eab9ea74ec6c88a536eb852bebf21c98c18c2002	unread	initial inventory only
-tests/fixtures/shader-validate/good.wgsl	94	52676ca1eedbbb80c202d5525a666696f2fa2e7be8ca95569cf51381e10c4b22	unread	initial inventory only
-tests/fixtures/stop-hook-git-check.sample.sh	1445	78cc4f321f91d86953eff5c7771081089fd4f8beeb3f1fa4dbb1a42159b2d7aa	unread	initial inventory only
-tests/fixtures/workflow-lint/bad/.github/workflows/bad.yml	501	28172a30e85504b8779ec037456868ecdfb09b8a7bdee7ccd60aacd5b2b6eba0	unread	initial inventory only
-tests/fixtures/workflow-lint/good/.github/workflows/good.yml	303	a98f7790ffa42a3a11143f1aacbcff922df9c03da4bd3aa48da0b11121ebdea5	unread	initial inventory only
+tests/data/agent-config-budgets.json	756	cd6bc08cfa36058fce30517e036b6cafc019980468d0fde7dd9916029c4249d7	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/car-wing-foil-tris.json	12647	93584dca4a13695fceff475e26e4ee4dde7b65fa238afa2c7bb23cdc2e8343ea	structured-data-validated	tests-data-complete.md; tests-data-evidence.json
+tests/data/centreline-kinks.json	340	aa820445648b994c6503c03c1d75d0806e849e2c40cd59c164ba0620e9c3d1a3	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/def-factory-golden.json	4324	ba23911e6ff0e88da0eb4959404dad8869739d0534c7d410484370f313cb75cf	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/f1-circuit-reference.geojson	311738	2ec66166b719c5b5704805d04f41860f26ab926e923a95f8d5667fa3221e6d33	structured-data-validated	tests-data-complete.md; tests-data-evidence.json
+tests/data/flaky-quarantine.json	14025	061335a90fbd5b62c133b80a71b0a82fd5c3871ae91f905e5c3a8a490bc09f7c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/font-digits.json	4613	beb3baa9b6c8088a09b1285dede4f379088b8181587ff58685fbb5033d6a534a	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/frame-lights.pre-viewlights.txt	34424	3870b9958b1e9522920e7a7f0df8c30ccb6666a2d064bb641cb35ed9b0f147e3	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/frozen-globals.json	5382	d11bdf9a010099f9a67799438167882e22aca4301d785d6d6a6930c63cb2da35	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/garage-defaults-export.json	16032	cf258c814289b2ea5aa874de2e19537612648f38114ed66ebd367aecdcb0552c	structured-data-validated	tests-data-complete.md; tests-data-evidence.json
+tests/data/html-sink-allowlist.json	3193	a65bbc89ce170c6d64673a5ae6f462975445545c52898972bed1c065d79d109a	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/i18n-lint-allowlist.json	552	b3a5f52bdc0dcbe8898115bda9e0d7e86a6506dbd076ea1be350d40b0468f3bf	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/i18n-migrated.json	564	6de96e4e7742a6753d9ed2fd9d0872333b3731d333cb251cae6a8e4c7cc5d2de	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/cursor--w32b-monza-coplanar-409c.json	140	7c7defd559af4a4fdbbb6f4ab830ef538b2fb362e8bf48f4e4e998c14b18c1ff	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/cursor--w34c-dijon-clips-0b82.json	141	ee527fac752e64d97b4672f18fb1227e0e8a86d7608dfbb149b928c8a7466318	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/frame-lights-release.json	232	797517e8787fbf1a23025a6f68a3115436d25652d9fed4615bcca2ac3dd5493f	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/garage-livery-witness.json	671	df07c2945febc037b2aca770cc8e641db25b85b9007ec73fc0533282bdbe388c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/ui-layers-reflow.json	124	41e13c6cca6d91106408ead21547c69e76b66f32363c1eb8b2608c7c2c85f790	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/vegas-day-strip.json	383	6ff5327fd7b06e78bbaa36166f1f89f77f3bdaf8d24051bd6c8b99b3eac2346a	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w22b-boot-island-preload.json	147	7f13fe493ba1aca6e1c8402dcec382786ad2bd89e655a37f336a9852f8ff8d50	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w22c-garage-prebuild-phone.json	132	108c6bbb32e622f5f15374171cc0b6d3a2d383d9e8685a4d1762b04e282e3232	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w22d-vsfriend-head-200.json	125	987608e8525f1952cb8a30a151205b7eadfa18c841c3356ab1bd41193e663b30	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w22h-livery-tex-dispose.json	129	10e7186a1f0b263598d183ab156ce828ec1847418dcd5bc071a6d2ed8722e5ca	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w22i-hud-layout-hidden.json	284	7bdf83ce52e6774f17d3c6beda3d37ce95e61516ae54920e4b0d82b999e55bb4	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w23d-crowd-ctx-rebuild.json	558	b54b6442d336d83b77f2b3f072ffdff7685878fcb209581ad3823afa6e047cc1	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w30a-outwash-drs-rail.json	325	212ce00e98c3d64f75430aa11f8b4d3d778064fed00e7ac8df11c6ad6b615b2d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w30b-suzuka-circuit-wheel.json	143	47cec7539dc979f36b07835c765ef40759c587beceb6837ffec1f927280aeda8	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w30c-qatar-day-sf.json	288	c2ddda84712ef105bd9ad4667bfd062084e7062612de95de974ad4c6c6066eff	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w30d-redbull-orbit-clear.json	137	4259394081e388e21fe8c7e7a7aa0697ee2bd494de03fdc8d0ce788a07ef7c5c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w31b-shanghai-pudong-horizon.json	154	0ba7b0665c2d05b0d3cbf94c6cf61749f4bade95e461561f715cdbfcdc27c693	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w32a-mugello-arrabbiata.json	147	3b468be573078f77606bf436e6d5412f621454005d0f000dcce57b9ed5590e01	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w32c-nurburg-horizon.json	152	2e88dc93d2222e1d804233a9b500f4095bdb917af1cae62f99a63ea5aa2d054f	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w32e-monaco-fairmont-orbit.json	143	500bc9ee36ef539125d633f94074a3dbc0765a60edd6d8fdb45a6f1a59bb9560	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w35d-baku-night-orbit.json	136	72d12703c4ab6f695499021fb14c24e451e87786b126acc7ef0853b24c6fd08c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w35g-kyalami-grandstand-orbit.json	147	00247b8d8f276128ee96b3b19a286ffd8f9576bf0b72e426a7912540781747ef	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w36e-jeddah-night-orbit.json	140	e2a0eb5dbe0248602dfb7e5b8201d4b0515e83780c6d7063baf8e58138cfc8e0	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.d/w36g-miami-hard-rock-cam.json	142	8b2fb32ad9e09078c4545ed18532016a5367279e5f005a1e3c4e305a5990add1	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/impact-map.json	540623	e9ac681601a22e2cf2df818554628e09aaefdf5321a720035b7cf204b7c5838d	structured-data-validated	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/abudhabi.json	366	111cdcb8c73ed05812689227fafd072ce2864dd22302aaa12a3d81891be39da0	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/albert_park.json	176	5c7670736616264fb194d548df4a75cea2f20a67a1777ef24a841310ea07ad69	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/anderstorp.json	422	1d2a0a769691b0b34887b6601b0245172c78469ef3168ca3abc9d11979ff14dd	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/bahrain.json	343	af13cfa10f05e6d87b409f3c7617d355d70cd48b75aa6a39ce5a53a2c57e721b	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/baku.json	161	14d241a895e20c5efa5e5ab3d6ad89fb40ded7b90120be927c697331d2a51ee7	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/brands_hatch.json	243	1c84d8d1622ca68c5706ffd6d0fe4e9d7999529959ad4976c92a92653114d5d1	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/buddh.json	385	93084f6317ef6eab2cb18fa088715cfdc3c455a283ba2b6c68cb42676daa481e	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/buenos_aires.json	381	6db5c507c231f36321cb2d1123d1aa21f5dde53ad93645599815ddb2f59d1c66	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/catalunya.json	200	be60d2a6f1de243a7a8b33c4bc4bfd530cb51b158019dd881908a2c986ba6ea4	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/cota.json	97	8b2aeac1788b5782d8d7064e2a6dfc773144526b63d90988ade8e0e36bfd463c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/dijon.json	435	83f9391280846e33a483f724283fc49d5bab03542432699ab1776458aebdd52d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/donington.json	538	bee9544423f9c5cc7493d78f01aac050fe1da14b95383e3d217162e44b4a0660	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/estoril.json	361	e58d3d05756a34693ec1b4069a56ed218eba117b6a3b63c1e92b58dcd3fd95df	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/fuji.json	285	f0322868076553f13d9ed7df852516a4fc6664f6ac3398de9c2b27e35cc0c664	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/hockenheim.json	294	1bed07ab00e4b61da954d0dcb9565c95858412effc598000f655815caf8c536c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/hungaroring.json	149	bb9b029cf96264d0e07242268cfdb4a40eafbeeeecc8fc1e1938d950d52392e4	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/imola.json	248	b7c85fe9b01627964b3b064db61f6a669817d76e90a63b1d66647b162255946a	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/indianapolis.json	252	ebadb88740c15bfd2699a7b45cda0b783a286371ee3e76d11cdfd69485f92b42	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/interlagos.json	284	892230528538526e2b9189f0eb8c0a055f1572b685d0223ac014de094d7c1b78	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/istanbul.json	194	d579bf239d6de03dc78b8ce11aa1112a1d131bfa7ab0241274ce7ba1a5c26a36	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/jacarepagua.json	649	12b2343481a87e8d036d6a99f81edfb6fa278e58386e270436e488d9bc6df42e	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/jeddah.json	419	bf2bf9f9ae094b12c3ba023c96cac4065b7d1d1905d01eaa00661f38bb052ad9	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/jerez.json	265	d8475ed595158ee78c17a0cac41ca963ac911e75139a3ec2c656815aa56e65b3	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/korea.json	349	57d68f26d5c5b5246d15d5f8ea1e7e76e688fce30ffbc9a18952e30722f52089	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/kyalami.json	325	3d158858157d02d554f3e121fcb5eab2ea1b747cbd160245836e9919222dbae7	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/madrid.json	137	daff4ba852a2e2f5a223034cae8bd7752ce919990d70432691e05fb3d720bcd0	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/magny_cours.json	445	f20387dffc7cad6bfdff811cbcafb7519b6e1d921dee87ee82e5b6f861dbdada	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/mexico.json	319	21cb76f62d18a0f8bc29ff283b1984f5ce71a40bb2d36577748ae84a3c29dc3d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/miami.json	274	e731f337547ccfdb66f90c1441013510d91aae05172e68927de9878b9202a095	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/monaco.json	275	f6093848280d4260ded6abc6e3ddecd9e33fa1ebb5f79e7b1b299b39b816b013	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/mont_tremblant.json	481	1512014cd0c0281d7fe503c0ea0732990c39d9c8f8f2284944542dbe898c0b81	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/montreal.json	236	1faa64c233982d3b6ab56728920e60ba3811bb234a06c21ca7d0bd8f80e26bc6	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/monza.json	428	3f1a154369d7d6aca7ab1666fa36d7d7a58428786ea889d2deba6f6ab43a484f	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/mosport.json	329	ad0c8f1bb2ae4ac59eea7b28a904a3090ed01610e1ea7b515526fe1328f390ae	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/mugello.json	266	5c07e4690ad15915ddb067f0700f351cda240a250e06bcba5d85e2fec8267a1e	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/nurburgring.json	195	afc2d9460bc94773a4b8609b82c95c08cd6c4c4d4bcae353feb4f68668938bc0	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/okayama.json	378	14656c96b3407f88521787d559e6d8bcbd54630fed285030983b5829c66840d4	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/paul_ricard.json	422	ec0a3c810e1ecbf5f69aa01bf7ab26aa3f435f83ad524e91197673a2a2d5e118	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/portimao.json	348	e381ae6acfda8b1eadbab543b2d86f98c656abe4286393c617e701708d11096c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/qatar.json	527	80e99259f2e18c973fe3889c54b1a7027884fcb06a32655d428a67cc36ebe914	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/redbull.json	132	fd4fa783b13f8e6ab4dfab0fe948e65ca8c459f219462d82f491f1fd1cfe5f99	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/sepang.json	276	db7b9984a59052df68fc0fdc2c385caa72c261ad4108c03827eb9eade4057e07	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/shanghai.json	368	9047535e977cfbaeaa47a05d0cf5c419ae2fbc54c0ff911547bf5a1d72f65078	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/silverstone.json	341	8b986d676c68ce4bc309ceb5144555fc7f5ff68e7c975a0ce73287e271ce033e	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/singapore.json	255	88bbf769752ffca3b9ffd8b0d479d72f6ac666dd537e27fba0b46efad01ea568	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/sochi.json	367	b3ed07b4721d3b416c59ce96ea3d712733cc00509feaa50a12cbfdc73bd9951c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/spa.json	245	fade5b14785f91d3419a5c909eefa2ae626c64c97066c9a1c3484bb578702396	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/suzuka.json	160	393042ee1c5305e608495fb33a70a2bd8e2486650fb9adaa4f585dd986ca1085	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/vegas.json	571	ad5a55e263bc64b25537a2d2bb4d6155c11f22deb0324bb8aa1cee72b86cde52	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/watkins_glen.json	238	91941a42b53f9950c79b441d54c702a94c61c2d03d916cb9ca3a09da1b94e23d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/zandvoort.json	125	ec3d1306e94600d121cbbe44b4e7c47549e58235e5297a9e45c45a249c41a430	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/landmarks/zolder.json	349	016e8c6142ce6cfe98757403227177075ca8f7a68437aeb5d31c4753273de232	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/mutants.json	14064	af7bf8ee131edf0d6caf91068b108d8c10d9e240db433b3a121faff46fba9453	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/pace-math-golden.json	4988	cb9829571714253b9f886fe17c3bfb7fe7cef2fa00fc330c39b28af2a6417266	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/perf-frametime-baseline.json	781	cac7615bcc96c0bb4aaafb489bf65177dc98a8f7c836608ad350047412fa78ea	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/physics-baseline.json	8397	d5752d46f0ee3121c2d2c5ce8fa51b93ba10dd01f3449b86cb6ebe989ab525c4	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/claude--f1-fleet-coordination-handoff-e3rqq4.json	69	58239490fda8ded9e79e31174e6b46f7e7a41fc3c01e8d39c307fd8c96614753	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/claude--f1-game-bstack-perf-1wd2es.json	123	d8bf03704040bf4727834f8e8b915d2de853e4a343577dae3615ce33ef99e0c3	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/claude--mega-w2-6b3f.json	152	bb4ced06482f53e2f3aa74ec7f609f27d09bcb5c20328c6fcb78be42b5c87e14	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--a-train3-shell-w9l1.json	111	b4ac4b4d468d2ed50453e2e07aabaaa83ba1cdd0697a104c7db5047188cb9661	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--astra-submit-o4c754.json	86	1bd4a9ee49a428db5eb3e3669e2657d96f53d6c966ab34b69dba874db35e1071	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--body-style-fixes-cf81.json	124	ed25c9d77d7d7979ed58eaf177f471761916b5402a4e718817314eca3e88ea22	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--car-mesh-h13a.json	69	22341751d8b6dd9d2db0ec3fcaff1947b62c14e80b12ece8677657b4e23d9881	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--car3d-ceiling-5e2a.json	111	fe97fc3a48707ee9c62c666358542b48f4d1aab283813076b4fdc15bcdcba327	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--cockpit-finish-settings-c8e2.json	114	5d1a51c22fbacdf31a685aa8cbe4fd16e6521f856a270caffbb7d3a5bff58013	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--complete-concept-meshes-3d82.json	70	fda317ac5736c4eb0a3e0d069bd75309065ddf6adcae28afcc7d0f4bbb363429	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--cpu-hunt-h13-5c1e.json	86	2502ca9a88aaed2a001d94d94c34043c8b6d50ec23dee20139f8bf2ff737c38a	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--ctx-lost-menu-notice-271d.json	140	139fc8564a7f3e84e21e6ffc2ed8bd327e06cf9dd7af4d6593184b3701496be2	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--ctx-lost-menu-recovery-463a.json	88	7c3b6d506264420b022738014aa954f3b62293c8416d1f9b77b55dc3a1c96ec6	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--ddp5-race-select-hitches-ee7e.json	192	076aabda71447f1e8fb0e4cf4cbbd72e08f168543460245f63cf0e72f68fb6a7	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--deep-review-fixes-95f8.json	184	fad88e2ca61856a84c226d0eac4cde120bde51cfecb0eeef665ffabaff764ce6	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--design-aero-d3c-7e2a.json	70	506f349766757df3394b11fb619d0a7dcdc1db19ce97490b62641b841e27f83d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--design-bodies-aero-d1d-4047.json	142	8b2988f550c72848047b660856f663ed20572fb65356dbbb6aa7f77e273a196c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--design-preview-aero-a3e7.json	70	916ef8cd2b77d479602c84a3e27f4cc92bb3b540a607f871a384f7082c9c86ba	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--design-preview-bodies-f0e0.json	70	855d98c16e827bfbe8fbaa2bc96225b3b6e5a4f3fe9f015b477be5887e084ca2	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--design-preview-helmet-decal-8d1e.json	70	a00070f9b02133d7a06631cce41b361dfea04edf845d5ee065d74ef90082530d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--design-preview-mech-5d7e.json	70	2ea2c2f79b4a980cef2752d5e8bb56312465e1824e03565ec5ba91c87731db17	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--design-preview-tyres-exh-6d4a.json	70	fda317ac5736c4eb0a3e0d069bd75309065ddf6adcae28afcc7d0f4bbb363429	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--design-preview-wheels-c1da.json	70	aa32219489119b8f25df5590e5ff2505367b6aaf52f22f5eee0d81f1ad553972	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--diag-webgpu-sniff-d6a3.json	92	143370df7b694357474a2f2b33d9aa6169a5562f7d3dea648e8d8d20e71cf8ed	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--dip1-ultra-phone-cap-a8c1.json	18	62b405d88881f963e77d8b9452f6bd6de13151d866f980edd90e394f0ababe27	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--dw8-settings-fixes-21d2.json	88	b42cc5fbf2944e680ba6303a4d54d1ab62b9d9887954818649b17a6dcdf31427	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--fit-audit-420b.json	69	58239490fda8ded9e79e31174e6b46f7e7a41fc3c01e8d39c307fd8c96614753	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--fit-residual-b25e.json	70	a00070f9b02133d7a06631cce41b361dfea04edf845d5ee065d74ef90082530d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--floor-smooth-d9a3.json	70	a36932b8aee395ec7ce67414a797c643a1d83917b43f94452e885101b34145eb	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--garage-concept-bodies-f83a.json	70	08e79f4c1e3b9c857fd4eb9b6cf739afa6a6b4d8f61ab871fd5f8989e00017f0	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--garage-mechanic-assets-4d7a.json	41	37ec8ea95aee2652cd595258115147b39b54a9e16e4e5ea5b62c716b3b3fc97a	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--garage-out-daily-race-7c3e.json	148	164d4f647b6c9a493532f1bd281e397ca31be9de59d755756a5971969aa12236	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--garage-photo-scene-b7g2.json	86	30695bf3293af393b36d44ef3b98ad9f409811102291cddd0cd94c1cfcc242ab	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--garage-shader-fix-r1c7.json	138	8d48df7b84c36b52f8598a5e24b5ada3d4520adc9ab8042e314d5211aa2765cd	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--garage-shape-refinement-3c9a.json	70	099fb72dae69aaa577321126fa746ddb87b598c51b799fe7fe8e00f28813cb0e	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--gfx-budget-no-overlay-a992.json	75	1a9b6fc01efa689e825f29e7943c899f13a6137cccec5ee7066ca376d8dea071	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--heap-census-integrity-8f2c.json	104	f6a7644f8f1b9030a7736737b32a22cd1a93073cba44f619f61133a8b6d4c95c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--helmet-visor-7e9c.json	113	b125f6bb707fa43531c696d814504c99e7b410fe1c0b2ca1416fd7ad5dd24880	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--hud-tick-h11b.json	90	d5f0b940c1230197ed1691d0bf75eb66207c615b2bc94f749cf3a23ca0a711ae	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--hud-time-mono-7c2e.json	87	6100c9881f8a5f1de2b5634c7119af2f467f09b4a5f8de6d8ba6aaefa17ac462	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--improvement-sweep-a26f.json	64	a58c722a5296623b5fac27d0afb0cb23564fff052dd6303c9372ef0b4c270c37	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--live-debug-audio-3-a1h3.json	69	9938adf69faa11cb477947a94774b9817172a6a99ec9c52f539a23d87688ea22	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--live-input-h11a.json	155	efa83642fa7e8901e5e49e989b818efabe31c3f52cc455cd4945e0d83cb59fd6	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--live-memory-h12a.json	86	d99876cee609a2899c2394293cbd7c7aa6ddeffebca18c4854cc18c995028e20	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--livery-aero-controls-5c92.json	70	a06d911933d348cb9852dd4e4327647142661e3ea60c17aabc003156a0b804f1	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--livery-menu-coverage-13c7.json	110	9393315f4444d68877e962b7b7b85dd632343091c65a6738b02805f2bfac14d5	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--mega-train3-a9e2.json	254	ba07b156cacfd5e10d14afbf836d46b206ec4a37272e18bde8089c979af49e64	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--net-custom-circuit-0e7f.json	128	18db413c92db36abd735a10f543adf57c47ec7fd5a461ad5412442dcf36eaa6c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--net-lobby-fixes-c7e2.json	70	4fe80ce3e957efb93244b501080c35ac47f9e54bc7df37a0568fa8052286f224	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--orchestration-redesign-7c1d.json	94	cfa1ebfb888afc2cfaf16d0219cf76c1c3aeaa2173f3021c46dca51b7e113823	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--pages-garage-out-flake-678a.json	87	89d2627b62de85ebdc35365a823a57f307323abce27e8f4359bada21cc7ad717	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--perf-debug-e5b2.json	64	d380c27bb3eca55c37e7ca2203a27f8b8d6841a62943679e949a28dd15979ff4	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--perf-parallel-8d51.json	204	90febc73700e1354438a0a39877866bd23a2c5bdf2e1723270c2e7ffd87b21ef	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--photo-reset-sun-l1c4.json	68	7f90b0587106b1c1538d23cd294f12fe08f0de7223e68f1d6fafbf5fb2e3e278	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--pin-convert-hud-w69a.json	109	1649eb7d6bc83506ca0a99bc5cd7df72f644275d4307f6960ff67e2e68a57154	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--quit-menu-stall-088e.json	87	52feb944d6d080878c8fe2adaa2610bfbe2bc0692fc726dfb425ce37c4aa137c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--race-build-superseded-3571.json	86	abfa9d13ac6c585e1bc7baf057ecaed3b0c4e3a31e9a0bbb41e163bc355fe696	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--race-entry-cover-h14.json	139	41497fafa29af070edae67b8fd9b6de9b6119036be42004264c9f3eebc31e32c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--race-entry-joins-h18.json	86	9a1e679a1aebae4762078f774dc0bceaefd0ac10dadabf544859b5e4496de2ee	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--race-entry-readback-defer-28bb.json	141	aeed635ae599a07a4a2b714f2b1ef4cbb4462d048226ecd7d4965deff0320941	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--race-retain-h12b.json	154	061078aadbe45960c0afd6e35a8eae9b5e9be7072dff35544fbf5d211b5b0adf	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--ratchet-double-lower-7c3b.json	44	a3163d1be39c7ce343181ce7224eb37cfcfb08e57eae1443d6cbdb43ee2acd87	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--rear-wing-aero-1800.json	86	1bd4a9ee49a428db5eb3e3669e2657d96f53d6c966ab34b69dba874db35e1071	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--render-lifecycle-hooks-2572.json	92	f18362112b5ac672d43d2995572f81f5d3fd3cc014c12fed07427e880b87faca	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--render-visibility-math-c7e4.json	86	30695bf3293af393b36d44ef3b98ad9f409811102291cddd0cd94c1cfcc242ab	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--rig-warm-w56a.json	64	ade269f098a3449b116fa99a5782d4861a20fe1504f76c373442e8089e282937	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--scenery-retry-a3570.json	86	d52d061430774f20222aee22de1f48b2c30b60eac2c407e31b83da872a4fe1e5	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--sculpted-concepts-rename-8c41.json	70	d237098fec105f054745b1ecedaf1db4d61829e28d771917eef63bf705c2f852	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--sim-perf-3109-31c3.json	86	c4ea7968cf328314b9fd9887e8e1dc97630c16d312d9aaf9a8b6e81dc0f4c7fd	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--sim-perf-3109-w67-7c2e.json	86	c4ea7968cf328314b9fd9887e8e1dc97630c16d312d9aaf9a8b6e81dc0f4c7fd	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--sol-deep-fixes-24-e8b1.json	87	6348b806654a340c664045680576a38ddc1821edae378321316fc9a5c9dc676d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--sw-race-entry-a3f2.json	88	bce86994d27a0f1ea39363276b4b3abeeca2e22c03481c19f83cdbd342894445	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--swiftshader-race-ctx-9e45.json	162	c26b9ea9ddd4da819dfdf7c136635104bae96a3fe3d8b8d98ecb70772c887ce5	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--title-warm-w50b.json	86	3c67a5b361350f00114514b57dc2b7141884844fe2d696ab72be5878daebafb9	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--tlx-cockpit-warm-h6c3.json	86	3c67a5b361350f00114514b57dc2b7141884844fe2d696ab72be5878daebafb9	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--track-perf-3113-7ad7.json	73	b94df0ee7346994e991e81d423345f17c546fa07104b0b5cdb771bab049c24f7	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--train-b-ui-o7g3.json	64	ade269f098a3449b116fa99a5782d4861a20fe1504f76c373442e8089e282937	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--train-bodies-897b.json	69	782135750cc00d1f302e7069b1c2e9ba971b62ba3c3cef7975ba48a07cb8d44c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--w13j-7adf.json	113	b125f6bb707fa43531c696d814504c99e7b410fe1c0b2ca1416fd7ad5dd24880	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--wet-road-stability-6f2a.json	86	a067eb3bb7b687b40d61c4f0fa6f7806f15d86efd4e6e9f869839542586b40de	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--wgx-debug-labels-7f5e.json	92	f18362112b5ac672d43d2995572f81f5d3fd3cc014c12fed07427e880b87faca	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/cursor--wgx-race-warm-5e1a.json	124	c8d17d711700833bb51d498154763d6a9672d2912f425131dfa01ad880f1897d	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/sync-pr-cursor-ddp5-race-select-hitches-ee7e.json	188	80358622a6348c4d4ce899b2953ebe17e66869937b07d25e37d14d6a7ecdc84c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/sync-pr-cursor-design-aero-d3c-7e2a.json	235	af40d0db8dcce0ff028c1c0b2e5916171dc8a11fc6c041e07947ec5ad40065b0	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.d/wt--audit4-I3.json	197	ab35e6939261c2163e5b97a926016df1c0275960ac8f51b04fa44a5523a9bd70	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/ratchets.json	3698	b1c5a90b9b49cd0e37b68f307d189f62cfc932e2706034996e6f44ce85718cf6	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/scenery-audit-baseline.json	1293	20375f3a84981c57084331882c470de360199613cd08f80e0781d560c0d2d290	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/settings-defaults-export.json	149285	3a416033b0b9ca37982c377c957b3165a3e8f423c1c7f65395211eb78cb992dd	structured-data-validated	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/agent-config.json	1906	5a40e9d06f0646976ca3bd1ad928bf0ce18d9716b7c822f80e4ec673d59765d5	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/agent-view.json	1927	cd1916b698b8154f31e505df7c88ed85610d3d60df6739669f7c417f8db1aeba	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/ai-racecraft.json	1977	99dfcad1017731a6bf1de184fb9916f726810cc1f27da2633f079c3ebd3b8987	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/asset-pack.json	2460	2689fa57f05768f9e65b35ba37b36fbb64311abea86456171bfcc96b65f37859	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/audio-debug.json	2077	1fa56a8b01eaaae1ddf3739bbad1a14f43d6125e76647cf3d79bccc5a2927419	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/career-mode.json	2167	df2d68f04eebacf564b35ca0b7d59fb5e9abe6cfc6c3f49f845478e253b6f581	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/check-changes.json	2210	3b6c40dfe6c0df27cf64f5c5dfd1ad5a23509e8f0705e69ecc731ac4de02ab33	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/check.json	565	7e8068dc6a548d7646395a91aaa6844b81ac9b0a8483832835a16b74c4c7a701	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/code-nav.json	1203	01cf0bb82fe1be5c0ea3b9a5884d84d242fff88acbd9546fc02f45016c34f277	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/css-play.json	2172	21d3f69e363898dd808a0257b557fcde131e70c77c0854199668596772b1c225	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/data-hub.json	2010	cfc067087dabd6c1bf2cf4d152e7fa18e50c8e8728533634564be79623c70c39	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/f1-animation-cameras.json	3864	ba46840c2afadce398f8ecd249bb2d1685be9dc8530e2b7d4f82369a1b92c65c	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/game-feel.json	1505	a5f51d9b491d5005b02e4349eacd255acf5f6a960903af6f5b38f7ebe1caf166	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/garage-parts-livery.json	2260	02644251a99df5e4c7e83636a90516a53be9159d65d6f1dcaccb79bdbfafe503	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/handoff.json	565	bbaad95ecee39222c34c471740d8f314f6fdac8d59e6852b7426331a5068e504	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/input-controls.json	2501	d210c62a812f54d1f2368280b6fc5582109edd106ff406488835a331359bbbf0	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/js-debugger.json	1565	77ba427b192b31cef3cfc760486af2631e4a99ad760ae9e02c976992516c3b0a	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/lighting-tuner.json	2178	6343c581d60f58aaac59768108fcc017226191e07bdaeca393b6d97d3b4f4f9f	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/mcp-probe.json	2531	d7b226d129a383d50f3e3c72d9ad097c61680496ab52fcccbea252b31e4d9363	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/multiplayer-debug.json	2053	d8c1a684f1e14f82361daded1840e2fc8c561e638cf23c56536986b64d7f702b	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/new-track.json	2265	8cb9b1eccbb0b4414cc16f612c31cbc1c43da88a0c37af2b9df50c898874b1ab	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/phone-browser.json	1345	029b3b0e32e647dd978832c078d3b1b99108800873f25e309f7556e3c8704160	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/playwright-probe.json	1887	c616c6b266f2eb294d65d274c050041d232cdce35ec67ebfa8ac5a3cc377d702	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/pwa-cache-service-worker.json	2155	d44d55826a667d981900b4310447974763ac6b4d000627b90cbb8538e1b5c2de	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/race-incidents-control.json	2182	88705ff9db67ddf2d40e61b8db40e9613606a43257be9eb5a410225e556d5287	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/race-weekend.json	2039	034a4d2a13e9c80d818e9a425c0f2ec3a7d6d3ff0589a9524c0cc4964191fc16	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/renderer-debug.json	4986	f305d76231c862d190d4839575ec876621c82165c4c6d82f2074ad741745f158	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/scenery-dress.json	1931	469c104ca7cd60f8f6b92c4ddb4d43e51765b832b618d2d14ae19254a3819c86	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/season-mode.json	2396	a0ae3eaf5bfe11c06411e115bdb21dfa90edaa2dc2a30ab0eaeeb65ca2c3e577	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/ship.json	577	4b86eb915152c1f4e5f91452fe9d6efcd998f9232196dae6b121b348673901ef	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/slim-bloat.json	1838	c96d7105d29f20dd037ebd5b5e1772d38162db1b7b940c8e6002b4de28f2ecf0	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/steward.json	3056	c2d00bc3d774357e50c6591ce13372c1c012f211c827205d4e0a9cd208859612	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/survey-track.json	2744	8fe15ddb2fbc18b7c7f4646557f157770fdeae4981e866195a3316f979b663e4	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/survey-ui-matrix.json	2131	983e90ea2bf52902058673f709dc690518f86156501c80fe48a706ac18a33957	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/tune-physics.json	1892	6662d5dc0e6dc341a6827175adf6d14d8c468a7d11db30145d976b8291b305e1	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/skill-routing/queries/ui-menu-a11y.json	2318	b07a7249bdde7f979d76e33ba2f4082bac7e9aaaba029d66f274f09222a9f7da	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/spec-timings.json	869093	d93ec8403236596804d5ec3227e9be9d1f2aedd35dec1f510fa90ba2da619e1e	structured-data-validated	tests-data-complete.md; tests-data-evidence.json
+tests/data/tolerance-exceptions.json	962	ae712d57156bf42671bd83d5fb94a528d90284b39cb78292e1883c41d70e0017	fully-read	tests-data-complete.md; tests-data-evidence.json
+tests/data/tooling-fast-timings.json	43261	74c4e337974eb14d00130215ed018569081ba5d303b32ed9c8d96dd89e8b9ce2	structured-data-validated	tests-data-complete.md; tests-data-evidence.json
+tests/fixtures/claude-usage/session-copy.jsonl	756	9481d71d8acf0aaa750d15adffb34e305a8d850492c2f6f63abae1b9314c8aba	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/claude-usage/session.jsonl	2648	d92d5fbfe6a5fbd0b6633a4d03edd73120f4bba747a344436c55ddbcaa0ea71d	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/fleet-board/api.json	2573	98a4fd16189037a8d6c22430ef7d87d8f0103486b35037b1b87eab8f490402cf	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/fleet-board/bus.json	563	b961c8f3aed5e34b828f1ccbf5fc40d4fa83f1a620e1b020c5ebffffbf058390	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/ghost-monza-short.json	169	9249602e76dab0d232c9c297c581fdbb4ebe8ffcca6556b86a75651799837fec	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/grok-transcripts/sample.jsonl	22722	8c435894409426d2eed5a82289034877270502b3447f74f5d522b17c314e237c	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/grok-transcripts/with-bad-line.jsonl	2111	f986e2d336bebe45e4ad055936887346077a3d8834e51f36d601e29ffab1024b	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/i18n/bad-placeholder/en.json	71	ac9de60797383773be7b1e0f30509a8f0375d5d27574f93a10ab46e42797de9a	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/i18n/bad-placeholder/xx.json	78	b02829fb38e098c9e879195c3c1d038af8da5197c4892e657022376366447a97	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/i18n/missing-key/en.json	112	8989a2b83bea35cebe6b1428c1e5dfab2deacb729c647c4c1545a52363af4957	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/i18n/missing-key/xx.json	141	6956b365190178a434039a1339b11a0cc4a86ccb78c94752f839aeef5e582dbb	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/i18n/valid/de.json	136	59fe14d331f720ec0f048d0c3435edc0e0bf23621edf9c7f3974bda51c3d8118	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/i18n/valid/en.json	130	ea5a10914230e1d85cbcee9537762cdc25f5a420d86d3a578379cab7cba5e65e	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/i18n/wrong-plural/en.json	61	5388bf975c06716cffaefc7ef69846c482cd48cd502de5db52d2f4e80031c139	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/i18n/wrong-plural/ru.json	74	70746a0285633bfb3d5f9df39e684707e0230180cdbb10b2012ec5171ddbc912	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/js-debugger/hang.fixture.mjs	168	145e245e89d209eb98e79d7f776357edfd3aae2f171d0d947e2e6da5c376e60a	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/js-debugger/lib.fixture.cjs	169	5d56ad3a2795a593f519e04e17673ef6cdaf2a3d538418d54982ad4917b149da	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/js-debugger/live.fixture.cjs	220	e7e59955ef4371b8f422925d3b2e473d63e215143a0ca723760257bfc117e382	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/js-debugger/sample.fixture.mjs	473	14cad0f6896974d6747382ead9e460e5d54eac37e7f55bd01ad3a630612a1ad8	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/js-debugger/spawner.fixture.mjs	428	fe0c2f74cbf79b9792b577b3eda265f6cc62f9f8c490eab65f4674becc03d74b	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/js-debugger/vm.fixture.mjs	861	45e4e4de027b56ae702a0b15c05a5822db9543a84a8ec96bd56906717ae2919f	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/js-debugger/vmlib.fixture.js	174	e130b83c928dc6e8126d67ac166044620ef8a3140a0429246512cbaa3354164d	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/launch-lane/get-session-allowed.json	256	864c388d0ed1244b6d3a2774a7475d1927562b9f6f0103a695cd4f9e4dc6ecae	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/launch-lane/get-session-warning.json	264	ea33203b538eb3ebd3851b2052f08f8d31313f6d229e7b346d18e5c2055ab25a	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/launch-lane/list-sessions.txt	1241	cfb9677d0cf75fedab9aa09ab29571d1a55c44eaaa341bc6e0d725cc83859ce0	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/openf1-baku-2026-race.json	203289	90733ce5cee211dd9fc470a883e802ce1a24cba3aa5768dbd17d3b8f7583df12	structured-data-validated	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/session-ledger/permissions.jsonl	234	54719a5393b65e341359376b54c64338cd73db1371ff8669229e6467ac9d535e	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/session-ledger/transcript.jsonl	3783	25823ead3d60744d0edd8b853eda1220907473c8b4fee943742350b16c310648	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/shader-validate/bad.frag	210	42f4824560ded8674da66c8038daab53e1c7782677878341614596e5544b50b6	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/shader-validate/bad.wgsl	206	bc5d94736781b4604d16363b66fb5cd6060eb0e86674b645569920cd1b6979c0	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/shader-validate/good.frag	114	e825b6e3d0dd3cf9aa459087eab9ea74ec6c88a536eb852bebf21c98c18c2002	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/shader-validate/good.wgsl	94	52676ca1eedbbb80c202d5525a666696f2fa2e7be8ca95569cf51381e10c4b22	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/stop-hook-git-check.sample.sh	1445	78cc4f321f91d86953eff5c7771081089fd4f8beeb3f1fa4dbb1a42159b2d7aa	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/workflow-lint/bad/.github/workflows/bad.yml	501	28172a30e85504b8779ec037456868ecdfb09b8a7bdee7ccd60aacd5b2b6eba0	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
+tests/fixtures/workflow-lint/good/.github/workflows/good.yml	303	a98f7790ffa42a3a11143f1aacbcff922df9c03da4bd3aa48da0b11121ebdea5	fully-read	tests-fixtures-complete.md; tests-fixtures-evidence.json
 tests/groups.json	127191	eaa4db1a20f567cd6d7e5cc5412028a7ceecb85964532e11e553845c9edf989c	unread	initial inventory only
 tests/helpers/abs-src.mjs	481	f33a40d278e2ec7ab00571e2020304a9c21b300861bba501c799947560e32d47	fully-read	tests-helpers-complete.md
 tests/helpers/agent-experiment.py	11124	e1c693c97d7b8ac2683ae17680f88209efdca39b3ebc6910f5b7d2bcc826e168	fully-read	tests-helpers-complete.md
@@ -3227,84 +3227,84 @@ tests/manual/probe-mcp.test.mjs	15387	652f135696037c5bb760f43392ea21b44ff9cf6946
 tests/manual/timeout-probe.spec.js	4092	b6f2ccf5e89bcf44f1c44c3c484823cf1186c394c4c540b5f4c58ee9fa3654ea	fully-read	tests-manual-complete.md
 tests/manual/tinyfish-mcp.test.mjs	18417	e7ab340ab80735ea573b821b7ec1ddf267b04e4b6026bab1cce8cbe958ebf295	fully-read	tests-manual-complete.md
 tests/manual/tracks-visual.spec.js	1814	69e16e59e176e659c8f10fd4274ecc1fc2dc33f4b2b9a97bdf46effc51bd235a	fully-read	tests-manual-complete.md
-tests/specs/abudhabi-foundation.spec.js	5684	d8f63f4a255414c2b9e7f6c58cf6894c989e2cbfb26cc6dca7b28621141b1c3f	unread	initial inventory only
-tests/specs/active-aero.spec.js	12858	2ade4f2925c8d9f075db80af4b2af28a226d2976643890c6cc673dd5c269c76e	unread	initial inventory only
-tests/specs/aero-zones.spec.js	20779	58834d3c77bc26e7d38b14a716643c6472098c4bc5d9b9b5f288a12142dd1185	unread	initial inventory only
-tests/specs/agent-determinism-frame.spec.js	2787	d9adc9233690ad7859be60567f75e9a293a829d9d9435a547f59762a08908914	unread	initial inventory only
-tests/specs/agent-determinism.spec.js	6172	591677f02790deec9071807a52f71d71c92115deb9bd7b47405d10ae643a68ad	unread	initial inventory only
-tests/specs/agent-drive-bench.spec.js	9210	8ca985153c34697f7537b30b976f4c1d271d2120f702c51849e12ba98369f03f	unread	initial inventory only
-tests/specs/agent-view.spec.js	93011	01fc032cff30d3f542876b396809bc14456d12c0c357474514877df88029ea5a	unread	initial inventory only
-tests/specs/albert-park-foundation.spec.js	3792	5ecb197fd2ae7687893b749ba9b79ef3a060c473315778c33939147e4bf5b51e	unread	initial inventory only
-tests/specs/assets-api.spec.js	11242	a95f2ab115e17393f5ca847dbbd1dd4dec52d0d2f1990b870f981391cf444d7b	unread	initial inventory only
-tests/specs/audio-smoke.spec.js	13146	6a689c29e429d55123d496a97227c2fe0e0fa048702e1a38147e871f6999725b	unread	initial inventory only
-tests/specs/audit.spec.js	13254	d318f6378ea5c9c0adbc19f832a96d70390cba62f11fd37c63cc10f1e5688a72	unread	initial inventory only
-tests/specs/autopilot.spec.js	17028	50de3e6ae3ce0ef8ac227430cc11ff40fcca06f04a15e898e03436ca0fafe901	unread	initial inventory only
-tests/specs/bahrain-foundation.spec.js	11803	36bdcf1101fb1ed09a6bc59f0538a60ba3aeaa2a6b4b876b2bb30b89f547a965	unread	initial inventory only
-tests/specs/boot-guard.spec.js	6777	40506baa33046396f40ece969a00edc427a033dbe15592c9c9cbf8d0172397cf	unread	initial inventory only
-tests/specs/browser-ui-hunt.spec.js	16212	0477e4efc285044de06aebf329eb828eaad3733285ea9d449adbe4e76bcabd0d	unread	initial inventory only
-tests/specs/camera-driving-hooks.spec.js	15725	1acf4c53215b04fdcc150fe40b2e4c79595536b7549937619fa6c8dd1e3ab237	unread	initial inventory only
-tests/specs/camera-hooks.spec.js	7177	4e01b09f0e6835244688d86772957498e0d82282ee4dede7e595c13af1e95b73	unread	initial inventory only
-tests/specs/camera-tuner.spec.js	18459	cbaad796547ad5c9f267553319e1d8864ecc6fbf97d3286309646b3458193469	unread	initial inventory only
-tests/specs/camera.spec.js	8886	b255dd6c79cf9ca399cd7bcb5d4dced02392f02fe228fdd1bcc89bb56f57be26	unread	initial inventory only
-tests/specs/car-effects.spec.js	14444	6df32f0a1f5657c1fde2f38cec9c070d9c48b24ac9cd5715b495c550f8f209b5	unread	initial inventory only
-tests/specs/career-hub.spec.js	35271	716f18d58ace41e06ed1e8e135ad3460351f9ea5db8c818ab81e10038f03d6b7	unread	initial inventory only
-tests/specs/career-season.spec.js	42754	e45cb788a110901a74ea3f5f1ce9490c851efe7f6c74d6e3674b82ac9f64246a	unread	initial inventory only
-tests/specs/career.spec.js	39916	7c8bddb9f5bc1d266e76bca8eef3e1f514ad8633436afa3da4bb6acb55bc1a9f	unread	initial inventory only
-tests/specs/carview-parts.spec.js	5901	172843e687da876270d2ba0edfdacecdae33450d783d53ae89abb030bfbfecf1	unread	initial inventory only
-tests/specs/collision-ai-fixes.spec.js	18696	9a721aeec8a57b57296f6555632e3dba617cd11aa0ded9821bb91fe52c11ab6b	unread	initial inventory only
-tests/specs/collisions-deep.spec.js	21063	981e2d0f13d8fa661bd0787b4f1fded97fd55300577ad70ea3779166abc27c03	unread	initial inventory only
-tests/specs/collisions.spec.js	5456	2f7a6bf77939964100b72a7179c0080b9e7c671fe666ce5b3c653f7754f0d4df	unread	initial inventory only
-tests/specs/cota-foundation.spec.js	7281	1d1dda41554febde17bff9069a73e77692382516f78178ab5e1ea79048481ec1	unread	initial inventory only
-tests/specs/css-player-smoke.spec.js	3695	c3f90c5498e2e40f39a9051d27734d4829fc748eeb669cef52f311514824cef6	unread	initial inventory only
-tests/specs/custom-team.spec.js	14182	16afd5d89d2405840bf45dd1637e9210a00bc599fdac7e1649f0632b0560c3e4	unread	initial inventory only
-tests/specs/data-lifecycle.spec.js	22861	533b54661d093708c31257fadb7b6e6d576d49a14d1f989214a5deeb79bbb720	unread	initial inventory only
-tests/specs/debris.spec.js	16113	5089204ee35a4fde45fe46d0d32b9763ec7648c89ea4b05e7fad82a67b3352d7	unread	initial inventory only
-tests/specs/dev-tools-dom.spec.js	3463	2595a9bbce22b825f0bf6e25413c8dc87a285f3680f899da5209b5a003a64ef0	unread	initial inventory only
-tests/specs/dev-tools.spec.js	24430	30133d1ba91f73b7aa103e9d28207f10f86f0a6337fc9d95f9f9e5a5cb83157c	unread	initial inventory only
-tests/specs/drift.spec.js	7973	7c48222e90bebd9d3a1cc80af4cae609e6a3350e23f2cd90196907befdba6f0c	unread	initial inventory only
-tests/specs/elevation-tracks.spec.js	24191	7cb170045ad6dc048fd05196fc7b21d5a7dd4d334e4a46eefe39526d26d54ec7	unread	initial inventory only
-tests/specs/engine-audio-offline.spec.js	7873	7cfa414b2dfb40b40b44e4d02b00ab137de04ad7f382f51b061841fb0906252a	unread	initial inventory only
-tests/specs/f1-track-accuracy.spec.js	8634	a5d5c09fc949a7a816b4dcba1f308e27962576fca68f053f62de722010655fa1	unread	initial inventory only
-tests/specs/gamepad.spec.js	31093	82c9a8868c880ab38b92a9c5ab3e29b80dff4d1582fc923646d322ce2accd528	unread	initial inventory only
-tests/specs/garage-aero.spec.js	15227	dfe73e2f8e7fbf8a67ee534e9178370490e3e0896f469ef7727667234ea608b2	unread	initial inventory only
-tests/specs/garage-close-one-click.spec.js	2113	f240c897351aeab65448c8c4d3eaf617c088eec1fe190825b232d8d5e05f051a	unread	initial inventory only
-tests/specs/garage-first-frame.spec.js	13165	8ad513d497d8a35d0fc8398133421bbe30cc0ab418982ef349d86e6fb72f772a	unread	initial inventory only
-tests/specs/garage-livery-churn.spec.js	12110	309c9669abfdef40b66ce64683d9f4a5205eaf79bde9148280913b06660628c6	unread	initial inventory only
-tests/specs/garage-livery-fit.spec.js	7381	6e0118e0911fca081fb43a8c2b0c9f13f741b414c57c33529f5ebfaeba3d0112	unread	initial inventory only
-tests/specs/garage-out-before-card.spec.js	24282	8879e053ad9bcfabfb366037dd0507485a195083d22051c1f1a41c4a89e35489	unread	initial inventory only
-tests/specs/garage-pick-cost.spec.js	8261	396389545517b08b40168fe1588aa125b5c72b551b4ecf29484381162846055c	unread	initial inventory only
-tests/specs/garage-prebuild.spec.js	2927	01121677979f4fbcd7546cb6962e14d0e7249f45a74d1c15ad860959d7509f7b	unread	initial inventory only
-tests/specs/gpu-capture.spec.js	3627	f6ab8d1fec75501a7fb15e06f5d13fc4dec9098c84ec122826dda83681f8c8fc	unread	initial inventory only
-tests/specs/headless-api.spec.js	12574	25388df8528ac19328cfa0fa68affd027dc193d8d42dc197676b5843b875c719	unread	initial inventory only
-tests/specs/hud-audit.spec.js	4120	c7509717b7d55ecbfa2e1908b4d43686644589282ef3836252e96dedfe1f226f	unread	initial inventory only
-tests/specs/hud-layout.spec.js	106339	164340a787ddb27d75ea0224f9a493c3deb80a2b1bb81d4ae74d3a3609ab7975	unread	initial inventory only
-tests/specs/hud-mirror.spec.js	24572	f18db29dc92d79c827822fb45bd15556bc341765bb02f38355f5e82e2404f6b0	unread	initial inventory only
-tests/specs/hungaroring-foundation.spec.js	3951	0f3199d4718068d27a96ce137d8402d91a31fabf63d4b83c3fa70fb9a72c6a12	unread	initial inventory only
-tests/specs/image-grade-visual.spec.js	26263	bd214017eb0c7fbd08a150c425b029812f5531349e31a3c06ed05e28756eb30c	unread	initial inventory only
-tests/specs/imola-foundation.spec.js	5378	639e98358da0148739581c6f5954c86c149c3003f0c72d2d0beda873f19a4515	unread	initial inventory only
-tests/specs/instanced-draw.spec.js	6921	2929b4a346e675c636e6f013095d8f1ee7e9348a74e2c67fbfef04eaee7e0a1e	unread	initial inventory only
-tests/specs/interlagos-foundation.spec.js	5177	b04106b5ae9bdc74d1618ce5cf5741ccff21a9454b6924ce1399b084117613a9	unread	initial inventory only
-tests/specs/jump-start.spec.js	7915	14ec96fa502168a1c473b4df71aae272239db1c6792fa29f2516ec181a4e93e7	unread	initial inventory only
-tests/specs/lighting-ab.spec.js	14626	3b2a5ab2a42802f5055b95dd3cc032792bb6348d9ae9766459ddbae52aa2fdc1	unread	initial inventory only
-tests/specs/lighting-tuner-grade.spec.js	20046	96be2816d96a9448c035b673f9ed4f284198518edb9c615bf6914e29ffc9d72c	unread	initial inventory only
-tests/specs/livery-sidewall.spec.js	2409	da083244b34a9ab09052e47c837e1afe8752afbd8b716d2ee29a0315a9d9207e	unread	initial inventory only
-tests/specs/livery-wheels.spec.js	2353	11707b16413ba418df4647fd14d9f2c12e5fb517ff33c5df56c47b6adab1cfe9	unread	initial inventory only
-tests/specs/logging.spec.js	5489	e192f0d35dcbab4493644c3a4b42ae2221e88517ca7039a9d6ca108ee27d8adf	unread	initial inventory only
-tests/specs/longitudinal.spec.js	12655	41ed8febc5819be097071d676ae97d1221315ae7e907423b1c8f04c4a716aec0	unread	initial inventory only
-tests/specs/map-hooks.spec.js	3295	622d2f6c0f9028e6e5b06adc31e134d3e5506224d81c953592574e55d714db0d	unread	initial inventory only
-tests/specs/material-shimmer.spec.js	8935	dbe6ff2f5a825efeea68c6d111674b0b861e3b8f06592a838c33671746e36359	unread	initial inventory only
-tests/specs/menu-baseline.spec.js	12444	e1dc7ae44a5a8f79008d4381dc87984566053c7b992fe68fbae56bfbcdb08f54	unread	initial inventory only
-tests/specs/menu-baseline.spec.js-snapshots/garage-desktop-render-linux.png	134429	4d42d6596ad503f3020dc7014e6e71a3e21b310b3718f25530909b716fdce0e1	unread	initial inventory only
-tests/specs/menu-baseline.spec.js-snapshots/garage-phone-landscape-render-linux.png	54950	47d306694a81b51cbd71b232018df7476a1e22bdd57d504a6873cf6cad17ce75	unread	initial inventory only
-tests/specs/menu-baseline.spec.js-snapshots/select-desktop-render-linux.png	398797	8b7baa6e90ca8b2b446ca598c2f8e58dd8475eb15f01695fb10a057b58be2182	unread	initial inventory only
-tests/specs/menu-baseline.spec.js-snapshots/select-phone-landscape-render-linux.png	148101	03b381289ae3a3b3284d9f94d7ca6c136e20ca47d80048e6e6926436a85d1ac5	unread	initial inventory only
-tests/specs/menu-baseline.spec.js-snapshots/title-desktop-render-linux.png	947406	8da4f373792b151112435b2be44aee6b6aff676a52f79587dba3293038e70036	unread	initial inventory only
-tests/specs/menu-baseline.spec.js-snapshots/title-phone-landscape-render-linux.png	206874	f1ca2451026478d23a26c1051953fce86371d4531e4c31d3209d3b630ae9dc59	unread	initial inventory only
-tests/specs/menu-keyboard.spec.js	46293	cb4b2f543ffb2358006e919c1035afccdd66d23986faddc41ff7b2501737e660	unread	initial inventory only
-tests/specs/menu-survey.spec.js	13207	8fd133dab33049601740d2bb832b92a23bcdf433f7316622ad8d1fdeb28c4ede	unread	initial inventory only
-tests/specs/menu-traversal.spec.js	21932	d00cd9302e635a88946061d2d00362832cde71b71d49d15718f92c73a7b56078	unread	initial inventory only
-tests/specs/monaco-foundation.spec.js	9796	4101b12fa4555ed98d8d4ef6e27a4e3badbbe032854403a3ff1196d050cc82ec	unread	initial inventory only
-tests/specs/montreal-foundation.spec.js	11387	13eff4d878e17f814bfdab413987e62f065282fdfcd64a8cfff7678415cc751a	unread	initial inventory only
+tests/specs/abudhabi-foundation.spec.js	5684	d8f63f4a255414c2b9e7f6c58cf6894c989e2cbfb26cc6dca7b28621141b1c3f	fully-read	specs groups 01
+tests/specs/active-aero.spec.js	12858	2ade4f2925c8d9f075db80af4b2af28a226d2976643890c6cc673dd5c269c76e	fully-read	specs groups 01
+tests/specs/aero-zones.spec.js	20779	58834d3c77bc26e7d38b14a716643c6472098c4bc5d9b9b5f288a12142dd1185	fully-read	specs groups 01
+tests/specs/agent-determinism-frame.spec.js	2787	d9adc9233690ad7859be60567f75e9a293a829d9d9435a547f59762a08908914	fully-read	specs groups 01
+tests/specs/agent-determinism.spec.js	6172	591677f02790deec9071807a52f71d71c92115deb9bd7b47405d10ae643a68ad	fully-read	specs groups 01
+tests/specs/agent-drive-bench.spec.js	9210	8ca985153c34697f7537b30b976f4c1d271d2120f702c51849e12ba98369f03f	fully-read	specs groups 01
+tests/specs/agent-view.spec.js	93011	01fc032cff30d3f542876b396809bc14456d12c0c357474514877df88029ea5a	fully-read	specs groups 01
+tests/specs/albert-park-foundation.spec.js	3792	5ecb197fd2ae7687893b749ba9b79ef3a060c473315778c33939147e4bf5b51e	fully-read	specs groups 01
+tests/specs/assets-api.spec.js	11242	a95f2ab115e17393f5ca847dbbd1dd4dec52d0d2f1990b870f981391cf444d7b	fully-read	specs groups 01,02
+tests/specs/audio-smoke.spec.js	13146	6a689c29e429d55123d496a97227c2fe0e0fa048702e1a38147e871f6999725b	fully-read	specs groups 02
+tests/specs/audit.spec.js	13254	d318f6378ea5c9c0adbc19f832a96d70390cba62f11fd37c63cc10f1e5688a72	fully-read	specs groups 02
+tests/specs/autopilot.spec.js	17028	50de3e6ae3ce0ef8ac227430cc11ff40fcca06f04a15e898e03436ca0fafe901	fully-read	specs groups 02
+tests/specs/bahrain-foundation.spec.js	11803	36bdcf1101fb1ed09a6bc59f0538a60ba3aeaa2a6b4b876b2bb30b89f547a965	fully-read	specs groups 02
+tests/specs/boot-guard.spec.js	6777	40506baa33046396f40ece969a00edc427a033dbe15592c9c9cbf8d0172397cf	fully-read	specs groups 02
+tests/specs/browser-ui-hunt.spec.js	16212	0477e4efc285044de06aebf329eb828eaad3733285ea9d449adbe4e76bcabd0d	fully-read	specs groups 02
+tests/specs/camera-driving-hooks.spec.js	15725	1acf4c53215b04fdcc150fe40b2e4c79595536b7549937619fa6c8dd1e3ab237	fully-read	specs groups 02
+tests/specs/camera-hooks.spec.js	7177	4e01b09f0e6835244688d86772957498e0d82282ee4dede7e595c13af1e95b73	fully-read	specs groups 02
+tests/specs/camera-tuner.spec.js	18459	cbaad796547ad5c9f267553319e1d8864ecc6fbf97d3286309646b3458193469	fully-read	specs groups 02
+tests/specs/camera.spec.js	8886	b255dd6c79cf9ca399cd7bcb5d4dced02392f02fe228fdd1bcc89bb56f57be26	fully-read	specs groups 02
+tests/specs/car-effects.spec.js	14444	6df32f0a1f5657c1fde2f38cec9c070d9c48b24ac9cd5715b495c550f8f209b5	fully-read	specs groups 02
+tests/specs/career-hub.spec.js	35271	716f18d58ace41e06ed1e8e135ad3460351f9ea5db8c818ab81e10038f03d6b7	fully-read	specs groups 02,03
+tests/specs/career-season.spec.js	42754	e45cb788a110901a74ea3f5f1ce9490c851efe7f6c74d6e3674b82ac9f64246a	fully-read	specs groups 03
+tests/specs/career.spec.js	39916	7c8bddb9f5bc1d266e76bca8eef3e1f514ad8633436afa3da4bb6acb55bc1a9f	fully-read	specs groups 03
+tests/specs/carview-parts.spec.js	5901	172843e687da876270d2ba0edfdacecdae33450d783d53ae89abb030bfbfecf1	fully-read	specs groups 03
+tests/specs/collision-ai-fixes.spec.js	18696	9a721aeec8a57b57296f6555632e3dba617cd11aa0ded9821bb91fe52c11ab6b	fully-read	specs groups 03
+tests/specs/collisions-deep.spec.js	21063	981e2d0f13d8fa661bd0787b4f1fded97fd55300577ad70ea3779166abc27c03	fully-read	specs groups 03
+tests/specs/collisions.spec.js	5456	2f7a6bf77939964100b72a7179c0080b9e7c671fe666ce5b3c653f7754f0d4df	fully-read	specs groups 03
+tests/specs/cota-foundation.spec.js	7281	1d1dda41554febde17bff9069a73e77692382516f78178ab5e1ea79048481ec1	fully-read	specs groups 03,04
+tests/specs/css-player-smoke.spec.js	3695	c3f90c5498e2e40f39a9051d27734d4829fc748eeb669cef52f311514824cef6	fully-read	specs groups 04
+tests/specs/custom-team.spec.js	14182	16afd5d89d2405840bf45dd1637e9210a00bc599fdac7e1649f0632b0560c3e4	fully-read	specs groups 04
+tests/specs/data-lifecycle.spec.js	22861	533b54661d093708c31257fadb7b6e6d576d49a14d1f989214a5deeb79bbb720	fully-read	specs groups 04
+tests/specs/debris.spec.js	16113	5089204ee35a4fde45fe46d0d32b9763ec7648c89ea4b05e7fad82a67b3352d7	fully-read	specs groups 04
+tests/specs/dev-tools-dom.spec.js	3463	2595a9bbce22b825f0bf6e25413c8dc87a285f3680f899da5209b5a003a64ef0	fully-read	specs groups 04
+tests/specs/dev-tools.spec.js	24430	30133d1ba91f73b7aa103e9d28207f10f86f0a6337fc9d95f9f9e5a5cb83157c	fully-read	specs groups 04
+tests/specs/drift.spec.js	7973	7c48222e90bebd9d3a1cc80af4cae609e6a3350e23f2cd90196907befdba6f0c	fully-read	specs groups 04
+tests/specs/elevation-tracks.spec.js	24191	7cb170045ad6dc048fd05196fc7b21d5a7dd4d334e4a46eefe39526d26d54ec7	fully-read	specs groups 04
+tests/specs/engine-audio-offline.spec.js	7873	7cfa414b2dfb40b40b44e4d02b00ab137de04ad7f382f51b061841fb0906252a	fully-read	specs groups 04
+tests/specs/f1-track-accuracy.spec.js	8634	a5d5c09fc949a7a816b4dcba1f308e27962576fca68f053f62de722010655fa1	fully-read	specs groups 04
+tests/specs/gamepad.spec.js	31093	82c9a8868c880ab38b92a9c5ab3e29b80dff4d1582fc923646d322ce2accd528	fully-read	specs groups 04,05
+tests/specs/garage-aero.spec.js	15227	dfe73e2f8e7fbf8a67ee534e9178370490e3e0896f469ef7727667234ea608b2	fully-read	specs groups 05
+tests/specs/garage-close-one-click.spec.js	2113	f240c897351aeab65448c8c4d3eaf617c088eec1fe190825b232d8d5e05f051a	fully-read	specs groups 05
+tests/specs/garage-first-frame.spec.js	13165	8ad513d497d8a35d0fc8398133421bbe30cc0ab418982ef349d86e6fb72f772a	fully-read	specs groups 05
+tests/specs/garage-livery-churn.spec.js	12110	309c9669abfdef40b66ce64683d9f4a5205eaf79bde9148280913b06660628c6	fully-read	specs groups 05
+tests/specs/garage-livery-fit.spec.js	7381	6e0118e0911fca081fb43a8c2b0c9f13f741b414c57c33529f5ebfaeba3d0112	fully-read	specs groups 05
+tests/specs/garage-out-before-card.spec.js	24282	8879e053ad9bcfabfb366037dd0507485a195083d22051c1f1a41c4a89e35489	fully-read	specs groups 05
+tests/specs/garage-pick-cost.spec.js	8261	396389545517b08b40168fe1588aa125b5c72b551b4ecf29484381162846055c	fully-read	specs groups 05
+tests/specs/garage-prebuild.spec.js	2927	01121677979f4fbcd7546cb6962e14d0e7249f45a74d1c15ad860959d7509f7b	fully-read	specs groups 05
+tests/specs/gpu-capture.spec.js	3627	f6ab8d1fec75501a7fb15e06f5d13fc4dec9098c84ec122826dda83681f8c8fc	fully-read	specs groups 05
+tests/specs/headless-api.spec.js	12574	25388df8528ac19328cfa0fa68affd027dc193d8d42dc197676b5843b875c719	fully-read	specs groups 05
+tests/specs/hud-audit.spec.js	4120	c7509717b7d55ecbfa2e1908b4d43686644589282ef3836252e96dedfe1f226f	fully-read	specs groups 05
+tests/specs/hud-layout.spec.js	106339	164340a787ddb27d75ea0224f9a493c3deb80a2b1bb81d4ae74d3a3609ab7975	fully-read	specs groups 05,06
+tests/specs/hud-mirror.spec.js	24572	f18db29dc92d79c827822fb45bd15556bc341765bb02f38355f5e82e2404f6b0	fully-read	specs groups 06
+tests/specs/hungaroring-foundation.spec.js	3951	0f3199d4718068d27a96ce137d8402d91a31fabf63d4b83c3fa70fb9a72c6a12	fully-read	specs groups 06
+tests/specs/image-grade-visual.spec.js	26263	bd214017eb0c7fbd08a150c425b029812f5531349e31a3c06ed05e28756eb30c	fully-read	specs groups 06
+tests/specs/imola-foundation.spec.js	5378	639e98358da0148739581c6f5954c86c149c3003f0c72d2d0beda873f19a4515	fully-read	specs groups 06
+tests/specs/instanced-draw.spec.js	6921	2929b4a346e675c636e6f013095d8f1ee7e9348a74e2c67fbfef04eaee7e0a1e	fully-read	specs groups 06
+tests/specs/interlagos-foundation.spec.js	5177	b04106b5ae9bdc74d1618ce5cf5741ccff21a9454b6924ce1399b084117613a9	fully-read	specs groups 06
+tests/specs/jump-start.spec.js	7915	14ec96fa502168a1c473b4df71aae272239db1c6792fa29f2516ec181a4e93e7	fully-read	specs groups 06
+tests/specs/lighting-ab.spec.js	14626	3b2a5ab2a42802f5055b95dd3cc032792bb6348d9ae9766459ddbae52aa2fdc1	fully-read	specs groups 06
+tests/specs/lighting-tuner-grade.spec.js	20046	96be2816d96a9448c035b673f9ed4f284198518edb9c615bf6914e29ffc9d72c	fully-read	specs groups 06,07
+tests/specs/livery-sidewall.spec.js	2409	da083244b34a9ab09052e47c837e1afe8752afbd8b716d2ee29a0315a9d9207e	fully-read	specs groups 07
+tests/specs/livery-wheels.spec.js	2353	11707b16413ba418df4647fd14d9f2c12e5fb517ff33c5df56c47b6adab1cfe9	fully-read	specs groups 07
+tests/specs/logging.spec.js	5489	e192f0d35dcbab4493644c3a4b42ae2221e88517ca7039a9d6ca108ee27d8adf	fully-read	specs groups 07
+tests/specs/longitudinal.spec.js	12655	41ed8febc5819be097071d676ae97d1221315ae7e907423b1c8f04c4a716aec0	fully-read	specs groups 07
+tests/specs/map-hooks.spec.js	3295	622d2f6c0f9028e6e5b06adc31e134d3e5506224d81c953592574e55d714db0d	fully-read	specs groups 07
+tests/specs/material-shimmer.spec.js	8935	dbe6ff2f5a825efeea68c6d111674b0b861e3b8f06592a838c33671746e36359	fully-read	specs groups 07
+tests/specs/menu-baseline.spec.js	12444	e1dc7ae44a5a8f79008d4381dc87984566053c7b992fe68fbae56bfbcdb08f54	fully-read	specs groups 07
+tests/specs/menu-baseline.spec.js-snapshots/garage-desktop-render-linux.png	134429	4d42d6596ad503f3020dc7014e6e71a3e21b310b3718f25530909b716fdce0e1	metadata-inspected	specs groups 07
+tests/specs/menu-baseline.spec.js-snapshots/garage-phone-landscape-render-linux.png	54950	47d306694a81b51cbd71b232018df7476a1e22bdd57d504a6873cf6cad17ce75	metadata-inspected	specs groups 07
+tests/specs/menu-baseline.spec.js-snapshots/select-desktop-render-linux.png	398797	8b7baa6e90ca8b2b446ca598c2f8e58dd8475eb15f01695fb10a057b58be2182	metadata-inspected	specs groups 07
+tests/specs/menu-baseline.spec.js-snapshots/select-phone-landscape-render-linux.png	148101	03b381289ae3a3b3284d9f94d7ca6c136e20ca47d80048e6e6926436a85d1ac5	metadata-inspected	specs groups 07
+tests/specs/menu-baseline.spec.js-snapshots/title-desktop-render-linux.png	947406	8da4f373792b151112435b2be44aee6b6aff676a52f79587dba3293038e70036	metadata-inspected	specs groups 07
+tests/specs/menu-baseline.spec.js-snapshots/title-phone-landscape-render-linux.png	206874	f1ca2451026478d23a26c1051953fce86371d4531e4c31d3209d3b630ae9dc59	metadata-inspected	specs groups 07
+tests/specs/menu-keyboard.spec.js	46293	cb4b2f543ffb2358006e919c1035afccdd66d23986faddc41ff7b2501737e660	fully-read	specs groups 07
+tests/specs/menu-survey.spec.js	13207	8fd133dab33049601740d2bb832b92a23bcdf433f7316622ad8d1fdeb28c4ede	fully-read	specs groups 07
+tests/specs/menu-traversal.spec.js	21932	d00cd9302e635a88946061d2d00362832cde71b71d49d15718f92c73a7b56078	fully-read	specs groups 07
+tests/specs/monaco-foundation.spec.js	9796	4101b12fa4555ed98d8d4ef6e27a4e3badbbe032854403a3ff1196d050cc82ec	fully-read	specs groups 07
+tests/specs/montreal-foundation.spec.js	11387	13eff4d878e17f814bfdab413987e62f065282fdfcd64a8cfff7678415cc751a	partial	specs groups 07
 tests/specs/monza-foundation.spec.js	6474	83f7e0f1e7a3e40c95b8ad494cf2a368460358e24920a900ed1216b8252e5cb9	unread	initial inventory only
 tests/specs/multiplayer-lobby.spec.js	16748	2bfe698bcb49bfb16c7775423443d1e3ca110512f70c0c3694b559a36226cc74	unread	initial inventory only
 tests/specs/multiplayer-npeer.spec.js	6170	6795edc84440b0d0815809d4dc50520f00d72cad3a2b908ad0c720ca94bf0245	unread	initial inventory only
@@ -4387,79 +4387,79 @@ tests/unit/tyre-strategy-vm.test.mjs	22051	841af5a96c8da3ffadafa71392e4b8c4116ad
 tests/unit/ui-experience.test.mjs	36390	39747980ffb754a2616dffe79271d580ce08b627e03cd5b65e10c1ed7d3d67b0	fully-read	tests-unit-57-complete.md
 tests/unit/ui-explorer-core.test.mjs	13164	fcc3a0095063eb45b510f7c8caa828653171c846c1b2af8af915e7dc64506b7a	fully-read	tests-unit-57-complete.md
 tests/unit/ui-explorer-report.test.mjs	9853	a91297f6fce543b3f0abe7f7ec0babb29ea1bcb0a84a86dde4663fa3f0626b72	fully-read	tests-unit-57-complete.md
-tests/unit/ui-explorer.test.mjs	42000	90d6f9bf75b9889540b2090e6e0ad4d7c8944bcf1ab503c4610e5fd313010eb6	unread	initial inventory only
-tests/unit/ui-fit-camtune-portrait-r7.test.mjs	2688	552b6eea5142db0a8f97103717357b6cf50c9c9e04965fc10535db6c51bcb3c8	unread	initial inventory only
-tests/unit/ui-fit-camtune-tap-r5.test.mjs	3373	0a0f61fb5ca7d9d0d28630d37a8e0019ba2aab210cf96c008ffe40cd5849919f	unread	initial inventory only
-tests/unit/ui-fit-flyby-tap-r6.test.mjs	2772	66136e784dee5a57e00acc11879f9ffd6c967d7ee0d57b1e6e5b114c6385cc0b	unread	initial inventory only
-tests/unit/ui-fit-garage-livery-r6.test.mjs	2600	ba80d00a86c807d3e81371f5bfd1d935db2368638655c78801c405b1402cd05d	unread	initial inventory only
-tests/unit/ui-fit-lighting-flyby-stack.test.mjs	3049	87717c6c3a436eda9107b73ed21409510a6302b4db42c60f22e30097d41a5178	unread	initial inventory only
-tests/unit/ui-fit-lighttune-tap-r6.test.mjs	1927	81c7c00f2e888f2b4cd34ae6f841f35e44c16381528fdf6e69d30161ce921b2b	unread	initial inventory only
-tests/unit/ui-fit-photostudio-tap-r6.test.mjs	1992	5661e1b50bc817d877218efcaf86afa172da4602686cfda48316a91b1eadd2e5	unread	initial inventory only
-tests/unit/ui-fit-settings-a11y-r6.test.mjs	3272	a685328bf843af3614f656b8811698ea22252e4d8478703a2ab54efa1759f1aa	unread	initial inventory only
-tests/unit/ui-fit-settings-appearance-r6.test.mjs	7629	a32ee06950ad16da4c916325277ce5175d58945064317709317cb0f0e6c4a685	unread	initial inventory only
-tests/unit/ui-fit-tap-scroll-round3.test.mjs	7841	695c1421d81c2457e15b7f9089b77fd133e3d356f3992995c314b6950000e14f	unread	initial inventory only
-tests/unit/ui-fixer-uncommitted.test.mjs	2528	d71cd9db42fc2bfc5aa198d6b7951767294b07355b2ca0c5f2da29b554262def	unread	initial inventory only
-tests/unit/ui-improve-pass.test.mjs	174843	e21baaa3dcd8e6ac3e57cf59f4d289368d2072747b07c9687ffcebebb253ed4a	unread	initial inventory only
-tests/unit/ui-inspector-audit.test.mjs	10363	1f6c6b281980dfa6bda399de4858630e855980ee449ce13a1c6f2f1a53c072c1	unread	initial inventory only
-tests/unit/ui-inspector-css.test.mjs	12250	dfab07a168dec3d2349e63a656a32e78e240cf8c0befc9cb1c17e697db7ed36e	unread	initial inventory only
-tests/unit/ui-inspector-transitions.test.mjs	14845	d91ca33907c4d5cdfc98bd663c7f6dd0b3e5e520fac7eb3981530941d53b550b	unread	initial inventory only
-tests/unit/ui-journey-career.test.mjs	8838	fa1fe7c7e326e99e6ef0ad699a8d23a9c20f2ab663d3d419d43e115875cbf6c3	unread	initial inventory only
-tests/unit/ui-journey-race.test.mjs	8246	75d6f9b1fea4ce3424c95133367870f87c144c1bfcc3aaa531c814db7810f248	unread	initial inventory only
-tests/unit/ui-journey-session.test.mjs	4816	0e601084ec798ee0db63183ece8cc1341d8b49ca70578a3bddd121a2d77da261	unread	initial inventory only
-tests/unit/ui-layers-reflow.test.mjs	5237	dbd335f64d9c2cba70030d2324aa025bfb7b64dc58ccecea0fbf054bac5cbe60	unread	initial inventory only
-tests/unit/ui-sheets-audit.test.mjs	65865	2d07d6abcd37b5d6be1acea8fa040976ad89f7f6a583dcdff01c0e4b861dd5e0	unread	initial inventory only
-tests/unit/uilayers-modal-order.test.mjs	19504	88a446aa6a45e12f59fbacd796d3ce3f1dfdb5bfa7803a0b90d73177e500092d	unread	initial inventory only
-tests/unit/validation-cli.test.mjs	26539	f867d6a51d81065ad450ef00b828fa43231c562342d65834e236be0c278b4d27	unread	initial inventory only
-tests/unit/vegas-day-strip.test.mjs	3611	828e09f4e58622128fb4e9d692029d6be14eb7d44ba0c88a5e8f1e15b1738bd4	unread	initial inventory only
-tests/unit/vehicle-tick-alloc.test.mjs	8422	e14dea3fb06deb1095312a4bdb5a39530e319dfbd78273177e5ca14b2c9e1011	unread	initial inventory only
-tests/unit/vendor-licences.test.mjs	1738	98eca0016f0f85b7d9b741d3a830487b0b3c280d4f89182ea60a39322a9df5d7	unread	initial inventory only
-tests/unit/verify-live.test.mjs	14530	8699a07545f6572f2def474fc2ba711476c9478ea17dbadf46eeef013da06bb3	unread	initial inventory only
-tests/unit/vertex-pack.test.mjs	16824	1203165bb4104ec50e059b8ac01b652490709e306e3fa0f72e7f69721b086c66	unread	initial inventory only
-tests/unit/viewer.test.mjs	6511	35e962687f37cfbf2b1c3ad5386c5b497cbc8bdc01a2054df6e0e311c5f7dc3f	unread	initial inventory only
-tests/unit/visor-optics.test.mjs	29087	c3c675dd3437a8e2d3f68daf753ca4108a04ae1d01ee26583a132755306f72bc	unread	initial inventory only
-tests/unit/visual-oracle.test.mjs	853	b035427ec8076a24d39b48ba6f67807f6fc392cf771a0a5f908d35e74ad4612b	unread	initial inventory only
-tests/unit/vm-debug-preload.test.mjs	2694	b368eebb1c3e28d48eec773fdb961d8dd6c260243b2049fd4e44898bfdc1cd7b	unread	initial inventory only
-tests/unit/vm-filename-lint.test.mjs	3776	0a97925a623d8da52a09da3c15ee5fa3ef6b5e11dbd9032f1b87b4d69572838d	unread	initial inventory only
-tests/unit/vm-page-lifecycle.test.mjs	6571	bb117a373cc4ed14e5a78138cd91d39a759d6c4093361db4fc6aee8d14f9b0c4	unread	initial inventory only
-tests/unit/voice-pack.test.mjs	77747	ea6620514a458d8b5eb796375bae1b3d2d81225a94f36c969dec4b09d1b75a22	unread	initial inventory only
-tests/unit/vsfriend-head-200.test.mjs	2625	2e9cd3cd3181766e7f823df30f1988a758b934519abdf7e68085dd1fa3d85f2f	unread	initial inventory only
-tests/unit/vstd-invariant.test.mjs	25543	f60fc86a143404be9083b341b32a97e628cb5737a1dec294880a9ebd9c90c47f	unread	initial inventory only
-tests/unit/wait-for.test.mjs	7783	6d20d42ec105c8fc2906b46c118b8583454da6a6d9223da8895e855b60f58fb7	unread	initial inventory only
-tests/unit/wait-polling.test.mjs	8086	c127b56c775de9cee39979addf5f938d2b20f3d3fbda9e7c0efc9f3fd9142037	unread	initial inventory only
-tests/unit/wake-lock-vm.test.mjs	14037	c17ac0b8abd4ca14f19f3cf963bce71cf7825cd4d2a6cc94b6a008a538ce25d9	unread	initial inventory only
-tests/unit/wall-clamp.test.mjs	17348	1c342340e238060a2b2cd467f18cd51f680455066baa1cf39ba3c7b65c86179f	unread	initial inventory only
-tests/unit/wall-end-face-vm.test.mjs	3902	dd3d7826c36aceecdf3d3d61c4eb1d851f29e200ddb1358e0118339f98ac5dfc	unread	initial inventory only
-tests/unit/watch-transport-scrub.test.mjs	10508	cfd9fa5e18d50a0a095a3579f0689604128d1c4085ccbd1700a0e91b91dd44f5	unread	initial inventory only
-tests/unit/water-local-level.test.mjs	2870	dc297f705b6b045eff97daee473985b2f24c550d2a8353d34eb22ab4726b4105	unread	initial inventory only
-tests/unit/weather-arc-plan.test.mjs	7470	c23e24129d05a28699cd135ac4b55b5697230d3812c721ef3003a3fc17852d87	unread	initial inventory only
-tests/unit/weather-arc-rain.test.mjs	15596	9e63e5a3ca52d12c5ceafd88f342745929f34d6454823dc02e9a8b5cfc2ebcc6	unread	initial inventory only
-tests/unit/weather-blend.test.mjs	34636	e60f2ac044e77df59163ab665cfe78cbc2e1dfbc703f7a1f945a0249675652aa	unread	initial inventory only
-tests/unit/webgpu-lifecycle.test.mjs	233336	7ded2a7fa37f3eef2187032fce85856dc3a6d0dd664b698e3c082287fc7cf37b	unread	initial inventory only
-tests/unit/webgpu-menu-warm.test.mjs	7078	4f4555f03baa5d8a0eee29daeb2586aba4e6c51dc1175d88f591241e0352cb55	unread	initial inventory only
-tests/unit/webgpu-uint16-index.test.mjs	8682	303838ddfd8cd78a739ba08f017983a1b1ccdab8e4edc95424f7fb28023bd276	unread	initial inventory only
-tests/unit/wet-grip-ladder.test.mjs	5223	a0f8817c2da9836062fdb9a18d8100e553e4cc5843af5637722dad660ab20355	unread	initial inventory only
-tests/unit/wgsl-bindings.test.mjs	6757	8860685cc42a3cee66bec9fe573173d56c9c0aea4cdac6f99d9fa8706a4e6741	unread	initial inventory only
-tests/unit/wgx-chunked-fallback.test.mjs	7667	5fe23694383d97e40f6f76addb8666e78a200617b025066430764f1777ea7635	unread	initial inventory only
-tests/unit/wgx-free-retire.test.mjs	24178	97c995ad9a068f1627f35db81f2cd23cb2032956b365cdcb4060323fa3aacd02	unread	initial inventory only
-tests/unit/wgx-labels.test.mjs	9685	b9c0e59548f68ba5ce306089fa03ee02845dec347fb7455d6d9d2ac10c58485c	unread	initial inventory only
-tests/unit/wheel-state.test.mjs	8508	79ca34482ed7ed01803cc73e8ed7cfc7df7dd64c9934891b95720b9e5ac921e8	unread	initial inventory only
-tests/unit/wind-speed.test.mjs	8191	af9bc5dc9b8748d1407270975679c4c5c23198684ecc21bc708c976552508a9a	unread	initial inventory only
-tests/unit/wind-vm.test.mjs	4479	36bae8443bb09575ea6badb5c8f55e62e6bb0458ce8c22571137f48f398a09d3	unread	initial inventory only
-tests/unit/wind.test.mjs	7784	ebdbf1a7e6d215fbf5ee22cc2851deac475aa6f5e0831e3989561189436dd845	unread	initial inventory only
-tests/unit/worker-pack-strip.test.mjs	9540	37953aab9f01c6dd57c315d9b6b5e96ae7e44502c0bc3717dd00a8398b80a9d7	unread	initial inventory only
-tests/unit/workflow-harness.test.mjs	18964	9e30566b95de32cf2cd1301a9107a602fd1a54931a7cce4e74baee0090715404	unread	initial inventory only
-tests/unit/workflow-lint-ci-plan.test.mjs	6382	2b6fa4cccfe864821a77ef926abba8ac8c978079826cc51fc8bd2249bead16f6	unread	initial inventory only
-tests/unit/workflow-lint.test.mjs	7894	81875514b507a600ba3316e6425e6bc332bb9e728816a89cda4dd632e9ee6d6c	unread	initial inventory only
-tests/unit/world-physics-vm.test.mjs	6255	dc8308ab6c78fbc987671e507eff9bafc8e52bd8b4258e1c2a93b6dd77e9817f	unread	initial inventory only
-tests/unit/wx-grid.test.mjs	3802	a1f5626cd3cc47a3dfc7e3e11b2333a4130caf2fa94e02ad5279c694c044f8ed	unread	initial inventory only
-tests/unit/xr-backend-pin.test.mjs	4349	3237030d38473fdcb05341e58e06496b139a9782ec593bafb16abc668f119fa7	unread	initial inventory only
-tests/unit/xr-cull-union.test.mjs	7518	f51068cc7285ce83f0b8543413bbd345dda60cdd07fac04da5ed861c4f98f524	unread	initial inventory only
-tests/unit/xr-opts.test.mjs	4887	772c4fdf936c7f74267dfec7e7149c7eef1eb05832da0052b410a77ced61f50f	unread	initial inventory only
-tests/unit/xr-phase0.test.mjs	58427	4a8560f0155a35572d1dbd4a1b506eca308ab0536dcc0b46197c7b87f32f378a	unread	initial inventory only
-tests/unit/xr-plan.test.mjs	6474	fdf625f396413e5a4d865aef827594fb8de0b9f3035904ebfdfdbebda6322cf6	unread	initial inventory only
-tests/unit/xr-visibility-pause.test.mjs	4839	164543aa71017d1cf39d6d2c160109588fa6b246137fabd2cc3d6f279c501374	unread	initial inventory only
-tests/unit/yaw-damp-speed.test.mjs	5306	34ecf7ace14e6a1f0f403b408bc0870a6ebc2e69044aac85648351d5826a8ba3	unread	initial inventory only
-tests/unit/yaw-low-speed-substep.test.mjs	4849	6d390e8e7b1f79c1dfb03e7b0d141e459965aea3d270acd1a90b31d92395da81	unread	initial inventory only
+tests/unit/ui-explorer.test.mjs	42000	90d6f9bf75b9889540b2090e6e0ad4d7c8944bcf1ab503c4610e5fd313010eb6	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-camtune-portrait-r7.test.mjs	2688	552b6eea5142db0a8f97103717357b6cf50c9c9e04965fc10535db6c51bcb3c8	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-camtune-tap-r5.test.mjs	3373	0a0f61fb5ca7d9d0d28630d37a8e0019ba2aab210cf96c008ffe40cd5849919f	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-flyby-tap-r6.test.mjs	2772	66136e784dee5a57e00acc11879f9ffd6c967d7ee0d57b1e6e5b114c6385cc0b	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-garage-livery-r6.test.mjs	2600	ba80d00a86c807d3e81371f5bfd1d935db2368638655c78801c405b1402cd05d	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-lighting-flyby-stack.test.mjs	3049	87717c6c3a436eda9107b73ed21409510a6302b4db42c60f22e30097d41a5178	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-lighttune-tap-r6.test.mjs	1927	81c7c00f2e888f2b4cd34ae6f841f35e44c16381528fdf6e69d30161ce921b2b	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-photostudio-tap-r6.test.mjs	1992	5661e1b50bc817d877218efcaf86afa172da4602686cfda48316a91b1eadd2e5	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-settings-a11y-r6.test.mjs	3272	a685328bf843af3614f656b8811698ea22252e4d8478703a2ab54efa1759f1aa	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-settings-appearance-r6.test.mjs	7629	a32ee06950ad16da4c916325277ce5175d58945064317709317cb0f0e6c4a685	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fit-tap-scroll-round3.test.mjs	7841	695c1421d81c2457e15b7f9089b77fd133e3d356f3992995c314b6950000e14f	fully-read	tests-unit-58-complete.md
+tests/unit/ui-fixer-uncommitted.test.mjs	2528	d71cd9db42fc2bfc5aa198d6b7951767294b07355b2ca0c5f2da29b554262def	fully-read	tests-unit-58-complete.md
+tests/unit/ui-improve-pass.test.mjs	174843	e21baaa3dcd8e6ac3e57cf59f4d289368d2072747b07c9687ffcebebb253ed4a	fully-read	tests-unit-58-complete.md
+tests/unit/ui-inspector-audit.test.mjs	10363	1f6c6b281980dfa6bda399de4858630e855980ee449ce13a1c6f2f1a53c072c1	fully-read	tests-unit-58-complete.md
+tests/unit/ui-inspector-css.test.mjs	12250	dfab07a168dec3d2349e63a656a32e78e240cf8c0befc9cb1c17e697db7ed36e	fully-read	tests-unit-58-complete.md
+tests/unit/ui-inspector-transitions.test.mjs	14845	d91ca33907c4d5cdfc98bd663c7f6dd0b3e5e520fac7eb3981530941d53b550b	fully-read	tests-unit-58-complete.md
+tests/unit/ui-journey-career.test.mjs	8838	fa1fe7c7e326e99e6ef0ad699a8d23a9c20f2ab663d3d419d43e115875cbf6c3	fully-read	tests-unit-58-complete.md
+tests/unit/ui-journey-race.test.mjs	8246	75d6f9b1fea4ce3424c95133367870f87c144c1bfcc3aaa531c814db7810f248	fully-read	tests-unit-58-complete.md
+tests/unit/ui-journey-session.test.mjs	4816	0e601084ec798ee0db63183ece8cc1341d8b49ca70578a3bddd121a2d77da261	fully-read	tests-unit-58-complete.md
+tests/unit/ui-layers-reflow.test.mjs	5237	dbd335f64d9c2cba70030d2324aa025bfb7b64dc58ccecea0fbf054bac5cbe60	fully-read	tests-unit-59-complete.md
+tests/unit/ui-sheets-audit.test.mjs	65865	2d07d6abcd37b5d6be1acea8fa040976ad89f7f6a583dcdff01c0e4b861dd5e0	fully-read	tests-unit-59-complete.md
+tests/unit/uilayers-modal-order.test.mjs	19504	88a446aa6a45e12f59fbacd796d3ce3f1dfdb5bfa7803a0b90d73177e500092d	fully-read	tests-unit-59-complete.md
+tests/unit/validation-cli.test.mjs	26539	f867d6a51d81065ad450ef00b828fa43231c562342d65834e236be0c278b4d27	fully-read	tests-unit-59-complete.md
+tests/unit/vegas-day-strip.test.mjs	3611	828e09f4e58622128fb4e9d692029d6be14eb7d44ba0c88a5e8f1e15b1738bd4	fully-read	tests-unit-59-complete.md
+tests/unit/vehicle-tick-alloc.test.mjs	8422	e14dea3fb06deb1095312a4bdb5a39530e319dfbd78273177e5ca14b2c9e1011	fully-read	tests-unit-59-complete.md
+tests/unit/vendor-licences.test.mjs	1738	98eca0016f0f85b7d9b741d3a830487b0b3c280d4f89182ea60a39322a9df5d7	fully-read	tests-unit-59-complete.md
+tests/unit/verify-live.test.mjs	14530	8699a07545f6572f2def474fc2ba711476c9478ea17dbadf46eeef013da06bb3	fully-read	tests-unit-59-complete.md
+tests/unit/vertex-pack.test.mjs	16824	1203165bb4104ec50e059b8ac01b652490709e306e3fa0f72e7f69721b086c66	fully-read	tests-unit-59-complete.md
+tests/unit/viewer.test.mjs	6511	35e962687f37cfbf2b1c3ad5386c5b497cbc8bdc01a2054df6e0e311c5f7dc3f	fully-read	tests-unit-59-complete.md
+tests/unit/visor-optics.test.mjs	29087	c3c675dd3437a8e2d3f68daf753ca4108a04ae1d01ee26583a132755306f72bc	fully-read	tests-unit-59-complete.md
+tests/unit/visual-oracle.test.mjs	853	b035427ec8076a24d39b48ba6f67807f6fc392cf771a0a5f908d35e74ad4612b	fully-read	tests-unit-59-complete.md
+tests/unit/vm-debug-preload.test.mjs	2694	b368eebb1c3e28d48eec773fdb961d8dd6c260243b2049fd4e44898bfdc1cd7b	fully-read	tests-unit-59-complete.md
+tests/unit/vm-filename-lint.test.mjs	3776	0a97925a623d8da52a09da3c15ee5fa3ef6b5e11dbd9032f1b87b4d69572838d	fully-read	tests-unit-59-complete.md
+tests/unit/vm-page-lifecycle.test.mjs	6571	bb117a373cc4ed14e5a78138cd91d39a759d6c4093361db4fc6aee8d14f9b0c4	fully-read	tests-unit-59-complete.md
+tests/unit/voice-pack.test.mjs	77747	ea6620514a458d8b5eb796375bae1b3d2d81225a94f36c969dec4b09d1b75a22	fully-read	tests-unit-60-complete.md
+tests/unit/vsfriend-head-200.test.mjs	2625	2e9cd3cd3181766e7f823df30f1988a758b934519abdf7e68085dd1fa3d85f2f	fully-read	tests-unit-60-complete.md
+tests/unit/vstd-invariant.test.mjs	25543	f60fc86a143404be9083b341b32a97e628cb5737a1dec294880a9ebd9c90c47f	fully-read	tests-unit-60-complete.md
+tests/unit/wait-for.test.mjs	7783	6d20d42ec105c8fc2906b46c118b8583454da6a6d9223da8895e855b60f58fb7	fully-read	tests-unit-60-complete.md
+tests/unit/wait-polling.test.mjs	8086	c127b56c775de9cee39979addf5f938d2b20f3d3fbda9e7c0efc9f3fd9142037	fully-read	tests-unit-60-complete.md
+tests/unit/wake-lock-vm.test.mjs	14037	c17ac0b8abd4ca14f19f3cf963bce71cf7825cd4d2a6cc94b6a008a538ce25d9	fully-read	tests-unit-60-complete.md
+tests/unit/wall-clamp.test.mjs	17348	1c342340e238060a2b2cd467f18cd51f680455066baa1cf39ba3c7b65c86179f	fully-read	tests-unit-60-complete.md
+tests/unit/wall-end-face-vm.test.mjs	3902	dd3d7826c36aceecdf3d3d61c4eb1d851f29e200ddb1358e0118339f98ac5dfc	fully-read	tests-unit-60-complete.md
+tests/unit/watch-transport-scrub.test.mjs	10508	cfd9fa5e18d50a0a095a3579f0689604128d1c4085ccbd1700a0e91b91dd44f5	fully-read	tests-unit-60-complete.md
+tests/unit/water-local-level.test.mjs	2870	dc297f705b6b045eff97daee473985b2f24c550d2a8353d34eb22ab4726b4105	fully-read	tests-unit-60-complete.md
+tests/unit/weather-arc-plan.test.mjs	7470	c23e24129d05a28699cd135ac4b55b5697230d3812c721ef3003a3fc17852d87	fully-read	tests-unit-60-complete.md
+tests/unit/weather-arc-rain.test.mjs	15596	9e63e5a3ca52d12c5ceafd88f342745929f34d6454823dc02e9a8b5cfc2ebcc6	fully-read	tests-unit-60-complete.md
+tests/unit/weather-blend.test.mjs	34636	e60f2ac044e77df59163ab665cfe78cbc2e1dfbc703f7a1f945a0249675652aa	fully-read	tests-unit-60-complete.md
+tests/unit/webgpu-lifecycle.test.mjs	233336	7ded2a7fa37f3eef2187032fce85856dc3a6d0dd664b698e3c082287fc7cf37b	fully-read	tests-unit-61-complete.md
+tests/unit/webgpu-menu-warm.test.mjs	7078	4f4555f03baa5d8a0eee29daeb2586aba4e6c51dc1175d88f591241e0352cb55	fully-read	tests-unit-61-complete.md
+tests/unit/webgpu-uint16-index.test.mjs	8682	303838ddfd8cd78a739ba08f017983a1b1ccdab8e4edc95424f7fb28023bd276	fully-read	tests-unit-61-complete.md
+tests/unit/wet-grip-ladder.test.mjs	5223	a0f8817c2da9836062fdb9a18d8100e553e4cc5843af5637722dad660ab20355	fully-read	tests-unit-61-complete.md
+tests/unit/wgsl-bindings.test.mjs	6757	8860685cc42a3cee66bec9fe573173d56c9c0aea4cdac6f99d9fa8706a4e6741	fully-read	tests-unit-61-complete.md
+tests/unit/wgx-chunked-fallback.test.mjs	7667	5fe23694383d97e40f6f76addb8666e78a200617b025066430764f1777ea7635	fully-read	tests-unit-61-complete.md
+tests/unit/wgx-free-retire.test.mjs	24178	97c995ad9a068f1627f35db81f2cd23cb2032956b365cdcb4060323fa3aacd02	fully-read	tests-unit-62-complete.md
+tests/unit/wgx-labels.test.mjs	9685	b9c0e59548f68ba5ce306089fa03ee02845dec347fb7455d6d9d2ac10c58485c	fully-read	tests-unit-62-complete.md
+tests/unit/wheel-state.test.mjs	8508	79ca34482ed7ed01803cc73e8ed7cfc7df7dd64c9934891b95720b9e5ac921e8	fully-read	tests-unit-62-complete.md
+tests/unit/wind-speed.test.mjs	8191	af9bc5dc9b8748d1407270975679c4c5c23198684ecc21bc708c976552508a9a	fully-read	tests-unit-62-complete.md
+tests/unit/wind-vm.test.mjs	4479	36bae8443bb09575ea6badb5c8f55e62e6bb0458ce8c22571137f48f398a09d3	fully-read	tests-unit-62-complete.md
+tests/unit/wind.test.mjs	7784	ebdbf1a7e6d215fbf5ee22cc2851deac475aa6f5e0831e3989561189436dd845	fully-read	tests-unit-62-complete.md
+tests/unit/worker-pack-strip.test.mjs	9540	37953aab9f01c6dd57c315d9b6b5e96ae7e44502c0bc3717dd00a8398b80a9d7	fully-read	tests-unit-62-complete.md
+tests/unit/workflow-harness.test.mjs	18964	9e30566b95de32cf2cd1301a9107a602fd1a54931a7cce4e74baee0090715404	fully-read	tests-unit-62-complete.md
+tests/unit/workflow-lint-ci-plan.test.mjs	6382	2b6fa4cccfe864821a77ef926abba8ac8c978079826cc51fc8bd2249bead16f6	fully-read	tests-unit-62-complete.md
+tests/unit/workflow-lint.test.mjs	7894	81875514b507a600ba3316e6425e6bc332bb9e728816a89cda4dd632e9ee6d6c	fully-read	tests-unit-62-complete.md
+tests/unit/world-physics-vm.test.mjs	6255	dc8308ab6c78fbc987671e507eff9bafc8e52bd8b4258e1c2a93b6dd77e9817f	fully-read	tests-unit-62-complete.md
+tests/unit/wx-grid.test.mjs	3802	a1f5626cd3cc47a3dfc7e3e11b2333a4130caf2fa94e02ad5279c694c044f8ed	fully-read	tests-unit-62-complete.md
+tests/unit/xr-backend-pin.test.mjs	4349	3237030d38473fdcb05341e58e06496b139a9782ec593bafb16abc668f119fa7	fully-read	tests-unit-62-complete.md
+tests/unit/xr-cull-union.test.mjs	7518	f51068cc7285ce83f0b8543413bbd345dda60cdd07fac04da5ed861c4f98f524	fully-read	tests-unit-62-complete.md
+tests/unit/xr-opts.test.mjs	4887	772c4fdf936c7f74267dfec7e7149c7eef1eb05832da0052b410a77ced61f50f	fully-read	tests-unit-62-complete.md
+tests/unit/xr-phase0.test.mjs	58427	4a8560f0155a35572d1dbd4a1b506eca308ab0536dcc0b46197c7b87f32f378a	fully-read	tests-unit-62-complete.md
+tests/unit/xr-plan.test.mjs	6474	fdf625f396413e5a4d865aef827594fb8de0b9f3035904ebfdfdbebda6322cf6	fully-read	tests-unit-62-complete.md
+tests/unit/xr-visibility-pause.test.mjs	4839	164543aa71017d1cf39d6d2c160109588fa6b246137fabd2cc3d6f279c501374	fully-read	tests-unit-62-complete.md
+tests/unit/yaw-damp-speed.test.mjs	5306	34ecf7ace14e6a1f0f403b408bc0870a6ebc2e69044aac85648351d5826a8ba3	fully-read	tests-unit-62-complete.md
+tests/unit/yaw-low-speed-substep.test.mjs	4849	6d390e8e7b1f79c1dfb03e7b0d141e459965aea3d270acd1a90b31d92395da81	fully-read	tests-unit-62-complete.md
 tests/vendor/README.md	2061	2c9172a0942ddf0b21da9ba59841e14b82ae346d60c9ff1a46c7e67bb5e3916d	unread	initial inventory only
 tests/vendor/iwer-2.5.0.min.js	263643	23d8640949f19db4b1e70398b30e084e4aa555f3a81e4329da3fac1a70b39542	unread	initial inventory only
 tools/README.md	99752	e367059f18e7c12262158d36ec6e73bdeea613ebcf39392489530dbf002c80cd	fully-read	tools-ci/mcp/lib/gen/check/environment/shot/ui-gfx/gfx-tail/car/track/perf-light/misc-complete.md scope union

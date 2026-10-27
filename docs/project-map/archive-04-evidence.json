@@ -1,0 +1,400 @@
+{
+  "id": "04",
+  "parts": [
+    {
+      "path": "docs/archive/notes/CURSOR-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md",
+      "start": 7712,
+      "end": 18988,
+      "kind": "text",
+      "sha256": "70f6db42270aa0d3e4589b4ee6438e144f1ed15b1382435c250df2dc18c98df4",
+      "sourceId": "S01",
+      "actualWholeSha256": "70f6db42270aa0d3e4589b4ee6438e144f1ed15b1382435c250df2dc18c98df4",
+      "partSha256": "999fb5dd4f1da5b05a317d359c6c764239de7fb85b88334012447d20880a0aac",
+      "chunks": [
+        {
+          "sourceId": "S01",
+          "start": 7712,
+          "end": 15712,
+          "sha256": "bfee7a39b2d9714ed1bc9eec08ef9ec3e82a46e473c6123bf6f599c7d667fb68"
+        },
+        {
+          "sourceId": "S01",
+          "start": 15712,
+          "end": 18988,
+          "sha256": "99d3c4dd23ab8805561918b85a8a82139e858a9f467578d9678be44b891c57dd"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/DEEP-RESEARCH-CLAUDE-CODE-FLEET-2026-10-15.md",
+      "start": 0,
+      "end": 46382,
+      "kind": "text",
+      "sha256": "d7d6e1e900ef3c45731884d60f203871b08754356272e57ee473a2a7b72701b0",
+      "sourceId": "S02",
+      "actualWholeSha256": "d7d6e1e900ef3c45731884d60f203871b08754356272e57ee473a2a7b72701b0",
+      "partSha256": "d7d6e1e900ef3c45731884d60f203871b08754356272e57ee473a2a7b72701b0",
+      "chunks": [
+        {
+          "sourceId": "S02",
+          "start": 0,
+          "end": 8000,
+          "sha256": "369cc32933f682faadc79501b236b7dbe71cf9b5890cc59982e1fb577a402cda"
+        },
+        {
+          "sourceId": "S02",
+          "start": 8000,
+          "end": 16000,
+          "sha256": "4b684956163377ce5596e50a4922e50e6910628401b2e6b12eb6be1b4b5117c0"
+        },
+        {
+          "sourceId": "S02",
+          "start": 16000,
+          "end": 24000,
+          "sha256": "f3a8e9ba0af74b5ba30201b26e840f196b3549da954050ca0ca676fbdbea133c"
+        },
+        {
+          "sourceId": "S02",
+          "start": 24000,
+          "end": 32000,
+          "sha256": "cdd45c917532eba0b372a24b43ad1ef2efbe1931d4b2d61f6762d4fb0b67fecd"
+        },
+        {
+          "sourceId": "S02",
+          "start": 32000,
+          "end": 40000,
+          "sha256": "d072d1a72c12a6aeef7d753eb59bcd9c87622385bea8a42fbbb8b0576ecb996e"
+        },
+        {
+          "sourceId": "S02",
+          "start": 40000,
+          "end": 46382,
+          "sha256": "3e8ef53b8956b87632b298c73155f067e03b394ee4b2cd740e28514eac538c4a"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/DESIGN-MATRIX-TOOL.md",
+      "start": 0,
+      "end": 3360,
+      "kind": "text",
+      "sha256": "c8b54dde7e1be8f0efe90d3f83046ef35c7752f7d797d1e59d4cbf9a88e527c2",
+      "sourceId": "S03",
+      "actualWholeSha256": "c8b54dde7e1be8f0efe90d3f83046ef35c7752f7d797d1e59d4cbf9a88e527c2",
+      "partSha256": "c8b54dde7e1be8f0efe90d3f83046ef35c7752f7d797d1e59d4cbf9a88e527c2",
+      "chunks": [
+        {
+          "sourceId": "S03",
+          "start": 0,
+          "end": 3360,
+          "sha256": "c8b54dde7e1be8f0efe90d3f83046ef35c7752f7d797d1e59d4cbf9a88e527c2"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/DOCS-SURVEY-2026-10-06.md",
+      "start": 0,
+      "end": 15144,
+      "kind": "text",
+      "sha256": "15863c7f2ae37acc6d09b1f8c0e0b6703b4dfe423245de7a73a0329ae8e904a6",
+      "sourceId": "S04",
+      "actualWholeSha256": "15863c7f2ae37acc6d09b1f8c0e0b6703b4dfe423245de7a73a0329ae8e904a6",
+      "partSha256": "15863c7f2ae37acc6d09b1f8c0e0b6703b4dfe423245de7a73a0329ae8e904a6",
+      "chunks": [
+        {
+          "sourceId": "S04",
+          "start": 0,
+          "end": 8000,
+          "sha256": "8757d76c350f8d3ae62fa6bb11a0a19585017b919e0ad09a7a6759fe729322ff"
+        },
+        {
+          "sourceId": "S04",
+          "start": 8000,
+          "end": 15144,
+          "sha256": "709d2fbf5bc6365c1402adff1e1d92ad04c9e8a13b5ba8b380e0ab4972931f74"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/F1-2026-REGS-REALISM-2026-10-18.md",
+      "start": 0,
+      "end": 5020,
+      "kind": "text",
+      "sha256": "a397164e1436edb394179aa1b9c42e0883d675e7a17775508ce1ef753ffa9409",
+      "sourceId": "S05",
+      "actualWholeSha256": "a397164e1436edb394179aa1b9c42e0883d675e7a17775508ce1ef753ffa9409",
+      "partSha256": "a397164e1436edb394179aa1b9c42e0883d675e7a17775508ce1ef753ffa9409",
+      "chunks": [
+        {
+          "sourceId": "S05",
+          "start": 0,
+          "end": 5020,
+          "sha256": "a397164e1436edb394179aa1b9c42e0883d675e7a17775508ce1ef753ffa9409"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md",
+      "start": 0,
+      "end": 24590,
+      "kind": "text",
+      "sha256": "88f10e2746ea00cb8f96aadfdd209a8ac238f79054d2f0423993a2c5632e9aa7",
+      "sourceId": "S06",
+      "actualWholeSha256": "88f10e2746ea00cb8f96aadfdd209a8ac238f79054d2f0423993a2c5632e9aa7",
+      "partSha256": "88f10e2746ea00cb8f96aadfdd209a8ac238f79054d2f0423993a2c5632e9aa7",
+      "chunks": [
+        {
+          "sourceId": "S06",
+          "start": 0,
+          "end": 8000,
+          "sha256": "99d7279479a94c9eff53e419389299c885b55654341be7ce1217d7f643e0843c"
+        },
+        {
+          "sourceId": "S06",
+          "start": 8000,
+          "end": 16000,
+          "sha256": "4a89c224f781a0522735d1967ebb8066224f1d9bcbc9ff0f77cbf9f62b48dc47"
+        },
+        {
+          "sourceId": "S06",
+          "start": 16000,
+          "end": 24000,
+          "sha256": "ec3dbf6b24b0f90ececa7788b6447aec87d4720c20205622c79643285231b452"
+        },
+        {
+          "sourceId": "S06",
+          "start": 24000,
+          "end": 24590,
+          "sha256": "048460f771cb4328f256be1c9c2fa40be62445bf3917d3659de8ae3eed6be202"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md",
+      "start": 0,
+      "end": 9557,
+      "kind": "text",
+      "sha256": "f9ac83ef0bd96d24a3ddeeaac8274da153648092acf0238ad27644d2f3641d7d",
+      "sourceId": "S07",
+      "actualWholeSha256": "f9ac83ef0bd96d24a3ddeeaac8274da153648092acf0238ad27644d2f3641d7d",
+      "partSha256": "f9ac83ef0bd96d24a3ddeeaac8274da153648092acf0238ad27644d2f3641d7d",
+      "chunks": [
+        {
+          "sourceId": "S07",
+          "start": 0,
+          "end": 8000,
+          "sha256": "0e68623b27e28086c30e2cfd8cb7f1e6a12e43bf99e480be953b4cf43d2abd9c"
+        },
+        {
+          "sourceId": "S07",
+          "start": 8000,
+          "end": 9557,
+          "sha256": "5c1cdd1ae13ef67f40bb4a2a8f0576b6989d1479b18ee9c30c78bfbbe39ed300"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md",
+      "start": 0,
+      "end": 16487,
+      "kind": "text",
+      "sha256": "5f7c91ab00279090ebfe47e3d288e492c6ef99aea29c332cbf86c908f3719b71",
+      "sourceId": "S08",
+      "actualWholeSha256": "5f7c91ab00279090ebfe47e3d288e492c6ef99aea29c332cbf86c908f3719b71",
+      "partSha256": "5f7c91ab00279090ebfe47e3d288e492c6ef99aea29c332cbf86c908f3719b71",
+      "chunks": [
+        {
+          "sourceId": "S08",
+          "start": 0,
+          "end": 8000,
+          "sha256": "aa455e068f352f914bc70a47f6e17c0b3a41348971fa331b97c786108d465050"
+        },
+        {
+          "sourceId": "S08",
+          "start": 8000,
+          "end": 16000,
+          "sha256": "b9db2b9d262f46fe80a8607b5be6a0b7f8908c03212eeae138ef3e2877e6b6d1"
+        },
+        {
+          "sourceId": "S08",
+          "start": 16000,
+          "end": 16487,
+          "sha256": "3ce0c3193708b591f87c6df1fda56a1248b4c5760096ce38f4c16ad7d2e83e01"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/FLEET-BOARD-2026-10-19.md",
+      "start": 0,
+      "end": 3005,
+      "kind": "text",
+      "sha256": "63274994972dfedb56faebe85443c436c0211e8a67516bef2e677a4a4fbf6d13",
+      "sourceId": "S09",
+      "actualWholeSha256": "63274994972dfedb56faebe85443c436c0211e8a67516bef2e677a4a4fbf6d13",
+      "partSha256": "63274994972dfedb56faebe85443c436c0211e8a67516bef2e677a4a4fbf6d13",
+      "chunks": [
+        {
+          "sourceId": "S09",
+          "start": 0,
+          "end": 3005,
+          "sha256": "63274994972dfedb56faebe85443c436c0211e8a67516bef2e677a4a4fbf6d13"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/FLEET-BUS-2026-10-19.md",
+      "start": 0,
+      "end": 6896,
+      "kind": "text",
+      "sha256": "c964b64202839cfac859fa23a097d2c671d8d977b3d27eb98d52ea5d406b24e1",
+      "sourceId": "S10",
+      "actualWholeSha256": "c964b64202839cfac859fa23a097d2c671d8d977b3d27eb98d52ea5d406b24e1",
+      "partSha256": "c964b64202839cfac859fa23a097d2c671d8d977b3d27eb98d52ea5d406b24e1",
+      "chunks": [
+        {
+          "sourceId": "S10",
+          "start": 0,
+          "end": 6896,
+          "sha256": "c964b64202839cfac859fa23a097d2c671d8d977b3d27eb98d52ea5d406b24e1"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/FLEET-COST-2026-10-19.md",
+      "start": 0,
+      "end": 4903,
+      "kind": "text",
+      "sha256": "e45998d8d57fd51722630fa044e81241cdb7e19d788393f24dd69f8c4b43c1af",
+      "sourceId": "S11",
+      "actualWholeSha256": "e45998d8d57fd51722630fa044e81241cdb7e19d788393f24dd69f8c4b43c1af",
+      "partSha256": "e45998d8d57fd51722630fa044e81241cdb7e19d788393f24dd69f8c4b43c1af",
+      "chunks": [
+        {
+          "sourceId": "S11",
+          "start": 0,
+          "end": 4903,
+          "sha256": "e45998d8d57fd51722630fa044e81241cdb7e19d788393f24dd69f8c4b43c1af"
+        }
+      ]
+    },
+    {
+      "path": "docs/archive/notes/FLEET-ROLES-2026-10-19.md",
+      "start": 0,
+      "end": 13380,
+      "kind": "text",
+      "sha256": "844805312c041a1ae86af7c13d15ccc0a05cc3e3b4ea36070bd3901f6c87ce09",
+      "sourceId": "S12",
+      "actualWholeSha256": "844805312c041a1ae86af7c13d15ccc0a05cc3e3b4ea36070bd3901f6c87ce09",
+      "partSha256": "204796182a88f02eed5f8e4161fde1fa77221982ae0cd410665be4ef8a42bdd1",
+      "chunks": [
+        {
+          "sourceId": "S12",
+          "start": 0,
+          "end": 8000,
+          "sha256": "0979a33180405826442335d6294402de6783ce2984ec69e03af3c6ca2d0d4065"
+        },
+        {
+          "sourceId": "S12",
+          "start": 8000,
+          "end": 13380,
+          "sha256": "361ff5489591b32c8b9ecfdc1f3d99da298e9026f72e0bdfbe62d88b275137ae"
+        }
+      ]
+    }
+  ],
+  "bytes": 160000,
+  "status": "mapped",
+  "planSha256": "45c79d5dfbe20976a87dabd9cada12c604de55827dc38a7b326f069571b5fe1c",
+  "readMethod": "Individual untruncated byte slices, each at most 8000 bytes; half-open ranges.",
+  "currentPathExistence": {
+    "docs/WORKERS.md": true,
+    "docs/AGENT-SURFACE.md": true,
+    "docs/TESTING.md": true,
+    "docs/PHYSICS.md": true,
+    "tools/shot/design-matrix.mjs": true,
+    "tools/shot/garage-angles.mjs": true,
+    "tools/ci/fleet-bus.mjs": false,
+    "tools/ci/fleet-board-snapshot.mjs": false,
+    "tools/ci/session-transcript.mjs": true,
+    "tools/ci/agent-msg.mjs": false,
+    "tools/ci/fleet-archive.mjs": false,
+    "tests/unit/fleet-bus.test.mjs": false,
+    "tests/unit/fleet-board-snapshot.test.mjs": false,
+    "tests/unit/sync-pr-robust.test.mjs": true,
+    "tests/specs/physics-characterization.spec.js": true,
+    "js/physics/consts.js": true,
+    "js/career/season-cal.js": true,
+    "js/data/teams.js": true
+  },
+  "backlinks": [
+    {
+      "sourceId": "S07",
+      "from": "docs/NOTES-INDEX.md"
+    },
+    {
+      "sourceId": "S08",
+      "from": "docs/NOTES-INDEX.md"
+    },
+    {
+      "sourceId": "S04",
+      "from": "docs/notes/ACTIONS-AUDIT-2026-10-14.md"
+    },
+    {
+      "sourceId": "S08",
+      "from": "docs/notes/BASE-CONTEXT-2026-10-26.md"
+    },
+    {
+      "sourceId": "S07",
+      "from": "docs/notes/SYSTEM-AUDIT-4-2026-10-26.md"
+    },
+    {
+      "sourceId": "S08",
+      "from": "docs/notes/orchestration-redesign-2026-10-27/claude-sessions.md"
+    },
+    {
+      "sourceId": "S09",
+      "from": "docs/notes/system-audit-3/environment.md"
+    },
+    {
+      "sourceId": "S08",
+      "from": "docs/notes/system-audit-4/anchors.md"
+    },
+    {
+      "sourceId": "S12",
+      "from": "docs/notes/system-audit-4/anchors.md"
+    },
+    {
+      "sourceId": "S07",
+      "from": "docs/notes/system-audit-4/verify-11-20.md"
+    },
+    {
+      "sourceId": "S12",
+      "from": "docs/notes/system-audit-4/skills/agent-fleet.md"
+    }
+  ],
+  "wholeHashesMatchPlan": true,
+  "coverage": {
+    "assignedBytes": 160000,
+    "readBytes": 160000,
+    "chunks": 26,
+    "maxChunkBytes": 8000,
+    "complete": true,
+    "partialSources": [
+      "S01",
+      "S12"
+    ],
+    "continuationGroup": {
+      "S01": "03",
+      "S12": "05"
+    }
+  },
+  "validation": {
+    "testsRun": false,
+    "browserRun": false,
+    "networkUsed": false,
+    "sourceEdits": false,
+    "staged": false,
+    "committed": false,
+    "markdownContainsArchiveDirectoryPath": false
+  }
+}

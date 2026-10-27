@@ -1,0 +1,234 @@
+{
+  "group": "06",
+  "plan_sha256": "45c79d5dfbe20976a87dabd9cada12c604de55827dc38a7b326f069571b5fe1c",
+  "sources": [
+    {
+      "path": "docs/archive/notes/HUD-PR-REVIEW-2026-10-10.md",
+      "start": 16616,
+      "end": 29053,
+      "kind": "text",
+      "sha256": "fb221b673cad6498e468b333d4d5586e80e3d3b6bb65c0be2efbc290e5ac9809",
+      "id": 1,
+      "whole_file_sha256": "fb221b673cad6498e468b333d4d5586e80e3d3b6bb65c0be2efbc290e5ac9809",
+      "part_sha256": "85dad097879036db2c19108f9b33fa747d8580da731d36d254eb69c932b47e47",
+      "chunks": [
+        {
+          "start": 16616,
+          "end": 24616,
+          "sha256": "9a3d39673231cdb1392ad5362d8993edc5e839dba2df2f7c7ccb2da11282151e"
+        },
+        {
+          "start": 24616,
+          "end": 29053,
+          "sha256": "046a77b376382899bfdef70984a9fef782a997e2125c11a7fb207235b5ac51c6"
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/IDEAS-GAMEPLAY-2026-10-22.md",
+      "start": 0,
+      "end": 56593,
+      "kind": "text",
+      "sha256": "9c745c385d76de1dbf3ac3528889b02055b968fc8dcba0257cda68716b610ff6",
+      "id": 2,
+      "whole_file_sha256": "9c745c385d76de1dbf3ac3528889b02055b968fc8dcba0257cda68716b610ff6",
+      "part_sha256": "9c745c385d76de1dbf3ac3528889b02055b968fc8dcba0257cda68716b610ff6",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "b740aaf28363081df6a7b94ea2ef480ed1378a999ce1684a4514e9c1c5191427"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "e77ea0b81bcf055948fb94c74aa9ef937313ad345d439fa43c7cca99d8fdf220"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "sha256": "8e2d304d4f12ecb99cc59d958f6b2aa0f7d695a27f95024e4d8a7586ab894325"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "sha256": "a98f1d63f88c2696b3c6cf55422b2151a93c78f167d3ed5a2a2e5a84f569d2c9"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "sha256": "ac498eef09369954ce105664c80a1df8c886d75cbdf98ab76115d1e383f5a7f0"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "sha256": "bb1a85f1e9174ed3be48515b43fa59467b831c107ce113f99f2fccbb6849ae74"
+        },
+        {
+          "start": 48000,
+          "end": 56000,
+          "sha256": "533047379663a5664df69f9876b5885fb06eb725941ae99f21746a722e4ac0f1"
+        },
+        {
+          "start": 56000,
+          "end": 56593,
+          "sha256": "5314a37d459ee06972e9e04bbcc691700b67192e5cb13203adb078d8179cd4e8"
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/IDEAS-PHONE-UX-2026-10-22.md",
+      "start": 0,
+      "end": 26606,
+      "kind": "text",
+      "sha256": "ac148f2974773bee6f1302e597e3e559690696627e1fa6c781123bc4262c8e16",
+      "id": 3,
+      "whole_file_sha256": "ac148f2974773bee6f1302e597e3e559690696627e1fa6c781123bc4262c8e16",
+      "part_sha256": "ac148f2974773bee6f1302e597e3e559690696627e1fa6c781123bc4262c8e16",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "7695fb455e000d001ad1d1f7859d6e360c41ccab2b7df4609c1a13a23b106560"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "967710225b1f0d866d15ee2e48142f30e51543cbf2565f97b612c258cffc731f"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "sha256": "80837c679a8a13c9f07222468123d46d0382f3028ef2dfc583ab64be05a74ea9"
+        },
+        {
+          "start": 24000,
+          "end": 26606,
+          "sha256": "315f0ad6fc5d69ff8c3d4d54b69f74fb3e5b6d5a95ccaf739bfb13ecb6b07493"
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/IMPROVEMENT-CANDIDATES-2026-10-22.md",
+      "start": 0,
+      "end": 10794,
+      "kind": "text",
+      "sha256": "0e51a82de25ddcf5a77bf78b45e76345fab4210c30a2d85f6bde55891ba08645",
+      "id": 4,
+      "whole_file_sha256": "0e51a82de25ddcf5a77bf78b45e76345fab4210c30a2d85f6bde55891ba08645",
+      "part_sha256": "0e51a82de25ddcf5a77bf78b45e76345fab4210c30a2d85f6bde55891ba08645",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "f5225572ecf27f95495c2a946bc94eb54267579cb379da306fee6b3a74c16928"
+        },
+        {
+          "start": 8000,
+          "end": 10794,
+          "sha256": "a903eeff066ab1487c1e304718e6d25bb7a76f9d163ade8e34325afb5a1a7a9e"
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/INPUT-HUD-TESTING-RESEARCH-2026-10-21.md",
+      "start": 0,
+      "end": 6579,
+      "kind": "text",
+      "sha256": "95521f51bd0a6eabde502d93908055dec5015ad1a9c8f3c9634fa78880b541cf",
+      "id": 5,
+      "whole_file_sha256": "95521f51bd0a6eabde502d93908055dec5015ad1a9c8f3c9634fa78880b541cf",
+      "part_sha256": "95521f51bd0a6eabde502d93908055dec5015ad1a9c8f3c9634fa78880b541cf",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6579,
+          "sha256": "95521f51bd0a6eabde502d93908055dec5015ad1a9c8f3c9634fa78880b541cf"
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/IPHONE-TLX-WEBGPU-2026-10-23.md",
+      "start": 0,
+      "end": 16467,
+      "kind": "text",
+      "sha256": "57ef1cdf701b7a665435a7ef67627711bdfcbc7b215b019aa45f79cf0b8f9496",
+      "id": 6,
+      "whole_file_sha256": "57ef1cdf701b7a665435a7ef67627711bdfcbc7b215b019aa45f79cf0b8f9496",
+      "part_sha256": "57ef1cdf701b7a665435a7ef67627711bdfcbc7b215b019aa45f79cf0b8f9496",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "0aa485a26862633a351dc0edc368e9b77a341568c4402e4dfec0c62c52255e68"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "586b3b9ef32d81a7fc1ea323eb83a9e8978ca17cbb4660d9c92527fe71bb4199"
+        },
+        {
+          "start": 16000,
+          "end": 16467,
+          "sha256": "ef92fbe66537d0097f1577d43ab171151af145775b24212aa4590e5b141dc858"
+        }
+      ],
+      "current_backlink_files": [
+        "./docs/notes/AWS-DEVICE-FARM-IPHONE-2026-10-23.md"
+      ]
+    },
+    {
+      "path": "docs/archive/notes/ISSUE-TRIAGE-1518-2649-2026-10-22.md",
+      "start": 0,
+      "end": 30524,
+      "kind": "text",
+      "sha256": "80947d2d110d83109e155716dd1e4791cad3ad37ca6297519bf56bfa27f88262",
+      "id": 7,
+      "whole_file_sha256": "80947d2d110d83109e155716dd1e4791cad3ad37ca6297519bf56bfa27f88262",
+      "part_sha256": "e83590fa4e66f9d02f01546afe43ce72cd2d3203369c6f6311d6e8a91ce5da80",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "304b3fa0628d2dc7d39adbd027fcb3a82f277acd494b7d922d132f9e8a3fa679"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "4d46b06dc9323a4450b2f708be506a7772ac9c96a9a59051f4ea03775238c1d2"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "sha256": "0caddb9b3bdff98c96be241ef1f0f2eebe125f724a11de334c312ee87d789655"
+        },
+        {
+          "start": 24000,
+          "end": 30524,
+          "sha256": "2270efaa2446d83eb70b81d07c1f6df66e36e60f1136ee111551550ae782f04c"
+        }
+      ],
+      "current_backlink_files": []
+    }
+  ],
+  "read_method": "Every assigned half-open byte span returned individually in <=8000-byte chunks with untruncated output; chunks decoded for reading. No archive instructions executed.",
+  "backlink_search": {
+    "method": "rg -l -F basename .",
+    "excluded_globs": [
+      "docs/archive/**",
+      "docs/project-map/**"
+    ],
+    "limits": "Default rg hidden/ignored exclusions apply; no history/external consumers searched."
+  },
+  "integrity": {
+    "whole_file_hashes_match_plan": true,
+    "assigned_bytes": 160000,
+    "all_chunks_returned_untruncated": true,
+    "max_chunk_bytes": 8000
+  }
+}

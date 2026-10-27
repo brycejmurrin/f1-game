@@ -1,0 +1,33 @@
+{
+  "goal": "Fully read vendored IWER test runtime; test-only provenance from README, no browser/device execution.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "tests/vendor/iwer-2.5.0.min.js",
+          "start": 0,
+          "end": 160000,
+          "kind": "text",
+          "sha256": "23d8640949f19db4b1e70398b30e084e4aa555f3a81e4329da3fac1a70b39542"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "tests/vendor/iwer-2.5.0.min.js",
+          "start": 160000,
+          "end": 263643,
+          "kind": "text",
+          "sha256": "23d8640949f19db4b1e70398b30e084e4aa555f3a81e4329da3fac1a70b39542"
+        }
+      ],
+      "bytes": 103643,
+      "status": "unassigned"
+    }
+  ]
+}

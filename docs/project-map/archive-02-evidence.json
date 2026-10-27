@@ -1,0 +1,562 @@
+{
+  "group": "02",
+  "mapped_on": "2026-10-27",
+  "assigned_bytes": 160000,
+  "scope": "All assigned half-open spans fully read; S01 begins mid-file and S20 ends mid-sentence. No inference about unassigned content.",
+  "hash_semantics": "Plan sha256 hashes whole file, part_sha256 hashes assigned span, chunks hash individual reads.",
+  "sources": [
+    {
+      "source_id": "S01",
+      "path": "docs/archive/manual-probes/throttle-rescue-probe.spec.js",
+      "start": 4239,
+      "end": 8613,
+      "kind": "text",
+      "sha256": "6961a41f09c23f183489887e0a12f5e16247f8a894af3e8b7b4b1295957032fe",
+      "whole_file_bytes": 8613,
+      "observed_whole_file_sha256": "6961a41f09c23f183489887e0a12f5e16247f8a894af3e8b7b4b1295957032fe",
+      "plan_hash_matches": true,
+      "part_sha256": "040cd2e051b24cb2cb86a63041c041c49071babb79e5fe9755f809132b201689",
+      "chunks": [
+        {
+          "start": 4239,
+          "end": 8613,
+          "sha256": "040cd2e051b24cb2cb86a63041c041c49071babb79e5fe9755f809132b201689",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "throttle-rescue-probe.spec.js",
+      "backlinks": []
+    },
+    {
+      "source_id": "S02",
+      "path": "docs/archive/moves/README.md",
+      "start": 0,
+      "end": 373,
+      "kind": "text",
+      "sha256": "a81fba81254147066078e7ae784c13fafa0384e39827361ebd44d00fddf8b6f9",
+      "whole_file_bytes": 373,
+      "observed_whole_file_sha256": "a81fba81254147066078e7ae784c13fafa0384e39827361ebd44d00fddf8b6f9",
+      "plan_hash_matches": true,
+      "part_sha256": "a81fba81254147066078e7ae784c13fafa0384e39827361ebd44d00fddf8b6f9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 373,
+          "sha256": "a81fba81254147066078e7ae784c13fafa0384e39827361ebd44d00fddf8b6f9",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "docs/archive/moves/README.md",
+      "backlinks": []
+    },
+    {
+      "source_id": "S03",
+      "path": "docs/archive/moves/batches/b1-foundation.json",
+      "start": 0,
+      "end": 955,
+      "kind": "text",
+      "sha256": "43be75371add526adda9acb78fbd251ca8d78a2e9636d39a2b0da48e61de8dcc",
+      "whole_file_bytes": 955,
+      "observed_whole_file_sha256": "43be75371add526adda9acb78fbd251ca8d78a2e9636d39a2b0da48e61de8dcc",
+      "plan_hash_matches": true,
+      "part_sha256": "43be75371add526adda9acb78fbd251ca8d78a2e9636d39a2b0da48e61de8dcc",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 955,
+          "sha256": "43be75371add526adda9acb78fbd251ca8d78a2e9636d39a2b0da48e61de8dcc",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "b1-foundation.json",
+      "backlinks": [
+        "./tools/gen/move-tree.mjs:48:// entries in both b1-foundation.json and phase2.json flipped to identity)."
+      ]
+    },
+    {
+      "source_id": "S04",
+      "path": "docs/archive/moves/batches/b2-presentation.json",
+      "start": 0,
+      "end": 1496,
+      "kind": "text",
+      "sha256": "577e8b8992eef261215242ce09c9f4a6dbdad2a0a3bf403ec7869e62f89deaea",
+      "whole_file_bytes": 1496,
+      "observed_whole_file_sha256": "577e8b8992eef261215242ce09c9f4a6dbdad2a0a3bf403ec7869e62f89deaea",
+      "plan_hash_matches": true,
+      "part_sha256": "577e8b8992eef261215242ce09c9f4a6dbdad2a0a3bf403ec7869e62f89deaea",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1496,
+          "sha256": "577e8b8992eef261215242ce09c9f4a6dbdad2a0a3bf403ec7869e62f89deaea",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "b2-presentation.json",
+      "backlinks": []
+    },
+    {
+      "source_id": "S05",
+      "path": "docs/archive/moves/batches/b3-domain.json",
+      "start": 0,
+      "end": 1266,
+      "kind": "text",
+      "sha256": "14a4a302261fb1e5bf2edd2bc8b0a9653c75f2ef14957f63f5d103875fd7a6af",
+      "whole_file_bytes": 1266,
+      "observed_whole_file_sha256": "14a4a302261fb1e5bf2edd2bc8b0a9653c75f2ef14957f63f5d103875fd7a6af",
+      "plan_hash_matches": true,
+      "part_sha256": "14a4a302261fb1e5bf2edd2bc8b0a9653c75f2ef14957f63f5d103875fd7a6af",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1266,
+          "sha256": "14a4a302261fb1e5bf2edd2bc8b0a9653c75f2ef14957f63f5d103875fd7a6af",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "b3-domain.json",
+      "backlinks": []
+    },
+    {
+      "source_id": "S06",
+      "path": "docs/archive/moves/batches/b4-render-track.json",
+      "start": 0,
+      "end": 1520,
+      "kind": "text",
+      "sha256": "b68f7723f267a12451f611c986835d6102fba6d54891c2a025fbce317b09f981",
+      "whole_file_bytes": 1520,
+      "observed_whole_file_sha256": "b68f7723f267a12451f611c986835d6102fba6d54891c2a025fbce317b09f981",
+      "plan_hash_matches": true,
+      "part_sha256": "b68f7723f267a12451f611c986835d6102fba6d54891c2a025fbce317b09f981",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1520,
+          "sha256": "b68f7723f267a12451f611c986835d6102fba6d54891c2a025fbce317b09f981",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "b4-render-track.json",
+      "backlinks": []
+    },
+    {
+      "source_id": "S07",
+      "path": "docs/archive/moves/phase2.json",
+      "start": 0,
+      "end": 4749,
+      "kind": "text",
+      "sha256": "8c638ad9d6b33f6cbd1209fcb05c07b141438aa8e691e8721899538c788acfa5",
+      "whole_file_bytes": 4749,
+      "observed_whole_file_sha256": "8c638ad9d6b33f6cbd1209fcb05c07b141438aa8e691e8721899538c788acfa5",
+      "plan_hash_matches": true,
+      "part_sha256": "8c638ad9d6b33f6cbd1209fcb05c07b141438aa8e691e8721899538c788acfa5",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4749,
+          "sha256": "8c638ad9d6b33f6cbd1209fcb05c07b141438aa8e691e8721899538c788acfa5",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "phase2.json",
+      "backlinks": [
+        "./tools/gen/move-tree.mjs:46:// entries AND corrupted phase2.json's not-yet-applied entries for paths a",
+        "./tools/gen/move-tree.mjs:48:// entries in both b1-foundation.json and phase2.json flipped to identity).",
+        "./docs/research/TREE-RESTRUCTURE-2026-09.md:333:      `docs/archive/moves/phase2.json` maps 91 files for 2b.",
+        "./docs/research/TREE-RESTRUCTURE-2026-09.md:338:      files into 16 domain directories; `docs/archive/moves/phase2.json` + the four"
+      ]
+    },
+    {
+      "source_id": "S08",
+      "path": "docs/archive/moves/phase4-tools-a.json",
+      "start": 0,
+      "end": 3622,
+      "kind": "text",
+      "sha256": "222786cac7d4afb3106720b57f8bd641727613855fc0fd04a55cda75848da58d",
+      "whole_file_bytes": 3622,
+      "observed_whole_file_sha256": "222786cac7d4afb3106720b57f8bd641727613855fc0fd04a55cda75848da58d",
+      "plan_hash_matches": true,
+      "part_sha256": "222786cac7d4afb3106720b57f8bd641727613855fc0fd04a55cda75848da58d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3622,
+          "sha256": "222786cac7d4afb3106720b57f8bd641727613855fc0fd04a55cda75848da58d",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "phase4-tools-a.json",
+      "backlinks": []
+    },
+    {
+      "source_id": "S09",
+      "path": "docs/archive/moves/phase4-tools-b.json",
+      "start": 0,
+      "end": 3271,
+      "kind": "text",
+      "sha256": "5813c71228e456f7d1396b4f55402b7a531dc14207a2dd673751821ba53fd199",
+      "whole_file_bytes": 3271,
+      "observed_whole_file_sha256": "5813c71228e456f7d1396b4f55402b7a531dc14207a2dd673751821ba53fd199",
+      "plan_hash_matches": true,
+      "part_sha256": "5813c71228e456f7d1396b4f55402b7a531dc14207a2dd673751821ba53fd199",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3271,
+          "sha256": "5813c71228e456f7d1396b4f55402b7a531dc14207a2dd673751821ba53fd199",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "phase4-tools-b.json",
+      "backlinks": []
+    },
+    {
+      "source_id": "S10",
+      "path": "docs/archive/moves/phase4-tools-c.json",
+      "start": 0,
+      "end": 2922,
+      "kind": "text",
+      "sha256": "06f7343c23c1e1378e1846741c80b4dc12b824d1a0ceb7602dc9a8691159ecec",
+      "whole_file_bytes": 2922,
+      "observed_whole_file_sha256": "06f7343c23c1e1378e1846741c80b4dc12b824d1a0ceb7602dc9a8691159ecec",
+      "plan_hash_matches": true,
+      "part_sha256": "06f7343c23c1e1378e1846741c80b4dc12b824d1a0ceb7602dc9a8691159ecec",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2922,
+          "sha256": "06f7343c23c1e1378e1846741c80b4dc12b824d1a0ceb7602dc9a8691159ecec",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "phase4-tools-c.json",
+      "backlinks": []
+    },
+    {
+      "source_id": "S11",
+      "path": "docs/archive/moves/phase4-tools.json",
+      "start": 0,
+      "end": 10058,
+      "kind": "text",
+      "sha256": "d1a75033d5513f4c7de9f1181444adc7793d80bc40c4d964f2a6d2120db487fa",
+      "whole_file_bytes": 10058,
+      "observed_whole_file_sha256": "d1a75033d5513f4c7de9f1181444adc7793d80bc40c4d964f2a6d2120db487fa",
+      "plan_hash_matches": true,
+      "part_sha256": "d1a75033d5513f4c7de9f1181444adc7793d80bc40c4d964f2a6d2120db487fa",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "60bcb1bb051a8fd93c3514ff1e0bb7a6555f18a3565656a22295e43ecb3f411a",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 8500,
+          "end": 10058,
+          "sha256": "c7ae24b28a2ef989dff004adecdabd61d05203360ac6530abbb905da2f077d9d",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "phase4-tools.json",
+      "backlinks": [
+        "./docs/research/TREE-RESTRUCTURE-2026-09.md:386:      `claude/p4-tools` off 9486be6 (writes its own `docs/archive/moves/phase4-tools.json`,"
+      ]
+    },
+    {
+      "source_id": "S12",
+      "path": "docs/archive/moves/spike-backends.json",
+      "start": 0,
+      "end": 4130,
+      "kind": "text",
+      "sha256": "75474542a554102fa68f8a14cd1f28e312563cad3f2911c25a04088f595232d0",
+      "whole_file_bytes": 4130,
+      "observed_whole_file_sha256": "75474542a554102fa68f8a14cd1f28e312563cad3f2911c25a04088f595232d0",
+      "plan_hash_matches": true,
+      "part_sha256": "75474542a554102fa68f8a14cd1f28e312563cad3f2911c25a04088f595232d0",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4130,
+          "sha256": "75474542a554102fa68f8a14cd1f28e312563cad3f2911c25a04088f595232d0",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "spike-backends.json",
+      "backlinks": [
+        "./vendor/three-0.186.1/PATCHES.md:34:   harness, `docs/archive/moves/spike-backends.json`, the tests and docs all name the",
+        "./docs/research/TREE-RESTRUCTURE-2026-09.md:363:      is archived at `docs/archive/moves/spike-backends.json`.",
+        "./docs/notes/SPIKE-BACKENDS-CHECKLIST.md:9:`docs/archive/moves/spike-backends.json`; its original dry run reported 0 errors,",
+        "./docs/notes/SPIKE-BACKENDS-CHECKLIST.md:76:`docs/archive/moves/spike-backends.json` \u2014 50 files, 7.69 MB, targets under",
+        "./docs/NOTES-INDEX.md:167:| [research/RENDERER-PERF-AUDIT-2026-09-02.md](research/RENDERER-PERF-AUDIT-2026-09-02.md) | Three read-only renderer perf audits (GLX / WGX / TLX), ranked findings with proposed patches; landed items marked; the temporary WGX/TLX spike-out was later reversed. | `spike/backends/README.md`, `docs/archive/moves/spike-backends.json` |",
+        "./spike/backends/README.md:8:record at [`docs/archive/moves/spike-backends.json`](../../docs/archive/moves/spike-backends.json)."
+      ]
+    },
+    {
+      "source_id": "S13",
+      "path": "docs/archive/notes/AGENT-HISTORY-2026-10-26.md",
+      "start": 0,
+      "end": 16426,
+      "kind": "text",
+      "sha256": "84a3fc43404b79b34f146ff7769721bdf826c75b099f6b89fb0f78438cf8e2fd",
+      "whole_file_bytes": 16426,
+      "observed_whole_file_sha256": "84a3fc43404b79b34f146ff7769721bdf826c75b099f6b89fb0f78438cf8e2fd",
+      "plan_hash_matches": true,
+      "part_sha256": "84a3fc43404b79b34f146ff7769721bdf826c75b099f6b89fb0f78438cf8e2fd",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "4ba7f7017c507f6e5618c539b9256deab35554d04641169cb48563e4ff02a13d",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 8500,
+          "end": 16426,
+          "sha256": "7d1c140dfb5de97e08e73107b61712e2bd1d4b4586b2298ff2632db6e6edcff7",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "AGENT-HISTORY-2026-10-26.md",
+      "backlinks": [
+        "./docs/NOTES-INDEX.md:88:| [archive/notes/AGENT-HISTORY-2026-10-26.md](archive/notes/AGENT-HISTORY-2026-10-26.md) | One importer and digester for every agent the fleet runs (Claude, Codex/ChatGPT, Grok, Cursor session exports) via `agent-history.mjs` (retired 2026-10-27). |",
+        "./docs/notes/system-audit-3/agents-hooks.md:13:| H3 | `mcp__Google_Drive` is allowed server-wide, so `share_file`, `trash_file` and `update_file` run with no prompt in default mode; no lane writes to Drive | settings.json allow (added in #3027, 3c1ec1e3f, 2026-10-19); the only repo use is `download_file_content` (AGENT-HISTORY-2026-10-26.md:136). Five opaque `mcp__<uuid>` servers are also allowed wholesale | one prompt-free share of a private file to anyone | allow only `mcp__Google_Drive__{search_files,read_file_content,download_file_content,get_file_metadata}`; deny share_file and trash_file | high | NEW |"
+      ]
+    },
+    {
+      "source_id": "S14",
+      "path": "docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md",
+      "start": 0,
+      "end": 55857,
+      "kind": "text",
+      "sha256": "f8b02e2e31e9a4bbb74d8700e80a5fc2adb08692baf115a55b7a69ea1613a333",
+      "whole_file_bytes": 55857,
+      "observed_whole_file_sha256": "f8b02e2e31e9a4bbb74d8700e80a5fc2adb08692baf115a55b7a69ea1613a333",
+      "plan_hash_matches": true,
+      "part_sha256": "f8b02e2e31e9a4bbb74d8700e80a5fc2adb08692baf115a55b7a69ea1613a333",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "a165b8b634552b3ce7446c2e63539d96ea3d7fae78b439edeeb278811e10a436",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "sha256": "40aec682a9e501cfd935219a350b8cd93fa6485ea26df14e3ea4eee0f08cac0d",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "sha256": "89ed379ef4b34557e473531d2e69b43da9be25fc46d597128ced0c4f5cb7b543",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "sha256": "f157b0c771289338eb86afe95196b1946062a9d6812de44a54f7f4eb68d44680",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 34000,
+          "end": 42500,
+          "sha256": "0bab69bbb73e49ce3969023a9d387b1be77b8646d5fbbd736d505603ceb515df",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 42500,
+          "end": 51000,
+          "sha256": "c3cb8884f7fc9c384e24ab236eb60ea18c3cee4c09f993948cb6fd53b7ff6294",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 51000,
+          "end": 55857,
+          "sha256": "6a4c7b1db90e74842c1aadc7752f1c7637327b9ba1ee0b2f45b19c51a6ffca9f",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "AGENT-TOOLING-RESEARCH-2026-09-22.md",
+      "backlinks": [
+        "./tests/unit/agent-surface.test.mjs:321:  // \"additive\"; docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md \u00a7Withdrawn.",
+        "./docs/NOTES-INDEX.md:74:| [archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md](archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md) | Fourth pass, as research: the agent surface (AGENTS.md, skills, subagents, hooks, MCP, CI, branching) checked against the 2026 guidance by nine web-research subagents and four repo reviewers \u2014 what already matches, the three branching models for a shared deploy branch, the ranked gap list, and \u00a76: what landed the same day (hook holes closed, agent tiers, `ci-red-triage`, two new hooks, `who-is-on-it`), what was withdrawn on evidence, and the settings file (deny list, allowlist, `worktree.baseRef`, the new hook rows) that landed with auto mode off. |",
+        "./docs/plans/2026-09-30-agent-skills-and-tools.md:146:From `AGENT-TOOLING-RESEARCH-2026-09-22.md` \u00a75\u2013\u00a76: hook holes, ci-red-triage, flake policy, who-is-on-it claims, description rewrites \u2014 **landed**. Still relevant to this plan's theme:",
+        "./docs/notes/AGENT-SURFACE-SURVEY-2026-10-05.md:3:Fifth pass over the agent surface (after `AGENT-TOOLING-RESEARCH-2026-09-22.md`,",
+        "./docs/notes/orchestration-redesign-2026-10-27/platform.md:6:`docs/archive/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md`, `docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md`.",
+        "./docs/notes/SELF-IMPROVING-SURFACE-2026-09-22.md:3:Companion to [`AGENT-TOOLING-RESEARCH-2026-09-22.md`](../archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md),"
+      ]
+    },
+    {
+      "source_id": "S15",
+      "path": "docs/archive/notes/AGENT-TOOLS-REVIEW-2026-10-17.md",
+      "start": 0,
+      "end": 12380,
+      "kind": "text",
+      "sha256": "75de3ec182f11e1c3225d72101ce5cd214001bb7ca10aadcd968b73aadf3b191",
+      "whole_file_bytes": 12380,
+      "observed_whole_file_sha256": "75de3ec182f11e1c3225d72101ce5cd214001bb7ca10aadcd968b73aadf3b191",
+      "plan_hash_matches": true,
+      "part_sha256": "75de3ec182f11e1c3225d72101ce5cd214001bb7ca10aadcd968b73aadf3b191",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "6e338083f8aa9d5e237910ecc368095c43fdfbc7d63f4c42076ccb64def7bc19",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 8500,
+          "end": 12380,
+          "sha256": "a154f3a47a96ed6c8028c4bf7c97dda80328fd50b8a879eadf17f5237f9ce815",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "AGENT-TOOLS-REVIEW-2026-10-17.md",
+      "backlinks": []
+    },
+    {
+      "source_id": "S16",
+      "path": "docs/archive/notes/AGENT-WORK-TRACKING-2026-10-14.md",
+      "start": 0,
+      "end": 22801,
+      "kind": "text",
+      "sha256": "9c0c30723d968d99787e6df60be4dd07c4911e0c85b31e091be034dca29a3cf4",
+      "whole_file_bytes": 22801,
+      "observed_whole_file_sha256": "9c0c30723d968d99787e6df60be4dd07c4911e0c85b31e091be034dca29a3cf4",
+      "plan_hash_matches": true,
+      "part_sha256": "9c0c30723d968d99787e6df60be4dd07c4911e0c85b31e091be034dca29a3cf4",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "4ca88d21d85cf3095390539ceb36712f31351bc16f4b1fed69a902469077600f",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "sha256": "89ec74ba1ec874343ece7d121c8c9ef1ae53b3fc6ca0979e7f646c3daeaa1512",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 17000,
+          "end": 22801,
+          "sha256": "97328d773656fe67d94b3e42710f5bf0f1bc8b843e7bb1b3fbb3423c77114b64",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "AGENT-WORK-TRACKING-2026-10-14.md",
+      "backlinks": [
+        "./docs/notes/SECOND-BRAIN-2026-10-14.md:3:Research behind the knowledge guards in `tests/unit/agent-config.test.mjs` (hidden-Unicode, memory `source:`) and `tests/unit/docs-integrity.test.mjs` (`Supersedes:` pairs). Three parallel web passes (Obsidian for agents, memory tools, knowledge practice) plus `AGENT-MEMORY.md`; the backlog half is `AGENT-WORK-TRACKING-2026-10-14.md` (PR #1519). Sources inline; nothing below was measured on this box except the repo facts named.",
+        "./docs/notes/BASE-CONTEXT-AUDIT-2026-10-19.md:28:- AGENTS.md `### Backlog` (760 B) \u2192 two-line pointer to `docs/archive/notes/AGENT-WORK-TRACKING-2026-10-14.md`: \u2212513 B, \u22123 lines.",
+        "./docs/NOTES-INDEX.md:26:| [archive/notes/AGENT-WORK-TRACKING-2026-10-14.md](archive/notes/AGENT-WORK-TRACKING-2026-10-14.md) | Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md \u00a7Backlog. |"
+      ]
+    },
+    {
+      "source_id": "S17",
+      "path": "docs/archive/notes/AGENT-WORKFLOW-EXPERIMENTS-2026-10-19.md",
+      "start": 0,
+      "end": 8513,
+      "kind": "text",
+      "sha256": "108d3e181af3c76b04f7de963a852a48a674b8d895ec146ed8377ee13f9fe65d",
+      "whole_file_bytes": 8513,
+      "observed_whole_file_sha256": "108d3e181af3c76b04f7de963a852a48a674b8d895ec146ed8377ee13f9fe65d",
+      "plan_hash_matches": true,
+      "part_sha256": "108d3e181af3c76b04f7de963a852a48a674b8d895ec146ed8377ee13f9fe65d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "c946251ce62c7632a8e133bdb8cd311b5245dd07c2a373bd9951a95e1a37d561",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        },
+        {
+          "start": 8500,
+          "end": 8513,
+          "sha256": "fca81c9aae0b38019080930ba58b240bf29418e28ca42f24cbb65cfb03757f04",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "AGENT-WORKFLOW-EXPERIMENTS-2026-10-19.md",
+      "backlinks": []
+    },
+    {
+      "source_id": "S18",
+      "path": "docs/archive/notes/AI-PASS-COMPLETE-LONGEST-EPISODE-2026-10-16.md",
+      "start": 0,
+      "end": 2062,
+      "kind": "text",
+      "sha256": "10dba84ea74fdd1305b5e052a585dbabc5151e6366547942095e18f3d43c0884",
+      "whole_file_bytes": 2062,
+      "observed_whole_file_sha256": "10dba84ea74fdd1305b5e052a585dbabc5151e6366547942095e18f3d43c0884",
+      "plan_hash_matches": true,
+      "part_sha256": "10dba84ea74fdd1305b5e052a585dbabc5151e6366547942095e18f3d43c0884",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2062,
+          "sha256": "10dba84ea74fdd1305b5e052a585dbabc5151e6366547942095e18f3d43c0884",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "AI-PASS-COMPLETE-LONGEST-EPISODE-2026-10-16.md",
+      "backlinks": [
+        "./docs/notes/AI-PASS-COMPLETION-TRAIL-YIELD-2026-10-19.md:4:`AI-PASS-COMPLETION-2026-10-19.md` and `AI-PASS-COMPLETE-LONGEST-EPISODE-2026-10-16.md`."
+      ]
+    },
+    {
+      "source_id": "S19",
+      "path": "docs/archive/notes/AI-PASS-COMPLETION-2026-10-19.md",
+      "start": 0,
+      "end": 3089,
+      "kind": "text",
+      "sha256": "a45ee9156e81a9ffb42958411187b348885624c13219a25841b933e0e022c20a",
+      "whole_file_bytes": 3089,
+      "observed_whole_file_sha256": "a45ee9156e81a9ffb42958411187b348885624c13219a25841b933e0e022c20a",
+      "plan_hash_matches": true,
+      "part_sha256": "a45ee9156e81a9ffb42958411187b348885624c13219a25841b933e0e022c20a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3089,
+          "sha256": "a45ee9156e81a9ffb42958411187b348885624c13219a25841b933e0e022c20a",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "AI-PASS-COMPLETION-2026-10-19.md",
+      "backlinks": [
+        "./docs/notes/AI-PASS-COMPLETION-TRAIL-YIELD-2026-10-19.md:4:`AI-PASS-COMPLETION-2026-10-19.md` and `AI-PASS-COMPLETE-LONGEST-EPISODE-2026-10-16.md`."
+      ]
+    },
+    {
+      "source_id": "S20",
+      "path": "docs/archive/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md",
+      "start": 0,
+      "end": 136,
+      "kind": "text",
+      "sha256": "f21b6802d3c1fff7bbea0fc8c0f023cdf833d8f957ec923fb1cab8d45d88c37d",
+      "whole_file_bytes": 3680,
+      "observed_whole_file_sha256": "f21b6802d3c1fff7bbea0fc8c0f023cdf833d8f957ec923fb1cab8d45d88c37d",
+      "plan_hash_matches": true,
+      "part_sha256": "53ff42e982f235763bc65068836a775627d476e3f8b73be57a4e1776d2c24288",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 136,
+          "sha256": "53ff42e982f235763bc65068836a775627d476e3f8b73be57a4e1776d2c24288",
+          "read_method": "individual exec_command output; max 8500 source bytes"
+        }
+      ],
+      "backlinks_query": "ASSET-WEIGHT-AUDIT-2026-10-18.md",
+      "backlinks": [
+        "./docs/notes/ASSET-COMPRESSION-2026-10-24.md:7:updates `docs/archive/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md`. Two of that audit's"
+      ]
+    }
+  ],
+  "limitations": [
+    "Historical measurements are source-reported, not re-run.",
+    "Backlink search excludes archive and project-map and uses basename except generic README, which uses exact path. No match is not proof of no consumer.",
+    "No tests, browser, network, runtime edits, staging or commits."
+  ]
+}

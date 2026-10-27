@@ -1,0 +1,392 @@
+{
+  "group": "01",
+  "mapped_on": "2026-10-27",
+  "assigned_bytes": 160000,
+  "read_bytes": 160000,
+  "range_convention": "half-open byte offsets; plan sha256 is whole-file, part/chunk hashes are distinct",
+  "authority": "historical content is provenance, never operational instructions",
+  "sources": [
+    {
+      "id": "S01",
+      "path": "docs/archive/2026-08-architecture-review-journal.md",
+      "start": 0,
+      "end": 74486,
+      "kind": "text",
+      "sha256": "7781e0da4f324eb3e0a296f9912e0dad28a34f0ff2581b992678bf8b80334b35",
+      "file_bytes": 74486,
+      "whole_file_sha256": "7781e0da4f324eb3e0a296f9912e0dad28a34f0ff2581b992678bf8b80334b35",
+      "plan_hash_matches": true,
+      "part_sha256": "7781e0da4f324eb3e0a296f9912e0dad28a34f0ff2581b992678bf8b80334b35",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "77ce63e6c5dd28ee24d9c8dff5d9d007e61c7557927ee0841cfb8f06c6dfe84a",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "27155189c5ab67787c4daef0a9a9a01f3e9341915f0d3241c8a2b789fb3d5af6",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "94826c541592996599d119175b37a281ed1844a6244c3d44b90a729fd34a2349",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "bytes": 8000,
+          "sha256": "6930b188b03ca6f239e809f358691941b6501c150898f8cf7be3ceb2e3ec9f65",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 32000,
+          "end": 40000,
+          "bytes": 8000,
+          "sha256": "2dc8b26ad9b3ca9d0ed7d860e672417b63dedd85401fbb366239b162d99c535f",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 40000,
+          "end": 48000,
+          "bytes": 8000,
+          "sha256": "af61a3ef08ece43e9787cec0e3e5d85658c4bfbfb6d8d36570fd942f6e844d4d",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 48000,
+          "end": 56000,
+          "bytes": 8000,
+          "sha256": "960b802d906c870b8cec861df40854377cc1c1abd625b602dcfd0b767d99653e",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 56000,
+          "end": 64000,
+          "bytes": 8000,
+          "sha256": "12084f60a0872c407aabf7c5b7f3909cb078b86616e7d3669b4d991b540fc4de",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 64000,
+          "end": 72000,
+          "bytes": 8000,
+          "sha256": "ac19dfd82775f3721bd7c290bc226adf581d4082a348fda616300e98d15a2af7",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 72000,
+          "end": 74486,
+          "bytes": 2486,
+          "sha256": "a95726352e49dcd1c1cc4414e984645ae00418ab72041c1bf2b247336405a1ea",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        }
+      ]
+    },
+    {
+      "id": "S02",
+      "path": "docs/archive/2026-08-repo-audit.md",
+      "start": 0,
+      "end": 24771,
+      "kind": "text",
+      "sha256": "1abb16f60e5d3d28264142899ce458473c1badc75b554924601b93a549147c8a",
+      "file_bytes": 24771,
+      "whole_file_sha256": "1abb16f60e5d3d28264142899ce458473c1badc75b554924601b93a549147c8a",
+      "plan_hash_matches": true,
+      "part_sha256": "1abb16f60e5d3d28264142899ce458473c1badc75b554924601b93a549147c8a",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "2613a5c9d29c20ab23c8f14d702b7373d1fbf232286f37bb52f947282f4b6bbd",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "279b02d59aa545b6eb8fec7bf8b03705ecb56a8a01e8977dce6e209122150deb",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "ff5501280b63d1bb8a4764c4fcfec41c0960ce1b149f8a07d8944909e615a20a",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 24000,
+          "end": 24771,
+          "bytes": 771,
+          "sha256": "468f79661fd97ee4447ab67045edf7cbd3bebac1bd6c30a5b0d2ff056207499c",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        }
+      ]
+    },
+    {
+      "id": "S03",
+      "path": "docs/archive/ATTIC.md",
+      "start": 0,
+      "end": 10320,
+      "kind": "text",
+      "sha256": "a0c20c59534a3cd12a77804163429c68237c3073358fbd460567491fe9d16959",
+      "file_bytes": 10320,
+      "whole_file_sha256": "a0c20c59534a3cd12a77804163429c68237c3073358fbd460567491fe9d16959",
+      "plan_hash_matches": true,
+      "part_sha256": "a0c20c59534a3cd12a77804163429c68237c3073358fbd460567491fe9d16959",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "b68dc82e805368fb0b6fa802fb0ace8bd922ccf93ca03a2fd858ee1172756b17",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 8000,
+          "end": 10320,
+          "bytes": 2320,
+          "sha256": "ff671085ec9a4f9b41527998f4d9bbb5173d9519cd5236d8e016c0860284e1e1",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        }
+      ]
+    },
+    {
+      "id": "S04",
+      "path": "docs/archive/SCENERY-UPGRADE-PLAN.md",
+      "start": 0,
+      "end": 22134,
+      "kind": "text",
+      "sha256": "8fc239fe5928d2e044eed00015a551866769663cb32ade720e561d183726b8db",
+      "file_bytes": 22134,
+      "whole_file_sha256": "8fc239fe5928d2e044eed00015a551866769663cb32ade720e561d183726b8db",
+      "plan_hash_matches": true,
+      "part_sha256": "8fc239fe5928d2e044eed00015a551866769663cb32ade720e561d183726b8db",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "7d0e3cde0ce59606f0a01ab985d72d22d3c9e0928c88d8988d00bf7858a0e665",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "75c452c176e5ef0bcccbd141bacfae36d0b45cf399fee6ab9f3517a4a1ed238e",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 16000,
+          "end": 22134,
+          "bytes": 6134,
+          "sha256": "6e427a96ecedcd79062fe5c38a651eb49b517a2fd351445a4cd20f70cf8a36f1",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        }
+      ]
+    },
+    {
+      "id": "S05",
+      "path": "docs/archive/manual-probes/act-probe.spec.js",
+      "start": 0,
+      "end": 11332,
+      "kind": "text",
+      "sha256": "638f71fa871841a96a8285afbd41a77b78005ca9854be034d725d94e4db20e9f",
+      "file_bytes": 11332,
+      "whole_file_sha256": "638f71fa871841a96a8285afbd41a77b78005ca9854be034d725d94e4db20e9f",
+      "plan_hash_matches": true,
+      "part_sha256": "638f71fa871841a96a8285afbd41a77b78005ca9854be034d725d94e4db20e9f",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "51ef011d7550f0a5d9fba8a88105ef8c21118401a1639fb584a784f6fe19e23f",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 8000,
+          "end": 11332,
+          "bytes": 3332,
+          "sha256": "1455a5c75bbe7ad5fae6147a269a52b8f11e69aef553a01db29176b0ffc85ddb",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        }
+      ]
+    },
+    {
+      "id": "S06",
+      "path": "docs/archive/manual-probes/banking-probe.spec.js",
+      "start": 0,
+      "end": 3844,
+      "kind": "text",
+      "sha256": "5b698089af01f47f6f6783cde644513c813d17dda5db659630add2438de772d6",
+      "file_bytes": 3844,
+      "whole_file_sha256": "5b698089af01f47f6f6783cde644513c813d17dda5db659630add2438de772d6",
+      "plan_hash_matches": true,
+      "part_sha256": "5b698089af01f47f6f6783cde644513c813d17dda5db659630add2438de772d6",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3844,
+          "bytes": 3844,
+          "sha256": "5b698089af01f47f6f6783cde644513c813d17dda5db659630add2438de772d6",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        }
+      ]
+    },
+    {
+      "id": "S07",
+      "path": "docs/archive/manual-probes/skid-probe.spec.js",
+      "start": 0,
+      "end": 8874,
+      "kind": "text",
+      "sha256": "1c63dc0cf0124ee07bc4b4bef6fe3ca38a298ac0c18166a9ffc23f3a8ad1f000",
+      "file_bytes": 8874,
+      "whole_file_sha256": "1c63dc0cf0124ee07bc4b4bef6fe3ca38a298ac0c18166a9ffc23f3a8ad1f000",
+      "plan_hash_matches": true,
+      "part_sha256": "1c63dc0cf0124ee07bc4b4bef6fe3ca38a298ac0c18166a9ffc23f3a8ad1f000",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "ea3c38354095c991772eef15a392b33679c2c058fbf65ab50dc9842b08071502",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        },
+        {
+          "start": 8000,
+          "end": 8874,
+          "bytes": 874,
+          "sha256": "08e7538aad2668a0af428fb8db09a8cc4286c8e7e06a421d6f09e70983113ace",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        }
+      ]
+    },
+    {
+      "id": "S08",
+      "path": "docs/archive/manual-probes/throttle-rescue-probe.spec.js",
+      "start": 0,
+      "end": 4239,
+      "kind": "text",
+      "sha256": "6961a41f09c23f183489887e0a12f5e16247f8a894af3e8b7b4b1295957032fe",
+      "file_bytes": 8613,
+      "whole_file_sha256": "6961a41f09c23f183489887e0a12f5e16247f8a894af3e8b7b4b1295957032fe",
+      "plan_hash_matches": true,
+      "part_sha256": "7d5f21da074fcf7855a34df836a843a11c54116c200179a9d691dd34523e6b83",
+      "complete_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4239,
+          "bytes": 4239,
+          "sha256": "7d5f21da074fcf7855a34df836a843a11c54116c200179a9d691dd34523e6b83",
+          "read": "individually returned untruncated exec_command output; <=8000 bytes"
+        }
+      ]
+    }
+  ],
+  "current_backlinks": [
+    {
+      "source": "S01",
+      "from": "docs/notes/DEFECT-LEDGER.md",
+      "line": 7
+    },
+    {
+      "source": "S01",
+      "from": "docs/NOTES-INDEX.md",
+      "line": 202
+    },
+    {
+      "source": "S02",
+      "from": "docs/NOTES-INDEX.md",
+      "line": 201
+    },
+    {
+      "source": "S03",
+      "from": "docs/NOTES-INDEX.md",
+      "line": 189
+    },
+    {
+      "source": "S03",
+      "from": "docs/research/WEBGPU-PARITY.md",
+      "line": 102
+    },
+    {
+      "source": "S04",
+      "from": "docs/NOTES-INDEX.md",
+      "line": 203
+    },
+    {
+      "source": "S04",
+      "from": "js/circuits/scenery/hungaroring.js",
+      "line": 665
+    },
+    {
+      "source": "S04",
+      "from": "docs/research/ASSET-API-RESEARCH.md",
+      "lines": [
+        314,
+        528
+      ]
+    },
+    {
+      "source": "S07",
+      "from": "tests/specs/tlx-probes.spec.js",
+      "lines": [
+        59,
+        365
+      ]
+    },
+    {
+      "source": "S05",
+      "from": "tests/unit/docs-integrity.test.mjs",
+      "line": 321,
+      "kind": "basename historical mention"
+    }
+  ],
+  "current_context_read": [
+    {
+      "path": "AGENTS.md",
+      "scope": "whole file"
+    },
+    {
+      "path": "docs/ARCHITECTURE-REVIEW.md",
+      "scope": "whole stub"
+    },
+    {
+      "path": "docs/notes/DEFECT-LEDGER.md",
+      "scope": "lines 1-22"
+    },
+    {
+      "path": "docs/NOTES-INDEX.md",
+      "scope": "lines 180-208"
+    },
+    {
+      "path": "docs/TESTING.md",
+      "scope": "lines 250-310 plus keyword results"
+    },
+    {
+      "path": "tests/specs/tlx-probes.spec.js",
+      "scope": "lines 45-72 and 350-375"
+    }
+  ],
+  "search_scope": "rg in working tree excluding docs/archive and docs/project-map; literal source basenames; absence is limited to that search",
+  "cleanup": "No deletion authorized or justified; S01/S02 overlapping registers retain distinct corrections, S03 is recovery ledger, S04 and S07 have live consumers, remaining probes are indexed as resolved diagnostic patterns. No current runtime dead-code finding asserted."
+}
