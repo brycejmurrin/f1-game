@@ -76,11 +76,13 @@ test("gameMergesBehind counts game merges between the tip and the merge-base; no
   assert.equal(gameMergesBehind(HISTORY, "none").count, 4);
 });
 
-test("distanceVerdict: at most N game merges behind (default 2); an off-line merge-base counts everything walked", () => {
-  assert.equal(MAX_BEHIND, 2);
-  assert.equal(distanceVerdict(HISTORY, sha(3)).ok, true);
-  assert.equal(distanceVerdict(HISTORY, sha(5)).ok, true, "exactly N passes");
-  const over = distanceVerdict(HISTORY, sha(6));
+test("distanceVerdict: at most N game merges behind (default 6); an off-line merge-base counts everything walked", () => {
+  assert.equal(MAX_BEHIND, 6);
+  assert.equal(distanceVerdict(HISTORY, sha(6)).ok, true, "3 behind passes the default");
+  assert.ok(distanceVerdict(HISTORY, sha(6)).evidence.includes("(max 6)"));
+  assert.equal(distanceVerdict(HISTORY, sha(3), 2).ok, true);
+  assert.equal(distanceVerdict(HISTORY, sha(5), 2).ok, true, "exactly N passes");
+  const over = distanceVerdict(HISTORY, sha(6), 2);
   assert.equal(over.ok, false);
   assert.ok(over.evidence.includes("3 game merge(s)") && over.evidence.includes("sync-pr"), over.evidence);
   assert.equal(distanceVerdict(HISTORY, sha(6), 3).ok, true, "--max-behind 3");
