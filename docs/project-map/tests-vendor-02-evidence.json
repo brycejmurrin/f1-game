@@ -1,0 +1,280 @@
+{
+  "group": "02",
+  "source": "tests/vendor/iwer-2.5.0.min.js",
+  "offset_contract": "zero-based byte offsets, end exclusive",
+  "source_bytes": 263643,
+  "plan_sha256_scope": "whole source file, not assigned part",
+  "plan_sha256": "23d8640949f19db4b1e70398b30e084e4aa555f3a81e4329da3fac1a70b39542",
+  "observed_source_sha256": "23d8640949f19db4b1e70398b30e084e4aa555f3a81e4329da3fac1a70b39542",
+  "part": {
+    "start": 160000,
+    "end": 263643,
+    "bytes": 103643,
+    "sha256": "984d51bbca4a2b3c2e712ac546d64aa216a0d913d4ec1828d15d9a34236a2f8f",
+    "fully_read": true
+  },
+  "chunks": [
+    {
+      "start": 160000,
+      "end": 168000,
+      "bytes": 8000,
+      "sha256": "4345327114159eaab6ac1b617dcdd2640f6c86cf8ff06f42a2c321dbf5d3273f",
+      "tool_chunk_id": "7fe9ba",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 168000,
+      "end": 176000,
+      "bytes": 8000,
+      "sha256": "8452737c8a69fc07db2d471d5097c714454f021c4f5737b104c4701b212d0a50",
+      "tool_chunk_id": "6b582c",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 176000,
+      "end": 184000,
+      "bytes": 8000,
+      "sha256": "777679faff22d92d32b22de160f056ac8779100e59432d85913b91d540f99918",
+      "tool_chunk_id": "aabd5c",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 184000,
+      "end": 192000,
+      "bytes": 8000,
+      "sha256": "c42480f162d4447b864016990fd6fed555d15cc19fd5a2e7a967a68f93475553",
+      "tool_chunk_id": "c71665",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 192000,
+      "end": 200000,
+      "bytes": 8000,
+      "sha256": "03cbbdae702d2c01c79d6d9cc9b7af7436f0e34381af12b16d2e275dac68a064",
+      "tool_chunk_id": "b5a307",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 200000,
+      "end": 208000,
+      "bytes": 8000,
+      "sha256": "a931490de99ccb9c08ef137c078d14c55282e9d205001ef2586366c06826dab9",
+      "tool_chunk_id": "0ca0df",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 208000,
+      "end": 216000,
+      "bytes": 8000,
+      "sha256": "6f31ad1cfac48310def050821f38ea51d7d5f126cba58efb3eb1599d7df62c86",
+      "tool_chunk_id": "c590c0",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 216000,
+      "end": 224000,
+      "bytes": 8000,
+      "sha256": "ffc6bd3d0b92b1681617dd18fc8696dab12bccc4753e78447178d18dc635f1df",
+      "tool_chunk_id": "637e41",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 224000,
+      "end": 232000,
+      "bytes": 8000,
+      "sha256": "9ea9075bd488f0fd33149f6e84d2ba36df80cb79baade6e8c96b6fd93db219eb",
+      "tool_chunk_id": "832572",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 232000,
+      "end": 240000,
+      "bytes": 8000,
+      "sha256": "774f94191b89cd3dbceb0d5246e5d67fc1bb5a105872cbab29315b75bfc528c5",
+      "tool_chunk_id": "544550",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 240000,
+      "end": 248000,
+      "bytes": 8000,
+      "sha256": "4b29fddd1672d32b84fe2ea5066761d5cec0027594b56799388f2ad9e13c9c83",
+      "tool_chunk_id": "7d4b3a",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 248000,
+      "end": 256000,
+      "bytes": 8000,
+      "sha256": "40bb4efb54f452bf77026c1c3f637ddf82d88c503ee9cfe65ccf1ea585438b99",
+      "tool_chunk_id": "933a76",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    },
+    {
+      "start": 256000,
+      "end": 263643,
+      "bytes": 7643,
+      "sha256": "0390c935562b27c7e72c609437735704a7f762fe25b4ddda5fb7e3e4d48b3bda",
+      "tool_chunk_id": "835646",
+      "returned_individually": true,
+      "truncated": false,
+      "read": true
+    }
+  ],
+  "coverage": {
+    "gap_bytes": 0,
+    "overlap_bytes": 0,
+    "firstpart_read_claimed": false,
+    "starts_mid_method": true,
+    "ending": "UMD factory close and trailing newlines"
+  },
+  "subsystems": [
+    {
+      "range": [
+        160000,
+        164103
+      ],
+      "symbols": [
+        "ur"
+      ],
+      "role": "partial cube texture tail; cube-map compositor shaders and renderer"
+    },
+    {
+      "range": [
+        164103,
+        176273
+      ],
+      "symbols": [
+        "dr",
+        "pr",
+        "fr",
+        "mr",
+        "vr"
+      ],
+      "role": "layers session mixin, subimages, binding factories, caches and polyfill injection"
+    },
+    {
+      "range": [
+        176273,
+        185875
+      ],
+      "symbols": [
+        "gr",
+        "wr",
+        "Sr",
+        "br",
+        "Tr",
+        "Rr",
+        "Er",
+        "Fr",
+        "Pr",
+        "Ar",
+        "Ir",
+        "Or",
+        "Dr",
+        "Lr",
+        "hs"
+      ],
+      "role": "defaults, controller/device profiles, reversible descriptor patches, native override support"
+    },
+    {
+      "range": [
+        185875,
+        243680
+      ],
+      "symbols": [
+        "us"
+      ],
+      "role": "XRNativeOverride full and gaze-only implementation"
+    },
+    {
+      "range": [
+        243680,
+        248131
+      ],
+      "symbols": [
+        "ActionRecorder",
+        "P_*",
+        "NativePlane",
+        "NativeMesh"
+      ],
+      "role": "recorder precision helpers, recorder and exports"
+    },
+    {
+      "range": [
+        248131,
+        263643
+      ],
+      "symbols": [
+        "XRDevice",
+        "metaQuest3",
+        "XRNativeOverride",
+        "installNativeOverride"
+      ],
+      "role": "device lifecycle, installation, canvas, views, controls, named export table"
+    }
+  ],
+  "support_reads": [
+    "AGENTS.md",
+    ".claude/skills/code-nav/SKILL.md",
+    "tests/vendor/README.md",
+    "tests/helpers/iwer-install.mjs",
+    "tests/specs/xr-plan.spec.js",
+    "tests/specs/vr-emulated.spec.js",
+    "tests/unit/xr-phase0.test.mjs:198-216,804-842",
+    "tests/unit/ci-gate-selection.test.mjs:365-390",
+    "playwright.config.js:278-302",
+    "package.json:95"
+  ],
+  "lsp": [
+    {
+      "tool": "lsp_outline",
+      "symbol": "XrSession",
+      "result": "js/xr/xr-session.js:18; 28 exports, 32 internals"
+    },
+    {
+      "tool": "lsp_definition",
+      "symbol": "XrSession.recenter",
+      "result": "js/xr/xr-session.js:335-360; standard XRRigidTransform passed to getOffsetReferenceSpace; tool reports module-file fallback and caller coverage unverified"
+    }
+  ],
+  "provenance": {
+    "version": "2.5.0",
+    "source": "node_modules/iwer/build/iwer.min.js after npm i iwer@2.5.0 (README assertion)",
+    "licenses": [
+      "MIT (IWER)",
+      "Apache-2.0 embedded layers/helpers (README assertion)"
+    ],
+    "network_verified": false
+  },
+  "limits": [
+    "Static source reading only; no vendor eval, tests, browser, network, source mutation, stage or commit.",
+    "Classes referenced before byte 160000 are dependencies, not fully read definitions in this group.",
+    "No physical headset, multiview, MSAA, foveation, WebGPU XR or timing validation.",
+    "No deletion recommended: used test dependency."
+  ]
+}

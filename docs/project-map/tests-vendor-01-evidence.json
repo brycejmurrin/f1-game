@@ -1,0 +1,1213 @@
+{
+  "schema": 1,
+  "group": "01",
+  "path": "tests/vendor/iwer-2.5.0.min.js",
+  "rangeConvention": "zero-based byte offsets, end exclusive",
+  "assignedRange": [
+    0,
+    160000
+  ],
+  "fullRead": true,
+  "wholeFile": {
+    "bytes": 263643,
+    "planSha256": "23d8640949f19db4b1e70398b30e084e4aa555f3a81e4329da3fac1a70b39542",
+    "actualSha256": "23d8640949f19db4b1e70398b30e084e4aa555f3a81e4329da3fac1a70b39542",
+    "planHashIsWholeFile": true
+  },
+  "part": {
+    "bytes": 160000,
+    "sha256": "063889f8020d46d2ad06b15f84c08334feb2cf7dbd292c4c56eaf39c8b40492a"
+  },
+  "chunks": [
+    {
+      "start": 0,
+      "end": 8000,
+      "bytes": 8000,
+      "sha256": "a61f3b65188ab290eaf1e7f48f7635f3a12d992bfc9d292599d21fa5bd790ed8",
+      "toolChunkId": "9957b2",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 8000,
+      "end": 16000,
+      "bytes": 8000,
+      "sha256": "6c94b884ce9cc3d83ce9aa446fb7d2c956a65eed47d409e0544bdcf10cf04c02",
+      "toolChunkId": "68353d",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 16000,
+      "end": 24000,
+      "bytes": 8000,
+      "sha256": "5929d4277f0016a14b98913c547b7d89a5f1ae92b74c1306321fa1552a1ad0f4",
+      "toolChunkId": "afeda8",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 24000,
+      "end": 32000,
+      "bytes": 8000,
+      "sha256": "184cef0b3878921f0fac62495a877b64b9ef810ed0b34a392f68cbf0e2397cdb",
+      "toolChunkId": "9d1d8c",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 32000,
+      "end": 40000,
+      "bytes": 8000,
+      "sha256": "e2242377580af9ea5e54a71348f7b36fdc675d613ba8ca15ad15a9878c34dea7",
+      "toolChunkId": "17630a",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 40000,
+      "end": 48000,
+      "bytes": 8000,
+      "sha256": "3e64796a4aed4cb22a1f97c813ad57f009b0615fe0cd528fd43fccce7f72456a",
+      "toolChunkId": "90e47b",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 48000,
+      "end": 56000,
+      "bytes": 8000,
+      "sha256": "58d730042b13cb23964215ccf5692a9ba5edbd770983016c3328e9798275fba9",
+      "toolChunkId": "906234",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 56000,
+      "end": 64000,
+      "bytes": 8000,
+      "sha256": "487cb5b2ffbb9a9d0c34470a7809b7b6483cf97fb85a96be819c8992ea4fc755",
+      "toolChunkId": "e80b36",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 64000,
+      "end": 72000,
+      "bytes": 8000,
+      "sha256": "1ca01f4c75b3eecde7dfeb34b049f1f26c49380727a9e2e8b4543d148e0ca937",
+      "toolChunkId": "ec4ea7",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 72000,
+      "end": 80000,
+      "bytes": 8000,
+      "sha256": "186708b5fd7cc239a62a30666f7dd2f13f5e39a4399c04a67c00fdb95e30dec5",
+      "toolChunkId": "f9027e",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 80000,
+      "end": 88000,
+      "bytes": 8000,
+      "sha256": "d84afa39c2b59a13af9647402a9ef46aca1a3b276d34d3ccb9db389627d497b9",
+      "toolChunkId": "c54982",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 88000,
+      "end": 96000,
+      "bytes": 8000,
+      "sha256": "3f074785d458ff82ed5c488d0ab2805327d66827f8a03cd6bc1a37d0995ac334",
+      "toolChunkId": "15eea5",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 96000,
+      "end": 104000,
+      "bytes": 8000,
+      "sha256": "74ae83912dc290131f3bb6d6d89a13e6498eda50093a92d1873c4cfd8e43cad1",
+      "toolChunkId": "52d50c",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 104000,
+      "end": 112000,
+      "bytes": 8000,
+      "sha256": "ae622286a306ce13681a18e867a92d879d3425662af044987ea685eb04b036e3",
+      "toolChunkId": "fd572b",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 112000,
+      "end": 120000,
+      "bytes": 8000,
+      "sha256": "d9516b5a66ec9e9d3cca1f1cb511b791821bbd487f669db4aff50d29dca97320",
+      "toolChunkId": "c48511",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 120000,
+      "end": 128000,
+      "bytes": 8000,
+      "sha256": "3108ed8523cc9121ccb90f67456e22b3032ada619bec4e51b1ae7843703b13ae",
+      "toolChunkId": "c8e135",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 128000,
+      "end": 136000,
+      "bytes": 8000,
+      "sha256": "011cfbdef64205403abc8454be4fe1a25ac71307c39f05db8868340308adaf1b",
+      "toolChunkId": "2d1741",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 136000,
+      "end": 144000,
+      "bytes": 8000,
+      "sha256": "9a90e808ef9ed6a803ac93fec40981344f2b8fb683dc80d11d04bdcc5af0df41",
+      "toolChunkId": "aac935",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 144000,
+      "end": 152000,
+      "bytes": 8000,
+      "sha256": "8c239997b2e91890c2a2879ecb0c368511178026127af67453d1b93523e2c22b",
+      "toolChunkId": "7c79bb",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    },
+    {
+      "start": 152000,
+      "end": 160000,
+      "bytes": 8000,
+      "sha256": "e457532813a9427fa9cf4293985a5c28eef742015fe38d0073331fb005d76612",
+      "toolChunkId": "43c179",
+      "returnedIndividually": true,
+      "untruncated": true,
+      "read": true
+    }
+  ],
+  "readMethod": "Python read_bytes slices, each shell tool result contains exactly 8000 source bytes plus newline; no line read, execution, import or evaluation of vendor",
+  "staticAst": {
+    "parser": "espree ecmaVersion latest",
+    "mode": "parse source text only; whole source parsed to permit complete syntax, then only classes beginning before assigned end retained",
+    "first160000BytesAscii": true,
+    "classes": [
+      {
+        "name": "de",
+        "start": 7032,
+        "end": 7148,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "pe",
+        "start": 7148,
+        "end": 7201,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "fe",
+        "start": 7201,
+        "end": 7577,
+        "partial": false,
+        "methods": [
+          "updateOffsetPosition",
+          "updateOffsetQuaternion",
+          "updateOffsetMatrix",
+          "calculateGlobalOffsetMatrix"
+        ]
+      },
+      {
+        "name": "me",
+        "start": 7577,
+        "end": 8522,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "x",
+          "x",
+          "y",
+          "y",
+          "z",
+          "z",
+          "set",
+          "clone",
+          "copy",
+          "round",
+          "normalize",
+          "add",
+          "applyQuaternion"
+        ]
+      },
+      {
+        "name": "ve",
+        "start": 8522,
+        "end": 9304,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "x",
+          "x",
+          "y",
+          "y",
+          "z",
+          "z",
+          "w",
+          "w",
+          "set",
+          "clone",
+          "copy",
+          "normalize",
+          "invert",
+          "multiply",
+          "setFromAxisAngle"
+        ]
+      },
+      {
+        "name": "Be",
+        "start": 12628,
+        "end": 34735,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "generateActionId",
+          "isCaptured",
+          "queueLength",
+          "enqueueDiscrete",
+          "enqueueDuration",
+          "armActionTimeout",
+          "clearActionTimeout",
+          "update",
+          "startReleaseTimer",
+          "cancelReleaseTimer",
+          "getDeviceTransform",
+          "setDeviceTransform",
+          "transformXROriginToGlobal",
+          "getDeviceSelectValue",
+          "setDeviceSelectValue",
+          "setDeviceConnected",
+          "executeDiscreteAction",
+          "executeGetSessionStatus",
+          "executeAcceptSession",
+          "executeEndSession",
+          "executeGetTransform",
+          "executeSetTransform",
+          "executeLookAt",
+          "executeSetInputMode",
+          "executeSetConnected",
+          "executeGetSelectValue",
+          "executeSetSelectValue",
+          "executeSetHandPose",
+          "requireSem",
+          "executeGetObjects",
+          "executeGetWorldState",
+          "listMethods",
+          "describe",
+          "connectTransport",
+          "executeGetGamepadState",
+          "executeSetGamepadState",
+          "executeGetDeviceState",
+          "executeSetDeviceState",
+          "applyInputState",
+          "applyDurationLerpState",
+          "applyDurationFinalState",
+          "getDurationResult",
+          "activateCaptureMode",
+          "dispatch",
+          "executeImmediateMethod",
+          "executeSelectSequence",
+          "acceptSession",
+          "forceRelease"
+        ]
+      },
+      {
+        "name": "Ge",
+        "start": 35342,
+        "end": 35694,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "pressed",
+          "touched",
+          "value"
+        ]
+      },
+      {
+        "name": "Xe",
+        "start": 35694,
+        "end": 35763,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "qe",
+        "start": 35763,
+        "end": 35968,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "type",
+          "pulse"
+        ]
+      },
+      {
+        "name": "Ue",
+        "start": 35968,
+        "end": 37453,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "id",
+          "index",
+          "connected",
+          "timestamp",
+          "mapping",
+          "axes",
+          "buttons",
+          "hapticActuators",
+          "vibrationActuator"
+        ]
+      },
+      {
+        "name": "je",
+        "start": 37656,
+        "end": 37680,
+        "partial": false,
+        "methods": []
+      },
+      {
+        "name": "He",
+        "start": 37680,
+        "end": 38104,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "handedness",
+          "targetRayMode",
+          "targetRaySpace",
+          "gripSpace",
+          "profiles",
+          "gamepad",
+          "hand"
+        ]
+      },
+      {
+        "name": "We",
+        "start": 38104,
+        "end": 38362,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "Ye",
+        "start": 38552,
+        "end": 39990,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "position",
+          "quaternion",
+          "inputSource",
+          "connected",
+          "connected",
+          "updateTargetRaySpace",
+          "onFrameStart"
+        ]
+      },
+      {
+        "name": "Qe",
+        "start": 39990,
+        "end": 42377,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "gamepadConfig",
+          "profileId",
+          "updateButtonValue",
+          "setButtonValueImmediate",
+          "updateButtonTouch",
+          "updateAxis",
+          "updateAxes",
+          "getButtonValue",
+          "getButtonTouched",
+          "getAxes"
+        ]
+      },
+      {
+        "name": "Je",
+        "start": 42377,
+        "end": 42748,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "meshSpace",
+          "vertices",
+          "indices",
+          "lastChangedTime",
+          "semanticLabel"
+        ]
+      },
+      {
+        "name": "Ke",
+        "start": 42748,
+        "end": 42770,
+        "partial": false,
+        "methods": []
+      },
+      {
+        "name": "it",
+        "start": 43787,
+        "end": 44182,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "planeSpace",
+          "polygon",
+          "orientation",
+          "lastChangedTime",
+          "semanticLabel"
+        ]
+      },
+      {
+        "name": "rt",
+        "start": 44182,
+        "end": 44204,
+        "partial": false,
+        "methods": []
+      },
+      {
+        "name": "st",
+        "start": 44204,
+        "end": 44991,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "data",
+          "width",
+          "height",
+          "normDepthBufferFromNormView",
+          "rawValueToMeters",
+          "dataFormat",
+          "getDepthInMeters"
+        ]
+      },
+      {
+        "name": "nt",
+        "start": 44991,
+        "end": 45219,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "at",
+        "start": 45219,
+        "end": 45892,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "getDepthInformation"
+        ]
+      },
+      {
+        "name": "ot",
+        "start": 45892,
+        "end": 46605,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "anchorSpace",
+          "requestPersistentHandle",
+          "delete"
+        ]
+      },
+      {
+        "name": "ct",
+        "start": 46605,
+        "end": 46627,
+        "partial": false,
+        "methods": []
+      },
+      {
+        "name": "ht",
+        "start": 46690,
+        "end": 47175,
+        "partial": false,
+        "methods": [
+          "recoverPersistentAnchorsFromStorage",
+          "createPersistentAnchor"
+        ]
+      },
+      {
+        "name": "ut",
+        "start": 47175,
+        "end": 47991,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "updateMatrix",
+          "matrix",
+          "position",
+          "orientation",
+          "inverse"
+        ]
+      },
+      {
+        "name": "(anonymous)",
+        "start": 47998,
+        "end": 48070,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "pt",
+        "start": 48071,
+        "end": 49165,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "origin",
+          "direction",
+          "matrix"
+        ]
+      },
+      {
+        "name": "ft",
+        "start": 49165,
+        "end": 49371,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "cancel"
+        ]
+      },
+      {
+        "name": "mt",
+        "start": 49371,
+        "end": 49575,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "getPose",
+          "createAnchor"
+        ]
+      },
+      {
+        "name": "vt",
+        "start": 49575,
+        "end": 49937,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "wt",
+        "start": 50155,
+        "end": 50496,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "onreset",
+          "onreset",
+          "getOffsetReferenceSpace"
+        ]
+      },
+      {
+        "name": "St",
+        "start": 50502,
+        "end": 51219,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "depthNear",
+          "depthFar",
+          "inlineVerticalFieldOfView",
+          "baseLayer"
+        ]
+      },
+      {
+        "name": "bt",
+        "start": 51219,
+        "end": 51366,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "Tt",
+        "start": 51437,
+        "end": 51924,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "eye",
+          "projectionMatrix",
+          "transform",
+          "recommendedViewportScale",
+          "requestViewportScale"
+        ]
+      },
+      {
+        "name": "Rt",
+        "start": 51924,
+        "end": 52248,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "transform",
+          "emulatedPosition",
+          "linearVelocity",
+          "angularVelocity"
+        ]
+      },
+      {
+        "name": "Et",
+        "start": 52248,
+        "end": 52378,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "radius"
+        ]
+      },
+      {
+        "name": "Mt",
+        "start": 52378,
+        "end": 52520,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "views"
+        ]
+      },
+      {
+        "name": "Lt",
+        "start": 52704,
+        "end": 56473,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "session",
+          "predictedDisplayTime",
+          "getPose",
+          "getViewerPose",
+          "getJointPose",
+          "fillJointRadii",
+          "fillPoses",
+          "detectedPlanes",
+          "detectedMeshes",
+          "trackedAnchors",
+          "createAnchor",
+          "getHitTestResults",
+          "getDepthInformation"
+        ]
+      },
+      {
+        "name": "zt",
+        "start": 56662,
+        "end": 73102,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "visibilityState",
+          "frameRate",
+          "supportedFrameRates",
+          "renderState",
+          "inputSources",
+          "enabledFeatures",
+          "isSystemKeyboardSupported",
+          "environmentBlendMode",
+          "interactionMode",
+          "depthUsage",
+          "depthDataFormat",
+          "updateRenderState",
+          "updateTargetFrameRate",
+          "requestReferenceSpace",
+          "requestAnimationFrame",
+          "cancelAnimationFrame",
+          "end",
+          "persistentAnchors",
+          "restorePersistentAnchor",
+          "deletePersistentAnchor",
+          "requestHitTestSource",
+          "onend",
+          "onend",
+          "oninputsourceschange",
+          "oninputsourceschange",
+          "onselect",
+          "onselect",
+          "onselectstart",
+          "onselectstart",
+          "onselectend",
+          "onselectend",
+          "onsqueeze",
+          "onsqueeze",
+          "onsqueezestart",
+          "onsqueezestart",
+          "onsqueezeend",
+          "onsqueezeend",
+          "onvisibilitychange",
+          "onvisibilitychange",
+          "onframeratechange",
+          "onframeratechange"
+        ]
+      },
+      {
+        "name": "Vt",
+        "start": 74389,
+        "end": 74411,
+        "partial": false,
+        "methods": []
+      },
+      {
+        "name": "Gt",
+        "start": 74411,
+        "end": 74536,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "jointName"
+        ]
+      },
+      {
+        "name": "ti",
+        "start": 99219,
+        "end": 101096,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "poseId",
+          "poseId",
+          "updateHandPose",
+          "pinchValue",
+          "updatePinchValue",
+          "setPinchValueImmediate",
+          "onFrameStart"
+        ]
+      },
+      {
+        "name": "ii",
+        "start": 101096,
+        "end": 101126,
+        "partial": false,
+        "methods": []
+      },
+      {
+        "name": "si",
+        "start": 101225,
+        "end": 102066,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "context",
+          "antialias",
+          "ignoreDepthValues",
+          "framebuffer",
+          "framebufferWidth",
+          "framebufferHeight",
+          "getViewport",
+          "getNativeFramebufferScaleFactor"
+        ]
+      },
+      {
+        "name": "ni",
+        "start": 102066,
+        "end": 110612,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "play",
+          "stop",
+          "playing",
+          "viewerSpace",
+          "viewSpaces",
+          "inputSources",
+          "loop",
+          "loop",
+          "playbackRate",
+          "playbackRate",
+          "setEventContext",
+          "duration",
+          "currentTime",
+          "seek",
+          "findFramePointer",
+          "stepFrames",
+          "playFrame",
+          "applyFrameAtPointer",
+          "dispatchSelectSqueezeEdges",
+          "dispatchEdgesBetweenFrames",
+          "eventTriggerForButton",
+          "updateInputSource",
+          "updateXRSpaceFromMergedFrames",
+          "processRawInputData"
+        ]
+      },
+      {
+        "name": "oi",
+        "start": 110629,
+        "end": 110838,
+        "partial": false,
+        "methods": [
+          "constructor"
+        ]
+      },
+      {
+        "name": "ui",
+        "start": 110918,
+        "end": 111110,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "updateTargetRaySpace"
+        ]
+      },
+      {
+        "name": "di",
+        "start": 111110,
+        "end": 112576,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "isSessionSupported",
+          "requestSession",
+          "offerSession"
+        ]
+      },
+      {
+        "name": "pi",
+        "start": 112576,
+        "end": 112765,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "x",
+          "y",
+          "width",
+          "height"
+        ]
+      },
+      {
+        "name": "Si",
+        "start": 118419,
+        "end": 124538,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "initialize",
+          "destroy",
+          "addEventListener",
+          "dispatchEvent",
+          "removeEventListener",
+          "getContext",
+          "getTextureType",
+          "colorTextures",
+          "depthStencilTextures",
+          "colorTexturesMeta",
+          "media",
+          "determineLayoutAttribute",
+          "isMediaLayer",
+          "_deferredInitialize",
+          "initializeIfNeeded",
+          "_allocateColorTexturesInternal",
+          "_allocateDepthStencilTexturesInternal",
+          "_createNewColorTexture",
+          "_createNewDepthStencilTexture",
+          "_createGenericPolyfillTexture",
+          "_getSupportedDepthFormats"
+        ]
+      },
+      {
+        "name": "Ri",
+        "start": 124793,
+        "end": 126506,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "getTextureType",
+          "_deferredInitialize",
+          "colorTextures",
+          "depthStencilTextures",
+          "colorTexturesMeta",
+          "width",
+          "height"
+        ]
+      },
+      {
+        "name": "_i",
+        "start": 126883,
+        "end": 128656,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "getTextureType",
+          "_deferredInitialize",
+          "colorTextures",
+          "depthStencilTextures",
+          "colorTexturesMeta"
+        ]
+      },
+      {
+        "name": "Ai",
+        "start": 128856,
+        "end": 130395,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "getTextureType",
+          "_deferredInitialize",
+          "colorTextures",
+          "depthStencilTextures",
+          "colorTexturesMeta"
+        ]
+      },
+      {
+        "name": "Ii",
+        "start": 130395,
+        "end": 131780,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "createQuadLayer",
+          "createCylinderLayer",
+          "createEquirectLayer",
+          "calculateAspectRatio"
+        ]
+      },
+      {
+        "name": "Ci",
+        "start": 131862,
+        "end": 135513,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "initialize",
+          "_allocateProjectionColorTextures",
+          "_allocateProjectionDepthStencilTextures",
+          "colorTextures",
+          "depthStencilTextures",
+          "colorTexturesMeta",
+          "getTextureType",
+          "_deferredInitialize",
+          "determineMaximumScaleFactor"
+        ]
+      },
+      {
+        "name": "Gi",
+        "start": 137383,
+        "end": 141374,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "render",
+          "_renderInternal",
+          "_renderInternalStereo",
+          "_createVAOs",
+          "_setStereoTextureBuffer",
+          "_createTextureUVs",
+          "_offsetTextureUVsByRect",
+          "_shouldUseStereoTexturePoints"
+        ]
+      },
+      {
+        "name": "Ui",
+        "start": 142221,
+        "end": 143229,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "render",
+          "_renderInternal"
+        ]
+      },
+      {
+        "name": "ir",
+        "start": 146117,
+        "end": 154590,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "saveVaoState",
+          "restoreVaoState",
+          "initialize",
+          "render",
+          "createPositionPoints",
+          "createTextureUVs",
+          "_offsetTextureUVsByRect",
+          "_shouldUseStereoTexturePoints",
+          "_setStereoTextureBuffer",
+          "_recalculateVertices",
+          "_createVAOs",
+          "_renderInternal",
+          "_renderInternalStereo",
+          "_setTransformMatrix"
+        ]
+      },
+      {
+        "name": "rr",
+        "start": 154590,
+        "end": 154864,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "createPositionPoints",
+          "createTextureUVs"
+        ]
+      },
+      {
+        "name": "sr",
+        "start": 154864,
+        "end": 155687,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "createPositionPoints",
+          "createTextureUVs"
+        ]
+      },
+      {
+        "name": "nr",
+        "start": 155687,
+        "end": 157008,
+        "partial": false,
+        "methods": [
+          "constructor",
+          "createPositionPoints",
+          "createTextureUVs"
+        ]
+      },
+      {
+        "name": "or",
+        "start": 157121,
+        "end": 160112,
+        "partial": true,
+        "methods": [
+          "constructor",
+          "initialize",
+          "_allocateColorTexturesInternal",
+          "_allocateDepthStencilTexturesInternal",
+          "_createCubeColorTexture",
+          "_createCubeDepthTexture"
+        ]
+      }
+    ],
+    "exportBoundary": "UMD wrapper seen at byte 0; final e.* export assignments outside assigned span were not inspected or mapped as fully read",
+    "partialConstructs": [
+      {
+        "name": "or",
+        "semanticRole": "cube composition layer",
+        "start": 157121,
+        "endFromStaticAst": 160112,
+        "readEnd": 160000,
+        "boundary": "inside _createCubeDepthTexture texImage2D unsigned-int argument"
+      }
+    ]
+  },
+  "supportRead": {
+    "full": [
+      "AGENTS.md",
+      ".claude/skills/code-nav/SKILL.md",
+      "tests/vendor/README.md",
+      "docs/project-map/tests-vendor-batches.json",
+      "tests/helpers/iwer-install.mjs",
+      "tests/specs/xr-plan.spec.js"
+    ],
+    "bounded": [
+      "tests/unit/xr-phase0.test.mjs:190-220,800-850",
+      "tests/specs/vr-emulated.spec.js:1-160 plus test-title and iwer-reference searches",
+      "tests/unit/ci-gate-selection.test.mjs:matching references only"
+    ]
+  },
+  "productionLsp": [
+    {
+      "symbol": "XrSession.recenter",
+      "file": "js/xr/xr-session.js",
+      "line": 335,
+      "caveat": "module-file fallback, export/caller coverage unverified"
+    },
+    {
+      "symbol": "XrSession.eyeFrames",
+      "file": "js/xr/xr-session.js",
+      "line": 371,
+      "exportLine": 479
+    },
+    {
+      "symbol": "XrRig.recenterOffsetFromPose",
+      "file": "js/xr/xr-rig.js",
+      "line": 199,
+      "exportLine": 225
+    }
+  ],
+  "execution": {
+    "vendorExecuted": false,
+    "testsRun": false,
+    "browserUsed": false,
+    "networkUsed": false
+  },
+  "unreadRanges": [
+    [
+      160000,
+      263643
+    ]
+  ],
+  "historicalPaths": [],
+  "cleanupCandidates": [
+    {
+      "candidate": "version-gated offset adapter",
+      "condition": "upgrade pinned IWER and rerun actual-vendor finite/center/stereo/nested-sign regression before removing",
+      "safeToDeleteNow": false
+    },
+    {
+      "candidate": "embedded hand pose tables and layers polyfill",
+      "condition": "upstream dependency replacement or curated rebuild with full contract and license review; no local minified surgery",
+      "safeToDeleteNow": false
+    }
+  ]
+}

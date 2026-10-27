@@ -1,0 +1,764 @@
+{
+  "group": "09",
+  "plan": {
+    "path": "docs/project-map/archive-batches.json",
+    "sha256": "0b951db81aedd80e1c6aabd6fccde9a6b8030cbe458ff32dfbb95aa21a9ca1ff",
+    "hash_scope": "whole file"
+  },
+  "coverage": {
+    "assigned_bytes": 160000,
+    "sources": 26,
+    "chunk_max_bytes": 8000,
+    "all_assigned_text_read": true,
+    "range_semantics": "half-open byte ranges",
+    "method": "each chunk returned individually by exec_command, without per-call truncation; chunk 3 re-read separately after aggregate output truncation"
+  },
+  "sources": [
+    {
+      "source_id": "S09-01",
+      "path": "docs/archive/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md",
+      "start": 7865,
+      "end": 9788,
+      "kind": "text",
+      "sha256": "b25da9071007e795fbff7b20e400e6663f95bc305a212a394494f1a1763f342e",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "b25da9071007e795fbff7b20e400e6663f95bc305a212a394494f1a1763f342e",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 9788,
+      "assigned_part_sha256": "f172ca66d4d97dc343aa80cd0ee66c84b28e3d4d9840a7b015965db3bb7b5fd7",
+      "chunks": [
+        {
+          "start": 7865,
+          "end": 9788,
+          "sha256": "f172ca66d4d97dc343aa80cd0ee66c84b28e3d4d9840a7b015965db3bb7b5fd7",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-10",
+      "producer": "orchestration survey author (unnamed in assigned tail)",
+      "topic": "Host-specific subscription names, stale skill hash, missing coordination surface; seven open tooling leads.",
+      "live_basename_backlinks": [
+        "./docs/notes/system-audit-4/web-hosts-gpu.md:2:Inputs: BRIEF.md; repo docs CI-RENDERING-PERFORMANCE.md, LOCAL-LLVMPIPE-2026-10-26.md, playwright.config.js, agent-fleet adapters.md, MULTI-AGENT-ORCHESTRATION-2026-10-10.md, .codex/*.",
+        "./docs/notes/orchestration-redesign-2026-10-27/platform.md:6:`docs/archive/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md`, `docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md`."
+      ],
+      "partial_source": true
+    },
+    {
+      "source_id": "S09-02",
+      "path": "docs/archive/notes/NIGHT-WASHOUT-FLEET-2026-10-15.md",
+      "start": 0,
+      "end": 2796,
+      "kind": "text",
+      "sha256": "1b31c4fad558b794da9f3e10d78092ea15f4114c1425aca4761181afa5188dde",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "1b31c4fad558b794da9f3e10d78092ea15f4114c1425aca4761181afa5188dde",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 2796,
+      "assigned_part_sha256": "1b31c4fad558b794da9f3e10d78092ea15f4114c1425aca4761181afa5188dde",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2796,
+          "sha256": "1b31c4fad558b794da9f3e10d78092ea15f4114c1425aca4761181afa5188dde",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-15",
+      "producer": "night-washout fleet survey branch",
+      "topic": "Night lamp bake and per-track trims for Abu Dhabi, Madrid and Jeddah; Monaco intentionally retained.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-03",
+      "path": "docs/archive/notes/ORCHESTRATION-AUDIT-A-B-2026-10-22.md",
+      "start": 0,
+      "end": 34232,
+      "kind": "text",
+      "sha256": "8018b3399bd9ba5508e5b0189e8c2a86958ebbefe18261e73cc93db93e244ca8",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "8018b3399bd9ba5508e5b0189e8c2a86958ebbefe18261e73cc93db93e244ca8",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 34232,
+      "assigned_part_sha256": "8018b3399bd9ba5508e5b0189e8c2a86958ebbefe18261e73cc93db93e244ca8",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "a21dc4afb562038df1b79fb08802f6e65ac9f1579f60b75fcc9e9d00ac14d1be",
+          "read_complete": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "sha256": "c0d85f5eb5cad5935a504def807de0ed2c8d52a0faa288c8e4caa39f3d413577",
+          "read_complete": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "sha256": "af3b1383d655c28f8ad2977f4bb9f9e5146547d1d7564877ca40813bc88cbe59",
+          "read_complete": true
+        },
+        {
+          "start": 24000,
+          "end": 32000,
+          "sha256": "c5f373358e0eca85bdab37c06506ac10fac38a2faf85a9e85663650760ebe39a",
+          "read_complete": true
+        },
+        {
+          "start": 32000,
+          "end": 34232,
+          "sha256": "786c0eff457bffeaa4dacb3ce82892c88fb2a7fef2abe08efc53e936188ee334",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-22; updated 2026-10-23",
+      "producer": "OrchA 23 with Fleet D/DAD and Merlin input",
+      "topic": "Transcript/bus/Pages audit: starvation, attribution, wake cost, duplicate work; ranked seventeen improvements and recorded user decisions.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-04",
+      "path": "docs/archive/notes/PASS-CENSUS-2026-10-17.md",
+      "start": 0,
+      "end": 4775,
+      "kind": "text",
+      "sha256": "0c97d3ad73b151b56fd75493a00042705da4f2df43e30c566d8ef048c06352e7",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "0c97d3ad73b151b56fd75493a00042705da4f2df43e30c566d8ef048c06352e7",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 4775,
+      "assigned_part_sha256": "0c97d3ad73b151b56fd75493a00042705da4f2df43e30c566d8ef048c06352e7",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4775,
+          "sha256": "0c97d3ad73b151b56fd75493a00042705da4f2df43e30c566d8ef048c06352e7",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "pass-census author (unnamed)",
+      "topic": "Per-pass draws/triangles and phone-tier mirror road density; counts do not establish GPU cost.",
+      "live_basename_backlinks": [
+        "./docs/notes/TLX-PHONE-PASS-CENSUS-2026-10-23.md:100:- Earlier counts: [MESH-CENSUS-2026-10-19](MESH-CENSUS-2026-10-19.md), [PASS-CENSUS-2026-10-17](../../docs/archive/notes/PASS-CENSUS-2026-10-17.md),"
+      ],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-05",
+      "path": "docs/archive/notes/PERF-CPU-LOAD-2026-10-19.md",
+      "start": 0,
+      "end": 5510,
+      "kind": "text",
+      "sha256": "01dc718d06c18a4a4196409a7eaa6b5bafac6cda251e006f659d8b39a91e52af",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "01dc718d06c18a4a4196409a7eaa6b5bafac6cda251e006f659d8b39a91e52af",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 5510,
+      "assigned_part_sha256": "01dc718d06c18a4a4196409a7eaa6b5bafac6cda251e006f659d8b39a91e52af",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5510,
+          "sha256": "01dc718d06c18a4a4196409a7eaa6b5bafac6cda251e006f659d8b39a91e52af",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-19",
+      "producer": "Fleet B lane H2",
+      "topic": "CPU/GC/load audit, boxed-double allocation, small UI/input pooling fixes and unresolved cold-load evidence.",
+      "live_basename_backlinks": [
+        "./docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md:6:`PERF-CPU-LOAD-2026-10-19.md`, `PERF-ALLOC-HUNT-2026-10-17.md`, `PERF-HUNT-CPU-2026-10-17.md`, `DEFECT-LEDGER.md`.",
+        "./docs/notes/CPU-HUNT-2026-10-24.md:5:`PERF-CPU-LOAD-2026-10-19.md`, `PERF-SCENE-CPU-2026-10-20.md`, `PERF-ALLOC-HUNT-2026-10-17.md`,",
+        "./docs/notes/CPU-HUNT-2026-10-24.md:22:So the ~180 KB/frame that `PERF-CPU-LOAD-2026-10-19.md` measured is ~90 % boxed doubles. They cost Android Chrome"
+      ],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-06",
+      "path": "docs/archive/notes/PERF-DEBUG-E5B2-2026-10-21.md",
+      "start": 0,
+      "end": 7564,
+      "kind": "text",
+      "sha256": "6acaf1ab60f2e95e1df09fe4cb6835eec575b1917e63765e2e828009f6c98b3b",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "6acaf1ab60f2e95e1df09fe4cb6835eec575b1917e63765e2e828009f6c98b3b",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 7564,
+      "assigned_part_sha256": "6acaf1ab60f2e95e1df09fe4cb6835eec575b1917e63765e2e828009f6c98b3b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7564,
+          "sha256": "6acaf1ab60f2e95e1df09fe4cb6835eec575b1917e63765e2e828009f6c98b3b",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-21",
+      "producer": "perf-debug-e5b2 parent and six read-only hunters",
+      "topic": "Quit effects cleanup, cheer automation cancellation, incident handback order, prop buffer reuse, pit/wind/cue allocation controls.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-07",
+      "path": "docs/archive/notes/PERF-FRESH-HUNT-2026-10-21.md",
+      "start": 0,
+      "end": 10158,
+      "kind": "text",
+      "sha256": "4d6d314ce4ed803f9b930d6fc105972f5d15e26f60c2559274e1302c60001e33",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "4d6d314ce4ed803f9b930d6fc105972f5d15e26f60c2559274e1302c60001e33",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 10158,
+      "assigned_part_sha256": "4d6d314ce4ed803f9b930d6fc105972f5d15e26f60c2559274e1302c60001e33",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "47cd6b17955b7895a1b4c606ad36509eef873d2431df964f5741bca9020d0ee0",
+          "read_complete": true
+        },
+        {
+          "start": 8000,
+          "end": 10158,
+          "sha256": "095ba688571cc995d97b21db037a30fd862d325adea7af9998665fa4d3764ea4",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-21",
+      "producer": "B\u00b7W11, research agents and five read-only hunters",
+      "topic": "Fresh research-led hypothesis ranking; only synthetic governor replay and scenery census measured.",
+      "live_basename_backlinks": [
+        "./docs/notes/LIVE-DEBUGGER-PHONEPERF-2026-10-24.md:5:`PERF-KNOWN-WINS-2026-10-23.md`, `PERF-IPHONE-AUDIT-2026-10-21.md`, `PERF-FRESH-HUNT-2026-10-21.md`,"
+      ],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-08",
+      "path": "docs/archive/notes/PERF-HUNT-BOOT-2026-10-17.md",
+      "start": 0,
+      "end": 2727,
+      "kind": "text",
+      "sha256": "4f6aaf6444ada067cd10e95459b63008c3798d91047210faffe24a653b3f3428",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "4f6aaf6444ada067cd10e95459b63008c3798d91047210faffe24a653b3f3428",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 2727,
+      "assigned_part_sha256": "4f6aaf6444ada067cd10e95459b63008c3798d91047210faffe24a653b3f3428",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2727,
+          "sha256": "4f6aaf6444ada067cd10e95459b63008c3798d91047210faffe24a653b3f3428",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "boot/loading hunter",
+      "topic": "Two dry boot/menu rounds; SwiftShader and cold/warm noise prevent landed performance claims.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-09",
+      "path": "docs/archive/notes/PERF-HUNT-P7-2026-10-17.md",
+      "start": 0,
+      "end": 3508,
+      "kind": "text",
+      "sha256": "3220235518341a28ac3a724b01c1f4e8aea490cfb5c4bc3701b17f16b43103c5",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "3220235518341a28ac3a724b01c1f4e8aea490cfb5c4bc3701b17f16b43103c5",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3508,
+      "assigned_part_sha256": "3220235518341a28ac3a724b01c1f4e8aea490cfb5c4bc3701b17f16b43103c5",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3508,
+          "sha256": "3220235518341a28ac3a724b01c1f4e8aea490cfb5c4bc3701b17f16b43103c5",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "P7 profiling lane",
+      "topic": "Clean console flow, hitch and CPU diagnosis; slow-frame wall-clock memo artifacts; no proven win.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-10",
+      "path": "docs/archive/notes/PERF-HUNT-RACELOOP-2026-10-17.md",
+      "start": 0,
+      "end": 3452,
+      "kind": "text",
+      "sha256": "e719c6da0e81f29afdde8af3ab3b913b452ec50a19039f5ea8723b712b160335",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "e719c6da0e81f29afdde8af3ab3b913b452ec50a19039f5ea8723b712b160335",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3452,
+      "assigned_part_sha256": "e719c6da0e81f29afdde8af3ab3b913b452ec50a19039f5ea8723b712b160335",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3452,
+          "sha256": "e719c6da0e81f29afdde8af3ab3b913b452ec50a19039f5ea8723b712b160335",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "race-loop hunter branch",
+      "topic": "CPU/GC rounds; warm-up halves allocation estimate and refutes scratch representation lead.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-11",
+      "path": "docs/archive/notes/PERF-HUNT-RENDER-2026-10-17.md",
+      "start": 0,
+      "end": 4560,
+      "kind": "text",
+      "sha256": "d6db09e6e46b55e572f62210b8c24066df9f23713f114a206a3d3c3d8f1a60b2",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "d6db09e6e46b55e572f62210b8c24066df9f23713f114a206a3d3c3d8f1a60b2",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 4560,
+      "assigned_part_sha256": "d6db09e6e46b55e572f62210b8c24066df9f23713f114a206a3d3c3d8f1a60b2",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4560,
+          "sha256": "d6db09e6e46b55e572f62210b8c24066df9f23713f114a206a3d3c3d8f1a60b2",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "Hunter A",
+      "topic": "TLX WebGL2 opt-in GPU timer gate; Apple Metal census is hardware evidence but not iPhone evidence.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-12",
+      "path": "docs/archive/notes/PERF-HUNT-SESSION-MEMORY-2026-10-17.md",
+      "start": 0,
+      "end": 3356,
+      "kind": "text",
+      "sha256": "2dc60019c2a8f9601bf325614da926683af4296eb481cdc77d4490ad03eff1a3",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "2dc60019c2a8f9601bf325614da926683af4296eb481cdc77d4490ad03eff1a3",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3356,
+      "assigned_part_sha256": "2dc60019c2a8f9601bf325614da926683af4296eb481cdc77d4490ad03eff1a3",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3356,
+          "sha256": "2dc60019c2a8f9601bf325614da926683af4296eb481cdc77d4490ad03eff1a3",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "P5 long-session memory lane",
+      "topic": "Single-page cycle census; listener tracker false positives and warm-up, no confirmed leak.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-13",
+      "path": "docs/archive/notes/PERF-HUNT-SESSION-MEMORY-R2-2026-10-17.md",
+      "start": 0,
+      "end": 3760,
+      "kind": "text",
+      "sha256": "9682dbdcabd3f5f6a4628fe58b7d6b280105d91ddce3a140ec78d7329223ac53",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "9682dbdcabd3f5f6a4628fe58b7d6b280105d91ddce3a140ec78d7329223ac53",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3760,
+      "assigned_part_sha256": "9682dbdcabd3f5f6a4628fe58b7d6b280105d91ddce3a140ec78d7329223ac53",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3760,
+          "sha256": "9682dbdcabd3f5f6a4628fe58b7d6b280105d91ddce3a140ec78d7329223ac53",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "P5 round-two memory lane",
+      "topic": "Three-page garage/WATCH snapshot work refutes app-level leak claims; race third page and snapshot incomplete.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-14",
+      "path": "docs/archive/notes/PERF-HUNT-TLX-2026-10-17-R3.md",
+      "start": 0,
+      "end": 2143,
+      "kind": "text",
+      "sha256": "18e828d5874fef1a20b476cf1effcbb661090af062e733c02b317a316d128f16",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "18e828d5874fef1a20b476cf1effcbb661090af062e733c02b317a316d128f16",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 2143,
+      "assigned_part_sha256": "18e828d5874fef1a20b476cf1effcbb661090af062e733c02b317a316d128f16",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2143,
+          "sha256": "18e828d5874fef1a20b476cf1effcbb661090af062e733c02b317a316d128f16",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "TLX perf hunter",
+      "topic": "Dry rounds three/four; uploads already ranged, state churn structural, no new confirmed finding.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-15",
+      "path": "docs/archive/notes/PERF-HUNT-WGX-GLX-2026-10-17.md",
+      "start": 0,
+      "end": 2165,
+      "kind": "text",
+      "sha256": "192ff142c49fdb068fe24ffc6f24f7b617b77f291978a36c071f1a25a242d038",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "192ff142c49fdb068fe24ffc6f24f7b617b77f291978a36c071f1a25a242d038",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 2165,
+      "assigned_part_sha256": "192ff142c49fdb068fe24ffc6f24f7b617b77f291978a36c071f1a25a242d038",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2165,
+          "sha256": "192ff142c49fdb068fe24ffc6f24f7b617b77f291978a36c071f1a25a242d038",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "WGX/GLX CPU hunter",
+      "topic": "Separate mirror instance pack avoids main/mirror cache eviction; lifecycle regression covers ownership.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-16",
+      "path": "docs/archive/notes/PERF-HUNT-WGX-GLX-ROUND2-2026-10-17.md",
+      "start": 0,
+      "end": 2826,
+      "kind": "text",
+      "sha256": "3b56041ffa3f30d0d6cb86aa93e4dec2f77d230e2a4c96de9619332d2e62bba6",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "3b56041ffa3f30d0d6cb86aa93e4dec2f77d230e2a4c96de9619332d2e62bba6",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 2826,
+      "assigned_part_sha256": "3b56041ffa3f30d0d6cb86aa93e4dec2f77d230e2a4c96de9619332d2e62bba6",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2826,
+          "sha256": "3b56041ffa3f30d0d6cb86aa93e4dec2f77d230e2a4c96de9619332d2e62bba6",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "P4 round two",
+      "topic": "WGX post-UBO dedupe and GLX material cache; lazy light restore measured and rejected.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-17",
+      "path": "docs/archive/notes/PERF-HUNT-WGX-GLX-ROUND3-2026-10-17.md",
+      "start": 0,
+      "end": 3664,
+      "kind": "text",
+      "sha256": "206ecf2092a3fd04217b08db19aa1c0d7570ff8445218826bee6d74642c1d67d",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "206ecf2092a3fd04217b08db19aa1c0d7570ff8445218826bee6d74642c1d67d",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3664,
+      "assigned_part_sha256": "206ecf2092a3fd04217b08db19aa1c0d7570ff8445218826bee6d74642c1d67d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3664,
+          "sha256": "206ecf2092a3fd04217b08db19aa1c0d7570ff8445218826bee6d74642c1d67d",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "P4 round three",
+      "topic": "Shadow slot reuse, mirror encoder reuse, GLX sampler cache; corrected comparable mirror-cache A/B and rejected descriptor pooling.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-18",
+      "path": "docs/archive/notes/PERF-HUNT-WGX-GLX-ROUND4-2026-10-17.md",
+      "start": 0,
+      "end": 2082,
+      "kind": "text",
+      "sha256": "0d4eb6b6cea7448b0772594e10258c0834d1f7fda83583f39f7d03874719759c",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "0d4eb6b6cea7448b0772594e10258c0834d1f7fda83583f39f7d03874719759c",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 2082,
+      "assigned_part_sha256": "0d4eb6b6cea7448b0772594e10258c0834d1f7fda83583f39f7d03874719759c",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2082,
+          "sha256": "0d4eb6b6cea7448b0772594e10258c0834d1f7fda83583f39f7d03874719759c",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "P4 round four",
+      "topic": "Remaining group-bind and decal/particle suggestions refuted; remaining costs structural.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-19",
+      "path": "docs/archive/notes/PERF-LAYOUT-SHOWNLAYER-2026-10-17.md",
+      "start": 0,
+      "end": 1625,
+      "kind": "text",
+      "sha256": "c4fece97948117d5359619542406611a381e87eb935e80d420f8b98265d6119b",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "c4fece97948117d5359619542406611a381e87eb935e80d420f8b98265d6119b",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 1625,
+      "assigned_part_sha256": "c4fece97948117d5359619542406611a381e87eb935e80d420f8b98265d6119b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1625,
+          "sha256": "c4fece97948117d5359619542406611a381e87eb935e80d420f8b98265d6119b",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-17",
+      "producer": "layout memo author (unnamed)",
+      "topic": "UiLayers nav memo, synchronous observer invalidation, resize/orientation invalidation; focused unit contract.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-20",
+      "path": "docs/archive/notes/PERF-PLAYBACK-DOM-2026-10-21.md",
+      "start": 0,
+      "end": 3568,
+      "kind": "text",
+      "sha256": "55df377743c0c481fa9dd9e6a4704f786679bcdd0375f72b80ecf63976bf35cf",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "55df377743c0c481fa9dd9e6a4704f786679bcdd0375f72b80ecf63976bf35cf",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3568,
+      "assigned_part_sha256": "55df377743c0c481fa9dd9e6a4704f786679bcdd0375f72b80ecf63976bf35cf",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3568,
+          "sha256": "55df377743c0c481fa9dd9e6a4704f786679bcdd0375f72b80ecf63976bf35cf",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-21",
+      "producer": "playback DOM audit author (unnamed)",
+      "topic": "WATCH disabled and telemetry formatted-text write-on-change; native DOM observer fanout counts.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-21",
+      "path": "docs/archive/notes/PERF-TLX-WEBGPU-2026-10-19.md",
+      "start": 0,
+      "end": 8241,
+      "kind": "text",
+      "sha256": "38149c9af4e85170406ea969745ab4c40d9b27d687db6fafe69f7befa91e6270",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "38149c9af4e85170406ea969745ab4c40d9b27d687db6fafe69f7befa91e6270",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 8241,
+      "assigned_part_sha256": "38149c9af4e85170406ea969745ab4c40d9b27d687db6fafe69f7befa91e6270",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "41046beb4b450460596d20bf2d3a9586fd4351491049c2f631101924e10699a2",
+          "read_complete": true
+        },
+        {
+          "start": 8000,
+          "end": 8241,
+          "sha256": "6e66dd789c246fec2dd45027ddf3c8aa00601f21b8069f02259fd49fedf5db2a",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-19",
+      "producer": "Fleet B H1 wave three",
+      "topic": "Three WebGPU animation-loop integration, shadow pass roots, lamp-rank unit direction; hardware rAF count attributable, timing confounded.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-22",
+      "path": "docs/archive/notes/PERF-UI-LAYOUT-2026-10-21.md",
+      "start": 0,
+      "end": 4846,
+      "kind": "text",
+      "sha256": "263295c05c289f1d9813aa5a65800a81e76ffac5fb907b03bc1c1ab64ba8d6a1",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "263295c05c289f1d9813aa5a65800a81e76ffac5fb907b03bc1c1ab64ba8d6a1",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 4846,
+      "assigned_part_sha256": "263295c05c289f1d9813aa5a65800a81e76ffac5fb907b03bc1c1ab64ba8d6a1",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4846,
+          "sha256": "263295c05c289f1d9813aa5a65800a81e76ffac5fb907b03bc1c1ab64ba8d6a1",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-21",
+      "producer": "UI layout hunt author (unnamed)",
+      "topic": "Appearance one-render-per-action and HUD clearance rectangle reuse; geometry and mutation invariants, no FPS claim.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-23",
+      "path": "docs/archive/notes/PERF-WGX-PHONE-SSR-2026-10-21.md",
+      "start": 0,
+      "end": 2829,
+      "kind": "text",
+      "sha256": "3c8b5f2ca60e94000190dfbe0fd82acda49ce0ceaaf2a85d448475782ed64b8a",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "3c8b5f2ca60e94000190dfbe0fd82acda49ce0ceaaf2a85d448475782ed64b8a",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 2829,
+      "assigned_part_sha256": "3c8b5f2ca60e94000190dfbe0fd82acda49ce0ceaaf2a85d448475782ed64b8a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2829,
+          "sha256": "3c8b5f2ca60e94000190dfbe0fd82acda49ce0ceaaf2a85d448475782ed64b8a",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-21",
+      "producer": "WGX SSR audit author (unnamed)",
+      "topic": "Skip unused lite SSR pipeline/shader/uniform construction; software lifecycle and live Dawn checks only.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-24",
+      "path": "docs/archive/notes/PERFORMANCE-AUDIT-FIXES.md",
+      "start": 0,
+      "end": 14083,
+      "kind": "text",
+      "sha256": "3f7d4710471eeffbbcc23dfff87bd40ef8bcd3ca3b7beb37a72c4aa4473a1c31",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "3f7d4710471eeffbbcc23dfff87bd40ef8bcd3ca3b7beb37a72c4aa4473a1c31",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 14083,
+      "assigned_part_sha256": "3f7d4710471eeffbbcc23dfff87bd40ef8bcd3ca3b7beb37a72c4aa4473a1c31",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "b2219fb31199820a9ff0e04c64c6cad2796bd45b2a907a103ca76826c03935b8",
+          "read_complete": true
+        },
+        {
+          "start": 8000,
+          "end": 14083,
+          "sha256": "541b1195fc5aab8b29b3d0d9bc938c0709a3aecb4e6abf462bb0f301c7a8cb51",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-19; later integration updates undated",
+      "producer": "performance audit author (unnamed)",
+      "topic": "Shared binding ownership, diagnostic measurement validity, hidden HUD, model admission, worker liveness, replay accounting and exceptional capture cleanup.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-25",
+      "path": "docs/archive/notes/PERFORMANCE-CALLSITE-AUDIT-2026-10-21.md",
+      "start": 0,
+      "end": 14624,
+      "kind": "text",
+      "sha256": "ea472ece252bb96f0288f5f37bbd132034954fb765a395ca8d4b17768cd440f5",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "ea472ece252bb96f0288f5f37bbd132034954fb765a395ca8d4b17768cd440f5",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 14624,
+      "assigned_part_sha256": "ea472ece252bb96f0288f5f37bbd132034954fb765a395ca8d4b17768cd440f5",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "871843362c2fefb0dc366f2719048604fa9d1405420d4e1f2643d35872442c04",
+          "read_complete": true
+        },
+        {
+          "start": 8000,
+          "end": 14624,
+          "sha256": "a52027d18be4c4edf181d423a06e1476e6bf50eac3043a0c8fcb4f822e9a0708",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-21",
+      "producer": "callsite audit author and six implementation lanes",
+      "topic": "Predicate calls, telemetry boundary search, DOM/voice ownership; expanded exact-state simulation, lighting, audio, debris and loading controls.",
+      "live_basename_backlinks": [],
+      "partial_source": false
+    },
+    {
+      "source_id": "S09-26",
+      "path": "docs/archive/notes/PERFORMANCE-DEBUGGING-2026-10-21-C91F.md",
+      "start": 0,
+      "end": 8983,
+      "kind": "text",
+      "sha256": "9f49e837b97a7867a9cef7ced02c50cca98ed951b3b0e8e0664b3799eb2a2b46",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "9f49e837b97a7867a9cef7ced02c50cca98ed951b3b0e8e0664b3799eb2a2b46",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 15094,
+      "assigned_part_sha256": "37fc7d0971eeb23e15a87e61e727bdecae4fb83853fbb965d75e87d078bfa7ff",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "sha256": "6aa4de9758b118b5833fc2897f7937875363737e6a10164df09116872b19e1af",
+          "read_complete": true
+        },
+        {
+          "start": 8000,
+          "end": 8983,
+          "sha256": "90fdd72d8fb74955dc374978aaab932139f2f80229e0b24bc3a99b347c35428c",
+          "read_complete": true
+        }
+      ],
+      "date": "2026-10-21",
+      "producer": "C91F debugging lane and isolated workers",
+      "topic": "Pinned source versus published identities; context-loss retry, pointer capture, WheelState yaw, stale QR completion and observer-window bugs. Assigned tail is incomplete.",
+      "live_basename_backlinks": [],
+      "partial_source": true
+    }
+  ],
+  "limits": [
+    "No current runtime, browser, network or tests run.",
+    "Historical instructions and recorded grants are provenance only.",
+    "Basename backlink search excludes archive and project-map; zero hits is not proof of no indirect dependency."
+  ]
+}

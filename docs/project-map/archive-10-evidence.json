@@ -1,0 +1,687 @@
+{
+  "group": "10",
+  "plan": {
+    "path": "docs/project-map/archive-batches.json",
+    "sha256": "0b951db81aedd80e1c6aabd6fccde9a6b8030cbe458ff32dfbb95aa21a9ca1ff",
+    "hash_scope": "whole file"
+  },
+  "coverage": {
+    "assigned_bytes": 160000,
+    "sources": 23,
+    "chunks": 31,
+    "chunk_max_bytes": 8500,
+    "all_assigned_text_read": true,
+    "range_semantics": "half-open byte ranges",
+    "method": "Each chunk returned individually by exec_command without per-call truncation; source 21 re-read separately after aggregate output truncation."
+  },
+  "backlink_search": {
+    "method": "rg -n -F full basename in live tree, excluding historical archive, project-map generated maps and .git",
+    "limits": "Exact basename references only; indirect, shortened-name and ignored-file references may be absent."
+  },
+  "sources": [
+    {
+      "path": "docs/archive/notes/PERFORMANCE-DEBUGGING-2026-10-21-C91F.md",
+      "start": 8983,
+      "end": 15094,
+      "kind": "text",
+      "sha256": "9f49e837b97a7867a9cef7ced02c50cca98ed951b3b0e8e0664b3799eb2a2b46",
+      "source_id": "S10-01",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "9f49e837b97a7867a9cef7ced02c50cca98ed951b3b0e8e0664b3799eb2a2b46",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 15094,
+      "assigned_part_sha256": "62cacb8c34749e8d462d76a2a7dba801d544adaf029d37c70bea50904a18e3f4",
+      "partial_source": true,
+      "date": "2026-10-21",
+      "producer": "C91F investigation and cross-review lanes",
+      "topic": "Continuation: repaired child-exit fixture, inherited four-frame browser failure, rejected loader/contact leads and WheelState normalization handback.",
+      "chunks": [
+        {
+          "start": 8983,
+          "end": 15094,
+          "sha256": "62cacb8c34749e8d462d76a2a7dba801d544adaf029d37c70bea50904a18e3f4",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/PERFORMANCE-RESEARCH-C71E-2026-10-21.md",
+      "start": 0,
+      "end": 17043,
+      "kind": "text",
+      "sha256": "3146eb7ab388ff3a9fb057bff9797cf8b04029af982ef01b0a46df182f0a7be1",
+      "source_id": "S10-02",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "3146eb7ab388ff3a9fb057bff9797cf8b04029af982ef01b0a46df182f0a7be1",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 17043,
+      "assigned_part_sha256": "3146eb7ab388ff3a9fb057bff9797cf8b04029af982ef01b0a46df182f0a7be1",
+      "partial_source": false,
+      "date": "2026-10-21",
+      "producer": "research-perf-c71e parent and six native lanes",
+      "topic": "Inspector renderer restoration, bounded timing entries and rewind-safe car sound edges; deferred readback, upload and Inspector retention leads.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "65513e3eafe377727fab607cf58a454f0e63ae74539ac43912d6c312e89003d0",
+          "read_complete": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "sha256": "4b2049a75e67128dfc045250656837b52733deec34dbb31f67f7bc49159bec5c",
+          "read_complete": true
+        },
+        {
+          "start": 17000,
+          "end": 17043,
+          "sha256": "bcc2a4f8ad74d326910c44e574d86138b9af7e0605fbb5bf6363e6824cd71e08",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/PHYSICS-CATCHUP-CAP-2026-10-23.md",
+      "start": 0,
+      "end": 4232,
+      "kind": "text",
+      "sha256": "bfeb0d25b91a804a1ac580ea0dd1fddcf175d7854718f511c776a311e278759b",
+      "source_id": "S10-03",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "bfeb0d25b91a804a1ac580ea0dd1fddcf175d7854718f511c776a311e278759b",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 4232,
+      "assigned_part_sha256": "bfeb0d25b91a804a1ac580ea0dd1fddcf175d7854718f511c776a311e278759b",
+      "partial_source": false,
+      "date": "2026-10-23",
+      "producer": "physics catch-up measurement lane, unnamed",
+      "topic": "CPU-throttled fixed-step measurements and hitch model retain cap five; no code change.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4232,
+          "sha256": "bfeb0d25b91a804a1ac580ea0dd1fddcf175d7854718f511c776a311e278759b",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": [
+        "./docs/notes/PERF-KNOWN-WINS-2026-10-23.md:52:| 10 | ~~Physics catch-up cap 5 \u2192 lower on phones~~ **measured, no change** | PERF-FRESH-HUNT #5; PR #3620 (`PHYSICS-CATCHUP-CAP-2026-10-23.md`, A\u00b7W25) | F1 | At 6\u00d7 CPU throttle: p99 8.82 ms, max 11.6 ms per step, against the 16.7 ms budget. Only a pathological case sustains 5 steps | closed: no change. Re-open only if a handset trace shows physics p99 above about 12 ms | PR #3620 | \u2014 | \u2014 |"
+      ]
+    },
+    {
+      "path": "docs/archive/notes/PLUGIN-SKILL-POLICY-2026-10-18.md",
+      "start": 0,
+      "end": 8075,
+      "kind": "text",
+      "sha256": "89f6547894737dab63fc6bad77ae4eb791ba8ee3d83a168b44360a3175e78187",
+      "source_id": "S10-04",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "89f6547894737dab63fc6bad77ae4eb791ba8ee3d83a168b44360a3175e78187",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 8075,
+      "assigned_part_sha256": "89f6547894737dab63fc6bad77ae4eb791ba8ee3d83a168b44360a3175e78187",
+      "partial_source": false,
+      "date": "2026-10-18",
+      "producer": "plugin-family review orchestrator and read-only Sonnet lanes",
+      "topic": "Approximately 110 generic plugin skills judged; historical enable/deny policy and collision analysis.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8075,
+          "sha256": "89f6547894737dab63fc6bad77ae4eb791ba8ee3d83a168b44360a3175e78187",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": [
+        "./docs/notes/SKILL-MCP-SCOUT-2026-10-18.md:4:UI, Chromium, agent workflow). Plugins already judged are in `PLUGIN-SKILL-POLICY-2026-10-18.md` (branch"
+      ]
+    },
+    {
+      "path": "docs/archive/notes/PROCESS-SPEEDUP-2026-09-16.md",
+      "start": 0,
+      "end": 11888,
+      "kind": "text",
+      "sha256": "f1aa0a2152d4c0601c86182bc5c6dd7709c387b2fb2ee08aa6d4e828398dcac0",
+      "source_id": "S10-05",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "f1aa0a2152d4c0601c86182bc5c6dd7709c387b2fb2ee08aa6d4e828398dcac0",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 11888,
+      "assigned_part_sha256": "f1aa0a2152d4c0601c86182bc5c6dd7709c387b2fb2ee08aa6d4e828398dcac0",
+      "partial_source": false,
+      "date": "2026-09-16",
+      "producer": "process-speedup session author, unnamed",
+      "topic": "Gate ladder clarity, empirical episode reset leak guard, retracted ratchet slack and proposed live-click/base-comparison helpers.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "7960016c6ebf445489f44be88539deecac2113e0cab6b656019431a0dfba8762",
+          "read_complete": true
+        },
+        {
+          "start": 8500,
+          "end": 11888,
+          "sha256": "05946c231e34adc6d2c6127ccf3dc32799ec2fa956d4c54555f571d07419ebc5",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": [
+        "./docs/notes/AGENT-PROCESS-RESEARCH-2026-09-16.md:4:`PROCESS-SPEEDUP-2026-09-16.md` (the addendum). This one was asked as a"
+      ]
+    },
+    {
+      "path": "docs/archive/notes/RAPIER-PIN-2026-10-19.md",
+      "start": 0,
+      "end": 4180,
+      "kind": "text",
+      "sha256": "a75ed6e68f342c3a0847c9506669cdfc206ca3b938d46cc1e025350ff7bc6818",
+      "source_id": "S10-06",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "a75ed6e68f342c3a0847c9506669cdfc206ca3b938d46cc1e025350ff7bc6818",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 4180,
+      "assigned_part_sha256": "a75ed6e68f342c3a0847c9506669cdfc206ca3b938d46cc1e025350ff7bc6818",
+      "partial_source": false,
+      "date": "2026-10-19",
+      "producer": "Rapier pin review lane, unnamed",
+      "topic": "Keep vendored 0.19.3; lazy WASM/CSP contract, upgrade costs and wrong license-text follow-up.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4180,
+          "sha256": "a75ed6e68f342c3a0847c9506669cdfc206ca3b938d46cc1e025350ff7bc6818",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/RENDER-LIVE-DEBUG-TLX-GLX-2026-10-19.md",
+      "start": 0,
+      "end": 7455,
+      "kind": "text",
+      "sha256": "888fd0580cfb6d23345a66f7c67c3874c1913b7c13f106d132daab923aba1049",
+      "source_id": "S10-07",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "888fd0580cfb6d23345a66f7c67c3874c1913b7c13f106d132daab923aba1049",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 7455,
+      "assigned_part_sha256": "888fd0580cfb6d23345a66f7c67c3874c1913b7c13f106d132daab923aba1049",
+      "partial_source": false,
+      "date": "2026-10-19",
+      "producer": "live-render-matrix author, unnamed",
+      "topic": "Five-row GLX/TLX matrix on Apple Paravirtual Metal; GLX passes, TLX timeouts and lazy second-circuit failure.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7455,
+          "sha256": "888fd0580cfb6d23345a66f7c67c3874c1913b7c13f106d132daab923aba1049",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/RENDERER-ALTERNATIVES-2026-10-24.md",
+      "start": 0,
+      "end": 3341,
+      "kind": "text",
+      "sha256": "833765710ead9dc4b91dd190ceaf26021867ae3e398ced2bcaacb2baa3965ef1",
+      "source_id": "S10-08",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "833765710ead9dc4b91dd190ceaf26021867ae3e398ced2bcaacb2baa3965ef1",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3341,
+      "assigned_part_sha256": "833765710ead9dc4b91dd190ceaf26021867ae3e398ced2bcaacb2baa3965ef1",
+      "partial_source": false,
+      "date": "2026-10-24",
+      "producer": "A\u00b7W47 at Bryce request",
+      "topic": "Renderer alternatives; keep Three r186, discard patch 17, propose static BundleGroup trial.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3341,
+          "sha256": "833765710ead9dc4b91dd190ceaf26021867ae3e398ced2bcaacb2baa3965ef1",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": [
+        "./docs/notes/UPSTREAM-THREE-ISSUES.md:199:`docs/archive/notes/RENDERER-ALTERNATIVES-2026-10-24.md`."
+      ]
+    },
+    {
+      "path": "docs/archive/notes/RES-SCALE-FIXED-TARGETS-2026-10-17.md",
+      "start": 0,
+      "end": 3101,
+      "kind": "text",
+      "sha256": "c59bbda211f1b5e25075272a126a6e18b30d7b0cdf467aba284f148394d474d5",
+      "source_id": "S10-09",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "c59bbda211f1b5e25075272a126a6e18b30d7b0cdf467aba284f148394d474d5",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3101,
+      "assigned_part_sha256": "c59bbda211f1b5e25075272a126a6e18b30d7b0cdf467aba284f148394d474d5",
+      "partial_source": false,
+      "date": "2026-10-17",
+      "producer": "resolution-target census/design lane, unnamed",
+      "topic": "Eleven reallocations per scale change; fixed-target UV/clamp/upscale design not implemented.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3101,
+          "sha256": "c59bbda211f1b5e25075272a126a6e18b30d7b0cdf467aba284f148394d474d5",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/ROLE-REVIEW-2026-10-17.md",
+      "start": 0,
+      "end": 15943,
+      "kind": "text",
+      "sha256": "f8d1fd914e01951617c4084cb7acf3be0de9af9dde958e0a56b00dd87627a590",
+      "source_id": "S10-10",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "f8d1fd914e01951617c4084cb7acf3be0de9af9dde958e0a56b00dd87627a590",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 15943,
+      "assigned_part_sha256": "f8d1fd914e01951617c4084cb7acf3be0de9af9dde958e0a56b00dd87627a590",
+      "partial_source": false,
+      "date": "2026-10-17",
+      "producer": "role/transcript review lane, unnamed",
+      "topic": "Late-night event windows plus session costs; rotation, broadcast, full-floor fallback and handoff proposals with confidence labels.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "4f6b11bd17cd8436860fd6be65c6d3924c94230679febbef4f4f8aebd08923cc",
+          "read_complete": true
+        },
+        {
+          "start": 8500,
+          "end": 15943,
+          "sha256": "08edb3cb4f8ff8c2e6e316a2aa2892262135beed5aa04e6cdc4789fe8803f2bc",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/SHARED-BRANCH-COORDINATION.md",
+      "start": 0,
+      "end": 5244,
+      "kind": "text",
+      "sha256": "fc4789476d96a4ab00c21194ce283e1b3011b1463476ae3b3e25d8dc5966cb13",
+      "source_id": "S10-11",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "fc4789476d96a4ab00c21194ce283e1b3011b1463476ae3b3e25d8dc5966cb13",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 5244,
+      "assigned_part_sha256": "fc4789476d96a4ab00c21194ce283e1b3011b1463476ae3b3e25d8dc5966cb13",
+      "partial_source": false,
+      "date": "2026-09-18; updates 2026-09-22, 2026-10-03, 2026-10-26",
+      "producer": "agent-dev-process retrospective author",
+      "topic": "Three simultaneous Silverstone roof fixes; claims evolution; direct-deploy development explicitly superseded.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5244,
+          "sha256": "fc4789476d96a4ab00c21194ce283e1b3011b1463476ae3b3e25d8dc5966cb13",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": [
+        "./tests/unit/deploy-tool.test.mjs:663:  assert.equal(proseOnly([\"docs/archive/notes/SHARED-BRANCH-COORDINATION.md\", \"AGENTS.md\"]), true);",
+        "./docs/notes/orchestration-redesign-2026-10-27/rulebook.md:42:**References to things that do not exist / are retired.** `docs/notes/INCIDENT-<date>.md` prescribed (comms.md:111), none exist; `pages-red-triage` (FLEET-ADAPTIVE:79) no such tool; orchestrator.md:257,263 still write `tools/ci/<agent-msg.mjs>` \"helper lands with #3518\" though it shipped; `ReadNotifications` (running.md:40, orchestrator.md:273, role-pr-owner.md:220) is not among the `claude-code-remote` tools comms.md:6-8 lists nor this host's tool list; agents/worker.md:291 lists `SendUserFile`, `LSP`, `TaskCreate/Update/List/Get` which this host does not list; fleet-bus.mjs:3 `@doc` still advertises \"Merge lease (one holder, expiry, refusal)\" (retired FLEET-BUS:90-94) and tools/README.md is generated from it; `APEX_MERGE_DESK` (fleet-redesign.md:17) is gone from settings.json (good, but the plan is cited as authority at AGENTS.md:182). SHARED-BRANCH-COORDINATION.md:1 declares itself superseded yet AGENTS.md:163-166 still carries its claim-before-shared-fix clause as live.",
+        "./docs/notes/orchestration-redesign-2026-10-27/rulebook.md:64:| 15 | Claim before a shared fix / one owner per red tip (AGENTS.md:163-166; steward \u00a73) | three fixes + a revert, 2026-09-18 | (c) SHARED-BRANCH-COORDINATION.md:1 says superseded (deploy branch protected, PR-only); `fleet-owner.mjs` HELD-by-open-diff replaces it |",
+        "./docs/NOTES-INDEX.md:59:| [archive/notes/SHARED-BRANCH-COORDINATION.md](archive/notes/SHARED-BRANCH-COORDINATION.md) | (Superseded in part: work lands via PR only.) `who-is-on-it.mjs` claims and the stand-down rule when another session already pushed a fix or holds a claim on your paths. |"
+      ]
+    },
+    {
+      "path": "docs/archive/notes/SILVERSTONE-PASS2-TREES-2026-10-10.md",
+      "start": 0,
+      "end": 1473,
+      "kind": "text",
+      "sha256": "ec6f62fdacc21f5750b6845a48fd5432972b1bfe4e6628132a36a8ed4c37e2dc",
+      "source_id": "S10-12",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "ec6f62fdacc21f5750b6845a48fd5432972b1bfe4e6628132a36a8ed4c37e2dc",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 1473,
+      "assigned_part_sha256": "ec6f62fdacc21f5750b6845a48fd5432972b1bfe4e6628132a36a8ed4c37e2dc",
+      "partial_source": false,
+      "date": "2026-10-10",
+      "producer": "Silverstone pass-two survey lane",
+      "topic": "CC0 tree import rejected for mesh/pack budget; low-poly or decimation prerequisite.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1473,
+          "sha256": "ec6f62fdacc21f5750b6845a48fd5432972b1bfe4e6628132a36a8ed4c37e2dc",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/SKILL-TESTDRIVE-2026-10-05.md",
+      "start": 0,
+      "end": 4138,
+      "kind": "text",
+      "sha256": "36fa8af4e6d8c078c46c9eb88347ec2ae962b382121b43abb193d147773957ba",
+      "source_id": "S10-13",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "36fa8af4e6d8c078c46c9eb88347ec2ae962b382121b43abb193d147773957ba",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 4138,
+      "assigned_part_sha256": "36fa8af4e6d8c078c46c9eb88347ec2ae962b382121b43abb193d147773957ba",
+      "partial_source": false,
+      "date": "2026-10-05",
+      "producer": "skill/MCP test-drive coordinator with Sonnet lanes",
+      "topic": "Thirty skills, six agents and MCP probes; Playwright executable wrapper and fast help guard; routing/load limitations.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4138,
+          "sha256": "36fa8af4e6d8c078c46c9eb88347ec2ae962b382121b43abb193d147773957ba",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/SPEC-TIMINGS-AUDIT-2026-10-10.md",
+      "start": 0,
+      "end": 3983,
+      "kind": "text",
+      "sha256": "dbe3edf9b0e63ceab8d3c76db95eb00a2ac11b29fa40283fff8612c973a22648",
+      "source_id": "S10-14",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "dbe3edf9b0e63ceab8d3c76db95eb00a2ac11b29fa40283fff8612c973a22648",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3983,
+      "assigned_part_sha256": "dbe3edf9b0e63ceab8d3c76db95eb00a2ac11b29fa40283fff8612c973a22648",
+      "partial_source": false,
+      "date": "2026-10-10; update 2026-10-11",
+      "producer": "spec-timing audit and steward",
+      "topic": "Measured llvmpipe billing samples replace constants; minimum-sample threshold and selector pin fallout.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3983,
+          "sha256": "dbe3edf9b0e63ceab8d3c76db95eb00a2ac11b29fa40283fff8612c973a22648",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/SYNC-CHURN-AND-BATCH-TRAIN-2026-10-16.md",
+      "start": 0,
+      "end": 17064,
+      "kind": "text",
+      "sha256": "de9ecd9d147241d2f4e40b2f1396aa012d20c4bcdda6862629bb002bb592a059",
+      "source_id": "S10-15",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "de9ecd9d147241d2f4e40b2f1396aa012d20c4bcdda6862629bb002bb592a059",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 17064,
+      "assigned_part_sha256": "de9ecd9d147241d2f4e40b2f1396aa012d20c4bcdda6862629bb002bb592a059",
+      "partial_source": false,
+      "date": "2026-10-16",
+      "producer": "Merge Desk design lane and read-only CI audit lanes",
+      "topic": "Sync churn census; conflict/stale-red predicate and skill text landed; later phases and savings unmeasured.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "d672aed0acaa552964b19884bf8c8066e652dcf05b0d209f6685e126161c8041",
+          "read_complete": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "sha256": "9909ceceef7fb3202618928fb88010bf39c9f13a4002500d995733fe8a535854",
+          "read_complete": true
+        },
+        {
+          "start": 17000,
+          "end": 17064,
+          "sha256": "ceb543e310504a20298bdebf4f91fd72ad48bacf291f33927f223236779e3127",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/THERMAL-GOVERNOR-2652.md",
+      "start": 0,
+      "end": 3145,
+      "kind": "text",
+      "sha256": "8e12a00d77d8566ac4a1d72b6e66676b3a592e7b6301e2e285e0c8407f6c232f",
+      "source_id": "S10-16",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "8e12a00d77d8566ac4a1d72b6e66676b3a592e7b6301e2e285e0c8407f6c232f",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3145,
+      "assigned_part_sha256": "8e12a00d77d8566ac4a1d72b6e66676b3a592e7b6301e2e285e0c8407f6c232f",
+      "partial_source": false,
+      "date": "2026-10-17",
+      "producer": "thermal-governor #2652 implementation lane",
+      "topic": "Default-off drift step and 45/30 render cadence; synthetic tests, phone soak still required.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3145,
+          "sha256": "8e12a00d77d8566ac4a1d72b6e66676b3a592e7b6301e2e285e0c8407f6c232f",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/TLX-DRAW-ORDER-AUDIT-2026-10-17.md",
+      "start": 0,
+      "end": 3027,
+      "kind": "text",
+      "sha256": "b29c080cef71764ca5d9a742710a93c362696c7376b6f0d7320262e1e3f368b3",
+      "source_id": "S10-17",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "b29c080cef71764ca5d9a742710a93c362696c7376b6f0d7320262e1e3f368b3",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3027,
+      "assigned_part_sha256": "b29c080cef71764ca5d9a742710a93c362696c7376b6f0d7320262e1e3f368b3",
+      "partial_source": false,
+      "date": "2026-10-17",
+      "producer": "TLX hidden-surface draw-order audit lane",
+      "topic": "Counted opaque/blended ordering; negative result, no reorder shipped or tile-GPU timing.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3027,
+          "sha256": "b29c080cef71764ca5d9a742710a93c362696c7376b6f0d7320262e1e3f368b3",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/TLX-FORCED-MOBILE-DEVICE-LOST-2026-10-20.md",
+      "start": 0,
+      "end": 1921,
+      "kind": "text",
+      "sha256": "ea3881831d04389ce3febc480763ca65b40f027b3e2aaa58d72ab78cb5184725",
+      "source_id": "S10-18",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "ea3881831d04389ce3febc480763ca65b40f027b3e2aaa58d72ab78cb5184725",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 1921,
+      "assigned_part_sha256": "ea3881831d04389ce3febc480763ca65b40f027b3e2aaa58d72ab78cb5184725",
+      "partial_source": false,
+      "date": "2026-10-20",
+      "producer": "B\u00b7W10 following B\u00b7H7 report",
+      "topic": "Forced-mobile device loss on software adapters; handset-UA distinction preserves soft-blit path.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1921,
+          "sha256": "ea3881831d04389ce3febc480763ca65b40f027b3e2aaa58d72ab78cb5184725",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/TLX-RENDER-BUNDLES-2026-10-25.md",
+      "start": 0,
+      "end": 3118,
+      "kind": "text",
+      "sha256": "ba88ed45a91f72c5c50aad6661e21f578d5a5ddd06d65127e7bb59d5dfd6f7dc",
+      "source_id": "S10-19",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "ba88ed45a91f72c5c50aad6661e21f578d5a5ddd06d65127e7bb59d5dfd6f7dc",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 3118,
+      "assigned_part_sha256": "ba88ed45a91f72c5c50aad6661e21f578d5a5ddd06d65127e7bb59d5dfd6f7dc",
+      "partial_source": false,
+      "date": "2026-10-25",
+      "producer": "A\u00b7W47 prototype and A\u00b7O4 follow-up",
+      "topic": "Flagged render-bundle prototype closed unmerged: slower/neutral pairs; revive only after binding/draw-count change.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3118,
+          "sha256": "ba88ed45a91f72c5c50aad6661e21f578d5a5ddd06d65127e7bb59d5dfd6f7dc",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/TLX-SHADER-IDEAS-2026-10-01.md",
+      "start": 0,
+      "end": 11419,
+      "kind": "text",
+      "sha256": "86c8e142d27f185df51edc569770da22756b928b727974d47f8d810dcbf40391",
+      "source_id": "S10-20",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "86c8e142d27f185df51edc569770da22756b928b727974d47f8d810dcbf40391",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 11419,
+      "assigned_part_sha256": "86c8e142d27f185df51edc569770da22756b928b727974d47f8d810dcbf40391",
+      "partial_source": false,
+      "date": "2026-10-01",
+      "producer": "TLX shader survey author, unnamed",
+      "topic": "Research-only foliage/rain/wind/rubber/glow/mist proposals, parity costs and rejected visual features.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "96128572ef0c8fbe108ef43d52adc388783451a36e72cee7ec6bfca7288e5ee4",
+          "read_complete": true
+        },
+        {
+          "start": 8500,
+          "end": 11419,
+          "sha256": "ab7058b96d77b05c35d36bdd9aa109063a80e4420b0ce14edb9e5df90fc332d1",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": [
+        "./docs/notes/TLX-PERF-HUNT-2026-10-11.md:13:list was `TLX-PERF-PLAN.md`, `PERF-FINDINGS.md`, `TLX-SHADER-IDEAS-2026-10-01.md` and"
+      ]
+    },
+    {
+      "path": "docs/archive/notes/TLX-WEBGPU-PERF-2026-10-18.md",
+      "start": 0,
+      "end": 5761,
+      "kind": "text",
+      "sha256": "269e27e423619b58dea838edebdbc36044919e88ad43563c1d7345977133d71f",
+      "source_id": "S10-21",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "269e27e423619b58dea838edebdbc36044919e88ad43563c1d7345977133d71f",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 5761,
+      "assigned_part_sha256": "269e27e423619b58dea838edebdbc36044919e88ad43563c1d7345977133d71f",
+      "partial_source": false,
+      "date": "2026-10-18",
+      "producer": "TLX WebGPU audit lanes and independent reviewer",
+      "topic": "Instance distance/fog culling, gated decal samples, garage geometry ownership, mobile shadow no-work and observer disposal.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5761,
+          "sha256": "269e27e423619b58dea838edebdbc36044919e88ad43563c1d7345977133d71f",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": [
+        "./tools/archive/README.md:16:| `gfx/decal-bake-probe.mjs` | decal bake pool A/B on WebGL2 | `docs/archive/notes/TLX-WEBGPU-PERF-2026-10-18.md` |"
+      ]
+    },
+    {
+      "path": "docs/archive/notes/TOKEN-EFFICIENCY-2026-10-18.md",
+      "start": 0,
+      "end": 15210,
+      "kind": "text",
+      "sha256": "70d3544512cf6e51b3fcd9a0ecf66a7e569342c9f07a29fe86e5a1e68462849d",
+      "source_id": "S10-22",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "70d3544512cf6e51b3fcd9a0ecf66a7e569342c9f07a29fe86e5a1e68462849d",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 15210,
+      "assigned_part_sha256": "70d3544512cf6e51b3fcd9a0ecf66a7e569342c9f07a29fe86e5a1e68462849d",
+      "partial_source": false,
+      "date": "2026-10-18",
+      "producer": "token-efficiency audit author, unnamed",
+      "topic": "Task-scoped reading and recoverable output recommendations; distinct Cursor output and Claude repeated-context evidence.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "460cf241e76ebcf6d324747c535695781573f8f210540541e39f17545371c107",
+          "read_complete": true
+        },
+        {
+          "start": 8500,
+          "end": 15210,
+          "sha256": "16b3032496ac94faa4b56267819b7fdecbc083c8b39de23f337e11a53b2b3013",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "path": "docs/archive/notes/TOKEN-TOOL-PROBES-2026-10-18.md",
+      "start": 0,
+      "end": 3128,
+      "kind": "text",
+      "sha256": "7e8874a42024c844faaaf5bf4220bda87f8aed9158e955f3baada7d0fbcf9bc0",
+      "source_id": "S10-23",
+      "plan_sha256_scope": "whole source file",
+      "actual_whole_file_sha256": "7e8874a42024c844faaaf5bf4220bda87f8aed9158e955f3baada7d0fbcf9bc0",
+      "whole_file_hash_matches_plan": true,
+      "whole_file_bytes": 10260,
+      "assigned_part_sha256": "03f10876e9dd53f4e761d8a4a9e4831bdd181792de6048632462b1dc1c57c397",
+      "partial_source": true,
+      "date": "2026-10-18",
+      "producer": "compact-status implementation/probe author, unnamed",
+      "topic": "Partial probe report: 21 bounded CLI calls, bytes and wall time; full schemas and provider tokens distinguished.",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3128,
+          "sha256": "03f10876e9dd53f4e761d8a4a9e4831bdd181792de6048632462b1dc1c57c397",
+          "read_complete": true
+        }
+      ],
+      "live_basename_backlinks": []
+    }
+  ],
+  "restrictions": "Historical instructions and grants are provenance only. No runtime, browser, network, tests, source edits, staging or commits."
+}

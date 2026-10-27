@@ -1,0 +1,392 @@
+{
+  "group": "07",
+  "plan_sha256": "45c79d5dfbe20976a87dabd9cada12c604de55827dc38a7b326f069571b5fe1c",
+  "read_date": "2026-10-27",
+  "assigned_bytes": 160000,
+  "range_semantics": "half-open bytes",
+  "sources": [
+    {
+      "path": "docs/archive/notes/ISSUE-TRIAGE-1518-2649-2026-10-22.md",
+      "start": 30524,
+      "end": 35046,
+      "kind": "text",
+      "sha256": "80947d2d110d83109e155716dd1e4791cad3ad37ca6297519bf56bfa27f88262",
+      "id": 1,
+      "whole_file_sha256": "80947d2d110d83109e155716dd1e4791cad3ad37ca6297519bf56bfa27f88262",
+      "part_sha256": "7b7a7e6745cc22cb3a4790c63756b1e647136ecebd9cbed0f8cfe1bc1c0cfa7e",
+      "chunks": [
+        {
+          "start": 30524,
+          "end": 35046,
+          "sha256": "7b7a7e6745cc22cb3a4790c63756b1e647136ecebd9cbed0f8cfe1bc1c0cfa7e",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/ISSUE-TRIAGE-2026-10-19.md",
+      "start": 0,
+      "end": 4106,
+      "kind": "text",
+      "sha256": "4a3119438c783d960417d0e8a3de1a506c2797790bf3641ad41f564afb434098",
+      "id": 2,
+      "whole_file_sha256": "4a3119438c783d960417d0e8a3de1a506c2797790bf3641ad41f564afb434098",
+      "part_sha256": "4a3119438c783d960417d0e8a3de1a506c2797790bf3641ad41f564afb434098",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4106,
+          "sha256": "4a3119438c783d960417d0e8a3de1a506c2797790bf3641ad41f564afb434098",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/ISSUE-TRIAGE-2650-3304-2026-10-22.md",
+      "start": 0,
+      "end": 29218,
+      "kind": "text",
+      "sha256": "48fddfc9fdeb8f8802a6ea03c179102c973c2f958b218faa08b1a71c749bad71",
+      "id": 3,
+      "whole_file_sha256": "48fddfc9fdeb8f8802a6ea03c179102c973c2f958b218faa08b1a71c749bad71",
+      "part_sha256": "48fddfc9fdeb8f8802a6ea03c179102c973c2f958b218faa08b1a71c749bad71",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "0404a8376990d0153004fdcead631bc6bd5b05a747d62b3f162675f9acd071d7",
+          "fully_read": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "sha256": "96bcd6ac852c271652cca8d14f93d1ed1d9bb9694103282f722a0bb3728cba01",
+          "fully_read": true
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "sha256": "94d6da2f88777f9c31eef99b058180d6c03943d86c4c027402c23c31c200d970",
+          "fully_read": true
+        },
+        {
+          "start": 25500,
+          "end": 29218,
+          "sha256": "aaae3be2d8341f1647b094e706e0236083ca3b34e5f4379927ea64c656bbc630",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/ISSUE-TRIAGE-3305-UP-2026-10-22.md",
+      "start": 0,
+      "end": 24082,
+      "kind": "text",
+      "sha256": "e951e407d3c7dcb4ec826729d3344530f16d9f872aed590435353d4a1ccd9ba1",
+      "id": 4,
+      "whole_file_sha256": "e951e407d3c7dcb4ec826729d3344530f16d9f872aed590435353d4a1ccd9ba1",
+      "part_sha256": "e951e407d3c7dcb4ec826729d3344530f16d9f872aed590435353d4a1ccd9ba1",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "afcc573240b4a2e85df6f31d8ea7142a0c910a4c9524a37869f833056a0dfdbb",
+          "fully_read": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "sha256": "cb4bb23d5a027703b5a6837e060eaf605a9f44b19a4c4fa640c7085c7068e1b8",
+          "fully_read": true
+        },
+        {
+          "start": 17000,
+          "end": 24082,
+          "sha256": "7f70f7861fcbd96ff2dba43638d9dd40b4513f5695dca0b05464d6d722991cb9",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIGHTING-TUNER-WIRING-AUDIT-2026-10-06.md",
+      "start": 0,
+      "end": 4258,
+      "kind": "text",
+      "sha256": "1a8891d1c8e53f51f5dc3a75891c8961b19e10120f34f4dc98d2536557499859",
+      "id": 5,
+      "whole_file_sha256": "1a8891d1c8e53f51f5dc3a75891c8961b19e10120f34f4dc98d2536557499859",
+      "part_sha256": "1a8891d1c8e53f51f5dc3a75891c8961b19e10120f34f4dc98d2536557499859",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4258,
+          "sha256": "1a8891d1c8e53f51f5dc3a75891c8961b19e10120f34f4dc98d2536557499859",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-AUDIO-DATA-NET-2026-10-22.md",
+      "start": 0,
+      "end": 3084,
+      "kind": "text",
+      "sha256": "72690eb4b5388c342640b24fd067b6a802c54f5fe6cc49c08a96f4a7c4b579cf",
+      "id": 6,
+      "whole_file_sha256": "72690eb4b5388c342640b24fd067b6a802c54f5fe6cc49c08a96f4a7c4b579cf",
+      "part_sha256": "72690eb4b5388c342640b24fd067b6a802c54f5fe6cc49c08a96f4a7c4b579cf",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3084,
+          "sha256": "72690eb4b5388c342640b24fd067b6a802c54f5fe6cc49c08a96f4a7c4b579cf",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-AUDIO-INPUT-2026-10-16.md",
+      "start": 0,
+      "end": 8187,
+      "kind": "text",
+      "sha256": "50f1b429d2f1737ad72072e2cbc24bf16ece7806069c4ae79e4209873771df61",
+      "id": 7,
+      "whole_file_sha256": "50f1b429d2f1737ad72072e2cbc24bf16ece7806069c4ae79e4209873771df61",
+      "part_sha256": "50f1b429d2f1737ad72072e2cbc24bf16ece7806069c4ae79e4209873771df61",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8187,
+          "sha256": "50f1b429d2f1737ad72072e2cbc24bf16ece7806069c4ae79e4209873771df61",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-BOOT-2026-10-21.md",
+      "start": 0,
+      "end": 5316,
+      "kind": "text",
+      "sha256": "08f73bd4d1528255d52666301b0057d9a838e4d0786d27f57f998ecb382d940a",
+      "id": 8,
+      "whole_file_sha256": "08f73bd4d1528255d52666301b0057d9a838e4d0786d27f57f998ecb382d940a",
+      "part_sha256": "08f73bd4d1528255d52666301b0057d9a838e4d0786d27f57f998ecb382d940a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5316,
+          "sha256": "08f73bd4d1528255d52666301b0057d9a838e4d0786d27f57f998ecb382d940a",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-BOOT-PWA-2026-10-16.md",
+      "start": 0,
+      "end": 11544,
+      "kind": "text",
+      "sha256": "bd8250ddb154b49aa4fdb95355f1b831495e48c359f11b9512fc5c7eb9a5092d",
+      "id": 9,
+      "whole_file_sha256": "bd8250ddb154b49aa4fdb95355f1b831495e48c359f11b9512fc5c7eb9a5092d",
+      "part_sha256": "bd8250ddb154b49aa4fdb95355f1b831495e48c359f11b9512fc5c7eb9a5092d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "79d7236a7f3f135e9d601942ff1c1dab75e8e82c0f384db41c05a0606c5d340e",
+          "fully_read": true
+        },
+        {
+          "start": 8500,
+          "end": 11544,
+          "sha256": "52bb2c700a63bca4cb6a374ccbbbfd66f48cfe06d1b2ca87718f4b3f7098d1be",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-CAREER-2-2026-10-17.md",
+      "start": 0,
+      "end": 4694,
+      "kind": "text",
+      "sha256": "11438fe7625583cccba293c021197e75ad20e915d0b6888372ae8ed19989d802",
+      "id": 10,
+      "whole_file_sha256": "11438fe7625583cccba293c021197e75ad20e915d0b6888372ae8ed19989d802",
+      "part_sha256": "11438fe7625583cccba293c021197e75ad20e915d0b6888372ae8ed19989d802",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4694,
+          "sha256": "11438fe7625583cccba293c021197e75ad20e915d0b6888372ae8ed19989d802",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-CAREER-2026-10-16.md",
+      "start": 0,
+      "end": 7249,
+      "kind": "text",
+      "sha256": "cad3f5fa742a65dc885d485bf4a594d208b26879a750b46ace0c4a7291b721fd",
+      "id": 11,
+      "whole_file_sha256": "cad3f5fa742a65dc885d485bf4a594d208b26879a750b46ace0c4a7291b721fd",
+      "part_sha256": "cad3f5fa742a65dc885d485bf4a594d208b26879a750b46ace0c4a7291b721fd",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7249,
+          "sha256": "cad3f5fa742a65dc885d485bf4a594d208b26879a750b46ace0c4a7291b721fd",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-CAREER-GARAGE-2026-10-22.md",
+      "start": 0,
+      "end": 7099,
+      "kind": "text",
+      "sha256": "55ce7be86ca023347396b732d6d248a289eebf2b67e463c8f0e6d56e55bce238",
+      "id": 12,
+      "whole_file_sha256": "55ce7be86ca023347396b732d6d248a289eebf2b67e463c8f0e6d56e55bce238",
+      "part_sha256": "55ce7be86ca023347396b732d6d248a289eebf2b67e463c8f0e6d56e55bce238",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7099,
+          "sha256": "55ce7be86ca023347396b732d6d248a289eebf2b67e463c8f0e6d56e55bce238",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-CARS-2026-10-16.md",
+      "start": 0,
+      "end": 9434,
+      "kind": "text",
+      "sha256": "b806fed2338cb53acca3d99272c2e84e89b776e9cf3e96065c7e2e7808d9db0a",
+      "id": 13,
+      "whole_file_sha256": "b806fed2338cb53acca3d99272c2e84e89b776e9cf3e96065c7e2e7808d9db0a",
+      "part_sha256": "b806fed2338cb53acca3d99272c2e84e89b776e9cf3e96065c7e2e7808d9db0a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "dcb77db39552a6a65c5f795da40aa8b5e43cd46859c64f3b578d6e75f85cfc0c",
+          "fully_read": true
+        },
+        {
+          "start": 8500,
+          "end": 9434,
+          "sha256": "a3502c7e2462d050dfb69a1a5a9b7da6863ac471b4845478a5de0f965992f99e",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-DATA-2026-10-16.md",
+      "start": 0,
+      "end": 11525,
+      "kind": "text",
+      "sha256": "0620debbe53458a3f530ec97786b082d84c26dbbd586c0ee83e63405de04fd36",
+      "id": 14,
+      "whole_file_sha256": "0620debbe53458a3f530ec97786b082d84c26dbbd586c0ee83e63405de04fd36",
+      "part_sha256": "0620debbe53458a3f530ec97786b082d84c26dbbd586c0ee83e63405de04fd36",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "4dd5a30bac361378bbae657a32a689221798b4fe2a091d110a2d24fad9ac19a7",
+          "fully_read": true
+        },
+        {
+          "start": 8500,
+          "end": 11525,
+          "sha256": "14dd0ff143e628fd14c03cb9523ae56a378df263d3c63ec65db92e746eb8c189",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-EDITOR-2026-10-16.md",
+      "start": 0,
+      "end": 12170,
+      "kind": "text",
+      "sha256": "5a65f3aa1914bb7305e03eae1b053669fef3d6277729e50f6c91450894dbca5d",
+      "id": 15,
+      "whole_file_sha256": "5a65f3aa1914bb7305e03eae1b053669fef3d6277729e50f6c91450894dbca5d",
+      "part_sha256": "5a65f3aa1914bb7305e03eae1b053669fef3d6277729e50f6c91450894dbca5d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "b97c6e742e59f74bdde01cd0ddc4556f9cb5ac6242b3dbd76c65931a66e45958",
+          "fully_read": true
+        },
+        {
+          "start": 8500,
+          "end": 12170,
+          "sha256": "5f80212743f822639bd5b014b0005dd9d968cee0cb76528031eb9e8906e2df91",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-HUD-2026-10-21.md",
+      "start": 0,
+      "end": 5311,
+      "kind": "text",
+      "sha256": "f3fcba26083390c9824d2b754123ac7ebefa85c7f0331e5cf239bf723dcd8dae",
+      "id": 16,
+      "whole_file_sha256": "f3fcba26083390c9824d2b754123ac7ebefa85c7f0331e5cf239bf723dcd8dae",
+      "part_sha256": "f3fcba26083390c9824d2b754123ac7ebefa85c7f0331e5cf239bf723dcd8dae",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5311,
+          "sha256": "f3fcba26083390c9824d2b754123ac7ebefa85c7f0331e5cf239bf723dcd8dae",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    },
+    {
+      "path": "docs/archive/notes/LIVE-DEBUGGER-HUNT-2026-10-16.md",
+      "start": 0,
+      "end": 8201,
+      "kind": "text",
+      "sha256": "0a10978b8691cd424d9b8e532ec084c9993d8e461dd16e8ceb3faceb5700406a",
+      "id": 17,
+      "whole_file_sha256": "0a10978b8691cd424d9b8e532ec084c9993d8e461dd16e8ceb3faceb5700406a",
+      "part_sha256": "f24561352f3854bc4f2c723181c993b303e977bdf5ab95a78d14414a282f1527",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8201,
+          "sha256": "f24561352f3854bc4f2c723181c993b303e977bdf5ab95a78d14414a282f1527",
+          "fully_read": true
+        }
+      ],
+      "current_backlink_files": []
+    }
+  ],
+  "backlink_method": "rg -l -F source basename . excluding docs/archive/** and docs/project-map/**; normal ignore and hidden-file behavior; no external history search",
+  "limitations": [
+    "S01 begins mid-record; preceding material assigned to group06.",
+    "S17 ends mid-sentence in the assigned span; remainder belongs to next batch.",
+    "Historic findings and commands are provenance, not current verdicts or instructions."
+  ]
+}

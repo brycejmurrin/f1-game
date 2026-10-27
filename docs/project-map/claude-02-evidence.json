@@ -1,0 +1,619 @@
+{
+  "group": "02",
+  "plan_sha256": "d2fd60676e9b4e57397639166337b4d42ad5de2f78be597358b5dce9eed72cf1",
+  "parts": [
+    {
+      "path": ".claude/hooks/lsp-hint.py",
+      "start": 3330,
+      "end": 6315,
+      "kind": "text",
+      "sha256": "31a987751267ef201996dfc01a875b495aaf154ac6250ab14639c340ef028e30",
+      "actual_sha256": "31a987751267ef201996dfc01a875b495aaf154ac6250ab14639c340ef028e30",
+      "part_sha256": "e55ffead862166592bab49bdb158ae878317068cdb90f9a0e7adbe6a7a035fe5",
+      "semantic_map": {
+        "role": "Nonblocking semantic-navigation advice after JS-symbol grep",
+        "input": "Grep/Bash hook payload, APEX_LSP_HINT=off opt-out",
+        "output": "hookSpecificOutput.additionalContext; exceptions swallowed",
+        "dependencies": [
+          "shlex",
+          "regex symbol heuristics",
+          "apex-lsp lsp_definition/lsp_references/lsp_callers",
+          "tools/mcp/lsp-mcp.sh"
+        ],
+        "limits": [
+          "Only suffix [3330,6315) assigned; earlier symbol/path predicates are not independently mapped",
+          "No source navigation performed: assigned executable code is Python/shell, no JS runtime symbols"
+        ]
+      },
+      "plan_hash_match": true
+    },
+    {
+      "path": ".claude/hooks/mcp-browser-guard.sh",
+      "start": 0,
+      "end": 4130,
+      "kind": "text",
+      "sha256": "0aef70286a86c22fa4befbe8c3b9f88c5fa0d9412333ef58436adcfdc6d150c5",
+      "actual_sha256": "0aef70286a86c22fa4befbe8c3b9f88c5fa0d9412333ef58436adcfdc6d150c5",
+      "part_sha256": "0aef70286a86c22fa4befbe8c3b9f88c5fa0d9412333ef58436adcfdc6d150c5",
+      "semantic_map": {
+        "role": "Deny browser-driving MCP calls made by subagents",
+        "input": "tool_name, tool_input.action, agent_id/agent_type/transcript_path",
+        "output": "exit 2 plus stderr refusal; exit 0 permits",
+        "dependencies": [
+          "settings.json MCP matcher",
+          "apex-tools browser catalog",
+          "Python json/re"
+        ],
+        "limits": [
+          "Malformed JSON fails closed",
+          "agent_type also treats a main --agent session as a subagent by deliberate local assumption",
+          "debug_chrome status/stop/list/help remain allowed"
+        ]
+      },
+      "plan_hash_match": true
+    },
+    {
+      "path": ".claude/hooks/memory-sync.sh",
+      "start": 0,
+      "end": 12535,
+      "kind": "text",
+      "sha256": "f72e22c8d0185dc7cd36d24fdf70332257268bce774cddd41b063e675062e6fe",
+      "actual_sha256": "f72e22c8d0185dc7cd36d24fdf70332257268bce774cddd41b063e675062e6fe",
+      "part_sha256": "f72e22c8d0185dc7cd36d24fdf70332257268bce774cddd41b063e675062e6fe",
+      "semantic_map": {
+        "role": "Cloud auto-memory three-way sync",
+        "input": "restore|save|unmark; hook payload; CLAUDE_CODE_REMOTE/APEX_MEMORY_SYNC; config/project dirs; git history",
+        "output": "live/repo/baseline Markdown writes, .head baseline, assume-unchanged index bits; advisory stdout/JSON",
+        "dependencies": [
+          "git common checkout",
+          "git ancestry and deletion history",
+          "Python embedded sync",
+          "SessionStart/PostToolUse/Stop registrations",
+          "bash-guard unmark call"
+        ],
+        "limits": [
+          "Always exit 0",
+          "Only .md files sync",
+          "Both topic edits keep repo; index line merge; edit/delete honors delete",
+          "Missing ancestry defers without mutating copies",
+          "PostToolUse filters edits outside live directory; conflicts alone surface in PostToolUse/Stop"
+        ]
+      },
+      "plan_hash_match": true
+    },
+    {
+      "path": ".claude/hooks/merge_policy.py",
+      "start": 0,
+      "end": 13230,
+      "kind": "text",
+      "sha256": "8796fe90fbec84c42e6cff22229d796dbd6869833c1b76bd6c78bbc27d89caee",
+      "actual_sha256": "8796fe90fbec84c42e6cff22229d796dbd6869833c1b76bd6c78bbc27d89caee",
+      "part_sha256": "8796fe90fbec84c42e6cff22229d796dbd6869833c1b76bd6c78bbc27d89caee",
+      "semantic_map": {
+        "role": "Shared policy strings, receipt freshness/head and committed gate-file validation",
+        "input": "root, kind, PR, optional head/clock; receipt JSON gateFiles/gateClosure/gateRoot",
+        "output": "(ok,why), PreToolUse decision JSON through emit",
+        "dependencies": [
+          "github-mcp-guard.sh",
+          "bash-guard.sh via shellparse",
+          "tools/lib/gate-receipt.mjs twin",
+          "git tracked/HEAD comparisons",
+          "SHA256"
+        ],
+        "limits": [
+          "10-minute receipt lifetime and one-minute future tolerance",
+          "Head prefixes require at least seven characters",
+          "Files checked in guarded root and existing distinct gateRoot",
+          "Receipt forgery outside scope; branch protection remains backstop",
+          "Policy denies session merges by absence of new merge receipts; legacy receipt validator still exists"
+        ]
+      },
+      "plan_hash_match": true
+    },
+    {
+      "path": ".claude/hooks/post-edit.sh",
+      "start": 0,
+      "end": 5700,
+      "kind": "text",
+      "sha256": "badc83e5315e40e986f95b7e46df7096d9e8920158b3cb2fecb4ea7aac18ee15",
+      "actual_sha256": "badc83e5315e40e986f95b7e46df7096d9e8920158b3cb2fecb4ea7aac18ee15",
+      "part_sha256": "badc83e5315e40e986f95b7e46df7096d9e8920158b3cb2fecb4ea7aac18ee15",
+      "semantic_map": {
+        "role": "Advisory feedback for parsed JS, new-test registration and stale generated outputs",
+        "input": "Write/Edit/MultiEdit file_path or notebook_path; repository root",
+        "output": "PostToolUse additionalContext max 9500 characters, exit 0",
+        "dependencies": [
+          "node --check",
+          "test-coverage-audit.mjs",
+          "gen-shell.mjs",
+          "gen-test-groups.mjs",
+          "gen-slider-doc.mjs",
+          "git ls-files",
+          "docs/TESTING.md"
+        ],
+        "limits": [
+          "Does not block or verify circuit builds; advises one final verify-track after all edits",
+          "Tracked tests avoid false-positive basename docs warning",
+          "No debounce for syntax checks"
+        ]
+      },
+      "plan_hash_match": true
+    },
+    {
+      "path": ".claude/hooks/protect-files.py",
+      "start": 0,
+      "end": 26270,
+      "kind": "text",
+      "sha256": "2a9640cbbe0c2334e9929fad106fd1d3f2fe2beb70d765c106088a0ce67895ed",
+      "actual_sha256": "2a9640cbbe0c2334e9929fad106fd1d3f2fe2beb70d765c106088a0ce67895ed",
+      "part_sha256": "2a9640cbbe0c2334e9929fad106fd1d3f2fe2beb70d765c106088a0ce67895ed",
+      "semantic_map": {
+        "role": "Generated/source/agent-scope/ratchet write guard",
+        "input": "JSON tool payload; tool/agent identity; source edits; shellparse targets; filesystem/git/process state",
+        "output": "exit 2 stderr block, exit 0 allow or loud fail-open warning",
+        "dependencies": [
+          "protect-files.sh entry wrapper",
+          "shellparse.write_targets/commands/surveyor_targets",
+          "git root/common dir/branch",
+          "Linux /proc process argv/cwd",
+          "generated source/generator mapping"
+        ],
+        "limits": [
+          "Malformed payload and parser crash fail open with warning despite hook onFailure:block",
+          "realpath before root checks prevents symlink target bypass",
+          "allow-protected lifts generated/shared-contract constraints, never live-run/ratchet/agent scope",
+          "Subagent hatch detection uses agent_id/transcript while browser guard also uses agent_type",
+          "Read-only reporter git mutation detection uses raw regex; opaque interpreter writes remain outside target extraction",
+          "git-resolve bypass occurs after live-run and agent restrictions"
+        ]
+      },
+      "plan_hash_match": true
+    },
+    {
+      "path": ".claude/hooks/protect-files.sh",
+      "start": 0,
+      "end": 2575,
+      "kind": "text",
+      "sha256": "7452a7042869a1ac5288145290cff14ae0c2967ae86851cc5115a5bfb007baba",
+      "actual_sha256": "7452a7042869a1ac5288145290cff14ae0c2967ae86851cc5115a5bfb007baba",
+      "part_sha256": "7452a7042869a1ac5288145290cff14ae0c2967ae86851cc5115a5bfb007baba",
+      "semantic_map": {
+        "role": "Thin stdin-preserving exec wrapper and readable rule inventory",
+        "input": "PreToolUse stdin",
+        "output": "Python guard exit status/stderr",
+        "dependencies": [
+          "protect-files.py",
+          "Cursor edit-guard.sh and shell-guard.sh"
+        ],
+        "limits": [
+          "Header inventory is explanatory; Python implementation is authoritative",
+          "Claims tools/README both blocked and unblocked in adjacent explanatory text; cleanup candidate"
+        ]
+      },
+      "plan_hash_match": true
+    },
+    {
+      "path": ".claude/hooks/session-start.sh",
+      "start": 0,
+      "end": 4118,
+      "kind": "text",
+      "sha256": "8733e01849afb20273dc73111923f6b336fe420295804f35d8bff0187f57ed1c",
+      "actual_sha256": "8733e01849afb20273dc73111923f6b336fe420295804f35d8bff0187f57ed1c",
+      "part_sha256": "8733e01849afb20273dc73111923f6b336fe420295804f35d8bff0187f57ed1c",
+      "semantic_map": {
+        "role": "Idempotent dependency/browser readiness and session orientation",
+        "input": "project dir, package/lock stamps, skip-install/browser flags, git/process/memory state",
+        "output": "artifact install logs and dependencies; one orientation context line; exit 0",
+        "dependencies": [
+          "npm install",
+          "chromium-path.mjs",
+          "install-browsers.sh",
+          "tsc --version",
+          "live-run.py",
+          "memory-sync.sh restore",
+          "gen-ladder-figures.mjs"
+        ],
+        "limits": [
+          "Skip-session flag exits before orientation and memory restore",
+          "Browser/lsp install failure reports status without blocking session",
+          "Does not itself start gameplay/browser tests"
+        ]
+      },
+      "plan_hash_match": true
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 0,
+      "end": 88457,
+      "kind": "text",
+      "sha256": "0e6d0b08fc6bb53ddd476158b32f515dc5d88d46f5947d519ff43a29b5167ea3",
+      "actual_sha256": "0e6d0b08fc6bb53ddd476158b32f515dc5d88d46f5947d519ff43a29b5167ea3",
+      "part_sha256": "f2babb06f9c424694307a59a4f3a97d1ba85fd3a03840eec0b569b6b128f8d3e",
+      "semantic_map": {
+        "role": "Shared conservative shell command inspection for Bash and file guards",
+        "input": "Shell text, cwd/root, optional browser group catalog and guard payload",
+        "output": "commands/env/argv/redirs/cwd; commit metadata; push/API/browser/ratchet/config/kill/poll issues; guard mixed line protocol and JSON decisions",
+        "dependencies": [
+          "Python shlex",
+          "merge_policy",
+          "foreign_push",
+          "git aliases/config/branch queries",
+          "tests/groups.json",
+          "tools/agent-run.mjs trusted unwrap",
+          "ready-gate API for closed branch check"
+        ],
+        "limits": [
+          "Assigned [0,88457) only; stops midway through _git_writes; remaining write-target logic/CLI dispatch not read here",
+          "Recursive shell bodies depth <4; aliases <2; agent-run unwrap max8; browser package recursion <3",
+          "Literal quotes/operators protected; shell heredocs unwrapped; write heredocs suppressed",
+          "Known target extraction gaps include interpreter writes, patch/apply, dynamic target expansions and directory/glob restoration",
+          "Strict parse failures become PARSE null for outer fallback; invalid trusted runner fails closed",
+          "GitHub HTTP script detection literal URL/method heuristics; not general interpreter analysis",
+          "closed PR API errors fail open; no network action executed during mapping"
+        ]
+      },
+      "plan_hash_match": true
+    }
+  ],
+  "chunks": [
+    {
+      "path": ".claude/hooks/lsp-hint.py",
+      "start": 3330,
+      "end": 6315,
+      "sha256": "e55ffead862166592bab49bdb158ae878317068cdb90f9a0e7adbe6a7a035fe5"
+    },
+    {
+      "path": ".claude/hooks/mcp-browser-guard.sh",
+      "start": 0,
+      "end": 4130,
+      "sha256": "0aef70286a86c22fa4befbe8c3b9f88c5fa0d9412333ef58436adcfdc6d150c5"
+    },
+    {
+      "path": ".claude/hooks/memory-sync.sh",
+      "start": 0,
+      "end": 8500,
+      "sha256": "555f1982aafafb2f3b6888e258850c8507280a87dabfc981a4cb1e70a684d3b7"
+    },
+    {
+      "path": ".claude/hooks/memory-sync.sh",
+      "start": 8500,
+      "end": 12535,
+      "sha256": "5ac999798c65aed1ff5ac35522790d57c62b7b6393083e3088be0544e92119e1"
+    },
+    {
+      "path": ".claude/hooks/merge_policy.py",
+      "start": 0,
+      "end": 8500,
+      "sha256": "c1e8f2456d008cc3398b0ef7c29c281f921a1c614bb04f08b09544e47029d2a8"
+    },
+    {
+      "path": ".claude/hooks/merge_policy.py",
+      "start": 8500,
+      "end": 13230,
+      "sha256": "8e479832a2a18311aaa4bee4f03ad0ccfbe2324cdabf81c1b0b9eec54a95e116"
+    },
+    {
+      "path": ".claude/hooks/post-edit.sh",
+      "start": 0,
+      "end": 5700,
+      "sha256": "badc83e5315e40e986f95b7e46df7096d9e8920158b3cb2fecb4ea7aac18ee15"
+    },
+    {
+      "path": ".claude/hooks/protect-files.py",
+      "start": 0,
+      "end": 8500,
+      "sha256": "d66f2ebe2c059b6fd25448f637333f6f722f9df2f3a95c7bc6fad145b0d9b4b3"
+    },
+    {
+      "path": ".claude/hooks/protect-files.py",
+      "start": 8500,
+      "end": 17000,
+      "sha256": "09612ea2f6cb3f1aa5b8c492c002aad99d19a5751552ab4208ece248200901c6"
+    },
+    {
+      "path": ".claude/hooks/protect-files.py",
+      "start": 17000,
+      "end": 25500,
+      "sha256": "3ef1a3c7f972e796c3f309e4782401eb9bb4a2063340e5d15b5da04c71b81fa5"
+    },
+    {
+      "path": ".claude/hooks/protect-files.py",
+      "start": 25500,
+      "end": 26270,
+      "sha256": "443045f58bac547811fcdcf7e99eeac4266e4c3f75d7179c7628438f75968743"
+    },
+    {
+      "path": ".claude/hooks/protect-files.sh",
+      "start": 0,
+      "end": 2575,
+      "sha256": "7452a7042869a1ac5288145290cff14ae0c2967ae86851cc5115a5bfb007baba"
+    },
+    {
+      "path": ".claude/hooks/session-start.sh",
+      "start": 0,
+      "end": 4118,
+      "sha256": "8733e01849afb20273dc73111923f6b336fe420295804f35d8bff0187f57ed1c"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 0,
+      "end": 8500,
+      "sha256": "aaf48c4bd6527f2b62c503041e76eb631d9b83ac9e92d9a9185975c5ec8b5821"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 8500,
+      "end": 17000,
+      "sha256": "daaf7b2618b223101b81b06e990eaa7c81445179411d03572953fec929ab71b7"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 17000,
+      "end": 25500,
+      "sha256": "79e9d2150bb3b41e592de2e4f1c9b57decb680448bfef7f8aac97c28da08efbb"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 25500,
+      "end": 34000,
+      "sha256": "b67ed9806c4f8560dddd4762ea86efe2f0a0a92321c48a5b3fd5dd59d3e1bb19"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 34000,
+      "end": 42500,
+      "sha256": "6a3123f46b8f4f78271078597992f4ab29c3c46b61e766572fc1b2edbb1b569b"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 42500,
+      "end": 51000,
+      "sha256": "a96f1e0cb9a1446b08bf3785b7b1bdaf86a38ca57868998f07a6697be2dddbbc"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 51000,
+      "end": 59500,
+      "sha256": "c8d8e267d1b78e72a0458d9766f24a8f785655ce9ca12c4d6551ac702b0658c2"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 59500,
+      "end": 68000,
+      "sha256": "f1154c7ed71d9b007a77bc3b69c48d6dd039a766cc0b58cf620a694f21b769e0"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 68000,
+      "end": 76500,
+      "sha256": "3c131e07f417a2535a4acb12380c499214d68372ba9bd666e47dedbb1acc1d7d"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 76500,
+      "end": 85000,
+      "sha256": "88905379c54cebd32401d26952b50055ec7dd8ae7823d89814fdb8e737bc622f"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 85000,
+      "end": 88457,
+      "sha256": "d78cdc0f66b35940aa6c46a912e515fe4becdf103644b6de50d8ff7218108480"
+    }
+  ],
+  "read_protocol": {
+    "chunk_max_bytes": 8500,
+    "all_assigned_bytes_returned": true,
+    "truncated_assigned_reads": false,
+    "note": "Initial combined AGENTS/plan read was truncated and is not coverage evidence; AGENTS subsequently fully read in bounded chunks and plan parsed only to select group."
+  },
+  "scope": {
+    "text_bytes": 160000,
+    "sources": 9,
+    "current_nested_AGENTS": [],
+    "actions": "static read/map only; no hook execution, tests, browser, network, source edits, staging or commits",
+    "runtime_lsp": "not applicable: Python/shell only in group"
+  },
+  "registrations": [
+    {
+      "event": "SessionStart",
+      "matcher": null,
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"",
+      "timeout": 300
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"",
+      "timeout": 30,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"",
+      "timeout": 30,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start|debug_chrome)|plugin_browser-use.*|browserstack__(run\\w*Session|run\\w*Tests\\w*|take\\w*Screenshot|startAccessibilityScan|runPercyScan))$",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/mcp-browser-guard.sh\"",
+      "timeout": 10,
+      "onFailure": "block"
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Grep|Bash",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/lsp-hint.py\"",
+      "timeout": 5
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Write|Edit|MultiEdit",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit.sh\"",
+      "timeout": 90
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Write|Edit|MultiEdit",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
+      "timeout": 10
+    },
+    {
+      "event": "Stop",
+      "matcher": null,
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
+      "timeout": 10
+    }
+  ],
+  "supporting_sources": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+      "bytes": 22722,
+      "coverage": "AGENTS full; rule full; settings parsed registrations only"
+    },
+    {
+      "path": ".claude/settings.json",
+      "sha256": "aba4dfe8d0e4857402da3806e51fcb74ef0a91c4dcc5a780a19b8f82cc6c238a",
+      "bytes": 12745,
+      "coverage": "AGENTS full; rule full; settings parsed registrations only"
+    },
+    {
+      "path": ".claude/rules/claude-config.md",
+      "sha256": "0f3558d7447ba4093e6f8e07eacba742e2db241597cdf288b836ce999ead0714",
+      "bytes": 2928,
+      "coverage": "AGENTS full; rule full; settings parsed registrations only"
+    }
+  ],
+  "comment_cleanup": [
+    {
+      "path": ".claude/hooks/protect-files.sh",
+      "candidate": "Header says tools/README.md blocked outright and subsequently says other generated docs including tools/README.md are not blocked; remove contradictory parenthesis, preserve generator policy."
+    },
+    {
+      "path": ".claude/hooks/protect-files.py",
+      "candidate": "Opening says each target gets same three rules and check docstring says three despite expanded scopes and ratchet rules; align explanatory count without changing checks."
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "candidate": "Top known-gap list includes curl/wget outputs but assigned suffix begins dedicated curl write flags; reconcile against next group before changing prose."
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "candidate": "guard comments and _receipt_head describe missing-head fallback though active merge check requires explicit head pin; update only after next-group consumer search proves helper use."
+    },
+    {
+      "path": ".claude/hooks/memory-sync.sh",
+      "candidate": "Long incident chronology can move into note while preserving three-way/deletion/unknown-history invariants; no automatic removal."
+    }
+  ],
+  "raw_reference_tokens": [
+    ".claude/agents/README.md",
+    ".claude/agents/agent-surface-reviewer.md",
+    ".claude/agents/track-surveyor.md",
+    ".claude/allow-protected",
+    ".claude/hooks/live-run.py",
+    ".claude/hooks/memory-sync.sh",
+    ".claude/memory",
+    ".claude/memory/",
+    ".claude/rules/ci-tools.md",
+    ".claude/settings.json",
+    ".claude/{os.path.basename",
+    ".cursor/hooks/edit-guard.sh",
+    "artifacts/**",
+    "artifacts/.",
+    "artifacts/.memory-base",
+    "artifacts/.memory-base/",
+    "artifacts/logs",
+    "artifacts/logs/gate.log",
+    "artifacts/merge-gate/<n>.json",
+    "artifacts/merge-gate/<pr>.json",
+    "artifacts/ready-gate/<n>.json.",
+    "artifacts/ready-gate/<pr>.json",
+    "artifacts/session-browsers.log",
+    "artifacts/session-install.log",
+    "artifacts/{g}-gate/<pr>.json",
+    "docs/LIGHTING-TUNER-SLIDERS.md",
+    "docs/TESTING.md",
+    "docs/WORKERS.md",
+    "docs/WORKERS.md.",
+    "docs/changelog.d/<slug>.md",
+    "docs/en/hooks",
+    "docs/en/hooks:",
+    "docs/notes/AGENT-MEMORY.md",
+    "docs/notes/HOOKS-SECURITY-2026-10-26.md",
+    "docs/plans/2026-10-19-fleet-redesign.md",
+    "js/**/*.js",
+    "js/*.js",
+    "js/car/car3d.js.",
+    "js/circuits/",
+    "js/circuits/*.js",
+    "js/circuits/<id>.js",
+    "js/circuits/scenery/*.js",
+    "js/circuits/scenery/<id>.js",
+    "js/css",
+    "js/game.js",
+    "js/lighting/knobs.js",
+    "js/roster.js",
+    "js/track",
+    "js/track/circuit-meta.js",
+    "scratch/**",
+    "scratch/**.md",
+    "scratch/.",
+    "tests/data/ratchets.d",
+    "tests/data/ratchets.d/",
+    "tests/data/ratchets.d/<branch>.json",
+    "tests/data/ratchets.json",
+    "tests/groups.json",
+    "tests/specs/*.spec.js",
+    "tests/unit/*.test.cjs",
+    "tests/unit/*.test.mjs",
+    "tests/unit/*.test.{mjs",
+    "tests/unit/memory-sync.test.mjs",
+    "tests/unit/merge-gate.test.mjs.",
+    "tools/README.md",
+    "tools/agent-run.mjs",
+    "tools/carview.html",
+    "tools/check/ratchets.mjs",
+    "tools/ci/",
+    "tools/ci/ci-rerun.mjs",
+    "tools/ci/ci-watch.mjs",
+    "tools/ci/deploy.mjs",
+    "tools/ci/merge-gate.mjs",
+    "tools/ci/ready-gate.mjs",
+    "tools/ci/sync-pr.mjs",
+    "tools/ci/test-bg.mjs",
+    "tools/ci/test-coverage-audit.mjs",
+    "tools/ci/wait-for.mjs",
+    "tools/env/install-browsers.sh",
+    "tools/gen/gen-changelog.mjs",
+    "tools/gen/gen-circuit-meta.mjs",
+    "tools/gen/gen-ladder-figures.mjs",
+    "tools/gen/gen-shell.mjs",
+    "tools/gen/gen-slider-doc.mjs",
+    "tools/gen/gen-test-groups.mjs",
+    "tools/gen/gen-test-groups.mjs.",
+    "tools/gen/gen-tools-readme.mjs",
+    "tools/lib/chromium-path.mjs",
+    "tools/lib/gate-receipt.mjs",
+    "tools/lib/gate-receipt.mjs:",
+    "tools/manifest.cjs",
+    "tools/mcp/apex-tools-mcp.mjs",
+    "tools/mcp/lsp-mcp.mjs",
+    "tools/mcp/lsp-mcp.sh",
+    "tools/shot/agent.mjs",
+    "tools/shot/gen-scenery-locations.cjs",
+    "tools/shot/scenery-locations.json",
+    "tools/track/verify-track.cjs"
+  ]
+}

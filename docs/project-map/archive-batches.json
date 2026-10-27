@@ -769,7 +769,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "assigned"
+      "status": "complete"
     },
     {
       "id": "08",
@@ -937,7 +937,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "assigned"
+      "status": "complete"
     },
     {
       "id": "09",
@@ -1126,7 +1126,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "10",
@@ -1294,7 +1294,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "11",
@@ -1413,7 +1413,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "assigned"
     },
     {
       "id": "12",

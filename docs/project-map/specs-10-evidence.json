@@ -1,0 +1,5147 @@
+{
+  "schemaVersion": 1,
+  "group": "10",
+  "rangeConvention": "UTF-8 bytes half-open; lines one-based inclusive",
+  "method": "All 160000 assigned TEXT bytes read in 22 individually returned, untruncated raw chunks of at most 8500 source bytes. Whole-source AST provides case boundaries outside assignment only; no claims from unread boundary remainders. Assertion spans are lexical outer expect call chains, not execution counts. No binary parts; no runtime validation.",
+  "files": [
+    {
+      "path": "tests/specs/parts-livery-zones.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 10975,
+        "sha256": "29823a22703b79fbe669a2e9cc4fc2551b32ddd8944cc3a111b6e22172b913dd",
+        "manifestSha256": "29823a22703b79fbe669a2e9cc4fc2551b32ddd8944cc3a111b6e22172b913dd",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 2097,
+        "end": 10975,
+        "bytes": 8878,
+        "sha256": "afec7b3995b3b4209c72d3c19695437e4ce812b99ff6c84ee02e89a5c20078df",
+        "partial": true,
+        "lines": [
+          40,
+          222
+        ]
+      },
+      "chunks": [
+        {
+          "start": 2097,
+          "end": 10597,
+          "bytes": 8500,
+          "sha256": "9e99fea9aae9fab15e08362f5f74b8fac9ac222d1cef2b7a7d75662395fea72c",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "5b5f76"
+        },
+        {
+          "start": 10597,
+          "end": 10975,
+          "bytes": 378,
+          "sha256": "2a56ebdc04ee2f8869ff25b81727baee6fc7c53eea887d64e0c9192eafeab863",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "011e1e"
+        }
+      ],
+      "imports": [],
+      "helpers": [
+        {
+          "name": "openLiveryEditor",
+          "start": 1069,
+          "end": 2114,
+          "lines": [
+            22,
+            42
+          ]
+        },
+        {
+          "name": "lastLogId",
+          "start": 2122,
+          "end": 2203,
+          "lines": [
+            44,
+            44
+          ]
+        },
+        {
+          "name": "rebuiltSince",
+          "start": 2427,
+          "end": 2632,
+          "lines": [
+            47,
+            48
+          ]
+        }
+      ],
+      "hooksAndConfiguration": [],
+      "cases": [
+        {
+          "title": "detail finishes: phone controls refinish the fitted parts and save all four choices",
+          "start": 2635,
+          "end": 3947,
+          "lines": [
+            50,
+            71
+          ],
+          "assignedIntersection": {
+            "start": 2635,
+            "end": 3947
+          },
+          "partial": false,
+          "fixture": "per-test page (fixture import outside assignment; structural AST metadata only)",
+          "assertions": [
+            {
+              "start": 3236,
+              "end": 3288,
+              "lines": [
+                60,
+                60
+              ]
+            },
+            {
+              "start": 3451,
+              "end": 3542,
+              "lines": [
+                63,
+                63
+              ]
+            },
+            {
+              "start": 3548,
+              "end": 3641,
+              "lines": [
+                64,
+                64
+              ]
+            },
+            {
+              "start": 3904,
+              "end": 3943,
+              "lines": [
+                70,
+                70
+              ]
+            }
+          ]
+        },
+        {
+          "title": "finish controls explain absent fins and deflectors without discarding the fin choice",
+          "start": 3950,
+          "end": 5102,
+          "lines": [
+            73,
+            94
+          ],
+          "assignedIntersection": {
+            "start": 3950,
+            "end": 5102
+          },
+          "partial": false,
+          "fixture": "per-test page (fixture import outside assignment; structural AST metadata only)",
+          "assertions": [
+            {
+              "start": 4232,
+              "end": 4264,
+              "lines": [
+                77,
+                77
+              ]
+            },
+            {
+              "start": 4274,
+              "end": 4354,
+              "lines": [
+                78,
+                78
+              ]
+            },
+            {
+              "start": 4695,
+              "end": 4724,
+              "lines": [
+                86,
+                86
+              ]
+            },
+            {
+              "start": 4738,
+              "end": 4809,
+              "lines": [
+                87,
+                87
+              ]
+            },
+            {
+              "start": 4836,
+              "end": 4864,
+              "lines": [
+                89,
+                89
+              ]
+            },
+            {
+              "start": 5034,
+              "end": 5088,
+              "lines": [
+                91,
+                91
+              ]
+            }
+          ]
+        },
+        {
+          "title": "zone finishes and ENDPLATES: tappable on a phone, and the saved car carries them",
+          "start": 5105,
+          "end": 7378,
+          "lines": [
+            96,
+            139
+          ],
+          "assignedIntersection": {
+            "start": 5105,
+            "end": 7378
+          },
+          "partial": false,
+          "fixture": "per-test page (fixture import outside assignment; structural AST metadata only)",
+          "assertions": [
+            {
+              "start": 5540,
+              "end": 5592,
+              "lines": [
+                105,
+                105
+              ]
+            },
+            {
+              "start": 6952,
+              "end": 6986,
+              "lines": [
+                132,
+                132
+              ]
+            },
+            {
+              "start": 6990,
+              "end": 7024,
+              "lines": [
+                133,
+                133
+              ]
+            },
+            {
+              "start": 7028,
+              "end": 7059,
+              "lines": [
+                134,
+                134
+              ]
+            },
+            {
+              "start": 7063,
+              "end": 7141,
+              "lines": [
+                135,
+                135
+              ]
+            },
+            {
+              "start": 7145,
+              "end": 7213,
+              "lines": [
+                136,
+                136
+              ]
+            },
+            {
+              "start": 7300,
+              "end": 7374,
+              "lines": [
+                138,
+                138
+              ]
+            }
+          ]
+        },
+        {
+          "title": "RUNNING GEAR: floor / suspension / duct tints are on that tab and land on the mesh",
+          "start": 7381,
+          "end": 10973,
+          "lines": [
+            141,
+            221
+          ],
+          "assignedIntersection": {
+            "start": 7381,
+            "end": 10973
+          },
+          "partial": false,
+          "fixture": "per-test page (fixture import outside assignment; structural AST metadata only)",
+          "assertions": [
+            {
+              "start": 7705,
+              "end": 7747,
+              "lines": [
+                147,
+                147
+              ]
+            },
+            {
+              "start": 7780,
+              "end": 7836,
+              "lines": [
+                149,
+                149
+              ]
+            },
+            {
+              "start": 7846,
+              "end": 7904,
+              "lines": [
+                150,
+                150
+              ]
+            },
+            {
+              "start": 8509,
+              "end": 8568,
+              "lines": [
+                168,
+                168
+              ]
+            },
+            {
+              "start": 10531,
+              "end": 10563,
+              "lines": [
+                213,
+                213
+              ]
+            },
+            {
+              "start": 10567,
+              "end": 10598,
+              "lines": [
+                214,
+                214
+              ]
+            },
+            {
+              "start": 10602,
+              "end": 10633,
+              "lines": [
+                215,
+                215
+              ]
+            },
+            {
+              "start": 10637,
+              "end": 10673,
+              "lines": [
+                216,
+                216
+              ]
+            },
+            {
+              "start": 10677,
+              "end": 10754,
+              "lines": [
+                217,
+                217
+              ]
+            },
+            {
+              "start": 10758,
+              "end": 10830,
+              "lines": [
+                218,
+                218
+              ]
+            },
+            {
+              "start": 10834,
+              "end": 10901,
+              "lines": [
+                219,
+                219
+              ]
+            },
+            {
+              "start": 10905,
+              "end": 10969,
+              "lines": [
+                220,
+                220
+              ]
+            }
+          ]
+        }
+      ],
+      "assertionsOutsideCases": [
+        {
+          "start": 2459,
+          "end": 2632,
+          "lines": [
+            47,
+            48
+          ]
+        }
+      ],
+      "boundary": {
+        "start": "Inside final semicolon/return of openLiveryEditor; preceding imports/configuration/opener outside assignment",
+        "end": "EOF"
+      },
+      "targets": [
+        "Car3D.build and FINISH_SURFACE",
+        "Log car build/refinish records",
+        "GameStore saved custom livery",
+        "livery creator pills, running-gear tab and color fields"
+      ]
+    },
+    {
+      "path": "tests/specs/parts-mesh-cache.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 30896,
+        "sha256": "3d5e1926c43e5768271084ace3e5934a5be53f154ea05e1f6598f66f3f641860",
+        "manifestSha256": "3d5e1926c43e5768271084ace3e5934a5be53f154ea05e1f6598f66f3f641860",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 30896,
+        "bytes": 30896,
+        "sha256": "3d5e1926c43e5768271084ace3e5934a5be53f154ea05e1f6598f66f3f641860",
+        "partial": false,
+        "lines": [
+          1,
+          625
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "3386d57386348b2095fe221b0a9ea07986bc43cf5affb71912d1a53ddd55bf12",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "5a68b9"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "a81bf1d3a4aa391e27c957018abb1f88ed376f7733467963db2563a0749c9f41",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "e6a938"
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "a6b8bc914232af967d3a79bc6f25623e205c7b9676b0c55a71fa7da114644698",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "0f45d8"
+        },
+        {
+          "start": 25500,
+          "end": 30896,
+          "bytes": 5396,
+          "sha256": "709fdfd346ef065b5d31669626889be56797ca2578a908d3b093a678294e547d",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "0a5085"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 911,
+          "end": 1007,
+          "lines": [
+            15,
+            15
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 1008,
+          "end": 1084,
+          "lines": [
+            16,
+            16
+          ]
+        }
+      ],
+      "helpers": [
+        {
+          "name": "waitReady",
+          "start": 1134,
+          "end": 1376,
+          "lines": [
+            20,
+            23
+          ]
+        },
+        {
+          "name": "installMeshProbe",
+          "start": 1378,
+          "end": 4262,
+          "lines": [
+            25,
+            102
+          ]
+        },
+        {
+          "name": "raceOnce",
+          "start": 5633,
+          "end": 5913,
+          "lines": [
+            124,
+            131
+          ]
+        },
+        {
+          "name": "fitParts",
+          "start": 6067,
+          "end": 6272,
+          "lines": [
+            135,
+            138
+          ]
+        }
+      ],
+      "hooksAndConfiguration": [
+        {
+          "name": "test.use",
+          "start": 6339,
+          "end": 6372,
+          "lines": [
+            141,
+            141
+          ]
+        },
+        {
+          "name": "test.setTimeout",
+          "start": 11045,
+          "end": 11069,
+          "lines": [
+            249,
+            249
+          ]
+        },
+        {
+          "name": "test.setTimeout",
+          "start": 14297,
+          "end": 14321,
+          "lines": [
+            313,
+            313
+          ]
+        },
+        {
+          "name": "test.slow",
+          "start": 17721,
+          "end": 17732,
+          "lines": [
+            384,
+            384
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "body-aware decal cache keys engine geometry and remains bounded",
+          "start": 6447,
+          "end": 8565,
+          "lines": [
+            144,
+            198
+          ],
+          "assignedIntersection": {
+            "start": 6447,
+            "end": 8565
+          },
+          "partial": false,
+          "fixture": "per-test page",
+          "assertions": [
+            {
+              "start": 8197,
+              "end": 8228,
+              "lines": [
+                190,
+                190
+              ]
+            },
+            {
+              "start": 8234,
+              "end": 8277,
+              "lines": [
+                191,
+                191
+              ]
+            },
+            {
+              "start": 8283,
+              "end": 8329,
+              "lines": [
+                192,
+                192
+              ]
+            },
+            {
+              "start": 8335,
+              "end": 8371,
+              "lines": [
+                193,
+                193
+              ]
+            },
+            {
+              "start": 8377,
+              "end": 8413,
+              "lines": [
+                194,
+                194
+              ]
+            },
+            {
+              "start": 8419,
+              "end": 8457,
+              "lines": [
+                195,
+                195
+              ]
+            },
+            {
+              "start": 8463,
+              "end": 8507,
+              "lines": [
+                196,
+                196
+              ]
+            },
+            {
+              "start": 8513,
+              "end": 8559,
+              "lines": [
+                197,
+                197
+              ]
+            }
+          ]
+        },
+        {
+          "title": "wheel assemblies separate rotating hardware from steering-only brake hardware",
+          "start": 8570,
+          "end": 10854,
+          "lines": [
+            200,
+            245
+          ],
+          "assignedIntersection": {
+            "start": 8570,
+            "end": 10854
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 10032,
+              "end": 10076,
+              "lines": [
+                228,
+                228
+              ]
+            },
+            {
+              "start": 10129,
+              "end": 10179,
+              "lines": [
+                230,
+                230
+              ]
+            },
+            {
+              "start": 10187,
+              "end": 10234,
+              "lines": [
+                231,
+                231
+              ]
+            },
+            {
+              "start": 10242,
+              "end": 10289,
+              "lines": [
+                232,
+                232
+              ]
+            },
+            {
+              "start": 10297,
+              "end": 10330,
+              "lines": [
+                233,
+                233
+              ]
+            },
+            {
+              "start": 10338,
+              "end": 10381,
+              "lines": [
+                234,
+                234
+              ]
+            },
+            {
+              "start": 10470,
+              "end": 10513,
+              "lines": [
+                236,
+                236
+              ]
+            },
+            {
+              "start": 10523,
+              "end": 10570,
+              "lines": [
+                237,
+                237
+              ]
+            },
+            {
+              "start": 10580,
+              "end": 10631,
+              "lines": [
+                238,
+                238
+              ]
+            },
+            {
+              "start": 10775,
+              "end": 10807,
+              "lines": [
+                243,
+                243
+              ]
+            },
+            {
+              "start": 10813,
+              "end": 10848,
+              "lines": [
+                244,
+                244
+              ]
+            }
+          ]
+        },
+        {
+          "title": "player body and cockpit caches keep at most 3 visual keys and free evicted meshes",
+          "start": 10924,
+          "end": 14026,
+          "lines": [
+            248,
+            308
+          ],
+          "assignedIntersection": {
+            "start": 10924,
+            "end": 14026
+          },
+          "partial": false,
+          "fixture": "per-test page",
+          "assertions": [
+            {
+              "start": 13402,
+              "end": 13449,
+              "lines": [
+                297,
+                297
+              ]
+            },
+            {
+              "start": 13455,
+              "end": 13496,
+              "lines": [
+                298,
+                298
+              ]
+            },
+            {
+              "start": 13502,
+              "end": 13563,
+              "lines": [
+                299,
+                299
+              ]
+            },
+            {
+              "start": 13569,
+              "end": 13623,
+              "lines": [
+                300,
+                300
+              ]
+            },
+            {
+              "start": 13629,
+              "end": 13677,
+              "lines": [
+                301,
+                301
+              ]
+            },
+            {
+              "start": 13683,
+              "end": 13758,
+              "lines": [
+                302,
+                302
+              ]
+            },
+            {
+              "start": 13764,
+              "end": 13828,
+              "lines": [
+                303,
+                303
+              ]
+            },
+            {
+              "start": 13834,
+              "end": 13876,
+              "lines": [
+                304,
+                304
+              ]
+            },
+            {
+              "start": 13882,
+              "end": 13921,
+              "lines": [
+                305,
+                305
+              ]
+            },
+            {
+              "start": 13927,
+              "end": 13972,
+              "lines": [
+                306,
+                306
+              ]
+            },
+            {
+              "start": 13978,
+              "end": 14020,
+              "lines": [
+                307,
+                307
+              ]
+            }
+          ]
+        },
+        {
+          "title": "wheel mesh cache keeps at most 8 tyre/brake pairs and frees evicted pairs",
+          "start": 14184,
+          "end": 17517,
+          "lines": [
+            312,
+            380
+          ],
+          "assignedIntersection": {
+            "start": 14184,
+            "end": 17517
+          },
+          "partial": false,
+          "fixture": "per-test page",
+          "assertions": [
+            {
+              "start": 16206,
+              "end": 16254,
+              "lines": [
+                362,
+                362
+              ]
+            },
+            {
+              "start": 17127,
+              "end": 17169,
+              "lines": [
+                374,
+                374
+              ]
+            },
+            {
+              "start": 17211,
+              "end": 17256,
+              "lines": [
+                375,
+                375
+              ]
+            },
+            {
+              "start": 17262,
+              "end": 17326,
+              "lines": [
+                376,
+                376
+              ]
+            },
+            {
+              "start": 17332,
+              "end": 17374,
+              "lines": [
+                377,
+                377
+              ]
+            },
+            {
+              "start": 17380,
+              "end": 17419,
+              "lines": [
+                378,
+                378
+              ]
+            },
+            {
+              "start": 17425,
+              "end": 17472,
+              "lines": [
+                379,
+                379
+              ]
+            }
+          ]
+        },
+        {
+          "title": "race warm-up builds the shadow casters, so lights-out builds none",
+          "start": 17522,
+          "end": 20930,
+          "lines": [
+            382,
+            444
+          ],
+          "assignedIntersection": {
+            "start": 17522,
+            "end": 20930
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 20450,
+              "end": 20569,
+              "lines": [
+                438,
+                438
+              ]
+            },
+            {
+              "start": 20577,
+              "end": 20662,
+              "lines": [
+                439,
+                439
+              ]
+            },
+            {
+              "start": 20670,
+              "end": 20759,
+              "lines": [
+                440,
+                440
+              ]
+            }
+          ]
+        },
+        {
+          "title": "player wheel centres stay on the road while the chassis pitches under braking",
+          "start": 20935,
+          "end": 30890,
+          "lines": [
+            446,
+            623
+          ],
+          "assignedIntersection": {
+            "start": 20935,
+            "end": 30890
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 29745,
+              "end": 29956,
+              "lines": [
+                607,
+                609
+              ]
+            },
+            {
+              "start": 30767,
+              "end": 30884,
+              "lines": [
+                621,
+                622
+              ]
+            }
+          ]
+        }
+      ],
+      "assertionsOutsideCases": [],
+      "targets": [
+        "CarMesh.init/getCarDecalMesh",
+        "Car3D.build/buildWheel/buildWheelLayers",
+        "GLX.createMesh/freeMesh/draw/carShadowBegin",
+        "LightTune.LT.carShadow",
+        "__apex garageParts, race, cameras, groundY and deterministic stepping"
+      ]
+    },
+    {
+      "path": "tests/specs/parts-persistence.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 10463,
+        "sha256": "4570b59fbdfbc7dec43845cee4fd24e18ecb39e4464a4804a8abae74df8c3ca6",
+        "manifestSha256": "4570b59fbdfbc7dec43845cee4fd24e18ecb39e4464a4804a8abae74df8c3ca6",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 10463,
+        "bytes": 10463,
+        "sha256": "4570b59fbdfbc7dec43845cee4fd24e18ecb39e4464a4804a8abae74df8c3ca6",
+        "partial": false,
+        "lines": [
+          1,
+          239
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "4f3d8f79b017a19c3065bd621a62bddf2149bd8d9432ea101de5ff979337f0cb",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "0770e2"
+        },
+        {
+          "start": 8500,
+          "end": 10463,
+          "bytes": 1963,
+          "sha256": "e89edd8f521f495a8c02b8839c79f4c636ea27a2b12e7b9f996ee473b754aef7",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "34e74b"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 834,
+          "end": 922,
+          "lines": [
+            16,
+            16
+          ]
+        },
+        {
+          "source": "../helpers/output-paths.js",
+          "start": 923,
+          "end": 980,
+          "lines": [
+            17,
+            17
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 981,
+          "end": 1073,
+          "lines": [
+            18,
+            18
+          ]
+        },
+        {
+          "source": "../helpers/garage-sheet.js",
+          "start": 1074,
+          "end": 1135,
+          "lines": [
+            19,
+            19
+          ]
+        }
+      ],
+      "helpers": [
+        {
+          "name": "waitReady",
+          "start": 1185,
+          "end": 1427,
+          "lines": [
+            23,
+            26
+          ]
+        },
+        {
+          "name": "getTeamId",
+          "start": 1429,
+          "end": 1604,
+          "lines": [
+            28,
+            33
+          ]
+        },
+        {
+          "name": "getStoredParts",
+          "start": 1606,
+          "end": 1765,
+          "lines": [
+            35,
+            40
+          ]
+        },
+        {
+          "name": "openSetup",
+          "start": 1928,
+          "end": 3434,
+          "lines": [
+            44,
+            69
+          ]
+        },
+        {
+          "name": "pickOpt",
+          "start": 3436,
+          "end": 3619,
+          "lines": [
+            71,
+            74
+          ]
+        },
+        {
+          "name": "reopenSetup",
+          "start": 3621,
+          "end": 4141,
+          "lines": [
+            76,
+            86
+          ]
+        }
+      ],
+      "hooksAndConfiguration": [
+        {
+          "name": "test.use",
+          "start": 4212,
+          "end": 4245,
+          "lines": [
+            89,
+            89
+          ]
+        },
+        {
+          "name": "test.use",
+          "start": 5939,
+          "end": 5972,
+          "lines": [
+            138,
+            138
+          ]
+        },
+        {
+          "name": "test.use",
+          "start": 7869,
+          "end": 7902,
+          "lines": [
+            189,
+            189
+          ]
+        },
+        {
+          "name": "test.use",
+          "start": 9858,
+          "end": 9891,
+          "lines": [
+            226,
+            226
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "selecting a gearbox part saves it to localStorage",
+          "start": 4250,
+          "end": 5160,
+          "lines": [
+            91,
+            112
+          ],
+          "assignedIntersection": {
+            "start": 4250,
+            "end": 5160
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 4917,
+              "end": 5012,
+              "lines": [
+                106,
+                107
+              ]
+            },
+            {
+              "start": 5024,
+              "end": 5154,
+              "lines": [
+                108,
+                111
+              ]
+            }
+          ]
+        },
+        {
+          "title": "selecting a fuel part saves it to localStorage",
+          "start": 5165,
+          "end": 5464,
+          "lines": [
+            114,
+            122
+          ],
+          "assignedIntersection": {
+            "start": 5165,
+            "end": 5464
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 5419,
+              "end": 5458,
+              "lines": [
+                121,
+                121
+              ]
+            }
+          ]
+        },
+        {
+          "title": "multiple categories save independently",
+          "start": 5469,
+          "end": 5862,
+          "lines": [
+            124,
+            134
+          ],
+          "assignedIntersection": {
+            "start": 5469,
+            "end": 5862
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 5767,
+              "end": 5810,
+              "lines": [
+                132,
+                132
+              ]
+            },
+            {
+              "start": 5816,
+              "end": 5856,
+              "lines": [
+                133,
+                133
+              ]
+            }
+          ]
+        },
+        {
+          "title": "selected gearbox part active after reload",
+          "start": 5977,
+          "end": 6512,
+          "lines": [
+            140,
+            152
+          ],
+          "assignedIntersection": {
+            "start": 5977,
+            "end": 6512
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 6316,
+              "end": 6401,
+              "lines": [
+                150,
+                150
+              ]
+            }
+          ]
+        },
+        {
+          "title": "selected fuel part active after reload",
+          "start": 6517,
+          "end": 7036,
+          "lines": [
+            154,
+            166
+          ],
+          "assignedIntersection": {
+            "start": 6517,
+            "end": 7036
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 6845,
+              "end": 6928,
+              "lines": [
+                164,
+                164
+              ]
+            }
+          ]
+        },
+        {
+          "title": "budget reflects saved parts after reload",
+          "start": 7041,
+          "end": 7798,
+          "lines": [
+            168,
+            185
+          ],
+          "assignedIntersection": {
+            "start": 7041,
+            "end": 7798
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 7750,
+              "end": 7792,
+              "lines": [
+                184,
+                184
+              ]
+            }
+          ]
+        },
+        {
+          "title": "different teams have independent part storage",
+          "start": 7907,
+          "end": 9791,
+          "lines": [
+            191,
+            222
+          ],
+          "assignedIntersection": {
+            "start": 7907,
+            "end": 9791
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 9287,
+              "end": 9396,
+              "lines": [
+                213,
+                213
+              ]
+            },
+            {
+              "start": 9402,
+              "end": 9508,
+              "lines": [
+                214,
+                214
+              ]
+            },
+            {
+              "start": 9703,
+              "end": 9785,
+              "lines": [
+                221,
+                221
+              ]
+            }
+          ]
+        },
+        {
+          "title": "DONE button closes setup and returns to select screen",
+          "start": 9896,
+          "end": 10457,
+          "lines": [
+            228,
+            237
+          ],
+          "assignedIntersection": {
+            "start": 9896,
+            "end": 10457
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 10303,
+              "end": 10349,
+              "lines": [
+                235,
+                235
+              ]
+            }
+          ]
+        }
+      ],
+      "assertionsOutsideCases": [],
+      "targets": [
+        "apex26.parts.<teamId> localStorage and GameStore.store",
+        "Parts.CATALOG prices and BUDGET",
+        "garage/category/option selectors and race settings",
+        "galleryPath screenshot artifacts"
+      ]
+    },
+    {
+      "path": "tests/specs/parts-physics.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 90322,
+        "sha256": "226bb997139abb56e3ffa83c51a9d6f1ecf75ca5db373a2c7a6e4d41e7a52cc1",
+        "manifestSha256": "226bb997139abb56e3ffa83c51a9d6f1ecf75ca5db373a2c7a6e4d41e7a52cc1",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 90322,
+        "bytes": 90322,
+        "sha256": "226bb997139abb56e3ffa83c51a9d6f1ecf75ca5db373a2c7a6e4d41e7a52cc1",
+        "partial": false,
+        "lines": [
+          1,
+          1836
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "a80fa1845c1c4196fb2d21ff8bfa4dbf79c02fe844f5eb9dcbad1fff9ffa342f",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "a02ef7"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "bc3417bd7ec4249f0f644979c6adb23414edbe8189baba004e5a3ebdeca85a38",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "ae301c"
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "bytes": 8500,
+          "sha256": "1d11d9ab6b6578356371c52eb3179285cf6e20bde45661a50f97920f93a21568",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "331a37"
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "bytes": 8500,
+          "sha256": "deb1030cb0e41dc45e9b3820509a5f2b59c50bf6a82348271fe5492fe7587525",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "aaace2"
+        },
+        {
+          "start": 34000,
+          "end": 42500,
+          "bytes": 8500,
+          "sha256": "e0aa71fdfc2c821197a87aeff4768b6fdeedabbae3d17315dadeb9f39c1e6be2",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "0a1642"
+        },
+        {
+          "start": 42500,
+          "end": 51000,
+          "bytes": 8500,
+          "sha256": "330f24fc8fee08c0809c0d514bf1943e2e43f608e1c82d042517de9b33448c84",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "bd65d2"
+        },
+        {
+          "start": 51000,
+          "end": 59500,
+          "bytes": 8500,
+          "sha256": "742f142163fca7b62ba11f4d4da8671a5e7913372de2024c3d4b1897be44bb04",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "058b6d"
+        },
+        {
+          "start": 59500,
+          "end": 68000,
+          "bytes": 8500,
+          "sha256": "531e51678ea16c41df3d6421b0717d9ded839429019ff730cf15d9e0c4acf62b",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "bd9ae0"
+        },
+        {
+          "start": 68000,
+          "end": 76500,
+          "bytes": 8500,
+          "sha256": "021531a69b86e7d135124c43055a6c6113348becd05a3288a2d4de042752f879",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "7352aa"
+        },
+        {
+          "start": 76500,
+          "end": 85000,
+          "bytes": 8500,
+          "sha256": "0a28eb9c20e1edce61df7146bb4ca808b4682699115981aed7be0a26e261c3c3",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "2bb52a"
+        },
+        {
+          "start": 85000,
+          "end": 90322,
+          "bytes": 5322,
+          "sha256": "3146eb873832078e3fa7a5e1e67327c8a99c5ca2c07e2cc331359bf0e0e31784",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "01b1f7"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 975,
+          "end": 1071,
+          "lines": [
+            16,
+            16
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 1072,
+          "end": 1148,
+          "lines": [
+            17,
+            17
+          ]
+        }
+      ],
+      "helpers": [
+        {
+          "name": "load",
+          "start": 1150,
+          "end": 2236,
+          "lines": [
+            19,
+            33
+          ]
+        }
+      ],
+      "hooksAndConfiguration": [],
+      "cases": [
+        {
+          "title": "has exactly 12 categories",
+          "start": 2300,
+          "end": 2477,
+          "lines": [
+            36,
+            40
+          ],
+          "assignedIntersection": {
+            "start": 2300,
+            "end": 2477
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 2449,
+              "end": 2471,
+              "lines": [
+                39,
+                39
+              ]
+            }
+          ]
+        },
+        {
+          "title": "category IDs are correct",
+          "start": 2482,
+          "end": 2789,
+          "lines": [
+            42,
+            47
+          ],
+          "assignedIntersection": {
+            "start": 2482,
+            "end": 2789
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 2638,
+              "end": 2783,
+              "lines": [
+                45,
+                46
+              ]
+            }
+          ]
+        },
+        {
+          "title": "GEARBOX category exists with F1 Spec option",
+          "start": 2794,
+          "end": 3115,
+          "lines": [
+            49,
+            56
+          ],
+          "assignedIntersection": {
+            "start": 2794,
+            "end": 3115
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 3085,
+              "end": 3109,
+              "lines": [
+                55,
+                55
+              ]
+            }
+          ]
+        },
+        {
+          "title": "FUEL category exists with Qualifying Mix option",
+          "start": 3120,
+          "end": 3444,
+          "lines": [
+            58,
+            65
+          ],
+          "assignedIntersection": {
+            "start": 3120,
+            "end": 3444
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 3414,
+              "end": 3438,
+              "lines": [
+                64,
+                64
+              ]
+            }
+          ]
+        },
+        {
+          "title": "all categories have at least 3 options",
+          "start": 3449,
+          "end": 3769,
+          "lines": [
+            67,
+            75
+          ],
+          "assignedIntersection": {
+            "start": 3449,
+            "end": 3769
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 3718,
+              "end": 3757,
+              "lines": [
+                73,
+                73
+              ]
+            }
+          ]
+        },
+        {
+          "title": "budget is a positive cap the catalog cannot trivially fill",
+          "start": 3774,
+          "end": 4262,
+          "lines": [
+            77,
+            85
+          ],
+          "assignedIntersection": {
+            "start": 3774,
+            "end": 4262
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 4184,
+              "end": 4217,
+              "lines": [
+                83,
+                83
+              ]
+            },
+            {
+              "start": 4223,
+              "end": 4256,
+              "lines": [
+                84,
+                84
+              ]
+            }
+          ]
+        },
+        {
+          "title": "DEFAULTS includes gearbox and fuel",
+          "start": 4267,
+          "end": 4513,
+          "lines": [
+            87,
+            92
+          ],
+          "assignedIntersection": {
+            "start": 4267,
+            "end": 4513
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 4422,
+              "end": 4463,
+              "lines": [
+                90,
+                90
+              ]
+            },
+            {
+              "start": 4469,
+              "end": 4507,
+              "lines": [
+                91,
+                91
+              ]
+            }
+          ]
+        },
+        {
+          "title": "all defaults return near-1.0 multipliers",
+          "start": 4574,
+          "end": 5015,
+          "lines": [
+            96,
+            104
+          ],
+          "assignedIntersection": {
+            "start": 4574,
+            "end": 5015
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 4829,
+              "end": 4868,
+              "lines": [
+                100,
+                100
+              ]
+            },
+            {
+              "start": 4874,
+              "end": 4913,
+              "lines": [
+                101,
+                101
+              ]
+            },
+            {
+              "start": 4919,
+              "end": 4962,
+              "lines": [
+                102,
+                102
+              ]
+            },
+            {
+              "start": 4968,
+              "end": 5009,
+              "lines": [
+                103,
+                103
+              ]
+            }
+          ]
+        },
+        {
+          "title": "race engine increases speed and accel",
+          "start": 5020,
+          "end": 5380,
+          "lines": [
+            106,
+            112
+          ],
+          "assignedIntersection": {
+            "start": 5020,
+            "end": 5380
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 5268,
+              "end": 5318,
+              "lines": [
+                110,
+                110
+              ]
+            },
+            {
+              "start": 5324,
+              "end": 5374,
+              "lines": [
+                111,
+                111
+              ]
+            }
+          ]
+        },
+        {
+          "title": "extreme aero boosts cornering and reduces speed",
+          "start": 5385,
+          "end": 5770,
+          "lines": [
+            114,
+            120
+          ],
+          "assignedIntersection": {
+            "start": 5385,
+            "end": 5770
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 5647,
+              "end": 5708,
+              "lines": [
+                118,
+                118
+              ]
+            },
+            {
+              "start": 5714,
+              "end": 5764,
+              "lines": [
+                119,
+                119
+              ]
+            }
+          ]
+        },
+        {
+          "title": "f1_spec gearbox increases accel and cornering",
+          "start": 5775,
+          "end": 6164,
+          "lines": [
+            122,
+            128
+          ],
+          "assignedIntersection": {
+            "start": 5775,
+            "end": 6164
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 6038,
+              "end": 6091,
+              "lines": [
+                126,
+                126
+              ]
+            },
+            {
+              "start": 6097,
+              "end": 6158,
+              "lines": [
+                127,
+                127
+              ]
+            }
+          ]
+        },
+        {
+          "title": "quali_mix fuel increases speed and accel",
+          "start": 6169,
+          "end": 6535,
+          "lines": [
+            130,
+            136
+          ],
+          "assignedIntersection": {
+            "start": 6169,
+            "end": 6535
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 6423,
+              "end": 6473,
+              "lines": [
+                134,
+                134
+              ]
+            },
+            {
+              "start": 6479,
+              "end": 6529,
+              "lines": [
+                135,
+                135
+              ]
+            }
+          ]
+        },
+        {
+          "title": "combining gearbox + fuel stacks multipliers",
+          "start": 6540,
+          "end": 6970,
+          "lines": [
+            138,
+            144
+          ],
+          "assignedIntersection": {
+            "start": 6540,
+            "end": 6970
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 6844,
+              "end": 6901,
+              "lines": [
+                142,
+                142
+              ]
+            },
+            {
+              "start": 6907,
+              "end": 6964,
+              "lines": [
+                143,
+                143
+              ]
+            }
+          ]
+        },
+        {
+          "title": "carbon ceramic brakes significantly improve braking",
+          "start": 6975,
+          "end": 7312,
+          "lines": [
+            146,
+            151
+          ],
+          "assignedIntersection": {
+            "start": 6975,
+            "end": 7312
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 7243,
+              "end": 7306,
+              "lines": [
+                150,
+                150
+              ]
+            }
+          ]
+        },
+        {
+          "title": "supplier option ignored when team engine doesn't match",
+          "start": 7317,
+          "end": 7816,
+          "lines": [
+            153,
+            160
+          ],
+          "assignedIntersection": {
+            "start": 7317,
+            "end": 7816
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 7757,
+              "end": 7810,
+              "lines": [
+                159,
+                159
+              ]
+            }
+          ]
+        },
+        {
+          "title": "supplier option applied when team engine matches",
+          "start": 7821,
+          "end": 8226,
+          "lines": [
+            162,
+            168
+          ],
+          "assignedIntersection": {
+            "start": 7821,
+            "end": 8226
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 8108,
+              "end": 8161,
+              "lines": [
+                166,
+                166
+              ]
+            },
+            {
+              "start": 8167,
+              "end": 8220,
+              "lines": [
+                167,
+                167
+              ]
+            }
+          ]
+        },
+        {
+          "title": "all defaults cost 0",
+          "start": 8704,
+          "end": 8873,
+          "lines": [
+            179,
+            183
+          ],
+          "assignedIntersection": {
+            "start": 8704,
+            "end": 8873
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 8847,
+              "end": 8867,
+              "lines": [
+                182,
+                182
+              ]
+            }
+          ]
+        },
+        {
+          "title": "one fitted part costs exactly its catalog price",
+          "start": 8878,
+          "end": 9303,
+          "lines": [
+            185,
+            193
+          ],
+          "assignedIntersection": {
+            "start": 8878,
+            "end": 9303
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 9135,
+              "end": 9166,
+              "lines": [
+                189,
+                189
+              ]
+            },
+            {
+              "start": 9268,
+              "end": 9291,
+              "lines": [
+                191,
+                191
+              ]
+            }
+          ]
+        },
+        {
+          "title": "costs add up correctly across multiple categories",
+          "start": 9308,
+          "end": 9750,
+          "lines": [
+            195,
+            204
+          ],
+          "assignedIntersection": {
+            "start": 9308,
+            "end": 9750
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 9721,
+              "end": 9744,
+              "lines": [
+                203,
+                203
+              ]
+            }
+          ]
+        },
+        {
+          "title": "max setup exceeds the budget",
+          "start": 9755,
+          "end": 10307,
+          "lines": [
+            206,
+            223
+          ],
+          "assignedIntersection": {
+            "start": 9755,
+            "end": 10307
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 10265,
+              "end": 10301,
+              "lines": [
+                222,
+                222
+              ]
+            }
+          ]
+        },
+        {
+          "title": "resolves ids, setup, cost, modifiers, tiers, and visual recipes in one pass",
+          "start": 10373,
+          "end": 11150,
+          "lines": [
+            227,
+            241
+          ],
+          "assignedIntersection": {
+            "start": 10373,
+            "end": 11150
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 10660,
+              "end": 10702,
+              "lines": [
+                232,
+                232
+              ]
+            },
+            {
+              "start": 10708,
+              "end": 10751,
+              "lines": [
+                233,
+                233
+              ]
+            },
+            {
+              "start": 10757,
+              "end": 10797,
+              "lines": [
+                234,
+                234
+              ]
+            },
+            {
+              "start": 10803,
+              "end": 10950,
+              "lines": [
+                235,
+                236
+              ]
+            },
+            {
+              "start": 10956,
+              "end": 11002,
+              "lines": [
+                237,
+                237
+              ]
+            },
+            {
+              "start": 11008,
+              "end": 11043,
+              "lines": [
+                238,
+                238
+              ]
+            },
+            {
+              "start": 11049,
+              "end": 11095,
+              "lines": [
+                239,
+                239
+              ]
+            },
+            {
+              "start": 11101,
+              "end": 11144,
+              "lines": [
+                240,
+                240
+              ]
+            }
+          ]
+        },
+        {
+          "title": "unknown saved ids fall back to stable category defaults",
+          "start": 11155,
+          "end": 11777,
+          "lines": [
+            243,
+            256
+          ],
+          "assignedIntersection": {
+            "start": 11155,
+            "end": 11777
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 11505,
+              "end": 11570,
+              "lines": [
+                252,
+                252
+              ]
+            },
+            {
+              "start": 11576,
+              "end": 11637,
+              "lines": [
+                253,
+                253
+              ]
+            },
+            {
+              "start": 11643,
+              "end": 11706,
+              "lines": [
+                254,
+                254
+              ]
+            },
+            {
+              "start": 11712,
+              "end": 11771,
+              "lines": [
+                255,
+                255
+              ]
+            }
+          ]
+        },
+        {
+          "title": "supplier locks support both legacy engine strings and team contexts",
+          "start": 11782,
+          "end": 12526,
+          "lines": [
+            258,
+            275
+          ],
+          "assignedIntersection": {
+            "start": 11782,
+            "end": 12526
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 12370,
+              "end": 12413,
+              "lines": [
+                272,
+                272
+              ]
+            },
+            {
+              "start": 12419,
+              "end": 12464,
+              "lines": [
+                273,
+                273
+              ]
+            },
+            {
+              "start": 12470,
+              "end": 12520,
+              "lines": [
+                274,
+                274
+              ]
+            }
+          ]
+        },
+        {
+          "title": "team and supplier access rules must both match when both are present",
+          "start": 12531,
+          "end": 13169,
+          "lines": [
+            277,
+            288
+          ],
+          "assignedIntersection": {
+            "start": 12531,
+            "end": 13169
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 13081,
+              "end": 13163,
+              "lines": [
+                287,
+                287
+              ]
+            }
+          ]
+        },
+        {
+          "title": "legacy helper APIs are wrappers over the unified result",
+          "start": 13174,
+          "end": 13931,
+          "lines": [
+            290,
+            307
+          ],
+          "assignedIntersection": {
+            "start": 13174,
+            "end": 13931
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 13696,
+              "end": 13745,
+              "lines": [
+                303,
+                303
+              ]
+            },
+            {
+              "start": 13751,
+              "end": 13797,
+              "lines": [
+                304,
+                304
+              ]
+            },
+            {
+              "start": 13803,
+              "end": 13858,
+              "lines": [
+                305,
+                305
+              ]
+            },
+            {
+              "start": 13864,
+              "end": 13925,
+              "lines": [
+                306,
+                306
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every declared recipe field belongs to a known visual consumer registry",
+          "start": 13997,
+          "end": 16029,
+          "lines": [
+            311,
+            362
+          ],
+          "assignedIntersection": {
+            "start": 13997,
+            "end": 16029
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 15774,
+              "end": 15806,
+              "lines": [
+                356,
+                356
+              ]
+            },
+            {
+              "start": 15812,
+              "end": 15855,
+              "lines": [
+                357,
+                357
+              ]
+            },
+            {
+              "start": 15861,
+              "end": 15897,
+              "lines": [
+                358,
+                358
+              ]
+            },
+            {
+              "start": 15903,
+              "end": 15937,
+              "lines": [
+                359,
+                359
+              ]
+            },
+            {
+              "start": 15943,
+              "end": 15975,
+              "lines": [
+                360,
+                360
+              ]
+            },
+            {
+              "start": 15981,
+              "end": 16023,
+              "lines": [
+                361,
+                361
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every catalog option owns a non-empty category recipe",
+          "start": 16034,
+          "end": 16482,
+          "lines": [
+            364,
+            376
+          ],
+          "assignedIntersection": {
+            "start": 16034,
+            "end": 16482
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 16449,
+              "end": 16476,
+              "lines": [
+                375,
+                375
+              ]
+            }
+          ]
+        },
+        {
+          "title": "resolved recipe data is consumed ahead of legacy option ids",
+          "start": 16487,
+          "end": 16831,
+          "lines": [
+            378,
+            386
+          ],
+          "assignedIntersection": {
+            "start": 16487,
+            "end": 16831
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 16804,
+              "end": 16825,
+              "lines": [
+                385,
+                385
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every fuel recipe owns baked and runtime flame colours",
+          "start": 16836,
+          "end": 17259,
+          "lines": [
+            388,
+            397
+          ],
+          "assignedIntersection": {
+            "start": 16836,
+            "end": 17259
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 17226,
+              "end": 17253,
+              "lines": [
+                396,
+                396
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every engine recipe owns a unique consumed bodywork shape",
+          "start": 17264,
+          "end": 18478,
+          "lines": [
+            399,
+            425
+          ],
+          "assignedIntersection": {
+            "start": 17264,
+            "end": 18478
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 18348,
+              "end": 18382,
+              "lines": [
+                422,
+                422
+              ]
+            },
+            {
+              "start": 18388,
+              "end": 18425,
+              "lines": [
+                423,
+                423
+              ]
+            },
+            {
+              "start": 18431,
+              "end": 18472,
+              "lines": [
+                424,
+                424
+              ]
+            }
+          ]
+        },
+        {
+          "title": "each engine bodywork field independently deforms its owned anchor",
+          "start": 18483,
+          "end": 19907,
+          "lines": [
+            427,
+            457
+          ],
+          "assignedIntersection": {
+            "start": 18483,
+            "end": 19907
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 19749,
+              "end": 19817,
+              "lines": [
+                454,
+                454
+              ]
+            },
+            {
+              "start": 19829,
+              "end": 19901,
+              "lines": [
+                456,
+                456
+              ]
+            }
+          ]
+        },
+        {
+          "title": "sidepod and nose details stay attached across extreme engine recipes",
+          "start": 19912,
+          "end": 25362,
+          "lines": [
+            459,
+            557
+          ],
+          "assignedIntersection": {
+            "start": 19912,
+            "end": 25362
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 24926,
+              "end": 24967,
+              "lines": [
+                548,
+                548
+              ]
+            },
+            {
+              "start": 24975,
+              "end": 25019,
+              "lines": [
+                549,
+                549
+              ]
+            },
+            {
+              "start": 25027,
+              "end": 25077,
+              "lines": [
+                550,
+                550
+              ]
+            },
+            {
+              "start": 25085,
+              "end": 25136,
+              "lines": [
+                551,
+                551
+              ]
+            },
+            {
+              "start": 25144,
+              "end": 25189,
+              "lines": [
+                552,
+                552
+              ]
+            },
+            {
+              "start": 25197,
+              "end": 25236,
+              "lines": [
+                553,
+                553
+              ]
+            },
+            {
+              "start": 25244,
+              "end": 25294,
+              "lines": [
+                554,
+                554
+              ]
+            },
+            {
+              "start": 25302,
+              "end": 25350,
+              "lines": [
+                555,
+                555
+              ]
+            }
+          ]
+        },
+        {
+          "title": "sidepod sponsor quads follow every crossed loft interval",
+          "start": 25367,
+          "end": 30024,
+          "lines": [
+            559,
+            644
+          ],
+          "assignedIntersection": {
+            "start": 25367,
+            "end": 30024
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 29702,
+              "end": 29757,
+              "lines": [
+                637,
+                637
+              ]
+            },
+            {
+              "start": 29765,
+              "end": 29806,
+              "lines": [
+                638,
+                638
+              ]
+            },
+            {
+              "start": 29814,
+              "end": 29858,
+              "lines": [
+                639,
+                639
+              ]
+            },
+            {
+              "start": 29866,
+              "end": 29908,
+              "lines": [
+                640,
+                640
+              ]
+            },
+            {
+              "start": 29916,
+              "end": 29957,
+              "lines": [
+                641,
+                641
+              ]
+            },
+            {
+              "start": 29965,
+              "end": 30012,
+              "lines": [
+                642,
+                642
+              ]
+            }
+          ]
+        },
+        {
+          "title": "imported bodies keep legacy decal anchors when engine setup changes",
+          "start": 30235,
+          "end": 32405,
+          "lines": [
+            649,
+            690
+          ],
+          "assignedIntersection": {
+            "start": 30235,
+            "end": 32405
+          },
+          "partial": false,
+          "fixture": "per-test page",
+          "assertions": [
+            {
+              "start": 32131,
+              "end": 32163,
+              "lines": [
+                685,
+                685
+              ]
+            },
+            {
+              "start": 32169,
+              "end": 32217,
+              "lines": [
+                686,
+                686
+              ]
+            },
+            {
+              "start": 32223,
+              "end": 32274,
+              "lines": [
+                687,
+                687
+              ]
+            },
+            {
+              "start": 32280,
+              "end": 32328,
+              "lines": [
+                688,
+                688
+              ]
+            },
+            {
+              "start": 32334,
+              "end": 32399,
+              "lines": [
+                689,
+                689
+              ]
+            }
+          ]
+        },
+        {
+          "title": "continuous sidepod loft omits coincident internal station caps",
+          "start": 32410,
+          "end": 33165,
+          "lines": [
+            692,
+            707
+          ],
+          "assignedIntersection": {
+            "start": 32410,
+            "end": 33165
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 33139,
+              "end": 33159,
+              "lines": [
+                706,
+                706
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every aero recipe declares consumed wing, floor, and diffuser geometry",
+          "start": 33170,
+          "end": 33992,
+          "lines": [
+            709,
+            724
+          ],
+          "assignedIntersection": {
+            "start": 33170,
+            "end": 33992
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 33884,
+              "end": 33918,
+              "lines": [
+                722,
+                722
+              ]
+            },
+            {
+              "start": 33924,
+              "end": 33986,
+              "lines": [
+                723,
+                723
+              ]
+            }
+          ]
+        },
+        {
+          "title": "each aero shape field independently deforms procedural geometry",
+          "start": 33997,
+          "end": 35487,
+          "lines": [
+            726,
+            760
+          ],
+          "assignedIntersection": {
+            "start": 33997,
+            "end": 35487
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 35442,
+              "end": 35475,
+              "lines": [
+                758,
+                758
+              ]
+            }
+          ]
+        },
+        {
+          "title": "rear endplates use a swept tapered profile that still contains the number board",
+          "start": 35492,
+          "end": 36487,
+          "lines": [
+            762,
+            784
+          ],
+          "assignedIntersection": {
+            "start": 35492,
+            "end": 36487
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 36279,
+              "end": 36481,
+              "lines": [
+                779,
+                783
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every rear-wing top plane reaches both endplates after taper and sweep",
+          "start": 36492,
+          "end": 38570,
+          "lines": [
+            786,
+            823
+          ],
+          "assignedIntersection": {
+            "start": 36492,
+            "end": 38570
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 38536,
+              "end": 38564,
+              "lines": [
+                822,
+                822
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every rear-wing top plane stays vertically inside its endplate crown",
+          "start": 38575,
+          "end": 40053,
+          "lines": [
+            825,
+            852
+          ],
+          "assignedIntersection": {
+            "start": 38575,
+            "end": 40053
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 40019,
+              "end": 40047,
+              "lines": [
+                851,
+                851
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every front-wing top flap reaches its endplates after taper and tip rise",
+          "start": 40058,
+          "end": 43116,
+          "lines": [
+            854,
+            908
+          ],
+          "assignedIntersection": {
+            "start": 40058,
+            "end": 43116
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 43082,
+              "end": 43110,
+              "lines": [
+                907,
+                907
+              ]
+            }
+          ]
+        },
+        {
+          "title": "hidden-system recipes expose serviceable engine, ERS, gearbox, and fuel cues",
+          "start": 43121,
+          "end": 44307,
+          "lines": [
+            910,
+            937
+          ],
+          "assignedIntersection": {
+            "start": 43121,
+            "end": 44307
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 44174,
+              "end": 44301,
+              "lines": [
+                931,
+                936
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every option recipe builds valid procedural geometry",
+          "start": 44312,
+          "end": 45297,
+          "lines": [
+            939,
+            963
+          ],
+          "assignedIntersection": {
+            "start": 44312,
+            "end": 45297
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 45263,
+              "end": 45291,
+              "lines": [
+                962,
+                962
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every option in a category produces a distinct consumed mesh signature",
+          "start": 45302,
+          "end": 47622,
+          "lines": [
+            965,
+            1011
+          ],
+          "assignedIntersection": {
+            "start": 45302,
+            "end": 47622
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 47586,
+              "end": 47616,
+              "lines": [
+                1010,
+                1010
+              ]
+            }
+          ]
+        },
+        {
+          "title": "factory presets retain distinct geometry with a neutral audit livery",
+          "start": 47627,
+          "end": 48675,
+          "lines": [
+            1013,
+            1036
+          ],
+          "assignedIntersection": {
+            "start": 47627,
+            "end": 48675
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 48598,
+              "end": 48634,
+              "lines": [
+                1034,
+                1034
+              ]
+            },
+            {
+              "start": 48640,
+              "end": 48669,
+              "lines": [
+                1035,
+                1035
+              ]
+            }
+          ]
+        },
+        {
+          "title": "`single-option recipes stay within ${TRIANGLE_BUDGET}x the default triangle budget`",
+          "start": 49034,
+          "end": 50204,
+          "lines": [
+            1044,
+            1066
+          ],
+          "assignedIntersection": {
+            "start": 49034,
+            "end": 50204
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 50108,
+              "end": 50155,
+              "lines": [
+                1064,
+                1064
+              ]
+            },
+            {
+              "start": 50161,
+              "end": 50198,
+              "lines": [
+                1065,
+                1065
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Car3D emits one valid surface id per vertex with core material classes",
+          "start": 50209,
+          "end": 51429,
+          "lines": [
+            1068,
+            1096
+          ],
+          "assignedIntersection": {
+            "start": 50209,
+            "end": 51429
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 50660,
+              "end": 50859,
+              "lines": [
+                1080,
+                1085
+              ]
+            },
+            {
+              "start": 50973,
+              "end": 51014,
+              "lines": [
+                1088,
+                1088
+              ]
+            },
+            {
+              "start": 51020,
+              "end": 51071,
+              "lines": [
+                1089,
+                1089
+              ]
+            },
+            {
+              "start": 51077,
+              "end": 51165,
+              "lines": [
+                1090,
+                1090
+              ]
+            },
+            {
+              "start": 51232,
+              "end": 51292,
+              "lines": [
+                1092,
+                1092
+              ]
+            },
+            {
+              "start": 51365,
+              "end": 51417,
+              "lines": [
+                1094,
+                1094
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Car3D keeps matte panels, glass, paint, and functional emissives semantically distinct",
+          "start": 51434,
+          "end": 52586,
+          "lines": [
+            1098,
+            1125
+          ],
+          "assignedIntersection": {
+            "start": 51434,
+            "end": 52586
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 52293,
+              "end": 52331,
+              "lines": [
+                1120,
+                1120
+              ]
+            },
+            {
+              "start": 52337,
+              "end": 52389,
+              "lines": [
+                1121,
+                1121
+              ]
+            },
+            {
+              "start": 52395,
+              "end": 52447,
+              "lines": [
+                1122,
+                1122
+              ]
+            },
+            {
+              "start": 52453,
+              "end": 52505,
+              "lines": [
+                1123,
+                1123
+              ]
+            },
+            {
+              "start": 52511,
+              "end": 52580,
+              "lines": [
+                1124,
+                1124
+              ]
+            }
+          ]
+        },
+        {
+          "title": "wheel sidewalls remain rubber outside an open metal rim (spokes / lip / nut)",
+          "start": 52591,
+          "end": 54319,
+          "lines": [
+            1127,
+            1162
+          ],
+          "assignedIntersection": {
+            "start": 52591,
+            "end": 54319
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 53922,
+              "end": 53980,
+              "lines": [
+                1156,
+                1156
+              ]
+            },
+            {
+              "start": 53986,
+              "end": 54047,
+              "lines": [
+                1157,
+                1157
+              ]
+            },
+            {
+              "start": 54053,
+              "end": 54109,
+              "lines": [
+                1158,
+                1158
+              ]
+            },
+            {
+              "start": 54199,
+              "end": 54251,
+              "lines": [
+                1160,
+                1160
+              ]
+            },
+            {
+              "start": 54257,
+              "end": 54313,
+              "lines": [
+                1161,
+                1161
+              ]
+            }
+          ]
+        },
+        {
+          "title": "static car geometry across brake packages reserves emissive surfaces for the FIA rain light",
+          "start": 54324,
+          "end": 55297,
+          "lines": [
+            1164,
+            1184
+          ],
+          "assignedIntersection": {
+            "start": 54324,
+            "end": 55297
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 55262,
+              "end": 55291,
+              "lines": [
+                1183,
+                1183
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every canonical Car3D build mode emits an aligned valid material stream",
+          "start": 55302,
+          "end": 56464,
+          "lines": [
+            1186,
+            1212
+          ],
+          "assignedIntersection": {
+            "start": 55302,
+            "end": 56464
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 56315,
+              "end": 56358,
+              "lines": [
+                1208,
+                1208
+              ]
+            },
+            {
+              "start": 56366,
+              "end": 56415,
+              "lines": [
+                1209,
+                1209
+              ]
+            },
+            {
+              "start": 56423,
+              "end": 56452,
+              "lines": [
+                1210,
+                1210
+              ]
+            }
+          ]
+        },
+        {
+          "title": "WebGL and WebGPU share the same car environment-surface gate",
+          "start": 56469,
+          "end": 58275,
+          "lines": [
+            1214,
+            1244
+          ],
+          "assignedIntersection": {
+            "start": 56469,
+            "end": 58275
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 57617,
+              "end": 57753,
+              "lines": [
+                1232,
+                1234
+              ]
+            },
+            {
+              "start": 57759,
+              "end": 57894,
+              "lines": [
+                1235,
+                1237
+              ]
+            },
+            {
+              "start": 58161,
+              "end": 58212,
+              "lines": [
+                1242,
+                1242
+              ]
+            },
+            {
+              "start": 58218,
+              "end": 58269,
+              "lines": [
+                1243,
+                1243
+              ]
+            }
+          ]
+        },
+        {
+          "title": "canonical mesh streams remain structurally valid without freezing topology",
+          "start": 58280,
+          "end": 59766,
+          "lines": [
+            1246,
+            1275
+          ],
+          "assignedIntersection": {
+            "start": 58280,
+            "end": 59766
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 59390,
+              "end": 59435,
+              "lines": [
+                1267,
+                1267
+              ]
+            },
+            {
+              "start": 59441,
+              "end": 59488,
+              "lines": [
+                1268,
+                1268
+              ]
+            },
+            {
+              "start": 59494,
+              "end": 59527,
+              "lines": [
+                1269,
+                1269
+              ]
+            },
+            {
+              "start": 59533,
+              "end": 59565,
+              "lines": [
+                1270,
+                1270
+              ]
+            },
+            {
+              "start": 59571,
+              "end": 59609,
+              "lines": [
+                1271,
+                1271
+              ]
+            },
+            {
+              "start": 59615,
+              "end": 59655,
+              "lines": [
+                1272,
+                1272
+              ]
+            },
+            {
+              "start": 59661,
+              "end": 59716,
+              "lines": [
+                1273,
+                1273
+              ]
+            },
+            {
+              "start": 59722,
+              "end": 59760,
+              "lines": [
+                1274,
+                1274
+              ]
+            }
+          ]
+        },
+        {
+          "title": "canonical car bounds remain plausible for a modern F1 car",
+          "start": 59771,
+          "end": 60573,
+          "lines": [
+            1277,
+            1294
+          ],
+          "assignedIntersection": {
+            "start": 59771,
+            "end": 60573
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 60329,
+              "end": 60365,
+              "lines": [
+                1288,
+                1288
+              ]
+            },
+            {
+              "start": 60371,
+              "end": 60404,
+              "lines": [
+                1289,
+                1289
+              ]
+            },
+            {
+              "start": 60410,
+              "end": 60447,
+              "lines": [
+                1290,
+                1290
+              ]
+            },
+            {
+              "start": 60453,
+              "end": 60486,
+              "lines": [
+                1291,
+                1291
+              ]
+            },
+            {
+              "start": 60492,
+              "end": 60528,
+              "lines": [
+                1292,
+                1292
+              ]
+            },
+            {
+              "start": 60534,
+              "end": 60567,
+              "lines": [
+                1293,
+                1293
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the decal sheet stays below its absolute triangle ceiling",
+          "start": 60578,
+          "end": 63655,
+          "lines": [
+            1296,
+            1343
+          ],
+          "assignedIntersection": {
+            "start": 60578,
+            "end": 63655
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 63600,
+              "end": 63649,
+              "lines": [
+                1342,
+                1342
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every recipe has primary and secondary visual parameters",
+          "start": 63660,
+          "end": 64114,
+          "lines": [
+            1345,
+            1357
+          ],
+          "assignedIntersection": {
+            "start": 63660,
+            "end": 64114
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 64074,
+              "end": 64108,
+              "lines": [
+                1356,
+                1356
+              ]
+            }
+          ]
+        },
+        {
+          "title": "each structure knob independently deforms the mesh, and its default is inert",
+          "start": 64119,
+          "end": 69545,
+          "lines": [
+            1359,
+            1439
+          ],
+          "assignedIntersection": {
+            "start": 64119,
+            "end": 69545
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 69377,
+              "end": 69464,
+              "lines": [
+                1437,
+                1437
+              ]
+            },
+            {
+              "start": 69470,
+              "end": 69539,
+              "lines": [
+                1438,
+                1438
+              ]
+            }
+          ]
+        },
+        {
+          "title": "recipe fingerprints are unique within every category",
+          "start": 69550,
+          "end": 70280,
+          "lines": [
+            1441,
+            1459
+          ],
+          "assignedIntersection": {
+            "start": 69550,
+            "end": 70280
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 70244,
+              "end": 70274,
+              "lines": [
+                1458,
+                1458
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every team has a valid deterministic factory preset with its signature",
+          "start": 70367,
+          "end": 72660,
+          "lines": [
+            1463,
+            1504
+          ],
+          "assignedIntersection": {
+            "start": 70367,
+            "end": 72660
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 71385,
+              "end": 71431,
+              "lines": [
+                1485,
+                1485
+              ]
+            },
+            {
+              "start": 71439,
+              "end": 71477,
+              "lines": [
+                1486,
+                1486
+              ]
+            },
+            {
+              "start": 71485,
+              "end": 71526,
+              "lines": [
+                1487,
+                1487
+              ]
+            },
+            {
+              "start": 72526,
+              "end": 72591,
+              "lines": [
+                1501,
+                1501
+              ]
+            },
+            {
+              "start": 72604,
+              "end": 72648,
+              "lines": [
+                1502,
+                1502
+              ]
+            }
+          ]
+        },
+        {
+          "title": "signature options match a universal equivalent's price and physics",
+          "start": 72665,
+          "end": 73618,
+          "lines": [
+            1506,
+            1526
+          ],
+          "assignedIntersection": {
+            "start": 72665,
+            "end": 73618
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 73582,
+              "end": 73612,
+              "lines": [
+                1525,
+                1525
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every team fields a signature in every category it can",
+          "start": 73623,
+          "end": 76924,
+          "lines": [
+            1528,
+            1583
+          ],
+          "assignedIntersection": {
+            "start": 73623,
+            "end": 76924
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 76313,
+              "end": 76344,
+              "lines": [
+                1574,
+                1574
+              ]
+            },
+            {
+              "start": 76511,
+              "end": 76599,
+              "lines": [
+                1577,
+                1577
+              ]
+            },
+            {
+              "start": 76605,
+              "end": 76648,
+              "lines": [
+                1578,
+                1578
+              ]
+            },
+            {
+              "start": 76816,
+              "end": 76918,
+              "lines": [
+                1581,
+                1582
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a signature is visible only to its own team and never changes that team's economics",
+          "start": 76929,
+          "end": 78472,
+          "lines": [
+            1585,
+            1616
+          ],
+          "assignedIntersection": {
+            "start": 76929,
+            "end": 78472
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 78396,
+              "end": 78428,
+              "lines": [
+                1614,
+                1614
+              ]
+            },
+            {
+              "start": 78434,
+              "end": 78466,
+              "lines": [
+                1615,
+                1615
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a signature selected by the wrong team falls back to its catalog equivalent",
+          "start": 78798,
+          "end": 79884,
+          "lines": [
+            1622,
+            1645
+          ],
+          "assignedIntersection": {
+            "start": 78798,
+            "end": 79884
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 79722,
+              "end": 79769,
+              "lines": [
+                1642,
+                1642
+              ]
+            },
+            {
+              "start": 79775,
+              "end": 79821,
+              "lines": [
+                1643,
+                1643
+              ]
+            },
+            {
+              "start": 79827,
+              "end": 79878,
+              "lines": [
+                1644,
+                1644
+              ]
+            }
+          ]
+        },
+        {
+          "title": "stat 0 → ~0.85 multiplier",
+          "start": 79946,
+          "end": 80126,
+          "lines": [
+            1649,
+            1653
+          ],
+          "assignedIntersection": {
+            "start": 79946,
+            "end": 80126
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 80090,
+              "end": 80120,
+              "lines": [
+                1652,
+                1652
+              ]
+            }
+          ]
+        },
+        {
+          "title": "stat 100 → 1.00 multiplier",
+          "start": 80131,
+          "end": 80314,
+          "lines": [
+            1655,
+            1659
+          ],
+          "assignedIntersection": {
+            "start": 80131,
+            "end": 80314
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 80278,
+              "end": 80308,
+              "lines": [
+                1658,
+                1658
+              ]
+            }
+          ]
+        },
+        {
+          "title": "stat 50 → ~0.925 multiplier",
+          "start": 80319,
+          "end": 80503,
+          "lines": [
+            1661,
+            1665
+          ],
+          "assignedIntersection": {
+            "start": 80319,
+            "end": 80503
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 80466,
+              "end": 80497,
+              "lines": [
+                1664,
+                1664
+              ]
+            }
+          ]
+        },
+        {
+          "title": "deployment and recovery both scale with the ERS option",
+          "start": 81042,
+          "end": 84382,
+          "lines": [
+            1675,
+            1731
+          ],
+          "assignedIntersection": {
+            "start": 81042,
+            "end": 84382
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 83344,
+              "end": 83396,
+              "lines": [
+                1712,
+                1712
+              ]
+            },
+            {
+              "start": 83402,
+              "end": 83451,
+              "lines": [
+                1713,
+                1713
+              ]
+            },
+            {
+              "start": 83632,
+              "end": 83679,
+              "lines": [
+                1717,
+                1717
+              ]
+            },
+            {
+              "start": 83685,
+              "end": 83735,
+              "lines": [
+                1718,
+                1718
+              ]
+            },
+            {
+              "start": 83741,
+              "end": 83792,
+              "lines": [
+                1719,
+                1719
+              ]
+            },
+            {
+              "start": 83876,
+              "end": 83924,
+              "lines": [
+                1721,
+                1721
+              ]
+            },
+            {
+              "start": 83930,
+              "end": 83968,
+              "lines": [
+                1722,
+                1722
+              ]
+            },
+            {
+              "start": 84147,
+              "end": 84185,
+              "lines": [
+                1726,
+                1726
+              ]
+            },
+            {
+              "start": 84191,
+              "end": 84237,
+              "lines": [
+                1727,
+                1727
+              ]
+            },
+            {
+              "start": 84319,
+              "end": 84376,
+              "lines": [
+                1730,
+                1730
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a full wet still loses to a slick on all four dry stats",
+          "start": 84457,
+          "end": 85669,
+          "lines": [
+            1735,
+            1755
+          ],
+          "assignedIntersection": {
+            "start": 84457,
+            "end": 85669
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 85302,
+              "end": 85341,
+              "lines": [
+                1749,
+                1749
+              ]
+            },
+            {
+              "start": 85399,
+              "end": 85473,
+              "lines": [
+                1751,
+                1751
+              ]
+            },
+            {
+              "start": 85481,
+              "end": 85561,
+              "lines": [
+                1752,
+                1752
+              ]
+            },
+            {
+              "start": 85569,
+              "end": 85657,
+              "lines": [
+                1753,
+                1753
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the grip table ladders by tread class, and is flat in the dry",
+          "start": 85674,
+          "end": 88412,
+          "lines": [
+            1757,
+            1804
+          ],
+          "assignedIntersection": {
+            "start": 85674,
+            "end": 88412
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 86538,
+              "end": 86606,
+              "lines": [
+                1772,
+                1772
+              ]
+            },
+            {
+              "start": 86849,
+              "end": 86909,
+              "lines": [
+                1777,
+                1777
+              ]
+            },
+            {
+              "start": 87004,
+              "end": 87056,
+              "lines": [
+                1781,
+                1781
+              ]
+            },
+            {
+              "start": 87108,
+              "end": 87160,
+              "lines": [
+                1782,
+                1782
+              ]
+            },
+            {
+              "start": 87367,
+              "end": 87421,
+              "lines": [
+                1786,
+                1786
+              ]
+            },
+            {
+              "start": 87427,
+              "end": 87483,
+              "lines": [
+                1787,
+                1787
+              ]
+            },
+            {
+              "start": 87953,
+              "end": 87986,
+              "lines": [
+                1795,
+                1795
+              ]
+            },
+            {
+              "start": 87992,
+              "end": 88026,
+              "lines": [
+                1796,
+                1796
+              ]
+            },
+            {
+              "start": 88240,
+              "end": 88303,
+              "lines": [
+                1801,
+                1801
+              ]
+            },
+            {
+              "start": 88309,
+              "end": 88406,
+              "lines": [
+                1802,
+                1803
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the compound fitted in the garage is the one the car drives on",
+          "start": 88417,
+          "end": 90316,
+          "lines": [
+            1806,
+            1834
+          ],
+          "assignedIntersection": {
+            "start": 88417,
+            "end": 90316
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 89635,
+              "end": 89669,
+              "lines": [
+                1824,
+                1824
+              ]
+            },
+            {
+              "start": 89710,
+              "end": 89756,
+              "lines": [
+                1825,
+                1825
+              ]
+            },
+            {
+              "start": 89762,
+              "end": 89815,
+              "lines": [
+                1826,
+                1826
+              ]
+            },
+            {
+              "start": 90221,
+              "end": 90257,
+              "lines": [
+                1832,
+                1832
+              ]
+            },
+            {
+              "start": 90263,
+              "end": 90310,
+              "lines": [
+                1833,
+                1833
+              ]
+            }
+          ]
+        }
+      ],
+      "assertionsOutsideCases": [],
+      "targets": [
+        "Parts catalog/resolution/cost/modifiers/access/factory/visual APIs",
+        "Car3D procedural bodies, anchors, wheels, materials and aero",
+        "CarMesh decals and imported-body anchors",
+        "GLSL/WGSL source chunks",
+        "PhysicsConsts.WET_GRIP",
+        "__apex energy/overtake/physics/world grip integration"
+      ]
+    },
+    {
+      "path": "tests/specs/parts-setup-ids.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 20559,
+        "sha256": "d944d0a675a44f26f847915534c7ca268e74654e5ffab2a90117db3c59c10ff3",
+        "manifestSha256": "d944d0a675a44f26f847915534c7ca268e74654e5ffab2a90117db3c59c10ff3",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 19441,
+        "bytes": 19441,
+        "sha256": "da2bee2e35270d2df8133be2571b0021c358fe1df4e190372bd1f3d281597dc1",
+        "partial": true,
+        "lines": [
+          1,
+          386
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "bytes": 8500,
+          "sha256": "fc563389c06a2749bf5537a9b1df4d80cda8761759c7f056a1556b5dd46e00c8",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "e1e765"
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "bytes": 8500,
+          "sha256": "88f7c6fa056006a7451277de6e2c82da80c06c02ed5fc9c7947fb20c15912c80",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "3f4716"
+        },
+        {
+          "start": 17000,
+          "end": 19441,
+          "bytes": 2441,
+          "sha256": "c2c5caa5e920e4fd9170526ff7c57bb81a83542679e2e11d272707cdaa99894c",
+          "rawRead": "Individual exec_command return, <=8500 source bytes, untruncated",
+          "toolOutputChunkId": "1974b9"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 524,
+          "end": 592,
+          "lines": [
+            10,
+            10
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 593,
+          "end": 685,
+          "lines": [
+            11,
+            11
+          ]
+        }
+      ],
+      "helpers": [
+        {
+          "name": "openSetup",
+          "start": 1543,
+          "end": 2197,
+          "lines": [
+            27,
+            40
+          ]
+        }
+      ],
+      "hooksAndConfiguration": [
+        {
+          "name": "test.use",
+          "start": 2263,
+          "end": 2296,
+          "lines": [
+            43,
+            43
+          ]
+        },
+        {
+          "name": "test.use",
+          "start": 4251,
+          "end": 4284,
+          "lines": [
+            85,
+            85
+          ]
+        },
+        {
+          "name": "test.use",
+          "start": 7210,
+          "end": 7243,
+          "lines": [
+            141,
+            141
+          ]
+        },
+        {
+          "name": "test.use",
+          "start": 12843,
+          "end": 12876,
+          "lines": [
+            244,
+            244
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "every parts category tab has data-cs-cat matching its catalog id",
+          "start": 2301,
+          "end": 2702,
+          "lines": [
+            45,
+            53
+          ],
+          "assignedIntersection": {
+            "start": 2301,
+            "end": 2702
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 2539,
+              "end": 2608,
+              "lines": [
+                50,
+                50
+              ]
+            },
+            {
+              "start": 2626,
+              "end": 2696,
+              "lines": [
+                52,
+                52
+              ]
+            }
+          ]
+        },
+        {
+          "title": "active category options expose data-cs-opt matching option ids",
+          "start": 2707,
+          "end": 3339,
+          "lines": [
+            55,
+            67
+          ],
+          "assignedIntersection": {
+            "start": 2707,
+            "end": 3339
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 3255,
+              "end": 3327,
+              "lines": [
+                65,
+                65
+              ]
+            }
+          ]
+        },
+        {
+          "title": "selecting by data-cs-opt activates that option",
+          "start": 3344,
+          "end": 3690,
+          "lines": [
+            69,
+            75
+          ],
+          "assignedIntersection": {
+            "start": 3344,
+            "end": 3690
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 3599,
+              "end": 3684,
+              "lines": [
+                74,
+                74
+              ]
+            }
+          ]
+        },
+        {
+          "title": "`${route}: no screen is left visible behind the panel`",
+          "start": 5043,
+          "end": 6739,
+          "lines": [
+            102,
+            131
+          ],
+          "assignedIntersection": {
+            "start": 5043,
+            "end": 6739
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 6124,
+              "end": 6240,
+              "lines": [
+                120,
+                121
+              ]
+            },
+            {
+              "start": 6627,
+              "end": 6690,
+              "lines": [
+                129,
+                129
+              ]
+            },
+            {
+              "start": 6698,
+              "end": 6731,
+              "lines": [
+                130,
+                130
+              ]
+            }
+          ]
+        },
+        {
+          "title": "TEAM leads the tab column and LIVERY still ends it",
+          "start": 7647,
+          "end": 8279,
+          "lines": [
+            152,
+            162
+          ],
+          "assignedIntersection": {
+            "start": 7647,
+            "end": 8279
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 7891,
+              "end": 7919,
+              "lines": [
+                156,
+                156
+              ]
+            },
+            {
+              "start": 7925,
+              "end": 7969,
+              "lines": [
+                157,
+                157
+              ]
+            },
+            {
+              "start": 8215,
+              "end": 8273,
+              "lines": [
+                161,
+                161
+              ]
+            }
+          ]
+        },
+        {
+          "title": "picking a team from the garage stores it and repaints the header",
+          "start": 8284,
+          "end": 9664,
+          "lines": [
+            164,
+            187
+          ],
+          "assignedIntersection": {
+            "start": 8284,
+            "end": 9664
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 8982,
+              "end": 9045,
+              "lines": [
+                175,
+                175
+              ]
+            },
+            {
+              "start": 9306,
+              "end": 9354,
+              "lines": [
+                182,
+                182
+              ]
+            },
+            {
+              "start": 9366,
+              "end": 9413,
+              "lines": [
+                183,
+                183
+              ]
+            },
+            {
+              "start": 9425,
+              "end": 9486,
+              "lines": [
+                184,
+                184
+              ]
+            },
+            {
+              "start": 9576,
+              "end": 9658,
+              "lines": [
+                186,
+                186
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a driver chip stores the driver",
+          "start": 9669,
+          "end": 10250,
+          "lines": [
+            189,
+            197
+          ],
+          "assignedIntersection": {
+            "start": 9669,
+            "end": 10250
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 9927,
+              "end": 10008,
+              "lines": [
+                193,
+                193
+              ]
+            },
+            {
+              "start": 10077,
+              "end": 10159,
+              "lines": [
+                195,
+                195
+              ]
+            },
+            {
+              "start": 10171,
+              "end": 10244,
+              "lines": [
+                196,
+                196
+              ]
+            }
+          ]
+        },
+        {
+          "title": "MY TEAM opens above the garage",
+          "start": 10255,
+          "end": 10792,
+          "lines": [
+            199,
+            209
+          ],
+          "assignedIntersection": {
+            "start": 10255,
+            "end": 10792
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 10724,
+              "end": 10786,
+              "lines": [
+                208,
+                208
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the select screen's card summarises what the garage chose",
+          "start": 10797,
+          "end": 12469,
+          "lines": [
+            211,
+            236
+          ],
+          "assignedIntersection": {
+            "start": 10797,
+            "end": 12469
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 10988,
+              "end": 11069,
+              "lines": [
+                214,
+                214
+              ]
+            },
+            {
+              "start": 12265,
+              "end": 12312,
+              "lines": [
+                233,
+                233
+              ]
+            },
+            {
+              "start": 12389,
+              "end": 12463,
+              "lines": [
+                235,
+                235
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the camera bar exposes a stable data-cs-view per preset",
+          "start": 13686,
+          "end": 14036,
+          "lines": [
+            260,
+            266
+          ],
+          "assignedIntersection": {
+            "start": 13686,
+            "end": 14036
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 13969,
+              "end": 14030,
+              "lines": [
+                265,
+                265
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the panel starts shut, opens from CAMERA, and a preset shuts it again",
+          "start": 14041,
+          "end": 15063,
+          "lines": [
+            268,
+            291
+          ],
+          "assignedIntersection": {
+            "start": 14041,
+            "end": 15063
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 14243,
+              "end": 14269,
+              "lines": [
+                271,
+                271
+              ]
+            },
+            {
+              "start": 14281,
+              "end": 14354,
+              "lines": [
+                272,
+                272
+              ]
+            },
+            {
+              "start": 14410,
+              "end": 14437,
+              "lines": [
+                275,
+                275
+              ]
+            },
+            {
+              "start": 14449,
+              "end": 14521,
+              "lines": [
+                276,
+                276
+              ]
+            },
+            {
+              "start": 14635,
+              "end": 14661,
+              "lines": [
+                280,
+                280
+              ]
+            },
+            {
+              "start": 14817,
+              "end": 14844,
+              "lines": [
+                285,
+                285
+              ]
+            },
+            {
+              "start": 14972,
+              "end": 14998,
+              "lines": [
+                289,
+                289
+              ]
+            },
+            {
+              "start": 15010,
+              "end": 15057,
+              "lines": [
+                290,
+                290
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the turntable runs on open and a preset both stops it and re-aims",
+          "start": 15068,
+          "end": 16220,
+          "lines": [
+            293,
+            318
+          ],
+          "assignedIntersection": {
+            "start": 15068,
+            "end": 16220
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 15247,
+              "end": 15275,
+              "lines": [
+                296,
+                296
+              ]
+            },
+            {
+              "start": 15281,
+              "end": 15311,
+              "lines": [
+                297,
+                297
+              ]
+            },
+            {
+              "start": 15517,
+              "end": 15546,
+              "lines": [
+                303,
+                303
+              ]
+            },
+            {
+              "start": 15552,
+              "end": 15597,
+              "lines": [
+                304,
+                304
+              ]
+            },
+            {
+              "start": 15764,
+              "end": 15810,
+              "lines": [
+                307,
+                307
+              ]
+            },
+            {
+              "start": 15898,
+              "end": 15945,
+              "lines": [
+                311,
+                311
+              ]
+            },
+            {
+              "start": 16084,
+              "end": 16125,
+              "lines": [
+                316,
+                316
+              ]
+            },
+            {
+              "start": 16137,
+              "end": 16214,
+              "lines": [
+                317,
+                317
+              ]
+            }
+          ]
+        },
+        {
+          "title": "PAN walks the rig along the car, and a preset re-centres it",
+          "start": 16225,
+          "end": 18393,
+          "lines": [
+            320,
+            363
+          ],
+          "assignedIntersection": {
+            "start": 16225,
+            "end": 18393
+          },
+          "partial": false,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 16597,
+              "end": 16639,
+              "lines": [
+                326,
+                326
+              ]
+            },
+            {
+              "start": 16680,
+              "end": 16716,
+              "lines": [
+                328,
+                328
+              ]
+            },
+            {
+              "start": 16964,
+              "end": 17056,
+              "lines": [
+                334,
+                334
+              ]
+            },
+            {
+              "start": 17062,
+              "end": 17129,
+              "lines": [
+                335,
+                335
+              ]
+            },
+            {
+              "start": 17135,
+              "end": 17199,
+              "lines": [
+                336,
+                336
+              ]
+            },
+            {
+              "start": 17205,
+              "end": 17265,
+              "lines": [
+                337,
+                337
+              ]
+            },
+            {
+              "start": 17426,
+              "end": 17489,
+              "lines": [
+                342,
+                342
+              ]
+            },
+            {
+              "start": 17721,
+              "end": 17797,
+              "lines": [
+                348,
+                348
+              ]
+            },
+            {
+              "start": 18051,
+              "end": 18111,
+              "lines": [
+                356,
+                356
+              ]
+            },
+            {
+              "start": 18117,
+              "end": 18177,
+              "lines": [
+                357,
+                357
+              ]
+            },
+            {
+              "start": 18339,
+              "end": 18387,
+              "lines": [
+                362,
+                362
+              ]
+            }
+          ]
+        },
+        {
+          "title": "zoom is clamped and drag orbits without touching distance",
+          "start": 18398,
+          "end": 20553,
+          "lines": [
+            365,
+            410
+          ],
+          "assignedIntersection": {
+            "start": 18398,
+            "end": 19441
+          },
+          "partial": true,
+          "fixture": "sharedTest page",
+          "assertions": [
+            {
+              "start": 18761,
+              "end": 18816,
+              "lines": [
+                374,
+                374
+              ]
+            },
+            {
+              "start": 18918,
+              "end": 18976,
+              "lines": [
+                377,
+                377
+              ]
+            }
+          ]
+        }
+      ],
+      "assertionsOutsideCases": [],
+      "boundary": {
+        "start": "BOF",
+        "end": "Inside comment in zoom/drag case before later clamp and drag checks; only first two distance assertions intersect assignment"
+      },
+      "targets": [
+        "Parts.CATALOG and option eligibility",
+        "setup sheet selectors and screen hidden state",
+        "team/driver localStorage and header",
+        "elementFromPoint stacking checks",
+        "__apex.garageCam camera state"
+      ]
+    }
+  ],
+  "productionNavigation": [
+    {
+      "query": "Parts.resolveSetup definition",
+      "result": "js/car/parts.js:883 definition; :1037 export"
+    },
+    {
+      "query": "Parts.resolveSetup references files",
+      "result": "17 references / 7 files",
+      "files": {
+        "js/game.js": 6,
+        "js/career/career.js": 5,
+        "js/car/parts.js": 2,
+        "js/agent/agentview.js": 1,
+        "js/car/car-draw.js": 1,
+        "js/garage/scene-dress.js": 1,
+        "js/race/reliability.js": 1
+      }
+    },
+    {
+      "query": "Car3D.build definition",
+      "result": "js/car/car3d.js:237 definition; :2888 export"
+    },
+    {
+      "query": "Car3D.build references files",
+      "result": "10 references / 5 files",
+      "files": {
+        "js/car/car-draw.js": 5,
+        "js/car/car3d.js": 2,
+        "js/agent/agentview.js": 1,
+        "js/camera/cockpit-preview.js": 1,
+        "js/garage/setup-camera.js": 1
+      }
+    },
+    {
+      "query": "Car3D.buildWheelLayers references files",
+      "result": "7 references / 3 files",
+      "files": {
+        "js/car/car-draw.js": 4,
+        "js/car/car3d.js": 2,
+        "js/camera/cockpit-preview.js": 1
+      }
+    },
+    {
+      "query": "CarMesh.getCarDecalMesh definition",
+      "result": "js/car/car-mesh.js:390; module-file fallback; no direct member use found; export/caller coverage unverified"
+    },
+    {
+      "query": "CarSetup definition",
+      "result": "symbol not found; no production inference made"
+    },
+    {
+      "query": "js/garage/setup-sheet.js outline",
+      "result": "SetupUI IIFE at line 2; exported create at line 5"
+    },
+    {
+      "query": "SetupUI.create references files",
+      "result": "3 references / 2 files",
+      "files": {
+        "js/garage/setup-sheet.js": 2,
+        "js/game.js": 1
+      }
+    },
+    {
+      "query": "SetupCamera definition",
+      "result": "js/garage/setup-camera.js:2 declaration"
+    }
+  ],
+  "cleanup": {
+    "executed": "None; static mapping only",
+    "observed": [
+      "Mesh probe wrappers and fake CarMesh.init hooks have no local undo; fresh fixture isolates cold-cache/decal cases. Shared wheel-ground wrappers and freeze remain until shared-page reset or teardown.",
+      "Shadow warm-up test uses finally to restore Car3D.build, GLX.carShadowBegin, LightTune carShadow and governor hold; deletes globals.",
+      "Imported body test restores fetch on success only; replaces GLTF.toMesh and Car3D.bodyAnchors without undo; fresh fixture isolates these changes.",
+      "Persistence and setup helpers reset menu, team/parts and unlimited budget through shared helpers; gallery cases opt into drawing. Saved localStorage and screenshots are retained by test behavior.",
+      "ERS case clears boost/input per leg. Wet-compound integration leaves its race on the shared page."
+    ],
+    "limitations": [
+      "No tests, browser, runtime validation, staging or commits executed.",
+      "Final camera case ends inside a comment before later clamp/drag assertions: only intersecting assertions belong to this group.",
+      "Source strings, geometry hashes and sampled vertices do not establish visual quality or real-GPU behavior."
+    ]
+  },
+  "counts": {
+    "caseDeclarations": 102,
+    "assertionSites": 326,
+    "chunks": 22,
+    "assignedBytes": 160000
+  }
+}

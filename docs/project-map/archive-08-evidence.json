@@ -1,0 +1,592 @@
+{
+  "group": "08",
+  "read_date": "2026-10-27",
+  "allocation_plan": {
+    "path": "docs/project-map/archive-batches.json",
+    "sha256": "45c79d5dfbe20976a87dabd9cada12c604de55827dc38a7b326f069571b5fe1c"
+  },
+  "assigned_bytes": 160000,
+  "read_method": "Each successful chunk returned individually, at most 8000 bytes, without output truncation; two UTF-8 split attempts failed and were re-read on the valid boundary 7998. Half-open byte offsets.",
+  "sources": [
+    {
+      "source_id": "S01",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-HUNT-2026-10-16.md",
+      "start": 8201,
+      "end": 16388,
+      "kind": "text",
+      "sha256": "0a10978b8691cd424d9b8e532ec084c9993d8e461dd16e8ceb3faceb5700406a",
+      "whole_file_bytes": 16388,
+      "whole_file_sha256": "0a10978b8691cd424d9b8e532ec084c9993d8e461dd16e8ceb3faceb5700406a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "218ffa16144cea9c4aad708b990d0a64fb0ddb4e84aedc8e6033cbf056cd321b",
+      "chunks": [
+        {
+          "start": 8201,
+          "end": 16201,
+          "bytes": 8000,
+          "sha256": "85be419ef610f0728e8a7b7f5db671f62d285e0f0cc99915000b814eb542ecd0",
+          "fully_read": true
+        },
+        {
+          "start": 16201,
+          "end": 16388,
+          "bytes": 187,
+          "sha256": "1b2cf1f36ececf63b9c192c0ae9f7483c5c2b80d72bb10306e74711ab12d9b96",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S02",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-INCIDENTS-2-2026-10-16.md",
+      "start": 0,
+      "end": 5783,
+      "kind": "text",
+      "sha256": "a9668602e73d3a1d71b1ddbb9b2b9366681c43159640b22f5321452ef98df3c0",
+      "whole_file_bytes": 5783,
+      "whole_file_sha256": "a9668602e73d3a1d71b1ddbb9b2b9366681c43159640b22f5321452ef98df3c0",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "a9668602e73d3a1d71b1ddbb9b2b9366681c43159640b22f5321452ef98df3c0",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5783,
+          "bytes": 5783,
+          "sha256": "a9668602e73d3a1d71b1ddbb9b2b9366681c43159640b22f5321452ef98df3c0",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S03",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-INCIDENTS-2026-10-16.md",
+      "start": 0,
+      "end": 7515,
+      "kind": "text",
+      "sha256": "35e2e9983a08bfa24a05c6595bd0c8f0d7e1a0a93714c9439b6b5de91543e566",
+      "whole_file_bytes": 7515,
+      "whole_file_sha256": "35e2e9983a08bfa24a05c6595bd0c8f0d7e1a0a93714c9439b6b5de91543e566",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "35e2e9983a08bfa24a05c6595bd0c8f0d7e1a0a93714c9439b6b5de91543e566",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7515,
+          "bytes": 7515,
+          "sha256": "35e2e9983a08bfa24a05c6595bd0c8f0d7e1a0a93714c9439b6b5de91543e566",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S04",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-LIGHTING-SEASON-2026-10-16.md",
+      "start": 0,
+      "end": 9091,
+      "kind": "text",
+      "sha256": "8b97b7f0a0e583367cb15f5be5970bfcea6f29e456878e15c92fd359f826907c",
+      "whole_file_bytes": 9091,
+      "whole_file_sha256": "8b97b7f0a0e583367cb15f5be5970bfcea6f29e456878e15c92fd359f826907c",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "8b97b7f0a0e583367cb15f5be5970bfcea6f29e456878e15c92fd359f826907c",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "d6730c69f2f915887e349638d62488496ea0bd88232c6ee01e7dfd00fa7d27ab",
+          "fully_read": true
+        },
+        {
+          "start": 8000,
+          "end": 9091,
+          "bytes": 1091,
+          "sha256": "5e5684bfa6b689bde3daf0aa76cebfc4e9ac53c85cdcbcf7ecdb0851220121a3",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S05",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-MEMLEAK-WEBGPU-2026-10-17.md",
+      "start": 0,
+      "end": 4971,
+      "kind": "text",
+      "sha256": "9d5cbdbf7763599d5e42b22a2be2529d93abb2c8312ac407eddcf379c7246ac8",
+      "whole_file_bytes": 4971,
+      "whole_file_sha256": "9d5cbdbf7763599d5e42b22a2be2529d93abb2c8312ac407eddcf379c7246ac8",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "9d5cbdbf7763599d5e42b22a2be2529d93abb2c8312ac407eddcf379c7246ac8",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4971,
+          "bytes": 4971,
+          "sha256": "9d5cbdbf7763599d5e42b22a2be2529d93abb2c8312ac407eddcf379c7246ac8",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S06",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-NET-2026-10-16.md",
+      "start": 0,
+      "end": 12421,
+      "kind": "text",
+      "sha256": "e90ac1fcb1a770942578a8b1bca15dd811bc9234494e38da8b2c4826217af466",
+      "whole_file_bytes": 12421,
+      "whole_file_sha256": "e90ac1fcb1a770942578a8b1bca15dd811bc9234494e38da8b2c4826217af466",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "e90ac1fcb1a770942578a8b1bca15dd811bc9234494e38da8b2c4826217af466",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "f29f7a0d3c2ff7936923f629a88704100166206f9df3ace7f2ebc348322d366f",
+          "fully_read": true
+        },
+        {
+          "start": 8000,
+          "end": 12421,
+          "bytes": 4421,
+          "sha256": "69680fb891003c32e4c5028b62b144d1d46a38c163ae6f79e9f83e1eaab50f8f",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S07",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-RACE-2-2026-10-17.md",
+      "start": 0,
+      "end": 5192,
+      "kind": "text",
+      "sha256": "f66beb085ccd55d94f27a104fc4a86f77cbb506bfae774a8a487474e6cbb02c0",
+      "whole_file_bytes": 5192,
+      "whole_file_sha256": "f66beb085ccd55d94f27a104fc4a86f77cbb506bfae774a8a487474e6cbb02c0",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "f66beb085ccd55d94f27a104fc4a86f77cbb506bfae774a8a487474e6cbb02c0",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5192,
+          "bytes": 5192,
+          "sha256": "f66beb085ccd55d94f27a104fc4a86f77cbb506bfae774a8a487474e6cbb02c0",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S08",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-RACE-2026-10-22.md",
+      "start": 0,
+      "end": 4281,
+      "kind": "text",
+      "sha256": "edd1ad5352ec69a0026416d1b989afba7a128cfa53f12bf36d293f41a74e5869",
+      "whole_file_bytes": 4281,
+      "whole_file_sha256": "edd1ad5352ec69a0026416d1b989afba7a128cfa53f12bf36d293f41a74e5869",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "edd1ad5352ec69a0026416d1b989afba7a128cfa53f12bf36d293f41a74e5869",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4281,
+          "bytes": 4281,
+          "sha256": "edd1ad5352ec69a0026416d1b989afba7a128cfa53f12bf36d293f41a74e5869",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S09",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-RENDER-2026-10-21.md",
+      "start": 0,
+      "end": 4938,
+      "kind": "text",
+      "sha256": "baead1c451a6bbf9199d27daf402b358c6db6d4d4eb8ee79e971db2360b2e99f",
+      "whole_file_bytes": 4938,
+      "whole_file_sha256": "baead1c451a6bbf9199d27daf402b358c6db6d4d4eb8ee79e971db2360b2e99f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "baead1c451a6bbf9199d27daf402b358c6db6d4d4eb8ee79e971db2360b2e99f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4938,
+          "bytes": 4938,
+          "sha256": "baead1c451a6bbf9199d27daf402b358c6db6d4d4eb8ee79e971db2360b2e99f",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": [
+        {
+          "path": "docs/notes/PHONE-RENDERER-AB-2026-10-21.md",
+          "line": 26,
+          "text": "   names the gradient sky); TLX stills of the sky need `apex26.tlxForceHw=sky` on this box. `docs/archive/notes/LIVE-DEBUGGER-RENDER-2026-10-21.md` R2."
+        }
+      ]
+    },
+    {
+      "source_id": "S10",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-SIM-2026-10-21.md",
+      "start": 0,
+      "end": 2006,
+      "kind": "text",
+      "sha256": "674b9742a842ac6995d789730a1982fc512464c8efe30b0d0e6bd843adfd957a",
+      "whole_file_bytes": 2006,
+      "whole_file_sha256": "674b9742a842ac6995d789730a1982fc512464c8efe30b0d0e6bd843adfd957a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "674b9742a842ac6995d789730a1982fc512464c8efe30b0d0e6bd843adfd957a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2006,
+          "bytes": 2006,
+          "sha256": "674b9742a842ac6995d789730a1982fc512464c8efe30b0d0e6bd843adfd957a",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S11",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-TLX-DRAWCALLS-2026-10-17.md",
+      "start": 0,
+      "end": 4129,
+      "kind": "text",
+      "sha256": "641402e153354c556efb22ae3d4712d70a2786f07e175e7b71e643b374dccc0a",
+      "whole_file_bytes": 4129,
+      "whole_file_sha256": "641402e153354c556efb22ae3d4712d70a2786f07e175e7b71e643b374dccc0a",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "641402e153354c556efb22ae3d4712d70a2786f07e175e7b71e643b374dccc0a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4129,
+          "bytes": 4129,
+          "sha256": "641402e153354c556efb22ae3d4712d70a2786f07e175e7b71e643b374dccc0a",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S12",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-TLX-FRAMEJS-2026-10-17.md",
+      "start": 0,
+      "end": 3660,
+      "kind": "text",
+      "sha256": "a2a8bcf207cbd1d121a01892a59441849754716cf6dd8abfe31bc4bdc0618952",
+      "whole_file_bytes": 3660,
+      "whole_file_sha256": "a2a8bcf207cbd1d121a01892a59441849754716cf6dd8abfe31bc4bdc0618952",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "a2a8bcf207cbd1d121a01892a59441849754716cf6dd8abfe31bc4bdc0618952",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3660,
+          "bytes": 3660,
+          "sha256": "a2a8bcf207cbd1d121a01892a59441849754716cf6dd8abfe31bc4bdc0618952",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S13",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-TLX-GPUMEM-2026-10-17.md",
+      "start": 0,
+      "end": 6713,
+      "kind": "text",
+      "sha256": "65ddd6cf9ff46c9f3b34cd743844b8f711e255c2c9c6b6a3de5f3d46d777c178",
+      "whole_file_bytes": 6713,
+      "whole_file_sha256": "65ddd6cf9ff46c9f3b34cd743844b8f711e255c2c9c6b6a3de5f3d46d777c178",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "65ddd6cf9ff46c9f3b34cd743844b8f711e255c2c9c6b6a3de5f3d46d777c178",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6713,
+          "bytes": 6713,
+          "sha256": "65ddd6cf9ff46c9f3b34cd743844b8f711e255c2c9c6b6a3de5f3d46d777c178",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S14",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-VERIFY-2-2026-10-17.md",
+      "start": 0,
+      "end": 3825,
+      "kind": "text",
+      "sha256": "4d3527196f9fa26cfc12bdd1f136a8097cf7257f462e823cecc4accdbfcd434f",
+      "whole_file_bytes": 3825,
+      "whole_file_sha256": "4d3527196f9fa26cfc12bdd1f136a8097cf7257f462e823cecc4accdbfcd434f",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "4d3527196f9fa26cfc12bdd1f136a8097cf7257f462e823cecc4accdbfcd434f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3825,
+          "bytes": 3825,
+          "sha256": "4d3527196f9fa26cfc12bdd1f136a8097cf7257f462e823cecc4accdbfcd434f",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S15",
+      "path": "docs/archive/notes/LIVE-DEBUGGER-VERIFY-2-F6-2026-10-17.md",
+      "start": 0,
+      "end": 1770,
+      "kind": "text",
+      "sha256": "7cd364178feb95ee13e013563f68d8ed8a6279e182793b0ff3ee4c9ff148b417",
+      "whole_file_bytes": 1770,
+      "whole_file_sha256": "7cd364178feb95ee13e013563f68d8ed8a6279e182793b0ff3ee4c9ff148b417",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "7cd364178feb95ee13e013563f68d8ed8a6279e182793b0ff3ee4c9ff148b417",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1770,
+          "bytes": 1770,
+          "sha256": "7cd364178feb95ee13e013563f68d8ed8a6279e182793b0ff3ee4c9ff148b417",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S16",
+      "path": "docs/archive/notes/LIVERY-EDITOR-AUDIT-2026-10-18.md",
+      "start": 0,
+      "end": 12306,
+      "kind": "text",
+      "sha256": "b4b6efbe72fc80806cec113ced1a22dbb1fcd908d2c3e2699b60b812a142398b",
+      "whole_file_bytes": 12306,
+      "whole_file_sha256": "b4b6efbe72fc80806cec113ced1a22dbb1fcd908d2c3e2699b60b812a142398b",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "b4b6efbe72fc80806cec113ced1a22dbb1fcd908d2c3e2699b60b812a142398b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7998,
+          "bytes": 7998,
+          "sha256": "a81b98f26fe69dc39c9dfcad6cf1e1d0a2fd8bc5951aadd32136054a1144669c",
+          "fully_read": true
+        },
+        {
+          "start": 7998,
+          "end": 12306,
+          "bytes": 4308,
+          "sha256": "dc2b4f26469bd92f4cdb1f713e10585746f03e35f4e5466e4537a2eb679c6d48",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S17",
+      "path": "docs/archive/notes/LSP-NAVIGATION-EFFICIENCY-2026-10-18.md",
+      "start": 0,
+      "end": 7081,
+      "kind": "text",
+      "sha256": "6874fe91158337870c9bb9b5222678c1d3a945e407051b5f3b204056463fd4e8",
+      "whole_file_bytes": 7081,
+      "whole_file_sha256": "6874fe91158337870c9bb9b5222678c1d3a945e407051b5f3b204056463fd4e8",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "6874fe91158337870c9bb9b5222678c1d3a945e407051b5f3b204056463fd4e8",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7081,
+          "bytes": 7081,
+          "sha256": "6874fe91158337870c9bb9b5222678c1d3a945e407051b5f3b204056463fd4e8",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S18",
+      "path": "docs/archive/notes/MCP-ASYNC-TIMEOUT-OPPORTUNITIES-2026-10-07.md",
+      "start": 0,
+      "end": 1351,
+      "kind": "text",
+      "sha256": "bec218f65d97887e8c8456a4d95293d6bd0d8e8b4776e0ec99ccae4ea5c48445",
+      "whole_file_bytes": 1351,
+      "whole_file_sha256": "bec218f65d97887e8c8456a4d95293d6bd0d8e8b4776e0ec99ccae4ea5c48445",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "bec218f65d97887e8c8456a4d95293d6bd0d8e8b4776e0ec99ccae4ea5c48445",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1351,
+          "bytes": 1351,
+          "sha256": "bec218f65d97887e8c8456a4d95293d6bd0d8e8b4776e0ec99ccae4ea5c48445",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S19",
+      "path": "docs/archive/notes/MCP-BUG-SURVEY-2026-10-10.md",
+      "start": 0,
+      "end": 3981,
+      "kind": "text",
+      "sha256": "6b9323746afce1c90a7283eca1bf6247a3bee6deb07bfc1a345160cb0b0272ca",
+      "whole_file_bytes": 3981,
+      "whole_file_sha256": "6b9323746afce1c90a7283eca1bf6247a3bee6deb07bfc1a345160cb0b0272ca",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "6b9323746afce1c90a7283eca1bf6247a3bee6deb07bfc1a345160cb0b0272ca",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3981,
+          "bytes": 3981,
+          "sha256": "6b9323746afce1c90a7283eca1bf6247a3bee6deb07bfc1a345160cb0b0272ca",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S20",
+      "path": "docs/archive/notes/MCP-REVIEW-2026-10-18.md",
+      "start": 0,
+      "end": 10896,
+      "kind": "text",
+      "sha256": "1210a515b1c6fffeb2b2aaeb8af708a2bdc314501719b1409d5be1fa8fddeb93",
+      "whole_file_bytes": 10896,
+      "whole_file_sha256": "1210a515b1c6fffeb2b2aaeb8af708a2bdc314501719b1409d5be1fa8fddeb93",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "1210a515b1c6fffeb2b2aaeb8af708a2bdc314501719b1409d5be1fa8fddeb93",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "2d17ba3b14da8735c9ec063a9b4b15b41f70d8018bbbaaea636c192857061947",
+          "fully_read": true
+        },
+        {
+          "start": 8000,
+          "end": 10896,
+          "bytes": 2896,
+          "sha256": "716c52f65cfd2a2725b52decb068233e7b752701a4422f3ad0a89667b9ac1a45",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S21",
+      "path": "docs/archive/notes/MCP-TOOL-TEST-2026-10-18.md",
+      "start": 0,
+      "end": 24271,
+      "kind": "text",
+      "sha256": "accb461ecbe4233875573372a3c616d2acfe6a3a51b85549d8965aef30f3bd45",
+      "whole_file_bytes": 24271,
+      "whole_file_sha256": "accb461ecbe4233875573372a3c616d2acfe6a3a51b85549d8965aef30f3bd45",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "accb461ecbe4233875573372a3c616d2acfe6a3a51b85549d8965aef30f3bd45",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "3c876a54c8272fc8809ee13c1604f85d2faf5e310dd64a757a9d7e696878e669",
+          "fully_read": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "3801b5916b3b56cf986a1e910b9d78bcdbbe1e1cc00db38a9d91e138cded7fd6",
+          "fully_read": true
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "dead49da59e27d488ad2cd9d97bbaca938a4a2bf83dd8e1f1e8569d38e4fc46b",
+          "fully_read": true
+        },
+        {
+          "start": 24000,
+          "end": 24271,
+          "bytes": 271,
+          "sha256": "f1f330a6dca6b447eec67fa36e64572376486729ff12a1bc97865f74574eb6cc",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S22",
+      "path": "docs/archive/notes/MESH-EFFICIENCY-RESEARCH-2026-10-17.md",
+      "start": 0,
+      "end": 7767,
+      "kind": "text",
+      "sha256": "b1b8f1269979bf5ae7b95d3e01a7b1dc8911fce0a17e1ce0db2dbc03d01404ac",
+      "whole_file_bytes": 7767,
+      "whole_file_sha256": "b1b8f1269979bf5ae7b95d3e01a7b1dc8911fce0a17e1ce0db2dbc03d01404ac",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "b1b8f1269979bf5ae7b95d3e01a7b1dc8911fce0a17e1ce0db2dbc03d01404ac",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7767,
+          "bytes": 7767,
+          "sha256": "b1b8f1269979bf5ae7b95d3e01a7b1dc8911fce0a17e1ce0db2dbc03d01404ac",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": []
+    },
+    {
+      "source_id": "S23",
+      "path": "docs/archive/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md",
+      "start": 0,
+      "end": 7865,
+      "kind": "text",
+      "sha256": "b25da9071007e795fbff7b20e400e6663f95bc305a212a394494f1a1763f342e",
+      "whole_file_bytes": 9788,
+      "whole_file_sha256": "b25da9071007e795fbff7b20e400e6663f95bc305a212a394494f1a1763f342e",
+      "plan_hash_matches": true,
+      "assigned_part_sha256": "555a5338641bb8684a35c3e0883fbf96fb3276244b2b13efb28a94c22754ce1c",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7865,
+          "bytes": 7865,
+          "sha256": "555a5338641bb8684a35c3e0883fbf96fb3276244b2b13efb28a94c22754ce1c",
+          "fully_read": true
+        }
+      ],
+      "live_basename_backlinks": [
+        {
+          "path": "docs/notes/system-audit-4/web-hosts-gpu.md",
+          "line": 2,
+          "text": "Inputs: BRIEF.md; repo docs CI-RENDERING-PERFORMANCE.md, LOCAL-LLVMPIPE-2026-10-26.md, playwright.config.js, agent-fleet adapters.md, MULTI-AGENT-ORCHESTRATION-2026-10-10.md, .codex/*."
+        },
+        {
+          "path": "docs/notes/orchestration-redesign-2026-10-27/platform.md",
+          "line": 6,
+          "text": "`docs/archive/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md`, `docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md`."
+        }
+      ]
+    }
+  ],
+  "backlink_scope": "rg --files --hidden excluding .git, historical collection and project-map; literal basename matching; no external or git-history search"
+}

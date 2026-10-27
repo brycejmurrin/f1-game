@@ -1,0 +1,4609 @@
+{
+  "group": "03",
+  "assigned_bytes": 160000,
+  "coverage": "Complete assigned half-open TEXT spans, 43 parts, 50 individual chunks <=8000 source bytes; only shellparse tail and audio diagnose prefix assigned.",
+  "plan": {
+    "path": "docs/project-map/claude-batches.json",
+    "sha256_at_assignment_read": "d2fd60676e9b4e57397639166337b4d42ad5de2f78be597358b5dce9eed72cf1",
+    "sha256_at_write": "d2fd60676e9b4e57397639166337b4d42ad5de2f78be597358b5dce9eed72cf1",
+    "sha_semantics": "Plan hashes denote whole source files, not assigned parts; separately hashed below."
+  },
+  "sources": [
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "start": 88457,
+      "end": 104642,
+      "kind": "text",
+      "sha256": "0e6d0b08fc6bb53ddd476158b32f515dc5d88d46f5947d519ff43a29b5167ea3",
+      "actual_whole_sha256": "0e6d0b08fc6bb53ddd476158b32f515dc5d88d46f5947d519ff43a29b5167ea3",
+      "plan_hash_matches": true,
+      "whole_bytes": 104642,
+      "part_sha256": "aa586f089a52ef7f834b2d2972f0b40ee70bffe6ed92d0cae2f259fb253267d7",
+      "start_line": 1720,
+      "end_line_inclusive": 2075,
+      "partial_file": true,
+      "chunks": [
+        {
+          "start": 88457,
+          "end": 96457,
+          "bytes": 8000,
+          "sha256": "ad8af0b93be21521a12c13b2c7852b176a26ae04c4ab0c416bd657a16ad62dec",
+          "tool_chunk_id": "1105c5",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 96457,
+          "end": 104457,
+          "bytes": 8000,
+          "sha256": "c732919556116f8bb73ef8b467ee0f382aca40db0a25f1c9401766c65c8c260f",
+          "tool_chunk_id": "0c94a9",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 104457,
+          "end": 104642,
+          "bytes": 185,
+          "sha256": "75d33b78d9cc4930a7f3891ba6bff6ebe503dae010c1b2e61fc121536e12e4e9",
+          "tool_chunk_id": "00cf14",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Python shell-analysis library and CLI tail",
+        "trigger_inputs": "Imported command text plus cwd, or stdin selected by CLI mode.",
+        "outputs": "Absolute write-target dictionaries with kind, optional src/cwd/sim; JSON mode results, agent-run leaf lines; parse failures null for several modes, agent-run stderr/exit 2.",
+        "registration": "Indirect dependency of bash-guard.sh and protect-files.py, not separately registered as a hook.",
+        "consumers": [
+          ".claude/hooks/bash-guard.sh:126,315",
+          ".claude/hooks/protect-files.py:441"
+        ],
+        "dependencies": "Earlier commands/_abs/parser functions, git globals and resolve-source set outside assigned range; os/re/json/sys; optional sed script file reads.",
+        "limits": "Assigned tail starts inside _git_writes; no claim of reading preceding parser. Recognizes listed shell write forms; does not execute analyzed shell commands. git-resolve classification relaxes generated/shared-contract rules, never live-run/scope rules."
+      },
+      "anchors": [
+        {
+          "line": 1791,
+          "text": "def _sed_w_files(script):"
+        },
+        {
+          "line": 1839,
+          "text": "def _sed_scripts(args, c):"
+        },
+        {
+          "line": 1874,
+          "text": "def _read(p):"
+        },
+        {
+          "line": 1882,
+          "text": "def _curl_writes(args, c):"
+        },
+        {
+          "line": 1912,
+          "text": "def write_targets(text, cwd):"
+        },
+        {
+          "line": 2027,
+          "text": "if __name__ == \"__main__\":"
+        }
+      ]
+    },
+    {
+      "path": ".claude/hooks/skill-hint.py",
+      "start": 0,
+      "end": 6112,
+      "kind": "text",
+      "sha256": "68cc5eb4083fa7d03b4daff0dac9c1380d3316e0b3959f99c3618b812e334de4",
+      "actual_whole_sha256": "68cc5eb4083fa7d03b4daff0dac9c1380d3316e0b3959f99c3618b812e334de4",
+      "plan_hash_matches": true,
+      "whole_bytes": 6112,
+      "part_sha256": "68cc5eb4083fa7d03b4daff0dac9c1380d3316e0b3959f99c3618b812e334de4",
+      "start_line": 1,
+      "end_line_inclusive": 134,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6112,
+          "bytes": 6112,
+          "sha256": "68cc5eb4083fa7d03b4daff0dac9c1380d3316e0b3959f99c3618b812e334de4",
+          "tool_chunk_id": "dbde25",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Advisory UserPromptSubmit hook",
+        "trigger_inputs": "JSON stdin prompt/event metadata; CLAUDE_PROJECT_DIR and APEX_SKILL_HINT.",
+        "outputs": "At most two skill names plus one routing-rule sentence on stdout, otherwise silence; always exit 0.",
+        "registration": "settings UserPromptSubmit, timeout 5s.",
+        "consumers": "Claude Code prompt context; routing eval and unit hook tests.",
+        "dependencies": "SKILL.md frontmatter descriptions/when_to_use, first 4096 chars, IDF word overlap and pinned phone verbs.",
+        "limits": "MIN_SCORE 4.5; targeted/default, generic, off. Skip slash commands, blank text, non-user event and leading notification envelopes; errors fail open."
+      },
+      "anchors": [
+        {
+          "line": 30,
+          "text": "MIN_SCORE = 4.5"
+        },
+        {
+          "line": 53,
+          "text": "def words(text):"
+        },
+        {
+          "line": 58,
+          "text": "def description(path):"
+        },
+        {
+          "line": 81,
+          "text": "def matches(prompt, root):"
+        },
+        {
+          "line": 104,
+          "text": "def main():"
+        },
+        {
+          "line": 129,
+          "text": "if __name__ == \"__main__\":"
+        }
+      ]
+    },
+    {
+      "path": ".claude/hooks/stop-guard.sh",
+      "start": 0,
+      "end": 2656,
+      "kind": "text",
+      "sha256": "40f162f2412583cdbfe6a20aa819c4f7edcab73dc2966077842f9f672a0ab08d",
+      "actual_whole_sha256": "40f162f2412583cdbfe6a20aa819c4f7edcab73dc2966077842f9f672a0ab08d",
+      "plan_hash_matches": true,
+      "whole_bytes": 2656,
+      "part_sha256": "40f162f2412583cdbfe6a20aa819c4f7edcab73dc2966077842f9f672a0ab08d",
+      "start_line": 1,
+      "end_line_inclusive": 49,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2656,
+          "bytes": 2656,
+          "sha256": "40f162f2412583cdbfe6a20aa819c4f7edcab73dc2966077842f9f672a0ab08d",
+          "tool_chunk_id": "0c10f0",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "One-nudge Stop hook",
+        "trigger_inputs": "stdin stop_hook_active; checkout root; allow-stop file; live-run.py output.",
+        "outputs": "stderr reason and exit 2 once per live-run identity; otherwise exit 0. Writes artifacts/.stop-guard stamp.",
+        "registration": "settings Stop, timeout 10s.",
+        "consumers": "Claude Code Stop continuation.",
+        "dependencies": "live-run.py, python3, md5sum, basename, shell filesystem.",
+        "limits": "No run -> no nudge; already-active stop and escape hatch pass. Scope is current checkout; avoids selection-only --list processes through helper."
+      },
+      "anchors": []
+    },
+    {
+      "path": ".claude/hooks/subagent-contract.py",
+      "start": 0,
+      "end": 8435,
+      "kind": "text",
+      "sha256": "5fc307f979d845c0b2ff3c582774cffb601d44d14198277473b72fcf6be05237",
+      "actual_whole_sha256": "5fc307f979d845c0b2ff3c582774cffb601d44d14198277473b72fcf6be05237",
+      "plan_hash_matches": true,
+      "whole_bytes": 8435,
+      "part_sha256": "5fc307f979d845c0b2ff3c582774cffb601d44d14198277473b72fcf6be05237",
+      "start_line": 1,
+      "end_line_inclusive": 166,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "f6e347f336937f1a3fe27c8a5cc798e16c32c8c04d0be44764ac16ba462d88b8",
+          "tool_chunk_id": "0677bc",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 8435,
+          "bytes": 435,
+          "sha256": "564054a4ee7fe256687e6eb5071f903948d59bb18367370f87041704e9b43758",
+          "tool_chunk_id": "3c4f90",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Advisory report-shape checker",
+        "trigger_inputs": "JSON agent_type, agent_id, stop_hook_active, last_assistant_message or SubagentHandback tool_input.message.",
+        "outputs": "SubagentStop decision:block/reason; PreToolUse permissionDecision:deny once using artifacts/subagent-contract stamp; otherwise no output, exit 0.",
+        "registration": "settings SubagentStop seven-agent matcher and PreToolUse SubagentHandback; timeout 10s.",
+        "consumers": "Reporter subagent final reports and handbacks.",
+        "dependencies": "Agent cards Return format; mirrored C table; subagent-contract-hook unit pins.",
+        "limits": "Unknown types/empty/malformed/internal errors fail open. UNREAD skips required-line tests but keeps row shape/caps. Caps 12 FINDING,15 CLAIM,30 KNOWN,1 VERDICT,8 BLOAT,30 SITE; ci-red-triage requires red/base/next or no-current-red lines. Required-line regex for agent-surface-reviewer requires VERDICT-space even though row accepts VERDICT-colon."
+      },
+      "anchors": [
+        {
+          "line": 34,
+          "text": "C = {"
+        },
+        {
+          "line": 81,
+          "text": "def lines(msg):"
+        },
+        {
+          "line": 91,
+          "text": "def check(name, msg):"
+        },
+        {
+          "line": 117,
+          "text": "def handback_once(d):"
+        },
+        {
+          "line": 133,
+          "text": "def main():"
+        }
+      ]
+    },
+    {
+      "path": ".claude/hooks/ui-fixer-uncommitted.sh",
+      "start": 0,
+      "end": 1411,
+      "kind": "text",
+      "sha256": "001b02599c59784170fad0aa337170b83c5df70f252bf850c931c68cb1f09a0c",
+      "actual_whole_sha256": "001b02599c59784170fad0aa337170b83c5df70f252bf850c931c68cb1f09a0c",
+      "plan_hash_matches": true,
+      "whole_bytes": 1411,
+      "part_sha256": "001b02599c59784170fad0aa337170b83c5df70f252bf850c931c68cb1f09a0c",
+      "start_line": 1,
+      "end_line_inclusive": 21,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1411,
+          "bytes": 1411,
+          "sha256": "001b02599c59784170fad0aa337170b83c5df70f252bf850c931c68cb1f09a0c",
+          "tool_chunk_id": "d0713a",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Advisory aged-diff prompt hook",
+        "trigger_inputs": "Checkout git branch/diff/log, date/stat, optional APEX_UI_FIXER_AGE.",
+        "outputs": "stdout WIP reminder and artifacts/.ui-fixer-uncommitted stamp; exit 0.",
+        "registration": "settings UserPromptSubmit, timeout 5s.",
+        "consumers": "Claude Code prompt context.",
+        "dependencies": "git, GNU-style stat/date, artifacts directory.",
+        "limits": "Only cursor/*; tracked HEAD diff excludes memory/artifacts; default age >3600s; 1800s stamp debounce; does not inspect semantic UI change type."
+      },
+      "anchors": []
+    },
+    {
+      "path": ".claude/memory/MEMORY.md",
+      "start": 0,
+      "end": 2665,
+      "kind": "text",
+      "sha256": "686554a15fee561fc252cc1d425b76ee51e8b950f18e819dd7018e14a824b8a7",
+      "actual_whole_sha256": "686554a15fee561fc252cc1d425b76ee51e8b950f18e819dd7018e14a824b8a7",
+      "plan_hash_matches": true,
+      "whole_bytes": 2665,
+      "part_sha256": "686554a15fee561fc252cc1d425b76ee51e8b950f18e819dd7018e14a824b8a7",
+      "start_line": 1,
+      "end_line_inclusive": 23,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2665,
+          "bytes": 2665,
+          "sha256": "686554a15fee561fc252cc1d425b76ee51e8b950f18e819dd7018e14a824b8a7",
+          "tool_chunk_id": "157cc8",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Auto-memory index",
+        "trigger_inputs": "Memory sync/host automatic loading.",
+        "outputs": "Linked topic index; preference routing rather than executable rules.",
+        "registration": "memory-sync hook plus auto memory enabled in settings env.",
+        "consumers": "Claude cloud memory readers; apex-memory list/show/retire.",
+        "dependencies": "14 assigned topic files; memory-sync.sh; tools/env/apex-memory.mjs.",
+        "limits": "Preferences/corrections only; contradictions with current code/AGENTS are marked stale; coordination belongs to WORKERS."
+      },
+      "anchors": []
+    },
+    {
+      "path": ".claude/memory/ask-via-askuserquestion.md",
+      "start": 0,
+      "end": 1488,
+      "kind": "text",
+      "sha256": "3ffbc3df1e5c80d5b467e5c733ba3c002f7f974c1f816b98775da8fd4cc7531a",
+      "actual_whole_sha256": "3ffbc3df1e5c80d5b467e5c733ba3c002f7f974c1f816b98775da8fd4cc7531a",
+      "plan_hash_matches": true,
+      "whole_bytes": 1488,
+      "part_sha256": "3ffbc3df1e5c80d5b467e5c733ba3c002f7f974c1f816b98775da8fd4cc7531a",
+      "start_line": 1,
+      "end_line_inclusive": 18,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1488,
+          "bytes": 1488,
+          "sha256": "3ffbc3df1e5c80d5b467e5c733ba3c002f7f974c1f816b98775da8fd4cc7531a",
+          "tool_chunk_id": "f0c22b",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Question tool for Bryce's decisions — Bryce-attended sessions only; unattended workers use the needs-decision label (2026-10-27)",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: ask-via-askuserquestion"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/bryce-iphone-tlx-webgpu.md",
+      "start": 0,
+      "end": 968,
+      "kind": "text",
+      "sha256": "756d7efa7edbbaec70dcd87e85325f41e36afd5f71e0908529f60ba7383d4bd2",
+      "actual_whole_sha256": "756d7efa7edbbaec70dcd87e85325f41e36afd5f71e0908529f60ba7383d4bd2",
+      "plan_hash_matches": true,
+      "whole_bytes": 968,
+      "part_sha256": "756d7efa7edbbaec70dcd87e85325f41e36afd5f71e0908529f60ba7383d4bd2",
+      "start_line": 1,
+      "end_line_inclusive": 17,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 968,
+          "bytes": 968,
+          "sha256": "756d7efa7edbbaec70dcd87e85325f41e36afd5f71e0908529f60ba7383d4bd2",
+          "tool_chunk_id": "2ae2b4",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Bryce plays on iPhone with THREE.JS + THREE PATH WEBGPU (tlxForceGL=0) and says it works, unlike the AUTO WebKit→WebGL2 default",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: bryce-iphone-tlx-webgpu"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/design-lanes-living-artifact.md",
+      "start": 0,
+      "end": 884,
+      "kind": "text",
+      "sha256": "67f9107738391f6b97d5f24ad8837299ccd66099f1b7cfdbcae6b75f25601c00",
+      "actual_whole_sha256": "67f9107738391f6b97d5f24ad8837299ccd66099f1b7cfdbcae6b75f25601c00",
+      "plan_hash_matches": true,
+      "whole_bytes": 884,
+      "part_sha256": "67f9107738391f6b97d5f24ad8837299ccd66099f1b7cfdbcae6b75f25601c00",
+      "start_line": 1,
+      "end_line_inclusive": 15,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 884,
+          "bytes": 884,
+          "sha256": "67f9107738391f6b97d5f24ad8837299ccd66099f1b7cfdbcae6b75f25601c00",
+          "tool_chunk_id": "529559",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Design-preview lanes keep ONE living Artifact gallery each, republished to the same URL every iteration round",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: design-lanes-living-artifact"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/fan-out-with-subagents.md",
+      "start": 0,
+      "end": 889,
+      "kind": "text",
+      "sha256": "e3fac2b1687606aae5e139a18d41ada56844b4bc71e8382c9a89e5ce552942d6",
+      "actual_whole_sha256": "e3fac2b1687606aae5e139a18d41ada56844b4bc71e8382c9a89e5ce552942d6",
+      "plan_hash_matches": true,
+      "whole_bytes": 889,
+      "part_sha256": "e3fac2b1687606aae5e139a18d41ada56844b4bc71e8382c9a89e5ce552942d6",
+      "start_line": 1,
+      "end_line_inclusive": 15,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 889,
+          "bytes": 889,
+          "sha256": "e3fac2b1687606aae5e139a18d41ada56844b4bc71e8382c9a89e5ce552942d6",
+          "tool_chunk_id": "800555",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Bryce 2026-10-26 — multi-part fleet tasks (PR trains, fixes): fan out to worker subagents in worktrees, not one serial session",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: fan-out-with-subagents"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/one-subagent-per-skill.md",
+      "start": 0,
+      "end": 1039,
+      "kind": "text",
+      "sha256": "18b4910eb50294487dc9d3bbd5d5b5395bb749a14ed17afd29ba5afdf189168c",
+      "actual_whole_sha256": "18b4910eb50294487dc9d3bbd5d5b5395bb749a14ed17afd29ba5afdf189168c",
+      "plan_hash_matches": true,
+      "whole_bytes": 1039,
+      "part_sha256": "18b4910eb50294487dc9d3bbd5d5b5395bb749a14ed17afd29ba5afdf189168c",
+      "start_line": 1,
+      "end_line_inclusive": 15,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1039,
+          "bytes": 1039,
+          "sha256": "18b4910eb50294487dc9d3bbd5d5b5395bb749a14ed17afd29ba5afdf189168c",
+          "tool_chunk_id": "1750bb",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "One subagent per skill when reviewing, testing or exercising skills, within host limits",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: one-subagent-per-skill"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/parallel-survey-and-review.md",
+      "start": 0,
+      "end": 1633,
+      "kind": "text",
+      "sha256": "9a656e3132b516d9642be251de930f846c4993ed64a2c938f1b5832c538552ba",
+      "actual_whole_sha256": "9a656e3132b516d9642be251de930f846c4993ed64a2c938f1b5832c538552ba",
+      "plan_hash_matches": true,
+      "whole_bytes": 1633,
+      "part_sha256": "9a656e3132b516d9642be251de930f846c4993ed64a2c938f1b5832c538552ba",
+      "start_line": 1,
+      "end_line_inclusive": 28,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1633,
+          "bytes": 1633,
+          "sha256": "9a656e3132b516d9642be251de930f846c4993ed64a2c938f1b5832c538552ba",
+          "tool_chunk_id": "fdb845",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "For UI/HUD reports: run the browser survey as a background apex-tools job from the main thread while read-only subagents review the code for organization and adaptability; write the resulting plan as a docs/notes file",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: parallel-survey-and-review"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/preview-must-look-different.md",
+      "start": 0,
+      "end": 1083,
+      "kind": "text",
+      "sha256": "91d5413a4fb4a7865193cad6a719349455ce0061cdfdd97b92d66884d5855cb0",
+      "actual_whole_sha256": "91d5413a4fb4a7865193cad6a719349455ce0061cdfdd97b92d66884d5855cb0",
+      "plan_hash_matches": true,
+      "whole_bytes": 1083,
+      "part_sha256": "91d5413a4fb4a7865193cad6a719349455ce0061cdfdd97b92d66884d5855cb0",
+      "start_line": 1,
+      "end_line_inclusive": 15,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1083,
+          "bytes": 1083,
+          "sha256": "91d5413a4fb4a7865193cad6a719349455ce0061cdfdd97b92d66884d5855cb0",
+          "tool_chunk_id": "4bff3d",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Design-variant preview sheets must visibly differ in the picture itself; mm metrics are not enough",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: preview-must-look-different"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/rules-are-agent-written-drafts.md",
+      "start": 0,
+      "end": 1155,
+      "kind": "text",
+      "sha256": "70882aef8dc8a71636c730aeed67fa70fbfebcc9e3628aa70e76e7ad6d59f274",
+      "actual_whole_sha256": "70882aef8dc8a71636c730aeed67fa70fbfebcc9e3628aa70e76e7ad6d59f274",
+      "plan_hash_matches": true,
+      "whole_bytes": 1155,
+      "part_sha256": "70882aef8dc8a71636c730aeed67fa70fbfebcc9e3628aa70e76e7ad6d59f274",
+      "start_line": 1,
+      "end_line_inclusive": 14,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1155,
+          "bytes": 1155,
+          "sha256": "70882aef8dc8a71636c730aeed67fa70fbfebcc9e3628aa70e76e7ad6d59f274",
+          "tool_chunk_id": "97326e",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Bryce 2026-10-26: AGENTS.md/CLAUDE.md/memory are agent-written drafts to be reconsidered; implement audit improvements, all in one PR",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: rules-are-agent-written-drafts"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/small-steps-for-api-analysis.md",
+      "start": 0,
+      "end": 638,
+      "kind": "text",
+      "sha256": "5c01912568fef191fb7f360d61049fb97e2fc9f23c495b969f4cd70148ee3d8d",
+      "actual_whole_sha256": "5c01912568fef191fb7f360d61049fb97e2fc9f23c495b969f4cd70148ee3d8d",
+      "plan_hash_matches": true,
+      "whole_bytes": 638,
+      "part_sha256": "5c01912568fef191fb7f360d61049fb97e2fc9f23c495b969f4cd70148ee3d8d",
+      "start_line": 1,
+      "end_line_inclusive": 11,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 638,
+          "bytes": 638,
+          "sha256": "5c01912568fef191fb7f360d61049fb97e2fc9f23c495b969f4cd70148ee3d8d",
+          "tool_chunk_id": "2426a0",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "When analyzing GitHub Actions/API data, work in small incremental queries, not one big bulk-fetch script",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: small-steps-for-api-analysis"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/survey-then-fix.md",
+      "start": 0,
+      "end": 1102,
+      "kind": "text",
+      "sha256": "71ac63fd5adb5325de8388579df28105032ad22896d93d2e2fdc45928b90b3b9",
+      "actual_whole_sha256": "71ac63fd5adb5325de8388579df28105032ad22896d93d2e2fdc45928b90b3b9",
+      "plan_hash_matches": true,
+      "whole_bytes": 1102,
+      "part_sha256": "71ac63fd5adb5325de8388579df28105032ad22896d93d2e2fdc45928b90b3b9",
+      "start_line": 1,
+      "end_line_inclusive": 23,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1102,
+          "bytes": 1102,
+          "sha256": "71ac63fd5adb5325de8388579df28105032ad22896d93d2e2fdc45928b90b3b9",
+          "tool_chunk_id": "866e3d",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "After an audit or survey, the user wants the ranked gap list landed in the same session, not only reported",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: survey-then-fix"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/synced-plugins-not-in-child-sessions.md",
+      "start": 0,
+      "end": 1685,
+      "kind": "text",
+      "sha256": "f01600d1f8e93a8da7402c9028037eab126d296b82da04886ecfeaca39db027e",
+      "actual_whole_sha256": "f01600d1f8e93a8da7402c9028037eab126d296b82da04886ecfeaca39db027e",
+      "plan_hash_matches": true,
+      "whole_bytes": 1685,
+      "part_sha256": "f01600d1f8e93a8da7402c9028037eab126d296b82da04886ecfeaca39db027e",
+      "start_line": 1,
+      "end_line_inclusive": 17,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1685,
+          "bytes": 1685,
+          "sha256": "f01600d1f8e93a8da7402c9028037eab126d296b82da04886ecfeaca39db027e",
+          "tool_chunk_id": "72431f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Dated Claude-host plugin inheritance limitation; discover availability in each session",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: synced-plugins-not-in-child-sessions"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/train-ratchet-standing-ok.md",
+      "start": 0,
+      "end": 1087,
+      "kind": "text",
+      "sha256": "a5cd68c1572063c2513252110825b2d388c2ff3372081f68aa594cc8c4f7aa32",
+      "actual_whole_sha256": "a5cd68c1572063c2513252110825b2d388c2ff3372081f68aa594cc8c4f7aa32",
+      "plan_hash_matches": true,
+      "whole_bytes": 1087,
+      "part_sha256": "a5cd68c1572063c2513252110825b2d388c2ff3372081f68aa594cc8c4f7aa32",
+      "start_line": 1,
+      "end_line_inclusive": 15,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1087,
+          "bytes": 1087,
+          "sha256": "a5cd68c1572063c2513252110825b2d388c2ff3372081f68aa594cc8c4f7aa32",
+          "tool_chunk_id": "aaedf7",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Bryce 2026-10-26 standing OK — tree-metric ratchet +1..+3 caused by combining train members may be raised without a per-case ask",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: train-ratchet-standing-ok"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/user-plays-on-phone.md",
+      "start": 0,
+      "end": 1057,
+      "kind": "text",
+      "sha256": "0110a96d650289976afa2a629a11a4c851f63cb3da8c35d9acc91c93d623bbe1",
+      "actual_whole_sha256": "0110a96d650289976afa2a629a11a4c851f63cb3da8c35d9acc91c93d623bbe1",
+      "plan_hash_matches": true,
+      "whole_bytes": 1057,
+      "part_sha256": "0110a96d650289976afa2a629a11a4c851f63cb3da8c35d9acc91c93d623bbe1",
+      "start_line": 1,
+      "end_line_inclusive": 14,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1057,
+          "bytes": 1057,
+          "sha256": "0110a96d650289976afa2a629a11a4c851f63cb3da8c35d9acc91c93d623bbe1",
+          "tool_chunk_id": "fdddcc",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "The owner plays and reports bugs from a PHONE (touch, landscape) — reproduce HUD/UI reports at phone-landscape-844x390 with hasTouch, not on a desktop viewport",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: user-plays-on-phone"
+        }
+      ]
+    },
+    {
+      "path": ".claude/memory/user-timezone-pacific.md",
+      "start": 0,
+      "end": 593,
+      "kind": "text",
+      "sha256": "4645c6f636ae4a620ec58cc9bc617f8b6ac7aa46cb57904f3546c0405f25c815",
+      "actual_whole_sha256": "4645c6f636ae4a620ec58cc9bc617f8b6ac7aa46cb57904f3546c0405f25c815",
+      "plan_hash_matches": true,
+      "whole_bytes": 593,
+      "part_sha256": "4645c6f636ae4a620ec58cc9bc617f8b6ac7aa46cb57904f3546c0405f25c815",
+      "start_line": 1,
+      "end_line_inclusive": 17,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 593,
+          "bytes": 593,
+          "sha256": "4645c6f636ae4a620ec58cc9bc617f8b6ac7aa46cb57904f3546c0405f25c815",
+          "tool_chunk_id": "411a4f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Preference/correction memory topic",
+        "trigger_inputs": "Bryce is on US Pacific time; write cron/Routine schedules as CRON_TZ=America/Los_Angeles",
+        "outputs": "Dated preference context; no executable registration.",
+        "registration": "MEMORY.md index and memory-sync/host memory.",
+        "consumers": "Attended/unattended agent planning as scoped by topic.",
+        "limits": "Audited as data, not adopted as current task instructions; dated evidence can be superseded."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: user-timezone-pacific"
+        }
+      ]
+    },
+    {
+      "path": ".claude/rules/ci-tools.md",
+      "start": 0,
+      "end": 456,
+      "kind": "text",
+      "sha256": "ad28e69b972fdcce10969cbc0ba261cea5f03f695a29c5b0a960a0f2e313571b",
+      "actual_whole_sha256": "ad28e69b972fdcce10969cbc0ba261cea5f03f695a29c5b0a960a0f2e313571b",
+      "plan_hash_matches": true,
+      "whole_bytes": 456,
+      "part_sha256": "ad28e69b972fdcce10969cbc0ba261cea5f03f695a29c5b0a960a0f2e313571b",
+      "start_line": 1,
+      "end_line_inclusive": 13,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 456,
+          "bytes": 456,
+          "sha256": "ad28e69b972fdcce10969cbc0ba261cea5f03f695a29c5b0a960a0f2e313571b",
+          "tool_chunk_id": "87a05b",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Path-scoped agent instructions",
+        "trigger_inputs": [
+          "tools/ci/**",
+          ".github/workflows/**"
+        ],
+        "outputs": "Scoped authoring/verification/navigation guidance.",
+        "registration": "YAML paths frontmatter; Claude Code rule loading.",
+        "consumers": "Agents working on matching files.",
+        "dependencies": [
+          "docs/WORKERS.md",
+          "merge_policy.py",
+          "= ci none",
+          "ci.yml",
+          "node tools/ci/sync-pr.mjs <branch>",
+          "update_pull_request_branch"
+        ],
+        "limits": "Textual contracts only; none executed during map."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "paths:"
+        }
+      ]
+    },
+    {
+      "path": ".claude/rules/claude-config.md",
+      "start": 0,
+      "end": 2928,
+      "kind": "text",
+      "sha256": "0f3558d7447ba4093e6f8e07eacba742e2db241597cdf288b836ce999ead0714",
+      "actual_whole_sha256": "0f3558d7447ba4093e6f8e07eacba742e2db241597cdf288b836ce999ead0714",
+      "plan_hash_matches": true,
+      "whole_bytes": 2928,
+      "part_sha256": "0f3558d7447ba4093e6f8e07eacba742e2db241597cdf288b836ce999ead0714",
+      "start_line": 1,
+      "end_line_inclusive": 47,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2928,
+          "bytes": 2928,
+          "sha256": "0f3558d7447ba4093e6f8e07eacba742e2db241597cdf288b836ce999ead0714",
+          "tool_chunk_id": "4e65e4",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Path-scoped agent instructions",
+        "trigger_inputs": [
+          ".claude/**"
+        ],
+        "outputs": "Scoped authoring/verification/navigation guidance.",
+        "registration": "YAML paths frontmatter; Claude Code rule loading.",
+        "consumers": "Agents working on matching files.",
+        "dependencies": [
+          ".claude/hooks/**",
+          ".claude/settings*.json",
+          ".claude/memory/",
+          "ready-gate",
+          ".claude/skills",
+          ".claude/agents",
+          "bash tools/env/mirror-skills.sh",
+          ".cursor/skills/",
+          ".cursor/agents/",
+          "tests/unit/rulebook-guards.test.mjs",
+          "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+          ".claude/settings.json",
+          "session-start.sh",
+          "memory-sync.sh",
+          "docs/notes/AGENT-MEMORY.md",
+          "protect-files.sh",
+          ".claude/agents/README.md",
+          ".claude/allow-protected",
+          ".claude/allow-context-cap",
+          "context-cap.py",
+          ".claude/allow-stop",
+          "stop-guard.sh",
+          "bash-guard.sh",
+          "test:guards",
+          "git commit",
+          "pkill -f",
+          "mcp-browser-guard.sh",
+          "github-mcp-guard.sh",
+          "gh pr merge",
+          "gh pr ready",
+          "gh api",
+          "merge_policy.py",
+          "context-cap.py",
+          "STOP AT",
+          "launch-gate.py",
+          "create_session",
+          "tools/ci/launch-gate.mjs",
+          "launch-page.py",
+          "get_session",
+          "post-edit.sh",
+          "js/",
+          "lsp-hint.py",
+          "stop-guard.sh",
+          "subagent-contract.py",
+          "skill-hint.py",
+          "ui-fixer-uncommitted.sh"
+        ],
+        "limits": "Textual contracts only; none executed during map."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "paths:"
+        },
+        {
+          "line": 19,
+          "text": "## Hooks (wired by `.claude/settings.json`; moved from AGENTS.md 2026-10-26)"
+        }
+      ]
+    },
+    {
+      "path": ".claude/rules/game-code.md",
+      "start": 0,
+      "end": 2097,
+      "kind": "text",
+      "sha256": "cdf2ca813984233b5fde9591bd15cf26b7ef3ee67d89a490baea44d6cd924886",
+      "actual_whole_sha256": "cdf2ca813984233b5fde9591bd15cf26b7ef3ee67d89a490baea44d6cd924886",
+      "plan_hash_matches": true,
+      "whole_bytes": 2097,
+      "part_sha256": "cdf2ca813984233b5fde9591bd15cf26b7ef3ee67d89a490baea44d6cd924886",
+      "start_line": 1,
+      "end_line_inclusive": 31,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2097,
+          "bytes": 2097,
+          "sha256": "cdf2ca813984233b5fde9591bd15cf26b7ef3ee67d89a490baea44d6cd924886",
+          "tool_chunk_id": "780570",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Path-scoped agent instructions",
+        "trigger_inputs": [
+          "js/**",
+          "css/**",
+          "index.html",
+          "sw.js"
+        ],
+        "outputs": "Scoped authoring/verification/navigation guidance.",
+        "registration": "YAML paths frontmatter; Claude Code rule loading.",
+        "consumers": "Agents working on matching files.",
+        "dependencies": [
+          "?v=dev",
+          "pages.yml",
+          "\"use strict\"",
+          "tools/manifest.cjs",
+          "node tools/gen/gen-shell.mjs",
+          "js/circuits/<id>.js",
+          "js/track/",
+          "tests/data/ratchets.json",
+          "tests/data/ratchets.d/<branch>.json",
+          "APEX_RATCHET_RAISE_OK=1 node tools/check/ratchets.mjs --update --fragment --reason=\"<why>\"",
+          "--update --lower-only",
+          "apex26.",
+          "Log",
+          "js/core/log.js",
+          "console.*",
+          "s",
+          "x",
+          "def._sceneryShift",
+          "bankingProfile",
+          "buildCenterline",
+          "frac",
+          "PACE",
+          "vTop()",
+          "vStd()",
+          "aStd()",
+          "tools/check/vstd-lint.mjs",
+          "Tracks.curvature()",
+          "c.aeroX",
+          "aeroDfMult(c)",
+          "c.xOn",
+          "js/physics/consts.js",
+          "let",
+          "tests/specs/physics-characterization.spec.js"
+        ],
+        "limits": "Textual contracts only; none executed during map."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "paths:"
+        }
+      ]
+    },
+    {
+      "path": ".claude/rules/js-nav.md",
+      "start": 0,
+      "end": 1366,
+      "kind": "text",
+      "sha256": "a40fa9fcbb8fb354cf976d60f178fb9db9b05423e4baa10a5235d6b8a342b5b4",
+      "actual_whole_sha256": "a40fa9fcbb8fb354cf976d60f178fb9db9b05423e4baa10a5235d6b8a342b5b4",
+      "plan_hash_matches": true,
+      "whole_bytes": 1366,
+      "part_sha256": "a40fa9fcbb8fb354cf976d60f178fb9db9b05423e4baa10a5235d6b8a342b5b4",
+      "start_line": 1,
+      "end_line_inclusive": 24,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1366,
+          "bytes": 1366,
+          "sha256": "a40fa9fcbb8fb354cf976d60f178fb9db9b05423e4baa10a5235d6b8a342b5b4",
+          "tool_chunk_id": "b0c3a6",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Path-scoped agent instructions",
+        "trigger_inputs": [
+          "js/**"
+        ],
+        "outputs": "Scoped authoring/verification/navigation guidance.",
+        "registration": "YAML paths frontmatter; Claude Code rule loading.",
+        "consumers": "Agents working on matching files.",
+        "dependencies": [
+          "Name",
+          "Head.member",
+          "G.member",
+          "apex-lsp",
+          "lsp_definition",
+          "body: true",
+          "lsp_references",
+          "lsp_callers",
+          "lsp_outline",
+          "tools/mcp/lsp-mcp.sh <cmd> <target>",
+          "lsp_diagnostics {file}",
+          "// @ts-check",
+          "window.X",
+          "module.exports",
+          "code-nav",
+          "files:true",
+          "path"
+        ],
+        "limits": "Textual contracts only; none executed during map."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "paths:"
+        }
+      ]
+    },
+    {
+      "path": ".claude/rules/render-tlx.md",
+      "start": 0,
+      "end": 2092,
+      "kind": "text",
+      "sha256": "3845c2d31490ab933d1dc3c68b9db200bd163e5b39cd849a88180e8c77508f4d",
+      "actual_whole_sha256": "3845c2d31490ab933d1dc3c68b9db200bd163e5b39cd849a88180e8c77508f4d",
+      "plan_hash_matches": true,
+      "whole_bytes": 2092,
+      "part_sha256": "3845c2d31490ab933d1dc3c68b9db200bd163e5b39cd849a88180e8c77508f4d",
+      "start_line": 1,
+      "end_line_inclusive": 36,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2092,
+          "bytes": 2092,
+          "sha256": "3845c2d31490ab933d1dc3c68b9db200bd163e5b39cd849a88180e8c77508f4d",
+          "tool_chunk_id": "fb89b5",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Path-scoped agent instructions",
+        "trigger_inputs": [
+          "js/render/three/**"
+        ],
+        "outputs": "Scoped authoring/verification/navigation guidance.",
+        "registration": "YAML paths frontmatter; Claude Code rule loading.",
+        "consumers": "Agents working on matching files.",
+        "dependencies": [
+          "apex26.gfxBackend",
+          "apex26.gfxBackend=three",
+          "apex26.tlxForceGL=1",
+          "mappedAtCreation",
+          "--tlx-webgpu",
+          "node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe montreal",
+          "--ls apex26.tlxForceHw=env",
+          "sky",
+          "batches",
+          "chunked",
+          "shadow",
+          "gpuErrors",
+          "gpu-census.yml",
+          "macos-latest",
+          "ci.yml",
+          "renderer_macos: true",
+          "path:",
+          "tlxForceGL=0",
+          "tlx.js",
+          "putImageData",
+          "!forceWebGL && (_softAdapter || _headless || cap===\"1\")",
+          "\"1\"",
+          "headless=true",
+          "docs/ARCHITECTURE.md",
+          "renderer-debug",
+          "mcp-probe",
+          "node tools/mcp/mcp-cli.mjs probe --backend three"
+        ],
+        "limits": "Textual contracts only; none executed during map."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "paths:"
+        }
+      ]
+    },
+    {
+      "path": ".claude/rules/render-wgx.md",
+      "start": 0,
+      "end": 2740,
+      "kind": "text",
+      "sha256": "687a21863664a8ab2fdb234ce9dcaa556442ed49bd303b6ca21ef237545c42ab",
+      "actual_whole_sha256": "687a21863664a8ab2fdb234ce9dcaa556442ed49bd303b6ca21ef237545c42ab",
+      "plan_hash_matches": true,
+      "whole_bytes": 2740,
+      "part_sha256": "687a21863664a8ab2fdb234ce9dcaa556442ed49bd303b6ca21ef237545c42ab",
+      "start_line": 1,
+      "end_line_inclusive": 43,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2740,
+          "bytes": 2740,
+          "sha256": "687a21863664a8ab2fdb234ce9dcaa556442ed49bd303b6ca21ef237545c42ab",
+          "tool_chunk_id": "2f0b0f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Path-scoped agent instructions",
+        "trigger_inputs": [
+          "js/render/webgpu/**"
+        ],
+        "outputs": "Scoped authoring/verification/navigation guidance.",
+        "registration": "YAML paths frontmatter; Claude Code rule loading.",
+        "consumers": "Agents working on matching files.",
+        "dependencies": [
+          "apex26.gfxBackend=webgpu",
+          "webgl2",
+          "apex26.gfxWgxAllowSoftware",
+          "node tools/gfx/wgx-validate.mjs --static",
+          "tests/unit/webgpu-lifecycle.test.mjs",
+          "renderer-soft-lifecycle.test.mjs",
+          "test:tooling-fast",
+          "node tools/gfx/gfx-probe.mjs --backend webgpu montreal",
+          "gpuErrors",
+          "gpu-census.yml",
+          "macos-latest",
+          "docs/research/WEBGPU-PARITY.md",
+          "sampleCount",
+          "dpdx",
+          "dpdy",
+          "fwidth",
+          "fs_main",
+          "addEventListener(\"uncapturederror\")",
+          "device.onuncapturederror",
+          "var<private>",
+          "npx serve -l 3456 .",
+          "node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'",
+          "canvas.getContext(\"webgl2\") === null",
+          "docs/ARCHITECTURE.md",
+          "mcp-probe",
+          "node tools/gfx/wgx-capture.mjs <track>",
+          "GLX.capturePixels()",
+          "getCurrentTexture()",
+          "mapAsync",
+          "renderer-debug",
+          "mcp-probe",
+          "deploy-research"
+        ],
+        "limits": "Textual contracts only; none executed during map."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "paths:"
+        }
+      ]
+    },
+    {
+      "path": ".claude/rules/tests-specs.md",
+      "start": 0,
+      "end": 564,
+      "kind": "text",
+      "sha256": "2b7fa91dadf8b7f54b2b6c44bc89be107f17884b1c2fc0475987235fac0b6d3c",
+      "actual_whole_sha256": "2b7fa91dadf8b7f54b2b6c44bc89be107f17884b1c2fc0475987235fac0b6d3c",
+      "plan_hash_matches": true,
+      "whole_bytes": 564,
+      "part_sha256": "2b7fa91dadf8b7f54b2b6c44bc89be107f17884b1c2fc0475987235fac0b6d3c",
+      "start_line": 1,
+      "end_line_inclusive": 14,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 564,
+          "bytes": 564,
+          "sha256": "2b7fa91dadf8b7f54b2b6c44bc89be107f17884b1c2fc0475987235fac0b6d3c",
+          "tool_chunk_id": "4921ae",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Path-scoped agent instructions",
+        "trigger_inputs": [
+          "tests/specs/**"
+        ],
+        "outputs": "Scoped authoring/verification/navigation guidance.",
+        "registration": "YAML paths frontmatter; Claude Code rule loading.",
+        "consumers": "Agents working on matching files.",
+        "dependencies": [
+          "node tools/ci/test-bg.mjs",
+          "test-bg.mjs --stop",
+          "grep -E '^= (run (passed|failed|timedout|interrupted)|bg exit)'"
+        ],
+        "limits": "Textual contracts only; none executed during map."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "paths:"
+        }
+      ]
+    },
+    {
+      "path": ".claude/settings.json",
+      "start": 0,
+      "end": 12745,
+      "kind": "text",
+      "sha256": "aba4dfe8d0e4857402da3806e51fcb74ef0a91c4dcc5a780a19b8f82cc6c238a",
+      "actual_whole_sha256": "aba4dfe8d0e4857402da3806e51fcb74ef0a91c4dcc5a780a19b8f82cc6c238a",
+      "plan_hash_matches": true,
+      "whole_bytes": 12745,
+      "part_sha256": "aba4dfe8d0e4857402da3806e51fcb74ef0a91c4dcc5a780a19b8f82cc6c238a",
+      "start_line": 1,
+      "end_line_inclusive": 421,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "34d1fbdfd551e975b9e25df52f9feaa7f039df32047f114e04b805e033ac7092",
+          "tool_chunk_id": "f7a2bc",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 12745,
+          "bytes": 4745,
+          "sha256": "1f5cff2109f63d38ed00fbf6aacac969f8d335749be8d24a6b349785402e076b",
+          "tool_chunk_id": "741ee9",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Claude Code host configuration",
+        "trigger_inputs": "Host project config loading and named lifecycle/tool events.",
+        "outputs": "Permission allow/deny decisions, plugin/server enablement, environment, hook dispatch.",
+        "registration": "Project .claude/settings.json read by Claude Code; no assertion of Codex applying these hooks.",
+        "consumers": "Claude Code tool/lifecycle dispatcher.",
+        "dependencies": "All registered hook paths, six enabled MCP servers; .mcp.json; host tools/plugins.",
+        "limits": "Permissions include broad Bash and tool allows plus explicit denies; deny force/deploy push, asset baking, certain GitHub mutations and overlapping plugin workflows. Worktrees baseRef=head; eight synced plugins disabled; auto memory enabled."
+      },
+      "anchors": []
+    },
+    {
+      "path": ".claude/skills/README.md",
+      "start": 0,
+      "end": 13620,
+      "kind": "text",
+      "sha256": "74c154f6f3359bfe493706fedb5e39c95072b630e642c4aed132957c3d14879d",
+      "actual_whole_sha256": "74c154f6f3359bfe493706fedb5e39c95072b630e642c4aed132957c3d14879d",
+      "plan_hash_matches": true,
+      "whole_bytes": 13620,
+      "part_sha256": "74c154f6f3359bfe493706fedb5e39c95072b630e642c4aed132957c3d14879d",
+      "start_line": 1,
+      "end_line_inclusive": 96,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "ca60ac1953cc548841e34dbcb91ce0543843cb00e1d334846f838900ea832a01",
+          "tool_chunk_id": "8d57ee",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 13620,
+          "bytes": 5620,
+          "sha256": "e964781b33393b1365b5e72d0c689e9f1c7267e15df25897b256ed97266f1a79",
+          "tool_chunk_id": "fee04b",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Skill routing and progressive-disclosure catalog",
+        "trigger_inputs": "Workflow lookup or skill creation/folding.",
+        "outputs": "Skill-to-trigger table and reference/subagent routing.",
+        "registration": "Index for .claude/skills; descriptions route host discovery separately.",
+        "consumers": "Agents and agent-config authoring workflow.",
+        "dependencies": "Skill directories, AGENT-SURFACE/VERIFICATION, smoke catalog/CLI.",
+        "limits": "CLI owns commands, skill owns when/how; folded triggers must survive in hub description. Smoke plan/check is offline contract evidence, never browser/device evidence."
+      },
+      "anchors": []
+    },
+    {
+      "path": ".claude/skills/agent-config/SKILL.md",
+      "start": 0,
+      "end": 5382,
+      "kind": "text",
+      "sha256": "843143211bce8e3f4425574e3bc612ccb5daaf733f361faa6d2d771e29300899",
+      "actual_whole_sha256": "843143211bce8e3f4425574e3bc612ccb5daaf733f361faa6d2d771e29300899",
+      "plan_hash_matches": true,
+      "whole_bytes": 5382,
+      "part_sha256": "843143211bce8e3f4425574e3bc612ccb5daaf733f361faa6d2d771e29300899",
+      "start_line": 1,
+      "end_line_inclusive": 81,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5382,
+          "bytes": 5382,
+          "sha256": "843143211bce8e3f4425574e3bc612ccb5daaf733f361faa6d2d771e29300899",
+          "tool_chunk_id": "b99200",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Agent-surface maintenance skill",
+        "trigger_inputs": "Skill/description/instruction/agent/hook/routing-budget changes.",
+        "outputs": "Updated canonical surface plus routing queries, smoke recipe, mirror and catalog for added/renamed skills.",
+        "registration": "name+description frontmatter, catalog, Codex mirror.",
+        "consumers": "Maintainers, agent-surface-reviewer.",
+        "dependencies": "agent-config/agent-surface/skill-progressive tests; mirror-skills.sh; skill-routing-eval.py; SKILL_KEYS.",
+        "limits": "Descriptions <=1024 chars; body <500 lines; live aggregate budgets in tests. New routing file has >=5 own and >=3 near-miss queries. A/B model calls are costly; skip description-routing A/B for body-only changes."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: agent-config"
+        },
+        {
+          "line": 17,
+          "text": "## Budgets the tests enforce (`tests/unit/agent-config.test.mjs`)"
+        },
+        {
+          "line": 34,
+          "text": "## New skill — in order"
+        },
+        {
+          "line": 49,
+          "text": "## Workflow: survey → fix → retest → A/B"
+        },
+        {
+          "line": 76,
+          "text": "## Pitfalls"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/agent-view/SKILL.md",
+      "start": 0,
+      "end": 3448,
+      "kind": "text",
+      "sha256": "a08555e79ffa5e4cd3912c137838cfaceb833cb36bd427067e48d916181c646e",
+      "actual_whole_sha256": "a08555e79ffa5e4cd3912c137838cfaceb833cb36bd427067e48d916181c646e",
+      "plan_hash_matches": true,
+      "whole_bytes": 3448,
+      "part_sha256": "a08555e79ffa5e4cd3912c137838cfaceb833cb36bd427067e48d916181c646e",
+      "start_line": 1,
+      "end_line_inclusive": 53,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3448,
+          "bytes": 3448,
+          "sha256": "a08555e79ffa5e4cd3912c137838cfaceb833cb36bd427067e48d916181c646e",
+          "tool_chunk_id": "f8b94f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Read-only numeric game inspection skill",
+        "trigger_inputs": "Track, tool/flags or staged __apex call, seed and world/field/geometry payload.",
+        "outputs": "Structured state, text rasters, deterministic driving digest and typed errors; geometry defects handed to authoring skills.",
+        "registration": "Frontmatter description + catalog + mirror; CLI and apex_agent adapter.",
+        "consumers": "Tools/agents inspecting race and track state.",
+        "dependencies": "agent.mjs, apex-eval.mjs, game-vm.cjs, __apex/ApexApi and four references.",
+        "limits": "Numeric VM vs browser raster distinction; seed before race; stage player before state reads; serialize browser boots, close VM in finally. Read-only ownership does not prohibit simulation controls."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: agent-view"
+        },
+        {
+          "line": 33,
+          "text": "## Reference"
+        },
+        {
+          "line": 44,
+          "text": "## Load on demand"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "start": 0,
+      "end": 3511,
+      "kind": "text",
+      "sha256": "dd8b0f7ce6937b8b6ac5d69f400c5f3806ad54aa5b2ecdb6e970b204b5a662b9",
+      "actual_whole_sha256": "dd8b0f7ce6937b8b6ac5d69f400c5f3806ad54aa5b2ecdb6e970b204b5a662b9",
+      "plan_hash_matches": true,
+      "whole_bytes": 3511,
+      "part_sha256": "dd8b0f7ce6937b8b6ac5d69f400c5f3806ad54aa5b2ecdb6e970b204b5a662b9",
+      "start_line": 1,
+      "end_line_inclusive": 69,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3511,
+          "bytes": 3511,
+          "sha256": "dd8b0f7ce6937b8b6ac5d69f400c5f3806ad54aa5b2ecdb6e970b204b5a662b9",
+          "tool_chunk_id": "74e576",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "Track/circuit comparison, street half-width/barrier comparison, VM terrain-over-road window sweep, optional parent orbit captures; close each VM; computed elevations only; overRoad>0 denotes banked-surface intrusion.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": [
+        {
+          "line": 6,
+          "text": "## One-off queries"
+        },
+        {
+          "line": 18,
+          "text": "## Street circuits (`street: true`)"
+        },
+        {
+          "line": 34,
+          "text": "## Parallel multi-track sweep (compare all circuits fast)"
+        },
+        {
+          "line": 45,
+          "text": "## Validate visually"
+        },
+        {
+          "line": 56,
+          "text": "## Terrain-over-road sweep (VM)"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/agent-view/references/state.md",
+      "start": 0,
+      "end": 3988,
+      "kind": "text",
+      "sha256": "001f74620fab503958a0ebc1cdc89c5a15880c122dac4049ee6899020b64ad9b",
+      "actual_whole_sha256": "001f74620fab503958a0ebc1cdc89c5a15880c122dac4049ee6899020b64ad9b",
+      "plan_hash_matches": true,
+      "whole_bytes": 3988,
+      "part_sha256": "001f74620fab503958a0ebc1cdc89c5a15880c122dac4049ee6899020b64ad9b",
+      "start_line": 1,
+      "end_line_inclusive": 77,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3988,
+          "bytes": 3988,
+          "sha256": "001f74620fab503958a0ebc1cdc89c5a15880c122dac4049ee6899020b64ad9b",
+          "tool_chunk_id": "776215",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "Initialization and numeric loop contracts; obs requires player placement; reset handles placement. Field gap is metres, timing gaps intervals; lap>=1 for splits, race history differs Time Trial. Log seed/start/policy/terminal; rescue invalidates timing.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": [
+        {
+          "line": 14,
+          "text": "## Deterministic headless control loop"
+        },
+        {
+          "line": 46,
+          "text": "## Telemetry hook catalog"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/agent-view/references/surface.md",
+      "start": 0,
+      "end": 16450,
+      "kind": "text",
+      "sha256": "6d9585f3c27af007b6ca8d0ca376132c079fe19c6bcde7851452c7ccf03d0a1a",
+      "actual_whole_sha256": "6d9585f3c27af007b6ca8d0ca376132c079fe19c6bcde7851452c7ccf03d0a1a",
+      "plan_hash_matches": true,
+      "whole_bytes": 16450,
+      "part_sha256": "6d9585f3c27af007b6ca8d0ca376132c079fe19c6bcde7851452c7ccf03d0a1a",
+      "start_line": 1,
+      "end_line_inclusive": 271,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "54922cc21eac7cc4ce1dd28df67cf97b153ebaf9ddd2aaf3bfcbb28e53165f68",
+          "tool_chunk_id": "ce6c6d",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "b01f858dffe5e1cfb2fdb6da46c2467cc89eb57eb887d83700dce7f4c9b9814c",
+          "tool_chunk_id": "00b574",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        },
+        {
+          "start": 16000,
+          "end": 16450,
+          "bytes": 450,
+          "sha256": "0a1b16c2e393bd0a0386f284536c40c829b0051c8f56be8777b8a6260d740065",
+          "tool_chunk_id": "b4a75c",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "Detailed API catalog and drive policy; world dynamic vs track/car static; scene radius omnidirectional, trackSide vs ego side; brief rollout omits drive fields; booleans pedals/reverse gate; 120s clamp; seed before race; staged and lifecycle receipts.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": [
+        {
+          "line": 12,
+          "text": "## Contents"
+        },
+        {
+          "line": 20,
+          "text": "## Three ways in (same surface, different cost)"
+        },
+        {
+          "line": 40,
+          "text": "## The tools, by the question they answer"
+        },
+        {
+          "line": 115,
+          "text": "## The driving loop"
+        },
+        {
+          "line": 198,
+          "text": "## Determinism — pin the seed before any comparison"
+        },
+        {
+          "line": 231,
+          "text": "## Staging (the sharp edges the CLI handles for you)"
+        },
+        {
+          "line": 263,
+          "text": "## Lifecycle/tool receipts"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/agent-view/references/track-geometry.md",
+      "start": 0,
+      "end": 6003,
+      "kind": "text",
+      "sha256": "ca634b07d42fd1d50ea7f7539a92ce3e1d9e187181791254de9d4d495982b98f",
+      "actual_whole_sha256": "ca634b07d42fd1d50ea7f7539a92ce3e1d9e187181791254de9d4d495982b98f",
+      "plan_hash_matches": true,
+      "whole_bytes": 6003,
+      "part_sha256": "ca634b07d42fd1d50ea7f7539a92ce3e1d9e187181791254de9d4d495982b98f",
+      "start_line": 1,
+      "end_line_inclusive": 91,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6003,
+          "bytes": 6003,
+          "sha256": "ca634b07d42fd1d50ea7f7539a92ce3e1d9e187181791254de9d4d495982b98f",
+          "tool_chunk_id": "266cd4",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "Track shape/profile/bounds/ground/wall contracts; official turn counts vs curvature peaks; racing vs authoring shifted frac; slope-to-grade formula; VM lifecycle and terrain-over-road sampling; geometry only, not real-world figure.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": [
+        {
+          "line": 6,
+          "text": "## Layout & geometry"
+        },
+        {
+          "line": 19,
+          "text": "## Surface & barriers"
+        },
+        {
+          "line": 27,
+          "text": "## \"How many corners?\" — official vs peaks"
+        },
+        {
+          "line": 49,
+          "text": "## No browser: Node-VM route (verified 2026-09-30)"
+        },
+        {
+          "line": 88,
+          "text": "## Load on demand"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/ai-racecraft/SKILL.md",
+      "start": 0,
+      "end": 7068,
+      "kind": "text",
+      "sha256": "3497c7f52c4c60bf52ec602f982633994a3fa8ac61baddd9e09833d57bb1cdc3",
+      "actual_whole_sha256": "3497c7f52c4c60bf52ec602f982633994a3fa8ac61baddd9e09833d57bb1cdc3",
+      "plan_hash_matches": true,
+      "whole_bytes": 7068,
+      "part_sha256": "3497c7f52c4c60bf52ec602f982633994a3fa8ac61baddd9e09833d57bb1cdc3",
+      "start_line": 1,
+      "end_line_inclusive": 111,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7068,
+          "bytes": 7068,
+          "sha256": "3497c7f52c4c60bf52ec602f982633994a3fa8ac61baddd9e09833d57bb1cdc3",
+          "tool_chunk_id": "57f25e",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "AI behavior authoring/debug workflow",
+        "trigger_inputs": "Aggression/passing/braking/ERS/lane/stuck reports; track/difficulty/seed/car/timers.",
+        "outputs": "Measured racecraft changes or diagnostic evidence from VM instruments; scoped edit-to-test table.",
+        "registration": "Frontmatter description, catalog/mirror.",
+        "consumers": "AI tuning maintainers; AiDrive rules consumed by game update.",
+        "dependencies": "AiDrive, AiCorridor, driver-ratings, game.js updateCar and seeded RNG; ai-race dispatcher; pace/stuck/tactics references.",
+        "limits": "AI-only curvature; preserve RNG draw placement and same-tick order; per-tick functions avoid allocation. Caution level !=0 routes incidents; player handling routes tune-physics. Browser field appearance remains separate."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: ai-racecraft"
+        },
+        {
+          "line": 13,
+          "text": "## Owns vs stays in `game.js`"
+        },
+        {
+          "line": 26,
+          "text": "## Ratings → behaviour (where each knob lives)"
+        },
+        {
+          "line": 46,
+          "text": "## Do not"
+        },
+        {
+          "line": 52,
+          "text": "## Hot path and update order"
+        },
+        {
+          "line": 59,
+          "text": "## Brake target (AI brakes too early / late)"
+        },
+        {
+          "line": 71,
+          "text": "## Field pace (scripted vs catch-up band, `ai-band.js`)"
+        },
+        {
+          "line": 75,
+          "text": "## Traffic tactics (bunching, passing, defending, the player)"
+        },
+        {
+          "line": 79,
+          "text": "## Stuck / unstuck (AI wedged, never recovers)"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/ai-racecraft/references/pace.md",
+      "start": 0,
+      "end": 634,
+      "kind": "text",
+      "sha256": "8bc94bbb2f707285e39c0054d344e3c84bce19f9ba5df743b2e350ec3fc4f374",
+      "actual_whole_sha256": "8bc94bbb2f707285e39c0054d344e3c84bce19f9ba5df743b2e350ec3fc4f374",
+      "plan_hash_matches": true,
+      "whole_bytes": 634,
+      "part_sha256": "8bc94bbb2f707285e39c0054d344e3c84bce19f9ba5df743b2e350ec3fc4f374",
+      "start_line": 1,
+      "end_line_inclusive": 12,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 634,
+          "bytes": 634,
+          "sha256": "8bc94bbb2f707285e39c0054d344e3c84bce19f9ba5df743b2e350ec3fc4f374",
+          "tool_chunk_id": "54a16c",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "AI scripted pace default vs opt-in catchup band; ai-band owns gap-to-player behavior; persisted apex26.aiPace; unit/profile recipes.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": []
+    },
+    {
+      "path": ".claude/skills/ai-racecraft/references/stuck.md",
+      "start": 0,
+      "end": 2130,
+      "kind": "text",
+      "sha256": "d8af39a469e6dd11fd04b4255b0e37355d434be649ae375659d784a2d5811572",
+      "actual_whole_sha256": "d8af39a469e6dd11fd04b4255b0e37355d434be649ae375659d784a2d5811572",
+      "plan_hash_matches": true,
+      "whole_bytes": 2130,
+      "part_sha256": "d8af39a469e6dd11fd04b4255b0e37355d434be649ae375659d784a2d5811572",
+      "start_line": 1,
+      "end_line_inclusive": 30,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2130,
+          "bytes": 2130,
+          "sha256": "d8af39a469e6dd11fd04b4255b0e37355d434be649ae375659d784a2d5811572",
+          "tool_chunk_id": "1b7416",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "Caution-zero discriminator; stuckT/rescueT and dig-out escalation, pit/kerb exceptions; record carAt timers and lane state; stuck instrument counts episodes/teleports while field dwell is different.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": []
+    },
+    {
+      "path": ".claude/skills/ai-racecraft/references/tactics.md",
+      "start": 0,
+      "end": 2921,
+      "kind": "text",
+      "sha256": "1a9985f372a78678818114bd1a10a71560080cc4b379453d07c6e91a80b48470",
+      "actual_whole_sha256": "1a9985f372a78678818114bd1a10a71560080cc4b379453d07c6e91a80b48470",
+      "plan_hash_matches": true,
+      "whole_bytes": 2921,
+      "part_sha256": "1a9985f372a78678818114bd1a10a71560080cc4b379453d07c6e91a80b48470",
+      "start_line": 1,
+      "end_line_inclusive": 42,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2921,
+          "bytes": 2921,
+          "sha256": "1a9985f372a78678818114bd1a10a71560080cc4b379453d07c6e91a80b48470",
+          "tool_chunk_id": "1d26c2",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "Follow time, corner-side passing, attemptRoll, paired yield/lockouts, human/streets exceptions; permanent-circuit passHunger and coverConcede; Lap1 instrument and focused completion pins.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": [
+        {
+          "line": 19,
+          "text": "## Pass completion (faster stuck behind slower)"
+        },
+        {
+          "line": 37,
+          "text": "## Lap-1 / Turn-1 melee (cars racing each other into contact)"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/asset-pack/SKILL.md",
+      "start": 0,
+      "end": 3688,
+      "kind": "text",
+      "sha256": "33e0c9c3fba2c701ba7ac90f310f4564867e54fb57be294b364a318c97d49abe",
+      "actual_whole_sha256": "33e0c9c3fba2c701ba7ac90f310f4564867e54fb57be294b364a318c97d49abe",
+      "plan_hash_matches": true,
+      "whole_bytes": 3688,
+      "part_sha256": "33e0c9c3fba2c701ba7ac90f310f4564867e54fb57be294b364a318c97d49abe",
+      "start_line": 1,
+      "end_line_inclusive": 68,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3688,
+          "bytes": 3688,
+          "sha256": "33e0c9c3fba2c701ba7ac90f310f4564867e54fb57be294b364a318c97d49abe",
+          "tool_chunk_id": "257b3f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Baked PBR/MAT and local interchange workflow",
+        "trigger_inputs": "assets().supported/uploaded state, manifest MAT ids/scales, backend-specific material mismatch, local glTF/GLB.",
+        "outputs": "Pack validation/diagnostic traces and precise regeneration handoff; browser blend A/B receipts.",
+        "registration": "Frontmatter description/catalog/mirror; bake denied in settings.",
+        "consumers": "Asset/render maintainers; Assets loader and three backends.",
+        "dependencies": "assets.mjs, shared/assets.js, TrackGeom.MAT, pack manifest, backend shader tables, workflow reference, DESIGN-TOOLS.",
+        "limits": "Agents may verify but not bake; 17 MAT slots, 8MB allowlisted pack; matTex browser-only. uploaded=false is loader path, uploaded=true flat appearance routes lighting. Procedural room drafts retain design review gates."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: asset-pack"
+        },
+        {
+          "line": 30,
+          "text": "## When to Use"
+        },
+        {
+          "line": 39,
+          "text": "## When NOT to Use"
+        },
+        {
+          "line": 58,
+          "text": "## Load on demand"
+        },
+        {
+          "line": 63,
+          "text": "## Local 3D authoring and interchange"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/asset-pack/references/workflow.md",
+      "start": 0,
+      "end": 7456,
+      "kind": "text",
+      "sha256": "abaf8e6f2587351dcfd49567d33aa9160e5aa51d79983056e21bd5762b0f3a9d",
+      "actual_whole_sha256": "abaf8e6f2587351dcfd49567d33aa9160e5aa51d79983056e21bd5762b0f3a9d",
+      "plan_hash_matches": true,
+      "whole_bytes": 7456,
+      "part_sha256": "abaf8e6f2587351dcfd49567d33aa9160e5aa51d79983056e21bd5762b0f3a9d",
+      "start_line": 1,
+      "end_line_inclusive": 140,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7456,
+          "bytes": 7456,
+          "sha256": "abaf8e6f2587351dcfd49567d33aa9160e5aa51d79983056e21bd5762b0f3a9d",
+          "tool_chunk_id": "4a9739",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "MAT slot lockstep and no-bake ids, uploaded scales vs manifest, allowlist/hash/PNG/dimension/tier/8MB verify contract; browser matTex A/B; one-backend trace layer index/sampling/readback/bake order; generated asset shipping/cache ownership.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": [
+        {
+          "line": 6,
+          "text": "## Contents"
+        },
+        {
+          "line": 12,
+          "text": "## MAT layers"
+        },
+        {
+          "line": 25,
+          "text": "## Workflow"
+        },
+        {
+          "line": 93,
+          "text": "## One material garbled on ONE backend (e.g. grass, TLX only)"
+        },
+        {
+          "line": 128,
+          "text": "## Common mistakes"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/audio-debug/SKILL.md",
+      "start": 0,
+      "end": 4020,
+      "kind": "text",
+      "sha256": "17efa55cd6adb227f96f1226ee65b5932871686364fc208984b6dace94ce7a2e",
+      "actual_whole_sha256": "17efa55cd6adb227f96f1226ee65b5932871686364fc208984b6dace94ce7a2e",
+      "plan_hash_matches": true,
+      "whole_bytes": 4020,
+      "part_sha256": "17efa55cd6adb227f96f1226ee65b5932871686364fc208984b6dace94ce7a2e",
+      "start_line": 1,
+      "end_line_inclusive": 66,
+      "partial_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4020,
+          "bytes": 4020,
+          "sha256": "17efa55cd6adb227f96f1226ee65b5932871686364fc208984b6dace94ce7a2e",
+          "tool_chunk_id": "e84c96",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "Audio lifecycle/bus/voice troubleshooting skill",
+        "trigger_inputs": "Silent/flat engine, first-tap iPhone, device switch, music/volume/gear issues; context debug and bus state.",
+        "outputs": "Audio diagnosis/tuning plus focused audio smoke/offline evidence recipes.",
+        "registration": "Frontmatter description/catalog/mirror.",
+        "consumers": "Audio maintainers; GameAudio engine/stub consumers.",
+        "dependencies": "engine.js and per-layer js/audio modules; samples; audio-test.cjs and focused specs; diagnose reference.",
+        "limits": "Master/SFX/music independent; gear cue belongs engine, not car-sfx. audio-test launches Chromium. Diagnose reference only prefix [0,1928) assigned; remaining sections not claimed read."
+      },
+      "anchors": [
+        {
+          "line": 2,
+          "text": "name: audio-debug"
+        },
+        {
+          "line": 20,
+          "text": "## Quick inspection"
+        },
+        {
+          "line": 50,
+          "text": "## Which `js/audio/` file"
+        },
+        {
+          "line": 63,
+          "text": "## Load on demand"
+        }
+      ]
+    },
+    {
+      "path": ".claude/skills/audio-debug/references/diagnose.md",
+      "start": 0,
+      "end": 1928,
+      "kind": "text",
+      "sha256": "a08ead0a40b1daf2c19d67bc3e3235f47dcb8883ae7c20e05422d70e8273889c",
+      "actual_whole_sha256": "a08ead0a40b1daf2c19d67bc3e3235f47dcb8883ae7c20e05422d70e8273889c",
+      "plan_hash_matches": true,
+      "whole_bytes": 11166,
+      "part_sha256": "2cb01248972d966b6496f45fd3594ebdab12a3ef1faa969bbbace2c5c79c2f52",
+      "start_line": 1,
+      "end_line_inclusive": 27,
+      "partial_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1928,
+          "bytes": 1928,
+          "sha256": "2cb01248972d966b6496f45fd3594ebdab12a3ef1faa969bbbace2c5c79c2f52",
+          "tool_chunk_id": "59ce73",
+          "method": "exec_command Python Path.read_bytes slice decoded; individually returned result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "On-demand skill reference",
+        "trigger_inputs": "Parent skill routes a matching detailed question.",
+        "outputs": "Assigned prefix introduces diagnosis contents and audio layer table through opening brake row: sample vs synth, gear pitch distinction, gravel, limiter timing/top-gear fade, turbo/wastegate and MGU-K. Later diagnosis procedures outside assigned bytes.",
+        "registration": "Relative references from parent SKILL.md; not standalone host skill.",
+        "consumers": "Parent skill readers.",
+        "limits": "Recipes/invariants are textual contracts, not executed verification."
+      },
+      "anchors": [
+        {
+          "line": 6,
+          "text": "## Contents"
+        },
+        {
+          "line": 14,
+          "text": "## Layers"
+        }
+      ]
+    }
+  ],
+  "hook_registrations": [
+    {
+      "event": "SessionStart",
+      "matcher": "*",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"",
+      "timeout": 300
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Write|Edit|MultiEdit|NotebookEdit",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"",
+      "timeout": 30,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+      "timeout": 360,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/protect-files.sh\"",
+      "timeout": 30,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "^mcp__(playwright-official__.*|chrome-devtools__.*|js-debugger__.*|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start|debug_chrome)|plugin_browser-use.*|browserstack__(run\\w*Session|run\\w*Tests\\w*|take\\w*Screenshot|startAccessibilityScan|runPercyScan))$",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/mcp-browser-guard.sh\"",
+      "timeout": 10,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/github-mcp-guard.sh\"",
+      "timeout": 10,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "SubagentHandback",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-contract.py\"",
+      "timeout": 10,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "^(Agent|mcp__claude-code-remote__create_session)$",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+      "timeout": 5,
+      "onFailure": "block"
+    },
+    {
+      "event": "PreToolUse",
+      "matcher": "^mcp__claude-code-remote__create_session$",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-gate.py\"",
+      "timeout": 5
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "mcp__claude-code-remote__get_session",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-page.py\"",
+      "timeout": 10
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Grep|Bash",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/lsp-hint.py\"",
+      "timeout": 5
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Write|Edit|MultiEdit",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/post-edit.sh\"",
+      "timeout": 90
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "Write|Edit|MultiEdit",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
+      "timeout": 10
+    },
+    {
+      "event": "PostToolUse",
+      "matcher": "*",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+      "timeout": 5
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-guard.sh\"",
+      "timeout": 10
+    },
+    {
+      "event": "Stop",
+      "matcher": "*",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/memory-sync.sh\" save",
+      "timeout": 10
+    },
+    {
+      "event": "UserPromptSubmit",
+      "matcher": "*",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/skill-hint.py\"",
+      "timeout": 5
+    },
+    {
+      "event": "UserPromptSubmit",
+      "matcher": "*",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/ui-fixer-uncommitted.sh\"",
+      "timeout": 5
+    },
+    {
+      "event": "UserPromptSubmit",
+      "matcher": "*",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+      "timeout": 5
+    },
+    {
+      "event": "SubagentStop",
+      "matcher": "^(code-hunter|finding-verifier|prior-art-scout|agent-surface-reviewer|bloat-auditor|physics-contract-auditor|ci-red-triage)$",
+      "type": "command",
+      "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/subagent-contract.py\"",
+      "timeout": 10
+    }
+  ],
+  "settings_nonhooks": {
+    "permissions": {
+      "allow": [
+        "mcp__github",
+        "mcp__apex-tools",
+        "mcp__playwright-official",
+        "mcp__chrome-devtools",
+        "mcp__js-debugger",
+        "mcp__apex-lsp",
+        "mcp__browserstack",
+        "mcp__claude-code-remote",
+        "mcp__Context7",
+        "mcp__Claude_Docs",
+        "mcp__tinyfish",
+        "mcp__MDN",
+        "mcp__mcp_browserstack_com",
+        "mcp__plugin_browser-use_browser-use",
+        "mcp__github__*",
+        "mcp__apex-tools__*",
+        "mcp__playwright-official__*",
+        "mcp__chrome-devtools__*",
+        "mcp__js-debugger__*",
+        "mcp__apex-lsp__*",
+        "mcp__browserstack__*",
+        "mcp__claude-code-remote__*",
+        "mcp__Context7__*",
+        "mcp__Claude_Docs__*",
+        "mcp__MDN__*",
+        "mcp__mcp_browserstack_com__*",
+        "Bash",
+        "Read",
+        "Edit",
+        "Write",
+        "NotebookEdit",
+        "Glob",
+        "Grep",
+        "WebFetch",
+        "WebSearch",
+        "Agent",
+        "Skill",
+        "Monitor",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList",
+        "TaskGet",
+        "TaskStop",
+        "TodoWrite",
+        "ToolSearch",
+        "SendMessage",
+        "ListAgents",
+        "ReadNotifications",
+        "SendUserFile",
+        "EnterWorktree",
+        "ExitWorktree",
+        "Artifact",
+        "ArtifactComments",
+        "ArtifactData",
+        "LSP",
+        "Bash(npm run test*)",
+        "Bash(npm run test:guards)",
+        "Bash(npm test *)",
+        "Bash(npm run gen)",
+        "Bash(npm run gen*)",
+        "Bash(npm install)",
+        "Bash(npm ci)",
+        "Bash(npx playwright install *)",
+        "Bash(npx serve *)",
+        "Bash(node --test *)",
+        "Bash(node --check *)",
+        "Bash(node -e *)",
+        "Bash(node tools/ci/ready-gate.mjs *)",
+        "Bash(node tools/ci/merge-gate.mjs *)",
+        "Bash(node tools/ci/ci-watch.mjs *)",
+        "Bash(node tools/ci/archive-sessions.mjs *)",
+        "Bash(node tools/ci/dispatch.mjs --plan*)",
+        "Bash(node tools/ci/pr-board.mjs *)",
+        "Bash(node tools/ci/session-status.mjs *)",
+        "Bash(node tools/ci/session-transcript.mjs *)",
+        "Bash(node tools/ci/wait-for.mjs *)",
+        "Bash(node tools/ci/needs-sync.mjs *)",
+        "Bash(node tools/ci/sync-pr.mjs *)",
+        "Bash(git push -u origin cursor/*)",
+        "Bash(git push origin cursor/*)",
+        "Bash(node tools/ci/verify-change.mjs *)",
+        "Bash(node tools/ci/pick-tests.mjs *)",
+        "Bash(node tools/ci/select-specs.mjs *)",
+        "Bash(node tools/ci/test-bg.mjs *)",
+        "Bash(node tools/ci/test-solo.mjs *)",
+        "Bash(node tools/ci/tooling-fast.mjs *)",
+        "Bash(node tools/ci/twinned-specs.mjs *)",
+        "Bash(node tools/ci/bump-cache.mjs *)",
+        "Bash(node tools/ci/deploy.mjs --plan*)",
+        "Bash(node tools/ci/deploy.mjs --gate-only*)",
+        "Bash(node tools/ci/sync-pr.mjs * --plan*)",
+        "Bash(node tools/track/verify-track.cjs *)",
+        "Bash(node tools/track/graph-parity.cjs *)",
+        "Bash(node tools/gen/gen-shell.mjs *)",
+        "Bash(node tools/gen/gen-test-groups.mjs *)",
+        "Bash(node tools/gen/gen-*.mjs *)",
+        "Bash(node tools/gen/assets.mjs verify)",
+        "Bash(node tools/check/*)",
+        "Bash(node tools/shot/*)",
+        "Bash(node tools/ui/*)",
+        "Bash(node tools/gfx/wgx-validate.mjs *)",
+        "Bash(node tools/gfx/gfx-probe.mjs *)",
+        "Bash(bash tools/env/cloud-agent-install.sh)",
+        "Bash(bash tools/env/mirror-skills.sh *)",
+        "Bash(tools/mcp/apex-tools-mcp.sh call *)",
+        "Bash(git status *)",
+        "Bash(git diff *)",
+        "Bash(git log *)",
+        "Bash(git branch *)",
+        "Bash(git show *)",
+        "Bash(git add *)",
+        "Bash(git commit *)",
+        "Bash(git fetch *)",
+        "Bash(git checkout *)",
+        "Bash(git switch *)",
+        "Bash(git stash list*)",
+        "Bash(git stash show *)",
+        "Bash(git stash push *)",
+        "Bash(git stash pop*)",
+        "Bash(git ls-remote *)",
+        "Bash(git rev-list *)",
+        "Bash(git merge-tree *)",
+        "Bash(git cat-file *)",
+        "Bash(git worktree *)",
+        "Bash(git merge *)",
+        "Bash(git rev-parse *)",
+        "Bash(git ls-files *)",
+        "Bash(git remote *)",
+        "Bash(git for-each-ref *)",
+        "Bash(grep *)",
+        "Bash(rg *)",
+        "Bash(cat *)",
+        "Bash(ls *)",
+        "Bash(wc *)",
+        "Bash(find *)",
+        "Bash(head *)",
+        "Bash(tail *)",
+        "Bash(sed -n *)",
+        "Bash(sort *)",
+        "Bash(jq *)",
+        "Bash(diff *)",
+        "Bash(cat /proc/loadavg)",
+        "Bash(ps *)",
+        "Bash(curl http://127.0.0.1:3*)",
+        "Bash(curl http://localhost:3*)",
+        "mcp__Google_Drive__search_files",
+        "mcp__Google_Drive__read_file_content",
+        "mcp__Google_Drive__get_file_metadata",
+        "mcp__Google_Drive__list_recent_files",
+        "mcp__Google_Drive__download_file_content",
+        "mcp__Google_Drive__get_file_permissions",
+        "mcp__TinyFish__search",
+        "mcp__TinyFish__fetch_content",
+        "mcp__TinyFish__get_search_usage",
+        "mcp__TinyFish__list_fetch_usage",
+        "mcp__TinyFish__get_wallet",
+        "mcp__TinyFish__get_run",
+        "mcp__TinyFish__list_runs"
+      ],
+      "deny": [
+        "Bash(git push --force*)",
+        "Bash(git push -f *)",
+        "Bash(git push *--force*)",
+        "Bash(git push * -f)",
+        "Bash(git push * -f *)",
+        "Bash(git push *+*)",
+        "Bash(git push * claude/f1-game-project-26h3ng*)",
+        "Bash(git push *:claude/f1-game-project-26h3ng*)",
+        "Bash(git push *refs/heads/claude/f1-game-project-26h3ng*)",
+        "Bash(node tools/ci/bump-cache.mjs --apply*)",
+        "Bash(node tools/gen/assets.mjs bake*)",
+        "Bash(node tools/track/rotate-markings.cjs --write*)",
+        "mcp__github__delete_file",
+        "mcp__github__update_pull_request_branch",
+        "mcp__github__create_repository",
+        "mcp__github__fork_repository",
+        "mcp__github__push_files",
+        "mcp__github__create_or_update_file",
+        "mcp__github__create_branch",
+        "Skill(agent-protocols:ship)",
+        "Skill(agent-protocols:build)",
+        "Skill(agent-protocols:plan)",
+        "Skill(agent-protocols:git-workflow-and-versioning)",
+        "Skill(agent-protocols:ci-cd-and-automation)",
+        "Skill(agent-protocols:shipping-and-launch)",
+        "Skill(engineering:code-review)",
+        "Skill(engineering:debug)",
+        "Skill(engineering:deploy-checklist)",
+        "Skill(engineering:incident-response)",
+        "Skill(agent-smith:create-agent)",
+        "mcp__TinyFish__top_up_wallet",
+        "mcp__TinyFish__create_dataset",
+        "mcp__Google_Drive__share_file",
+        "mcp__Google_Drive__trash_file",
+        "mcp__Google_Drive__update_file",
+        "mcp__Google_Drive__create_file",
+        "mcp__Google_Drive__copy_file",
+        "Bash(git config core.hooksPath*)",
+        "Bash(git config --global *)"
+      ]
+    },
+    "enabledPlugins": {
+      "agent-army@synced": false,
+      "agent-context-kit@synced": false,
+      "cc-bootstrapper@synced": false,
+      "claude-code-toolkit@synced": false,
+      "claude-context-optimizer@synced": false,
+      "claude-cursor-orchestration@synced": false,
+      "claude-review-loop@synced": false,
+      "handoff@synced": false
+    },
+    "worktree": {
+      "baseRef": "head"
+    },
+    "env": {
+      "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"
+    },
+    "enabledMcpjsonServers": [
+      "apex-tools",
+      "playwright-official",
+      "chrome-devtools",
+      "js-debugger",
+      "apex-lsp",
+      "browserstack"
+    ]
+  },
+  "memory_topics": [
+    {
+      "path": ".claude/memory/ask-via-askuserquestion.md",
+      "name": "ask-via-askuserquestion",
+      "description": "Question tool for Bryce's decisions — Bryce-attended sessions only; unattended workers use the needs-decision label (2026-10-27)"
+    },
+    {
+      "path": ".claude/memory/bryce-iphone-tlx-webgpu.md",
+      "name": "bryce-iphone-tlx-webgpu",
+      "description": "Bryce plays on iPhone with THREE.JS + THREE PATH WEBGPU (tlxForceGL=0) and says it works, unlike the AUTO WebKit→WebGL2 default"
+    },
+    {
+      "path": ".claude/memory/design-lanes-living-artifact.md",
+      "name": "design-lanes-living-artifact",
+      "description": "Design-preview lanes keep ONE living Artifact gallery each, republished to the same URL every iteration round"
+    },
+    {
+      "path": ".claude/memory/fan-out-with-subagents.md",
+      "name": "fan-out-with-subagents",
+      "description": "Bryce 2026-10-26 — multi-part fleet tasks (PR trains, fixes): fan out to worker subagents in worktrees, not one serial session"
+    },
+    {
+      "path": ".claude/memory/one-subagent-per-skill.md",
+      "name": "one-subagent-per-skill",
+      "description": "One subagent per skill when reviewing, testing or exercising skills, within host limits"
+    },
+    {
+      "path": ".claude/memory/parallel-survey-and-review.md",
+      "name": "parallel-survey-and-review",
+      "description": "For UI/HUD reports: run the browser survey as a background apex-tools job from the main thread while read-only subagents review the code for organization and adaptability; write the resulting plan as a docs/notes file"
+    },
+    {
+      "path": ".claude/memory/preview-must-look-different.md",
+      "name": "preview-must-look-different",
+      "description": "Design-variant preview sheets must visibly differ in the picture itself; mm metrics are not enough"
+    },
+    {
+      "path": ".claude/memory/rules-are-agent-written-drafts.md",
+      "name": "rules-are-agent-written-drafts",
+      "description": "Bryce 2026-10-26: AGENTS.md/CLAUDE.md/memory are agent-written drafts to be reconsidered; implement audit improvements, all in one PR"
+    },
+    {
+      "path": ".claude/memory/small-steps-for-api-analysis.md",
+      "name": "small-steps-for-api-analysis",
+      "description": "When analyzing GitHub Actions/API data, work in small incremental queries, not one big bulk-fetch script"
+    },
+    {
+      "path": ".claude/memory/survey-then-fix.md",
+      "name": "survey-then-fix",
+      "description": "After an audit or survey, the user wants the ranked gap list landed in the same session, not only reported"
+    },
+    {
+      "path": ".claude/memory/synced-plugins-not-in-child-sessions.md",
+      "name": "synced-plugins-not-in-child-sessions",
+      "description": "Dated Claude-host plugin inheritance limitation; discover availability in each session"
+    },
+    {
+      "path": ".claude/memory/train-ratchet-standing-ok.md",
+      "name": "train-ratchet-standing-ok",
+      "description": "Bryce 2026-10-26 standing OK — tree-metric ratchet +1..+3 caused by combining train members may be raised without a per-case ask"
+    },
+    {
+      "path": ".claude/memory/user-plays-on-phone.md",
+      "name": "user-plays-on-phone",
+      "description": "The owner plays and reports bugs from a PHONE (touch, landscape) — reproduce HUD/UI reports at phone-landscape-844x390 with hasTouch, not on a desktop viewport"
+    },
+    {
+      "path": ".claude/memory/user-timezone-pacific.md",
+      "name": "user-timezone-pacific",
+      "description": "Bryce is on US Pacific time; write cron/Routine schedules as CRON_TZ=America/Los_Angeles"
+    }
+  ],
+  "lsp_evidence": [
+    {
+      "query": "definition AiDrive",
+      "result": "js/physics/ai-drive.js:2:7 const AiDrive"
+    },
+    {
+      "query": "references AiDrive files:true",
+      "result": "146 in 8 files: game 108; pit-lane 23; collide 7; wall-clamp 3; real-race 2; ai-corridor/ai-drive/contact-geometry 1 each"
+    },
+    {
+      "query": "definition GameAudio",
+      "result": "engine.js:4:5 and stub.js:8:5; reinjected global ambiguity"
+    },
+    {
+      "query": "references GameAudio.shift files:true",
+      "result": "5 in game.js 3, engine.js 1, stub.js 1; text-match caveat: repeated top-level var assignments/member contributions, runtime load order decides"
+    },
+    {
+      "query": "definition Assets",
+      "result": "shared/assets.js:4:7; window export at 1011:43"
+    },
+    {
+      "query": "definition __apex",
+      "result": "game.js:79:67 window.__apex=ApexApi.create(G); game.js:9513:8 null teardown"
+    },
+    {
+      "query": "definition ApexApi",
+      "result": "js/agent/apex.js:2:7"
+    }
+  ],
+  "raw_reference_inventory": [
+    {
+      "source": ".claude/hooks/shellparse.py",
+      "raw": "s///w",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/hooks/skill-hint.py",
+      "raw": ".claude/skills/*/SKILL.md",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/hooks/stop-guard.sh",
+      "raw": "touch .claude/allow-stop",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/memory/MEMORY.md",
+      "raw": ".claude/hooks/memory-sync.sh",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/memory/MEMORY.md",
+      "raw": "docs/WORKERS.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/memory/MEMORY.md",
+      "raw": "docs/notes/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/memory/parallel-survey-and-review.md",
+      "raw": "docs/notes/<TOPIC>-PLAN-<date>.md",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/memory/rules-are-agent-written-drafts.md",
+      "raw": ".claude/rules/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/memory/rules-are-agent-written-drafts.md",
+      "raw": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/memory/rules-are-agent-written-drafts.md",
+      "raw": "tests/unit/rulebook-guards.test.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/memory/train-ratchet-standing-ok.md",
+      "raw": "APEX_RATCHET_RAISE_OK=1 node tools/check/ratchets.mjs --update --fragment --reason=\"…\"",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/memory/user-plays-on-phone.md",
+      "raw": "node tools/shot/hud-survey.mjs --cam <cam> --device phone-landscape-844x390",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/memory/user-timezone-pacific.md",
+      "raw": "CRON_TZ=America/Los_Angeles …",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/ci-tools.md",
+      "raw": "docs/WORKERS.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/ci-tools.md",
+      "raw": "merge_policy.py",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/ci-tools.md",
+      "raw": "node tools/ci/sync-pr.mjs <branch>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/agents",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/agents/README.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/allow-context-cap",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/allow-protected",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/allow-stop",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/hooks/**",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/memory/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/settings*.json",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/settings.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".claude/skills",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".cursor/agents/",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": ".cursor/skills/",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "bash tools/env/mirror-skills.sh",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "bash-guard.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "context-cap.py",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "docs/notes/AGENT-MEMORY.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "docs/notes/RULEBOOK-REWRITE-2026-10-26.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "github-mcp-guard.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "js/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "launch-gate.py",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "launch-page.py",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "lsp-hint.py",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "mcp-browser-guard.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "memory-sync.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "merge_policy.py",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "post-edit.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "protect-files.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "session-start.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "skill-hint.py",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "stop-guard.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "subagent-contract.py",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "tests/unit/rulebook-guards.test.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "tools/ci/launch-gate.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/claude-config.md",
+      "raw": "ui-fixer-uncommitted.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "APEX_RATCHET_RAISE_OK=1 node tools/check/ratchets.mjs --update --fragment --reason=\"<why>\"",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "js/circuits/<id>.js",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "js/core/log.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "js/physics/consts.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "js/track/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "node tools/gen/gen-shell.mjs",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "tests/data/ratchets.d/<branch>.json",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "tests/data/ratchets.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "tests/specs/physics-characterization.spec.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "tools/check/vstd-lint.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/game-code.md",
+      "raw": "tools/manifest.cjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/js-nav.md",
+      "raw": "// @ts-check",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/js-nav.md",
+      "raw": "tools/mcp/lsp-mcp.sh <cmd> <target>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/render-tlx.md",
+      "raw": "docs/ARCHITECTURE.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/render-tlx.md",
+      "raw": "node tools/gfx/gfx-probe.mjs --backend three --tlx-webgpu --lavapipe montreal",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/render-tlx.md",
+      "raw": "node tools/mcp/mcp-cli.mjs probe --backend three",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/render-tlx.md",
+      "raw": "tlx.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/render-wgx.md",
+      "raw": "docs/ARCHITECTURE.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/render-wgx.md",
+      "raw": "docs/research/WEBGPU-PARITY.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/render-wgx.md",
+      "raw": "node tools/gfx/gfx-probe.mjs --backend webgpu montreal",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/render-wgx.md",
+      "raw": "node tools/gfx/wgx-capture.mjs <track>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/render-wgx.md",
+      "raw": "node tools/gfx/wgx-validate.mjs --static",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/render-wgx.md",
+      "raw": "node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --console 'WGX|error'",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/rules/render-wgx.md",
+      "raw": "renderer-soft-lifecycle.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/rules/render-wgx.md",
+      "raw": "tests/unit/webgpu-lifecycle.test.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/rules/tests-specs.md",
+      "raw": "node tools/ci/test-bg.mjs",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "../../docs/ARCHITECTURE.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "../agents/",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": ".claude/agents",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": ".claude/hooks",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": ".mcp.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "/<name>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "/check",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "/handoff",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "/ship",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "AGENTS.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "CLAUDE.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "SKILL.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "apex-capture.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "apex-eval.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "assets/pack",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "browser-http-up.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "css/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "docs/AGENT-SURFACE.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "docs/VERIFICATION.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "docs/WORKERS.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "glx-failures.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/circuits/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/data/*",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/editor/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/lighting/presets.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/physics/ai-drive.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/physics/tyre-model.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/race/pit-lane.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/render/shared/assets.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "js/xr/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "layout-audit.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "mirror-skills.sh",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "node tools/check/skill-smoke.mjs --all --plan",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "node tools/gen/gen-shell.mjs",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "obs/act/reset",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "pr-board.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/bump.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/cameras.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/campaign.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/car-studio.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/deploy.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/editor.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/glx.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/instancing.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/motion-capture.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/perf-profile.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/replay.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/restructure.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/role-pr-owner.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/state.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/track-geometry.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/triage.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "references/xr.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "season-cal.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "season-ui.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "shot.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "sw.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "sync-pr.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/check/skill-routing-eval.py",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/ci/pr-board.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/gen/assets.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/manifest.cjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/mcp/lsp-mcp.sh",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/perf",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/track/verify-track.cjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "tools/ui/css-play.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "version.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "wgx-defects.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/README.md",
+      "raw": "wgx.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "*.py",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "../../.claude/skills/<name>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": ".agents/skills/<name>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": ".claude/agents/<name>.md",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": ".claude/hooks/*.sh",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": ".claude/rules/claude-config.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": ".claude/settings.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": ".claude/skills/<name>/SKILL.md",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": ".claude/skills/README.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": ".mcp.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "AGENTS.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "CLAUDE.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "agent-config.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "agent-surface.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "bash tools/env/mirror-skills.sh",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "bash-guard-hardening.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "docs/notes/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "js/circuits/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "js/track/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "ls .claude/skills",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "memory-sync.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "references/",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "scratch/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "skill-progressive.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "tests/data/skill-routing/queries/<name>.json",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "tests/unit/agent-config.test.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "tests/unit/agent-surface.test.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "tests/unit/skill-progressive.test.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-config/SKILL.md",
+      "raw": "tools/check/skill-smoke-recipes.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "agent-determinism.spec.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "agent-drive-bench.spec.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "agent-view.spec.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "agent.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "apex-eval.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "node tools/check/episode-diff.mjs",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "node tools/shot/agent.mjs <track> <tool> [flags]",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "node tools/shot/agent.mjs <track> help --vm",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "node tools/shot/agent.mjs help <hook>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "node tools/shot/agent.mjs monza world --vm --detail brief",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "npm test -- tests/specs/<file>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/SKILL.md",
+      "raw": "select-specs.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "raw": "grep -l 'street: true' js/circuits/*.js",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "raw": "js/circuits/*",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "raw": "node tools/track/verify-track.cjs <id>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "raw": "scratch/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "raw": "terrain-over-road.spec.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "raw": "tools/lib/game-vm.cjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "raw": "track-geometry.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+      "raw": "tracks-walls.spec.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/state.md",
+      "raw": "(a.headless(true), a.reset(0.1,30,0), a.act({steer:-0.3,throttle:true,brake:false},1/60,5))",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/state.md",
+      "raw": "a.act(input,1/60,6)",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/state.md",
+      "raw": "scratch/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/state.md",
+      "raw": "step(1/60,1)",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/state.md",
+      "raw": "tools/lib/game-vm.cjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/state.md",
+      "raw": "tools/shot/apex-eval.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "\"props are indexed 0..2834; call scene()/query()\"",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "1/nc.radiusM",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "docs/DEBUG-HOOKS.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "js/car/parts.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "node tools/shot/agent.mjs <track> <tool> --vm [flags]",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "node tools/shot/agent.mjs <track> <tool> [flags]",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "node tools/shot/agent.mjs monza world --detail drive",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "node tools/shot/apex-eval.mjs <track> \"<expr>\"",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "raw": "node tools/shot/apex-eval.mjs monza \"(a.go(), a.jump(0.1,55), a.world())\"",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "/tmp",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "1/max|k|",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "100·slope/√(1−slope²)",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "a.info() / a.corners() / a.trackProfile(400) / a.trackInfo({what:\"corners\"})",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "grep -n \"Eau Rouge\\|Raidillon\" js/circuits/spa.js",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "js/agent/agentview-corners.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "js/circuits/<id>.js",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "scratch/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "tools/lib/game-vm.cjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "tools/shot/apex-eval.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/agent-view/references/track-geometry.md",
+      "raw": "tools/track/verify-track.cjs <id>",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-band.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-band.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-drive.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-drive.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-pack-stuck-vm.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-pass-complete.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-pass-defend-vm.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-racecraft-vm.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-stuck-vm.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "ai-trail-yield-vm.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "game.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "js/data/driver-ratings.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "js/physics/ai-drive.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "node --test tests/unit/ai-drive.test.mjs",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "references/pace.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "references/stuck.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "references/tactics.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/SKILL.md",
+      "raw": "roomL/R",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/pace.md",
+      "raw": "js/physics/ai-band.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/pace.md",
+      "raw": "node --test tests/unit/ai-band.test.mjs",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/pace.md",
+      "raw": "node tools/check/ai-race.mjs band",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/stuck.md",
+      "raw": "ai-field.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/stuck.md",
+      "raw": "game.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/stuck.md",
+      "raw": "node --test tests/unit/ai-stuck-vm.test.mjs tests/unit/ai-pack-stuck-vm.test.mjs",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/stuck.md",
+      "raw": "node tools/check/ai-race.mjs stuck --track monza --runs 3",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/tactics.md",
+      "raw": "ai-corridor.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/tactics.md",
+      "raw": "ai-drive.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/tactics.md",
+      "raw": "js/game.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/tactics.md",
+      "raw": "node tools/check/ai-race.mjs tactics --track monza --laps 3 --runs 5",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/ai-racecraft/references/tactics.md",
+      "raw": "tests/unit/ai-pass-complete.test.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": ".claude/settings.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "assets/pack/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "css/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "docs/research/ASSET-API-RESEARCH.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "js/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "js/render/shared/assets.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "node tools/gen/assets.mjs bake*",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "node tools/gen/assets.mjs bake-synthetic",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "node tools/gen/assets.mjs verify",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "node tools/gen/gen-shell.mjs --check",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "references/workflow.md",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "tests/specs/assets-api.spec.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "tools/gen/assets.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "raw": "version.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": ".claude/settings.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "assets/atlases/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "assets/pack/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "assets/pack/manifest.json",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "css/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "docs/research/ASSET-API-RESEARCH.md",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "gfx-backend-canary.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "git checkout -- assets/pack",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "glsl-lit.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "js/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "js/render/shared/assets.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "js/track/core/geom.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "node -e 'for (const l of require(\"./assets/pack/manifest.json\").materials.layers) console.log(l.mat, l.id, l.scale)'",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "node tools/gen/gen-shell.mjs --check",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "tests/unit/assets-pack.test.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "tlx.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "tools/gen/assets.mjs",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "tsl-lit.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "uv = wp.xz / scale[mid]",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "webgpu-lifecycle.test.mjs",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/asset-pack/references/workflow.md",
+      "raw": "wgsl-chunks.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "announcer*.js",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "assets/sfx/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "audio-smoke.spec.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "battle-earcon.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "car-sfx.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "crowd.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "driving-cues.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "engine-audio-offline.spec.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "engine.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "ers-layer.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "js/audio/",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "js/audio/engine.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "js/game.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "music-lib.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "panel.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "race-mix-audition.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "radio-*.js",
+      "exists_as_literal_repo_path": null,
+      "status": "command, pattern, symbol or contextual path; not resolved"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "rivals.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "signal.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "soundtrack.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "spotify.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "stub.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "tests/specs/audio-smoke.spec.js",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "tone-model.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/SKILL.md",
+      "raw": "voice-pack.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "assets/sfx/f1_engine.mp3",
+      "exists_as_literal_repo_path": true,
+      "status": "literal path exists"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "engine.js",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    },
+    {
+      "source": ".claude/skills/audio-debug/references/diagnose.md",
+      "raw": "f0/3",
+      "exists_as_literal_repo_path": false,
+      "status": "missing/literal-not-path-or-pattern"
+    }
+  ],
+  "comment_cleanup": [
+    {
+      "source": ".claude/hooks/stop-guard.sh",
+      "lines": [
+        7,
+        12,
+        15,
+        33,
+        37,
+        41
+      ],
+      "note": "Opening historical header describes run-log stamp; implementation and newer explanatory comment use live identity hashed from helper output. Candidate remove obsolete header wording after confirming live-run identity contract; no edit made."
+    },
+    {
+      "source": ".claude/hooks/subagent-contract.py",
+      "lines": [
+        54,
+        56,
+        77
+      ],
+      "note": "Historical deleted-agent comment retained; agent-surface-reviewer shape accepts colon but required line needs a space. Mapping observation, no report executed."
+    },
+    {
+      "source": ".claude/skills/agent-view/references/surface.md",
+      "lines": [
+        26,
+        149,
+        164,
+        190
+      ],
+      "note": "Dated boot/policy costs and measured lap behavior are examples, not current guarantees; preserve input/seed/terminal caveats if trimming."
+    },
+    {
+      "source": ".claude/memory/synced-plugins-not-in-child-sessions.md",
+      "lines": [
+        11,
+        18
+      ],
+      "note": "File preserves superseded plugin inheritance observation plus later re-verification. Retain dated qualification rather than generalizing old claim."
+    },
+    {
+      "source": ".claude/skills/asset-pack/SKILL.md",
+      "lines": [
+        8,
+        12
+      ],
+      "note": "Optional pack phrasing coexists with canonical ships-ON reference; supported/uploaded state is the operative discriminator."
+    }
+  ],
+  "historical_or_archive_raw_paths": [
+    "docs/plans/research-2026-09-16/agent-ergonomics.md",
+    ".claude/agents/ci-watcher.md"
+  ],
+  "limitations": [
+    "No test, browser, network, runtime, stage or commit action performed.",
+    "No audited skill/agent/hook instruction executed.",
+    "Supporting filenames/grep hits are navigation evidence only; not full semantic reads.",
+    "LSP provides runtime symbol binding corroboration, not a runtime boot or behavior result.",
+    "Memory-sync and earlier shell parser internals are outside this group.",
+    "Audio diagnose ends mid-layer row at byte 1928; remaining file belongs next group."
+  ],
+  "instructions": {
+    "root": "AGENTS.md",
+    "root_sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+    "root_read": "Recovered complete contents in separate <=8000-byte reads after initial broad output truncation; final overlap [20000,end) also read.",
+    "nested": "rg --files --hidden -g AGENTS.md .claude docs returned no nested instruction files."
+  }
+}

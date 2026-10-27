@@ -139,7 +139,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "02",
@@ -181,7 +181,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "assigned"
     },
     {
       "id": "03",
@@ -279,7 +279,7 @@
         }
       ],
       "bytes": 102567,
-      "status": "unassigned"
+      "status": "assigned"
     }
   ]
 }

@@ -1,0 +1,1896 @@
+{
+  "schema_version": 1,
+  "group": "01",
+  "scope": "static source map; no execution/network; half-open byte offsets",
+  "plan": {
+    "path": "docs/project-map/github-batches.json",
+    "sha256": "7690d23f68272c4e65195d9f30d954553e5a5242f27f9daa00e7a488b2054135"
+  },
+  "parts": [
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug.yml",
+      "start": 0,
+      "end": 752,
+      "kind": "text",
+      "sha256": "be0f2f9184a3ee7125a03f9793ad72b56cd1315f26d9ac84d8d75605addfc25f",
+      "whole_file_bytes": 752,
+      "whole_file_sha256": "be0f2f9184a3ee7125a03f9793ad72b56cd1315f26d9ac84d8d75605addfc25f",
+      "plan_hash_matches": true,
+      "assigned_bytes": 752,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 752,
+          "bytes": 752,
+          "sha256": "be0f2f9184a3ee7125a03f9793ad72b56cd1315f26d9ac84d8d75605addfc25f",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/config.yml",
+      "start": 0,
+      "end": 27,
+      "kind": "text",
+      "sha256": "13064e7bea658e01e718b414fbb7b3b244f36411fe25ee2055c151f7b534547a",
+      "whole_file_bytes": 27,
+      "whole_file_sha256": "13064e7bea658e01e718b414fbb7b3b244f36411fe25ee2055c151f7b534547a",
+      "plan_hash_matches": true,
+      "assigned_bytes": 27,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 27,
+          "bytes": 27,
+          "sha256": "13064e7bea658e01e718b414fbb7b3b244f36411fe25ee2055c151f7b534547a",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/task.yml",
+      "start": 0,
+      "end": 1223,
+      "kind": "text",
+      "sha256": "3d733933ead90954e0a9d0a45b1997a385d58111055093d0676257ce71b97e52",
+      "whole_file_bytes": 1223,
+      "whole_file_sha256": "3d733933ead90954e0a9d0a45b1997a385d58111055093d0676257ce71b97e52",
+      "plan_hash_matches": true,
+      "assigned_bytes": 1223,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1223,
+          "bytes": 1223,
+          "sha256": "3d733933ead90954e0a9d0a45b1997a385d58111055093d0676257ce71b97e52",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/actionlint.yaml",
+      "start": 0,
+      "end": 1158,
+      "kind": "text",
+      "sha256": "0b67d6713f858511b8849488ab585df05458f4224b5ccbdd583dbc573a061400",
+      "whole_file_bytes": 1158,
+      "whole_file_sha256": "0b67d6713f858511b8849488ab585df05458f4224b5ccbdd583dbc573a061400",
+      "plan_hash_matches": true,
+      "assigned_bytes": 1158,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1158,
+          "bytes": 1158,
+          "sha256": "0b67d6713f858511b8849488ab585df05458f4224b5ccbdd583dbc573a061400",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/actions/mesa-xvfb/action.yml",
+      "start": 0,
+      "end": 3535,
+      "kind": "text",
+      "sha256": "9b6b87e18c7396ae2a05988183b3a91dbb7dbf4bcdb3f1fe959c1a3e6c141bed",
+      "whole_file_bytes": 3535,
+      "whole_file_sha256": "9b6b87e18c7396ae2a05988183b3a91dbb7dbf4bcdb3f1fe959c1a3e6c141bed",
+      "plan_hash_matches": true,
+      "assigned_bytes": 3535,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3535,
+          "bytes": 3535,
+          "sha256": "9b6b87e18c7396ae2a05988183b3a91dbb7dbf4bcdb3f1fe959c1a3e6c141bed",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/actions/playwright-chromium/action.yml",
+      "start": 0,
+      "end": 2231,
+      "kind": "text",
+      "sha256": "1fbad53bea0a3e4fcb5c3a64568c40af8cfd2d31fcebbaf7f0249d8648eb499f",
+      "whole_file_bytes": 2231,
+      "whole_file_sha256": "1fbad53bea0a3e4fcb5c3a64568c40af8cfd2d31fcebbaf7f0249d8648eb499f",
+      "plan_hash_matches": true,
+      "assigned_bytes": 2231,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2231,
+          "bytes": 2231,
+          "sha256": "1fbad53bea0a3e4fcb5c3a64568c40af8cfd2d31fcebbaf7f0249d8648eb499f",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/actions/setup-apex/action.yml",
+      "start": 0,
+      "end": 767,
+      "kind": "text",
+      "sha256": "0edea9d8b796c0ad885294d0788f2c8783b5c8214d9ccb73c2b25187ae6191c3",
+      "whole_file_bytes": 767,
+      "whole_file_sha256": "0edea9d8b796c0ad885294d0788f2c8783b5c8214d9ccb73c2b25187ae6191c3",
+      "plan_hash_matches": true,
+      "assigned_bytes": 767,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 767,
+          "bytes": 767,
+          "sha256": "0edea9d8b796c0ad885294d0788f2c8783b5c8214d9ccb73c2b25187ae6191c3",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/capture-gallery-request.json",
+      "start": 0,
+      "end": 327,
+      "kind": "text",
+      "sha256": "72c02374a241077d511b0e4c523d4caaea068dcd9acc6bd23a7cf69a7bdfd9f6",
+      "whole_file_bytes": 327,
+      "whole_file_sha256": "72c02374a241077d511b0e4c523d4caaea068dcd9acc6bd23a7cf69a7bdfd9f6",
+      "plan_hash_matches": true,
+      "assigned_bytes": 327,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 327,
+          "bytes": 327,
+          "sha256": "72c02374a241077d511b0e4c523d4caaea068dcd9acc6bd23a7cf69a7bdfd9f6",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/dependabot.yml",
+      "start": 0,
+      "end": 1361,
+      "kind": "text",
+      "sha256": "084e52ba9615ab494b02928bd435726888ef05dbe3ccfe6822bac50274455ba4",
+      "whole_file_bytes": 1361,
+      "whole_file_sha256": "084e52ba9615ab494b02928bd435726888ef05dbe3ccfe6822bac50274455ba4",
+      "plan_hash_matches": true,
+      "assigned_bytes": 1361,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1361,
+          "bytes": 1361,
+          "sha256": "084e52ba9615ab494b02928bd435726888ef05dbe3ccfe6822bac50274455ba4",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/gpu-census-request.json",
+      "start": 0,
+      "end": 148,
+      "kind": "text",
+      "sha256": "75796dd0a8bf798bd0dee4166384eda42cb48bdce0e65c2823d5442f21102533",
+      "whole_file_bytes": 148,
+      "whole_file_sha256": "75796dd0a8bf798bd0dee4166384eda42cb48bdce0e65c2823d5442f21102533",
+      "plan_hash_matches": true,
+      "assigned_bytes": 148,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 148,
+          "bytes": 148,
+          "sha256": "75796dd0a8bf798bd0dee4166384eda42cb48bdce0e65c2823d5442f21102533",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/labels.json",
+      "start": 0,
+      "end": 4169,
+      "kind": "text",
+      "sha256": "565703df2eaa9bc1d0031e41d70668e2377f175e6abe5209bcc0362b15dc9d43",
+      "whole_file_bytes": 4169,
+      "whole_file_sha256": "565703df2eaa9bc1d0031e41d70668e2377f175e6abe5209bcc0362b15dc9d43",
+      "plan_hash_matches": true,
+      "assigned_bytes": 4169,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4169,
+          "bytes": 4169,
+          "sha256": "565703df2eaa9bc1d0031e41d70668e2377f175e6abe5209bcc0362b15dc9d43",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/pull_request_template.md",
+      "start": 0,
+      "end": 3196,
+      "kind": "text",
+      "sha256": "9b702489beb5b8b21a1d5baf2c106c7e5ae6ce828d2ae9c14be3416d4d48377b",
+      "whole_file_bytes": 3196,
+      "whole_file_sha256": "9b702489beb5b8b21a1d5baf2c106c7e5ae6ce828d2ae9c14be3416d4d48377b",
+      "plan_hash_matches": true,
+      "assigned_bytes": 3196,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3196,
+          "bytes": 3196,
+          "sha256": "9b702489beb5b8b21a1d5baf2c106c7e5ae6ce828d2ae9c14be3416d4d48377b",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/archive-evidence.yml",
+      "start": 0,
+      "end": 7927,
+      "kind": "text",
+      "sha256": "18a269780129db8aa3528fc75176d9515813863593864dcd35fc6cf1502e1fd5",
+      "whole_file_bytes": 7927,
+      "whole_file_sha256": "18a269780129db8aa3528fc75176d9515813863593864dcd35fc6cf1502e1fd5",
+      "plan_hash_matches": true,
+      "assigned_bytes": 7927,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7927,
+          "bytes": 7927,
+          "sha256": "18a269780129db8aa3528fc75176d9515813863593864dcd35fc6cf1502e1fd5",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/browser-group.yml",
+      "start": 0,
+      "end": 6283,
+      "kind": "text",
+      "sha256": "e277561bf632ea3ddde77550e257852ac694a413285bb43a48ce770607f406e1",
+      "whole_file_bytes": 6283,
+      "whole_file_sha256": "e277561bf632ea3ddde77550e257852ac694a413285bb43a48ce770607f406e1",
+      "plan_hash_matches": true,
+      "assigned_bytes": 6283,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6283,
+          "bytes": 6283,
+          "sha256": "e277561bf632ea3ddde77550e257852ac694a413285bb43a48ce770607f406e1",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/capture-gallery.yml",
+      "start": 0,
+      "end": 1538,
+      "kind": "text",
+      "sha256": "d3357b63292c9737f2ac03dccf90e2a48068518d71804bab7f5ec6ee027d8374",
+      "whole_file_bytes": 1538,
+      "whole_file_sha256": "d3357b63292c9737f2ac03dccf90e2a48068518d71804bab7f5ec6ee027d8374",
+      "plan_hash_matches": true,
+      "assigned_bytes": 1538,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1538,
+          "bytes": 1538,
+          "sha256": "d3357b63292c9737f2ac03dccf90e2a48068518d71804bab7f5ec6ee027d8374",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/car-shot.yml",
+      "start": 0,
+      "end": 6121,
+      "kind": "text",
+      "sha256": "32ea0e3e2fddcee7f04ea36ffc1393e23e3a24d1051c5c755f8a45c584e81168",
+      "whole_file_bytes": 6121,
+      "whole_file_sha256": "32ea0e3e2fddcee7f04ea36ffc1393e23e3a24d1051c5c755f8a45c584e81168",
+      "plan_hash_matches": true,
+      "assigned_bytes": 6121,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6121,
+          "bytes": 6121,
+          "sha256": "32ea0e3e2fddcee7f04ea36ffc1393e23e3a24d1051c5c755f8a45c584e81168",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/changelog-fold.yml",
+      "start": 0,
+      "end": 6444,
+      "kind": "text",
+      "sha256": "c974d820ec98d3f64ba44e2405a0d99bc73a499212868b0d00124704d209a11a",
+      "whole_file_bytes": 6444,
+      "whole_file_sha256": "c974d820ec98d3f64ba44e2405a0d99bc73a499212868b0d00124704d209a11a",
+      "plan_hash_matches": true,
+      "assigned_bytes": 6444,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6444,
+          "bytes": 6444,
+          "sha256": "c974d820ec98d3f64ba44e2405a0d99bc73a499212868b0d00124704d209a11a",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/ci-cancel-on-close.yml",
+      "start": 0,
+      "end": 3303,
+      "kind": "text",
+      "sha256": "8b5805477a5609302278e7e9acd0aeba3f689732cc4abe685f5c3bb9a796bcea",
+      "whole_file_bytes": 3303,
+      "whole_file_sha256": "8b5805477a5609302278e7e9acd0aeba3f689732cc4abe685f5c3bb9a796bcea",
+      "plan_hash_matches": true,
+      "assigned_bytes": 3303,
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3303,
+          "bytes": 3303,
+          "sha256": "8b5805477a5609302278e7e9acd0aeba3f689732cc4abe685f5c3bb9a796bcea",
+          "fully_returned_untruncated": true
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "start": 0,
+      "end": 109490,
+      "kind": "text",
+      "sha256": "d615b39496e01177025a6dde9dbdd6edd5d8314942a9adaca3cb8ead2bf0f1d6",
+      "whole_file_bytes": 213506,
+      "whole_file_sha256": "d615b39496e01177025a6dde9dbdd6edd5d8314942a9adaca3cb8ead2bf0f1d6",
+      "plan_hash_matches": true,
+      "assigned_bytes": 109490,
+      "complete_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "efc65b61b478f54fb998e21cec27c6a27ecee6cc0213ba6d783e54f36328c1ea",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "47f69a08aba34b3b19babd1c03d80e2cc21a4ce36d68d64a77a1401bc1033103",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 18000,
+          "end": 27000,
+          "bytes": 9000,
+          "sha256": "a22fe388cea2b89047f45ceb91c36f882403c86649cb6add1282b6e01cdc0c0c",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 27000,
+          "end": 36000,
+          "bytes": 9000,
+          "sha256": "0e8975c825fd0a376b2cc4e2fa4e849b3f06e179d911aa244ee74ef77208d09f",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 36000,
+          "end": 45000,
+          "bytes": 9000,
+          "sha256": "d583614cc49b648aed002f77fd83aa977b959739a65e7545332603c583a9700a",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 45000,
+          "end": 54000,
+          "bytes": 9000,
+          "sha256": "1c136046215ecaaff5a7eeea3d91445ba7afcef2cce27d9432aa32e2de456730",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 54000,
+          "end": 63000,
+          "bytes": 9000,
+          "sha256": "5958000cade16ba8e0a1bb162bfb4483b9479758ae1cc019216d55dd716e2ddb",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 63000,
+          "end": 72000,
+          "bytes": 9000,
+          "sha256": "30fea1626ed6a19699b52a1c50ea68a6251b6bfc68212483cd444d0f3502edc6",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 72000,
+          "end": 81000,
+          "bytes": 9000,
+          "sha256": "47e2001054f0463ce22184e1db88995113e5de089648df9181aa8e3a937e0749",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 81000,
+          "end": 90000,
+          "bytes": 9000,
+          "sha256": "ab5f08cdbf96b2165761032723351bac25ca2e8e72779f3e2a5924a8eff989da",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 90000,
+          "end": 99000,
+          "bytes": 9000,
+          "sha256": "5a736500e8ce371d5414e9f444df1cfd7d349326ffa1bcd0fc921fde26120499",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 99000,
+          "end": 108000,
+          "bytes": 9000,
+          "sha256": "fc76fcbc525ba7ec68f029d24c8fd497cfa887a8d4018cce1cf1931aba3d81c6",
+          "fully_returned_untruncated": true
+        },
+        {
+          "start": 108000,
+          "end": 109490,
+          "bytes": 1490,
+          "sha256": "399f33a8e5ea0e6de11e608da5ed1f4c005dbbac470c847b7d1c7ff7268e98ff",
+          "fully_returned_untruncated": true
+        }
+      ]
+    }
+  ],
+  "support_reads": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+      "range": [
+        0,
+        22722
+      ],
+      "coverage": "complete supplementary read"
+    },
+    {
+      "path": "tools/shot/run-capture-request.mjs",
+      "sha256": "15bdbdd40563f36078a009cb4299e0e33e5b1ff3ab63a0525ebe193f9e61d9bd",
+      "range": [
+        0,
+        2596
+      ],
+      "coverage": "complete supplementary read"
+    },
+    {
+      "path": "tools/shot/export-history-evidence.mjs",
+      "sha256": "7bb84d5e67d2cf8478077d7bdf5da511cc7ce2b469b38c8e61fd4985918f1578",
+      "range": [
+        0,
+        3263
+      ],
+      "coverage": "complete supplementary read"
+    },
+    {
+      "path": "tools/check/workflow-lint.mjs",
+      "sha256": "c144813beaac28c74155e58c20ffa31d17894771defe388bb2b0687c90b8ed46",
+      "range": [
+        0,
+        4788
+      ],
+      "coverage": "complete supplementary read"
+    },
+    {
+      "path": "tools/gen/gen-changelog.mjs",
+      "sha256": "717cd842ed52b8a9d7d2f756558b39d7375941a12f0f187d8cc3689a8bc1df7b",
+      "range": [
+        0,
+        5668
+      ],
+      "coverage": "complete supplementary read"
+    },
+    {
+      "path": "tools/ci/remote-group.mjs",
+      "coverage": "targeted textual CLI/config references only",
+      "sha256": "6a0623f4d8a0691b3b50f7a50c0db59573f95a515c9fd0054c2e767c3abf4644"
+    },
+    {
+      "path": "tools/shot/publish-evidence.mjs",
+      "coverage": "targeted textual CLI/config references only",
+      "sha256": "124e2dd60883988e94022b79bbadcb731bd0100adb2f266b971da734c0b59577"
+    },
+    {
+      "path": "tools/car/render-car.mjs",
+      "coverage": "targeted textual CLI/config references only",
+      "sha256": "6b13ecda072160103bbc612705bef79b42501896bea827906150399aa065936b"
+    }
+  ],
+  "workflows": {
+    ".github/workflows/archive-evidence.yml": {
+      "complete": true,
+      "contract": {
+        "name": "Archive evidence",
+        "on": {
+          "workflow_dispatch": {
+            "inputs": {
+              "run_id": {
+                "description": "Completed workflow run ID that produced the capture",
+                "required": "false",
+                "type": "string"
+              },
+              "artifact_name": {
+                "description": "Exact artifact name to preserve",
+                "required": "false",
+                "type": "string"
+              },
+              "source_commit": {
+                "description": "Historical Git evidence instead of a CI artifact: full commit SHA",
+                "required": "false",
+                "type": "string"
+              },
+              "source_paths": {
+                "description": "Historical paths as a JSON array, e.g. [\"shots/1354\"]",
+                "required": "false",
+                "default": "[]",
+                "type": "string"
+              },
+              "direct_images": {
+                "description": "Also publish selected historical images as direct documentation assets (max 997)",
+                "required": "false",
+                "default": "false",
+                "type": "boolean"
+              },
+              "label": {
+                "description": "Short lowercase label, e.g. monza-survey",
+                "required": "true",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "permissions": {
+          "actions": "read",
+          "contents": "write"
+        },
+        "jobs": {
+          "archive": {
+            "runs-on": "ubuntu-latest",
+            "timeout-minutes": "20",
+            "steps": [
+              {
+                "name": "Check out the publisher",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "path": "publisher",
+                  "persist-credentials": "false"
+                }
+              },
+              {
+                "uses": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "with": {
+                  "node-version": "22"
+                }
+              },
+              {
+                "name": "Identify the workflow-run head",
+                "id": "capture",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}",
+                  "RUN_ID": "${{ inputs.run_id }}",
+                  "ARTIFACT_NAME": "${{ inputs.artifact_name }}",
+                  "SOURCE_COMMIT": "${{ inputs.source_commit }}",
+                  "SOURCE_PATHS": "${{ inputs.source_paths }}"
+                },
+                "run": "if [ -n \"$SOURCE_COMMIT\" ]; then\n  node --input-type=module <<'JS'\nimport fs from 'node:fs';\nimport { validateHistorySelection } from './publisher/tools/shot/export-history-evidence.mjs';\nif (process.env.RUN_ID || process.env.ARTIFACT_NAME) throw new Error('Choose historical Git evidence OR a CI artifact');\nconst paths = validateHistorySelection(process.env.SOURCE_COMMIT, JSON.parse(process.env.SOURCE_PATHS || '[]'));\nfs.writeFileSync(`${process.env.RUNNER_TEMP}/evidence-history.json`, JSON.stringify({ sha: process.env.SOURCE_COMMIT, paths }));\nfs.appendFileSync(process.env.GITHUB_OUTPUT, `sha=${process.env.SOURCE_COMMIT}\\nmode=history\\n`);\nJS\n  exit 0\nfi\n[ -n \"$ARTIFACT_NAME\" ] || { echo 'artifact_name is required for a CI capture'; exit 1; }\n[[ \"$RUN_ID\" =~ ^[1-9][0-9]*$ ]] || { echo 'run_id must be numeric'; exit 1; }\ngh api \"repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID\" > \"$RUNNER_TEMP/evidence-run.json\"\nnode --input-type=module <<'JS'\nimport fs from 'node:fs';\nconst run = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/evidence-run.json`));\nif (run.repository?.full_name !== process.env.GITHUB_REPOSITORY || run.status !== 'completed' || !/^[a-f0-9]{40}$/.test(run.head_sha)) {\n  throw new Error('Select a completed run from this repository with a valid source SHA');\n}\nfs.appendFileSync(process.env.GITHUB_OUTPUT, `sha=${run.head_sha}\\nmode=artifact\\n`);\nJS\n"
+              },
+              {
+                "name": "Check out the run head for packaging provenance",
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "ref": "${{ steps.capture.outputs.sha }}",
+                  "path": "capture",
+                  "persist-credentials": "false"
+                }
+              },
+              {
+                "name": "Download the selected artifact",
+                "if": "steps.capture.outputs.mode == 'artifact'",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}",
+                  "RUN_ID": "${{ inputs.run_id }}",
+                  "ARTIFACT_NAME": "${{ inputs.artifact_name }}"
+                },
+                "run": "gh run download \"$RUN_ID\" --repo \"$GITHUB_REPOSITORY\" --name=\"$ARTIFACT_NAME\" --dir \"$RUNNER_TEMP/evidence-download\"\n"
+              },
+              {
+                "name": "Publish and verify the evidence bundle",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}",
+                  "LABEL": "${{ inputs.label }}",
+                  "SOURCE_MODE": "${{ steps.capture.outputs.mode }}",
+                  "DIRECT_IMAGES": "${{ inputs.direct_images }}",
+                  "ARTIFACT_NAME": "${{ inputs.artifact_name }}"
+                },
+                "run": "node --input-type=module <<'JS'\nimport fs from 'node:fs';\nimport path from 'node:path';\nimport { prepareEvidence, publishEvidence } from './publisher/tools/shot/publish-evidence.mjs';\nimport { exportHistoryEvidence } from './publisher/tools/shot/export-history-evidence.mjs';\nconst historical = process.env.SOURCE_MODE === 'history';\nconst run = historical ? null : JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/evidence-run.json`));\nconst root = path.resolve('capture');\nconst artifactRoot = path.join(root, 'artifacts');\nconst dir = path.join(root, 'artifacts/promoted-evidence');\nif (fs.existsSync(artifactRoot) && fs.lstatSync(artifactRoot).isSymbolicLink()) throw new Error('Captured artifacts/ must not be a symlink');\nif (fs.existsSync(dir)) throw new Error('Capture checkout already contains the promotion directory');\n// Extract outside both checkouts, then copy without following links.\n// prepareEvidence rejects any copied symlinks before reading files.\nlet exported;\nif (historical) {\n  const selection = JSON.parse(fs.readFileSync(`${process.env.RUNNER_TEMP}/evidence-history.json`));\n  exported = exportHistoryEvidence({ root, ...selection });\n} else {\n  fs.cpSync(`${process.env.RUNNER_TEMP}/evidence-download`, dir, { recursive: true, dereference: false, errorOnExist: true, force: false });\n  const origin = path.join(dir, '_evidence-promotion.json');\n  fs.writeFileSync(origin, JSON.stringify({ workflowRunUrl: run.html_url, runId: run.id, runAttempt: run.run_attempt, event: run.event, workflowHeadRepository: run.head_repository?.full_name, workflowRunHeadSha: run.head_sha, captureSourceSha: null, captureSourceVerification: 'unverified; consult producer metadata or checkout logs', artifactName: process.env.ARTIFACT_NAME }, null, 2), { flag: 'wx' });\n}\nif (!historical && process.env.DIRECT_IMAGES === 'true') throw new Error('direct_images applies only to selected historical Git evidence');\nconst linkableFiles = historical && process.env.DIRECT_IMAGES === 'true' ? exported.origin.files.filter((f) => /\\.(png|jpe?g|webp|gif|avif)$/i.test(f.path)).map((f) => f.path) : undefined;\nconst bundle = prepareEvidence({ root, dir, label: process.env.LABEL, linkableFiles });\nconst result = publishEvidence(bundle.receiptPath);\nfs.appendFileSync(process.env.GITHUB_STEP_SUMMARY, [\n  '## Published evidence', '',\n  `[Evidence release](${result.url})`, '',\n  ...result.assets.map((a) => `- [${a.name}](${a.url})`), '',\n  `Packaging checkout (workflow-run head): ${result.sourceSha}`,\n  'Captured revision: **unverified**; consult the original producer metadata or checkout logs.',\n  historical ? `Original Git evidence commit: ${result.sourceSha}` : `[Original capture run](${run.html_url})`, '',\n].join('\\n'));\nconsole.log(JSON.stringify(result, null, 2));\nJS\n"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/browser-group.yml": {
+      "complete": true,
+      "contract": {
+        "name": "Browser group",
+        "on": {
+          "workflow_dispatch": {
+            "inputs": {
+              "group": {
+                "description": "browser group from package.json (the part after test:), e.g. ui, input, hooks, tiny",
+                "required": "true",
+                "type": "string"
+              },
+              "plan": {
+                "description": "shard plan JSON from `remote-group.mjs --plan` ({matrix:[{shard,total}\u2026], shards?:[[spec|{file,shard}]\u2026]}); the default is 4 count shards",
+                "required": "false",
+                "default": "{\"matrix\":[{\"shard\":1,\"total\":4},{\"shard\":2,\"total\":4},{\"shard\":3,\"total\":4},{\"shard\":4,\"total\":4}]}",
+                "type": "string"
+              },
+              "gl": {
+                "description": "llvmpipe (Mesa, 8-12x faster) or swiftshader (the local renderer, to reproduce a local-only red)",
+                "required": "false",
+                "default": "llvmpipe",
+                "type": "choice",
+                "options": [
+                  "llvmpipe",
+                  "swiftshader"
+                ]
+              },
+              "workers": {
+                "description": "Playwright workers per shard; empty = plan default (1 for render-heavy groups, 2 for headless-ish on llvmpipe)",
+                "required": "false",
+                "default": "",
+                "type": "string"
+              }
+            }
+          }
+        },
+        "run-name": "browser group ${{ inputs.group }} on ${{ github.ref_name }} (${{ inputs.gl }})",
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "browser-group-${{ github.ref_name }}-${{ inputs.group }}",
+          "cancel-in-progress": "true"
+        },
+        "jobs": {
+          "group": {
+            "name": "${{ inputs.group }} (${{ matrix.shard }}/${{ matrix.total }})",
+            "runs-on": "ubuntu-latest",
+            "timeout-minutes": "60",
+            "strategy": {
+              "fail-fast": "false",
+              "matrix": {
+                "include": "${{ fromJSON(inputs.plan).matrix }}"
+              }
+            },
+            "steps": [
+              {
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": "false"
+                }
+              },
+              {
+                "uses": "./.github/actions/setup-apex"
+              },
+              {
+                "name": "Playwright Chromium (cached)",
+                "uses": "./.github/actions/playwright-chromium"
+              },
+              {
+                "name": "Mesa llvmpipe + Xvfb",
+                "if": "inputs.gl != 'swiftshader'",
+                "uses": "./.github/actions/mesa-xvfb"
+              },
+              {
+                "name": "Run the group's shard (llvmpipe)",
+                "if": "inputs.gl != 'swiftshader'",
+                "env": {
+                  "APEX_FAIL_ON_FLAKY": "1",
+                  "APEX_WITH_TWINNED": "1",
+                  "APEX_GL": "llvmpipe",
+                  "LIBGL_ALWAYS_SOFTWARE": "1",
+                  "GL": "llvmpipe",
+                  "GROUP": "${{ inputs.group }}",
+                  "PLAN": "${{ inputs.plan }}",
+                  "SHARD": "${{ matrix.shard }}",
+                  "TOTAL": "${{ matrix.total }}",
+                  "WORKERS": "${{ inputs.workers }}"
+                },
+                "run": "node tools/ci/remote-group.mjs --run-shard"
+              },
+              {
+                "name": "Run the group's shard (SwiftShader)",
+                "if": "inputs.gl == 'swiftshader'",
+                "env": {
+                  "APEX_FAIL_ON_FLAKY": "1",
+                  "APEX_WITH_TWINNED": "1",
+                  "GL": "swiftshader",
+                  "GROUP": "${{ inputs.group }}",
+                  "PLAN": "${{ inputs.plan }}",
+                  "SHARD": "${{ matrix.shard }}",
+                  "TOTAL": "${{ matrix.total }}",
+                  "WORKERS": "${{ inputs.workers }}"
+                },
+                "run": "node tools/ci/remote-group.mjs --run-shard"
+              },
+              {
+                "name": "Failure artifacts",
+                "if": "failure() || cancelled()",
+                "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "with": {
+                  "name": "playwright-artifacts-${{ inputs.group }}-${{ matrix.shard }}",
+                  "path": "artifacts/test-results-*/\nartifacts/report-*/\n",
+                  "retention-days": "7",
+                  "if-no-files-found": "ignore"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/capture-gallery.yml": {
+      "complete": true,
+      "contract": {
+        "name": "Capture gallery",
+        "run-name": "Native capture gallery on ${{ github.ref_name }}",
+        "on": {
+          "workflow_dispatch": "",
+          "push": {
+            "branches": [
+              "cursor/**"
+            ],
+            "paths": [
+              ".github/capture-gallery-request.json"
+            ]
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "capture-gallery-${{ github.ref }}",
+          "cancel-in-progress": "false"
+        },
+        "jobs": {
+          "capture": {
+            "runs-on": "macos-latest",
+            "timeout-minutes": "15",
+            "steps": [
+              {
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "ref": "${{ github.sha }}",
+                  "persist-credentials": "false"
+                }
+              },
+              {
+                "uses": "./.github/actions/setup-apex"
+              },
+              {
+                "name": "Validate bounded capture request",
+                "run": "node tools/shot/run-capture-request.mjs --plan"
+              },
+              {
+                "name": "Install Chromium",
+                "run": "npx playwright install chromium"
+              },
+              {
+                "name": "Capture native frames and export gallery",
+                "run": "node tools/shot/run-capture-request.mjs"
+              },
+              {
+                "name": "Upload images, camera receipts and portable gallery",
+                "if": "always()",
+                "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "with": {
+                  "name": "capture-gallery-${{ github.sha }}",
+                  "path": "artifacts/design-matrix/ci-capture/\nartifacts/capture-site/\n",
+                  "if-no-files-found": "warn",
+                  "retention-days": "7"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/car-shot.yml": {
+      "complete": true,
+      "contract": {
+        "name": "Car shot",
+        "on": {
+          "workflow_dispatch": {
+            "inputs": {
+              "preset": {
+                "description": "render-car preset (cockpit, livery, wing, engine, brakes, ...) or 'list'",
+                "required": "false",
+                "default": "cockpit"
+              },
+              "views": {
+                "description": "Comma-separated views instead of a preset (hero, side, top, turntable, all)",
+                "required": "false",
+                "default": ""
+              },
+              "team": {
+                "description": "Team id (js/data/teams.js)",
+                "required": "false",
+                "default": "mclaren"
+              },
+              "livery": {
+                "description": "Livery id (js/car/liveries.js) \u2014 blank for the team default",
+                "required": "false",
+                "default": ""
+              },
+              "tod": {
+                "description": "Lighting: day | dusk | dawn | night | void",
+                "required": "false",
+                "default": "day"
+              },
+              "image": {
+                "description": "Runner image \u2014 macos-latest has the GPU; ubuntu-latest is the software control",
+                "required": "false",
+                "default": "macos-latest"
+              }
+            }
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "car-shot-${{ github.ref }}",
+          "cancel-in-progress": "true"
+        },
+        "jobs": {
+          "shot": {
+            "runs-on": "${{ inputs.image || 'macos-latest' }}",
+            "timeout-minutes": "20",
+            "steps": [
+              {
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "persist-credentials": "false"
+                }
+              },
+              {
+                "uses": "./.github/actions/setup-apex"
+              },
+              {
+                "name": "Install Chromium",
+                "run": "npx playwright install chromium"
+              },
+              {
+                "name": "Install Chromium OS deps (Linux only)",
+                "if": "runner.os == 'Linux'",
+                "run": "npx playwright install-deps chromium"
+              },
+              {
+                "name": "Mesa llvmpipe + Xvfb (Linux only)",
+                "if": "runner.os == 'Linux'",
+                "uses": "./.github/actions/mesa-xvfb"
+              },
+              {
+                "name": "What does the OS think it has",
+                "continue-on-error": "true",
+                "shell": "bash",
+                "run": "uname -a || true\nif [ \"$RUNNER_OS\" = \"macOS\" ]; then system_profiler SPDisplaysDataType 2>&1 | head -30 || true; fi\nif [ \"$RUNNER_OS\" = \"Linux\" ]; then ls -la /dev/dri 2>&1 || echo \"no /dev/dri\"; fi\n"
+              },
+              {
+                "name": "Serve the repo root",
+                "shell": "bash",
+                "run": "python3 -m http.server 3456 --bind 127.0.0.1 >/tmp/serve.log 2>&1 &\nfor _ in $(seq 1 60); do\n  curl -fsS -o /dev/null \"http://127.0.0.1:3456/tools/carview.html\" && exit 0\n  sleep 1\ndone\necho \"server never answered\"; cat /tmp/serve.log; exit 1\n"
+              },
+              {
+                "name": "Render",
+                "shell": "bash",
+                "env": {
+                  "APEX_GL": "${{ runner.os == 'Linux' && 'llvmpipe' || '' }}",
+                  "LIBGL_ALWAYS_SOFTWARE": "${{ runner.os == 'Linux' && '1' || '' }}",
+                  "SHOT_TEAM": "${{ inputs.team || 'mclaren' }}",
+                  "SHOT_TOD": "${{ inputs.tod || 'day' }}",
+                  "SHOT_LIVERY": "${{ inputs.livery }}",
+                  "SHOT_VIEWS": "${{ inputs.views }}",
+                  "SHOT_PRESET": "${{ inputs.preset || 'cockpit' }}"
+                },
+                "run": "ARGS=\"--team=$SHOT_TEAM --tod=$SHOT_TOD\"\nARGS=\"$ARGS --out=scratch/renders/cars/ci --w=1100 --h=800\"\n# The GPU is the whole reason this job exists \u2014 but keep the Linux\n# control on software GL (llvmpipe via APEX_GL), which is what it is\n# a control FOR.\nif [ \"$RUNNER_OS\" != \"Linux\" ]; then ARGS=\"$ARGS --gpu=1\"; fi\nif [ -n \"$SHOT_LIVERY\" ]; then ARGS=\"$ARGS --livery=$SHOT_LIVERY\"; fi\nif [ -n \"$SHOT_VIEWS\" ]; then\n  ARGS=\"$ARGS --views=$SHOT_VIEWS\"\nelse\n  ARGS=\"$ARGS --preset=$SHOT_PRESET\"\nfi\necho \"render-car $ARGS\"\nnode tools/car/render-car.mjs $ARGS\n"
+              },
+              {
+                "name": "Upload frames",
+                "if": "always()",
+                "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+                "with": {
+                  "name": "car-shot-${{ inputs.image || 'macos-latest' }}",
+                  "path": "scratch/renders/cars/**",
+                  "if-no-files-found": "error",
+                  "retention-days": "14"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/changelog-fold.yml": {
+      "complete": true,
+      "contract": {
+        "name": "Changelog fold",
+        "on": {
+          "schedule": [
+            {
+              "cron": "37 6 * * 1"
+            }
+          ],
+          "workflow_dispatch": ""
+        },
+        "permissions": {
+          "contents": "write",
+          "pull-requests": "write",
+          "issues": "write",
+          "actions": "write"
+        },
+        "concurrency": {
+          "group": "changelog-fold",
+          "cancel-in-progress": "false"
+        },
+        "jobs": {
+          "fold": {
+            "runs-on": "ubuntu-latest",
+            "timeout-minutes": "10",
+            "steps": [
+              {
+                "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+                "with": {
+                  "ref": "claude/f1-game-project-26h3ng",
+                  "fetch-depth": "0"
+                }
+              },
+              {
+                "uses": "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1",
+                "with": {
+                  "node-version": "22"
+                }
+              },
+              {
+                "name": "Skip while a fold PR is open",
+                "id": "open",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "n=\"$(gh pr list --repo \"$GITHUB_REPOSITORY\" --head bot/changelog-fold --state open --json number --jq length)\"\necho \"open fold PRs: $n\"\necho \"n=$n\" >> \"$GITHUB_OUTPUT\"\n"
+              },
+              {
+                "name": "Fold",
+                "if": "steps.open.outputs.n == '0'",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}"
+                },
+                "run": "set -euo pipefail\nnode tools/gen/gen-changelog.mjs --check\nnpm run -s fold | tee fold.log\nif git diff --quiet -- CHANGELOG.md docs/changelog.d; then\n  echo \"nothing to fold\"; exit 0\nfi\nnode tools/gen/gen-changelog.mjs --check\ncat fold.log >> \"$GITHUB_STEP_SUMMARY\"\ngit config user.name \"apex-changelog-bot\"\ngit config user.email \"noreply@anthropic.com\"\ngit checkout -B bot/changelog-fold\ngit add -A CHANGELOG.md docs/changelog.d\ngit commit -m \"chore(changelog): fold docs/changelog.d fragments\n\n$(cat fold.log)\"\ngit push --force-with-lease origin bot/changelog-fold\nPR_TITLE=\"chore(changelog): fold docs/changelog.d fragments\"\nPR_BODY=\"Scheduled fold: $(cat fold.log). Opened by .github/workflows/changelog-fold.yml, which dispatched ci.yml on bot/changelog-fold for this head. CHANGELOG: no player-facing change (this PR moves existing entries).\"\n# A REFUSED PR FAILS THE JOB (audit4 D1 / audit3 #5, 2026-10-26). This was\n# `|| echo ::warning::`, so run 40343209239 pushed the branch, could not\n# open the PR (\"GitHub Actions is not permitted to create or approve pull\n# requests\") and ended GREEN, every day. Now the job opens (or comments\n# on) one issue naming the branch, still dispatches the branch's CI, and\n# exits 1. The cure is the repo setting \"Allow GitHub Actions to create\n# and approve pull requests\" (DECISIONS #10, Bryce applies it) or a hand PR.\n# https://cli.github.com/manual/gh_issue_create\nif gh pr create --repo \"$GITHUB_REPOSITORY\" --base claude/f1-game-project-26h3ng --head bot/changelog-fold \\\n  --title \"$PR_TITLE\" --body \"$PR_BODY\" 2> pr.err; then\n  PR_OK=1\nelse\n  PR_OK=0; cat pr.err\nfi\n# A GITHUB_TOKEN PR starts no CI; a workflow_dispatch always does (header).\ngh workflow run ci.yml --repo \"$GITHUB_REPOSITORY\" --ref bot/changelog-fold \\\n  || echo \"::warning::ci.yml dispatch failed; dispatch it on bot/changelog-fold by hand\"\nif [ \"$PR_OK\" = 0 ]; then\n  export ISSUE_TITLE=\"fold PR needs a hand (bot/changelog-fold)\"\n  NOTE=\"The scheduled changelog fold pushed \\`bot/changelog-fold\\` ($(git rev-parse --short HEAD)) but \\`gh pr create\\` was refused: $(head -1 pr.err). Open the PR from \\`bot/changelog-fold\\` by hand (its ci.yml run was dispatched), or enable Settings > Actions > General > \\\"Allow GitHub Actions to create and approve pull requests\\\" (DECISIONS #10). Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"\n  NUM=\"$(gh issue list --repo \"$GITHUB_REPOSITORY\" --state open --limit 100 --json number,title --jq '[.[] | select(.title == env.ISSUE_TITLE)][0].number // empty')\"\n  if [ -n \"$NUM\" ]; then gh issue comment \"$NUM\" --repo \"$GITHUB_REPOSITORY\" --body \"$NOTE\"\n  else gh issue create --repo \"$GITHUB_REPOSITORY\" --title \"$ISSUE_TITLE\" --body \"$NOTE\"; fi\n  echo \"::error::fold PR not opened: $(head -1 pr.err) \u2014 see the issue \\\"$ISSUE_TITLE\\\"\"\n  exit 1\nfi\n"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/ci-cancel-on-close.yml": {
+      "complete": true,
+      "contract": {
+        "name": "Cancel CI of a closed PR",
+        "on": {
+          "pull_request": {
+            "types": [
+              "closed"
+            ]
+          }
+        },
+        "concurrency": {
+          "group": "ci-${{ github.event.pull_request.head.ref }}",
+          "cancel-in-progress": "true"
+        },
+        "permissions": {
+          "actions": "write",
+          "contents": "read"
+        },
+        "jobs": {
+          "cancel-stragglers": {
+            "name": "Cancel the closed PR's other runs",
+            "runs-on": "ubuntu-latest",
+            "timeout-minutes": "3",
+            "steps": [
+              {
+                "name": "Cancel queued / running pull_request runs on this branch",
+                "env": {
+                  "GH_TOKEN": "${{ github.token }}",
+                  "REPO": "${{ github.repository }}",
+                  "BRANCH": "${{ github.event.pull_request.head.ref }}",
+                  "SELF": "${{ github.run_id }}"
+                },
+                "run": "set -euo pipefail\n# Every live status the List-runs API accepts; pending/waiting/requested\n# runs hold a concurrency slot too (#2266 taught queue-depth the same).\n# https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-repository\nfor st in queued in_progress pending waiting requested; do\n  gh api -X GET \"repos/$REPO/actions/runs\" -f branch=\"$BRANCH\" -f event=pull_request -f status=\"$st\" -f per_page=100 \\\n    --jq '.workflow_runs[] | \"\\(.id) \\(.name)\"' | while read -r id name; do\n    [ \"$id\" = \"$SELF\" ] && continue\n    echo \"cancel $id ($name)\"\n    gh api -X POST \"repos/$REPO/actions/runs/$id/cancel\" >/dev/null || echo \"  (already finishing)\"\n  done\ndone\n"
+              }
+            ]
+          }
+        }
+      }
+    },
+    ".github/workflows/ci.yml": {
+      "complete": false,
+      "header_contract": {
+        "name": "CI",
+        "run-name": "${{ (github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('CI ignored: label {0}', github.event.label.name) || (github.event_name == 'pull_request' && github.event.action == 'edited' && !(github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && 'CI ignored: edit' || '' }}",
+        "on": {
+          "pull_request": {
+            "types": [
+              "opened",
+              "synchronize",
+              "reopened",
+              "ready_for_review",
+              "labeled",
+              "edited"
+            ],
+            "branches": [
+              "claude/f1-game-project-26h3ng"
+            ]
+          },
+          "schedule": [
+            {
+              "cron": "17 4 * * *"
+            }
+          ],
+          "workflow_dispatch": {
+            "inputs": {
+              "group": {
+                "description": "browser group to run on the 4-shard matrix (tiny = boot group; ui, input, driving, ...)",
+                "type": "string",
+                "required": "false",
+                "default": "tiny"
+              },
+              "renderer_macos": {
+                "description": "also run the gfx specs on the macOS (Metal) runner",
+                "type": "boolean",
+                "required": "false",
+                "default": "false"
+              },
+              "gl": {
+                "description": "software GL for the browser jobs: llvmpipe (default) or swiftshader (opt-out)",
+                "type": "string",
+                "required": "false",
+                "default": "llvmpipe"
+              }
+            }
+          },
+          "workflow_call": {
+            "inputs": {
+              "before_sha": {
+                "description": "github.event.before from the calling push (empty = run sweeps)",
+                "type": "string",
+                "required": "false",
+                "default": ""
+              },
+              "concurrency_key": {
+                "description": "unique caller run key; empty keeps direct push/PR branch concurrency",
+                "type": "string",
+                "required": "false",
+                "default": ""
+              },
+              "fast_tier_run": {
+                "description": "id of a green fast-tier ci.yml run on this exact tree; its tree-only jobs are skipped",
+                "type": "string",
+                "required": "false",
+                "default": ""
+              }
+            }
+          }
+        },
+        "permissions": {
+          "contents": "read"
+        },
+        "concurrency": {
+          "group": "ci-${{ inputs.concurrency_key || ((github.event_name == 'pull_request' && github.event.action == 'labeled' && (github.event.label.name != 'run-ci' || !github.event.pull_request.draft)) && format('label-{0}', github.run_id)) || ((github.event_name == 'pull_request' && github.event.action == 'edited' && !(github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && format('edit-{0}', github.run_id)) || ((github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && github.run_id) || github.event.pull_request.head.ref || github.ref_name }}",
+          "cancel-in-progress": "${{ github.event_name == 'pull_request' }}"
+        },
+        "env": {
+          "APEX_RATCHET_ABSOLUTE": "${{ github.event_name != 'pull_request' && '1' || '' }}"
+        }
+      },
+      "jobs_in_assigned_prefix": {
+        "draft-ci-skipped": {
+          "name": "Draft push (CI skipped \u2014 add run-ci label)",
+          "runs-on": "ubuntu-latest",
+          "timeout-minutes": "2",
+          "if": "${{ github.event_name == 'pull_request' && github.event.action != 'labeled' && github.event.action != 'edited' && github.event.pull_request.draft && !contains(github.event.pull_request.labels.*.name, 'run-ci') && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) }}",
+          "steps": [
+            {
+              "run": "echo \"No CI on a draft without the run-ci label or a PR-body line starting CI: run (self-serve when labels 403). Either gives the fast tier (guards, parts census, driving-model; no node suites or selected browser specs until ready); mark it ready for the full tier.\""
+            }
+          ]
+        },
+        "guards-a": {
+          "name": "Structural guards (tooling A)",
+          "runs-on": "ubuntu-latest",
+          "timeout-minutes": "18",
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && (inputs.fast_tier_run == '') }}",
+          "permissions": {
+            "contents": "read",
+            "actions": "read"
+          },
+          "env": {
+            "NO_MEMO": "${{ github.event_name == 'schedule' && '1' || '' }}"
+          },
+          "steps": [
+            {
+              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "with": {
+                "persist-credentials": "false",
+                "fetch-depth": "0",
+                "filter": "blob:none"
+              }
+            },
+            {
+              "name": "Was this head already green as a draft?",
+              "id": "reuse",
+              "env": {
+                "GH_TOKEN": "${{ github.token }}",
+                "GITHUB_EVENT_ACTION": "${{ github.event.action }}",
+                "PR_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+                "PR_BASE_REF": "${{ github.event.pull_request.base.ref }}"
+              },
+              "run": "bash tools/ci/reuse-draft-fast.sh >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "uses": "./.github/actions/setup-apex",
+              "if": "steps.reuse.outputs.reuse != 'true'"
+            },
+            {
+              "name": "Inputs hash (guards)",
+              "id": "h",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'",
+              "run": "echo \"key=guards-a-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)\" >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "name": "Verdict cache lookup",
+              "id": "memo",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'",
+              "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": ".verdict-guards-a",
+                "key": "${{ steps.h.outputs.key }}",
+                "lookup-only": "true"
+              }
+            },
+            {
+              "name": "Tooling-fast shard 1/4",
+              "if": "steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')",
+              "env": {
+                "APEX_DOCS_FIGURES_ADVISORY": "${{ github.event_name != 'pull_request' && '1' || '' }}"
+              },
+              "run": "node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/4 --bail"
+            },
+            {
+              "name": "Record green verdict",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()",
+              "run": "date -u > .verdict-guards-a"
+            },
+            {
+              "name": "Save verdict cache",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()",
+              "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": ".verdict-guards-a",
+                "key": "${{ steps.h.outputs.key }}"
+              }
+            },
+            {
+              "name": "Memoized skip",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'",
+              "env": {
+                "CACHE_KEY": "${{ steps.h.outputs.key }}"
+              },
+              "run": "echo \"SKIPPED tooling A \u2014 inputs-hash verdict cache hit for $CACHE_KEY\""
+            },
+            {
+              "name": "Reused draft",
+              "if": "steps.reuse.outputs.reuse == 'true'",
+              "run": "echo \"SKIPPED tooling A \u2014 draft fast-tier already green on this head SHA\""
+            }
+          ]
+        },
+        "guards-b": {
+          "name": "Structural guards (tooling B)",
+          "runs-on": "ubuntu-latest",
+          "timeout-minutes": "18",
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && (inputs.fast_tier_run == '') }}",
+          "permissions": {
+            "contents": "read",
+            "actions": "read"
+          },
+          "env": {
+            "NO_MEMO": "${{ github.event_name == 'schedule' && '1' || '' }}"
+          },
+          "steps": [
+            {
+              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "with": {
+                "persist-credentials": "false",
+                "fetch-depth": "0",
+                "filter": "blob:none"
+              }
+            },
+            {
+              "name": "Was this head already green as a draft?",
+              "id": "reuse",
+              "env": {
+                "GH_TOKEN": "${{ github.token }}",
+                "GITHUB_EVENT_ACTION": "${{ github.event.action }}",
+                "PR_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+                "PR_BASE_REF": "${{ github.event.pull_request.base.ref }}"
+              },
+              "run": "bash tools/ci/reuse-draft-fast.sh >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "uses": "./.github/actions/setup-apex",
+              "if": "steps.reuse.outputs.reuse != 'true'"
+            },
+            {
+              "name": "Inputs hash (guards)",
+              "id": "h",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'",
+              "run": "echo \"key=guards-b-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)\" >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "name": "Verdict cache lookup",
+              "id": "memo",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'",
+              "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": ".verdict-guards-b",
+                "key": "${{ steps.h.outputs.key }}",
+                "lookup-only": "true"
+              }
+            },
+            {
+              "name": "Tooling-fast shard 2/4",
+              "if": "steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')",
+              "env": {
+                "APEX_DOCS_FIGURES_ADVISORY": "${{ github.event_name != 'pull_request' && '1' || '' }}"
+              },
+              "run": "node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/4 --bail"
+            },
+            {
+              "name": "Ratchet ceilings vs the base",
+              "if": "steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')",
+              "env": {
+                "RATCHET_BASE": "${{ github.event.pull_request.base.sha || (github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng' && github.event.before) || (inputs.concurrency_key != '' && github.sha) || 'origin/claude/f1-game-project-26h3ng' }}",
+                "RATCHET_MODE": "${{ (github.event_name == 'push' || inputs.concurrency_key != '') && '--advisory' || '' }}",
+                "EVENT": "${{ github.event_name }}"
+              },
+              "run": "base=\"$RATCHET_BASE\"\n# The event base can lag the base that this PR merge was built on;\n# count only this PR's ceiling changes, not intervening ship raises.\n[ \"$EVENT\" = pull_request ] && base=\"$(bash tools/ci/ci-pr-base.sh \"$base\")\"\ncase \"$base\" in 0000000000000000000000000000000000000000|\"\") base=origin/claude/f1-game-project-26h3ng ;; esac\ngit cat-file -e \"$base^{commit}\" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng\necho \"ratchet base: $base ${RATCHET_MODE:+(advisory)}\"\nnode tools/check/ratchets.mjs --base \"$base\" $RATCHET_MODE\n"
+            },
+            {
+              "name": "Test tolerances are not loosened",
+              "if": "steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true') && github.event_name == 'pull_request'",
+              "env": {
+                "TOL_BASE": "${{ github.event.pull_request.base.sha }}"
+              },
+              "run": "base=\"$(bash tools/ci/ci-pr-base.sh \"$TOL_BASE\")\"\ngit cat-file -e \"$base^{commit}\" 2>/dev/null || base=origin/claude/f1-game-project-26h3ng\nnode tools/check/tolerance-diff.mjs --base \"$base\"\n"
+            },
+            {
+              "name": "Every test file belongs to a topical group",
+              "if": "steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')",
+              "run": "npm run test:audit"
+            },
+            {
+              "name": "What does this gate cover?",
+              "if": "steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')",
+              "run": "node tools/ci/ci-coverage.mjs"
+            },
+            {
+              "name": "How far behind ship?",
+              "if": "github.event_name == 'pull_request' && steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')",
+              "env": {
+                "BEHIND_SHIP_HEAD": "${{ github.event.pull_request.head.sha }}",
+                "BEHIND_SHIP_SHIP": "origin/claude/f1-game-project-26h3ng"
+              },
+              "run": "git fetch --no-tags --depth=1 origin claude/f1-game-project-26h3ng 2>/dev/null || true\nnode tools/ci/behind-ship.mjs\n"
+            },
+            {
+              "name": "Record green verdict",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()",
+              "run": "date -u > .verdict-guards-b"
+            },
+            {
+              "name": "Save verdict cache",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()",
+              "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": ".verdict-guards-b",
+                "key": "${{ steps.h.outputs.key }}"
+              }
+            },
+            {
+              "name": "Memoized skip",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'",
+              "env": {
+                "CACHE_KEY": "${{ steps.h.outputs.key }}"
+              },
+              "run": "echo \"SKIPPED tooling B \u2014 inputs-hash verdict cache hit for $CACHE_KEY\""
+            },
+            {
+              "name": "Reused draft",
+              "if": "steps.reuse.outputs.reuse == 'true'",
+              "run": "echo \"SKIPPED tooling B \u2014 draft fast-tier already green on this head SHA\""
+            }
+          ]
+        },
+        "guards-c": {
+          "name": "Structural guards (tooling C)",
+          "runs-on": "ubuntu-latest",
+          "timeout-minutes": "18",
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && (inputs.fast_tier_run == '') }}",
+          "permissions": {
+            "contents": "read",
+            "actions": "read"
+          },
+          "env": {
+            "NO_MEMO": "${{ github.event_name == 'schedule' && '1' || '' }}"
+          },
+          "steps": [
+            {
+              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "with": {
+                "persist-credentials": "false",
+                "fetch-depth": "0",
+                "filter": "blob:none"
+              }
+            },
+            {
+              "name": "Was this head already green as a draft?",
+              "id": "reuse",
+              "env": {
+                "GH_TOKEN": "${{ github.token }}",
+                "GITHUB_EVENT_ACTION": "${{ github.event.action }}",
+                "PR_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+                "PR_BASE_REF": "${{ github.event.pull_request.base.ref }}"
+              },
+              "run": "bash tools/ci/reuse-draft-fast.sh >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "uses": "./.github/actions/setup-apex",
+              "if": "steps.reuse.outputs.reuse != 'true'"
+            },
+            {
+              "name": "Inputs hash (guards)",
+              "id": "h",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'",
+              "run": "echo \"key=guards-c-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)\" >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "name": "Verdict cache lookup",
+              "id": "memo",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'",
+              "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": ".verdict-guards-c",
+                "key": "${{ steps.h.outputs.key }}",
+                "lookup-only": "true"
+              }
+            },
+            {
+              "name": "Tooling-fast shard 3/4",
+              "if": "steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')",
+              "env": {
+                "APEX_DOCS_FIGURES_ADVISORY": "${{ github.event_name != 'pull_request' && '1' || '' }}"
+              },
+              "run": "node tools/ci/tooling-fast.mjs --jobs=4 --shard=3/4 --bail"
+            },
+            {
+              "name": "Record green verdict",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()",
+              "run": "date -u > .verdict-guards-c"
+            },
+            {
+              "name": "Save verdict cache",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()",
+              "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": ".verdict-guards-c",
+                "key": "${{ steps.h.outputs.key }}"
+              }
+            },
+            {
+              "name": "Memoized skip",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'",
+              "env": {
+                "CACHE_KEY": "${{ steps.h.outputs.key }}"
+              },
+              "run": "echo \"SKIPPED tooling C \u2014 inputs-hash verdict cache hit for $CACHE_KEY\""
+            },
+            {
+              "name": "Reused draft",
+              "if": "steps.reuse.outputs.reuse == 'true'",
+              "run": "echo \"SKIPPED tooling C \u2014 draft fast-tier already green on this head SHA\""
+            }
+          ]
+        },
+        "guards-d": {
+          "name": "Structural guards (tooling D)",
+          "runs-on": "ubuntu-latest",
+          "timeout-minutes": "18",
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && (inputs.fast_tier_run == '') }}",
+          "permissions": {
+            "contents": "read",
+            "actions": "read"
+          },
+          "env": {
+            "NO_MEMO": "${{ github.event_name == 'schedule' && '1' || '' }}"
+          },
+          "steps": [
+            {
+              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "with": {
+                "persist-credentials": "false",
+                "fetch-depth": "0",
+                "filter": "blob:none"
+              }
+            },
+            {
+              "name": "Was this head already green as a draft?",
+              "id": "reuse",
+              "env": {
+                "GH_TOKEN": "${{ github.token }}",
+                "GITHUB_EVENT_ACTION": "${{ github.event.action }}",
+                "PR_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+                "PR_BASE_REF": "${{ github.event.pull_request.base.ref }}"
+              },
+              "run": "bash tools/ci/reuse-draft-fast.sh >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "uses": "./.github/actions/setup-apex",
+              "if": "steps.reuse.outputs.reuse != 'true'"
+            },
+            {
+              "name": "Inputs hash (guards)",
+              "id": "h",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'",
+              "run": "echo \"key=guards-d-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)\" >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "name": "Verdict cache lookup",
+              "id": "memo",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'",
+              "uses": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": ".verdict-guards-d",
+                "key": "${{ steps.h.outputs.key }}",
+                "lookup-only": "true"
+              }
+            },
+            {
+              "name": "Tooling-fast shard 4/4",
+              "if": "steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')",
+              "env": {
+                "APEX_DOCS_FIGURES_ADVISORY": "${{ github.event_name != 'pull_request' && '1' || '' }}"
+              },
+              "run": "node tools/ci/tooling-fast.mjs --jobs=4 --shard=4/4 --bail"
+            },
+            {
+              "name": "Record green verdict",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()",
+              "run": "date -u > .verdict-guards-d"
+            },
+            {
+              "name": "Save verdict cache",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()",
+              "uses": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": ".verdict-guards-d",
+                "key": "${{ steps.h.outputs.key }}"
+              }
+            },
+            {
+              "name": "Memoized skip",
+              "if": "steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit == 'true'",
+              "env": {
+                "CACHE_KEY": "${{ steps.h.outputs.key }}"
+              },
+              "run": "echo \"SKIPPED tooling D \u2014 inputs-hash verdict cache hit for $CACHE_KEY\""
+            },
+            {
+              "name": "Reused draft",
+              "if": "steps.reuse.outputs.reuse == 'true'",
+              "run": "echo \"SKIPPED tooling D \u2014 draft fast-tier already green on this head SHA\""
+            }
+          ]
+        },
+        "guards": {
+          "name": "Structural guards",
+          "needs": [
+            "guards-a",
+            "guards-b",
+            "guards-c",
+            "guards-d"
+          ],
+          "runs-on": "ubuntu-latest",
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && (!cancelled() && inputs.fast_tier_run == '') }}",
+          "timeout-minutes": "5",
+          "steps": [
+            {
+              "name": "Tooling halves must be green",
+              "env": {
+                "A": "${{ needs.guards-a.result }}",
+                "B": "${{ needs.guards-b.result }}",
+                "C": "${{ needs.guards-c.result }}",
+                "D": "${{ needs.guards-d.result }}"
+              },
+              "run": "set -u\necho \"guards-a=$A guards-b=$B guards-c=$C guards-d=$D\"\n[ \"$A\" = success ] && [ \"$B\" = success ] && [ \"$C\" = success ] && [ \"$D\" = success ]\n"
+            }
+          ]
+        },
+        "lints": {
+          "name": "Workflow and shader lints",
+          "runs-on": "ubuntu-latest",
+          "timeout-minutes": "15",
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && (inputs.fast_tier_run == '') }}",
+          "permissions": {
+            "contents": "read"
+          },
+          "env": {
+            "APEX_REQUIRE_LINT_BINS": "1"
+          },
+          "steps": [
+            {
+              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "with": {
+                "persist-credentials": "false"
+              }
+            },
+            {
+              "uses": "./.github/actions/setup-apex"
+            },
+            {
+              "name": "Lint binaries cache",
+              "id": "bins",
+              "uses": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+              "with": {
+                "path": "artifacts/bin",
+                "key": "lint-bins-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/env/install-lint-bins.sh') }}"
+              }
+            },
+            {
+              "name": "Install lint binaries",
+              "run": "bash tools/env/install-lint-bins.sh"
+            },
+            {
+              "name": "Workflow lint (actionlint + zizmor)",
+              "run": "node tools/check/workflow-lint.mjs"
+            },
+            {
+              "name": "Shader validation (glslang + naga)",
+              "run": "node tools/check/shader-validate.mjs"
+            },
+            {
+              "name": "Planted-defect fixtures",
+              "run": "node --test --test-timeout=900000 tests/unit/workflow-lint.test.mjs tests/unit/shader-validate.test.mjs"
+            }
+          ]
+        },
+        "node-suites": {
+          "name": "Pure-node unit suites (${{ matrix.slice }})",
+          "needs": [
+            "select"
+          ],
+          "runs-on": "ubuntu-latest",
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && !(github.event_name == 'pull_request' && github.event.pull_request.draft) && (inputs.fast_tier_run == '' && inputs.concurrency_key == '' && (needs.select.outputs.any_node == 'true' || github.event_name != 'pull_request')) }}",
+          "permissions": {
+            "contents": "read",
+            "actions": "read"
+          },
+          "env": {
+            "NODE_COMPILE_CACHE": "${{ github.workspace }}/artifacts/.node-compile-cache"
+          },
+          "strategy": {
+            "fail-fast": "false",
+            "matrix": {
+              "include": "${{ fromJSON(needs.select.outputs.slices) }}"
+            }
+          },
+          "timeout-minutes": "25",
+          "steps": [
+            {
+              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "if": "matrix.needed != 'false'",
+              "with": {
+                "persist-credentials": "false",
+                "fetch-depth": "0",
+                "filter": "blob:none"
+              }
+            },
+            {
+              "uses": "./.github/actions/setup-apex",
+              "if": "matrix.needed != 'false'"
+            },
+            {
+              "name": "Plan the slices for this diff",
+              "if": "matrix.needed != 'false'",
+              "env": {
+                "EVENT": "${{ github.event_name }}",
+                "PR_BASE": "${{ github.event.pull_request.base.sha }}",
+                "PUSH_BEFORE": "${{ github.event.before }}",
+                "CALLED": "${{ inputs.concurrency_key != '' }}",
+                "LIVE_BEFORE": "${{ inputs.before_sha }}",
+                "GH_TOKEN": "${{ github.token }}"
+              },
+              "run": "set -u\nPLAN=\"${RUNNER_TEMP:-.}/node-plan.sh\"\nBASE=\"\"; WHY=\"\"\nif [ \"$CALLED\" = \"true\" ]; then\n  BASE=\"${LIVE_BEFORE:-}\"; WHY=\"a Pages call: the live commit is the base\"\nelif [ \"$EVENT\" = \"pull_request\" ]; then\n  # The test commit's first parent, not the event's base.sha, which\n  # lags one sync behind it (tools/ci/ci-pr-base.sh).\n  BASE=\"$(bash tools/ci/ci-pr-base.sh \"${PR_BASE:-}\")\"; WHY=\"a pull request (event base.sha ${PR_BASE:-none})\"\nelif [ \"$EVENT\" = \"push\" ]; then\n  if [ \"$(bash tools/ci/base-green.sh \"${PUSH_BEFORE:-}\")\" = green ]; then\n    BASE=\"${PUSH_BEFORE:-}\"; WHY=\"a deploy push whose previous tip was gated green\"\n  else\n    echo \"the previous tip ${PUSH_BEFORE:-?} is not known green: every script runs\"\n  fi\nfi\nif [ -n \"${BASE:-}\" ] && git cat-file -e \"${BASE}^{commit}\" 2>/dev/null; then\n  echo \"plan base: $BASE ($WHY)\"\n  node tools/ci/node-plan.mjs --since \"$BASE\" --sh > \"$PLAN\"\n  node tools/ci/node-plan.mjs --since \"$BASE\"\nelse\n  node tools/ci/node-plan.mjs --all --sh > \"$PLAN\"\n  echo \"no gated base for this $EVENT: every script runs\"\nfi\n"
+            },
+            {
+              "name": "Pure-node unit suites",
+              "run": "# ONE SLICE PER RUNNER (matrix.slice). Every script stays on its own\n# line: deploy.mjs and twinned-specs.mjs read this step's text.\n# `planned <script>` is the plan step's predicate (true on every\n# non-PR event); a skip prints SKIPPED <script> and the reason.\n# matrix.needed=false (deploy push / train rows): the name still\n# reports for the Pages reuse check, but no work runs for a\n# slice this diff does not select.\nif [ \"${{ matrix.needed }}\" = \"false\" ]; then\n  echo \"SKIPPED slice ${{ matrix.slice }} \u2014 not selected for this diff (needed=false)\"\n  exit 0\nfi\n. \"${RUNNER_TEMP:-.}/node-plan.sh\"\ncase \"${{ matrix.slice }}\" in\n  vm-a1)\n    # The Node VM harness: js/game.js headless, exact parity with the\n    # physics baseline (tests/unit/physics-characterization-vm.test.mjs).\n    # elevation-tracks-vm builds 40 circuits; each arm builds every\n    # other one (APEX_CIRCUIT_SHARD, tools/lib/circuit-scope.cjs), on\n    # top of the plan's APEX_CIRCUITS when the diff is circuit-only.\n    export APEX_CIRCUIT_SHARD=1/2\n    if planned test:game-vm-a; then\n    npm run test:game-vm-a\n    fi\n    unset APEX_CIRCUIT_SHARD   # the shard scopes the elevation twin only; riders see the whole roster\n    # RIDERS (2026-10-15): the ten former `fast`-slice scripts used to\n    # ride vm-b1, \"the shorter half\" of 2026-09-30. Measured on three\n    # green ship pushes 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md\n    # \u00a77) they were 180 s on top of a game-vm-b1 that alone is 437 s, so\n    # vm-b1 set the wall at 10\u201312 min. They now sit on the three light\n    # rows, greedy by median: here net-unit 33 s, audio-unit 33 s,\n    # state-unit 5 s, desktop-unit 0.5 s beside a 112 s shard. Still\n    # always-on (never guarded by planned()); on a matched PR plan\n    # NODE_PLAN_SKIP_TF=1 thins tooling-fast overlap via run-group;\n    # the `npm run` else-branch stays for gateNodeSuites / deploy.\n    # onlyHere files never drop (docs/notes/CI-CAPACITY-2026-09-29.md).\n    # tools/ci/pick-unit-slices.mjs SLICE_SCRIPTS mirrors these arms and\n    # its test pins the two in step.\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:net-unit --skip-tf; else\n    npm run test:net-unit\n    fi\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:audio-unit --skip-tf; else\n    npm run test:audio-unit\n    fi\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:state-unit --skip-tf; else\n    npm run test:state-unit\n    fi\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:desktop-unit --skip-tf; else\n    npm run test:desktop-unit\n    fi\n    ;;\n  vm-a2)\n    export APEX_CIRCUIT_SHARD=2/2\n    if planned test:game-vm-a; then\n    npm run test:game-vm-a\n    fi\n    unset APEX_CIRCUIT_SHARD   # as in vm-a1\n    # GATE GAP closed 2026-09-10: five garage files (livery-decal-surfaces,\n    # livery-contrast, body-split, cover-legibility, helmets) and three\n    # steering files (digital-steer, key-binds, settings-export) were in\n    # their groups and in NO gate \u2014 not tooling-fast, not this step, so\n    # deploy.mjs (which derives its node list from here) never ran them\n    # either. garage-unit is the heaviest rider (94 s median on a runner,\n    # 2026-10-15: the livery rasters), so it rides the 110 s shard alone;\n    # steering-unit (6 s) rides `slow`.\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:garage-unit --skip-tf; else\n    npm run test:garage-unit\n    fi\n    ;;\n  page-a)\n    if planned test:vm-page-a; then\n    npm run test:vm-page-a\n    fi\n    ;;\n  page-b)\n    if planned test:vm-page-b; then\n    npm run test:vm-page-b\n    fi\n    ;;\n  slow)\n    # The three raster/spawn-heavy car files, out of the edit loop\n    # (152 s of the old 315 s tooling-fast; 2026-09-01) and into the gate.\n    if planned test:node-slow; then\n    npm run test:node-slow\n    fi\n    # Riders (see vm-a1): steering-unit 6 s, mcp 5 s, service-worker 4 s,\n    # lifecycle-unit and agent-contract < 1 s, beside 168 s of node-slow.\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:steering-unit --skip-tf; else\n    npm run test:steering-unit\n    fi\n    # The CLI-only MCP wrappers were here as test:mcp until 2026-09-10;\n    # those suites (tinyfish-mcp, probe-mcp) moved to tests/manual/ and\n    # their fast-gate half is mcp-cli. environment-json stays gated here.\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:mcp --skip-tf; else\n    npm run test:mcp\n    fi\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:service-worker --skip-tf; else\n    npm run test:service-worker\n    fi\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:lifecycle-unit --skip-tf; else\n    npm run test:lifecycle-unit\n    fi\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:agent-contract --skip-tf; else\n    npm run test:agent-contract\n    fi\n    ;;\n  vm-b1)\n    # First of two time-balanced partitions of test:game-vm-b\n    # (tests/groups.json; test:game-vm-b is still the whole list locally).\n    # Re-cut 2026-10-15 by per-file runner medians (LPT over 59 files,\n    # ~850 s of serial test time each; survey note \u00a77): the 2026-09-30\n    # cut measured 437 s vs 220 s on a runner. NODE_PLAN_SKIP_TF=1 drops\n    # the VM files Structural guards already runs (tooling-fast:\n    # real-replay-vm 98 s, game-vm, red-flag-fuel-vm here;\n    # physics-characterization-vm, session-entry-vm on b2) \u2014 both jobs\n    # share one `if:`, so a matched plan ran them twice (test audit T5,\n    # 2026-10-05). --all / fail-safe keep npm run.\n    if planned test:game-vm-b1; then\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:game-vm-b1 --skip-tf; else\n    npm run test:game-vm-b1\n    fi\n    fi\n    ;;\n  vm-b2)\n    if planned test:game-vm-b2; then\n    if [ -n \"${NODE_PLAN_SKIP_TF:-}\" ]; then node tools/ci/run-group.mjs test:game-vm-b2 --skip-tf; else\n    npm run test:game-vm-b2\n    fi\n    fi\n    ;;\nesac\n"
+            }
+          ]
+        },
+        "sweeps-parts": {
+          "name": "Parts option-resolution census",
+          "runs-on": "ubuntu-latest",
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) }}",
+          "permissions": {
+            "contents": "read",
+            "actions": "read"
+          },
+          "timeout-minutes": "10",
+          "env": {
+            "NODE_OPTIONS": "--max-old-space-size=6144"
+          },
+          "steps": [
+            {
+              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "with": {
+                "persist-credentials": "false",
+                "fetch-depth": "0",
+                "filter": "blob:none"
+              }
+            },
+            {
+              "name": "Was this head already green as a draft?",
+              "id": "reuse",
+              "env": {
+                "GH_TOKEN": "${{ github.token }}",
+                "GITHUB_EVENT_ACTION": "${{ github.event.action }}",
+                "PR_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+                "PR_BASE_REF": "${{ github.event.pull_request.base.ref }}"
+              },
+              "run": "bash tools/ci/reuse-draft-fast.sh >> \"$GITHUB_OUTPUT\""
+            },
+            {
+              "name": "Does this diff touch the car parts?",
+              "id": "filter",
+              "if": "steps.reuse.outputs.reuse != 'true'",
+              "env": {
+                "BEFORE": "${{ inputs.concurrency_key != '' && inputs.before_sha || (inputs.concurrency_key == '' && github.event.before) || '' }}",
+                "EVENT": "${{ github.event_name }}",
+                "PR_BASE": "${{ github.event.pull_request.base.sha }}",
+                "CALLED": "${{ inputs.concurrency_key != '' }}"
+              },
+              "run": "set -u\nrun_all() { echo \"parts=true\" >> \"$GITHUB_OUTPUT\"; echo \"RUNNING THE PARTS CENSUS: $1\"; exit 0; }\n# A pull_request has a base and always had one. The sweeps filter\n# below went without it long enough to run the whole fleet on every\n# PR (fixed the same day this one was written); the mistake is not\n# repeated here.\ncase \"$EVENT\" in\n  push) ;;\n  pull_request) BEFORE=\"${PR_BASE:-}\" ;;\n  *) [ \"$CALLED\" = \"true\" ] || run_all \"event is '$EVENT', not a push, a PR or a Pages call\" ;;\nesac\n# A PR diffs against the test commit's first parent (ci-pr-base.sh):\n# the event's base.sha lags one sync behind it.\n[ \"$EVENT\" = pull_request ] && BEFORE=\"$(bash tools/ci/ci-pr-base.sh \"${BEFORE:-}\")\"\ncase \"${BEFORE:-}\" in\n  \"\"|0000000000000000000000000000000000000000) run_all \"no comparison base (new branch, first push, or caller omitted input)\" ;;\nesac\ngit cat-file -e \"${BEFORE}^{commit}\" 2>/dev/null || run_all \"base $BEFORE unreachable (force push?)\"\nCHANGED=$(git diff --name-only \"$BEFORE\" \"$GITHUB_SHA\") || run_all \"git diff failed\"\necho \"--- changed files ---\"; echo \"$CHANGED\"; echo \"---------------------\"\nPARTS_ERE=\"$(node tools/ci/geometry-paths.mjs --parts-ere)\" \\\n  || run_all \"could not read the parts path pattern out of tools/ci/geometry-paths.mjs\"\n[ -n \"$PARTS_ERE\" ] || run_all \"tools/ci/geometry-paths.mjs printed an EMPTY parts pattern\"\necho \"--- parts paths --- $PARTS_ERE\"\nif printf '%s\\n' \"$CHANGED\" | grep -qE \"$PARTS_ERE\"; then\n  echo \"parts=true\" >> \"$GITHUB_OUTPUT\"\n  echo \"RUNNING THE PARTS CENSUS: the diff touches a module tools/car/parts-sweep.mjs loads\"\nelse\n  echo \"parts=false\" >> \"$GITHUB_OUTPUT\"\n  echo \"SKIPPING THE PARTS CENSUS: nothing in this diff reaches the car the sweep photographs\"\nfi\n"
+            },
+            {
+              "uses": "./.github/actions/setup-apex",
+              "if": "steps.reuse.outputs.reuse != 'true' && steps.filter.outputs.parts == 'true'"
+            },
+            {
+              "if": "steps.reuse.outputs.reuse != 'true' && steps.filter.outputs.parts == 'true'",
+              "run": "npm run test:sweeps-parts"
+            },
+            {
+              "name": "Reused draft",
+              "if": "steps.reuse.outputs.reuse == 'true'",
+              "run": "echo \"SKIPPED parts census \u2014 draft fast-tier already green on this head SHA\""
+            }
+          ]
+        },
+        "sweeps": {
+          "name": "Per-circuit geometry sweeps (${{ matrix.shard }}of4)",
+          "runs-on": "ubuntu-latest",
+          "needs": [
+            "select"
+          ],
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && (!(inputs.concurrency_key == '' && ((github.event_name == 'push' && github.ref_name == 'claude/f1-game-project-26h3ng') || (github.event_name == 'pull_request' && github.event.pull_request.draft)))) && (needs.select.outputs.geometry != 'false' || needs.select.outputs.geometry_targeted != '') }}",
+          "strategy": {
+            "fail-fast": "false",
+            "matrix": {
+              "shard": [
+                "1",
+                "2",
+                "3",
+                "4"
+              ]
+            }
+          },
+          "timeout-minutes": "35",
+          "env": {
+            "NODE_OPTIONS": "--max-old-space-size=6144"
+          },
+          "steps": [
+            {
+              "uses": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+              "with": {
+                "persist-credentials": "false",
+                "fetch-depth": "0",
+                "filter": "blob:none"
+              }
+            },
+            {
+              "uses": "./.github/actions/setup-apex"
+            },
+            {
+              "name": "Suite shard assignment",
+              "id": "shard",
+              "env": {
+                "SHARD": "${{ matrix.shard }}",
+                "SHARDS": "4"
+              },
+              "run": "set -u\nnode <<'NODE'\nconst fs = require(\"fs\");\nconst shard = +process.env.SHARD;\nconst shards = +process.env.SHARDS;\nconst pkgPath = \"package.json\";\nconst pkg = JSON.parse(fs.readFileSync(pkgPath, \"utf8\"));\nconst all = String(pkg.scripts[\"test:sweeps\"] || \"\").match(/tests\\/unit\\/[^\\s]+/g) || [];\nif (!all.length) {\n  console.error(\"package.json test:sweeps names ZERO suites\");\n  process.exit(1);\n}\nconst { execFileSync } = require(\"child_process\");\nconst plan = JSON.parse(execFileSync(process.execPath, [\n  \"tools/ci/sweep-shards.mjs\", \"--shard\", String(shard), \"--shards\", String(shards), \"--json\",\n], { encoding: \"utf8\" }));\nconst slice = plan.files;\nconst temp = process.env.RUNNER_TEMP || \".\";\nfs.writeFileSync(`${temp}/sweep-shard-slice.txt`, slice.length ? `${slice.join(\"\\n\")}\\n` : \"\");\nconsole.log(`--- suite shard ${shard}of${shards}: ${slice.length}/${all.length} suites (~${plan.seconds}s measured) ---`);\nfor (const s of slice) console.log(s);\nconsole.log(\"--------------------\");\npkg.scripts[\"test:sweeps\"] = \"node --test --test-timeout=900000 --test-concurrency=1\" + (slice.length ? ` ${slice.join(\" \")}` : \"\");\nfs.writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\\n`);\nfs.appendFileSync(process.env.GITHUB_OUTPUT, `count=${slice.length}\\n`);\nNODE\n"
+            },
+            {
+              "name": "Geometry sweeps (rebuilds every circuit, per suite)",
+              "if": "needs.select.outputs.geometry != 'false'",
+              "env": {
+                "APEX_CIRCUITS": "${{ needs.select.outputs.geometry_circuits }}"
+              },
+              "run": "npm run test:sweeps"
+            },
+            {
+              "name": "Targeted sweeps (the suites that read this diff, no fleet rebuild)",
+              "if": "needs.select.outputs.geometry == 'false' && needs.select.outputs.geometry_targeted != ''",
+              "env": {
+                "TARGETED": "${{ needs.select.outputs.geometry_targeted }}",
+                "SHARD": "${{ matrix.shard }}"
+              },
+              "run": "set -u\nSLICE_FILE=\"${RUNNER_TEMP:-.}/sweep-shard-slice.txt\"\nMINE=\"\"\nfor t in $TARGETED; do\n  if [ -f \"$SLICE_FILE\" ] && grep -qxF \"$t\" \"$SLICE_FILE\"; then\n    MINE=\"${MINE} ${t}\"\n  fi\ndone\nMINE=\"${MINE# }\"\necho \"targeted shard ${SHARD}of4: ${MINE:-\"(none on this shard)\"}\"\n[ -z \"$MINE\" ] && exit 0\nnode --test --test-timeout=900000 --test-concurrency=1 $MINE\n"
+            },
+            {
+              "name": "Every circuit still builds headlessly",
+              "if": "needs.select.outputs.geometry != 'false' && matrix.shard == 3",
+              "run": "node tools/track/verify-track.cjs --all"
+            }
+          ]
+        },
+        "sweeps-roll-up": {
+          "name": "Per-circuit geometry sweeps",
+          "needs": [
+            "select",
+            "sweeps"
+          ],
+          "if": "${{ (github.event_name != 'pull_request' || !github.event.pull_request.draft || contains(github.event.pull_request.labels.*.name, 'run-ci') || contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"'))) && (github.event.action != 'labeled' || (github.event.label.name == 'run-ci' && github.event.pull_request.draft)) && (github.event.action != 'edited' || (github.event.pull_request.draft && github.event.changes.body && !contains(github.event.pull_request.labels.*.name, 'run-ci') && contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.pull_request.body), fromJSON('\"\\nCI\\u003a run\"')) && !contains(format('{0}{1}', fromJSON('\"\\n\"'), github.event.changes.body.from), fromJSON('\"\\nCI\\u003a run\"')))) && (always() && !cancelled() && needs.select.result == 'success' && (needs.sweeps.result != 'skipped' || (needs.select.outputs.geometry == 'false' && needs.select.outputs.geometry_targeted == ''))) }}",
+          "runs-on": "ubuntu-latest",
+          "timeout-minutes": "5",
+          "steps": [
+            {
+              "name": "Every sweep shard succeeded or the planner proved no sweep applies",
+              "env": {
+                "SWEEPS_RESULT": "${{ needs.sweeps.result }}",
+                "GEOMETRY": "${{ needs.select.outputs.geometry }}",
+                "TARGETED": "${{ needs.select.outputs.geometry_targeted }}"
+              },
+              "run": "test \"$SWEEPS_RESULT\" = success || {\n  test \"$SWEEPS_RESULT\" = skipped && test \"$GEOMETRY\" = false && test -z \"$TARGETED\"\n}\n"
+            }
+          ]
+        },
+        "smoke": {
+          "partial": true,
+          "boundary_byte": 109490,
+          "notes": "Read through nightly llvmpipe command; SwiftShader alternative and artifacts continue group02"
+        }
+      },
+      "external_needs_seen": [
+        "select"
+      ],
+      "select_outputs_consumed": [
+        "any_node",
+        "slices",
+        "geometry",
+        "geometry_targeted",
+        "geometry_circuits",
+        "ships"
+      ],
+      "partial_smoke_contract": {
+        "needs": [
+          "select"
+        ],
+        "runner": "ubuntu-latest",
+        "ships_false": "skips expensive steps, retains job result",
+        "matrix": "direct schedule/dispatch without concurrency_key: [1,2,3,4]; otherwise [1]",
+        "timeout_minutes": "wide120; otherwise20",
+        "global_timeout_minutes": "wide110",
+        "env": [
+          "APEX_WORKERS=1",
+          "APEX_FAIL_ON_FLAKY=1",
+          "APEX_GL=llvmpipe",
+          "LIBGL_ALWAYS_SOFTWARE=1",
+          "APEX_WITH_TWINNED=1 for wide"
+        ],
+        "command": "npm run test:smoke -- --timeout=900000 --shard=${{ matrix.shard }}/1; wide npm run test:${GROUP:-tiny} -- --timeout=900000 --shard=${{ matrix.shard }}/4",
+        "outputs": "no artifact section inside assigned prefix",
+        "boundary": "inside comment before SwiftShader alternative"
+      }
+    }
+  },
+  "limits": [
+    "CI partial [0,109490) of 213506 bytes; boundary inside smoke comment. select outputs are consumers only; terminal verdict outside assignment.",
+    "Historical comments are provenance, not current configuration authority.",
+    "CLI/config contracts traced textually; no runtime game symbol required LSP. No network.",
+    "No tests, browser, workflow execution, staging or commits."
+  ],
+  "historical_or_missing_references": [
+    {
+      "path": ".github/workflows/fleet.yml",
+      "source": ".github/labels.json",
+      "status": "comment only; missing current workflow"
+    },
+    {
+      "path": "shots/1354",
+      "source": ".github/workflows/archive-evidence.yml",
+      "status": "historical selection example"
+    }
+  ],
+  "total_assigned_bytes": 160000,
+  "read_method": "Each assigned file <=9000 bytes returned by its own exec_command result. CI returned in [s,min(s+9000,109490)) byte calls. An initially aggregated response was truncated; all five affected CI spans were subsequently reread individually without truncation."
+}

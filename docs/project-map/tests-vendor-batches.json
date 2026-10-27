@@ -13,7 +13,7 @@
         }
       ],
       "bytes": 160000,
-      "status": "unassigned"
+      "status": "complete"
     },
     {
       "id": "02",
@@ -27,7 +27,7 @@
         }
       ],
       "bytes": 103643,
-      "status": "unassigned"
+      "status": "complete"
     }
   ]
 }

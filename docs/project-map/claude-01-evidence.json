@@ -1,0 +1,1098 @@
+{
+  "group": "01",
+  "assigned_bytes": 160000,
+  "coverage": "complete assigned half-open ranges; lsp-hint prefix only by plan",
+  "plan": {
+    "path": "docs/project-map/claude-batches.json",
+    "sha256": "fa783162b817fee18ead7ac45d1cea85ace2ee22ad162d31df71d9f81eb54f35"
+  },
+  "sources": [
+    {
+      "path": ".claude/agent-memory/bloat-auditor/MEMORY.md",
+      "start": 0,
+      "end": 548,
+      "kind": "text",
+      "sha256": "152712ece76fbd19c5daad968b5474dd5d07c743c68cfe3a5019db34facd1f9f",
+      "actual_whole_sha256": "152712ece76fbd19c5daad968b5474dd5d07c743c68cfe3a5019db34facd1f9f",
+      "plan_hash_matches": true,
+      "part_sha256": "152712ece76fbd19c5daad968b5474dd5d07c743c68cfe3a5019db34facd1f9f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 548,
+          "sha256": "152712ece76fbd19c5daad968b5474dd5d07c743c68cfe3a5019db34facd1f9f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "project agent memory",
+        "contract": "Rejected carve rows with reviewed SHA; parent writes and auditor validates unchanged source"
+      }
+    },
+    {
+      "path": ".claude/agent-memory/verify-agent/MEMORY.md",
+      "start": 0,
+      "end": 156,
+      "kind": "text",
+      "sha256": "7e36333bba12a257c5b9dfa7d7c04f64592ab0777d1da586ece58ee325fb1e02",
+      "actual_whole_sha256": "7e36333bba12a257c5b9dfa7d7c04f64592ab0777d1da586ece58ee325fb1e02",
+      "plan_hash_matches": true,
+      "part_sha256": "7e36333bba12a257c5b9dfa7d7c04f64592ab0777d1da586ece58ee325fb1e02",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 156,
+          "sha256": "7e36333bba12a257c5b9dfa7d7c04f64592ab0777d1da586ece58ee325fb1e02",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "project agent memory",
+        "contract": "Known-red spec/SHA/reason rows; reverify entries older than merge-base"
+      }
+    },
+    {
+      "path": ".claude/agents/README.md",
+      "start": 0,
+      "end": 8105,
+      "kind": "text",
+      "sha256": "774d7417490a1bf43f216ac24fa554231a715b22f49659a1c46eb29e15863ef9",
+      "actual_whole_sha256": "774d7417490a1bf43f216ac24fa554231a715b22f49659a1c46eb29e15863ef9",
+      "plan_hash_matches": true,
+      "part_sha256": "774d7417490a1bf43f216ac24fa554231a715b22f49659a1c46eb29e15863ef9",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8105,
+          "sha256": "774d7417490a1bf43f216ac24fa554231a715b22f49659a1c46eb29e15863ef9",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent index",
+        "contract": "Agent routing/frontmatter host compatibility and model tiers"
+      }
+    },
+    {
+      "path": ".claude/agents/agent-surface-reviewer.md",
+      "start": 0,
+      "end": 4655,
+      "kind": "text",
+      "sha256": "d3111e054fc5070e00619308f71b54cd7ecadb29da516db73a001457292e4c15",
+      "actual_whole_sha256": "d3111e054fc5070e00619308f71b54cd7ecadb29da516db73a001457292e4c15",
+      "plan_hash_matches": true,
+      "part_sha256": "d3111e054fc5070e00619308f71b54cd7ecadb29da516db73a001457292e4c15",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4655,
+          "sha256": "d3111e054fc5070e00619308f71b54cd7ecadb29da516db73a001457292e4c15",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "Edited skill/agent/hook/rule section; unit, task hint, scratch report path, optional retest",
+        "outputs": "\u226460-line report and VERDICT/GAP1/GAP2 hand-back",
+        "limits": "Only scratch Markdown report; no browser, tests or web; retest independently before old report",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: agent-surface-reviewer\ndescription: Use proactively after editing a skill, agent, hook or AGENTS.md section. Reviews ONE agent-surface unit (trigger, paths, commands, walkthrough, structure, enforcement), writes a \u2264 60-line report to scratch/, returns VERDICT + top 2 gaps. \"retest <old report>\" = before/after. Read-only on the repo.\nmodel: sonnet\nmaxTurns: 30\nis_background: true\nbackground: true\ntools: Bash, Read, Grep, Glob, Write"
+      }
+    },
+    {
+      "path": ".claude/agents/bloat-auditor.md",
+      "start": 0,
+      "end": 6098,
+      "kind": "text",
+      "sha256": "0dd62a39348ecba7df8eddda71996e3273b49f9b619c1c219d420ede0e9fb84f",
+      "actual_whole_sha256": "0dd62a39348ecba7df8eddda71996e3273b49f9b619c1c219d420ede0e9fb84f",
+      "plan_hash_matches": true,
+      "part_sha256": "0dd62a39348ecba7df8eddda71996e3273b49f9b619c1c219d420ede0e9fb84f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6098,
+          "sha256": "0dd62a39348ecba7df8eddda71996e3273b49f9b619c1c219d420ede0e9fb84f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "One assigned scope and rejected-finding memory",
+        "outputs": "\u22648 BLOAT rows plus COVERED; estimated removal cost and do-not rule",
+        "limits": "Read-only; parent carves; no browser/web; rejection valid only at reviewed SHA",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: bloat-auditor\ndescription: Read-only agent-bloat / simplify auditor. Use when a file, skill, or subtree may be split, extracted, or stripped of dead/duplicate code or stale comments. Returns BLOAT rows; no edits, no Playwright. Parent applies one carve.\nmodel: sonnet\nomitClaudeMd: true\nmaxTurns: 40\nmemory: project\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics"
+      }
+    },
+    {
+      "path": ".claude/agents/ci-red-triage.md",
+      "start": 0,
+      "end": 8659,
+      "kind": "text",
+      "sha256": "dbe4caf32a60426ad99309fec89d83a82e9f555a07747b5a3d7a4ca4460cce5b",
+      "actual_whole_sha256": "dbe4caf32a60426ad99309fec89d83a82e9f555a07747b5a3d7a4ca4460cce5b",
+      "plan_hash_matches": true,
+      "part_sha256": "dbe4caf32a60426ad99309fec89d83a82e9f555a07747b5a3d7a4ca4460cce5b",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "e350b162b56ed86bfd557feea09a572d958c98f95cf6a3aed428abb6a4f96938",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 8659,
+          "sha256": "23456dc47769addb7f23dfbb934aa80e8cc1fc04fa253d3ee1ac8cfad81a567d",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "Current red Actions run URL/id/SHA; resolve current heads if omitted",
+        "outputs": "SHA/run/train/red, test/assertion/lane, base status, next action, located log evidence",
+        "limits": "Read-only remote triage; no local rerun; distinguish Pages nested jobs and draft/full tiers",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: ci-red-triage\ndescription: Read-only triage of a red GitHub Actions run (ci.yml, pages.yml, gpu-census.yml). Use when a CI or Pages run is red and the question is WHICH test, WHICH assertion, WHICH lane, and whether the base was already red \u2014 before anyone re-runs or \"fixes\" anything. Returns the AGENTS.md status line. Never re-runs tests locally.\nmodel: sonnet\nmaxTurns: 20\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, WebFetch, mcp__github__get_job_logs, mcp__github__actions_get, mcp__github__actions_list, mcp__github__get_check_run, mcp__github__pull_request_read"
+      }
+    },
+    {
+      "path": ".claude/agents/code-hunter.md",
+      "start": 0,
+      "end": 4963,
+      "kind": "text",
+      "sha256": "9159c9d7aff101d1e4ff9188366b02f2339a659d470869f9871496889644bcd3",
+      "actual_whole_sha256": "9159c9d7aff101d1e4ff9188366b02f2339a659d470869f9871496889644bcd3",
+      "plan_hash_matches": true,
+      "part_sha256": "9159c9d7aff101d1e4ff9188366b02f2339a659d470869f9871496889644bcd3",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4963,
+          "sha256": "9159c9d7aff101d1e4ff9188366b02f2339a659d470869f9871496889644bcd3",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "One slice, focus and scout known list",
+        "outputs": "\u226412 FINDING rows plus covered/not covered/measured",
+        "limits": "Read-only; binding-aware tracing; bounded node checks; no browser; known items excluded",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: code-hunter\ndescription: Use when hunting bugs, perf wins or dead code in ONE slice of the tree (a dir, subsystem or backend), one agent per slice in parallel. Traces callers; returns \u2264 12 FINDING rows with file:line, mechanism, fix, test, confidence. Read-only, no browser. Pairs with the code-survey workflow (.claude/workflows/code-survey.js) and finding-verifier.\nmodel: opus\nomitClaudeMd: true\nmaxTurns: 35\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics"
+      }
+    },
+    {
+      "path": ".claude/agents/deploy-research.md",
+      "start": 0,
+      "end": 9126,
+      "kind": "text",
+      "sha256": "aa8b2b02b5febd424f089bd489fe0e92bb874530a4c1c22eae85b472b190c362",
+      "actual_whole_sha256": "aa8b2b02b5febd424f089bd489fe0e92bb874530a4c1c22eae85b472b190c362",
+      "plan_hash_matches": true,
+      "part_sha256": "aa8b2b02b5febd424f089bd489fe0e92bb874530a4c1c22eae85b472b190c362",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "793ced27d11b054dc760af6dba4e14b88168604e4a36528ff72a3cca6cf58e23",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 9126,
+          "sha256": "17b131b40f9cad87c05d8216e4a6381f4d87d7ee231ad4295688af24b372ac09",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "Deploy liveness, changed markers, byte hashes or public research",
+        "outputs": "OK/STALE-IN-TRAIN/STALE/MISMATCH/UNKNOWN and cited evidence/unverified list",
+        "limits": "Read-only public bytes; SHA ancestry decides liveness; build number is evidence only; no local browser",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: deploy-research\ndescription: Public-web and post-deploy research \u2014 `curl` for the deployed artifact (it reaches github.io from this container and is the only way to read a `<meta>` tag), the host fetch/search tools for prose pages and search. Use proactively for live apex-sha / version.json / shipped JS markers, exact-byte asset hashes and headers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright, never the in-repo tinyfish wrapper.\nmodel: haiku\nomitClaudeMd: true\nmaxTurns: 60\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, WebFetch, WebSearch"
+      }
+    },
+    {
+      "path": ".claude/agents/finding-verifier.md",
+      "start": 0,
+      "end": 4297,
+      "kind": "text",
+      "sha256": "6c24dd2db17f355615894db3fb70398c8aab38f98c56bdf1e788cc376d95346a",
+      "actual_whole_sha256": "6c24dd2db17f355615894db3fb70398c8aab38f98c56bdf1e788cc376d95346a",
+      "plan_hash_matches": true,
+      "part_sha256": "6c24dd2db17f355615894db3fb70398c8aab38f98c56bdf1e788cc376d95346a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4297,
+          "sha256": "6c24dd2db17f355615894db3fb70398c8aab38f98c56bdf1e788cc376d95346a",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "Up to 15 file:line claims and optional original SHA",
+        "outputs": "CLAIM statuses CONFIRMED/STALE/REFUTED/NEEDS-BROWSER/UNREAD plus tally",
+        "limits": "Current-tree adversarial check; never fixes or adds findings; moved line alone is not stale",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: finding-verifier\ndescription: Use proactively before acting on any hunt, review or audit finding. Re-reads each cited \"file:line \u2014 claim\" (up to 15) on the current tree and returns CONFIRMED / STALE / REFUTED / NEEDS-BROWSER with evidence. Read-only; never fixes. Pairs with skill steward and the code-survey / total-audit workflows.\nmodel: sonnet\nomitClaudeMd: true\nmaxTurns: 45\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics"
+      }
+    },
+    {
+      "path": ".claude/agents/physics-contract-auditor.md",
+      "start": 0,
+      "end": 4981,
+      "kind": "text",
+      "sha256": "2b593342273efe4609e5a7d0054e95cbfae288b2ba82c486cbff7683da4d8623",
+      "actual_whole_sha256": "2b593342273efe4609e5a7d0054e95cbfae288b2ba82c486cbff7683da4d8623",
+      "plan_hash_matches": true,
+      "part_sha256": "2b593342273efe4609e5a7d0054e95cbfae288b2ba82c486cbff7683da4d8623",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4981,
+          "sha256": "2b593342273efe4609e5a7d0054e95cbfae288b2ba82c486cbff7683da4d8623",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "Physics/curvature scope; optional speed-comparison scope",
+        "outputs": "\u226430 SITE classifications, invariant/gate verdicts and coverage",
+        "limits": "Read-only; approved column table first; node gates only; rendered uncertainty remains unverified",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: physics-contract-auditor\ndescription: Read-only physics-contract sweep. Use when game.js, physics-consts, assists, AI, or a new Tracks.curvature() read may let the arc reach the driver; classify each site AI-only / assist-gated / broadcast-only / surface after the curvature-channels gate (vstd-lint only for a named speed-comparison scope). No Playwright, no code edits.\nmodel: sonnet\nmaxTurns: 40\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob"
+      }
+    },
+    {
+      "path": ".claude/agents/prior-art-scout.md",
+      "start": 0,
+      "end": 3991,
+      "kind": "text",
+      "sha256": "fbbbf3f6c267718e3f7f7095cb6bda2f394ae35dffbce1a62003fcb357e135b5",
+      "actual_whole_sha256": "fbbbf3f6c267718e3f7f7095cb6bda2f394ae35dffbce1a62003fcb357e135b5",
+      "plan_hash_matches": true,
+      "part_sha256": "fbbbf3f6c267718e3f7f7095cb6bda2f394ae35dffbce1a62003fcb357e135b5",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3991,
+          "sha256": "fbbbf3f6c267718e3f7f7095cb6bda2f394ae35dffbce1a62003fcb357e135b5",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "Slice/topic before hunt or audit",
+        "outputs": "\u226430 KNOWN rows, source statuses, sources read/not read",
+        "limits": "Read-only local history/text; does not decide current truth; shallow-history gaps explicit",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: prior-art-scout\ndescription: Use proactively as step 0 of a hunt or audit. Greps DEFECT-LEDGER, docs/BUGS.md, docs/notes hunt/survey notes and git log for what is already known about a slice or topic; returns at most 30 KNOWN rows as the do-not-re-report list. Read-only. Pairs with code-hunter and slim-bloat.\nmodel: haiku\nomitClaudeMd: true\nmaxTurns: 12\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob"
+      }
+    },
+    {
+      "path": ".claude/agents/track-surveyor.md",
+      "start": 0,
+      "end": 6827,
+      "kind": "text",
+      "sha256": "0c642be1eda65a94cbc6dd8f6e2595e12856c2932e23bc97343c4c4d6f7a55c7",
+      "actual_whole_sha256": "0c642be1eda65a94cbc6dd8f6e2595e12856c2932e23bc97343c4c4d6f7a55c7",
+      "plan_hash_matches": true,
+      "part_sha256": "0c642be1eda65a94cbc6dd8f6e2595e12856c2932e23bc97343c4c4d6f7a55c7",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6827,
+          "sha256": "0c642be1eda65a94cbc6dd8f6e2595e12856c2932e23bc97343c4c4d6f7a55c7",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "One circuit id, source pair, numerical baseline and parent captures",
+        "outputs": "Branch/worktree, source/year, before/after measurements, deltas and required parent captures",
+        "limits": "Worktree; edits assigned def/scenery pair only; node CLIs; commit without push; parent browser signoff",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: track-surveyor\ndescription: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.\nmodel: inherit\nmaxTurns: 50\ntools: Bash, Read, Grep, Glob, Edit\nisolation: worktree\nis_background: true\nbackground: true"
+      }
+    },
+    {
+      "path": ".claude/agents/verify-agent.md",
+      "start": 0,
+      "end": 6112,
+      "kind": "text",
+      "sha256": "61375672a1b197bfd89de8e96ff3e9a00f192e4173831a6e76bdd2b6ba6d858d",
+      "actual_whole_sha256": "61375672a1b197bfd89de8e96ff3e9a00f192e4173831a6e76bdd2b6ba6d858d",
+      "plan_hash_matches": true,
+      "part_sha256": "61375672a1b197bfd89de8e96ff3e9a00f192e4173831a6e76bdd2b6ba6d858d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6112,
+          "sha256": "61375672a1b197bfd89de8e96ff3e9a00f192e4173831a6e76bdd2b6ba6d858d",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "Changed-tree plan, optional --base ref and frozen paths",
+        "outputs": "Verbatim fast JSON, failed-phase logs, notRun batches, optional DELTA",
+        "limits": "Read-only except artifacts/owned baseline worktree; no browser/--wait; no-op is not verification",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: verify-agent\ndescription: Read-only verification subagent. Runs tools/ci/verify-change.mjs --fast against the current tree and reports the JSON verdict; with --base <ref> it also runs the same gate on an ephemeral worktree at that ref and answers \"was this already red?\". Use to verify a change without giving a subagent write access or a browser run of its own.\nmodel: haiku\nmaxTurns: 16\nmemory: project\nreadonly: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob"
+      }
+    },
+    {
+      "path": ".claude/agents/worker.md",
+      "start": 0,
+      "end": 9823,
+      "kind": "text",
+      "sha256": "c660704687ef5ae0c1a2fbd0f800ed2fca6d1703d8e19094a408524f0503cd32",
+      "actual_whole_sha256": "c660704687ef5ae0c1a2fbd0f800ed2fca6d1703d8e19094a408524f0503cd32",
+      "plan_hash_matches": true,
+      "part_sha256": "c660704687ef5ae0c1a2fbd0f800ed2fca6d1703d8e19094a408524f0503cd32",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "96e324ff10ef5614b7952a3795e5aca700626fdd804022d2eae88f07687c6121",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 9823,
+          "sha256": "7731acdd7c47c8af87c7c812583809593ff97165a6fccb93065675c0a48c0502",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "agent",
+        "trigger_inputs": "Goal, OWNED/FORBIDDEN paths, verify command, peers, push ownership",
+        "outputs": "WORKER status, branch/SHA/worktree, changed/verified/not run/next",
+        "limits": "Worktree implementation; explicit tools; node verification; parent owns merge/readiness/local browser",
+        "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+        "frontmatter": "name: worker\ndescription: Implementation subagent for ONE scoped change the parent hands off \u2014 edit, node-verify, commit on its own worktree branch \u2014 coordinating by SendMessage while it works; several run in parallel on disjoint paths. Not a read-only check (verify-agent), not one circuit (track-surveyor), never a browser run.\nmodel: inherit\ntools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, SendMessage, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__apex-lsp, mcp__js-debugger, mcp__Context7, mcp__Claude_Docs, mcp__TinyFish, mcp__browserstack, mcp__playwright-official, mcp__chrome-devtools\nmaxTurns: 120\nisolation: worktree"
+      }
+    },
+    {
+      "path": ".claude/hooks/bash-guard.sh",
+      "start": 0,
+      "end": 47561,
+      "kind": "text",
+      "sha256": "e5cbc324d0f3f2c2a6f5e24b93fd6bc846fe7b5082776bc12d50c2e352c000b7",
+      "actual_whole_sha256": "e5cbc324d0f3f2c2a6f5e24b93fd6bc846fe7b5082776bc12d50c2e352c000b7",
+      "plan_hash_matches": true,
+      "part_sha256": "e5cbc324d0f3f2c2a6f5e24b93fd6bc846fe7b5082776bc12d50c2e352c000b7",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "2eb927b97b69ac747b3fbac85f4ac4b41c70d7fa9426b660d3504637e582e2bb",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        },
+        {
+          "start": 8500,
+          "end": 17000,
+          "sha256": "bc7952fceaa4fcc007f46b39ecc8ff0c5b4243825fdb7d24a9c38764840b081c",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        },
+        {
+          "start": 17000,
+          "end": 25500,
+          "sha256": "b255dcc04758bc48f4ace7a9e8c9c93cae1117fd49632a02d50a1527a41319f0",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        },
+        {
+          "start": 25500,
+          "end": 34000,
+          "sha256": "783cd003f418d1ce5208ee99c2a44807a09b4bdc76e4085d78122140b02e5c0b",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        },
+        {
+          "start": 34000,
+          "end": 42500,
+          "sha256": "17af2a7f5729e8f44c3d114ec34fe4d38804b6f72555103b00c4908338eafa60",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        },
+        {
+          "start": 42500,
+          "end": 47561,
+          "sha256": "0c091f422f0478d6c42d2699140ea08ace0d8667458aceaceef4f2c1df701ce1",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "hook/helper",
+        "registration": "PreToolUse Bash (360s, onFailure block)",
+        "inputs": "Hook stdin command/agent metadata, cwd/index/worktree, environment overrides",
+        "outputs": "Exit 2 refusals; JSON permission decisions/additionalContext; commit logs, ratchet staging and guard cache",
+        "dependencies": "shellparse.py; merge_policy.py; memory-sync.sh; foreign_push.py (via parser); ratchets.mjs; guards-verdict.mjs; tests/groups.json",
+        "limits": "Parsed shell safety, pushes/API/merge/cancel, subagent browser ban and commit gate; malformed parse uses conservative fallback; some remote checks warn/fail open"
+      }
+    },
+    {
+      "path": ".claude/hooks/context-cap.py",
+      "start": 0,
+      "end": 7159,
+      "kind": "text",
+      "sha256": "af6d8663acc693772f1bdb256f929892bdef7f198d983dee2a2c3eb0b8c81a7e",
+      "actual_whole_sha256": "af6d8663acc693772f1bdb256f929892bdef7f198d983dee2a2c3eb0b8c81a7e",
+      "plan_hash_matches": true,
+      "part_sha256": "af6d8663acc693772f1bdb256f929892bdef7f198d983dee2a2c3eb0b8c81a7e",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7159,
+          "sha256": "af6d8663acc693772f1bdb256f929892bdef7f198d983dee2a2c3eb0b8c81a7e",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "hook/helper",
+        "registration": "UserPromptSubmit; all PostToolUse; PreToolUse Agent/create_session (5s)",
+        "inputs": "Transcript newest main assistant usage; first user brief STOP AT; env cap/hatch",
+        "outputs": "Once-per-level advisory under artifacts/ctx-cap; hard-cap spawn deny JSON",
+        "dependencies": "Transcript JSONL; artifacts/ctx-cap; .claude/allow-context-cap",
+        "limits": "Soft brief/env cap, default hard=soft+50k; successor create_session allowed; internal exceptions fail open"
+      }
+    },
+    {
+      "path": ".claude/hooks/foreign_push.py",
+      "start": 0,
+      "end": 7559,
+      "kind": "text",
+      "sha256": "196ec8c2896b3194c98c0ba25d9d6d98968bdb043c01191faffd8552b9c2d651",
+      "actual_whole_sha256": "196ec8c2896b3194c98c0ba25d9d6d98968bdb043c01191faffd8552b9c2d651",
+      "plan_hash_matches": true,
+      "part_sha256": "196ec8c2896b3194c98c0ba25d9d6d98968bdb043c01191faffd8552b9c2d651",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7559,
+          "sha256": "196ec8c2896b3194c98c0ba25d9d6d98968bdb043c01191faffd8552b9c2d651",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "hook/helper",
+        "registration": "Helper imported by shellparse push guard; optional CLI",
+        "inputs": "Repo, remote, branch; tracking reflog; live remote tip; author/session identity",
+        "outputs": "Refusal stderr/exit2 or allow; temporary private fetch ref cleaned",
+        "dependencies": "git reflog/ls-remote/fetch/log; CLAUDE_CODE_REMOTE_SESSION_ID",
+        "limits": "Baseline last update-by-push, first-parent foreign commits; first push and queue-state branch exemption; remote errors warn/allow"
+      }
+    },
+    {
+      "path": ".claude/hooks/github-mcp-guard.sh",
+      "start": 0,
+      "end": 7302,
+      "kind": "text",
+      "sha256": "180095f4c31d7918f390e3b4d126684d971b79d957a89c76842a854d5d4ce75f",
+      "actual_whole_sha256": "180095f4c31d7918f390e3b4d126684d971b79d957a89c76842a854d5d4ce75f",
+      "plan_hash_matches": true,
+      "part_sha256": "180095f4c31d7918f390e3b4d126684d971b79d957a89c76842a854d5d4ce75f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7302,
+          "sha256": "180095f4c31d7918f390e3b4d126684d971b79d957a89c76842a854d5d4ce75f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "hook/helper",
+        "registration": "PreToolUse matching GitHub merge/update/action/file tools (10s, onFailure block)",
+        "inputs": "Hook JSON or Cursor bare tool/string tool_input; receipt/environment",
+        "outputs": "PreToolUse ask/deny JSON; unrelated operations silent",
+        "dependencies": "merge_policy.py; ready/merge gate receipts",
+        "limits": "Denies squash/rebase and direct file writes; ready needs receipt; cancellation denied absent override; dispatch/log deletion/rerun policy"
+      }
+    },
+    {
+      "path": ".claude/hooks/launch-gate.py",
+      "start": 0,
+      "end": 4274,
+      "kind": "text",
+      "sha256": "316236039d2008ee509f2eee9b248ca2c32ec42bd9b718ab0e29711d8bc814c2",
+      "actual_whole_sha256": "316236039d2008ee509f2eee9b248ca2c32ec42bd9b718ab0e29711d8bc814c2",
+      "plan_hash_matches": true,
+      "part_sha256": "316236039d2008ee509f2eee9b248ca2c32ec42bd9b718ab0e29711d8bc814c2",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4274,
+          "sha256": "316236039d2008ee509f2eee9b248ca2c32ec42bd9b718ab0e29711d8bc814c2",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "hook/helper",
+        "registration": "PreToolUse create_session (5s)",
+        "inputs": "Tool payload outcome_branch; artifacts/launch-gate/receipt.json",
+        "outputs": "Deny JSON on absent/bad/stale receipt or deploy outcome branch",
+        "dependencies": "tools/ci/launch-gate.mjs; launch-page.py saved page",
+        "limits": "Receipt kind launch, page SHA256, ok, timestamp max120s and future tolerance60s; own errors fail open"
+      }
+    },
+    {
+      "path": ".claude/hooks/launch-page.py",
+      "start": 0,
+      "end": 2315,
+      "kind": "text",
+      "sha256": "7dadcdfdae408f447cc57c6bf908c11595f57f8d86db7696fdf79df3eec40fe7",
+      "actual_whole_sha256": "7dadcdfdae408f447cc57c6bf908c11595f57f8d86db7696fdf79df3eec40fe7",
+      "plan_hash_matches": true,
+      "part_sha256": "7dadcdfdae408f447cc57c6bf908c11595f57f8d86db7696fdf79df3eec40fe7",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2315,
+          "sha256": "7dadcdfdae408f447cc57c6bf908c11595f57f8d86db7696fdf79df3eec40fe7",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "hook/helper",
+        "registration": "PostToolUse get_session (10s)",
+        "inputs": "Tool response JSON/string, requesting/calling session ids",
+        "outputs": "Atomic artifacts/launch/self.json with writer/time/content hash/response",
+        "dependencies": "tools/ci/launch-gate.mjs consumes saved page",
+        "limits": "No stdout; errors stderr/fail open; implementation records requested_session but does not enforce header self-only claim"
+      }
+    },
+    {
+      "path": ".claude/hooks/live-run.py",
+      "start": 0,
+      "end": 2159,
+      "kind": "text",
+      "sha256": "158e5eb7289331cbf9e49c848f00b7ac59526800ad2fd764376c35dac5e56b5f",
+      "actual_whole_sha256": "158e5eb7289331cbf9e49c848f00b7ac59526800ad2fd764376c35dac5e56b5f",
+      "plan_hash_matches": true,
+      "part_sha256": "158e5eb7289331cbf9e49c848f00b7ac59526800ad2fd764376c35dac5e56b5f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2159,
+          "sha256": "158e5eb7289331cbf9e49c848f00b7ac59526800ad2fd764376c35dac5e56b5f",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "hook/helper",
+        "registration": "CLI helper consumed by session-start.sh and stop-guard.sh",
+        "inputs": "Checkout root; /proc cmdline/cwd/stat; test-bg registry",
+        "outputs": "First live pid:starttime plus log or dash; empty when absent",
+        "dependencies": "/proc; artifacts/logs/test-bg.json",
+        "limits": "Excludes shell wrappers and --list; scoped to checkout; registry log selected separately from matched process"
+      }
+    },
+    {
+      "path": ".claude/hooks/lsp-hint.py",
+      "start": 0,
+      "end": 3330,
+      "kind": "text",
+      "sha256": "31a987751267ef201996dfc01a875b495aaf154ac6250ab14639c340ef028e30",
+      "actual_whole_sha256": "31a987751267ef201996dfc01a875b495aaf154ac6250ab14639c340ef028e30",
+      "plan_hash_matches": true,
+      "part_sha256": "e7e47812131564cae25e46f3604056211e88c7ab8915eac7784fa359c929957a",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3330,
+          "sha256": "e7e47812131564cae25e46f3604056211e88c7ab8915eac7784fa359c929957a",
+          "method": "exec_command Python Path.read_bytes slice decoded; individual returned tool result",
+          "untruncated": true
+        }
+      ],
+      "semantic": {
+        "kind": "hook/helper",
+        "registration": "PostToolUse Grep/Bash (5s)",
+        "inputs": "Search symbol/pattern/path and environment; assigned prefix only",
+        "outputs": "Documented additionalContext LSP suggestion (later implementation outside this batch)",
+        "dependencies": "apex-lsp tool naming; APEX_LSP_HINT",
+        "limits": "Assigned bytes define symbol regex, non-JS exclusions, builtins, option sets and outside_js; remainder belongs next batch"
+      }
+    }
+  ],
+  "semantic_table": [
+    {
+      "path": ".claude/agent-memory/bloat-auditor/MEMORY.md",
+      "kind": "project agent memory",
+      "contract": "Rejected carve rows with reviewed SHA; parent writes and auditor validates unchanged source"
+    },
+    {
+      "path": ".claude/agent-memory/verify-agent/MEMORY.md",
+      "kind": "project agent memory",
+      "contract": "Known-red spec/SHA/reason rows; reverify entries older than merge-base"
+    },
+    {
+      "path": ".claude/agents/README.md",
+      "kind": "agent index",
+      "contract": "Agent routing/frontmatter host compatibility and model tiers"
+    },
+    {
+      "path": ".claude/agents/agent-surface-reviewer.md",
+      "kind": "agent",
+      "trigger_inputs": "Edited skill/agent/hook/rule section; unit, task hint, scratch report path, optional retest",
+      "outputs": "\u226460-line report and VERDICT/GAP1/GAP2 hand-back",
+      "limits": "Only scratch Markdown report; no browser, tests or web; retest independently before old report",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: agent-surface-reviewer\ndescription: Use proactively after editing a skill, agent, hook or AGENTS.md section. Reviews ONE agent-surface unit (trigger, paths, commands, walkthrough, structure, enforcement), writes a \u2264 60-line report to scratch/, returns VERDICT + top 2 gaps. \"retest <old report>\" = before/after. Read-only on the repo.\nmodel: sonnet\nmaxTurns: 30\nis_background: true\nbackground: true\ntools: Bash, Read, Grep, Glob, Write"
+    },
+    {
+      "path": ".claude/agents/bloat-auditor.md",
+      "kind": "agent",
+      "trigger_inputs": "One assigned scope and rejected-finding memory",
+      "outputs": "\u22648 BLOAT rows plus COVERED; estimated removal cost and do-not rule",
+      "limits": "Read-only; parent carves; no browser/web; rejection valid only at reviewed SHA",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: bloat-auditor\ndescription: Read-only agent-bloat / simplify auditor. Use when a file, skill, or subtree may be split, extracted, or stripped of dead/duplicate code or stale comments. Returns BLOAT rows; no edits, no Playwright. Parent applies one carve.\nmodel: sonnet\nomitClaudeMd: true\nmaxTurns: 40\nmemory: project\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics"
+    },
+    {
+      "path": ".claude/agents/ci-red-triage.md",
+      "kind": "agent",
+      "trigger_inputs": "Current red Actions run URL/id/SHA; resolve current heads if omitted",
+      "outputs": "SHA/run/train/red, test/assertion/lane, base status, next action, located log evidence",
+      "limits": "Read-only remote triage; no local rerun; distinguish Pages nested jobs and draft/full tiers",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: ci-red-triage\ndescription: Read-only triage of a red GitHub Actions run (ci.yml, pages.yml, gpu-census.yml). Use when a CI or Pages run is red and the question is WHICH test, WHICH assertion, WHICH lane, and whether the base was already red \u2014 before anyone re-runs or \"fixes\" anything. Returns the AGENTS.md status line. Never re-runs tests locally.\nmodel: sonnet\nmaxTurns: 20\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, WebFetch, mcp__github__get_job_logs, mcp__github__actions_get, mcp__github__actions_list, mcp__github__get_check_run, mcp__github__pull_request_read"
+    },
+    {
+      "path": ".claude/agents/code-hunter.md",
+      "kind": "agent",
+      "trigger_inputs": "One slice, focus and scout known list",
+      "outputs": "\u226412 FINDING rows plus covered/not covered/measured",
+      "limits": "Read-only; binding-aware tracing; bounded node checks; no browser; known items excluded",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: code-hunter\ndescription: Use when hunting bugs, perf wins or dead code in ONE slice of the tree (a dir, subsystem or backend), one agent per slice in parallel. Traces callers; returns \u2264 12 FINDING rows with file:line, mechanism, fix, test, confidence. Read-only, no browser. Pairs with the code-survey workflow (.claude/workflows/code-survey.js) and finding-verifier.\nmodel: opus\nomitClaudeMd: true\nmaxTurns: 35\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics"
+    },
+    {
+      "path": ".claude/agents/deploy-research.md",
+      "kind": "agent",
+      "trigger_inputs": "Deploy liveness, changed markers, byte hashes or public research",
+      "outputs": "OK/STALE-IN-TRAIN/STALE/MISMATCH/UNKNOWN and cited evidence/unverified list",
+      "limits": "Read-only public bytes; SHA ancestry decides liveness; build number is evidence only; no local browser",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: deploy-research\ndescription: Public-web and post-deploy research \u2014 `curl` for the deployed artifact (it reaches github.io from this container and is the only way to read a `<meta>` tag), the host fetch/search tools for prose pages and search. Use proactively for live apex-sha / version.json / shipped JS markers, exact-byte asset hashes and headers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright, never the in-repo tinyfish wrapper.\nmodel: haiku\nomitClaudeMd: true\nmaxTurns: 60\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, WebFetch, WebSearch"
+    },
+    {
+      "path": ".claude/agents/finding-verifier.md",
+      "kind": "agent",
+      "trigger_inputs": "Up to 15 file:line claims and optional original SHA",
+      "outputs": "CLAIM statuses CONFIRMED/STALE/REFUTED/NEEDS-BROWSER/UNREAD plus tally",
+      "limits": "Current-tree adversarial check; never fixes or adds findings; moved line alone is not stale",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: finding-verifier\ndescription: Use proactively before acting on any hunt, review or audit finding. Re-reads each cited \"file:line \u2014 claim\" (up to 15) on the current tree and returns CONFIRMED / STALE / REFUTED / NEEDS-BROWSER with evidence. Read-only; never fixes. Pairs with skill steward and the code-survey / total-audit workflows.\nmodel: sonnet\nomitClaudeMd: true\nmaxTurns: 45\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob, mcp__apex-lsp__lsp_definition, mcp__apex-lsp__lsp_references, mcp__apex-lsp__lsp_callers, mcp__apex-lsp__lsp_outline, mcp__apex-lsp__lsp_diagnostics"
+    },
+    {
+      "path": ".claude/agents/physics-contract-auditor.md",
+      "kind": "agent",
+      "trigger_inputs": "Physics/curvature scope; optional speed-comparison scope",
+      "outputs": "\u226430 SITE classifications, invariant/gate verdicts and coverage",
+      "limits": "Read-only; approved column table first; node gates only; rendered uncertainty remains unverified",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: physics-contract-auditor\ndescription: Read-only physics-contract sweep. Use when game.js, physics-consts, assists, AI, or a new Tracks.curvature() read may let the arc reach the driver; classify each site AI-only / assist-gated / broadcast-only / surface after the curvature-channels gate (vstd-lint only for a named speed-comparison scope). No Playwright, no code edits.\nmodel: sonnet\nmaxTurns: 40\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob"
+    },
+    {
+      "path": ".claude/agents/prior-art-scout.md",
+      "kind": "agent",
+      "trigger_inputs": "Slice/topic before hunt or audit",
+      "outputs": "\u226430 KNOWN rows, source statuses, sources read/not read",
+      "limits": "Read-only local history/text; does not decide current truth; shallow-history gaps explicit",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: prior-art-scout\ndescription: Use proactively as step 0 of a hunt or audit. Greps DEFECT-LEDGER, docs/BUGS.md, docs/notes hunt/survey notes and git log for what is already known about a slice or topic; returns at most 30 KNOWN rows as the do-not-re-report list. Read-only. Pairs with code-hunter and slim-bloat.\nmodel: haiku\nomitClaudeMd: true\nmaxTurns: 12\nreadonly: true\nis_background: true\nbackground: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob"
+    },
+    {
+      "path": ".claude/agents/track-surveyor.md",
+      "kind": "agent",
+      "trigger_inputs": "One circuit id, source pair, numerical baseline and parent captures",
+      "outputs": "Branch/worktree, source/year, before/after measurements, deltas and required parent captures",
+      "limits": "Worktree; edits assigned def/scenery pair only; node CLIs; commit without push; parent browser signoff",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: track-surveyor\ndescription: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.\nmodel: inherit\nmaxTurns: 50\ntools: Bash, Read, Grep, Glob, Edit\nisolation: worktree\nis_background: true\nbackground: true"
+    },
+    {
+      "path": ".claude/agents/verify-agent.md",
+      "kind": "agent",
+      "trigger_inputs": "Changed-tree plan, optional --base ref and frozen paths",
+      "outputs": "Verbatim fast JSON, failed-phase logs, notRun batches, optional DELTA",
+      "limits": "Read-only except artifacts/owned baseline worktree; no browser/--wait; no-op is not verification",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: verify-agent\ndescription: Read-only verification subagent. Runs tools/ci/verify-change.mjs --fast against the current tree and reports the JSON verdict; with --base <ref> it also runs the same gate on an ephemeral worktree at that ref and answers \"was this already red?\". Use to verify a change without giving a subagent write access or a browser run of its own.\nmodel: haiku\nmaxTurns: 16\nmemory: project\nreadonly: true\ndisallowedTools: Write, Edit, NotebookEdit\ntools: Bash, Read, Grep, Glob"
+    },
+    {
+      "path": ".claude/agents/worker.md",
+      "kind": "agent",
+      "trigger_inputs": "Goal, OWNED/FORBIDDEN paths, verify command, peers, push ownership",
+      "outputs": "WORKER status, branch/SHA/worktree, changed/verified/not run/next",
+      "limits": "Worktree implementation; explicit tools; node verification; parent owns merge/readiness/local browser",
+      "registration": "YAML frontmatter in .claude/agents, discovered by Claude Code/Cursor; README routing",
+      "frontmatter": "name: worker\ndescription: Implementation subagent for ONE scoped change the parent hands off \u2014 edit, node-verify, commit on its own worktree branch \u2014 coordinating by SendMessage while it works; several run in parallel on disjoint paths. Not a read-only check (verify-agent), not one circuit (track-surveyor), never a browser run.\nmodel: inherit\ntools: Read, Edit, Write, NotebookEdit, Glob, Grep, LSP, Bash, Monitor, TaskStop, TaskCreate, TaskUpdate, TaskList, TaskGet, TodoWrite, WebFetch, WebSearch, Skill, ToolSearch, SendMessage, SendUserFile, EnterWorktree, ExitWorktree, Artifact, ArtifactComments, ArtifactData, mcp__github, mcp__claude-code-remote, mcp__apex-tools, mcp__apex-lsp, mcp__js-debugger, mcp__Context7, mcp__Claude_Docs, mcp__TinyFish, mcp__browserstack, mcp__playwright-official, mcp__chrome-devtools\nmaxTurns: 120\nisolation: worktree"
+    },
+    {
+      "path": ".claude/hooks/bash-guard.sh",
+      "kind": "hook/helper",
+      "registration": "PreToolUse Bash (360s, onFailure block)",
+      "inputs": "Hook stdin command/agent metadata, cwd/index/worktree, environment overrides",
+      "outputs": "Exit 2 refusals; JSON permission decisions/additionalContext; commit logs, ratchet staging and guard cache",
+      "dependencies": "shellparse.py; merge_policy.py; memory-sync.sh; foreign_push.py (via parser); ratchets.mjs; guards-verdict.mjs; tests/groups.json",
+      "limits": "Parsed shell safety, pushes/API/merge/cancel, subagent browser ban and commit gate; malformed parse uses conservative fallback; some remote checks warn/fail open"
+    },
+    {
+      "path": ".claude/hooks/context-cap.py",
+      "kind": "hook/helper",
+      "registration": "UserPromptSubmit; all PostToolUse; PreToolUse Agent/create_session (5s)",
+      "inputs": "Transcript newest main assistant usage; first user brief STOP AT; env cap/hatch",
+      "outputs": "Once-per-level advisory under artifacts/ctx-cap; hard-cap spawn deny JSON",
+      "dependencies": "Transcript JSONL; artifacts/ctx-cap; .claude/allow-context-cap",
+      "limits": "Soft brief/env cap, default hard=soft+50k; successor create_session allowed; internal exceptions fail open"
+    },
+    {
+      "path": ".claude/hooks/foreign_push.py",
+      "kind": "hook/helper",
+      "registration": "Helper imported by shellparse push guard; optional CLI",
+      "inputs": "Repo, remote, branch; tracking reflog; live remote tip; author/session identity",
+      "outputs": "Refusal stderr/exit2 or allow; temporary private fetch ref cleaned",
+      "dependencies": "git reflog/ls-remote/fetch/log; CLAUDE_CODE_REMOTE_SESSION_ID",
+      "limits": "Baseline last update-by-push, first-parent foreign commits; first push and queue-state branch exemption; remote errors warn/allow"
+    },
+    {
+      "path": ".claude/hooks/github-mcp-guard.sh",
+      "kind": "hook/helper",
+      "registration": "PreToolUse matching GitHub merge/update/action/file tools (10s, onFailure block)",
+      "inputs": "Hook JSON or Cursor bare tool/string tool_input; receipt/environment",
+      "outputs": "PreToolUse ask/deny JSON; unrelated operations silent",
+      "dependencies": "merge_policy.py; ready/merge gate receipts",
+      "limits": "Denies squash/rebase and direct file writes; ready needs receipt; cancellation denied absent override; dispatch/log deletion/rerun policy"
+    },
+    {
+      "path": ".claude/hooks/launch-gate.py",
+      "kind": "hook/helper",
+      "registration": "PreToolUse create_session (5s)",
+      "inputs": "Tool payload outcome_branch; artifacts/launch-gate/receipt.json",
+      "outputs": "Deny JSON on absent/bad/stale receipt or deploy outcome branch",
+      "dependencies": "tools/ci/launch-gate.mjs; launch-page.py saved page",
+      "limits": "Receipt kind launch, page SHA256, ok, timestamp max120s and future tolerance60s; own errors fail open"
+    },
+    {
+      "path": ".claude/hooks/launch-page.py",
+      "kind": "hook/helper",
+      "registration": "PostToolUse get_session (10s)",
+      "inputs": "Tool response JSON/string, requesting/calling session ids",
+      "outputs": "Atomic artifacts/launch/self.json with writer/time/content hash/response",
+      "dependencies": "tools/ci/launch-gate.mjs consumes saved page",
+      "limits": "No stdout; errors stderr/fail open; implementation records requested_session but does not enforce header self-only claim"
+    },
+    {
+      "path": ".claude/hooks/live-run.py",
+      "kind": "hook/helper",
+      "registration": "CLI helper consumed by session-start.sh and stop-guard.sh",
+      "inputs": "Checkout root; /proc cmdline/cwd/stat; test-bg registry",
+      "outputs": "First live pid:starttime plus log or dash; empty when absent",
+      "dependencies": "/proc; artifacts/logs/test-bg.json",
+      "limits": "Excludes shell wrappers and --list; scoped to checkout; registry log selected separately from matched process"
+    },
+    {
+      "path": ".claude/hooks/lsp-hint.py",
+      "kind": "hook/helper",
+      "registration": "PostToolUse Grep/Bash (5s)",
+      "inputs": "Search symbol/pattern/path and environment; assigned prefix only",
+      "outputs": "Documented additionalContext LSP suggestion (later implementation outside this batch)",
+      "dependencies": "apex-lsp tool naming; APEX_LSP_HINT",
+      "limits": "Assigned bytes define symbol regex, non-JS exclusions, builtins, option sets and outside_js; remainder belongs next batch"
+    }
+  ],
+  "dependency_edges": [
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/agent-surface-reviewer.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/bloat-auditor.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/ci-red-triage.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/code-hunter.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/deploy-research.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/finding-verifier.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/physics-contract-auditor.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/prior-art-scout.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/track-surveyor.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/verify-agent.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/agents/README.md",
+      "to": ".claude/agents/worker.md",
+      "relation": "routes/discovers"
+    },
+    {
+      "from": ".claude/hooks/bash-guard.sh",
+      "to": "shellparse.py",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/bash-guard.sh",
+      "to": "merge_policy.py",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/bash-guard.sh",
+      "to": "memory-sync.sh",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/bash-guard.sh",
+      "to": "foreign_push.py (via parser)",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/bash-guard.sh",
+      "to": "ratchets.mjs",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/bash-guard.sh",
+      "to": "guards-verdict.mjs",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/bash-guard.sh",
+      "to": "tests/groups.json",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/context-cap.py",
+      "to": "Transcript JSONL",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/context-cap.py",
+      "to": "artifacts/ctx-cap",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/context-cap.py",
+      "to": ".claude/allow-context-cap",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/foreign_push.py",
+      "to": "git reflog/ls-remote/fetch/log",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/foreign_push.py",
+      "to": "CLAUDE_CODE_REMOTE_SESSION_ID",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/github-mcp-guard.sh",
+      "to": "merge_policy.py",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/github-mcp-guard.sh",
+      "to": "ready/merge gate receipts",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/launch-gate.py",
+      "to": "tools/ci/launch-gate.mjs",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/launch-gate.py",
+      "to": "launch-page.py saved page",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/launch-page.py",
+      "to": "tools/ci/launch-gate.mjs consumes saved page",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/live-run.py",
+      "to": "/proc",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/live-run.py",
+      "to": "artifacts/logs/test-bg.json",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/lsp-hint.py",
+      "to": "apex-lsp tool naming",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    },
+    {
+      "from": ".claude/hooks/lsp-hint.py",
+      "to": "APEX_LSP_HINT",
+      "relation": "reads/calls/consumes (source contract; not executed)"
+    }
+  ],
+  "context_reads": {
+    "AGENTS.md": "whole, bounded slices 0:8500,8500:16000,16000:end",
+    "nested_AGENTS": "none under .claude or docs",
+    "rule": ".claude/rules/claude-config.md read whole",
+    "registration": ".claude/settings.json parsed targeted hook objects",
+    "consumer_search": "bounded rg lines in shellparse.py/protect-files.py/session-start.sh/stop-guard.sh"
+  },
+  "method_limits": [
+    "No tests/browser/network/runtime commands/source changes/staging/commit.",
+    "No JS runtime symbols resolved; assigned runtime implementations are shell/Python; runtime JS names are cited contracts, not audited implementations.",
+    "Initial combined orientation read truncated; all assigned source reads subsequently individually returned <=8500 bytes without truncation."
+  ],
+  "historical_or_missing_paths": [
+    {
+      "path": ".claude/agents/orchestrator.md",
+      "status": "retired reference in launch-gate comment; not checked as current surface"
+    },
+    {
+      "path": "docs/DEFECT-LEDGER.md",
+      "status": "explicitly nonexistent historical wrong path in code-hunter"
+    },
+    {
+      "path": "js/game/",
+      "status": "explicitly retired directory in physics auditor"
+    }
+  ],
+  "context_evidence": [
+    {
+      "path": "AGENTS.md",
+      "whole_sha256": "b40fcb879153ce1c19bd2fe13aeaa771a21faa31b04d679828b01684b8295422",
+      "read_method": "individual Python byte slices",
+      "byte_ranges": [
+        {
+          "start": 0,
+          "end": 8500,
+          "sha256": "6ce91cbca70da6d71d01dedc5eb256b315c978d16d57a6082fb9fa31cfac81a8"
+        },
+        {
+          "start": 8500,
+          "end": 16000,
+          "sha256": "abc475da9606cb9c6a6924ccefb6b483e138a100ffb6c455efcff9059f1e03aa"
+        },
+        {
+          "start": 16000,
+          "end": 22722,
+          "sha256": "26ed4863c65378e3789e47b1ee9471e83bc22d8948d32de006dc032147d798fc"
+        }
+      ],
+      "coverage": "whole"
+    },
+    {
+      "path": ".claude/rules/claude-config.md",
+      "whole_sha256": "0f3558d7447ba4093e6f8e07eacba742e2db241597cdf288b836ce999ead0714",
+      "read_method": "cat whole",
+      "byte_ranges": [
+        {
+          "start": 0,
+          "end": 2928,
+          "sha256": "0f3558d7447ba4093e6f8e07eacba742e2db241597cdf288b836ce999ead0714"
+        }
+      ],
+      "coverage": "whole"
+    },
+    {
+      "path": ".claude/settings.json",
+      "whole_sha256": "aba4dfe8d0e4857402da3806e51fcb74ef0a91c4dcc5a780a19b8f82cc6c238a",
+      "read_method": "Python JSON parse; targeted hook registration objects only",
+      "byte_ranges": [],
+      "coverage": "targeted semantic objects/lines, not full-file read"
+    },
+    {
+      "path": ".claude/hooks/shellparse.py",
+      "whole_sha256": "0e6d0b08fc6bb53ddd476158b32f515dc5d88d46f5947d519ff43a29b5167ea3",
+      "read_method": "rg selected dependency lines",
+      "byte_ranges": [],
+      "coverage": "targeted semantic objects/lines, not full-file read"
+    },
+    {
+      "path": ".claude/hooks/protect-files.py",
+      "whole_sha256": "2a9640cbbe0c2334e9929fad106fd1d3f2fe2beb70d765c106088a0ce67895ed",
+      "read_method": "rg selected reporter scope lines",
+      "byte_ranges": [],
+      "coverage": "targeted semantic objects/lines, not full-file read"
+    },
+    {
+      "path": ".claude/hooks/session-start.sh",
+      "whole_sha256": "8733e01849afb20273dc73111923f6b336fe420295804f35d8bff0187f57ed1c",
+      "read_method": "rg live-run consumer line",
+      "byte_ranges": [],
+      "coverage": "targeted semantic objects/lines, not full-file read"
+    },
+    {
+      "path": ".claude/hooks/stop-guard.sh",
+      "whole_sha256": "40f162f2412583cdbfe6a20aa819c4f7edcab73dc2966077842f9f672a0ab08d",
+      "read_method": "rg live-run consumer line",
+      "byte_ranges": [],
+      "coverage": "targeted semantic objects/lines, not full-file read"
+    }
+  ]
+}

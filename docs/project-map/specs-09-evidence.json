@@ -1,0 +1,8706 @@
+{
+  "schemaVersion": 1,
+  "group": "09",
+  "rangeConvention": "UTF-8 bytes half-open; lines one-based inclusive",
+  "method": "All 160000 assigned text bytes read as 27 individually returned <=8000-byte raw chunks; any reads caught in an aggregate response truncation were reread individually. Whole-source AST supplies structural boundaries outside assignment only. Assertion spans are lexical expect/expect.poll/expect.soft call sites, not execution counts. No binary parts; no runtime validation.",
+  "files": [
+    {
+      "path": "tests/specs/new-hooks.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 43850,
+        "sha256": "c021948b6e561c85ade13ea31b10a7193af613fe5ca53f2a0193994f6aac244b",
+        "manifestSha256": "c021948b6e561c85ade13ea31b10a7193af613fe5ca53f2a0193994f6aac244b",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 19465,
+        "end": 43850,
+        "bytes": 24385,
+        "sha256": "9d3189a98df7eb3323f65e21eeae6a039ff6a3aa6fe6d0dfed2f2dec6c2825d4",
+        "partial": true,
+        "lines": [
+          470,
+          951
+        ]
+      },
+      "chunks": [
+        {
+          "start": 19465,
+          "end": 27465,
+          "bytes": 8000,
+          "sha256": "054ee1bbc87314898a982c497e7522112dbb3e3ba6914e7ac11ffd4ad139018a",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "ef5510"
+        },
+        {
+          "start": 27465,
+          "end": 35465,
+          "bytes": 8000,
+          "sha256": "f2697dfcfa6da0dcc0b2f1d2a842d4c516b7d9e62890e3a35e39927778df27c1",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "560b56"
+        },
+        {
+          "start": 35465,
+          "end": 43465,
+          "bytes": 8000,
+          "sha256": "246b62619eee2965bfbbd869212ecc3baac8b3a1c996b5515a7f01a1e160ed8e",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "f1d74e"
+        },
+        {
+          "start": 43465,
+          "end": 43850,
+          "bytes": 385,
+          "sha256": "93cf2ae9455de3b9535631ab50394cc6c51929d0d3b3d0852cfa38fbece1f64b",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "8bd611"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 234,
+          "end": 311,
+          "lines": [
+            5,
+            5
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 21720,
+          "end": 21753,
+          "lines": [
+            509,
+            509
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 23044,
+          "end": 23077,
+          "lines": [
+            543,
+            543
+          ]
+        },
+        {
+          "kind": "test.slow",
+          "start": 27402,
+          "end": 27413,
+          "lines": [
+            643,
+            643
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 38184,
+          "end": 38217,
+          "lines": [
+            839,
+            839
+          ]
+        },
+        {
+          "kind": "test.setTimeout",
+          "start": 38325,
+          "end": 38348,
+          "lines": [
+            842,
+            842
+          ]
+        }
+      ],
+      "functions": [],
+      "cases": [
+        {
+          "title": "Shanghai stays flat-by-F1-standards, with a real back-straight crest",
+          "start": 19100,
+          "end": 21466,
+          "lines": [
+            466,
+            503
+          ],
+          "partial": true,
+          "assignedAssertions": [
+            {
+              "start": 21241,
+              "end": 21261,
+              "lines": [
+                499,
+                499
+              ]
+            },
+            {
+              "start": 21295,
+              "end": 21315,
+              "lines": [
+                500,
+                500
+              ]
+            },
+            {
+              "start": 21346,
+              "end": 21374,
+              "lines": [
+                501,
+                501
+              ]
+            },
+            {
+              "start": 21402,
+              "end": 21438,
+              "lines": [
+                502,
+                502
+              ]
+            }
+          ]
+        },
+        {
+          "title": "gear field is present and in 1-8 range",
+          "start": 21758,
+          "end": 22086,
+          "lines": [
+            511,
+            518
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 21917,
+              "end": 21928,
+              "lines": [
+                514,
+                514
+              ]
+            },
+            {
+              "start": 21949,
+              "end": 21972,
+              "lines": [
+                515,
+                515
+              ]
+            },
+            {
+              "start": 21993,
+              "end": 22009,
+              "lines": [
+                516,
+                516
+              ]
+            },
+            {
+              "start": 22041,
+              "end": 22057,
+              "lines": [
+                517,
+                517
+              ]
+            }
+          ]
+        },
+        {
+          "title": "gear matches timing().gear",
+          "start": 22091,
+          "end": 22304,
+          "lines": [
+            520,
+            524
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 22269,
+              "end": 22285,
+              "lines": [
+                523,
+                523
+              ]
+            }
+          ]
+        },
+        {
+          "title": "gear increases at high speed after stepping physics",
+          "start": 22309,
+          "end": 22815,
+          "lines": [
+            526,
+            537
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 22767,
+              "end": 22783,
+              "lines": [
+                536,
+                536
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Silverstone uses grounded required landmarks and airfield-scale terrain",
+          "start": 23082,
+          "end": 26341,
+          "lines": [
+            545,
+            621
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 23943,
+              "end": 23972,
+              "lines": [
+                567,
+                567
+              ]
+            },
+            {
+              "start": 24005,
+              "end": 24034,
+              "lines": [
+                568,
+                568
+              ]
+            },
+            {
+              "start": 24349,
+              "end": 24390,
+              "lines": [
+                573,
+                573
+              ]
+            },
+            {
+              "start": 24415,
+              "end": 24459,
+              "lines": [
+                574,
+                574
+              ]
+            },
+            {
+              "start": 24484,
+              "end": 24635,
+              "lines": [
+                575,
+                578
+              ]
+            },
+            {
+              "start": 24652,
+              "end": 24679,
+              "lines": [
+                579,
+                579
+              ]
+            },
+            {
+              "start": 24697,
+              "end": 24727,
+              "lines": [
+                580,
+                580
+              ]
+            },
+            {
+              "start": 24755,
+              "end": 24805,
+              "lines": [
+                581,
+                581
+              ]
+            },
+            {
+              "start": 24943,
+              "end": 24962,
+              "lines": [
+                586,
+                586
+              ]
+            },
+            {
+              "start": 25656,
+              "end": 25671,
+              "lines": [
+                603,
+                603
+              ]
+            },
+            {
+              "start": 25894,
+              "end": 25997,
+              "lines": [
+                610,
+                612
+              ]
+            },
+            {
+              "start": 26173,
+              "end": 26185,
+              "lines": [
+                618,
+                618
+              ]
+            },
+            {
+              "start": 26285,
+              "end": 26307,
+              "lines": [
+                620,
+                620
+              ]
+            }
+          ]
+        },
+        {
+          "title": "reports finite geometry and structured model outcomes",
+          "start": 26346,
+          "end": 27298,
+          "lines": [
+            623,
+            640
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 26622,
+              "end": 26652,
+              "lines": [
+                629,
+                629
+              ]
+            },
+            {
+              "start": 26677,
+              "end": 26727,
+              "lines": [
+                630,
+                630
+              ]
+            },
+            {
+              "start": 26744,
+              "end": 26788,
+              "lines": [
+                631,
+                631
+              ]
+            },
+            {
+              "start": 26805,
+              "end": 26852,
+              "lines": [
+                632,
+                632
+              ]
+            },
+            {
+              "start": 26869,
+              "end": 26913,
+              "lines": [
+                633,
+                633
+              ]
+            },
+            {
+              "start": 26930,
+              "end": 26973,
+              "lines": [
+                634,
+                634
+              ]
+            },
+            {
+              "start": 27130,
+              "end": 27142,
+              "lines": [
+                637,
+                637
+              ]
+            },
+            {
+              "start": 27242,
+              "end": 27264,
+              "lines": [
+                639,
+                639
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Miami emits validated water, grouped heroes, and safe overpasses",
+          "start": 27303,
+          "end": 29157,
+          "lines": [
+            642,
+            674
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 27823,
+              "end": 27873,
+              "lines": [
+                653,
+                653
+              ]
+            },
+            {
+              "start": 28030,
+              "end": 28042,
+              "lines": [
+                656,
+                656
+              ]
+            },
+            {
+              "start": 28320,
+              "end": 28343,
+              "lines": [
+                662,
+                662
+              ]
+            },
+            {
+              "start": 28462,
+              "end": 28475,
+              "lines": [
+                664,
+                664
+              ]
+            },
+            {
+              "start": 28497,
+              "end": 28569,
+              "lines": [
+                665,
+                665
+              ]
+            },
+            {
+              "start": 28913,
+              "end": 28949,
+              "lines": [
+                670,
+                670
+              ]
+            },
+            {
+              "start": 28974,
+              "end": 28988,
+              "lines": [
+                671,
+                671
+              ]
+            },
+            {
+              "start": 29013,
+              "end": 29043,
+              "lines": [
+                672,
+                672
+              ]
+            },
+            {
+              "start": 29071,
+              "end": 29140,
+              "lines": [
+                673,
+                673
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Jeddah declares its migrated waterfront foundation contracts",
+          "start": 29162,
+          "end": 31589,
+          "lines": [
+            676,
+            727
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 30237,
+              "end": 30274,
+              "lines": [
+                703,
+                703
+              ]
+            },
+            {
+              "start": 30295,
+              "end": 30326,
+              "lines": [
+                704,
+                704
+              ]
+            },
+            {
+              "start": 30341,
+              "end": 30378,
+              "lines": [
+                705,
+                705
+              ]
+            },
+            {
+              "start": 30573,
+              "end": 30602,
+              "lines": [
+                710,
+                710
+              ]
+            },
+            {
+              "start": 30631,
+              "end": 30659,
+              "lines": [
+                711,
+                711
+              ]
+            },
+            {
+              "start": 30691,
+              "end": 30721,
+              "lines": [
+                712,
+                712
+              ]
+            },
+            {
+              "start": 30749,
+              "end": 30779,
+              "lines": [
+                713,
+                713
+              ]
+            },
+            {
+              "start": 30811,
+              "end": 30861,
+              "lines": [
+                714,
+                714
+              ]
+            },
+            {
+              "start": 30878,
+              "end": 30951,
+              "lines": [
+                715,
+                715
+              ]
+            },
+            {
+              "start": 31079,
+              "end": 31095,
+              "lines": [
+                717,
+                717
+              ]
+            },
+            {
+              "start": 31352,
+              "end": 31364,
+              "lines": [
+                722,
+                722
+              ]
+            },
+            {
+              "start": 31460,
+              "end": 31476,
+              "lines": [
+                724,
+                724
+              ]
+            },
+            {
+              "start": 31533,
+              "end": 31555,
+              "lines": [
+                726,
+                726
+              ]
+            }
+          ]
+        },
+        {
+          "title": "night rebuilds expose a distinct validated props manifest",
+          "start": 31594,
+          "end": 33881,
+          "lines": [
+            729,
+            760
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 33009,
+              "end": 33020,
+              "lines": [
+                747,
+                747
+              ]
+            },
+            {
+              "start": 33045,
+              "end": 33058,
+              "lines": [
+                748,
+                748
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Singapore migration keeps models, walls, terrain, and elevation intentional",
+          "start": 33886,
+          "end": 38116,
+          "lines": [
+            762,
+            835
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 35703,
+              "end": 35757,
+              "lines": [
+                797,
+                797
+              ]
+            },
+            {
+              "start": 35774,
+              "end": 35807,
+              "lines": [
+                798,
+                798
+              ]
+            },
+            {
+              "start": 35825,
+              "end": 35861,
+              "lines": [
+                799,
+                799
+              ]
+            },
+            {
+              "start": 35879,
+              "end": 35911,
+              "lines": [
+                800,
+                800
+              ]
+            },
+            {
+              "start": 35929,
+              "end": 35979,
+              "lines": [
+                801,
+                801
+              ]
+            },
+            {
+              "start": 35996,
+              "end": 36016,
+              "lines": [
+                802,
+                802
+              ]
+            },
+            {
+              "start": 37081,
+              "end": 37101,
+              "lines": [
+                817,
+                817
+              ]
+            },
+            {
+              "start": 37131,
+              "end": 37160,
+              "lines": [
+                818,
+                818
+              ]
+            },
+            {
+              "start": 37178,
+              "end": 37210,
+              "lines": [
+                819,
+                819
+              ]
+            },
+            {
+              "start": 37228,
+              "end": 37256,
+              "lines": [
+                820,
+                820
+              ]
+            },
+            {
+              "start": 37515,
+              "end": 37542,
+              "lines": [
+                825,
+                825
+              ]
+            },
+            {
+              "start": 37641,
+              "end": 37663,
+              "lines": [
+                827,
+                827
+              ]
+            },
+            {
+              "start": 37697,
+              "end": 37727,
+              "lines": [
+                828,
+                828
+              ]
+            },
+            {
+              "start": 37741,
+              "end": 37771,
+              "lines": [
+                829,
+                829
+              ]
+            },
+            {
+              "start": 37803,
+              "end": 37873,
+              "lines": [
+                830,
+                830
+              ]
+            },
+            {
+              "start": 37890,
+              "end": 37920,
+              "lines": [
+                831,
+                831
+              ]
+            },
+            {
+              "start": 37945,
+              "end": 37975,
+              "lines": [
+                832,
+                832
+              ]
+            },
+            {
+              "start": 37997,
+              "end": 38029,
+              "lines": [
+                833,
+                833
+              ]
+            },
+            {
+              "start": 38056,
+              "end": 38089,
+              "lines": [
+                834,
+                834
+              ]
+            }
+          ]
+        },
+        {
+          "title": "owns safe grounded scenery with the intended urban elevation profile",
+          "start": 38222,
+          "end": 42038,
+          "lines": [
+            841,
+            915
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 39102,
+              "end": 39135,
+              "lines": [
+                862,
+                862
+              ]
+            },
+            {
+              "start": 39156,
+              "end": 39183,
+              "lines": [
+                863,
+                863
+              ]
+            },
+            {
+              "start": 39216,
+              "end": 39249,
+              "lines": [
+                864,
+                864
+              ]
+            },
+            {
+              "start": 39474,
+              "end": 39504,
+              "lines": [
+                868,
+                868
+              ]
+            },
+            {
+              "start": 39537,
+              "end": 39567,
+              "lines": [
+                869,
+                869
+              ]
+            },
+            {
+              "start": 39597,
+              "end": 39629,
+              "lines": [
+                870,
+                870
+              ]
+            },
+            {
+              "start": 39657,
+              "end": 39689,
+              "lines": [
+                871,
+                871
+              ]
+            },
+            {
+              "start": 39714,
+              "end": 39741,
+              "lines": [
+                872,
+                872
+              ]
+            },
+            {
+              "start": 39759,
+              "end": 39789,
+              "lines": [
+                873,
+                873
+              ]
+            },
+            {
+              "start": 39861,
+              "end": 39912,
+              "lines": [
+                876,
+                876
+              ]
+            },
+            {
+              "start": 41081,
+              "end": 41154,
+              "lines": [
+                892,
+                892
+              ]
+            },
+            {
+              "start": 41330,
+              "end": 41342,
+              "lines": [
+                895,
+                895
+              ]
+            },
+            {
+              "start": 41429,
+              "end": 41440,
+              "lines": [
+                897,
+                897
+              ]
+            },
+            {
+              "start": 41670,
+              "end": 41692,
+              "lines": [
+                903,
+                903
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Shanghai declares safe required heroes and reflective water",
+          "start": 42043,
+          "end": 43844,
+          "lines": [
+            917,
+            949
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 42965,
+              "end": 43016,
+              "lines": [
+                935,
+                935
+              ]
+            },
+            {
+              "start": 43035,
+              "end": 43147,
+              "lines": [
+                936,
+                937
+              ]
+            },
+            {
+              "start": 43273,
+              "end": 43321,
+              "lines": [
+                939,
+                939
+              ]
+            },
+            {
+              "start": 43340,
+              "end": 43465,
+              "lines": [
+                940,
+                941
+              ]
+            },
+            {
+              "start": 43485,
+              "end": 43534,
+              "lines": [
+                942,
+                942
+              ]
+            },
+            {
+              "start": 43553,
+              "end": 43579,
+              "lines": [
+                943,
+                943
+              ]
+            },
+            {
+              "start": 43599,
+              "end": 43623,
+              "lines": [
+                944,
+                944
+              ]
+            },
+            {
+              "start": 43650,
+              "end": 43674,
+              "lines": [
+                945,
+                945
+              ]
+            },
+            {
+              "start": 43699,
+              "end": 43728,
+              "lines": [
+                946,
+                946
+              ]
+            },
+            {
+              "start": 43758,
+              "end": 43821,
+              "lines": [
+                947,
+                947
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 21241,
+          "end": 21261,
+          "lines": [
+            499,
+            499
+          ]
+        },
+        {
+          "start": 21295,
+          "end": 21315,
+          "lines": [
+            500,
+            500
+          ]
+        },
+        {
+          "start": 21346,
+          "end": 21374,
+          "lines": [
+            501,
+            501
+          ]
+        },
+        {
+          "start": 21402,
+          "end": 21438,
+          "lines": [
+            502,
+            502
+          ]
+        },
+        {
+          "start": 21917,
+          "end": 21928,
+          "lines": [
+            514,
+            514
+          ]
+        },
+        {
+          "start": 21949,
+          "end": 21972,
+          "lines": [
+            515,
+            515
+          ]
+        },
+        {
+          "start": 21993,
+          "end": 22009,
+          "lines": [
+            516,
+            516
+          ]
+        },
+        {
+          "start": 22041,
+          "end": 22057,
+          "lines": [
+            517,
+            517
+          ]
+        },
+        {
+          "start": 22269,
+          "end": 22285,
+          "lines": [
+            523,
+            523
+          ]
+        },
+        {
+          "start": 22767,
+          "end": 22783,
+          "lines": [
+            536,
+            536
+          ]
+        },
+        {
+          "start": 23943,
+          "end": 23972,
+          "lines": [
+            567,
+            567
+          ]
+        },
+        {
+          "start": 24005,
+          "end": 24034,
+          "lines": [
+            568,
+            568
+          ]
+        },
+        {
+          "start": 24349,
+          "end": 24390,
+          "lines": [
+            573,
+            573
+          ]
+        },
+        {
+          "start": 24415,
+          "end": 24459,
+          "lines": [
+            574,
+            574
+          ]
+        },
+        {
+          "start": 24484,
+          "end": 24635,
+          "lines": [
+            575,
+            578
+          ]
+        },
+        {
+          "start": 24652,
+          "end": 24679,
+          "lines": [
+            579,
+            579
+          ]
+        },
+        {
+          "start": 24697,
+          "end": 24727,
+          "lines": [
+            580,
+            580
+          ]
+        },
+        {
+          "start": 24755,
+          "end": 24805,
+          "lines": [
+            581,
+            581
+          ]
+        },
+        {
+          "start": 24943,
+          "end": 24962,
+          "lines": [
+            586,
+            586
+          ]
+        },
+        {
+          "start": 25656,
+          "end": 25671,
+          "lines": [
+            603,
+            603
+          ]
+        },
+        {
+          "start": 25894,
+          "end": 25997,
+          "lines": [
+            610,
+            612
+          ]
+        },
+        {
+          "start": 26173,
+          "end": 26185,
+          "lines": [
+            618,
+            618
+          ]
+        },
+        {
+          "start": 26285,
+          "end": 26307,
+          "lines": [
+            620,
+            620
+          ]
+        },
+        {
+          "start": 26622,
+          "end": 26652,
+          "lines": [
+            629,
+            629
+          ]
+        },
+        {
+          "start": 26677,
+          "end": 26727,
+          "lines": [
+            630,
+            630
+          ]
+        },
+        {
+          "start": 26744,
+          "end": 26788,
+          "lines": [
+            631,
+            631
+          ]
+        },
+        {
+          "start": 26805,
+          "end": 26852,
+          "lines": [
+            632,
+            632
+          ]
+        },
+        {
+          "start": 26869,
+          "end": 26913,
+          "lines": [
+            633,
+            633
+          ]
+        },
+        {
+          "start": 26930,
+          "end": 26973,
+          "lines": [
+            634,
+            634
+          ]
+        },
+        {
+          "start": 27130,
+          "end": 27142,
+          "lines": [
+            637,
+            637
+          ]
+        },
+        {
+          "start": 27242,
+          "end": 27264,
+          "lines": [
+            639,
+            639
+          ]
+        },
+        {
+          "start": 27823,
+          "end": 27873,
+          "lines": [
+            653,
+            653
+          ]
+        },
+        {
+          "start": 28030,
+          "end": 28042,
+          "lines": [
+            656,
+            656
+          ]
+        },
+        {
+          "start": 28320,
+          "end": 28343,
+          "lines": [
+            662,
+            662
+          ]
+        },
+        {
+          "start": 28462,
+          "end": 28475,
+          "lines": [
+            664,
+            664
+          ]
+        },
+        {
+          "start": 28497,
+          "end": 28569,
+          "lines": [
+            665,
+            665
+          ]
+        },
+        {
+          "start": 28913,
+          "end": 28949,
+          "lines": [
+            670,
+            670
+          ]
+        },
+        {
+          "start": 28974,
+          "end": 28988,
+          "lines": [
+            671,
+            671
+          ]
+        },
+        {
+          "start": 29013,
+          "end": 29043,
+          "lines": [
+            672,
+            672
+          ]
+        },
+        {
+          "start": 29071,
+          "end": 29140,
+          "lines": [
+            673,
+            673
+          ]
+        },
+        {
+          "start": 30237,
+          "end": 30274,
+          "lines": [
+            703,
+            703
+          ]
+        },
+        {
+          "start": 30295,
+          "end": 30326,
+          "lines": [
+            704,
+            704
+          ]
+        },
+        {
+          "start": 30341,
+          "end": 30378,
+          "lines": [
+            705,
+            705
+          ]
+        },
+        {
+          "start": 30573,
+          "end": 30602,
+          "lines": [
+            710,
+            710
+          ]
+        },
+        {
+          "start": 30631,
+          "end": 30659,
+          "lines": [
+            711,
+            711
+          ]
+        },
+        {
+          "start": 30691,
+          "end": 30721,
+          "lines": [
+            712,
+            712
+          ]
+        },
+        {
+          "start": 30749,
+          "end": 30779,
+          "lines": [
+            713,
+            713
+          ]
+        },
+        {
+          "start": 30811,
+          "end": 30861,
+          "lines": [
+            714,
+            714
+          ]
+        },
+        {
+          "start": 30878,
+          "end": 30951,
+          "lines": [
+            715,
+            715
+          ]
+        },
+        {
+          "start": 31079,
+          "end": 31095,
+          "lines": [
+            717,
+            717
+          ]
+        },
+        {
+          "start": 31352,
+          "end": 31364,
+          "lines": [
+            722,
+            722
+          ]
+        },
+        {
+          "start": 31460,
+          "end": 31476,
+          "lines": [
+            724,
+            724
+          ]
+        },
+        {
+          "start": 31533,
+          "end": 31555,
+          "lines": [
+            726,
+            726
+          ]
+        },
+        {
+          "start": 33009,
+          "end": 33020,
+          "lines": [
+            747,
+            747
+          ]
+        },
+        {
+          "start": 33045,
+          "end": 33058,
+          "lines": [
+            748,
+            748
+          ]
+        },
+        {
+          "start": 35703,
+          "end": 35757,
+          "lines": [
+            797,
+            797
+          ]
+        },
+        {
+          "start": 35774,
+          "end": 35807,
+          "lines": [
+            798,
+            798
+          ]
+        },
+        {
+          "start": 35825,
+          "end": 35861,
+          "lines": [
+            799,
+            799
+          ]
+        },
+        {
+          "start": 35879,
+          "end": 35911,
+          "lines": [
+            800,
+            800
+          ]
+        },
+        {
+          "start": 35929,
+          "end": 35979,
+          "lines": [
+            801,
+            801
+          ]
+        },
+        {
+          "start": 35996,
+          "end": 36016,
+          "lines": [
+            802,
+            802
+          ]
+        },
+        {
+          "start": 37081,
+          "end": 37101,
+          "lines": [
+            817,
+            817
+          ]
+        },
+        {
+          "start": 37131,
+          "end": 37160,
+          "lines": [
+            818,
+            818
+          ]
+        },
+        {
+          "start": 37178,
+          "end": 37210,
+          "lines": [
+            819,
+            819
+          ]
+        },
+        {
+          "start": 37228,
+          "end": 37256,
+          "lines": [
+            820,
+            820
+          ]
+        },
+        {
+          "start": 37515,
+          "end": 37542,
+          "lines": [
+            825,
+            825
+          ]
+        },
+        {
+          "start": 37641,
+          "end": 37663,
+          "lines": [
+            827,
+            827
+          ]
+        },
+        {
+          "start": 37697,
+          "end": 37727,
+          "lines": [
+            828,
+            828
+          ]
+        },
+        {
+          "start": 37741,
+          "end": 37771,
+          "lines": [
+            829,
+            829
+          ]
+        },
+        {
+          "start": 37803,
+          "end": 37873,
+          "lines": [
+            830,
+            830
+          ]
+        },
+        {
+          "start": 37890,
+          "end": 37920,
+          "lines": [
+            831,
+            831
+          ]
+        },
+        {
+          "start": 37945,
+          "end": 37975,
+          "lines": [
+            832,
+            832
+          ]
+        },
+        {
+          "start": 37997,
+          "end": 38029,
+          "lines": [
+            833,
+            833
+          ]
+        },
+        {
+          "start": 38056,
+          "end": 38089,
+          "lines": [
+            834,
+            834
+          ]
+        },
+        {
+          "start": 39102,
+          "end": 39135,
+          "lines": [
+            862,
+            862
+          ]
+        },
+        {
+          "start": 39156,
+          "end": 39183,
+          "lines": [
+            863,
+            863
+          ]
+        },
+        {
+          "start": 39216,
+          "end": 39249,
+          "lines": [
+            864,
+            864
+          ]
+        },
+        {
+          "start": 39474,
+          "end": 39504,
+          "lines": [
+            868,
+            868
+          ]
+        },
+        {
+          "start": 39537,
+          "end": 39567,
+          "lines": [
+            869,
+            869
+          ]
+        },
+        {
+          "start": 39597,
+          "end": 39629,
+          "lines": [
+            870,
+            870
+          ]
+        },
+        {
+          "start": 39657,
+          "end": 39689,
+          "lines": [
+            871,
+            871
+          ]
+        },
+        {
+          "start": 39714,
+          "end": 39741,
+          "lines": [
+            872,
+            872
+          ]
+        },
+        {
+          "start": 39759,
+          "end": 39789,
+          "lines": [
+            873,
+            873
+          ]
+        },
+        {
+          "start": 39861,
+          "end": 39912,
+          "lines": [
+            876,
+            876
+          ]
+        },
+        {
+          "start": 41081,
+          "end": 41154,
+          "lines": [
+            892,
+            892
+          ]
+        },
+        {
+          "start": 41330,
+          "end": 41342,
+          "lines": [
+            895,
+            895
+          ]
+        },
+        {
+          "start": 41429,
+          "end": 41440,
+          "lines": [
+            897,
+            897
+          ]
+        },
+        {
+          "start": 41670,
+          "end": 41692,
+          "lines": [
+            903,
+            903
+          ]
+        },
+        {
+          "start": 42965,
+          "end": 43016,
+          "lines": [
+            935,
+            935
+          ]
+        },
+        {
+          "start": 43035,
+          "end": 43147,
+          "lines": [
+            936,
+            937
+          ]
+        },
+        {
+          "start": 43273,
+          "end": 43321,
+          "lines": [
+            939,
+            939
+          ]
+        },
+        {
+          "start": 43340,
+          "end": 43465,
+          "lines": [
+            940,
+            941
+          ]
+        },
+        {
+          "start": 43485,
+          "end": 43534,
+          "lines": [
+            942,
+            942
+          ]
+        },
+        {
+          "start": 43553,
+          "end": 43579,
+          "lines": [
+            943,
+            943
+          ]
+        },
+        {
+          "start": 43599,
+          "end": 43623,
+          "lines": [
+            944,
+            944
+          ]
+        },
+        {
+          "start": 43650,
+          "end": 43674,
+          "lines": [
+            945,
+            945
+          ]
+        },
+        {
+          "start": 43699,
+          "end": 43728,
+          "lines": [
+            946,
+            946
+          ]
+        },
+        {
+          "start": 43758,
+          "end": 43821,
+          "lines": [
+            947,
+            947
+          ]
+        }
+      ],
+      "targets": [
+        "trackProfile",
+        "obs",
+        "timing",
+        "jump",
+        "setInput",
+        "step",
+        "clearInput",
+        "groundY",
+        "wallStats",
+        "modelDiagnostics",
+        "geometryDiagnostics",
+        "race",
+        "info"
+      ],
+      "semantics": "Sampled track foundations and gear observation; Shanghai case prefix excluded.",
+      "fixtureImports": [
+        "../helpers/fixtures.js"
+      ],
+      "assertionCount": 98,
+      "caseDeclarationCount": 12,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution.",
+      "limits": "Assigned part begins inside Shanghai case; preceding load helper/setup not read as part of this assignment. Night/day props inequality is commented out."
+    },
+    {
+      "path": "tests/specs/obs-act-edge.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 11678,
+        "sha256": "8bf011a81e0117fe7a3697e07077ed001af968982eb2b8cdcfdb5c5885871bb9",
+        "manifestSha256": "8bf011a81e0117fe7a3697e07077ed001af968982eb2b8cdcfdb5c5885871bb9",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 11678,
+        "bytes": 11678,
+        "sha256": "8bf011a81e0117fe7a3697e07077ed001af968982eb2b8cdcfdb5c5885871bb9",
+        "partial": false,
+        "lines": [
+          1,
+          297
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "e612b08c2d557e6259163260767afa8b3e54c072900b601ddcc8a4b0b911b575",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "adb255"
+        },
+        {
+          "start": 8000,
+          "end": 11678,
+          "bytes": 3678,
+          "sha256": "b2a0df3d76d91711b0f70d4310e5c59d02ccbaa70767de61ae7111c63274b44a",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "84d897"
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "start": 185,
+          "end": 233,
+          "lines": [
+            5,
+            5
+          ]
+        },
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 234,
+          "end": 283,
+          "lines": [
+            6,
+            6
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 1239,
+          "end": 1272,
+          "lines": [
+            23,
+            23
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 2917,
+          "end": 2950,
+          "lines": [
+            64,
+            64
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 4905,
+          "end": 4938,
+          "lines": [
+            114,
+            114
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 6911,
+          "end": 6944,
+          "lines": [
+            166,
+            166
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 9246,
+          "end": 9279,
+          "lines": [
+            231,
+            231
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 11002,
+          "end": 11035,
+          "lines": [
+            276,
+            276
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "loadRace",
+          "start": 333,
+          "end": 992,
+          "lines": [
+            10,
+            18
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "act(input, dt, 0) returns current obs without advancing s",
+          "start": 1277,
+          "end": 1785,
+          "lines": [
+            25,
+            35
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 1729,
+              "end": 1748,
+              "lines": [
+                34,
+                34
+              ]
+            }
+          ]
+        },
+        {
+          "title": "act(null, dt, 0) with n=0 also does not advance physics",
+          "start": 1790,
+          "end": 2209,
+          "lines": [
+            37,
+            46
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 2153,
+              "end": 2172,
+              "lines": [
+                45,
+                45
+              ]
+            }
+          ]
+        },
+        {
+          "title": "act with n=1 advances further than n=0",
+          "start": 2214,
+          "end": 2661,
+          "lines": [
+            48,
+            58
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 2625,
+              "end": 2635,
+              "lines": [
+                57,
+                57
+              ]
+            }
+          ]
+        },
+        {
+          "title": "reset(0.999) places player near end of lap without incrementing lap",
+          "start": 2955,
+          "end": 3473,
+          "lines": [
+            66,
+            76
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 3322,
+              "end": 3338,
+              "lines": [
+                73,
+                73
+              ]
+            },
+            {
+              "start": 3383,
+              "end": 3399,
+              "lines": [
+                74,
+                74
+              ]
+            },
+            {
+              "start": 3441,
+              "end": 3459,
+              "lines": [
+                75,
+                75
+              ]
+            }
+          ]
+        },
+        {
+          "title": "driving past finish line from frac=0.999 increments lap counter",
+          "start": 3478,
+          "end": 4092,
+          "lines": [
+            78,
+            92
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4049,
+              "end": 4067,
+              "lines": [
+                91,
+                91
+              ]
+            }
+          ]
+        },
+        {
+          "title": "scan returns finite values immediately after reset near seam",
+          "start": 4097,
+          "end": 4648,
+          "lines": [
+            94,
+            108
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4349,
+              "end": 4378,
+              "lines": [
+                100,
+                100
+              ]
+            },
+            {
+              "start": 4428,
+              "end": 4450,
+              "lines": [
+                102,
+                102
+              ]
+            },
+            {
+              "start": 4469,
+              "end": 4492,
+              "lines": [
+                103,
+                103
+              ]
+            },
+            {
+              "start": 4511,
+              "end": 4537,
+              "lines": [
+                104,
+                104
+              ]
+            },
+            {
+              "start": 4556,
+              "end": 4582,
+              "lines": [
+                105,
+                105
+              ]
+            },
+            {
+              "start": 4601,
+              "end": 4617,
+              "lines": [
+                106,
+                106
+              ]
+            }
+          ]
+        },
+        {
+          "title": "scan returns no NaN at 5 positions near s = track.total",
+          "start": 4943,
+          "end": 5606,
+          "lines": [
+            116,
+            134
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5574,
+              "end": 5588,
+              "lines": [
+                133,
+                133
+              ]
+            }
+          ]
+        },
+        {
+          "title": "scan distances wrap correctly \u2014 each point is beyond the previous",
+          "start": 5611,
+          "end": 6151,
+          "lines": [
+            136,
+            148
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5933,
+              "end": 5951,
+              "lines": [
+                143,
+                143
+              ]
+            },
+            {
+              "start": 5966,
+              "end": 5984,
+              "lines": [
+                144,
+                144
+              ]
+            },
+            {
+              "start": 5999,
+              "end": 6017,
+              "lines": [
+                145,
+                145
+              ]
+            },
+            {
+              "start": 6110,
+              "end": 6126,
+              "lines": [
+                147,
+                147
+              ]
+            }
+          ]
+        },
+        {
+          "title": "clearR and clearL are positive for scan at wrap-around positions",
+          "start": 6156,
+          "end": 6649,
+          "lines": [
+            150,
+            160
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 6557,
+              "end": 6578,
+              "lines": [
+                158,
+                158
+              ]
+            },
+            {
+              "start": 6603,
+              "end": 6624,
+              "lines": [
+                159,
+                159
+              ]
+            }
+          ]
+        },
+        {
+          "title": "done is false immediately after reset()",
+          "start": 6949,
+          "end": 7159,
+          "lines": [
+            168,
+            172
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 7125,
+              "end": 7141,
+              "lines": [
+                171,
+                171
+              ]
+            }
+          ]
+        },
+        {
+          "title": "done is false during normal forward driving",
+          "start": 7164,
+          "end": 7626,
+          "lines": [
+            174,
+            187
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 7592,
+              "end": 7608,
+              "lines": [
+                186,
+                186
+              ]
+            }
+          ]
+        },
+        {
+          "title": "done becomes true when wrong-way is active",
+          "start": 7631,
+          "end": 8182,
+          "lines": [
+            189,
+            204
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 8153,
+              "end": 8165,
+              "lines": [
+                203,
+                203
+              ]
+            }
+          ]
+        },
+        {
+          "title": "done resets to false after reset() clears wrong-way",
+          "start": 8187,
+          "end": 8978,
+          "lines": [
+            206,
+            225
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 8894,
+              "end": 8919,
+              "lines": [
+                223,
+                223
+              ]
+            },
+            {
+              "start": 8936,
+              "end": 8960,
+              "lines": [
+                224,
+                224
+              ]
+            }
+          ]
+        },
+        {
+          "title": "obs() returns no NaN or Infinity at 20 positions around full lap",
+          "start": 9284,
+          "end": 10099,
+          "lines": [
+            233,
+            251
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 10061,
+              "end": 10081,
+              "lines": [
+                250,
+                250
+              ]
+            }
+          ]
+        },
+        {
+          "title": "reward object fields are always finite numbers",
+          "start": 10104,
+          "end": 10749,
+          "lines": [
+            253,
+            270
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 10717,
+              "end": 10731,
+              "lines": [
+                269,
+                269
+              ]
+            }
+          ]
+        },
+        {
+          "title": "`scan near seam is finite on ${trackId}`",
+          "start": 11097,
+          "end": 11668,
+          "lines": [
+            279,
+            294
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 11639,
+              "end": 11649,
+              "lines": [
+                293,
+                293
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1729,
+          "end": 1748,
+          "lines": [
+            34,
+            34
+          ]
+        },
+        {
+          "start": 2153,
+          "end": 2172,
+          "lines": [
+            45,
+            45
+          ]
+        },
+        {
+          "start": 2625,
+          "end": 2635,
+          "lines": [
+            57,
+            57
+          ]
+        },
+        {
+          "start": 3322,
+          "end": 3338,
+          "lines": [
+            73,
+            73
+          ]
+        },
+        {
+          "start": 3383,
+          "end": 3399,
+          "lines": [
+            74,
+            74
+          ]
+        },
+        {
+          "start": 3441,
+          "end": 3459,
+          "lines": [
+            75,
+            75
+          ]
+        },
+        {
+          "start": 4049,
+          "end": 4067,
+          "lines": [
+            91,
+            91
+          ]
+        },
+        {
+          "start": 4349,
+          "end": 4378,
+          "lines": [
+            100,
+            100
+          ]
+        },
+        {
+          "start": 4428,
+          "end": 4450,
+          "lines": [
+            102,
+            102
+          ]
+        },
+        {
+          "start": 4469,
+          "end": 4492,
+          "lines": [
+            103,
+            103
+          ]
+        },
+        {
+          "start": 4511,
+          "end": 4537,
+          "lines": [
+            104,
+            104
+          ]
+        },
+        {
+          "start": 4556,
+          "end": 4582,
+          "lines": [
+            105,
+            105
+          ]
+        },
+        {
+          "start": 4601,
+          "end": 4617,
+          "lines": [
+            106,
+            106
+          ]
+        },
+        {
+          "start": 5574,
+          "end": 5588,
+          "lines": [
+            133,
+            133
+          ]
+        },
+        {
+          "start": 5933,
+          "end": 5951,
+          "lines": [
+            143,
+            143
+          ]
+        },
+        {
+          "start": 5966,
+          "end": 5984,
+          "lines": [
+            144,
+            144
+          ]
+        },
+        {
+          "start": 5999,
+          "end": 6017,
+          "lines": [
+            145,
+            145
+          ]
+        },
+        {
+          "start": 6110,
+          "end": 6126,
+          "lines": [
+            147,
+            147
+          ]
+        },
+        {
+          "start": 6557,
+          "end": 6578,
+          "lines": [
+            158,
+            158
+          ]
+        },
+        {
+          "start": 6603,
+          "end": 6624,
+          "lines": [
+            159,
+            159
+          ]
+        },
+        {
+          "start": 7125,
+          "end": 7141,
+          "lines": [
+            171,
+            171
+          ]
+        },
+        {
+          "start": 7592,
+          "end": 7608,
+          "lines": [
+            186,
+            186
+          ]
+        },
+        {
+          "start": 8153,
+          "end": 8165,
+          "lines": [
+            203,
+            203
+          ]
+        },
+        {
+          "start": 8894,
+          "end": 8919,
+          "lines": [
+            223,
+            223
+          ]
+        },
+        {
+          "start": 8936,
+          "end": 8960,
+          "lines": [
+            224,
+            224
+          ]
+        },
+        {
+          "start": 10061,
+          "end": 10081,
+          "lines": [
+            250,
+            250
+          ]
+        },
+        {
+          "start": 10717,
+          "end": 10731,
+          "lines": [
+            269,
+            269
+          ]
+        },
+        {
+          "start": 11639,
+          "end": 11649,
+          "lines": [
+            293,
+            293
+          ]
+        }
+      ],
+      "targets": [
+        "race",
+        "info",
+        "jump",
+        "obs",
+        "reset",
+        "act",
+        "headless",
+        "aim"
+      ],
+      "semantics": "Headless act/reset/obs seam, numeric and terminal behavior.",
+      "fixtureImports": [
+        "../helpers/fixtures.js"
+      ],
+      "assertionCount": 28,
+      "caseDeclarationCount": 16,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/offtrack.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 10333,
+        "sha256": "babc5f4af283ac81ebd7e49020a2736761941af1cc6efb77c5ccab3eef2a7e33",
+        "manifestSha256": "babc5f4af283ac81ebd7e49020a2736761941af1cc6efb77c5ccab3eef2a7e33",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 10333,
+        "bytes": 10333,
+        "sha256": "babc5f4af283ac81ebd7e49020a2736761941af1cc6efb77c5ccab3eef2a7e33",
+        "partial": false,
+        "lines": [
+          1,
+          197
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "84aae548caa785b8a235948aebc15f35dfb8886057c55f3546d1fdc1bdeb72d8",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "e73731"
+        },
+        {
+          "start": 8000,
+          "end": 10333,
+          "bytes": 2333,
+          "sha256": "adc08e9292605306a3344a371308b2f554aa1cc1f57e81776068cffd37ba3195",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "480579"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 217,
+          "end": 280,
+          "lines": [
+            5,
+            5
+          ]
+        }
+      ],
+      "hooks": [],
+      "functions": [],
+      "cases": [
+        {
+          "title": "prog tracks s: forward driving advances prog \u2248 s-progress",
+          "start": 906,
+          "end": 1674,
+          "lines": [
+            17,
+            32
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 1525,
+              "end": 1540,
+              "lines": [
+                30,
+                30
+              ]
+            },
+            {
+              "start": 1597,
+              "end": 1629,
+              "lines": [
+                31,
+                31
+              ]
+            }
+          ]
+        },
+        {
+          "title": "facing backwards and throttling DECREASES progress (no forward cheat)",
+          "start": 1679,
+          "end": 2418,
+          "lines": [
+            34,
+            48
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 2333,
+              "end": 2348,
+              "lines": [
+                47,
+                47
+              ]
+            }
+          ]
+        },
+        {
+          "title": "wrong-way is flagged when driving against the track",
+          "start": 2423,
+          "end": 3070,
+          "lines": [
+            50,
+            67
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 3040,
+              "end": 3053,
+              "lines": [
+                66,
+                66
+              ]
+            }
+          ]
+        },
+        {
+          "title": "brake at a standstill crawls the car backwards (reverse), then throttle recovers",
+          "start": 3075,
+          "end": 4102,
+          "lines": [
+            69,
+            87
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 3890,
+              "end": 3903,
+              "lines": [
+                84,
+                84
+              ]
+            },
+            {
+              "start": 3953,
+              "end": 3966,
+              "lines": [
+                85,
+                85
+              ]
+            },
+            {
+              "start": 4018,
+              "end": 4031,
+              "lines": [
+                86,
+                86
+              ]
+            }
+          ]
+        },
+        {
+          "title": "driving onto grass and back recovers (slowed off, speeds up on return)",
+          "start": 4107,
+          "end": 6431,
+          "lines": [
+            89,
+            125
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 6168,
+              "end": 6184,
+              "lines": [
+                121,
+                121
+              ]
+            },
+            {
+              "start": 6380,
+              "end": 6395,
+              "lines": [
+                124,
+                124
+              ]
+            }
+          ]
+        },
+        {
+          "title": "auto-rescue: a wrong-way car is recovered to the racing line facing forward",
+          "start": 6436,
+          "end": 7415,
+          "lines": [
+            127,
+            147
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 7273,
+              "end": 7290,
+              "lines": [
+                144,
+                144
+              ]
+            },
+            {
+              "start": 7307,
+              "end": 7333,
+              "lines": [
+                145,
+                145
+              ]
+            },
+            {
+              "start": 7377,
+              "end": 7397,
+              "lines": [
+                146,
+                146
+              ]
+            }
+          ]
+        },
+        {
+          "title": "auto-rescue: a car beached deep off-track is recovered",
+          "start": 7420,
+          "end": 8131,
+          "lines": [
+            149,
+            165
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 8097,
+              "end": 8114,
+              "lines": [
+                164,
+                164
+              ]
+            }
+          ]
+        },
+        {
+          "title": "stopped on-track: throttle held is never stuck at 0; gas released is left parked",
+          "start": 8382,
+          "end": 10327,
+          "lines": [
+            170,
+            195
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 10133,
+              "end": 10160,
+              "lines": [
+                193,
+                193
+              ]
+            },
+            {
+              "start": 10226,
+              "end": 10251,
+              "lines": [
+                194,
+                194
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1525,
+          "end": 1540,
+          "lines": [
+            30,
+            30
+          ]
+        },
+        {
+          "start": 1597,
+          "end": 1629,
+          "lines": [
+            31,
+            31
+          ]
+        },
+        {
+          "start": 2333,
+          "end": 2348,
+          "lines": [
+            47,
+            47
+          ]
+        },
+        {
+          "start": 3040,
+          "end": 3053,
+          "lines": [
+            66,
+            66
+          ]
+        },
+        {
+          "start": 3890,
+          "end": 3903,
+          "lines": [
+            84,
+            84
+          ]
+        },
+        {
+          "start": 3953,
+          "end": 3966,
+          "lines": [
+            85,
+            85
+          ]
+        },
+        {
+          "start": 4018,
+          "end": 4031,
+          "lines": [
+            86,
+            86
+          ]
+        },
+        {
+          "start": 6168,
+          "end": 6184,
+          "lines": [
+            121,
+            121
+          ]
+        },
+        {
+          "start": 6380,
+          "end": 6395,
+          "lines": [
+            124,
+            124
+          ]
+        },
+        {
+          "start": 7273,
+          "end": 7290,
+          "lines": [
+            144,
+            144
+          ]
+        },
+        {
+          "start": 7307,
+          "end": 7333,
+          "lines": [
+            145,
+            145
+          ]
+        },
+        {
+          "start": 7377,
+          "end": 7397,
+          "lines": [
+            146,
+            146
+          ]
+        },
+        {
+          "start": 8097,
+          "end": 8114,
+          "lines": [
+            164,
+            164
+          ]
+        },
+        {
+          "start": 10133,
+          "end": 10160,
+          "lines": [
+            193,
+            193
+          ]
+        },
+        {
+          "start": 10226,
+          "end": 10251,
+          "lines": [
+            194,
+            194
+          ]
+        }
+      ],
+      "targets": [
+        "setPhysics",
+        "jump",
+        "physState",
+        "setInput",
+        "step",
+        "clearInput",
+        "aim",
+        "race",
+        "info",
+        "go"
+      ],
+      "semantics": "Signed progress, surface recovery, reverse and automatic rescue.",
+      "fixtureImports": [
+        "../helpers/fixtures.js"
+      ],
+      "assertionCount": 15,
+      "caseDeclarationCount": 8,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/output-paths.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 2956,
+        "sha256": "73c700d84d2affa16a07df37b18b9cce6203c53d55978d7365f5801455487699",
+        "manifestSha256": "73c700d84d2affa16a07df37b18b9cce6203c53d55978d7365f5801455487699",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 2956,
+        "bytes": 2956,
+        "sha256": "73c700d84d2affa16a07df37b18b9cce6203c53d55978d7365f5801455487699",
+        "partial": false,
+        "lines": [
+          1,
+          62
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2956,
+          "bytes": 2956,
+          "sha256": "73c700d84d2affa16a07df37b18b9cce6203c53d55978d7365f5801455487699",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "189c9f"
+        }
+      ],
+      "imports": [
+        {
+          "source": "@playwright/test",
+          "start": 13,
+          "end": 61,
+          "lines": [
+            2,
+            2
+          ]
+        },
+        {
+          "source": "node:fs",
+          "start": 62,
+          "end": 99,
+          "lines": [
+            3,
+            3
+          ]
+        },
+        {
+          "source": "node:path",
+          "start": 100,
+          "end": 156,
+          "lines": [
+            4,
+            4
+          ]
+        },
+        {
+          "source": "../helpers/output-paths.js",
+          "start": 157,
+          "end": 238,
+          "lines": [
+            5,
+            5
+          ]
+        }
+      ],
+      "hooks": [],
+      "functions": [
+        {
+          "name": "repoRoot",
+          "start": 1123,
+          "end": 1357,
+          "lines": [
+            22,
+            30
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "gallery paths are port-scoped and create their parent directories",
+          "start": 1403,
+          "end": 2256,
+          "lines": [
+            33,
+            47
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 1655,
+              "end": 1666,
+              "lines": [
+                38,
+                38
+              ]
+            },
+            {
+              "start": 1750,
+              "end": 1762,
+              "lines": [
+                39,
+                39
+              ]
+            },
+            {
+              "start": 1798,
+              "end": 1821,
+              "lines": [
+                40,
+                40
+              ]
+            },
+            {
+              "start": 1995,
+              "end": 2051,
+              "lines": [
+                43,
+                43
+              ]
+            },
+            {
+              "start": 2066,
+              "end": 2107,
+              "lines": [
+                44,
+                44
+              ]
+            },
+            {
+              "start": 2123,
+              "end": 2180,
+              "lines": [
+                45,
+                45
+              ]
+            }
+          ]
+        },
+        {
+          "title": "gallery paths reject traversal and empty segments",
+          "start": 2259,
+          "end": 2568,
+          "lines": [
+            49,
+            53
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 2327,
+              "end": 2378,
+              "lines": [
+                50,
+                50
+              ]
+            },
+            {
+              "start": 2411,
+              "end": 2464,
+              "lines": [
+                51,
+                51
+              ]
+            },
+            {
+              "start": 2497,
+              "end": 2535,
+              "lines": [
+                52,
+                52
+              ]
+            }
+          ]
+        },
+        {
+          "title": "each producer can own a stable suite directory",
+          "start": 2571,
+          "end": 2954,
+          "lines": [
+            55,
+            61
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 2684,
+              "end": 2736,
+              "lines": [
+                57,
+                57
+              ]
+            },
+            {
+              "start": 2814,
+              "end": 2871,
+              "lines": [
+                59,
+                59
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1655,
+          "end": 1666,
+          "lines": [
+            38,
+            38
+          ]
+        },
+        {
+          "start": 1750,
+          "end": 1762,
+          "lines": [
+            39,
+            39
+          ]
+        },
+        {
+          "start": 1798,
+          "end": 1821,
+          "lines": [
+            40,
+            40
+          ]
+        },
+        {
+          "start": 1995,
+          "end": 2051,
+          "lines": [
+            43,
+            43
+          ]
+        },
+        {
+          "start": 2066,
+          "end": 2107,
+          "lines": [
+            44,
+            44
+          ]
+        },
+        {
+          "start": 2123,
+          "end": 2180,
+          "lines": [
+            45,
+            45
+          ]
+        },
+        {
+          "start": 2327,
+          "end": 2378,
+          "lines": [
+            50,
+            50
+          ]
+        },
+        {
+          "start": 2411,
+          "end": 2464,
+          "lines": [
+            51,
+            51
+          ]
+        },
+        {
+          "start": 2497,
+          "end": 2535,
+          "lines": [
+            52,
+            52
+          ]
+        },
+        {
+          "start": 2684,
+          "end": 2736,
+          "lines": [
+            57,
+            57
+          ]
+        },
+        {
+          "start": 2814,
+          "end": 2871,
+          "lines": [
+            59,
+            59
+          ]
+        }
+      ],
+      "targets": [],
+      "semantics": "Filesystem gallery ownership, port scope and safe segments.",
+      "fixtureImports": [
+        "../helpers/output-paths.js"
+      ],
+      "assertionCount": 11,
+      "caseDeclarationCount": 3,
+      "cleanup": "galleryDir/galleryPath create artifact directories; no local removal."
+    },
+    {
+      "path": "tests/specs/parts-budget.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 13791,
+        "sha256": "347b5a0c68cbd835c24c23a3455c352405c4e77e05d6d84918edbc5cb43d0e0d",
+        "manifestSha256": "347b5a0c68cbd835c24c23a3455c352405c4e77e05d6d84918edbc5cb43d0e0d",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 13791,
+        "bytes": 13791,
+        "sha256": "347b5a0c68cbd835c24c23a3455c352405c4e77e05d6d84918edbc5cb43d0e0d",
+        "partial": false,
+        "lines": [
+          1,
+          271
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "58cd9f20fa9ffd10756d4323d64484a9cffd3d713d75714bed1958210774c4dd",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "c83d92"
+        },
+        {
+          "start": 8000,
+          "end": 13791,
+          "bytes": 5791,
+          "sha256": "ad31e574eac1ec4324ded936890fba9394a20734d757e08d0f6cd44fd3b3a009",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "213157"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 963,
+          "end": 1040,
+          "lines": [
+            17,
+            17
+          ]
+        },
+        {
+          "source": "../helpers/output-paths.js",
+          "start": 1041,
+          "end": 1098,
+          "lines": [
+            18,
+            18
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 1099,
+          "end": 1203,
+          "lines": [
+            19,
+            19
+          ]
+        },
+        {
+          "source": "../helpers/garage-sheet.js",
+          "start": 1204,
+          "end": 1265,
+          "lines": [
+            20,
+            20
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "start": 9955,
+          "end": 9979,
+          "lines": [
+            182,
+            182
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "waitReady",
+          "start": 1267,
+          "end": 1509,
+          "lines": [
+            22,
+            25
+          ]
+        },
+        {
+          "name": "pickOpt",
+          "start": 1511,
+          "end": 1694,
+          "lines": [
+            27,
+            30
+          ]
+        },
+        {
+          "name": "openSetup",
+          "start": 1696,
+          "end": 4432,
+          "lines": [
+            32,
+            74
+          ]
+        },
+        {
+          "name": "shot",
+          "start": 5550,
+          "end": 6074,
+          "lines": [
+            93,
+            104
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "shows the full cap at all defaults",
+          "start": 6129,
+          "end": 6751,
+          "lines": [
+            107,
+            117
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 6642,
+              "end": 6654,
+              "lines": [
+                115,
+                115
+              ]
+            }
+          ]
+        },
+        {
+          "title": "budget label has no 'over' class at defaults",
+          "start": 6756,
+          "end": 6979,
+          "lines": [
+            119,
+            123
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 6934,
+              "end": 6951,
+              "lines": [
+                122,
+                122
+              ]
+            }
+          ]
+        },
+        {
+          "title": "budget bar fill is zero at all defaults",
+          "start": 6984,
+          "end": 7240,
+          "lines": [
+            125,
+            131
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 7194,
+              "end": 7211,
+              "lines": [
+                130,
+                130
+              ]
+            }
+          ]
+        },
+        {
+          "title": "selecting the race engine spends exactly its catalog price",
+          "start": 7307,
+          "end": 8014,
+          "lines": [
+            135,
+            146
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 7924,
+              "end": 7936,
+              "lines": [
+                144,
+                144
+              ]
+            }
+          ]
+        },
+        {
+          "title": "budget fill bar increases after selecting a paid part",
+          "start": 8019,
+          "end": 8418,
+          "lines": [
+            148,
+            156
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 8367,
+              "end": 8384,
+              "lines": [
+                155,
+                155
+              ]
+            }
+          ]
+        },
+        {
+          "title": "parts that exceed budget show over-budget class",
+          "start": 8423,
+          "end": 9246,
+          "lines": [
+            158,
+            171
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 9150,
+              "end": 9173,
+              "lines": [
+                169,
+                169
+              ]
+            }
+          ]
+        },
+        {
+          "title": "budget label gets 'over' class when spending exceeds the cap",
+          "start": 9251,
+          "end": 10687,
+          "lines": [
+            173,
+            196
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 10607,
+              "end": 10618,
+              "lines": [
+                194,
+                194
+              ]
+            }
+          ]
+        },
+        {
+          "title": "unlimited button shows FREE BUILD text initially",
+          "start": 10756,
+          "end": 11014,
+          "lines": [
+            200,
+            205
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 10934,
+              "end": 10946,
+              "lines": [
+                203,
+                203
+              ]
+            },
+            {
+              "start": 10976,
+              "end": 10988,
+              "lines": [
+                204,
+                204
+              ]
+            }
+          ]
+        },
+        {
+          "title": "clicking unlimited button enables FREE BUILD mode",
+          "start": 11019,
+          "end": 11352,
+          "lines": [
+            207,
+            213
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 11250,
+              "end": 11268,
+              "lines": [
+                211,
+                211
+              ]
+            }
+          ]
+        },
+        {
+          "title": "unlimited mode hides budget fill bar",
+          "start": 11357,
+          "end": 11659,
+          "lines": [
+            215,
+            222
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 11613,
+              "end": 11630,
+              "lines": [
+                221,
+                221
+              ]
+            }
+          ]
+        },
+        {
+          "title": "unlimited button gets 'on' class when active",
+          "start": 11664,
+          "end": 11927,
+          "lines": [
+            224,
+            229
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 11894,
+              "end": 11905,
+              "lines": [
+                228,
+                228
+              ]
+            }
+          ]
+        },
+        {
+          "title": "unlimited mode removes over-budget option classes",
+          "start": 11932,
+          "end": 12573,
+          "lines": [
+            231,
+            243
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 12482,
+              "end": 12505,
+              "lines": [
+                241,
+                241
+              ]
+            }
+          ]
+        },
+        {
+          "title": "unlimited state persists after page reload",
+          "start": 12578,
+          "end": 13266,
+          "lines": [
+            245,
+            258
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 13157,
+              "end": 13175,
+              "lines": [
+                256,
+                256
+              ]
+            }
+          ]
+        },
+        {
+          "title": "toggling unlimited OFF restores normal budget display",
+          "start": 13271,
+          "end": 13785,
+          "lines": [
+            260,
+            269
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 13625,
+              "end": 13643,
+              "lines": [
+                266,
+                266
+              ]
+            },
+            {
+              "start": 13747,
+              "end": 13758,
+              "lines": [
+                268,
+                268
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 6642,
+          "end": 6654,
+          "lines": [
+            115,
+            115
+          ]
+        },
+        {
+          "start": 6934,
+          "end": 6951,
+          "lines": [
+            122,
+            122
+          ]
+        },
+        {
+          "start": 7194,
+          "end": 7211,
+          "lines": [
+            130,
+            130
+          ]
+        },
+        {
+          "start": 7924,
+          "end": 7936,
+          "lines": [
+            144,
+            144
+          ]
+        },
+        {
+          "start": 8367,
+          "end": 8384,
+          "lines": [
+            155,
+            155
+          ]
+        },
+        {
+          "start": 9150,
+          "end": 9173,
+          "lines": [
+            169,
+            169
+          ]
+        },
+        {
+          "start": 10607,
+          "end": 10618,
+          "lines": [
+            194,
+            194
+          ]
+        },
+        {
+          "start": 10934,
+          "end": 10946,
+          "lines": [
+            203,
+            203
+          ]
+        },
+        {
+          "start": 10976,
+          "end": 10988,
+          "lines": [
+            204,
+            204
+          ]
+        },
+        {
+          "start": 11250,
+          "end": 11268,
+          "lines": [
+            211,
+            211
+          ]
+        },
+        {
+          "start": 11613,
+          "end": 11630,
+          "lines": [
+            221,
+            221
+          ]
+        },
+        {
+          "start": 11894,
+          "end": 11905,
+          "lines": [
+            228,
+            228
+          ]
+        },
+        {
+          "start": 12482,
+          "end": 12505,
+          "lines": [
+            241,
+            241
+          ]
+        },
+        {
+          "start": 13157,
+          "end": 13175,
+          "lines": [
+            256,
+            256
+          ]
+        },
+        {
+          "start": 13625,
+          "end": 13643,
+          "lines": [
+            266,
+            266
+          ]
+        },
+        {
+          "start": 13747,
+          "end": 13758,
+          "lines": [
+            268,
+            268
+          ]
+        }
+      ],
+      "targets": [
+        "headless"
+      ],
+      "semantics": "Budget display, selection arithmetic, warnings, free-build persistence.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/output-paths.js",
+        "../helpers/shared-page.js",
+        "../helpers/garage-sheet.js"
+      ],
+      "assertionCount": 16,
+      "caseDeclarationCount": 14,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/parts-catalog.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 14028,
+        "sha256": "07d16926b1f5d764bb4f5944bfd6aab0451a577c401a95f7b2e00c227de0777f",
+        "manifestSha256": "07d16926b1f5d764bb4f5944bfd6aab0451a577c401a95f7b2e00c227de0777f",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 14028,
+        "bytes": 14028,
+        "sha256": "07d16926b1f5d764bb4f5944bfd6aab0451a577c401a95f7b2e00c227de0777f",
+        "partial": false,
+        "lines": [
+          1,
+          305
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "1dfc6b837815c8ff4b98226d81ed14e4d393c303fb73a49d025d8f33e2e114d7",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "95295d"
+        },
+        {
+          "start": 8000,
+          "end": 14028,
+          "bytes": 6028,
+          "sha256": "206707d2a3d42ed530b7c2a983272ba3ff3e5e97d2158a6684e0d3a06a97287f",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "b3489d"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 755,
+          "end": 823,
+          "lines": [
+            14,
+            14
+          ]
+        },
+        {
+          "source": "../helpers/output-paths.js",
+          "start": 824,
+          "end": 881,
+          "lines": [
+            15,
+            15
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 882,
+          "end": 974,
+          "lines": [
+            16,
+            16
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 3344,
+          "end": 3377,
+          "lines": [
+            66,
+            66
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 5185,
+          "end": 5218,
+          "lines": [
+            112,
+            112
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 7445,
+          "end": 7478,
+          "lines": [
+            170,
+            170
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 10073,
+          "end": 10106,
+          "lines": [
+            225,
+            225
+          ]
+        },
+        {
+          "kind": "test.use",
+          "start": 13591,
+          "end": 13642,
+          "lines": [
+            296,
+            296
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "openSetup",
+          "start": 1104,
+          "end": 2537,
+          "lines": [
+            21,
+            44
+          ]
+        },
+        {
+          "name": "openCat",
+          "start": 2539,
+          "end": 2645,
+          "lines": [
+            46,
+            48
+          ]
+        },
+        {
+          "name": "opt",
+          "start": 2647,
+          "end": 2739,
+          "lines": [
+            50,
+            52
+          ]
+        },
+        {
+          "name": "catalogOpt",
+          "start": 2901,
+          "end": 3271,
+          "lines": [
+            56,
+            63
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "every catalog category label is visible",
+          "start": 3382,
+          "end": 3874,
+          "lines": [
+            68,
+            77
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 3586,
+              "end": 3636,
+              "lines": [
+                72,
+                72
+              ]
+            },
+            {
+              "start": 3697,
+              "end": 3751,
+              "lines": [
+                74,
+                74
+              ]
+            }
+          ]
+        },
+        {
+          "title": "GEARBOX section contains Standard and F1 Spec options",
+          "start": 3879,
+          "end": 4140,
+          "lines": [
+            79,
+            85
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4037,
+              "end": 4066,
+              "lines": [
+                83,
+                83
+              ]
+            },
+            {
+              "start": 4092,
+              "end": 4120,
+              "lines": [
+                84,
+                84
+              ]
+            }
+          ]
+        },
+        {
+          "title": "FUEL section contains Standard and Qualifying Mix options",
+          "start": 4145,
+          "end": 4409,
+          "lines": [
+            87,
+            93
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4304,
+              "end": 4333,
+              "lines": [
+                91,
+                91
+              ]
+            },
+            {
+              "start": 4359,
+              "end": 4389,
+              "lines": [
+                92,
+                92
+              ]
+            }
+          ]
+        },
+        {
+          "title": "ENGINE section shows every engine option the team may fit",
+          "start": 4414,
+          "end": 5110,
+          "lines": [
+            95,
+            108
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4833,
+              "end": 4896,
+              "lines": [
+                104,
+                104
+              ]
+            },
+            {
+              "start": 5077,
+              "end": 5090,
+              "lines": [
+                107,
+                107
+              ]
+            }
+          ]
+        },
+        {
+          "title": "GEARBOX Standard option is active by default",
+          "start": 5223,
+          "end": 5429,
+          "lines": [
+            114,
+            119
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5372,
+              "end": 5401,
+              "lines": [
+                118,
+                118
+              ]
+            }
+          ]
+        },
+        {
+          "title": "FUEL Standard option is active by default",
+          "start": 5434,
+          "end": 5661,
+          "lines": [
+            121,
+            126
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5604,
+              "end": 5633,
+              "lines": [
+                125,
+                125
+              ]
+            }
+          ]
+        },
+        {
+          "title": "clicking Close Ratio gearbox makes it active",
+          "start": 5666,
+          "end": 6048,
+          "lines": [
+            128,
+            135
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5886,
+              "end": 5918,
+              "lines": [
+                133,
+                133
+              ]
+            }
+          ]
+        },
+        {
+          "title": "clicking High Octane fuel makes it active",
+          "start": 6053,
+          "end": 6426,
+          "lines": [
+            137,
+            144
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 6267,
+              "end": 6299,
+              "lines": [
+                142,
+                142
+              ]
+            }
+          ]
+        },
+        {
+          "title": "description updates when an option is selected",
+          "start": 6431,
+          "end": 6879,
+          "lines": [
+            146,
+            155
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 6689,
+              "end": 6737,
+              "lines": [
+                152,
+                152
+              ]
+            },
+            {
+              "start": 6850,
+              "end": 6862,
+              "lines": [
+                154,
+                154
+              ]
+            }
+          ]
+        },
+        {
+          "title": "GEARBOX Sequential Pro option has a cost badge",
+          "start": 6884,
+          "end": 7366,
+          "lines": [
+            157,
+            166
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 7083,
+              "end": 7121,
+              "lines": [
+                162,
+                162
+              ]
+            },
+            {
+              "start": 7221,
+              "end": 7266,
+              "lines": [
+                164,
+                164
+              ]
+            },
+            {
+              "start": 7297,
+              "end": 7335,
+              "lines": [
+                165,
+                165
+              ]
+            }
+          ]
+        },
+        {
+          "title": "AMG HPP option visible when team is Mercedes",
+          "start": 7483,
+          "end": 7811,
+          "lines": [
+            172,
+            177
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 7658,
+              "end": 7692,
+              "lines": [
+                175,
+                175
+              ]
+            }
+          ]
+        },
+        {
+          "title": "AMG HPP option NOT visible when team is not Mercedes",
+          "start": 7816,
+          "end": 8320,
+          "lines": [
+            179,
+            186
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 8170,
+              "end": 8204,
+              "lines": [
+                184,
+                184
+              ]
+            }
+          ]
+        },
+        {
+          "title": "factory option has FACTORY tag badge",
+          "start": 8325,
+          "end": 8659,
+          "lines": [
+            188,
+            194
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 8541,
+              "end": 8552,
+              "lines": [
+                192,
+                192
+              ]
+            },
+            {
+              "start": 8577,
+              "end": 8634,
+              "lines": [
+                193,
+                193
+              ]
+            }
+          ]
+        },
+        {
+          "title": "unrestricted options have UNIVERSAL badges",
+          "start": 8664,
+          "end": 8891,
+          "lines": [
+            196,
+            200
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 8809,
+              "end": 8858,
+              "lines": [
+                199,
+                199
+              ]
+            }
+          ]
+        },
+        {
+          "title": "team signatures are visible only to their eligible team",
+          "start": 8896,
+          "end": 9635,
+          "lines": [
+            202,
+            216
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 9129,
+              "end": 9140,
+              "lines": [
+                206,
+                206
+              ]
+            },
+            {
+              "start": 9165,
+              "end": 9225,
+              "lines": [
+                207,
+                207
+              ]
+            },
+            {
+              "start": 9577,
+              "end": 9614,
+              "lines": [
+                215,
+                215
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every visual tier of every category builds a different car mesh",
+          "start": 10111,
+          "end": 11861,
+          "lines": [
+            227,
+            261
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 11358,
+              "end": 11409,
+              "lines": [
+                253,
+                253
+              ]
+            },
+            {
+              "start": 11493,
+              "end": 11557,
+              "lines": [
+                256,
+                256
+              ]
+            },
+            {
+              "start": 11608,
+              "end": 11678,
+              "lines": [
+                257,
+                257
+              ]
+            },
+            {
+              "start": 11742,
+              "end": 11832,
+              "lines": [
+                259,
+                259
+              ]
+            }
+          ]
+        },
+        {
+          "title": "each livery atlas tier paints a canvas of its own size",
+          "start": 11866,
+          "end": 13523,
+          "lines": [
+            263,
+            292
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 13071,
+              "end": 13107,
+              "lines": [
+                284,
+                284
+              ]
+            },
+            {
+              "start": 13129,
+              "end": 13166,
+              "lines": [
+                285,
+                285
+              ]
+            },
+            {
+              "start": 13188,
+              "end": 13234,
+              "lines": [
+                286,
+                286
+              ]
+            },
+            {
+              "start": 13403,
+              "end": 13422,
+              "lines": [
+                290,
+                290
+              ]
+            },
+            {
+              "start": 13460,
+              "end": 13481,
+              "lines": [
+                291,
+                291
+              ]
+            }
+          ]
+        },
+        {
+          "title": "portrait setup screenshot",
+          "start": 13659,
+          "end": 14022,
+          "lines": [
+            298,
+            303
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 13779,
+              "end": 13812,
+              "lines": [
+                300,
+                300
+              ]
+            },
+            {
+              "start": 13935,
+              "end": 13994,
+              "lines": [
+                302,
+                302
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 3586,
+          "end": 3636,
+          "lines": [
+            72,
+            72
+          ]
+        },
+        {
+          "start": 3697,
+          "end": 3751,
+          "lines": [
+            74,
+            74
+          ]
+        },
+        {
+          "start": 4037,
+          "end": 4066,
+          "lines": [
+            83,
+            83
+          ]
+        },
+        {
+          "start": 4092,
+          "end": 4120,
+          "lines": [
+            84,
+            84
+          ]
+        },
+        {
+          "start": 4304,
+          "end": 4333,
+          "lines": [
+            91,
+            91
+          ]
+        },
+        {
+          "start": 4359,
+          "end": 4389,
+          "lines": [
+            92,
+            92
+          ]
+        },
+        {
+          "start": 4833,
+          "end": 4896,
+          "lines": [
+            104,
+            104
+          ]
+        },
+        {
+          "start": 5077,
+          "end": 5090,
+          "lines": [
+            107,
+            107
+          ]
+        },
+        {
+          "start": 5372,
+          "end": 5401,
+          "lines": [
+            118,
+            118
+          ]
+        },
+        {
+          "start": 5604,
+          "end": 5633,
+          "lines": [
+            125,
+            125
+          ]
+        },
+        {
+          "start": 5886,
+          "end": 5918,
+          "lines": [
+            133,
+            133
+          ]
+        },
+        {
+          "start": 6267,
+          "end": 6299,
+          "lines": [
+            142,
+            142
+          ]
+        },
+        {
+          "start": 6689,
+          "end": 6737,
+          "lines": [
+            152,
+            152
+          ]
+        },
+        {
+          "start": 6850,
+          "end": 6862,
+          "lines": [
+            154,
+            154
+          ]
+        },
+        {
+          "start": 7083,
+          "end": 7121,
+          "lines": [
+            162,
+            162
+          ]
+        },
+        {
+          "start": 7221,
+          "end": 7266,
+          "lines": [
+            164,
+            164
+          ]
+        },
+        {
+          "start": 7297,
+          "end": 7335,
+          "lines": [
+            165,
+            165
+          ]
+        },
+        {
+          "start": 7658,
+          "end": 7692,
+          "lines": [
+            175,
+            175
+          ]
+        },
+        {
+          "start": 8170,
+          "end": 8204,
+          "lines": [
+            184,
+            184
+          ]
+        },
+        {
+          "start": 8541,
+          "end": 8552,
+          "lines": [
+            192,
+            192
+          ]
+        },
+        {
+          "start": 8577,
+          "end": 8634,
+          "lines": [
+            193,
+            193
+          ]
+        },
+        {
+          "start": 8809,
+          "end": 8858,
+          "lines": [
+            199,
+            199
+          ]
+        },
+        {
+          "start": 9129,
+          "end": 9140,
+          "lines": [
+            206,
+            206
+          ]
+        },
+        {
+          "start": 9165,
+          "end": 9225,
+          "lines": [
+            207,
+            207
+          ]
+        },
+        {
+          "start": 9577,
+          "end": 9614,
+          "lines": [
+            215,
+            215
+          ]
+        },
+        {
+          "start": 11358,
+          "end": 11409,
+          "lines": [
+            253,
+            253
+          ]
+        },
+        {
+          "start": 11493,
+          "end": 11557,
+          "lines": [
+            256,
+            256
+          ]
+        },
+        {
+          "start": 11608,
+          "end": 11678,
+          "lines": [
+            257,
+            257
+          ]
+        },
+        {
+          "start": 11742,
+          "end": 11832,
+          "lines": [
+            259,
+            259
+          ]
+        },
+        {
+          "start": 13071,
+          "end": 13107,
+          "lines": [
+            284,
+            284
+          ]
+        },
+        {
+          "start": 13129,
+          "end": 13166,
+          "lines": [
+            285,
+            285
+          ]
+        },
+        {
+          "start": 13188,
+          "end": 13234,
+          "lines": [
+            286,
+            286
+          ]
+        },
+        {
+          "start": 13403,
+          "end": 13422,
+          "lines": [
+            290,
+            290
+          ]
+        },
+        {
+          "start": 13460,
+          "end": 13481,
+          "lines": [
+            291,
+            291
+          ]
+        },
+        {
+          "start": 13779,
+          "end": 13812,
+          "lines": [
+            300,
+            300
+          ]
+        },
+        {
+          "start": 13935,
+          "end": 13994,
+          "lines": [
+            302,
+            302
+          ]
+        }
+      ],
+      "targets": [
+        "headless"
+      ],
+      "semantics": "Team-filtered catalog UI and visual tier application.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/output-paths.js",
+        "../helpers/shared-page.js"
+      ],
+      "assertionCount": 36,
+      "caseDeclarationCount": 18,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/parts-ers.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 6821,
+        "sha256": "b492ac42748863d4257a8ee4ab524f4ed9ac413d45af4305d0ad81bebb39decb",
+        "manifestSha256": "b492ac42748863d4257a8ee4ab524f4ed9ac413d45af4305d0ad81bebb39decb",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 6821,
+        "bytes": 6821,
+        "sha256": "b492ac42748863d4257a8ee4ab524f4ed9ac413d45af4305d0ad81bebb39decb",
+        "partial": false,
+        "lines": [
+          1,
+          132
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6821,
+          "bytes": 6821,
+          "sha256": "b492ac42748863d4257a8ee4ab524f4ed9ac413d45af4305d0ad81bebb39decb",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "db0127"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 848,
+          "end": 933,
+          "lines": [
+            15,
+            15
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 934,
+          "end": 998,
+          "lines": [
+            16,
+            16
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "start": 4301,
+          "end": 4325,
+          "lines": [
+            76,
+            76
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "load",
+          "start": 1000,
+          "end": 1740,
+          "lines": [
+            18,
+            30
+          ]
+        },
+        {
+          "name": "boostRun",
+          "start": 2104,
+          "end": 2888,
+          "lines": [
+            37,
+            54
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "holding BOOST at high speed drains the battery",
+          "start": 4329,
+          "end": 4699,
+          "lines": [
+            77,
+            83
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4573,
+              "end": 4590,
+              "lines": [
+                81,
+                81
+              ]
+            },
+            {
+              "start": 4617,
+              "end": 4671,
+              "lines": [
+                82,
+                82
+              ]
+            }
+          ]
+        },
+        {
+          "title": "holding BOOST at high speed PUSHES \u2014 more ground than the same run without it",
+          "start": 4704,
+          "end": 5363,
+          "lines": [
+            85,
+            95
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5121,
+              "end": 5166,
+              "lines": [
+                91,
+                91
+              ]
+            },
+            {
+              "start": 5192,
+              "end": 5329,
+              "lines": [
+                92,
+                93
+              ]
+            }
+          ]
+        },
+        {
+          "title": "BOOST still drains at low speed, where the taper is strongest",
+          "start": 5368,
+          "end": 5635,
+          "lines": [
+            97,
+            101
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5544,
+              "end": 5607,
+              "lines": [
+                100,
+                100
+              ]
+            }
+          ]
+        },
+        {
+          "title": "not holding BOOST does not drain \u2014 the battery recovers instead",
+          "start": 5640,
+          "end": 5899,
+          "lines": [
+            103,
+            107
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5822,
+              "end": 5870,
+              "lines": [
+                106,
+                106
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the deploy taper never reaches zero, so BOOST is never silently inert",
+          "start": 5904,
+          "end": 6815,
+          "lines": [
+            109,
+            130
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 6744,
+              "end": 6797,
+              "lines": [
+                129,
+                129
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 4573,
+          "end": 4590,
+          "lines": [
+            81,
+            81
+          ]
+        },
+        {
+          "start": 4617,
+          "end": 4671,
+          "lines": [
+            82,
+            82
+          ]
+        },
+        {
+          "start": 5121,
+          "end": 5166,
+          "lines": [
+            91,
+            91
+          ]
+        },
+        {
+          "start": 5192,
+          "end": 5329,
+          "lines": [
+            92,
+            93
+          ]
+        },
+        {
+          "start": 5544,
+          "end": 5607,
+          "lines": [
+            100,
+            100
+          ]
+        },
+        {
+          "start": 5822,
+          "end": 5870,
+          "lines": [
+            106,
+            106
+          ]
+        },
+        {
+          "start": 6744,
+          "end": 6797,
+          "lines": [
+            129,
+            129
+          ]
+        }
+      ],
+      "targets": [
+        "info",
+        "headless",
+        "go",
+        "setEnergy",
+        "jump",
+        "setInput",
+        "step",
+        "setBoost",
+        "timing",
+        "probe",
+        "clearInput"
+      ],
+      "semantics": "BOOST thrust and battery drain across speed regimes.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/shared-page.js"
+      ],
+      "assertionCount": 7,
+      "caseDeclarationCount": 5,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/parts-factory-presets.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 6184,
+        "sha256": "e8b34412aef2849c34d5b40e684018970493c1d7bc69530aefd165b9318f5cb2",
+        "manifestSha256": "e8b34412aef2849c34d5b40e684018970493c1d7bc69530aefd165b9318f5cb2",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 6184,
+        "bytes": 6184,
+        "sha256": "e8b34412aef2849c34d5b40e684018970493c1d7bc69530aefd165b9318f5cb2",
+        "partial": false,
+        "lines": [
+          1,
+          121
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6184,
+          "bytes": 6184,
+          "sha256": "e8b34412aef2849c34d5b40e684018970493c1d7bc69530aefd165b9318f5cb2",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "877be6"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 322,
+          "end": 390,
+          "lines": [
+            7,
+            7
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 391,
+          "end": 455,
+          "lines": [
+            8,
+            8
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.setTimeout",
+          "start": 1257,
+          "end": 1281,
+          "lines": [
+            21,
+            21
+          ]
+        }
+      ],
+      "functions": [],
+      "cases": [
+        {
+          "title": "AI full-body meshes use deterministic factory presets instead of saved setups",
+          "start": 457,
+          "end": 6182,
+          "lines": [
+            10,
+            120
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5984,
+              "end": 6009,
+              "lines": [
+                116,
+                116
+              ]
+            },
+            {
+              "start": 6025,
+              "end": 6049,
+              "lines": [
+                117,
+                117
+              ]
+            },
+            {
+              "start": 6069,
+              "end": 6095,
+              "lines": [
+                118,
+                118
+              ]
+            },
+            {
+              "start": 6126,
+              "end": 6153,
+              "lines": [
+                119,
+                119
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 5984,
+          "end": 6009,
+          "lines": [
+            116,
+            116
+          ]
+        },
+        {
+          "start": 6025,
+          "end": 6049,
+          "lines": [
+            117,
+            117
+          ]
+        },
+        {
+          "start": 6069,
+          "end": 6095,
+          "lines": [
+            118,
+            118
+          ]
+        },
+        {
+          "start": 6126,
+          "end": 6153,
+          "lines": [
+            119,
+            119
+          ]
+        }
+      ],
+      "targets": [
+        "clearCarMeshCaches",
+        "race",
+        "park",
+        "cars",
+        "aiPlace"
+      ],
+      "semantics": "AI factory meshes independent of saved player parts.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/shared-page.js"
+      ],
+      "assertionCount": 4,
+      "caseDeclarationCount": 1,
+      "cleanup": "Car3D.build monkey patch and __factoryMeshCaptures are not restored locally; shared page lifetime matters."
+    },
+    {
+      "path": "tests/specs/parts-liveries.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 25601,
+        "sha256": "9d3a89c4b21489eccb7bee8e82da7c4999c21e0c0acb6433c31ec81c1ec26b9b",
+        "manifestSha256": "9d3a89c4b21489eccb7bee8e82da7c4999c21e0c0acb6433c31ec81c1ec26b9b",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 25601,
+        "bytes": 25601,
+        "sha256": "9d3a89c4b21489eccb7bee8e82da7c4999c21e0c0acb6433c31ec81c1ec26b9b",
+        "partial": false,
+        "lines": [
+          1,
+          471
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "bc06b5ff2055939f3dcdab10ebf365fa0124e91bb23add66b69d0214262a87c4",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "cb82b0"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "4aa7efef005ac1d67af489724bac5b7bddaecd7d9a9833eba529a2b62017841f",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "a1e5e7"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "408f4905e0b4ac7469a5f7a2e904268107334c7e3d05b9d2b7dbee5ecf916725",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "d19994"
+        },
+        {
+          "start": 24000,
+          "end": 25601,
+          "bytes": 1601,
+          "sha256": "231f894acdd825cbf70b77cbdb7cbb681f84900df36c69d488cc79d4c1a4f9c2",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "6e1d3f"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 814,
+          "end": 882,
+          "lines": [
+            15,
+            15
+          ]
+        },
+        {
+          "source": "../helpers/output-paths.js",
+          "start": 883,
+          "end": 940,
+          "lines": [
+            16,
+            16
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 941,
+          "end": 1031,
+          "lines": [
+            17,
+            17
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 9320,
+          "end": 9353,
+          "lines": [
+            202,
+            202
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "load",
+          "start": 1081,
+          "end": 1136,
+          "lines": [
+            21,
+            23
+          ]
+        },
+        {
+          "name": "openSetup",
+          "start": 1356,
+          "end": 1711,
+          "lines": [
+            28,
+            35
+          ]
+        },
+        {
+          "name": "reveal",
+          "start": 2039,
+          "end": 2319,
+          "lines": [
+            41,
+            47
+          ]
+        },
+        {
+          "name": "pinEmptyCustoms",
+          "start": 2321,
+          "end": 2537,
+          "lines": [
+            49,
+            53
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "every livery has well-formed colours and a known finish",
+          "start": 2587,
+          "end": 3954,
+          "lines": [
+            56,
+            84
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 3925,
+              "end": 3936,
+              "lines": [
+                83,
+                83
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every team's picker leads with its own default livery",
+          "start": 3959,
+          "end": 4551,
+          "lines": [
+            86,
+            98
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4385,
+              "end": 4412,
+              "lines": [
+                94,
+                94
+              ]
+            },
+            {
+              "start": 4436,
+              "end": 4466,
+              "lines": [
+                95,
+                95
+              ]
+            },
+            {
+              "start": 4485,
+              "end": 4512,
+              "lines": [
+                96,
+                96
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a custom team's stored finish reaches its default livery",
+          "start": 4556,
+          "end": 4910,
+          "lines": [
+            100,
+            107
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4875,
+              "end": 4889,
+              "lines": [
+                106,
+                106
+              ]
+            }
+          ]
+        },
+        {
+          "title": "gloss (and an absent finish) leave every paint face on the paint surface",
+          "start": 4970,
+          "end": 5793,
+          "lines": [
+            111,
+            127
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5649,
+              "end": 5673,
+              "lines": [
+                124,
+                124
+              ]
+            },
+            {
+              "start": 5698,
+              "end": 5723,
+              "lines": [
+                125,
+                125
+              ]
+            },
+            {
+              "start": 5752,
+              "end": 5776,
+              "lines": [
+                126,
+                126
+              ]
+            }
+          ]
+        },
+        {
+          "title": "satin and chrome move the paint faces \u2014 and only the paint faces",
+          "start": 5798,
+          "end": 7930,
+          "lines": [
+            129,
+            171
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 7178,
+              "end": 7205,
+              "lines": [
+                157,
+                157
+              ]
+            },
+            {
+              "start": 7538,
+              "end": 7566,
+              "lines": [
+                162,
+                162
+              ]
+            },
+            {
+              "start": 7678,
+              "end": 7710,
+              "lines": [
+                165,
+                165
+              ]
+            },
+            {
+              "start": 7737,
+              "end": 7769,
+              "lines": [
+                166,
+                166
+              ]
+            },
+            {
+              "start": 7785,
+              "end": 7812,
+              "lines": [
+                167,
+                167
+              ]
+            },
+            {
+              "start": 7828,
+              "end": 7859,
+              "lines": [
+                168,
+                168
+              ]
+            },
+            {
+              "start": 7878,
+              "end": 7907,
+              "lines": [
+                169,
+                169
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a satin livery builds a body with no gloss paint left",
+          "start": 8219,
+          "end": 9265,
+          "lines": [
+            177,
+            198
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 9145,
+              "end": 9166,
+              "lines": [
+                195,
+                195
+              ]
+            },
+            {
+              "start": 9186,
+              "end": 9206,
+              "lines": [
+                196,
+                196
+              ]
+            },
+            {
+              "start": 9220,
+              "end": 9240,
+              "lines": [
+                197,
+                197
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the paint editor outweighs the garage chrome above it",
+          "start": 10546,
+          "end": 11626,
+          "lines": [
+            221,
+            242
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 10972,
+              "end": 11042,
+              "lines": [
+                232,
+                232
+              ]
+            },
+            {
+              "start": 11132,
+              "end": 11170,
+              "lines": [
+                235,
+                235
+              ]
+            },
+            {
+              "start": 11292,
+              "end": 11370,
+              "lines": [
+                238,
+                238
+              ]
+            },
+            {
+              "start": 11384,
+              "end": 11452,
+              "lines": [
+                239,
+                239
+              ]
+            },
+            {
+              "start": 11482,
+              "end": 11584,
+              "lines": [
+                240,
+                240
+              ]
+            }
+          ]
+        },
+        {
+          "title": "FIN SHAPE none greys out the four fin rows, and a fin brings them back",
+          "start": 11631,
+          "end": 15205,
+          "lines": [
+            244,
+            294
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 12785,
+              "end": 12794,
+              "lines": [
+                260,
+                260
+              ]
+            },
+            {
+              "start": 12848,
+              "end": 12902,
+              "lines": [
+                261,
+                261
+              ]
+            },
+            {
+              "start": 13025,
+              "end": 13034,
+              "lines": [
+                264,
+                264
+              ]
+            },
+            {
+              "start": 13087,
+              "end": 13141,
+              "lines": [
+                265,
+                265
+              ]
+            },
+            {
+              "start": 13168,
+              "end": 13222,
+              "lines": [
+                266,
+                266
+              ]
+            },
+            {
+              "start": 13249,
+              "end": 13294,
+              "lines": [
+                267,
+                267
+              ]
+            },
+            {
+              "start": 13405,
+              "end": 13457,
+              "lines": [
+                269,
+                269
+              ]
+            },
+            {
+              "start": 13661,
+              "end": 13716,
+              "lines": [
+                273,
+                273
+              ]
+            },
+            {
+              "start": 13742,
+              "end": 13797,
+              "lines": [
+                274,
+                274
+              ]
+            },
+            {
+              "start": 13823,
+              "end": 13895,
+              "lines": [
+                275,
+                275
+              ]
+            },
+            {
+              "start": 14221,
+              "end": 14235,
+              "lines": [
+                279,
+                279
+              ]
+            },
+            {
+              "start": 14315,
+              "end": 14329,
+              "lines": [
+                280,
+                280
+              ]
+            },
+            {
+              "start": 14766,
+              "end": 14781,
+              "lines": [
+                287,
+                287
+              ]
+            },
+            {
+              "start": 15027,
+              "end": 15036,
+              "lines": [
+                291,
+                291
+              ]
+            },
+            {
+              "start": 15090,
+              "end": 15104,
+              "lines": [
+                292,
+                292
+              ]
+            },
+            {
+              "start": 15131,
+              "end": 15185,
+              "lines": [
+                293,
+                293
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a plain fin greys TAIL GRAPHIC, and the CLEAN sponsor pack greys the wordmark pills",
+          "start": 15210,
+          "end": 17550,
+          "lines": [
+            296,
+            329
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 16037,
+              "end": 16051,
+              "lines": [
+                308,
+                308
+              ]
+            },
+            {
+              "start": 16236,
+              "end": 16250,
+              "lines": [
+                311,
+                311
+              ]
+            },
+            {
+              "start": 16421,
+              "end": 16435,
+              "lines": [
+                314,
+                314
+              ]
+            },
+            {
+              "start": 16563,
+              "end": 16577,
+              "lines": [
+                316,
+                316
+              ]
+            },
+            {
+              "start": 16704,
+              "end": 16718,
+              "lines": [
+                318,
+                318
+              ]
+            },
+            {
+              "start": 16936,
+              "end": 16959,
+              "lines": [
+                321,
+                321
+              ]
+            },
+            {
+              "start": 17087,
+              "end": 17110,
+              "lines": [
+                323,
+                323
+              ]
+            },
+            {
+              "start": 17191,
+              "end": 17248,
+              "lines": [
+                325,
+                325
+              ]
+            },
+            {
+              "start": 17274,
+              "end": 17346,
+              "lines": [
+                326,
+                326
+              ]
+            },
+            {
+              "start": 17507,
+              "end": 17530,
+              "lines": [
+                328,
+                328
+              ]
+            }
+          ]
+        },
+        {
+          "title": "WING FLAPS carbon greys the WINGS and REAR WING colours, and the stars motif is offered",
+          "start": 17555,
+          "end": 19469,
+          "lines": [
+            331,
+            359
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 18043,
+              "end": 18056,
+              "lines": [
+                339,
+                339
+              ]
+            },
+            {
+              "start": 18110,
+              "end": 18122,
+              "lines": [
+                340,
+                340
+              ]
+            },
+            {
+              "start": 18254,
+              "end": 18267,
+              "lines": [
+                342,
+                342
+              ]
+            },
+            {
+              "start": 18320,
+              "end": 18332,
+              "lines": [
+                343,
+                343
+              ]
+            },
+            {
+              "start": 18385,
+              "end": 18428,
+              "lines": [
+                344,
+                344
+              ]
+            },
+            {
+              "start": 18532,
+              "end": 18545,
+              "lines": [
+                346,
+                346
+              ]
+            },
+            {
+              "start": 18599,
+              "end": 18611,
+              "lines": [
+                347,
+                347
+              ]
+            },
+            {
+              "start": 18835,
+              "end": 18879,
+              "lines": [
+                350,
+                350
+              ]
+            },
+            {
+              "start": 18905,
+              "end": 18918,
+              "lines": [
+                351,
+                351
+              ]
+            },
+            {
+              "start": 19116,
+              "end": 19130,
+              "lines": [
+                354,
+                354
+              ]
+            },
+            {
+              "start": 19394,
+              "end": 19449,
+              "lines": [
+                358,
+                358
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a new paint job opens on the team's own silhouette, not the plain car",
+          "start": 19474,
+          "end": 22049,
+          "lines": [
+            361,
+            400
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 20602,
+              "end": 20664,
+              "lines": [
+                379,
+                379
+              ]
+            },
+            {
+              "start": 20683,
+              "end": 20773,
+              "lines": [
+                380,
+                380
+              ]
+            },
+            {
+              "start": 21139,
+              "end": 21220,
+              "lines": [
+                389,
+                389
+              ]
+            },
+            {
+              "start": 21237,
+              "end": 21312,
+              "lines": [
+                390,
+                390
+              ]
+            },
+            {
+              "start": 21330,
+              "end": 21403,
+              "lines": [
+                391,
+                391
+              ]
+            },
+            {
+              "start": 21664,
+              "end": 21678,
+              "lines": [
+                395,
+                395
+              ]
+            },
+            {
+              "start": 21842,
+              "end": 21856,
+              "lines": [
+                397,
+                397
+              ]
+            },
+            {
+              "start": 21987,
+              "end": 22001,
+              "lines": [
+                399,
+                399
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the creator offers a finish choice and saves it onto the custom livery",
+          "start": 22054,
+          "end": 24477,
+          "lines": [
+            402,
+            443
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 23183,
+              "end": 23199,
+              "lines": [
+                421,
+                421
+              ]
+            },
+            {
+              "start": 23230,
+              "end": 23244,
+              "lines": [
+                422,
+                422
+              ]
+            },
+            {
+              "start": 23278,
+              "end": 23344,
+              "lines": [
+                423,
+                423
+              ]
+            },
+            {
+              "start": 23466,
+              "end": 23533,
+              "lines": [
+                426,
+                426
+              ]
+            },
+            {
+              "start": 23567,
+              "end": 23633,
+              "lines": [
+                427,
+                427
+              ]
+            },
+            {
+              "start": 23671,
+              "end": 23738,
+              "lines": [
+                428,
+                428
+              ]
+            },
+            {
+              "start": 24287,
+              "end": 24305,
+              "lines": [
+                439,
+                439
+              ]
+            },
+            {
+              "start": 24327,
+              "end": 24355,
+              "lines": [
+                440,
+                440
+              ]
+            },
+            {
+              "start": 24376,
+              "end": 24402,
+              "lines": [
+                441,
+                441
+              ]
+            },
+            {
+              "start": 24428,
+              "end": 24448,
+              "lines": [
+                442,
+                442
+              ]
+            }
+          ]
+        },
+        {
+          "title": "a gloss draft stores no finish field at all",
+          "start": 24482,
+          "end": 25115,
+          "lines": [
+            445,
+            459
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 25035,
+              "end": 25048,
+              "lines": [
+                457,
+                457
+              ]
+            },
+            {
+              "start": 25070,
+              "end": 25093,
+              "lines": [
+                458,
+                458
+              ]
+            }
+          ]
+        },
+        {
+          "title": "stock satin and chrome schemes are badged in the picker",
+          "start": 25120,
+          "end": 25595,
+          "lines": [
+            461,
+            469
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 25418,
+              "end": 25432,
+              "lines": [
+                466,
+                466
+              ]
+            },
+            {
+              "start": 25457,
+              "end": 25471,
+              "lines": [
+                467,
+                467
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 3925,
+          "end": 3936,
+          "lines": [
+            83,
+            83
+          ]
+        },
+        {
+          "start": 4385,
+          "end": 4412,
+          "lines": [
+            94,
+            94
+          ]
+        },
+        {
+          "start": 4436,
+          "end": 4466,
+          "lines": [
+            95,
+            95
+          ]
+        },
+        {
+          "start": 4485,
+          "end": 4512,
+          "lines": [
+            96,
+            96
+          ]
+        },
+        {
+          "start": 4875,
+          "end": 4889,
+          "lines": [
+            106,
+            106
+          ]
+        },
+        {
+          "start": 5649,
+          "end": 5673,
+          "lines": [
+            124,
+            124
+          ]
+        },
+        {
+          "start": 5698,
+          "end": 5723,
+          "lines": [
+            125,
+            125
+          ]
+        },
+        {
+          "start": 5752,
+          "end": 5776,
+          "lines": [
+            126,
+            126
+          ]
+        },
+        {
+          "start": 7178,
+          "end": 7205,
+          "lines": [
+            157,
+            157
+          ]
+        },
+        {
+          "start": 7538,
+          "end": 7566,
+          "lines": [
+            162,
+            162
+          ]
+        },
+        {
+          "start": 7678,
+          "end": 7710,
+          "lines": [
+            165,
+            165
+          ]
+        },
+        {
+          "start": 7737,
+          "end": 7769,
+          "lines": [
+            166,
+            166
+          ]
+        },
+        {
+          "start": 7785,
+          "end": 7812,
+          "lines": [
+            167,
+            167
+          ]
+        },
+        {
+          "start": 7828,
+          "end": 7859,
+          "lines": [
+            168,
+            168
+          ]
+        },
+        {
+          "start": 7878,
+          "end": 7907,
+          "lines": [
+            169,
+            169
+          ]
+        },
+        {
+          "start": 9145,
+          "end": 9166,
+          "lines": [
+            195,
+            195
+          ]
+        },
+        {
+          "start": 9186,
+          "end": 9206,
+          "lines": [
+            196,
+            196
+          ]
+        },
+        {
+          "start": 9220,
+          "end": 9240,
+          "lines": [
+            197,
+            197
+          ]
+        },
+        {
+          "start": 10972,
+          "end": 11042,
+          "lines": [
+            232,
+            232
+          ]
+        },
+        {
+          "start": 11132,
+          "end": 11170,
+          "lines": [
+            235,
+            235
+          ]
+        },
+        {
+          "start": 11292,
+          "end": 11370,
+          "lines": [
+            238,
+            238
+          ]
+        },
+        {
+          "start": 11384,
+          "end": 11452,
+          "lines": [
+            239,
+            239
+          ]
+        },
+        {
+          "start": 11482,
+          "end": 11584,
+          "lines": [
+            240,
+            240
+          ]
+        },
+        {
+          "start": 12785,
+          "end": 12794,
+          "lines": [
+            260,
+            260
+          ]
+        },
+        {
+          "start": 12848,
+          "end": 12902,
+          "lines": [
+            261,
+            261
+          ]
+        },
+        {
+          "start": 13025,
+          "end": 13034,
+          "lines": [
+            264,
+            264
+          ]
+        },
+        {
+          "start": 13087,
+          "end": 13141,
+          "lines": [
+            265,
+            265
+          ]
+        },
+        {
+          "start": 13168,
+          "end": 13222,
+          "lines": [
+            266,
+            266
+          ]
+        },
+        {
+          "start": 13249,
+          "end": 13294,
+          "lines": [
+            267,
+            267
+          ]
+        },
+        {
+          "start": 13405,
+          "end": 13457,
+          "lines": [
+            269,
+            269
+          ]
+        },
+        {
+          "start": 13661,
+          "end": 13716,
+          "lines": [
+            273,
+            273
+          ]
+        },
+        {
+          "start": 13742,
+          "end": 13797,
+          "lines": [
+            274,
+            274
+          ]
+        },
+        {
+          "start": 13823,
+          "end": 13895,
+          "lines": [
+            275,
+            275
+          ]
+        },
+        {
+          "start": 14221,
+          "end": 14235,
+          "lines": [
+            279,
+            279
+          ]
+        },
+        {
+          "start": 14315,
+          "end": 14329,
+          "lines": [
+            280,
+            280
+          ]
+        },
+        {
+          "start": 14766,
+          "end": 14781,
+          "lines": [
+            287,
+            287
+          ]
+        },
+        {
+          "start": 15027,
+          "end": 15036,
+          "lines": [
+            291,
+            291
+          ]
+        },
+        {
+          "start": 15090,
+          "end": 15104,
+          "lines": [
+            292,
+            292
+          ]
+        },
+        {
+          "start": 15131,
+          "end": 15185,
+          "lines": [
+            293,
+            293
+          ]
+        },
+        {
+          "start": 16037,
+          "end": 16051,
+          "lines": [
+            308,
+            308
+          ]
+        },
+        {
+          "start": 16236,
+          "end": 16250,
+          "lines": [
+            311,
+            311
+          ]
+        },
+        {
+          "start": 16421,
+          "end": 16435,
+          "lines": [
+            314,
+            314
+          ]
+        },
+        {
+          "start": 16563,
+          "end": 16577,
+          "lines": [
+            316,
+            316
+          ]
+        },
+        {
+          "start": 16704,
+          "end": 16718,
+          "lines": [
+            318,
+            318
+          ]
+        },
+        {
+          "start": 16936,
+          "end": 16959,
+          "lines": [
+            321,
+            321
+          ]
+        },
+        {
+          "start": 17087,
+          "end": 17110,
+          "lines": [
+            323,
+            323
+          ]
+        },
+        {
+          "start": 17191,
+          "end": 17248,
+          "lines": [
+            325,
+            325
+          ]
+        },
+        {
+          "start": 17274,
+          "end": 17346,
+          "lines": [
+            326,
+            326
+          ]
+        },
+        {
+          "start": 17507,
+          "end": 17530,
+          "lines": [
+            328,
+            328
+          ]
+        },
+        {
+          "start": 18043,
+          "end": 18056,
+          "lines": [
+            339,
+            339
+          ]
+        },
+        {
+          "start": 18110,
+          "end": 18122,
+          "lines": [
+            340,
+            340
+          ]
+        },
+        {
+          "start": 18254,
+          "end": 18267,
+          "lines": [
+            342,
+            342
+          ]
+        },
+        {
+          "start": 18320,
+          "end": 18332,
+          "lines": [
+            343,
+            343
+          ]
+        },
+        {
+          "start": 18385,
+          "end": 18428,
+          "lines": [
+            344,
+            344
+          ]
+        },
+        {
+          "start": 18532,
+          "end": 18545,
+          "lines": [
+            346,
+            346
+          ]
+        },
+        {
+          "start": 18599,
+          "end": 18611,
+          "lines": [
+            347,
+            347
+          ]
+        },
+        {
+          "start": 18835,
+          "end": 18879,
+          "lines": [
+            350,
+            350
+          ]
+        },
+        {
+          "start": 18905,
+          "end": 18918,
+          "lines": [
+            351,
+            351
+          ]
+        },
+        {
+          "start": 19116,
+          "end": 19130,
+          "lines": [
+            354,
+            354
+          ]
+        },
+        {
+          "start": 19394,
+          "end": 19449,
+          "lines": [
+            358,
+            358
+          ]
+        },
+        {
+          "start": 20602,
+          "end": 20664,
+          "lines": [
+            379,
+            379
+          ]
+        },
+        {
+          "start": 20683,
+          "end": 20773,
+          "lines": [
+            380,
+            380
+          ]
+        },
+        {
+          "start": 21139,
+          "end": 21220,
+          "lines": [
+            389,
+            389
+          ]
+        },
+        {
+          "start": 21237,
+          "end": 21312,
+          "lines": [
+            390,
+            390
+          ]
+        },
+        {
+          "start": 21330,
+          "end": 21403,
+          "lines": [
+            391,
+            391
+          ]
+        },
+        {
+          "start": 21664,
+          "end": 21678,
+          "lines": [
+            395,
+            395
+          ]
+        },
+        {
+          "start": 21842,
+          "end": 21856,
+          "lines": [
+            397,
+            397
+          ]
+        },
+        {
+          "start": 21987,
+          "end": 22001,
+          "lines": [
+            399,
+            399
+          ]
+        },
+        {
+          "start": 23183,
+          "end": 23199,
+          "lines": [
+            421,
+            421
+          ]
+        },
+        {
+          "start": 23230,
+          "end": 23244,
+          "lines": [
+            422,
+            422
+          ]
+        },
+        {
+          "start": 23278,
+          "end": 23344,
+          "lines": [
+            423,
+            423
+          ]
+        },
+        {
+          "start": 23466,
+          "end": 23533,
+          "lines": [
+            426,
+            426
+          ]
+        },
+        {
+          "start": 23567,
+          "end": 23633,
+          "lines": [
+            427,
+            427
+          ]
+        },
+        {
+          "start": 23671,
+          "end": 23738,
+          "lines": [
+            428,
+            428
+          ]
+        },
+        {
+          "start": 24287,
+          "end": 24305,
+          "lines": [
+            439,
+            439
+          ]
+        },
+        {
+          "start": 24327,
+          "end": 24355,
+          "lines": [
+            440,
+            440
+          ]
+        },
+        {
+          "start": 24376,
+          "end": 24402,
+          "lines": [
+            441,
+            441
+          ]
+        },
+        {
+          "start": 24428,
+          "end": 24448,
+          "lines": [
+            442,
+            442
+          ]
+        },
+        {
+          "start": 25035,
+          "end": 25048,
+          "lines": [
+            457,
+            457
+          ]
+        },
+        {
+          "start": 25070,
+          "end": 25093,
+          "lines": [
+            458,
+            458
+          ]
+        },
+        {
+          "start": 25418,
+          "end": 25432,
+          "lines": [
+            466,
+            466
+          ]
+        },
+        {
+          "start": 25457,
+          "end": 25471,
+          "lines": [
+            467,
+            467
+          ]
+        }
+      ],
+      "targets": [],
+      "semantics": "Livery catalog/material remap and creator dependencies/persistence.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/output-paths.js",
+        "../helpers/shared-page.js"
+      ],
+      "assertionCount": 82,
+      "caseDeclarationCount": 14,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/parts-livery-contrast.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 26804,
+        "sha256": "c6117eeb345f1aa514fae8a48a660cdda4648febead50e5f6c94be922d72a8e9",
+        "manifestSha256": "c6117eeb345f1aa514fae8a48a660cdda4648febead50e5f6c94be922d72a8e9",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 26804,
+        "bytes": 26804,
+        "sha256": "c6117eeb345f1aa514fae8a48a660cdda4648febead50e5f6c94be922d72a8e9",
+        "partial": false,
+        "lines": [
+          1,
+          496
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "10afaaa16c6359efe71e31a15104555f7946a0d0645cca01127775d6878fdda7",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "1e6dc4"
+        },
+        {
+          "start": 8000,
+          "end": 16000,
+          "bytes": 8000,
+          "sha256": "1135c5db6c6a95b601a355d8b1e040174b04b343c0a15719fcbc5ac8241aefda",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "d5bc41"
+        },
+        {
+          "start": 16000,
+          "end": 24000,
+          "bytes": 8000,
+          "sha256": "f0e7d8a26bb9bea1e0cc450061c12040f26ae7d55bfe62a253ef9dc6f0ab0550",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "f65371"
+        },
+        {
+          "start": 24000,
+          "end": 26804,
+          "bytes": 2804,
+          "sha256": "21165ce568b508c0965e04a2f379cdfd956729ae7d07d0047d7e315076c07410",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "d2d7b2"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 804,
+          "end": 872,
+          "lines": [
+            15,
+            15
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 873,
+          "end": 928,
+          "lines": [
+            16,
+            16
+          ]
+        }
+      ],
+      "hooks": [],
+      "functions": [
+        {
+          "name": "load",
+          "start": 930,
+          "end": 985,
+          "lines": [
+            18,
+            20
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "luminance is linearised, so mid-grey picks the ink that actually contrasts",
+          "start": 1421,
+          "end": 2009,
+          "lines": [
+            31,
+            42
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 1926,
+              "end": 1939,
+              "lines": [
+                40,
+                40
+              ]
+            },
+            {
+              "start": 1963,
+              "end": 1978,
+              "lines": [
+                41,
+                41
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every shipped livery is legible on every panel, by ink or by halo",
+          "start": 2014,
+          "end": 4248,
+          "lines": [
+            44,
+            92
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4105,
+              "end": 4126,
+              "lines": [
+                90,
+                90
+              ]
+            },
+            {
+              "start": 4153,
+              "end": 4230,
+              "lines": [
+                91,
+                91
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the shark-fin motif is inked for the fin colour, not the body colour",
+          "start": 4253,
+          "end": 4980,
+          "lines": [
+            94,
+            106
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4807,
+              "end": 4876,
+              "lines": [
+                104,
+                104
+              ]
+            },
+            {
+              "start": 4898,
+              "end": 4953,
+              "lines": [
+                105,
+                105
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the rear-wing band is inked for the wing colour, not the body colour",
+          "start": 4985,
+          "end": 6072,
+          "lines": [
+            108,
+            125
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 5895,
+              "end": 5966,
+              "lines": [
+                123,
+                123
+              ]
+            },
+            {
+              "start": 5988,
+              "end": 6045,
+              "lines": [
+                124,
+                124
+              ]
+            }
+          ]
+        },
+        {
+          "title": "every decal region sits on the paint buildAtlas inks it for",
+          "start": 6550,
+          "end": 19260,
+          "lines": [
+            133,
+            349
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 18159,
+              "end": 18235,
+              "lines": [
+                331,
+                331
+              ]
+            },
+            {
+              "start": 18257,
+              "end": 18379,
+              "lines": [
+                332,
+                333
+              ]
+            },
+            {
+              "start": 19173,
+              "end": 19235,
+              "lines": [
+                347,
+                347
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the wing sponsor band sits on the rear flap it is painted for",
+          "start": 20002,
+          "end": 24244,
+          "lines": [
+            362,
+            437
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 23726,
+              "end": 23784,
+              "lines": [
+                430,
+                430
+              ]
+            },
+            {
+              "start": 23816,
+              "end": 23872,
+              "lines": [
+                431,
+                431
+              ]
+            },
+            {
+              "start": 23897,
+              "end": 23958,
+              "lines": [
+                432,
+                432
+              ]
+            },
+            {
+              "start": 24135,
+              "end": 24211,
+              "lines": [
+                435,
+                435
+              ]
+            }
+          ]
+        },
+        {
+          "title": "derived team marks clear 4.2; free marks keep markBase",
+          "start": 24402,
+          "end": 25991,
+          "lines": [
+            441,
+            477
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 25795,
+              "end": 25816,
+              "lines": [
+                474,
+                474
+              ]
+            },
+            {
+              "start": 25843,
+              "end": 25863,
+              "lines": [
+                475,
+                475
+              ]
+            },
+            {
+              "start": 25888,
+              "end": 25973,
+              "lines": [
+                476,
+                476
+              ]
+            }
+          ]
+        },
+        {
+          "title": "the wing sponsor band is mapped onto geometry, not drawn into nothing",
+          "start": 25996,
+          "end": 26798,
+          "lines": [
+            479,
+            494
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 26712,
+              "end": 26766,
+              "lines": [
+                493,
+                493
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1926,
+          "end": 1939,
+          "lines": [
+            40,
+            40
+          ]
+        },
+        {
+          "start": 1963,
+          "end": 1978,
+          "lines": [
+            41,
+            41
+          ]
+        },
+        {
+          "start": 4105,
+          "end": 4126,
+          "lines": [
+            90,
+            90
+          ]
+        },
+        {
+          "start": 4153,
+          "end": 4230,
+          "lines": [
+            91,
+            91
+          ]
+        },
+        {
+          "start": 4807,
+          "end": 4876,
+          "lines": [
+            104,
+            104
+          ]
+        },
+        {
+          "start": 4898,
+          "end": 4953,
+          "lines": [
+            105,
+            105
+          ]
+        },
+        {
+          "start": 5895,
+          "end": 5966,
+          "lines": [
+            123,
+            123
+          ]
+        },
+        {
+          "start": 5988,
+          "end": 6045,
+          "lines": [
+            124,
+            124
+          ]
+        },
+        {
+          "start": 18159,
+          "end": 18235,
+          "lines": [
+            331,
+            331
+          ]
+        },
+        {
+          "start": 18257,
+          "end": 18379,
+          "lines": [
+            332,
+            333
+          ]
+        },
+        {
+          "start": 19173,
+          "end": 19235,
+          "lines": [
+            347,
+            347
+          ]
+        },
+        {
+          "start": 23726,
+          "end": 23784,
+          "lines": [
+            430,
+            430
+          ]
+        },
+        {
+          "start": 23816,
+          "end": 23872,
+          "lines": [
+            431,
+            431
+          ]
+        },
+        {
+          "start": 23897,
+          "end": 23958,
+          "lines": [
+            432,
+            432
+          ]
+        },
+        {
+          "start": 24135,
+          "end": 24211,
+          "lines": [
+            435,
+            435
+          ]
+        },
+        {
+          "start": 25795,
+          "end": 25816,
+          "lines": [
+            474,
+            474
+          ]
+        },
+        {
+          "start": 25843,
+          "end": 25863,
+          "lines": [
+            475,
+            475
+          ]
+        },
+        {
+          "start": 25888,
+          "end": 25973,
+          "lines": [
+            476,
+            476
+          ]
+        },
+        {
+          "start": 26712,
+          "end": 26766,
+          "lines": [
+            493,
+            493
+          ]
+        }
+      ],
+      "targets": [],
+      "semantics": "Atlas ink/halo contrast and geometric backing.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/shared-page.js"
+      ],
+      "assertionCount": 19,
+      "caseDeclarationCount": 8,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/parts-livery-crest.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 4096,
+        "sha256": "580e6b79e4a7e07d2a6beeab5ea8ffce02de95d5b4e41c33eec64ad3021f0391",
+        "manifestSha256": "580e6b79e4a7e07d2a6beeab5ea8ffce02de95d5b4e41c33eec64ad3021f0391",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 4096,
+        "bytes": 4096,
+        "sha256": "580e6b79e4a7e07d2a6beeab5ea8ffce02de95d5b4e41c33eec64ad3021f0391",
+        "partial": false,
+        "lines": [
+          1,
+          74
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4096,
+          "bytes": 4096,
+          "sha256": "580e6b79e4a7e07d2a6beeab5ea8ffce02de95d5b4e41c33eec64ad3021f0391",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "7b6bcf"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 400,
+          "end": 454,
+          "lines": [
+            6,
+            6
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 455,
+          "end": 545,
+          "lines": [
+            7,
+            7
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 547,
+          "end": 614,
+          "lines": [
+            9,
+            9
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "reveal",
+          "start": 700,
+          "end": 980,
+          "lines": [
+            12,
+            18
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "CREST emblems: every style is a tappable pill, and the chosen one repaints the car's marks",
+          "start": 982,
+          "end": 4094,
+          "lines": [
+            20,
+            73
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 1714,
+              "end": 1752,
+              "lines": [
+                33,
+                33
+              ]
+            },
+            {
+              "start": 1851,
+              "end": 1862,
+              "lines": [
+                36,
+                36
+              ]
+            },
+            {
+              "start": 2092,
+              "end": 2153,
+              "lines": [
+                38,
+                38
+              ]
+            },
+            {
+              "start": 2178,
+              "end": 2234,
+              "lines": [
+                39,
+                39
+              ]
+            },
+            {
+              "start": 2590,
+              "end": 2602,
+              "lines": [
+                46,
+                46
+              ]
+            },
+            {
+              "start": 2652,
+              "end": 2808,
+              "lines": [
+                47,
+                48
+              ]
+            },
+            {
+              "start": 3125,
+              "end": 3198,
+              "lines": [
+                53,
+                53
+              ]
+            },
+            {
+              "start": 3357,
+              "end": 3369,
+              "lines": [
+                58,
+                58
+              ]
+            },
+            {
+              "start": 3946,
+              "end": 3966,
+              "lines": [
+                70,
+                70
+              ]
+            },
+            {
+              "start": 3985,
+              "end": 4005,
+              "lines": [
+                71,
+                71
+              ]
+            },
+            {
+              "start": 4022,
+              "end": 4079,
+              "lines": [
+                72,
+                72
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1714,
+          "end": 1752,
+          "lines": [
+            33,
+            33
+          ]
+        },
+        {
+          "start": 1851,
+          "end": 1862,
+          "lines": [
+            36,
+            36
+          ]
+        },
+        {
+          "start": 2092,
+          "end": 2153,
+          "lines": [
+            38,
+            38
+          ]
+        },
+        {
+          "start": 2178,
+          "end": 2234,
+          "lines": [
+            39,
+            39
+          ]
+        },
+        {
+          "start": 2590,
+          "end": 2602,
+          "lines": [
+            46,
+            46
+          ]
+        },
+        {
+          "start": 2652,
+          "end": 2808,
+          "lines": [
+            47,
+            48
+          ]
+        },
+        {
+          "start": 3125,
+          "end": 3198,
+          "lines": [
+            53,
+            53
+          ]
+        },
+        {
+          "start": 3357,
+          "end": 3369,
+          "lines": [
+            58,
+            58
+          ]
+        },
+        {
+          "start": 3946,
+          "end": 3966,
+          "lines": [
+            70,
+            70
+          ]
+        },
+        {
+          "start": 3985,
+          "end": 4005,
+          "lines": [
+            71,
+            71
+          ]
+        },
+        {
+          "start": 4022,
+          "end": 4079,
+          "lines": [
+            72,
+            72
+          ]
+        }
+      ],
+      "targets": [],
+      "semantics": "Touch crest choices repaint and persist.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/shared-page.js"
+      ],
+      "assertionCount": 11,
+      "caseDeclarationCount": 1,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/parts-livery-designs.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 11226,
+        "sha256": "48b9f490dfe1cd43ec0a8753d784f05a72bc37d0a4582e5d320faa17c005d056",
+        "manifestSha256": "48b9f490dfe1cd43ec0a8753d784f05a72bc37d0a4582e5d320faa17c005d056",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 11226,
+        "bytes": 11226,
+        "sha256": "48b9f490dfe1cd43ec0a8753d784f05a72bc37d0a4582e5d320faa17c005d056",
+        "partial": false,
+        "lines": [
+          1,
+          204
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "49c7627e098638abd4ed5e45913c80745e50a49374d1d0b6b108aa6d2c2f81ee",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "49d741"
+        },
+        {
+          "start": 8000,
+          "end": 11226,
+          "bytes": 3226,
+          "sha256": "fe0680764d53516bf7e5254c237725cb86ec46ecc2c4c2ad9d3cc272bb4730e2",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "0e65ac"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 539,
+          "end": 604,
+          "lines": [
+            8,
+            8
+          ]
+        },
+        {
+          "source": "../helpers/output-paths.js",
+          "start": 605,
+          "end": 662,
+          "lines": [
+            9,
+            9
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 663,
+          "end": 770,
+          "lines": [
+            10,
+            10
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 772,
+          "end": 839,
+          "lines": [
+            12,
+            12
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "reveal",
+          "start": 925,
+          "end": 1205,
+          "lines": [
+            15,
+            21
+          ]
+        },
+        {
+          "name": "openCreator",
+          "start": 1207,
+          "end": 2092,
+          "lines": [
+            23,
+            40
+          ]
+        }
+      ],
+      "cases": [
+        {
+          "title": "2026-motif patterns: listed by name in SPINE TOP, tappable, and they repaint the car",
+          "start": 2094,
+          "end": 4093,
+          "lines": [
+            42,
+            76
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 2325,
+              "end": 2343,
+              "lines": [
+                45,
+                45
+              ]
+            },
+            {
+              "start": 2536,
+              "end": 2552,
+              "lines": [
+                49,
+                49
+              ]
+            },
+            {
+              "start": 2653,
+              "end": 2704,
+              "lines": [
+                51,
+                51
+              ]
+            },
+            {
+              "start": 3149,
+              "end": 3161,
+              "lines": [
+                59,
+                59
+              ]
+            },
+            {
+              "start": 3211,
+              "end": 3367,
+              "lines": [
+                60,
+                61
+              ]
+            },
+            {
+              "start": 3974,
+              "end": 3993,
+              "lines": [
+                74,
+                74
+              ]
+            },
+            {
+              "start": 4014,
+              "end": 4078,
+              "lines": [
+                75,
+                75
+              ]
+            }
+          ]
+        },
+        {
+          "title": "all catalog part styles and body shapes are reachable, previewed and saved independently of fitted parts",
+          "start": 4097,
+          "end": 8873,
+          "lines": [
+            79,
+            154
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 4652,
+              "end": 4666,
+              "lines": [
+                86,
+                86
+              ]
+            },
+            {
+              "start": 4687,
+              "end": 4743,
+              "lines": [
+                87,
+                87
+              ]
+            },
+            {
+              "start": 5210,
+              "end": 5267,
+              "lines": [
+                94,
+                94
+              ]
+            },
+            {
+              "start": 5296,
+              "end": 5353,
+              "lines": [
+                95,
+                95
+              ]
+            },
+            {
+              "start": 6287,
+              "end": 6299,
+              "lines": [
+                112,
+                112
+              ]
+            },
+            {
+              "start": 6351,
+              "end": 6506,
+              "lines": [
+                113,
+                114
+              ]
+            },
+            {
+              "start": 7464,
+              "end": 7480,
+              "lines": [
+                131,
+                131
+              ]
+            },
+            {
+              "start": 7732,
+              "end": 7744,
+              "lines": [
+                135,
+                135
+              ]
+            },
+            {
+              "start": 8156,
+              "end": 8185,
+              "lines": [
+                142,
+                142
+              ]
+            },
+            {
+              "start": 8245,
+              "end": 8271,
+              "lines": [
+                143,
+                143
+              ]
+            },
+            {
+              "start": 8299,
+              "end": 8365,
+              "lines": [
+                144,
+                144
+              ]
+            },
+            {
+              "start": 8634,
+              "end": 8650,
+              "lines": [
+                149,
+                149
+              ]
+            },
+            {
+              "start": 8676,
+              "end": 8692,
+              "lines": [
+                150,
+                150
+              ]
+            }
+          ]
+        },
+        {
+          "title": "an edited design survives one stray Escape or CANCEL: the editor arms, the GARAGE stays",
+          "start": 8876,
+          "end": 10358,
+          "lines": [
+            156,
+            183
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 9210,
+              "end": 9224,
+              "lines": [
+                161,
+                161
+              ]
+            },
+            {
+              "start": 9312,
+              "end": 9326,
+              "lines": [
+                163,
+                163
+              ]
+            },
+            {
+              "start": 9543,
+              "end": 9576,
+              "lines": [
+                167,
+                167
+              ]
+            },
+            {
+              "start": 9600,
+              "end": 9614,
+              "lines": [
+                168,
+                168
+              ]
+            },
+            {
+              "start": 9638,
+              "end": 9652,
+              "lines": [
+                169,
+                169
+              ]
+            },
+            {
+              "start": 9691,
+              "end": 9730,
+              "lines": [
+                170,
+                170
+              ]
+            },
+            {
+              "start": 9886,
+              "end": 9900,
+              "lines": [
+                173,
+                173
+              ]
+            },
+            {
+              "start": 9923,
+              "end": 9956,
+              "lines": [
+                174,
+                174
+              ]
+            },
+            {
+              "start": 10184,
+              "end": 10198,
+              "lines": [
+                179,
+                179
+              ]
+            },
+            {
+              "start": 10244,
+              "end": 10258,
+              "lines": [
+                181,
+                181
+              ]
+            },
+            {
+              "start": 10275,
+              "end": 10342,
+              "lines": [
+                182,
+                182
+              ]
+            }
+          ]
+        },
+        {
+          "title": "CLOSE GARAGE with an edited design arms DISCARD EDITS? first; the confirming tap closes",
+          "start": 10361,
+          "end": 11011,
+          "lines": [
+            185,
+            197
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 10647,
+              "end": 10680,
+              "lines": [
+                190,
+                190
+              ]
+            },
+            {
+              "start": 10704,
+              "end": 10742,
+              "lines": [
+                191,
+                191
+              ]
+            },
+            {
+              "start": 10766,
+              "end": 10778,
+              "lines": [
+                192,
+                192
+              ]
+            },
+            {
+              "start": 10837,
+              "end": 10870,
+              "lines": [
+                194,
+                194
+              ]
+            },
+            {
+              "start": 10893,
+              "end": 10905,
+              "lines": [
+                195,
+                195
+              ]
+            },
+            {
+              "start": 10928,
+              "end": 10995,
+              "lines": [
+                196,
+                196
+              ]
+            }
+          ]
+        },
+        {
+          "title": "CLOSE GARAGE with an unedited design closes in one tap",
+          "start": 11014,
+          "end": 11224,
+          "lines": [
+            199,
+            203
+          ],
+          "partial": false,
+          "assignedAssertions": [
+            {
+              "start": 11174,
+              "end": 11207,
+              "lines": [
+                202,
+                202
+              ]
+            }
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "start": 1952,
+          "end": 1990,
+          "lines": [
+            37,
+            37
+          ]
+        },
+        {
+          "start": 2325,
+          "end": 2343,
+          "lines": [
+            45,
+            45
+          ]
+        },
+        {
+          "start": 2536,
+          "end": 2552,
+          "lines": [
+            49,
+            49
+          ]
+        },
+        {
+          "start": 2653,
+          "end": 2704,
+          "lines": [
+            51,
+            51
+          ]
+        },
+        {
+          "start": 3149,
+          "end": 3161,
+          "lines": [
+            59,
+            59
+          ]
+        },
+        {
+          "start": 3211,
+          "end": 3367,
+          "lines": [
+            60,
+            61
+          ]
+        },
+        {
+          "start": 3974,
+          "end": 3993,
+          "lines": [
+            74,
+            74
+          ]
+        },
+        {
+          "start": 4014,
+          "end": 4078,
+          "lines": [
+            75,
+            75
+          ]
+        },
+        {
+          "start": 4652,
+          "end": 4666,
+          "lines": [
+            86,
+            86
+          ]
+        },
+        {
+          "start": 4687,
+          "end": 4743,
+          "lines": [
+            87,
+            87
+          ]
+        },
+        {
+          "start": 5210,
+          "end": 5267,
+          "lines": [
+            94,
+            94
+          ]
+        },
+        {
+          "start": 5296,
+          "end": 5353,
+          "lines": [
+            95,
+            95
+          ]
+        },
+        {
+          "start": 6287,
+          "end": 6299,
+          "lines": [
+            112,
+            112
+          ]
+        },
+        {
+          "start": 6351,
+          "end": 6506,
+          "lines": [
+            113,
+            114
+          ]
+        },
+        {
+          "start": 7464,
+          "end": 7480,
+          "lines": [
+            131,
+            131
+          ]
+        },
+        {
+          "start": 7732,
+          "end": 7744,
+          "lines": [
+            135,
+            135
+          ]
+        },
+        {
+          "start": 8156,
+          "end": 8185,
+          "lines": [
+            142,
+            142
+          ]
+        },
+        {
+          "start": 8245,
+          "end": 8271,
+          "lines": [
+            143,
+            143
+          ]
+        },
+        {
+          "start": 8299,
+          "end": 8365,
+          "lines": [
+            144,
+            144
+          ]
+        },
+        {
+          "start": 8634,
+          "end": 8650,
+          "lines": [
+            149,
+            149
+          ]
+        },
+        {
+          "start": 8676,
+          "end": 8692,
+          "lines": [
+            150,
+            150
+          ]
+        },
+        {
+          "start": 9210,
+          "end": 9224,
+          "lines": [
+            161,
+            161
+          ]
+        },
+        {
+          "start": 9312,
+          "end": 9326,
+          "lines": [
+            163,
+            163
+          ]
+        },
+        {
+          "start": 9543,
+          "end": 9576,
+          "lines": [
+            167,
+            167
+          ]
+        },
+        {
+          "start": 9600,
+          "end": 9614,
+          "lines": [
+            168,
+            168
+          ]
+        },
+        {
+          "start": 9638,
+          "end": 9652,
+          "lines": [
+            169,
+            169
+          ]
+        },
+        {
+          "start": 9691,
+          "end": 9730,
+          "lines": [
+            170,
+            170
+          ]
+        },
+        {
+          "start": 9886,
+          "end": 9900,
+          "lines": [
+            173,
+            173
+          ]
+        },
+        {
+          "start": 9923,
+          "end": 9956,
+          "lines": [
+            174,
+            174
+          ]
+        },
+        {
+          "start": 10184,
+          "end": 10198,
+          "lines": [
+            179,
+            179
+          ]
+        },
+        {
+          "start": 10244,
+          "end": 10258,
+          "lines": [
+            181,
+            181
+          ]
+        },
+        {
+          "start": 10275,
+          "end": 10342,
+          "lines": [
+            182,
+            182
+          ]
+        },
+        {
+          "start": 10647,
+          "end": 10680,
+          "lines": [
+            190,
+            190
+          ]
+        },
+        {
+          "start": 10704,
+          "end": 10742,
+          "lines": [
+            191,
+            191
+          ]
+        },
+        {
+          "start": 10766,
+          "end": 10778,
+          "lines": [
+            192,
+            192
+          ]
+        },
+        {
+          "start": 10837,
+          "end": 10870,
+          "lines": [
+            194,
+            194
+          ]
+        },
+        {
+          "start": 10893,
+          "end": 10905,
+          "lines": [
+            195,
+            195
+          ]
+        },
+        {
+          "start": 10928,
+          "end": 10995,
+          "lines": [
+            196,
+            196
+          ]
+        },
+        {
+          "start": 11174,
+          "end": 11207,
+          "lines": [
+            202,
+            202
+          ]
+        }
+      ],
+      "targets": [],
+      "semantics": "Touch design/style selection and safe dirty-draft exit.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/output-paths.js",
+        "../helpers/shared-page.js"
+      ],
+      "assertionCount": 39,
+      "caseDeclarationCount": 5,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution."
+    },
+    {
+      "path": "tests/specs/parts-livery-zones.spec.js",
+      "kind": "text",
+      "whole": {
+        "bytes": 10975,
+        "sha256": "29823a22703b79fbe669a2e9cc4fc2551b32ddd8944cc3a111b6e22172b913dd",
+        "manifestSha256": "29823a22703b79fbe669a2e9cc4fc2551b32ddd8944cc3a111b6e22172b913dd",
+        "hashMatches": true
+      },
+      "part": {
+        "start": 0,
+        "end": 2097,
+        "bytes": 2097,
+        "sha256": "59f39ee68662ed023cac975943efae934cd9d4180d6d60fbd579037685dd6b07",
+        "partial": true,
+        "lines": [
+          1,
+          40
+        ]
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2097,
+          "bytes": 2097,
+          "sha256": "59f39ee68662ed023cac975943efae934cd9d4180d6d60fbd579037685dd6b07",
+          "rawRead": "Individual exec_command return, <=8000 source bytes, untruncated",
+          "toolOutputChunkId": "eead15"
+        }
+      ],
+      "imports": [
+        {
+          "source": "../helpers/fixtures.js",
+          "start": 459,
+          "end": 524,
+          "lines": [
+            8,
+            8
+          ]
+        },
+        {
+          "source": "../helpers/shared-page.js",
+          "start": 525,
+          "end": 632,
+          "lines": [
+            9,
+            9
+          ]
+        }
+      ],
+      "hooks": [
+        {
+          "kind": "test.use",
+          "start": 634,
+          "end": 701,
+          "lines": [
+            11,
+            11
+          ]
+        }
+      ],
+      "functions": [
+        {
+          "name": "reveal",
+          "start": 787,
+          "end": 1067,
+          "lines": [
+            14,
+            20
+          ]
+        },
+        {
+          "name": "openLiveryEditor",
+          "start": 1069,
+          "end": 2114,
+          "lines": [
+            22,
+            42
+          ]
+        }
+      ],
+      "cases": [],
+      "assertions": [
+        {
+          "start": 1995,
+          "end": 2033,
+          "lines": [
+            39,
+            39
+          ]
+        }
+      ],
+      "targets": [],
+      "semantics": "Setup prefix only; no intersecting cases.",
+      "fixtureImports": [
+        "../helpers/fixtures.js",
+        "../helpers/shared-page.js"
+      ],
+      "assertionCount": 1,
+      "caseDeclarationCount": 0,
+      "cleanup": "Page fixture teardown; explicit input clearing/headless toggles or shared entry resets where present. No mapping-time execution.",
+      "limits": "Assigned part ends mid-helper. Later zone cases and assertions are excluded."
+    }
+  ],
+  "scope": {
+    "textBytes": 160000,
+    "parts": 13,
+    "chunks": 27,
+    "binaryParts": 0,
+    "runtimeValidation": "Not run; source mapping only",
+    "assertionCounting": "Lexical expect, expect.poll and expect.soft call sites intersecting assigned bytes; loops may execute multiple times. Commented expressions excluded by AST.",
+    "outsideAssignment": "Whole-file AST used only for structural case/function/import boundaries. No semantic coverage inferred for excluded text."
+  },
+  "lsp": [
+    {
+      "command": "bash tools/mcp/lsp-mcp.sh refs Parts.getVisualTiers --concise --limit=20",
+      "chunkId": "b83c85",
+      "complete": true,
+      "totalReferences": 12,
+      "definition": "js/car/parts.js:1026",
+      "productionConsumers": [
+        "js/car/car-draw.js:101",
+        "js/car/car-draw.js:135",
+        "js/car/car-draw.js:166",
+        "js/car/car-draw.js:360",
+        "js/car/car-draw.js:843",
+        "js/car/car-draw.js:866",
+        "js/game.js:1293",
+        "js/game.js:1434",
+        "js/garage/setup-camera.js:570",
+        "js/garage/setup-sheet.js:1165"
+      ]
+    },
+    {
+      "command": "bash tools/mcp/lsp-mcp.sh refs LiveryTex.buildAtlas --concise --limit=20",
+      "chunkId": "2f42f1",
+      "complete": true,
+      "totalReferences": 6,
+      "definition": "js/car/liverytex.js:1658",
+      "productionConsumers": [
+        "js/car/car-draw.js:732",
+        "js/car/car-draw.js:784",
+        "js/car/surface-outline.js:52",
+        "js/car/surface-outline.js:58"
+      ]
+    },
+    {
+      "command": "bash tools/mcp/lsp-mcp.sh refs Car3D.build --concise --limit=20",
+      "chunkId": "11ccb4",
+      "complete": true,
+      "totalReferences": 10,
+      "definition": "js/car/car3d.js:237",
+      "productionConsumers": [
+        "js/agent/agentview.js:793",
+        "js/camera/cockpit-preview.js:111",
+        "js/car/car-draw.js:161",
+        "js/car/car-draw.js:358",
+        "js/car/car-draw.js:1346",
+        "js/car/car-draw.js:1358",
+        "js/car/car-draw.js:1632",
+        "js/garage/setup-camera.js:562"
+      ]
+    },
+    {
+      "command": "bash tools/mcp/lsp-mcp.sh sym obs",
+      "chunkId": "0195e6",
+      "result": "Exact obs method js/agent/apex.js:1702; broad matching names page truncated by native limit, no exhaustive usage claim."
+    },
+    {
+      "command": "bash tools/mcp/lsp-mcp.sh def js/agent/apex.js:1702:3 --body --maxLines=12",
+      "chunkId": "daf885",
+      "definition": "js/agent/apex.js:1702",
+      "bodyBounded": true,
+      "semantics": "Returns null without player position or track; samples local track, wrapped 10/30/60m scan; done follows wrongWay or recent rescue."
+    }
+  ],
+  "lspLimits": [
+    {
+      "query": "ApexObs",
+      "result": "symbol not found",
+      "chunkId": "73f22e"
+    },
+    {
+      "query": "__apex.obs",
+      "result": "window.__apex at js/game.js:79 has no member obs",
+      "chunkId": "39eec9"
+    }
+  ]
+}

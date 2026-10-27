@@ -1,0 +1,187 @@
+{
+  "goal": "Complete remaining doc/config registries and surveys, full assigned text bytes and semantic contracts. Historical paths in evidence JSON only.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "docs/agent-index.json",
+          "start": 0,
+          "end": 140608,
+          "kind": "text",
+          "sha256": "a0bdb2c74c67111491fb85b2609f4fa184ee2895b234110b1e8cd3bb759c04c6"
+        },
+        {
+          "path": "docs/agent-output/README.md",
+          "start": 0,
+          "end": 12688,
+          "kind": "text",
+          "sha256": "a2c5d50aeab45c4eee1238b5f95bf7e1b660274242da7fdd129534abe0a8a68a"
+        },
+        {
+          "path": "docs/agent-output/catalog.json",
+          "start": 0,
+          "end": 6704,
+          "kind": "text",
+          "sha256": "9cefaa83f4c7efabeba68e3ad8565b9ad0a2238b075b552a9df38fc64613e57f"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "docs/agent-output/catalog.json",
+          "start": 6704,
+          "end": 149089,
+          "kind": "text",
+          "sha256": "9cefaa83f4c7efabeba68e3ad8565b9ad0a2238b075b552a9df38fc64613e57f"
+        },
+        {
+          "path": "docs/agent-output/experiments.md",
+          "start": 0,
+          "end": 5771,
+          "kind": "text",
+          "sha256": "8b9d0d084378f2e18de1646165e00638f39400561a8cb540e897aa18fdb37d7a"
+        },
+        {
+          "path": "docs/agent-output/policies.json",
+          "start": 0,
+          "end": 11844,
+          "kind": "text",
+          "sha256": "e844c8d2ff6ad6726dc2b6a79f6eea3136456fe36b6c20b85862332dc1b3bdf9"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "docs/agent-output/policies.json",
+          "start": 11844,
+          "end": 111100,
+          "kind": "text",
+          "sha256": "e844c8d2ff6ad6726dc2b6a79f6eea3136456fe36b6c20b85862332dc1b3bdf9"
+        },
+        {
+          "path": "docs/evidence/historical-catalog.json",
+          "start": 0,
+          "end": 60744,
+          "kind": "text",
+          "sha256": "200734eefe76e3958f4cfcb6e9792fa0ce94ec90a9c12419ae109dd8d5233f8b"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": "docs/evidence/historical-catalog.json",
+          "start": 60744,
+          "end": 84115,
+          "kind": "text",
+          "sha256": "200734eefe76e3958f4cfcb6e9792fa0ce94ec90a9c12419ae109dd8d5233f8b"
+        },
+        {
+          "path": "docs/look-survey/README.md",
+          "start": 0,
+          "end": 4562,
+          "kind": "text",
+          "sha256": "d56b640ad0cd4a8b87b32ecf5f2f278769eaee4852f6a5a83c0431289ca92863"
+        },
+        {
+          "path": "docs/look-survey/flyby-signatures/bahrain-flyby.json",
+          "start": 0,
+          "end": 3802,
+          "kind": "text",
+          "sha256": "c94f3d0e922d6bc93bd34f8cdff764896bb3d4a78aaab4b0ca16279b5e7b9edd"
+        },
+        {
+          "path": "docs/look-survey/flyby-signatures/monaco-flyby.json",
+          "start": 0,
+          "end": 3809,
+          "kind": "text",
+          "sha256": "90bfc9f57aad715d1e3af2842a9fa60eacedbb27be3f1943c62592f211291693"
+        },
+        {
+          "path": "docs/look-survey/flyby-signatures/spa-flyby.json",
+          "start": 0,
+          "end": 3888,
+          "kind": "text",
+          "sha256": "39c01164e568e38cb74bda139381b8e893ac096a921e28e3bf5a1a4ee09bde78"
+        },
+        {
+          "path": "docs/perf/iphone-browserstack-2026-10-21.md",
+          "start": 0,
+          "end": 3979,
+          "kind": "text",
+          "sha256": "c1d382ecf58cc4880a18755ed09ca4f8bc1292a58584826c98127462847db670"
+        },
+        {
+          "path": "docs/superpowers/specs/2026-10-25-grok-transcripts-cli-design.md",
+          "start": 0,
+          "end": 5364,
+          "kind": "text",
+          "sha256": "7b5adfcce9212a2bd7754ab97a3f9ca009583010d19073f400599a3674536d4e"
+        },
+        {
+          "path": "docs/survey/perf-survey-boot-css-racestart-2026-10-06.md",
+          "start": 0,
+          "end": 17516,
+          "kind": "text",
+          "sha256": "fa21ab80b2d7411422e0f0eb6c88fee3bf1e639df67e088ac71ca584864a3989"
+        },
+        {
+          "path": "docs/survey/perf-survey-particles-probes-physics-2026-10-06.md",
+          "start": 0,
+          "end": 20575,
+          "kind": "text",
+          "sha256": "49296a8cd84f6318d0c201aaff6cae6b9bfdba75a825876982bb7f649465bcb6"
+        },
+        {
+          "path": "docs/surveys/w24a-logging.md",
+          "start": 0,
+          "end": 9328,
+          "kind": "text",
+          "sha256": "6f1beb601eb7643495daf7fbafc434deb9e080a6ef6a30fae3d45b329018f7d6"
+        },
+        {
+          "path": "docs/surveys/w24b-tools.md",
+          "start": 0,
+          "end": 12008,
+          "kind": "text",
+          "sha256": "5f280a8f1eda631c6980fad7bd2580854286ada087d0c5ab9790688ad2d13b2f"
+        },
+        {
+          "path": "docs/surveys/w24c-tests.md",
+          "start": 0,
+          "end": 11205,
+          "kind": "text",
+          "sha256": "9660185d7b1c140651799d7d57aeaaf6c0ded719e37c25013a681d17474212df"
+        },
+        {
+          "path": "docs/surveys/w24d-devicefarm.md",
+          "start": 0,
+          "end": 11331,
+          "kind": "text",
+          "sha256": "549063395105d59c8e08a7dac5cf2eda9b76cf5c13be36ee98fc7720974818ac"
+        },
+        {
+          "path": "docs/surveys/w25d-tools-ci.md",
+          "start": 0,
+          "end": 1651,
+          "kind": "text",
+          "sha256": "c1bb72bf33239828e82f8c1e399f9eab5005251b652f5a2eb244a8198d876aeb"
+        }
+      ],
+      "bytes": 132389,
+      "status": "unassigned"
+    }
+  ]
+}
