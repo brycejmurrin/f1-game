@@ -40,7 +40,7 @@ const RaceSettings = (function () {
   }
   /** DAMAGE (#1578, js/race/damage-handling.js) after RELIABILITY, injected like AI PACE. */
   function ensureDamageRow($) {
-    if ($("rs-damage")) return;
+    if ($("rs-damage") || typeof DamageHandling === "undefined") return;
     const reliab = $("rs-reliab");
     if (!reliab || !reliab.parentNode) return;
     const row = document.createElement("div");
@@ -267,7 +267,7 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-caution", G.cautionInfo().enabled ? "on" : "off", RS_ONOFF);
       $("rs-reliab").hidden = tt;
       SettingRow.paint("rs-reliab", G.raceReliability, RS_RELIAB);
-      if ($("rs-damage")) { $("rs-damage").hidden = tt; SettingRow.paint("rs-damage", DamageHandling.isEnabled() ? "on" : "off", RS_DAMAGE); }
+      if (typeof DamageHandling !== "undefined" && $("rs-damage")) { $("rs-damage").hidden = tt; SettingRow.paint("rs-damage", DamageHandling.isEnabled() ? "on" : "off", RS_DAMAGE); }
       // Hidden in a time trial for the same reason the model forces it off
       // there: a lap against the clock is not a set anybody is asked to manage.
       $("rs-tyres").hidden = tt;
@@ -433,7 +433,7 @@ const RaceSettings = (function () {
       });
       wire("rs-caution", () => (G.cautionInfo().enabled ? "on" : "off"), (v) => setCautionEnabled(v === "on"));
       wire("rs-reliab", () => G.raceReliability, (v) => { G.raceReliability = v; store.set("reliability", v); });
-      if ($("rs-damage")) wire("rs-damage", () => (DamageHandling.isEnabled() ? "on" : "off"), (v) => { DamageHandling.setEnabled(v === "on"); store.set(DamageHandling.KEY, v === "on"); });
+      if (typeof DamageHandling !== "undefined" && $("rs-damage")) wire("rs-damage", () => (DamageHandling.isEnabled() ? "on" : "off"), (v) => { DamageHandling.setEnabled(v === "on"); store.set("damageHandling", v === "on"); });
       wire("rs-tyres", () => G.raceTyreWear, (v) => { G.raceTyreWear = v; });
       wire("rs-dirty", () => G.raceDirtyAir, (v) => { G.raceDirtyAir = v; });
       if ($("rs-wind") && hasWind()) wire("rs-wind", () => Wind.level(), (v) => { store.set("wind", Wind.setLevel(v)); });
