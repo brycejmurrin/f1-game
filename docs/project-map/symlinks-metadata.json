@@ -1,0 +1,344 @@
+[
+  {
+    "path": ".agents/skills/agent-config",
+    "target": "../../.claude/skills/agent-config",
+    "resolvedRelative": ".claude/skills/agent-config",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 33,
+    "sha256": "cd74dea63e61b5d054f8ba5f78e597878e13fe58a6eaded113ac68a6ab0f15aa"
+  },
+  {
+    "path": ".agents/skills/agent-view",
+    "target": "../../.claude/skills/agent-view",
+    "resolvedRelative": ".claude/skills/agent-view",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 31,
+    "sha256": "f83080d0c39410fd57d104428304cef473437bce3beb7ef331a6778dea955610"
+  },
+  {
+    "path": ".agents/skills/ai-racecraft",
+    "target": "../../.claude/skills/ai-racecraft",
+    "resolvedRelative": ".claude/skills/ai-racecraft",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 33,
+    "sha256": "6de8d05c0493fc373417a304ec1a3c7567eebee959fffcb9e8fe8e89b5691897"
+  },
+  {
+    "path": ".agents/skills/asset-pack",
+    "target": "../../.claude/skills/asset-pack",
+    "resolvedRelative": ".claude/skills/asset-pack",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 31,
+    "sha256": "f3541f74beedcfb0117228a29007461986c619c92fbec8ccd815090ebf2661af"
+  },
+  {
+    "path": ".agents/skills/audio-debug",
+    "target": "../../.claude/skills/audio-debug",
+    "resolvedRelative": ".claude/skills/audio-debug",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 32,
+    "sha256": "9ff8ff55f8930683f877db1316a770ef48e0a805201150d2a13c7815eea987d6"
+  },
+  {
+    "path": ".agents/skills/career-mode",
+    "target": "../../.claude/skills/career-mode",
+    "resolvedRelative": ".claude/skills/career-mode",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 32,
+    "sha256": "bc4b1518ebdfebe90f3eb699867bc3989d986c621db99c2c7d61180ea41e1b2e"
+  },
+  {
+    "path": ".agents/skills/check",
+    "target": "../../.claude/skills/check",
+    "resolvedRelative": ".claude/skills/check",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 26,
+    "sha256": "6dfe30c53cb462c596fa8afcbc94efd89971fe44dcf66bfb2d7ecf4e664e9484"
+  },
+  {
+    "path": ".agents/skills/check-changes",
+    "target": "../../.claude/skills/check-changes",
+    "resolvedRelative": ".claude/skills/check-changes",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 34,
+    "sha256": "cb2791fde97638e755a13498686490740f53d07a79765c3817725fce18519ee6"
+  },
+  {
+    "path": ".agents/skills/code-nav",
+    "target": "../../.claude/skills/code-nav",
+    "resolvedRelative": ".claude/skills/code-nav",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 29,
+    "sha256": "f54d0e01f0e3fa3f618071a0a10bcd49e5dcc7ebe50bd45ab9ff1794db6d82f0"
+  },
+  {
+    "path": ".agents/skills/css-play",
+    "target": "../../.claude/skills/css-play",
+    "resolvedRelative": ".claude/skills/css-play",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 29,
+    "sha256": "3d5ff346656a363b8e4bacb1ea9d128fa49997b06132036af0a5d8569aadc488"
+  },
+  {
+    "path": ".agents/skills/data-hub",
+    "target": "../../.claude/skills/data-hub",
+    "resolvedRelative": ".claude/skills/data-hub",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 29,
+    "sha256": "6dc6cc60a5304137bd8fdbc127fd96bc2d5e6acfdf42e082dca5c9cf1256973f"
+  },
+  {
+    "path": ".agents/skills/f1-animation-cameras",
+    "target": "../../.claude/skills/f1-animation-cameras",
+    "resolvedRelative": ".claude/skills/f1-animation-cameras",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 41,
+    "sha256": "6873dd7a174567f7b312e775f9daef71b0200c6a74ee9c65d20f2cc22aaa5784"
+  },
+  {
+    "path": ".agents/skills/game-feel",
+    "target": "../../.claude/skills/game-feel",
+    "resolvedRelative": ".claude/skills/game-feel",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 30,
+    "sha256": "5071f9fc4d3c78fbe375f5ce5eaf7458f6d9775dc8ad6e6cd1599ca810617827"
+  },
+  {
+    "path": ".agents/skills/garage-parts-livery",
+    "target": "../../.claude/skills/garage-parts-livery",
+    "resolvedRelative": ".claude/skills/garage-parts-livery",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 40,
+    "sha256": "c1de0a2e92f26488a5c11f6b81006f0f2ada344e18550fe43061d16d17d27fa3"
+  },
+  {
+    "path": ".agents/skills/handoff",
+    "target": "../../.claude/skills/handoff",
+    "resolvedRelative": ".claude/skills/handoff",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 28,
+    "sha256": "88b916daa6195aaa99cf5949c7f8d76f477d45a18a9bcb794635cc77fdfe4811"
+  },
+  {
+    "path": ".agents/skills/input-controls",
+    "target": "../../.claude/skills/input-controls",
+    "resolvedRelative": ".claude/skills/input-controls",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 35,
+    "sha256": "08ed343dadb5dc20e1a408d8b7fad2345830a502c16a391f3e4d4d9ae0da9f34"
+  },
+  {
+    "path": ".agents/skills/js-debugger",
+    "target": "../../.claude/skills/js-debugger",
+    "resolvedRelative": ".claude/skills/js-debugger",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 32,
+    "sha256": "95f02b4446ab679306cbbe0b6b85f796d336e3ca88bd328798afe2c401d41c1c"
+  },
+  {
+    "path": ".agents/skills/lighting-tuner",
+    "target": "../../.claude/skills/lighting-tuner",
+    "resolvedRelative": ".claude/skills/lighting-tuner",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 35,
+    "sha256": "421f1d5b16a7aaed24fe3c30d053e5a63bbd0220cb59331c0331dd917de63023"
+  },
+  {
+    "path": ".agents/skills/mcp-probe",
+    "target": "../../.claude/skills/mcp-probe",
+    "resolvedRelative": ".claude/skills/mcp-probe",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 30,
+    "sha256": "fede03bca82d7bdc2bdf578385a747019beb001cf31551cd379c05a9ccfac22e"
+  },
+  {
+    "path": ".agents/skills/multiplayer-debug",
+    "target": "../../.claude/skills/multiplayer-debug",
+    "resolvedRelative": ".claude/skills/multiplayer-debug",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 38,
+    "sha256": "76aabf57dcf2b558d2c5f1af3abec4215da434f59b192993d1120a6eba858e59"
+  },
+  {
+    "path": ".agents/skills/new-track",
+    "target": "../../.claude/skills/new-track",
+    "resolvedRelative": ".claude/skills/new-track",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 30,
+    "sha256": "45f6c6b938e08f67d7c62354eff4a148d99d6b5e531f7048f34e0e0c8d23f59e"
+  },
+  {
+    "path": ".agents/skills/phone-browser",
+    "target": "../../.claude/skills/phone-browser",
+    "resolvedRelative": ".claude/skills/phone-browser",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 34,
+    "sha256": "04dffffd8d5eb681fc6cd21eaac88505a18f4ec3dd344c3346c6dc872daaf374"
+  },
+  {
+    "path": ".agents/skills/playwright-probe",
+    "target": "../../.claude/skills/playwright-probe",
+    "resolvedRelative": ".claude/skills/playwright-probe",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 37,
+    "sha256": "87e118c40b50fc522a1576ce6ec91ed2c5874fb2a781dae5ff1ccdaf09bbfe94"
+  },
+  {
+    "path": ".agents/skills/pwa-cache-service-worker",
+    "target": "../../.claude/skills/pwa-cache-service-worker",
+    "resolvedRelative": ".claude/skills/pwa-cache-service-worker",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 45,
+    "sha256": "12628677f9f333955005d9f89a3ba820744fda5429c9083f5cb4154511f4f317"
+  },
+  {
+    "path": ".agents/skills/race-incidents-control",
+    "target": "../../.claude/skills/race-incidents-control",
+    "resolvedRelative": ".claude/skills/race-incidents-control",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 43,
+    "sha256": "a483cfe6d4858b0d0d18991af5068787668caa06169ecdc0d4fb781ac26091b5"
+  },
+  {
+    "path": ".agents/skills/race-weekend",
+    "target": "../../.claude/skills/race-weekend",
+    "resolvedRelative": ".claude/skills/race-weekend",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 33,
+    "sha256": "45881ab035063c81841ac0de1fe82b86470a39ff4b200aaf462c7fb93c7f75e4"
+  },
+  {
+    "path": ".agents/skills/renderer-debug",
+    "target": "../../.claude/skills/renderer-debug",
+    "resolvedRelative": ".claude/skills/renderer-debug",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 35,
+    "sha256": "683e5608e78925ca901c0bb85176dbeaf125c0f5d33745d8c679deba6b45ecb8"
+  },
+  {
+    "path": ".agents/skills/scenery-dress",
+    "target": "../../.claude/skills/scenery-dress",
+    "resolvedRelative": ".claude/skills/scenery-dress",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 34,
+    "sha256": "9705cee088cb064e4ac56cdfab5ff0f0676d2a025dba12e2edb9abeb72b9f9c8"
+  },
+  {
+    "path": ".agents/skills/season-mode",
+    "target": "../../.claude/skills/season-mode",
+    "resolvedRelative": ".claude/skills/season-mode",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 32,
+    "sha256": "05b72ea10aa454a59388deb8ff61b602241d637bd42a2ee7fb2f2d6edc313cfa"
+  },
+  {
+    "path": ".agents/skills/ship",
+    "target": "../../.claude/skills/ship",
+    "resolvedRelative": ".claude/skills/ship",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 25,
+    "sha256": "842e6a74c430e6f2043fbd3d5545f1d0ed2b9206bbf781c5bad34146df827314"
+  },
+  {
+    "path": ".agents/skills/slim-bloat",
+    "target": "../../.claude/skills/slim-bloat",
+    "resolvedRelative": ".claude/skills/slim-bloat",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 31,
+    "sha256": "38d526c9caed972114144ec0eb7b26b89c31ad45534997e0c422991f50834877"
+  },
+  {
+    "path": ".agents/skills/steward",
+    "target": "../../.claude/skills/steward",
+    "resolvedRelative": ".claude/skills/steward",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 28,
+    "sha256": "25429d7e77dfd70c068a290e95f598ac090c51d53bc0f38a85d9d91bcbe1730c"
+  },
+  {
+    "path": ".agents/skills/survey-track",
+    "target": "../../.claude/skills/survey-track",
+    "resolvedRelative": ".claude/skills/survey-track",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 33,
+    "sha256": "eebc4096ef2386333b8451ead995ea7dd7f60aaf983a3321b9a5175b869d76b9"
+  },
+  {
+    "path": ".agents/skills/survey-ui-matrix",
+    "target": "../../.claude/skills/survey-ui-matrix",
+    "resolvedRelative": ".claude/skills/survey-ui-matrix",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 37,
+    "sha256": "c8a31442fa966b6cff549549cd1b5356af917e9dd4246b371989bd731e69faad"
+  },
+  {
+    "path": ".agents/skills/tune-physics",
+    "target": "../../.claude/skills/tune-physics",
+    "resolvedRelative": ".claude/skills/tune-physics",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 33,
+    "sha256": "ff2377ade27d3c1c641a908b6fddb934a7fecf81193f2c0f844b61fac50300d4"
+  },
+  {
+    "path": ".agents/skills/ui-menu-a11y",
+    "target": "../../.claude/skills/ui-menu-a11y",
+    "resolvedRelative": ".claude/skills/ui-menu-a11y",
+    "exists": true,
+    "targetKind": "directory",
+    "linkBytes": 33,
+    "sha256": "4c9689f3e9429ce74d5eb466fb34009991bb9dfad1787625a83f88e96831ad39"
+  },
+  {
+    "path": "js/circuits/AGENTS.md",
+    "target": "CLAUDE.md",
+    "resolvedRelative": "js/circuits/CLAUDE.md",
+    "exists": true,
+    "targetKind": "file",
+    "linkBytes": 9,
+    "sha256": "6ebdb617a8104a7756d0cf36578ab01103dc9f07e4dc6feb751296b9c402faf7"
+  },
+  {
+    "path": "js/track/AGENTS.md",
+    "target": "CLAUDE.md",
+    "resolvedRelative": "js/track/CLAUDE.md",
+    "exists": true,
+    "targetKind": "file",
+    "linkBytes": 9,
+    "sha256": "6ebdb617a8104a7756d0cf36578ab01103dc9f07e4dc6feb751296b9c402faf7"
+  }
+]

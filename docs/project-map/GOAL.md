@@ -41,19 +41,20 @@ Every tracked JavaScript file under js/ is fully read: **561/561**. All34 CSS fi
 - All582 tracked tools paths fully read across tools-ci/mcp/lib/gen/check/environment/shot/ui-gfx/gfx-tail/car/track/perf-light/misc reports.
 - All39 root Markdown guides fully read across docs-root reports.
 - All598 changelog fragments fully read; docs-changelog-complete.md.
+- Manual test scope11 files/1439 lines complete; tests-manual-complete.md. Icons/locale leaves complete:77 PNG metadata, icon guide and both English catalogs read; icons-locales-complete.md. All38 tracked symlinks inspected; symlinks-complete.md. Original tracked-entry inventory is5109 (directory symlinks restored to coverage).
 - All182 assets mapped:11 prose/code files fully read,24 generated voice indexes completely parsed/tuple-validated,147 binary resources inspected; assets-complete.md. Generated data is not claimed manually semantically read.
-- Unit groups01–44 and46–47 complete; group45 report integration pending. Group02 raw gaps closed by02a/b/c; group21 raw gaps closed by21a/b/c/d.
+- Unit groups01–57 complete:983 files/283179 source lines. Group02 raw gaps closed by02a/b/c; group21 raw gaps closed by21a/b/c/d.
 - All57 vendor paths mapped:56 text files fully read; Rapier wrapper source fully read and encoded WASM structurally inspected. All20 vendor continuation groups complete.
-- Historical notes groups01–35 fully read as assigned byte ranges; notes-batches.json tracks44 groups and coverage.tsv credits full files only after interval closure.
+- All44 historical-note groups complete; every byte interval of all305 original tracked notes is covered, with source hashes and provenance limits.
 
 ## Active/queued assignments and continuation
-Use collaboration.list_agents for actual live worker state. Current readers: unit45 and48–50, notes36–37. Continue units51–62 and notes38–44, then remaining tests, documentation and auxiliary roots. Start fresh GPT-6.1 Sol agents with fork_turns none and explicit model. Keep at most6 workers plus parent; a seventh worker launch was actually rejected by host.
+Use collaboration.list_agents for actual live worker state. Current readers: units58–62 and browser specs01. Continue specs02–17, archive01–31, plans01–05, research01–07, tracks01–03, claude01–08, github01–03, auxiliary01–06, examples01–03, and snapshot01–08. Additional fixtures/data/vendor and non-root documentation leaves need separate passes. All batch manifests record exact half-open byte ranges. Start fresh GPT-6.1 Sol agents with fork_turns none and explicit model. Keep at most6 workers plus parent; a seventh worker launch was actually rejected by host.
 
 ## Persistence checkpoint
-Draft PR https://github.com/brycejmurrin/f1-game/pull/3922. Separate report commits through8a222466b local; remote last pushed64809115e. More validated report commits and push are pending. Documentation checks are being rerun after correcting report path/Markdown quoting issues; do not treat a failing historical log as latest green. coverage.tsv is source-hash/read-status evidence; own mapping reports are excluded to avoid recursive scope.
+Draft PR https://github.com/brycejmurrin/f1-game/pull/3922. Separate report commits through9d7b70782 local; remote last pushed64809115e. All143 queued report commits passed the documentation commit guard. Integrating the next completed batch and pushing a checkpoint now. Documentation checks are being rerun after correcting report path/Markdown quoting issues; do not treat a failing historical log as latest green. coverage.tsv is source-hash/read-status evidence; own mapping reports are excluded to avoid recursive scope.
 
 ## Remaining backlog
 Remaining unit groups, browser specs/manual tests/fixtures/data, historical and non-root documentation, auxiliary tracked roots, symlink metadata, and relevant retained artifacts/scratch. Runtime, stylesheets, tools, assets, vendor and platform scopes have completed the evidence methods recorded above. Earlier partial maps are superseded by complete domain reports; no initial map alone proves completion.
 
 ## Verification and persistence
-Parent serializes report integration and commits. New reports need docs-integrity and agent-config checks. Existing checkpoint passed 74/74. Agents created under an earlier read-only policy may remain EROFS even after parent access restored; parent writes their supplied text. Never claim completion while backlog remains.
+Parent serializes report integration and commits. New reports need docs-integrity and agent-config checks. Earlier checkpoint passed 74/74; current reports are being checked again. Agents created under an earlier read-only policy may remain EROFS even after parent access restored; parent writes their supplied text. Never claim completion while backlog remains.

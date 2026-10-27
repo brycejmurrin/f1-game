@@ -1,0 +1,526 @@
+{
+  "group": "39",
+  "assigned_bytes": 100000,
+  "read_bytes": 100000,
+  "chunk_count": 18,
+  "parts": [
+    {
+      "path": "docs/notes/system-audit-4/anchors.md",
+      "start": 5225,
+      "end": 7472,
+      "kind": "text",
+      "sha256": "5409fc9698576fce414a50d9a7ec081c6ad19c853ff3fc7dc8a002ded3c52c78",
+      "whole_bytes": 7472,
+      "whole_sha256": "5409fc9698576fce414a50d9a7ec081c6ad19c853ff3fc7dc8a002ded3c52c78",
+      "manifest_match": true,
+      "part_bytes": 2247,
+      "part_sha256": "bbde23280d9213803fe6b378b1a686fa59e779512f86a54b07dcdc7ac1c280f4",
+      "chunks": [
+        {
+          "start": 5225,
+          "end": 7472,
+          "bytes": 2247,
+          "sha256": "bbde23280d9213803fe6b378b1a686fa59e779512f86a54b07dcdc7ac1c280f4"
+        }
+      ],
+      "date_producer": "2026-10-26; unnamed mechanical anchor reviewer",
+      "topics": "Tail of missing-path anchor table records obsolete role cards, vendor source anchors, moved workflow and absent scratch evidence; full scan reports 6,512 rows and 2,873 drifted.",
+      "backlinks_producers": "Anchor drift scan; prior performance hunts, asset research and audit three.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Only assigned tail; prefix belongs to group 38. Missing-at-audit assertions are historical, not current resolution checks."
+    },
+    {
+      "path": "docs/notes/system-audit-4/bus-history.md",
+      "start": 0,
+      "end": 11652,
+      "kind": "text",
+      "sha256": "93a9eb98c2e643abc4b55726709a6e3441a2addf9b5c9e795b791ce259530517",
+      "whole_bytes": 11652,
+      "whole_sha256": "93a9eb98c2e643abc4b55726709a6e3441a2addf9b5c9e795b791ce259530517",
+      "manifest_match": true,
+      "part_bytes": 11652,
+      "part_sha256": "93a9eb98c2e643abc4b55726709a6e3441a2addf9b5c9e795b791ce259530517",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "de5890d4212a3ab7e7da1c60ded6d56509d70f25fe482737a56e3222fc4cb88b"
+        },
+        {
+          "start": 9000,
+          "end": 11652,
+          "bytes": 2652,
+          "sha256": "19a8f335bee7760ce79f38b0a438dfb686e19d825dcd573667ba525d3ebaea28"
+        }
+      ],
+      "date_producer": "2026-10-26; unnamed bus reviewer",
+      "topics": "Replays 3,383 bus records across eight UTC dates: malformed LIVE identities, D backlog, status chatter, prose-only lending, broadcasts, relayed grants, false BLOCKED waits, turnover and overloaded DONE.",
+      "backlinks_producers": "548 merge records, 367 green Pages runs, 26 lent PR bodies; fleet-bus parser replay; pass-three findings.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Answer matching and fleet classification are heuristic; body edit history and transcripts unavailable. Historical bus protocol is superseded by current GitHub-only coordination."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/agent-surface-reviewer.md",
+      "start": 0,
+      "end": 5515,
+      "kind": "text",
+      "sha256": "7e4164055fb11386436852d27bf3d42c5e2ce86a727269b11725d8c8248ce930",
+      "whole_bytes": 5515,
+      "whole_sha256": "7e4164055fb11386436852d27bf3d42c5e2ce86a727269b11725d8c8248ce930",
+      "manifest_match": true,
+      "part_bytes": 5515,
+      "part_sha256": "7e4164055fb11386436852d27bf3d42c5e2ce86a727269b11725d8c8248ce930",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5515,
+          "bytes": 5515,
+          "sha256": "7e4164055fb11386436852d27bf3d42c5e2ce86a727269b11725d8c8248ce930"
+        }
+      ],
+      "date_producer": "2026-10-26; agent-surface card reviewer",
+      "topics": "Finds VERDICT colon mismatch, misleading universal write-ban claim, inert host fields, roster-count inconsistency and unavailable tool references.",
+      "backlinks_producers": "Agent card, agent README, subagent-contract and protect-files hooks; host documentation.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Review claims reflect that checkout; tools and hook line anchors need revalidation."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/bloat-auditor.md",
+      "start": 0,
+      "end": 4831,
+      "kind": "text",
+      "sha256": "f9176e35219289e723fede6789a9260972b5033721bb05349426271326e1cc29",
+      "whole_bytes": 4831,
+      "whole_sha256": "f9176e35219289e723fede6789a9260972b5033721bb05349426271326e1cc29",
+      "manifest_match": true,
+      "part_bytes": 4831,
+      "part_sha256": "f9176e35219289e723fede6789a9260972b5033721bb05349426271326e1cc29",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4831,
+          "bytes": 4831,
+          "sha256": "f9176e35219289e723fede6789a9260972b5033721bb05349426271326e1cc29"
+        }
+      ],
+      "date_producer": "2026-10-26; bloat card reviewer",
+      "topics": "Read-only claim conflicts with Bash/memory writes; rejection-memory flow unreachable; COVERED contract omitted in caller skill; inherited-rule pointer inaccessible.",
+      "backlinks_producers": "Bloat scanner, extraction tool, slim-bloat skill, project memory and contract hook.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Memory auto-enablement is explicitly unverified; no scanner run evidence here."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/ci-red-triage.md",
+      "start": 0,
+      "end": 5326,
+      "kind": "text",
+      "sha256": "a53f5b705318b7749365a242783fea7b1c4b15912cc0d7fc8f14e67b13198c85",
+      "whole_bytes": 5326,
+      "whole_sha256": "a53f5b705318b7749365a242783fea7b1c4b15912cc0d7fc8f14e67b13198c85",
+      "manifest_match": true,
+      "part_bytes": 5326,
+      "part_sha256": "a53f5b705318b7749365a242783fea7b1c4b15912cc0d7fc8f14e67b13198c85",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5326,
+          "bytes": 5326,
+          "sha256": "a53f5b705318b7749365a242783fea7b1c4b15912cc0d7fc8f14e67b13198c85"
+        }
+      ],
+      "date_producer": "2026-10-26; CI triage card reviewer",
+      "topics": "Dead CI heading, UNKNOWN denial escape mismatch, missing draft/ready tiers and structural lanes, unbounded logs and ungranted workflow tool.",
+      "backlinks_producers": "Actual red run 40366431724; rule 8/13; contract hook; check-changes triage.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Some shell helpers and flags unread; failure walkthrough is dated and no commands were executed."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/code-hunter.md",
+      "start": 0,
+      "end": 5097,
+      "kind": "text",
+      "sha256": "83ad2335c7b2aa17faae3edd751e2c22b261a839a772b5d69c1807b0a5256b67",
+      "whole_bytes": 5097,
+      "whole_sha256": "83ad2335c7b2aa17faae3edd751e2c22b261a839a772b5d69c1807b0a5256b67",
+      "manifest_match": true,
+      "part_bytes": 5097,
+      "part_sha256": "83ad2335c7b2aa17faae3edd751e2c22b261a839a772b5d69c1807b0a5256b67",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5097,
+          "bytes": 5097,
+          "sha256": "83ad2335c7b2aa17faae3edd751e2c22b261a839a772b5d69c1807b0a5256b67"
+        }
+      ],
+      "date_producer": "2026-10-26; code-hunter card reviewer",
+      "topics": "No-file contract conflicts with report callers; final-message delivery ambiguous; turn/time budgets misalign; host fields and nonexistent survey skill references drift.",
+      "backlinks_producers": "Hunt callers, contract FINDING cap 12, code-nav and agent README.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Read-only Bash enforcement remains qualified; no present-day card audit."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/deploy-research.md",
+      "start": 0,
+      "end": 5396,
+      "kind": "text",
+      "sha256": "8840d30592a787e65d70b6973d5820fca8790eb7d3d59dfb2c32d9765a2c81e7",
+      "whole_bytes": 5396,
+      "whole_sha256": "8840d30592a787e65d70b6973d5820fca8790eb7d3d59dfb2c32d9765a2c81e7",
+      "manifest_match": true,
+      "part_bytes": 5396,
+      "part_sha256": "8840d30592a787e65d70b6973d5820fca8790eb7d3d59dfb2c32d9765a2c81e7",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5396,
+          "bytes": 5396,
+          "sha256": "8840d30592a787e65d70b6973d5820fca8790eb7d3d59dfb2c32d9765a2c81e7"
+        }
+      ],
+      "date_producer": "2026-10-26; deploy card reviewer",
+      "topics": "SHA recipe sound, but missing push-to-live latency/cache context; bulk asset audit exceeds turn budget; build-number comparison ambiguous.",
+      "backlinks_producers": "Live-site audit; 863 asset URLs; Pages workflow, live SHA helper and verify-live.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Latency/cache observations are dated measurements; helper recipes were not run and header existence partly unchecked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/finding-verifier.md",
+      "start": 0,
+      "end": 5425,
+      "kind": "text",
+      "sha256": "962481244bad6b5f54e8f1f95355334afb5275a92b1bc2ffc1ac58ed84810c39",
+      "whole_bytes": 5425,
+      "whole_sha256": "962481244bad6b5f54e8f1f95355334afb5275a92b1bc2ffc1ac58ed84810c39",
+      "manifest_match": true,
+      "part_bytes": 5425,
+      "part_sha256": "962481244bad6b5f54e8f1f95355334afb5275a92b1bc2ffc1ac58ed84810c39",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5425,
+          "bytes": 5425,
+          "sha256": "962481244bad6b5f54e8f1f95355334afb5275a92b1bc2ffc1ac58ed84810c39"
+        }
+      ],
+      "date_producer": "2026-10-26; finding-verifier card reviewer",
+      "topics": "Fifteen claims exceed 25-turn method; inline report fallback missing; final rows may disappear; schema output conflicts with CLAIM table.",
+      "backlinks_producers": "Contract cap 15; survey and total-audit workflow callers; steward/slim-bloat routing.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Per-claim turn estimates are reasoning, not measured timing; archived workflow copies are stale evidence."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/physics-contract-auditor.md",
+      "start": 0,
+      "end": 6262,
+      "kind": "text",
+      "sha256": "c7166e734683c481483b7ee9703261dc37e1f533bfac50549d4d55ea0ff5aac3",
+      "whole_bytes": 6262,
+      "whole_sha256": "c7166e734683c481483b7ee9703261dc37e1f533bfac50549d4d55ea0ff5aac3",
+      "manifest_match": true,
+      "part_bytes": 6262,
+      "part_sha256": "c7166e734683c481483b7ee9703261dc37e1f533bfac50549d4d55ea0ff5aac3",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6262,
+          "bytes": 6262,
+          "sha256": "c7166e734683c481483b7ee9703261dc37e1f533bfac50549d4d55ea0ff5aac3"
+        }
+      ],
+      "date_producer": "2026-10-26; physics card reviewer",
+      "topics": "Classification matches curvature contract, but PACE lint is wrong first gate; derivative search incomplete; ledger useful; turn reserve duplicated inconsistently.",
+      "backlinks_producers": "PHYSICS curvature table, vstd lint, curvature site ledger and tune-physics skill.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Commands skipped under load 15.4; symbol anchors and site counts are historical."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/prior-art-scout.md",
+      "start": 0,
+      "end": 5387,
+      "kind": "text",
+      "sha256": "990bced1f4516c2ae684472eb9a415c9c15d7ac4ec5583f01e5237cc3d2743fb",
+      "whole_bytes": 5387,
+      "whole_sha256": "990bced1f4516c2ae684472eb9a415c9c15d7ac4ec5583f01e5237cc3d2743fb",
+      "manifest_match": true,
+      "part_bytes": 5387,
+      "part_sha256": "990bced1f4516c2ae684472eb9a415c9c15d7ac4ec5583f01e5237cc3d2743fb",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5387,
+          "bytes": 5387,
+          "sha256": "990bced1f4516c2ae684472eb9a415c9c15d7ac4ec5583f01e5237cc3d2743fb"
+        }
+      ],
+      "date_producer": "2026-10-26; prior-art card reviewer",
+      "topics": "Narrow scout works; whole-tree 30-row/12-turn budget arbitrary; shallow history warning missing; ledger section anchors unstable; host fields inert.",
+      "backlinks_producers": "Defect ledger, BUGS, git shallow status, workflow known-schema and contract hook.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Scout intentionally does not rejudge recorded defects; checkout history began around October 18."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/track-surveyor.md",
+      "start": 0,
+      "end": 5276,
+      "kind": "text",
+      "sha256": "9a56d1644235286d5ec4941b859c998ebb445afb37a8d2019869d1696865a925",
+      "whole_bytes": 5276,
+      "whole_sha256": "9a56d1644235286d5ec4941b859c998ebb445afb37a8d2019869d1696865a925",
+      "manifest_match": true,
+      "part_bytes": 5276,
+      "part_sha256": "9a56d1644235286d5ec4941b859c998ebb445afb37a8d2019869d1696865a925",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5276,
+          "bytes": 5276,
+          "sha256": "9a56d1644235286d5ec4941b859c998ebb445afb37a8d2019869d1696865a925"
+        }
+      ],
+      "date_producer": "2026-10-26; track card reviewer",
+      "topics": "Scope hook mostly matches; assigned-circuit restriction prose-only; baseline audits overlap; post-edit audits incomplete; generated scenery data responsibility unclear.",
+      "backlinks_producers": "Circuit audit tools, scenery-dress reference, survey handback and protect-files.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Verify-track skipped under load 15.46; worktree-base wording already differs from current AGENTS.md."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/verify-agent.md",
+      "start": 0,
+      "end": 5638,
+      "kind": "text",
+      "sha256": "1fd8ad9628fb3672b6d942784cf071ef6154a8946175adb8ba834b22dbfcaebe",
+      "whole_bytes": 5638,
+      "whole_sha256": "1fd8ad9628fb3672b6d942784cf071ef6154a8946175adb8ba834b22dbfcaebe",
+      "manifest_match": true,
+      "part_bytes": 5638,
+      "part_sha256": "1fd8ad9628fb3672b6d942784cf071ef6154a8946175adb8ba834b22dbfcaebe",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5638,
+          "bytes": 5638,
+          "sha256": "1fd8ad9628fb3672b6d942784cf071ef6154a8946175adb8ba834b22dbfcaebe"
+        }
+      ],
+      "date_producer": "2026-10-26; verify card reviewer",
+      "topics": "Flags sound; readonly field ineffective; no hook return contract; base comparison worktree/network behavior unproven; memory policy contradictory.",
+      "backlinks_producers": "verify-change, wait-for, check-changes, project memory and live-CI helper.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "No measured base-mode execution; network-key asymmetry is analyzed as benign, not tested."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cards/worker.md",
+      "start": 0,
+      "end": 6746,
+      "kind": "text",
+      "sha256": "db9ef2e07782d15556b3e3fe796221fda04fa8c290d25602730ef63275b50443",
+      "whole_bytes": 6746,
+      "whole_sha256": "db9ef2e07782d15556b3e3fe796221fda04fa8c290d25602730ef63275b50443",
+      "manifest_match": true,
+      "part_bytes": 6746,
+      "part_sha256": "db9ef2e07782d15556b3e3fe796221fda04fa8c290d25602730ef63275b50443",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6746,
+          "bytes": 6746,
+          "sha256": "db9ef2e07782d15556b3e3fe796221fda04fa8c290d25602730ef63275b50443"
+        }
+      ],
+      "date_producer": "2026-10-26; worker card reviewer",
+      "topics": "Browser guard prose inverted for browser-use/browserstack; protected worktree list drifts; final delivery mechanism unclear; undefined capability language and missing viewer grant.",
+      "backlinks_producers": "Worker card, protect-files, browser guard, settings, handback contract and node_modules linking.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "BrowserStack lower saturation risk is qualified; host-only viewer grant unverified; current guard behavior needs source corroboration."
+    },
+    {
+      "path": "docs/notes/system-audit-4/ci-7d.md",
+      "start": 0,
+      "end": 11195,
+      "kind": "text",
+      "sha256": "2be975a7a840a5e4e30cce5cb8185e34cb9a7ea6b00a25718726bf216c116e0c",
+      "whole_bytes": 11195,
+      "whole_sha256": "2be975a7a840a5e4e30cce5cb8185e34cb9a7ea6b00a25718726bf216c116e0c",
+      "manifest_match": true,
+      "part_bytes": 11195,
+      "part_sha256": "2be975a7a840a5e4e30cce5cb8185e34cb9a7ea6b00a25718726bf216c116e0c",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "e52c8889be0a58d34215c28debc8d678e359208c3860ab4e00b6c7dce6d4458b"
+        },
+        {
+          "start": 9000,
+          "end": 11195,
+          "bytes": 2195,
+          "sha256": "02ee7ded952e641beb64401c4e4cebc951492ba6cc538f7703f22899d994eb5f"
+        }
+      ],
+      "date_producer": "2026-10-19\u201326; unnamed CI reviewer",
+      "topics": "6,982 runs quantify stale green/composition reds, omitted train twin gates, selected-lane queues, flakes, ratchet accumulation and routing gaps; refutes earlier audio selection alarm.",
+      "backlinks_producers": "Actions REST, 70 logs, 273 merge selection replays, ratchet fragments; pass-three findings.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Eleven job fetches failed; full replay-vs-actual comparison absent; composition receipts not checked on merge hosts. Metrics describe 7.7 days only."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cli-help.md",
+      "start": 0,
+      "end": 7119,
+      "kind": "text",
+      "sha256": "87e3d486c56156decec6db4c188e94f8030c8658a835874e62e0c7391ecb7734",
+      "whole_bytes": 7119,
+      "whole_sha256": "87e3d486c56156decec6db4c188e94f8030c8658a835874e62e0c7391ecb7734",
+      "manifest_match": true,
+      "part_bytes": 7119,
+      "part_sha256": "87e3d486c56156decec6db4c188e94f8030c8658a835874e62e0c7391ecb7734",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7119,
+          "bytes": 7119,
+          "sha256": "87e3d486c56156decec6db4c188e94f8030c8658a835874e62e0c7391ecb7734"
+        }
+      ],
+      "date_producer": "2026-10-26; mechanical CLI reviewer",
+      "topics": "383 CLI scan finds inconsistent help, ignored unknown flags, undocumented flags and artifact side effects; shared makeFlags parser rejects typos.",
+      "backlinks_producers": "Static extraction and capped dynamic help/unknown-flag scans; pass-three tooling audit.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Regex counts are bounds; 34 safety skips and browser-capable unknown-flag skips; deploy typo acceptance static only. Internal artifact totals disagree in closing caveat."
+    },
+    {
+      "path": "docs/notes/system-audit-4/cursor-lanes.md",
+      "start": 0,
+      "end": 6888,
+      "kind": "text",
+      "sha256": "44841b37d9a468878d4dd2a52077ee47cf50f7eeb1f8e410526d64ecbcbd714b",
+      "whole_bytes": 10934,
+      "whole_sha256": "44841b37d9a468878d4dd2a52077ee47cf50f7eeb1f8e410526d64ecbcbd714b",
+      "manifest_match": true,
+      "part_bytes": 6888,
+      "part_sha256": "7edfbfefc82b50814596ef7989a6e399df7be3319ad638cad714ae80f900862d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6888,
+          "bytes": 6888,
+          "sha256": "7edfbfefc82b50814596ef7989a6e399df7be3319ad638cad714ae80f900862d"
+        }
+      ],
+      "date_producer": "2026-10-26 ~17:40Z; Cursor/Codex/Grok lane reviewer",
+      "topics": "207 Cursor agents and bus/PR populations show long READY waits, obsolete one-train rule, token label failures and brief-caused HANDOFF misuse; scenery-gate contradiction begins.",
+      "backlinks_producers": "Cursor runs/SSE, 588 PRs, 2,560 CI runs, 3,383 bus records and 27 briefs.",
+      "current_use": "Historical investigation and cleanup provenance; confirm against current source before action.",
+      "limits": "Assigned prefix ends mid scenery finding; remaining 4,046 bytes belong to group 40. SSE retains only 24 hours and PR host attribution uses branch/run links."
+    }
+  ],
+  "historical_archive_session_references": [
+    ".claude/agent-memory/*/MEMORY.md",
+    ".claude/agent-memory/bloat-auditor/",
+    "/runs",
+    "^refuted: \\d+/\\d+ stale: \\d+/\\d+",
+    "^scratch/.+\\.md$",
+    "artifacts/",
+    "bash tools/mcp/lsp-mcp.sh",
+    "bus/out/r*.txt",
+    "car/career-economy",
+    "car/flank-occlusion.mjs",
+    "car/livery-contrast",
+    "car/spine-station",
+    "check/ai-band|ai-human|ai-line|ai-pace|ai-tactics|ai-field|ai-stuck|ai-strategy-census|twin-fidelity",
+    "check/class-usage",
+    "check/html-sink-lint.mjs",
+    "check/ratchets",
+    "check/tree-counts.mjs",
+    "check/wait-polling-lint.mjs",
+    "ci / Pure-node unit suites",
+    "ci/agent-msg",
+    "ci/agent-msg.mjs",
+    "ci/agent-msg.mjs --help",
+    "ci/bump-cache",
+    "ci/ci-watch",
+    "ci/deploy.mjs",
+    "ci/deploy.mjs --help",
+    "ci/fleet-brief",
+    "ci/fleet-brief.mjs",
+    "ci/fleet-bus",
+    "ci/fleet-bus.mjs",
+    "ci/fleet-bus.mjs --help",
+    "ci/fleet-flags",
+    "ci/fleet-flags.mjs",
+    "ci/fleet-tick",
+    "ci/fleet-tick.mjs",
+    "ci/junit-failed",
+    "ci/launch-lane",
+    "ci/launch-lane.mjs",
+    "ci/merge-gate.mjs",
+    "ci/node-plan.mjs",
+    "ci/pages-live-sha.sh",
+    "ci/ready-gate.mjs",
+    "ci/session-status",
+    "ci/session-status.mjs",
+    "ci/test-bg",
+    "ci/test-bg.mjs",
+    "ci/test-bg.mjs --help",
+    "ci/tooling-fast.mjs",
+    "ci/verify-live",
+    "ci/verify-live.mjs",
+    "cursor/",
+    "cursor/sysaudit3-7dd2e",
+    "cursor/w*",
+    "docs/notes/SYSTEM-AUDIT-3-2026-10-26.md",
+    "fleet: A / orchestrator: A",
+    "gen/gen-ladder-figures",
+    "gfx/wgx-capture",
+    "gfx/wgx-lavapipe-probe",
+    "git rev-list --count bot/ratchets-fold..tip",
+    "js/circuits/(scenery/)?[a-z0-9_-]+\\.js | scratch/.+ | artifacts/.+",
+    "js/circuits/scenery/",
+    "lib/webgpu-chrome-args.cjs",
+    "lighting/ab-lighting.mjs",
+    "mcp/lsp-eval",
+    "net/rtc-e2e",
+    "net/rtc-e2e-3p.mjs",
+    "node --test tests/unit/curvature-channels.test.mjs",
+    "node tools/check/bloat-scan.mjs --json js/track/",
+    "perf/vm-leak-census.mjs",
+    "pulls/<n>",
+    "refuted: k/N",
+    "scan.json",
+    "scratch/sysaudit4/anchors/drift.csv",
+    "scratch/sysaudit4/bus/{analyze,r1..r6,pagesgreen}.mjs",
+    "scratch/sysaudit4/ci/",
+    "scratch/sysaudit4/cli/scan.csv",
+    "scratch/sysaudit4/cli/scan.mjs",
+    "scratch/sysaudit4/cursor-lanes/",
+    "shot/shot",
+    "shot/shot.mjs",
+    "system-audit-3/tools.md",
+    "tests/data/ratchets.d",
+    "tools/",
+    "tools/check/ratchets.mjs",
+    "tools/ci/branch-audit.mjs",
+    "tools/ci/spec-timings.mjs",
+    "tools/lib/cli-args.mjs",
+    "tools/mcp/apex-tools-mcp.mjs",
+    "tools/mcp/cdmcp-cli.py",
+    "tools/shot/garage-angles.mjs",
+    "tools/shot/scenery-locations.json",
+    "tools/ui/menu-capture.mjs",
+    "track/coplanar-audit.cjs",
+    "ui/fit-audit",
+    "ui/layout-audit",
+    "ui/menu-fit",
+    "version.json"
+  ],
+  "comment_cleanup_candidates": [
+    "Retired fleet protocols and one-train agreement",
+    "Conditional write enforcement and inert host fields",
+    "Return shape, final-message delivery and turn budgets",
+    "Fragile anchors and refuted earlier claims",
+    "CLI artifact-total inconsistency"
+  ]
+}

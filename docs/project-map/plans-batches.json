@@ -1,0 +1,390 @@
+{
+  "goal": "Complete original tracked scope; every source/prose byte read, binary metadata inspected. Half-open byte ranges; source hashes bind to original files.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "docs/plans/2026-09-14-mechanics-coherence.md",
+          "start": 0,
+          "end": 13061,
+          "kind": "text",
+          "sha256": "6c0b53cb8ded07cf41de0905779e4e28065e8549bfe813491afedfc8e87779d1"
+        },
+        {
+          "path": "docs/plans/2026-09-14-texture-memory-plan.md",
+          "start": 0,
+          "end": 14771,
+          "kind": "text",
+          "sha256": "5b29fd650f12f8d68614dc658ab390d3a971a060fe8f804ba4bc26949c4aeaaa"
+        },
+        {
+          "path": "docs/plans/2026-09-15-racing-depth.md",
+          "start": 0,
+          "end": 17424,
+          "kind": "text",
+          "sha256": "23d1c9f8aaafb73c669ee14317a0f1b6bc0d014a4a31fa41a80dc5c1156794b5"
+        },
+        {
+          "path": "docs/plans/2026-09-16-process-speedup-next.md",
+          "start": 0,
+          "end": 24501,
+          "kind": "text",
+          "sha256": "be070dcce592eafc42878753a5dd2d5ca60efd81aa9d3d5c92129baab1cd0483"
+        },
+        {
+          "path": "docs/plans/2026-09-24-flyby-improvements.md",
+          "start": 0,
+          "end": 31126,
+          "kind": "text",
+          "sha256": "8b5f9b5358bff9ce80f3ecea17ebc7ae6dd7baaf1a670654920124effb16e798"
+        },
+        {
+          "path": "docs/plans/2026-09-24-refactor-readability.md",
+          "start": 0,
+          "end": 17862,
+          "kind": "text",
+          "sha256": "f6e60d1062085db11ea546a8b1b1401b888b58789570a2b30a6c28b9fd2e8514"
+        },
+        {
+          "path": "docs/plans/2026-09-30-agent-skills-and-tools.md",
+          "start": 0,
+          "end": 24818,
+          "kind": "text",
+          "sha256": "5b816cbd8511ebcc4aae18c0220fdd96a1b6fdd710054ccd39af34806ede7ac9"
+        },
+        {
+          "path": "docs/plans/2026-09-30-ai-personality.md",
+          "start": 0,
+          "end": 15011,
+          "kind": "text",
+          "sha256": "8c12f8079f81833073da66f11044cc6e13b599490c8cb500fe7b8d66e755707a"
+        },
+        {
+          "path": "docs/plans/2026-09-30-barrier-runoff-teleports.md",
+          "start": 0,
+          "end": 1426,
+          "kind": "text",
+          "sha256": "466b5856fd6d057ae0fc90ef33abc8d7e08d39e04560e69f6a9d46e90f2aadf2"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "docs/plans/2026-09-30-barrier-runoff-teleports.md",
+          "start": 1426,
+          "end": 13297,
+          "kind": "text",
+          "sha256": "466b5856fd6d057ae0fc90ef33abc8d7e08d39e04560e69f6a9d46e90f2aadf2"
+        },
+        {
+          "path": "docs/plans/2026-09-30-broadcast-feel.md",
+          "start": 0,
+          "end": 15495,
+          "kind": "text",
+          "sha256": "b75d9695273786895dfc388eac745140c3c743b5c81b0e20f368cd025c48645a"
+        },
+        {
+          "path": "docs/plans/2026-09-30-carve-headroom.md",
+          "start": 0,
+          "end": 12021,
+          "kind": "text",
+          "sha256": "c721bee6f8c17edec5b3a13cb6661aee406598746bc2d44a7a2c109f7f6a3a52"
+        },
+        {
+          "path": "docs/plans/2026-09-30-load-download-weight.md",
+          "start": 0,
+          "end": 15566,
+          "kind": "text",
+          "sha256": "68c73479be3152039f2f7ad089f7373edd98baaaf82e2516d9384e41bd878cdd"
+        },
+        {
+          "path": "docs/plans/2026-09-30-player-a11y.md",
+          "start": 0,
+          "end": 18979,
+          "kind": "text",
+          "sha256": "854b0339ed5c88bf8d035c66d47b951879d77964490927764213da7660c7a1d4"
+        },
+        {
+          "path": "docs/plans/2026-09-30-strategy-career-depth.md",
+          "start": 0,
+          "end": 14532,
+          "kind": "text",
+          "sha256": "b96d23d0c1aab979512bfe064f384b47f8cc5cd72670bf23f2a7f0aa4884b11e"
+        },
+        {
+          "path": "docs/plans/2026-09-30-test-ci-health.md",
+          "start": 0,
+          "end": 14677,
+          "kind": "text",
+          "sha256": "79c40ba1a059a23dc4b2fe1bd1251615e53dde0dfaaf8ffa59ebc702c24dfba9"
+        },
+        {
+          "path": "docs/plans/2026-09-30-wetness-lighting.md",
+          "start": 0,
+          "end": 17097,
+          "kind": "text",
+          "sha256": "97b969d4e34af755d485e804d0e4ef6c46a00d477e6354367896c9275a728a09"
+        },
+        {
+          "path": "docs/plans/2026-10-01-models-life.md",
+          "start": 0,
+          "end": 15345,
+          "kind": "text",
+          "sha256": "79e735309f2ad9b09087ce8037ad9bc230fc9e2f5c5d3121bb69aecd9fc8a1fb"
+        },
+        {
+          "path": "docs/plans/2026-10-03-perf-memory.md",
+          "start": 0,
+          "end": 18647,
+          "kind": "text",
+          "sha256": "122a8021248d4df8ad987b6dd5f0f570eac2baf055607587eb201d6b0c004387"
+        },
+        {
+          "path": "docs/plans/2026-10-04-colourblind-captions.md",
+          "start": 0,
+          "end": 5770,
+          "kind": "text",
+          "sha256": "4622a10dc858282a88ea5492cb5b25e680b6e327ec6a2c58ad66fe7c0466cc44"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "docs/plans/2026-10-04-colourblind-captions.md",
+          "start": 5770,
+          "end": 26643,
+          "kind": "text",
+          "sha256": "4622a10dc858282a88ea5492cb5b25e680b6e327ec6a2c58ad66fe7c0466cc44"
+        },
+        {
+          "path": "docs/plans/2026-10-04-feature-roadmap.md",
+          "start": 0,
+          "end": 9522,
+          "kind": "text",
+          "sha256": "91998dbe19514347e3d27a4d6329a366e959b737b96b0c6ec9d673a8db4c0ace"
+        },
+        {
+          "path": "docs/plans/2026-10-04-highlight-reel-clip-export.md",
+          "start": 0,
+          "end": 25196,
+          "kind": "text",
+          "sha256": "96b2132e6b8477e18725a3346e2cc7406b53b0f7b09729fa1b5d0cd1cd8652fe"
+        },
+        {
+          "path": "docs/plans/2026-10-04-localisation.md",
+          "start": 0,
+          "end": 31075,
+          "kind": "text",
+          "sha256": "cef293842c8d6b55c8e649d33e0e58168625b488212254e63e74ee32eed1a21f"
+        },
+        {
+          "path": "docs/plans/2026-10-04-pwa-shortcuts-calendar.md",
+          "start": 0,
+          "end": 25414,
+          "kind": "text",
+          "sha256": "fd63f989f2efb285247d6fc39ea69aa91df612cf2786e79940b53fea25f69b2d"
+        },
+        {
+          "path": "docs/plans/2026-10-04-share-cards.md",
+          "start": 0,
+          "end": 18790,
+          "kind": "text",
+          "sha256": "35d2a63d664c95381896daab36637040107f4d12b4ccca5db98b40050e0d18ce"
+        },
+        {
+          "path": "docs/plans/2026-10-04-stream-overlay.md",
+          "start": 0,
+          "end": 19605,
+          "kind": "text",
+          "sha256": "d6965e51fd626f563ccb97fc7f9af82a0020a5bdbc48383ed60cdcf76c5d3922"
+        },
+        {
+          "path": "docs/plans/2026-10-09-bug-hunt-plan.md",
+          "start": 0,
+          "end": 9525,
+          "kind": "text",
+          "sha256": "8de1c509a00c031cd1a11de56ada91779a250df1254ae43376e9f376883f5d8a"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": "docs/plans/2026-10-09-bug-hunt-plan.md",
+          "start": 9525,
+          "end": 47156,
+          "kind": "text",
+          "sha256": "8de1c509a00c031cd1a11de56ada91779a250df1254ae43376e9f376883f5d8a"
+        },
+        {
+          "path": "docs/plans/2026-10-10-bug-hunt-2-register.md",
+          "start": 0,
+          "end": 12430,
+          "kind": "text",
+          "sha256": "5e3752225429a0dcf457c7d4eeda42b93d1bde6fcb217e0559c20f46c0cca674"
+        },
+        {
+          "path": "docs/plans/2026-10-10-fix-all-plan.md",
+          "start": 0,
+          "end": 6265,
+          "kind": "text",
+          "sha256": "e5006f750a9cb1b9f92a34f9b5331dabf3b578f88dd0c332d9559bee1bf1357b"
+        },
+        {
+          "path": "docs/plans/2026-10-16-agent-friction-fix-plan.md",
+          "start": 0,
+          "end": 17924,
+          "kind": "text",
+          "sha256": "2ee9626f4b7dfd204e2332a98925b5edef0ab0d6edc0a37a0a6b56babc7b81da"
+        },
+        {
+          "path": "docs/plans/2026-10-19-crowd-vat.md",
+          "start": 0,
+          "end": 9718,
+          "kind": "text",
+          "sha256": "ee8a29b3b3867fc7707de3a90f410f4d4dfdb73f4c0a3366db484dcad5cb5d30"
+        },
+        {
+          "path": "docs/plans/2026-10-19-deferred-history-cleanup.md",
+          "start": 0,
+          "end": 5013,
+          "kind": "text",
+          "sha256": "bee2ea937f8801b5adb1d266ce0c149548c3e47ad3cd4c3ce796bf14b25b29d1"
+        },
+        {
+          "path": "docs/plans/2026-10-19-fair-play-online.md",
+          "start": 0,
+          "end": 9815,
+          "kind": "text",
+          "sha256": "89fd9b4420e3e281438c5c831429ba5ca5cc928798fa8def5e6ecaecf9c5d22f"
+        },
+        {
+          "path": "docs/plans/2026-10-19-fleet-redesign.md",
+          "start": 0,
+          "end": 19339,
+          "kind": "text",
+          "sha256": "481bf06766f98693989d7a5714278389e2e04a40af1c10a02965cbd1817e2975"
+        },
+        {
+          "path": "docs/plans/2026-10-27-orchestration-redesign.md",
+          "start": 0,
+          "end": 29192,
+          "kind": "text",
+          "sha256": "2f3be768e5ddb5daef8b7162e746169d53ab3dabf8d72edc1ca41054d8340c76"
+        },
+        {
+          "path": "docs/plans/CLEANUP-ROADMAP.md",
+          "start": 0,
+          "end": 6261,
+          "kind": "text",
+          "sha256": "630b35733dc4bcf3ebf5710a9f2fd68265ca7ec640daa30586b2828a76b560d2"
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/README.md",
+          "start": 0,
+          "end": 2744,
+          "kind": "text",
+          "sha256": "4d9cbc489a57d877519719bd262eec43196ae67cf95e4c5d5a776cffe8fe0ad0"
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/agent-ergonomics.md",
+          "start": 0,
+          "end": 3668,
+          "kind": "text",
+          "sha256": "35204c7b0894ae5a465001e56b076b270b164fa5eec2e2fb645185d3deb5e840"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "05",
+      "parts": [
+        {
+          "path": "docs/plans/research-2026-09-16/agent-ergonomics.md",
+          "start": 3668,
+          "end": 19391,
+          "kind": "text",
+          "sha256": "35204c7b0894ae5a465001e56b076b270b164fa5eec2e2fb645185d3deb5e840"
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/ci.md",
+          "start": 0,
+          "end": 15003,
+          "kind": "text",
+          "sha256": "3654d89e65ac5fc42f8339ac9c4361a826da38865682fbe34105ccfddc80457b"
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/measurement.md",
+          "start": 0,
+          "end": 16417,
+          "kind": "text",
+          "sha256": "4c67d99e2dce96fde5fe07834bd7b52500c1dcefe417e41fb87b101778895499"
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/testing.md",
+          "start": 0,
+          "end": 19480,
+          "kind": "text",
+          "sha256": "5ee390606ddce58c1e5e90ebe98313c63d8cc2497eecafc77f3a66b2282839eb"
+        },
+        {
+          "path": "docs/plans/research-2026-09-16/vm-harness.md",
+          "start": 0,
+          "end": 14258,
+          "kind": "text",
+          "sha256": "0581c2e93c1ea52646514f0efad9c49efd6d69fc1d32ae7384e716198889569f"
+        },
+        {
+          "path": "docs/plans/skilltest-ci-tooling.md",
+          "start": 0,
+          "end": 11838,
+          "kind": "text",
+          "sha256": "fa50ff2fb3845f47fc39d1438619075577990e45fa9714b4afd7c286bc53ffb3"
+        },
+        {
+          "path": "docs/plans/skilltest-content-pipeline.md",
+          "start": 0,
+          "end": 14138,
+          "kind": "text",
+          "sha256": "a41aab9991d1596b86fb281735e80b468309e196be6209d3415de6760b4aeaf7"
+        },
+        {
+          "path": "docs/plans/skilltest-game-systems.md",
+          "start": 0,
+          "end": 9427,
+          "kind": "text",
+          "sha256": "68aa46be95cb637e60bd2a4d7031145bd446ee7a1284503e91d580fd9d9a8fc7"
+        },
+        {
+          "path": "docs/plans/skilltest-guards-and-agent-kit.md",
+          "start": 0,
+          "end": 8775,
+          "kind": "text",
+          "sha256": "90bebcfe6465ab3cf35dd71b2afd27200298141142a09335cb9a321d99388445"
+        },
+        {
+          "path": "docs/plans/skilltest-probe-debug.md",
+          "start": 0,
+          "end": 9845,
+          "kind": "text",
+          "sha256": "ecc7230890a40c887e2e44898a43dcca08b91abb7077fb32d5b2b1f805745368"
+        }
+      ],
+      "bytes": 134904,
+      "status": "unassigned"
+    }
+  ]
+}

@@ -1,0 +1,418 @@
+{
+  "goal": "Complete original tracked scope; every source/prose byte read, binary metadata inspected. Half-open byte ranges; source hashes bind to original files.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "docs/tracks/START-LINES.md",
+          "start": 0,
+          "end": 25195,
+          "kind": "text",
+          "sha256": "074777852d54f4bdbc3445ebfd4509f235d58ab98930c7559acf605dada29bfe"
+        },
+        {
+          "path": "docs/tracks/abudhabi.md",
+          "start": 0,
+          "end": 5071,
+          "kind": "text",
+          "sha256": "4b7dcde69168bdc960d09882884e6869cea737f71219682365962df8b2064e0c"
+        },
+        {
+          "path": "docs/tracks/albert_park.md",
+          "start": 0,
+          "end": 5908,
+          "kind": "text",
+          "sha256": "f7cf0ecd52016ad664ad5843f1f0d2e8a30982ec925bd88d024982e731faf1e3"
+        },
+        {
+          "path": "docs/tracks/anderstorp.md",
+          "start": 0,
+          "end": 4823,
+          "kind": "text",
+          "sha256": "5310b3e2f32b60ba981d487c801352ab38ef7c3e27ceff35c64255e3c0e12f11"
+        },
+        {
+          "path": "docs/tracks/bahrain.md",
+          "start": 0,
+          "end": 9472,
+          "kind": "text",
+          "sha256": "97e392a7d2190080eafd1ef7b56f8777eaaed2001cb4b7e8f8b672f6d74a84a4"
+        },
+        {
+          "path": "docs/tracks/baku.md",
+          "start": 0,
+          "end": 6088,
+          "kind": "text",
+          "sha256": "3817e90afcee3f5a806d98d127d59e4c26036595ba0e0ec1bb6dfda480fea5c2"
+        },
+        {
+          "path": "docs/tracks/brands_hatch.md",
+          "start": 0,
+          "end": 7619,
+          "kind": "text",
+          "sha256": "dae4e4d3913f20c85d2381903236665a359be2eb21da12ff397a9629e2ff0a4c"
+        },
+        {
+          "path": "docs/tracks/buddh.md",
+          "start": 0,
+          "end": 5462,
+          "kind": "text",
+          "sha256": "9bef6230bead2d4bddf81dac7ea104795cc14f098e7a51145e36962c3c35c15c"
+        },
+        {
+          "path": "docs/tracks/buenos_aires.md",
+          "start": 0,
+          "end": 6725,
+          "kind": "text",
+          "sha256": "ba5d10bcd4b0350f425bcd31a519b7c269039d48fa2fb8348147a60f2bcdec9d"
+        },
+        {
+          "path": "docs/tracks/catalunya.md",
+          "start": 0,
+          "end": 5818,
+          "kind": "text",
+          "sha256": "161b8d48639bc8ca7975831e408b2d7436e62219de3d692da51f09025ba71445"
+        },
+        {
+          "path": "docs/tracks/cota.md",
+          "start": 0,
+          "end": 6264,
+          "kind": "text",
+          "sha256": "6a73414ac04d0ed92eeb2455813c1a874fbd06cd81aa075eaf9b7939bd3187bc"
+        },
+        {
+          "path": "docs/tracks/dijon.md",
+          "start": 0,
+          "end": 4831,
+          "kind": "text",
+          "sha256": "4a2f1f28a5e9a6492c4f30e46fda042c462dca94e3b294d6bf889f6c6d2f3a8e"
+        },
+        {
+          "path": "docs/tracks/donington.md",
+          "start": 0,
+          "end": 8425,
+          "kind": "text",
+          "sha256": "8697fc75029c9a40ea11a055825bd46d8e2b506953938aecc2c480fec12828e1"
+        },
+        {
+          "path": "docs/tracks/estoril.md",
+          "start": 0,
+          "end": 5852,
+          "kind": "text",
+          "sha256": "bbfd258f600f8666c92399b064154a18858630d961bde22ca764852b9359da79"
+        },
+        {
+          "path": "docs/tracks/fuji.md",
+          "start": 0,
+          "end": 5739,
+          "kind": "text",
+          "sha256": "73575f46a80589975ca167a83bce972aac3785b66f17bba4341b01b2f436e40b"
+        },
+        {
+          "path": "docs/tracks/hockenheim.md",
+          "start": 0,
+          "end": 6410,
+          "kind": "text",
+          "sha256": "11de2bc9624b0ad4c42b129fe38a5fc4a20ac6f383ed3cea72d16817f7b71dd2"
+        },
+        {
+          "path": "docs/tracks/hungaroring.md",
+          "start": 0,
+          "end": 13100,
+          "kind": "text",
+          "sha256": "a6e99d01c1bf684d4f8170091b5a0866236a6e8abd992125d23670b5e397af86"
+        },
+        {
+          "path": "docs/tracks/imola.md",
+          "start": 0,
+          "end": 11623,
+          "kind": "text",
+          "sha256": "b11c87633ea3a69b188d9f3e5ac6a75799e1e6cb3280954f756d1ace4c46f0ec"
+        },
+        {
+          "path": "docs/tracks/indianapolis.md",
+          "start": 0,
+          "end": 7672,
+          "kind": "text",
+          "sha256": "e86528ab211a035adf1634a44883b2e89ae94d1f0d21ea5229753639f521ff98"
+        },
+        {
+          "path": "docs/tracks/interlagos.md",
+          "start": 0,
+          "end": 6624,
+          "kind": "text",
+          "sha256": "7a98349ea9a277dbcdb9fe2b5e52e62cac72c063584f9da7871ab5e49f9640ea"
+        },
+        {
+          "path": "docs/tracks/istanbul.md",
+          "start": 0,
+          "end": 1279,
+          "kind": "text",
+          "sha256": "27b59065ff9c4d75c055097be1f06f547af2a98d1fbe2f124b06691bbdf4d2e8"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "docs/tracks/istanbul.md",
+          "start": 1279,
+          "end": 6917,
+          "kind": "text",
+          "sha256": "27b59065ff9c4d75c055097be1f06f547af2a98d1fbe2f124b06691bbdf4d2e8"
+        },
+        {
+          "path": "docs/tracks/jacarepagua.md",
+          "start": 0,
+          "end": 6394,
+          "kind": "text",
+          "sha256": "804924ec2de8f1ae8bf05e0ba24a1c8c5480b4a96663641f4c3638c3f1dd435d"
+        },
+        {
+          "path": "docs/tracks/jeddah.md",
+          "start": 0,
+          "end": 6855,
+          "kind": "text",
+          "sha256": "c59605afa45a7c408bbf8ca1858d0878b6540ac7d32148485ff8232b49754a65"
+        },
+        {
+          "path": "docs/tracks/jerez.md",
+          "start": 0,
+          "end": 6349,
+          "kind": "text",
+          "sha256": "1e956a1324a85a2113e04ab1edda9fd621d58baeafbadc332f966e00eb1234d4"
+        },
+        {
+          "path": "docs/tracks/korea.md",
+          "start": 0,
+          "end": 4553,
+          "kind": "text",
+          "sha256": "72bebf19b8f115623dccdb110a8e7985da5c27d4a6ea5933ffa6dc0dc975d64e"
+        },
+        {
+          "path": "docs/tracks/kyalami.md",
+          "start": 0,
+          "end": 7598,
+          "kind": "text",
+          "sha256": "8b058c9061b03fcaad28deb3d27a48cb23ad9040f658c070638831d10d22878b"
+        },
+        {
+          "path": "docs/tracks/madrid.md",
+          "start": 0,
+          "end": 7569,
+          "kind": "text",
+          "sha256": "1aba4190efea09b03ee37c11e7d3457bc19e0a091c1efe04b17b22318047f942"
+        },
+        {
+          "path": "docs/tracks/magny_cours.md",
+          "start": 0,
+          "end": 6519,
+          "kind": "text",
+          "sha256": "9fbf2a4bf82882ae3e1ae4e249628bef389784c78e3e2e2a5f9bfcecd097e220"
+        },
+        {
+          "path": "docs/tracks/mexico.md",
+          "start": 0,
+          "end": 6114,
+          "kind": "text",
+          "sha256": "2619f9b8cfd86ad5f9a0ed7f1a02ba6f0ef495c6ca65805b3f7f48216f8c9f0e"
+        },
+        {
+          "path": "docs/tracks/miami.md",
+          "start": 0,
+          "end": 6355,
+          "kind": "text",
+          "sha256": "49d9e28d6979c708c36689e8a6aeaa7a956c2996f3d993cfe2f529f680dd5ef6"
+        },
+        {
+          "path": "docs/tracks/monaco.md",
+          "start": 0,
+          "end": 6375,
+          "kind": "text",
+          "sha256": "afaf8116c036c120a4cde9a2d242ca5b5095c2404f92be6ee4d1eb04eb159af7"
+        },
+        {
+          "path": "docs/tracks/mont_tremblant.md",
+          "start": 0,
+          "end": 6941,
+          "kind": "text",
+          "sha256": "5923a5ecc02495ec3a9edea328be223c8bc7e6173b27551bb6dea8e86a1ad6f8"
+        },
+        {
+          "path": "docs/tracks/montreal.md",
+          "start": 0,
+          "end": 11539,
+          "kind": "text",
+          "sha256": "d85e8f36b94dfc0577682f7eb54d1265325d9171f8cafecfa4e982e34bc91b49"
+        },
+        {
+          "path": "docs/tracks/monza.md",
+          "start": 0,
+          "end": 6548,
+          "kind": "text",
+          "sha256": "e229018235a430b4d733b86b12d89fdb7392b50ec623aeede0c7db31839daae7"
+        },
+        {
+          "path": "docs/tracks/mosport.md",
+          "start": 0,
+          "end": 8234,
+          "kind": "text",
+          "sha256": "d60e3c73ae2127650c175713e5b134ce9291088c130d2446895bfa2525875524"
+        },
+        {
+          "path": "docs/tracks/mugello.md",
+          "start": 0,
+          "end": 6201,
+          "kind": "text",
+          "sha256": "abd80a8a363bb015c17334ec8a2505bde4198460c4c7f0604848b6051aa51e1e"
+        },
+        {
+          "path": "docs/tracks/nurburgring.md",
+          "start": 0,
+          "end": 5709,
+          "kind": "text",
+          "sha256": "32a6e76b95aea5ded1433f2c3948970b36e1d6a6320a38dd4c2f0f1b2fa25ec4"
+        },
+        {
+          "path": "docs/tracks/okayama.md",
+          "start": 0,
+          "end": 6301,
+          "kind": "text",
+          "sha256": "0e585b1c6c22180483e86277bee1332ee5174996e73902bc11a0b44cc7afab6e"
+        },
+        {
+          "path": "docs/tracks/paul_ricard.md",
+          "start": 0,
+          "end": 8152,
+          "kind": "text",
+          "sha256": "d54b7c55fac8cc5088ecba18c31ca89cd169512787e03601ee73e7d039f506a8"
+        },
+        {
+          "path": "docs/tracks/portimao.md",
+          "start": 0,
+          "end": 7934,
+          "kind": "text",
+          "sha256": "703b9bc4a03b22976ded9658c9ccf823987742e93e8d2bf7cfbda7532b253da3"
+        },
+        {
+          "path": "docs/tracks/qatar.md",
+          "start": 0,
+          "end": 10203,
+          "kind": "text",
+          "sha256": "d382d0f92c1f92022fcee7a46bd382ed6e493b09f0ce399965bf456e3efd66e9"
+        },
+        {
+          "path": "docs/tracks/redbull.md",
+          "start": 0,
+          "end": 5631,
+          "kind": "text",
+          "sha256": "427c345bff4b34efaac09fa62f41162b9a769866d81eef8025e826b1d2b34a4e"
+        },
+        {
+          "path": "docs/tracks/sepang.md",
+          "start": 0,
+          "end": 6288,
+          "kind": "text",
+          "sha256": "a49f958280dd946e7ea8a9423d66a51fa31817972f2d611fe3f2b768266bad94"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "docs/tracks/sepang.md",
+          "start": 6288,
+          "end": 7640,
+          "kind": "text",
+          "sha256": "a49f958280dd946e7ea8a9423d66a51fa31817972f2d611fe3f2b768266bad94"
+        },
+        {
+          "path": "docs/tracks/shanghai.md",
+          "start": 0,
+          "end": 7869,
+          "kind": "text",
+          "sha256": "8f5e1776d1aa0a3a6100c3be5fb87a98848e95512f43567a2aa1f383ec0deb06"
+        },
+        {
+          "path": "docs/tracks/silverstone.md",
+          "start": 0,
+          "end": 7656,
+          "kind": "text",
+          "sha256": "80fee1d211047a50058e199c7f7bc10461240c4f35de0fe7d1ef5532c096fac6"
+        },
+        {
+          "path": "docs/tracks/singapore.md",
+          "start": 0,
+          "end": 6298,
+          "kind": "text",
+          "sha256": "701a5db48c8229c7d84f7751a295e2e4c110c205ce4f34b0c86093ad608f173f"
+        },
+        {
+          "path": "docs/tracks/sochi.md",
+          "start": 0,
+          "end": 6534,
+          "kind": "text",
+          "sha256": "65cb537553c8e39b80af77303dafe26852b724d292179ae42b2450eb0c756b43"
+        },
+        {
+          "path": "docs/tracks/spa.md",
+          "start": 0,
+          "end": 10884,
+          "kind": "text",
+          "sha256": "2c05fdd73cb579e6839950c09b99b108d84406985858b773a37a231f758052cb"
+        },
+        {
+          "path": "docs/tracks/suzuka.md",
+          "start": 0,
+          "end": 6959,
+          "kind": "text",
+          "sha256": "f52dc13ed5bb83eeb9a6d00b3610e5bc8caca96b59eae2ab22e0050449a00fd6"
+        },
+        {
+          "path": "docs/tracks/track-designer-overhaul.md",
+          "start": 0,
+          "end": 4726,
+          "kind": "text",
+          "sha256": "253e63e57649e8b93a87cf74a2774ffdc607e09ccd6e2aac6d103f8272d87311"
+        },
+        {
+          "path": "docs/tracks/vegas.md",
+          "start": 0,
+          "end": 7640,
+          "kind": "text",
+          "sha256": "abfad6fcee5d9774404c83aeda139fb3632c3060c3c93a1c02522b58ac1403ed"
+        },
+        {
+          "path": "docs/tracks/watkins_glen.md",
+          "start": 0,
+          "end": 7163,
+          "kind": "text",
+          "sha256": "a8d852a6a4838d64f9857434e05dc24ef0065264137c0b005ed19307b9130988"
+        },
+        {
+          "path": "docs/tracks/zandvoort.md",
+          "start": 0,
+          "end": 7393,
+          "kind": "text",
+          "sha256": "744caef26240f7cdec3656ec1d88cd96933e36ef4217fc7315ae72f06fffa64e"
+        },
+        {
+          "path": "docs/tracks/zolder.md",
+          "start": 0,
+          "end": 6839,
+          "kind": "text",
+          "sha256": "a93298f6e64ed72d22d50f5471f794b28871643c9b72b0b56267d9031f693cfc"
+        }
+      ],
+      "bytes": 81313,
+      "status": "unassigned"
+    }
+  ]
+}

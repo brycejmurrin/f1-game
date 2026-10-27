@@ -1,0 +1,345 @@
+{
+  "group": "38",
+  "classification": "Historical literal paths and integrity evidence; no execution authority",
+  "assigned_bytes": 100000,
+  "read_chunks": 13,
+  "coverage": "All 12 assigned half-open ranges read individually in 13 untruncated calls of at most 10000 bytes. CI opening excluded; rulebook split at byte 10000.",
+  "sources": [
+    {
+      "source": "docs/notes/system-audit-3/ci-train.md",
+      "whole_bytes": 10113,
+      "whole_sha256": "143331189cd9b5d1808043eca9d02a3d75d55b3cd4db64e0f63b3fd98acde935",
+      "manifest_sha256": "143331189cd9b5d1808043eca9d02a3d75d55b3cd4db64e0f63b3fd98acde935",
+      "manifest_matches": true,
+      "range": [
+        1248,
+        10113
+      ],
+      "part_bytes": 8865,
+      "part_sha256": "142ddd0565547a65b36ecd81d081ad686e5806f9da3805140625fd9ce6c635c9",
+      "chunks": [
+        {
+          "start": 1248,
+          "end": 10113,
+          "bytes": 8865,
+          "sha256": "142ddd0565547a65b36ecd81d081ad686e5806f9da3805140625fd9ce6c635c9"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md",
+        "docs/notes/system-audit-4/anchors.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/docs-memory.md",
+      "whole_bytes": 8853,
+      "whole_sha256": "e00dce0a02b0f84d6903b4b9a724ddf0634b6b3c6a73891e51ffb714455999de",
+      "manifest_sha256": "e00dce0a02b0f84d6903b4b9a724ddf0634b6b3c6a73891e51ffb714455999de",
+      "manifest_matches": true,
+      "range": [
+        0,
+        8853
+      ],
+      "part_bytes": 8853,
+      "part_sha256": "e00dce0a02b0f84d6903b4b9a724ddf0634b6b3c6a73891e51ffb714455999de",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8853,
+          "bytes": 8853,
+          "sha256": "e00dce0a02b0f84d6903b4b9a724ddf0634b6b3c6a73891e51ffb714455999de"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/environment.md",
+      "whole_bytes": 9222,
+      "whole_sha256": "9a3d053813da55786b53365d4096a89dcf7a263b1edd1059374b42b304dd2cc8",
+      "manifest_sha256": "9a3d053813da55786b53365d4096a89dcf7a263b1edd1059374b42b304dd2cc8",
+      "manifest_matches": true,
+      "range": [
+        0,
+        9222
+      ],
+      "part_bytes": 9222,
+      "part_sha256": "9a3d053813da55786b53365d4096a89dcf7a263b1edd1059374b42b304dd2cc8",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9222,
+          "bytes": 9222,
+          "sha256": "9a3d053813da55786b53365d4096a89dcf7a263b1edd1059374b42b304dd2cc8"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md",
+        "docs/notes/system-audit-4/security.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/game-code.md",
+      "whole_bytes": 8013,
+      "whole_sha256": "27d8501bc420871762ed3afc831ea29fc366b3199019072cd76b802a5d5e9aef",
+      "manifest_sha256": "27d8501bc420871762ed3afc831ea29fc366b3199019072cd76b802a5d5e9aef",
+      "manifest_matches": true,
+      "range": [
+        0,
+        8013
+      ],
+      "part_bytes": 8013,
+      "part_sha256": "27d8501bc420871762ed3afc831ea29fc366b3199019072cd76b802a5d5e9aef",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8013,
+          "bytes": 8013,
+          "sha256": "27d8501bc420871762ed3afc831ea29fc366b3199019072cd76b802a5d5e9aef"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md",
+        "docs/notes/system-audit-3/rulebook.md",
+        "docs/notes/system-audit-3/skills-m-z.md",
+        "docs/notes/system-audit-4/hunt-core.md",
+        "docs/notes/system-audit-4/hunt-physics-ai.md",
+        "docs/notes/system-audit-4/hunt-physics-b.md",
+        "docs/notes/system-audit-4/hunt-render.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/rulebook.md",
+      "whole_bytes": 10733,
+      "whole_sha256": "f7bd999700c1a32aa009b6e28f50a89df2e4cc47a81b6756380c8d6d7ad7d518",
+      "manifest_sha256": "f7bd999700c1a32aa009b6e28f50a89df2e4cc47a81b6756380c8d6d7ad7d518",
+      "manifest_matches": true,
+      "range": [
+        0,
+        10733
+      ],
+      "part_bytes": 10733,
+      "part_sha256": "f7bd999700c1a32aa009b6e28f50a89df2e4cc47a81b6756380c8d6d7ad7d518",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 10000,
+          "bytes": 10000,
+          "sha256": "fc12126e99cb49bcbd87e38feda9dc0ec4805bc104a7fd26bf2536f00b328ffb"
+        },
+        {
+          "start": 10000,
+          "end": 10733,
+          "bytes": 733,
+          "sha256": "13deee7f6c25b22e174f0b173d53a85d67b0f497585784a43547f1d5c25d86a7"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/skills-a-l.md",
+      "whole_bytes": 9022,
+      "whole_sha256": "ef457465594f1977c87e7176c86400cd966fd0cf4e0e9d0bc18eb50a732aa02d",
+      "manifest_sha256": "ef457465594f1977c87e7176c86400cd966fd0cf4e0e9d0bc18eb50a732aa02d",
+      "manifest_matches": true,
+      "range": [
+        0,
+        9022
+      ],
+      "part_bytes": 9022,
+      "part_sha256": "ef457465594f1977c87e7176c86400cd966fd0cf4e0e9d0bc18eb50a732aa02d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9022,
+          "bytes": 9022,
+          "sha256": "ef457465594f1977c87e7176c86400cd966fd0cf4e0e9d0bc18eb50a732aa02d"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md",
+        "docs/notes/system-audit-4/skills/game-feel.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/skills-m-z.md",
+      "whole_bytes": 9432,
+      "whole_sha256": "5a9bc23b34db34bee89e2c70dc20b6158903af505064b942243b5a6648a5cf2f",
+      "manifest_sha256": "5a9bc23b34db34bee89e2c70dc20b6158903af505064b942243b5a6648a5cf2f",
+      "manifest_matches": true,
+      "range": [
+        0,
+        9432
+      ],
+      "part_bytes": 9432,
+      "part_sha256": "5a9bc23b34db34bee89e2c70dc20b6158903af505064b942243b5a6648a5cf2f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9432,
+          "bytes": 9432,
+          "sha256": "5a9bc23b34db34bee89e2c70dc20b6158903af505064b942243b5a6648a5cf2f"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/tests.md",
+      "whole_bytes": 9487,
+      "whole_sha256": "4aa04e7a18dde2046713c76925f04d217d1b6055e5d21809c5cf0e20f84ca3df",
+      "manifest_sha256": "4aa04e7a18dde2046713c76925f04d217d1b6055e5d21809c5cf0e20f84ca3df",
+      "manifest_matches": true,
+      "range": [
+        0,
+        9487
+      ],
+      "part_bytes": 9487,
+      "part_sha256": "4aa04e7a18dde2046713c76925f04d217d1b6055e5d21809c5cf0e20f84ca3df",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9487,
+          "bytes": 9487,
+          "sha256": "4aa04e7a18dde2046713c76925f04d217d1b6055e5d21809c5cf0e20f84ca3df"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/tools.md",
+      "whole_bytes": 9681,
+      "whole_sha256": "07165e8d071f8027f506d973cfd533279346b7f462b37c07a1621ea00655148f",
+      "manifest_sha256": "07165e8d071f8027f506d973cfd533279346b7f462b37c07a1621ea00655148f",
+      "manifest_matches": true,
+      "range": [
+        0,
+        9681
+      ],
+      "part_bytes": 9681,
+      "part_sha256": "07165e8d071f8027f506d973cfd533279346b7f462b37c07a1621ea00655148f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9681,
+          "bytes": 9681,
+          "sha256": "07165e8d071f8027f506d973cfd533279346b7f462b37c07a1621ea00655148f"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md",
+        "docs/notes/system-audit-3/rulebook.md",
+        "docs/notes/system-audit-4/skills/check.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-3/transcripts.md",
+      "whole_bytes": 9516,
+      "whole_sha256": "063fac2204ab371d5ccc20bf295f1cf9e755677c00744435743e4c18a37602f4",
+      "manifest_sha256": "063fac2204ab371d5ccc20bf295f1cf9e755677c00744435743e4c18a37602f4",
+      "manifest_matches": true,
+      "range": [
+        0,
+        9516
+      ],
+      "part_bytes": 9516,
+      "part_sha256": "063fac2204ab371d5ccc20bf295f1cf9e755677c00744435743e4c18a37602f4",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9516,
+          "bytes": 9516,
+          "sha256": "063fac2204ab371d5ccc20bf295f1cf9e755677c00744435743e4c18a37602f4"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-3/README.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-4/README.md",
+      "whole_bytes": 1951,
+      "whole_sha256": "6746c88f7591c6c03b508e32504cf699692956d4abc2877ee337ab39a35caaf0",
+      "manifest_sha256": "6746c88f7591c6c03b508e32504cf699692956d4abc2877ee337ab39a35caaf0",
+      "manifest_matches": true,
+      "range": [
+        0,
+        1951
+      ],
+      "part_bytes": 1951,
+      "part_sha256": "6746c88f7591c6c03b508e32504cf699692956d4abc2877ee337ab39a35caaf0",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1951,
+          "bytes": 1951,
+          "sha256": "6746c88f7591c6c03b508e32504cf699692956d4abc2877ee337ab39a35caaf0"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-4/anchors.md",
+        "docs/notes/system-audit-4/docs-claims-core.md",
+        "docs/notes/system-audit-4/numbers.md"
+      ]
+    },
+    {
+      "source": "docs/notes/system-audit-4/anchors.md",
+      "whole_bytes": 7472,
+      "whole_sha256": "5409fc9698576fce414a50d9a7ec081c6ad19c853ff3fc7dc8a002ded3c52c78",
+      "manifest_sha256": "5409fc9698576fce414a50d9a7ec081c6ad19c853ff3fc7dc8a002ded3c52c78",
+      "manifest_matches": true,
+      "range": [
+        0,
+        5225
+      ],
+      "part_bytes": 5225,
+      "part_sha256": "9c49718802ed6fa7f9bcf2879160ee38933ddfdf28e09fa1b347e3c97d7627e6",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5225,
+          "bytes": 5225,
+          "sha256": "9c49718802ed6fa7f9bcf2879160ee38933ddfdf28e09fa1b347e3c97d7627e6"
+        }
+      ],
+      "literal_backlinks": [
+        "docs/notes/system-audit-4/README.md"
+      ]
+    }
+  ],
+  "historical_or_obsolete_paths": [
+    " routes them to check-changes, scenery-dress and multiplayer-debug, though tools/archive/README says they are \"not part of any \u2026 skill\". All 7 still parse (node --check, imports resolve) | apex_catalog surfaces dead probes | exclude ",
+    "artifacts/launch/self.json",
+    "artifacts/pr-snapshot/etags.json",
+    "cat >> scratch/orchb-queue.md",
+    "readFileSync(\"scratch/sysaudit3/.gc-ratchets.json\")",
+    "scratch/sysaudit3/routing/pilot.json",
+    "scratch/sysaudit3/tx/<name>-p*.txt",
+    "scratch/sysaudit4/BRIEF.md",
+    "scratch/sysaudit4/anchors/scan.py",
+    "tools/archive/**",
+    ".claude/agents/merge-desk.md",
+    ".claude/skills/ci-watch/SKILL.md",
+    ".claude/memory/bryce-merges-manually.md",
+    "other-file.js",
+    "file.js",
+    "claims.txt",
+    "orchb-queue.md",
+    "stacked-prs-land-bottom-up.md",
+    "pr-auto-merge.md",
+    "merge-fast-verify-on-ci.md",
+    "docs/archive/notes/FLEET-ROLES-2026-10-19.md",
+    "docs/archive/research/TOTAL-AUDIT-2026-08.md",
+    "docs/archive/research/W4-AUDIT-2026-08.md",
+    "docs/archive/research/CODE-SURVEY-2026-09.md",
+    "docs/archive/research/AUDIT-SYNTHESIS-2026-08.md",
+    "docs/archive/webgpu/WEBGPU-MIGRATION.md",
+    "docs/archive/research/workflows/redesign-judge-panel.js"
+  ]
+}

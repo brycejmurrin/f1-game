@@ -1,0 +1,418 @@
+{
+  "goal": "Complete original tracked scope; every source/prose byte read, binary metadata inspected. Half-open byte ranges; source hashes bind to original files.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "docs/research/AGENT-CODE-INVESTIGATIONS.md",
+          "start": 0,
+          "end": 4630,
+          "kind": "text",
+          "sha256": "24cc611a1209f52076373ddbd8add8b75efedc88292cbc77811d5eef29cd9de1"
+        },
+        {
+          "path": "docs/research/AGENT-CONTRACTS.md",
+          "start": 0,
+          "end": 6906,
+          "kind": "text",
+          "sha256": "c3544e484432f84357dcb7e5a2110cc24cd41cf92f42d8c6f0cceba3474d1925"
+        },
+        {
+          "path": "docs/research/AGENT-JS-DEBUGGER-MCP.md",
+          "start": 0,
+          "end": 31773,
+          "kind": "text",
+          "sha256": "3a0efaaff763a1656fc95aeba8e1be6233530d35f57efff2481c93e29d796e57"
+        },
+        {
+          "path": "docs/research/AGENT-WORKFLOW-HARNESS.md",
+          "start": 0,
+          "end": 6436,
+          "kind": "text",
+          "sha256": "8162b13d146b5eb33dbbe5b8fda7006a7e3e287137507a7f481c7191fd41afed"
+        },
+        {
+          "path": "docs/research/AI-CONTACT-RESEARCH-2026-09.md",
+          "start": 0,
+          "end": 96443,
+          "kind": "text",
+          "sha256": "3b92ea79cc25115170bbf31c24f17f19051a6a0fb55ceb1fcc50e78c361e3211"
+        },
+        {
+          "path": "docs/research/APEX-TOOLS-MCP.md",
+          "start": 0,
+          "end": 13812,
+          "kind": "text",
+          "sha256": "01696575e391ce1d77be662e1db23c172afe9a92f599240714cc7c29815240ef"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "docs/research/APEX-TOOLS-MCP.md",
+          "start": 13812,
+          "end": 21054,
+          "kind": "text",
+          "sha256": "01696575e391ce1d77be662e1db23c172afe9a92f599240714cc7c29815240ef"
+        },
+        {
+          "path": "docs/research/ARCHITECTURE-REDESIGN-2026-08.md",
+          "start": 0,
+          "end": 46863,
+          "kind": "text",
+          "sha256": "99b64e62ca8a29aa06388420f5521d3a08335e568f69f7807230a0e7357dad5e"
+        },
+        {
+          "path": "docs/research/ASSET-API-RESEARCH.md",
+          "start": 0,
+          "end": 30268,
+          "kind": "text",
+          "sha256": "0c9a407b34501122c4b27821069fbb398a92c53e26c393314212f6f961595d8d"
+        },
+        {
+          "path": "docs/research/CHROME-DEVTOOLS-MCP.md",
+          "start": 0,
+          "end": 10340,
+          "kind": "text",
+          "sha256": "8df8a2e4f9cc61cd56b77c93052efd5114875a867dbe3bc84109f81ce7f37a4a"
+        },
+        {
+          "path": "docs/research/CONTROLS-AUDIT-2026-09.md",
+          "start": 0,
+          "end": 46429,
+          "kind": "text",
+          "sha256": "9a03b843689f948d50c2ce28a3f804c8a0f7abc2362208d4069cf631ec858d62"
+        },
+        {
+          "path": "docs/research/CONTROLS-RESEARCH-2026-09-14.md",
+          "start": 0,
+          "end": 15588,
+          "kind": "text",
+          "sha256": "ae6a9f631a1ffe291372b5e67f1a8f7ed1c0bf030d1fca4c20bd8c9213abfee5"
+        },
+        {
+          "path": "docs/research/DRIVING-CONTROLS-RESEARCH.md",
+          "start": 0,
+          "end": 3270,
+          "kind": "text",
+          "sha256": "ffa1199148fe520b85b89d59a11bc6601f59f71094e153f01954eaad2730e784"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "docs/research/DRIVING-CONTROLS-RESEARCH.md",
+          "start": 3270,
+          "end": 35219,
+          "kind": "text",
+          "sha256": "ffa1199148fe520b85b89d59a11bc6601f59f71094e153f01954eaad2730e784"
+        },
+        {
+          "path": "docs/research/F1-PROFILING-PLAYBOOK.md",
+          "start": 0,
+          "end": 17627,
+          "kind": "text",
+          "sha256": "3d1c9bdea8e4962c3d8d6ca06b279d890c6d5c3b9479b8e1746c635493bd7b10"
+        },
+        {
+          "path": "docs/research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md",
+          "start": 0,
+          "end": 30749,
+          "kind": "text",
+          "sha256": "d41a84dc353f64e84a52eed11d258462ca9cea89105706dd2f337f490331f4ef"
+        },
+        {
+          "path": "docs/research/PAUSE-SETTINGS-IA.md",
+          "start": 0,
+          "end": 9862,
+          "kind": "text",
+          "sha256": "c2b04533efafb084eac3ca494314c8d6357ef2eb53464ec2e3aba3e1423512d6"
+        },
+        {
+          "path": "docs/research/PHASE-C-SLIDER-DESIGN.md",
+          "start": 0,
+          "end": 20383,
+          "kind": "text",
+          "sha256": "8d81409f06efc5bf5e2210875556048223376bc3898ba667aae935b60ad6f7be"
+        },
+        {
+          "path": "docs/research/PIT-BAY-LOGOS-PLAN-2026-09.md",
+          "start": 0,
+          "end": 18696,
+          "kind": "text",
+          "sha256": "62e4c8e3c06366f297142f5ed1a2ec49cb38dfc0a6434e874e2222493689f840"
+        },
+        {
+          "path": "docs/research/PIT-ENTRY-LAMPS-PLAN-2026-09.md",
+          "start": 0,
+          "end": 16518,
+          "kind": "text",
+          "sha256": "07e4507c4f0f7ac013ca7936085ba4d29eabd058e8ea79c23e4384b11268b21d"
+        },
+        {
+          "path": "docs/research/PIT-GUIDANCE-STRATEGY-PLAN-2026-09.md",
+          "start": 0,
+          "end": 14216,
+          "kind": "text",
+          "sha256": "bc0a65b56df67afcfbaaaab6162d8ff804039a4bc0c05f6d01e8a56472bb1804"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": "docs/research/PIT-GUIDANCE-STRATEGY-PLAN-2026-09.md",
+          "start": 14216,
+          "end": 16807,
+          "kind": "text",
+          "sha256": "bc0a65b56df67afcfbaaaab6162d8ff804039a4bc0c05f6d01e8a56472bb1804"
+        },
+        {
+          "path": "docs/research/PIT-LANE-REDESIGN-2026-09.md",
+          "start": 0,
+          "end": 29535,
+          "kind": "text",
+          "sha256": "61f1a53901709e10a65897ac51ec43258fc2579441c34ff98211eb82a46621f4"
+        },
+        {
+          "path": "docs/research/PIT-LIGHTING-PLAN-2026-09.md",
+          "start": 0,
+          "end": 18817,
+          "kind": "text",
+          "sha256": "e2e8afbf5b4fea080cf4937a3b5e682e349ec0104e126a171ce42498c4784df8"
+        },
+        {
+          "path": "docs/research/PIT-NEXT-STEPS-2026-09.md",
+          "start": 0,
+          "end": 35402,
+          "kind": "text",
+          "sha256": "ca710f2839310838c2d3ae2dd01efbf233a5970c96be31d883f7668f69426309"
+        },
+        {
+          "path": "docs/research/PIT-OPEN-ITEMS-PLAN-2026-09.md",
+          "start": 0,
+          "end": 9042,
+          "kind": "text",
+          "sha256": "e4a988bca68a221cb683f340a11dbe779266715049d99e94cc71d6d3d9c284d6"
+        },
+        {
+          "path": "docs/research/PLATFORM-INPUT-NOTES.md",
+          "start": 0,
+          "end": 34682,
+          "kind": "text",
+          "sha256": "74d8b2d770a02eee09e7c53c382eb27d97eb251e8744c2c01dae2e7578909aa1"
+        },
+        {
+          "path": "docs/research/RACE-RADIO-REDESIGN-2026-09.md",
+          "start": 0,
+          "end": 11753,
+          "kind": "text",
+          "sha256": "1e94e4c3ccef83d04a8afdbe0432f396e766e5e746b1b8797fc3d7756b3d13dd"
+        },
+        {
+          "path": "docs/research/RENDERER-PERF-AUDIT-2026-09-02.md",
+          "start": 0,
+          "end": 18178,
+          "kind": "text",
+          "sha256": "8c3288d16a28d6b5ccc8aa546c705b9c1b84b1a881a22c67c392823abc93065d"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "05",
+      "parts": [
+        {
+          "path": "docs/research/RENDERER-PERF-AUDIT-2026-09-02.md",
+          "start": 18178,
+          "end": 34714,
+          "kind": "text",
+          "sha256": "8c3288d16a28d6b5ccc8aa546c705b9c1b84b1a881a22c67c392823abc93065d"
+        },
+        {
+          "path": "docs/research/SCENE-GRAPH-PLAN.md",
+          "start": 0,
+          "end": 24738,
+          "kind": "text",
+          "sha256": "2916d21862bda36c8b4ce6016d51edcf1ae9e102f950d8e00c705ce29c726878"
+        },
+        {
+          "path": "docs/research/STREET-PIT-LANES-PLAN-2026-09.md",
+          "start": 0,
+          "end": 21872,
+          "kind": "text",
+          "sha256": "ef2f8e6c995ab6924f9b390e8cc702bd1b451cc3a637b100aa28fb2c77f149c1"
+        },
+        {
+          "path": "docs/research/STRUCTURE-REDECISION-2026-08.md",
+          "start": 0,
+          "end": 16497,
+          "kind": "text",
+          "sha256": "b54bdf2fd7a96a95f3e624bcef4f9589df9cde7f12c79ca92d76ea844165a731"
+        },
+        {
+          "path": "docs/research/TRACK-SOURCE-AUDIT-2026-10-19.md",
+          "start": 0,
+          "end": 72584,
+          "kind": "text",
+          "sha256": "da84c277e7940c387a177742123bedc6efc74c1415eda64da89db5f96983aa54"
+        },
+        {
+          "path": "docs/research/TREE-RESTRUCTURE-2026-09.md",
+          "start": 0,
+          "end": 7773,
+          "kind": "text",
+          "sha256": "6dde9bb2b248db18844f79411a61f0233186e873a61e1d2a1af45702e622b152"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "06",
+      "parts": [
+        {
+          "path": "docs/research/TREE-RESTRUCTURE-2026-09.md",
+          "start": 7773,
+          "end": 53642,
+          "kind": "text",
+          "sha256": "6dde9bb2b248db18844f79411a61f0233186e873a61e1d2a1af45702e622b152"
+        },
+        {
+          "path": "docs/research/TYRE-STRATEGY-DESIGN.md",
+          "start": 0,
+          "end": 42957,
+          "kind": "text",
+          "sha256": "2fd30886c4390f2c59f0a32902743cb8d6d130f0e6f3bc9c397c1f31d2d01085"
+        },
+        {
+          "path": "docs/research/UI-DESIGN-PRINCIPLES.md",
+          "start": 0,
+          "end": 5985,
+          "kind": "text",
+          "sha256": "36ccf2b89cad43b662a28a5864900c09250f6e5ec1229e13272ef9b67cd1063b"
+        },
+        {
+          "path": "docs/research/UI-REDESIGN-2026-08-18.md",
+          "start": 0,
+          "end": 16599,
+          "kind": "text",
+          "sha256": "c7e1487189dda2ef68eebc8d43f94b14bdfec216bad8cf3f6ec91a4f7466fd7c"
+        },
+        {
+          "path": "docs/research/UPSCALING-2026-09.md",
+          "start": 0,
+          "end": 16594,
+          "kind": "text",
+          "sha256": "13f65cbcb733720da1150b1bc15ac2ddcc213fb72728f4b90f075d41b1dc6428"
+        },
+        {
+          "path": "docs/research/WEBGPU-PARITY.md",
+          "start": 0,
+          "end": 31996,
+          "kind": "text",
+          "sha256": "ba60c6f35a579debb165ce7c847ab3ae7dac6a05aefb00ef6b4bf9d28d700236"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "07",
+      "parts": [
+        {
+          "path": "docs/research/WEBGPU-PARITY.md",
+          "start": 31996,
+          "end": 61689,
+          "kind": "text",
+          "sha256": "ba60c6f35a579debb165ce7c847ab3ae7dac6a05aefb00ef6b4bf9d28d700236"
+        },
+        {
+          "path": "docs/research/steering-research.md",
+          "start": 0,
+          "end": 5759,
+          "kind": "text",
+          "sha256": "4abe28161d1b3a0218127ba917850b3cfc41f1772c000c6a208a9b0220b329a2"
+        },
+        {
+          "path": "docs/research/wgx-gallery-manifest.json",
+          "start": 0,
+          "end": 3502,
+          "kind": "text",
+          "sha256": "0d454cd13a48bd9c2d9958c25baca9fce94b6bb15c8e6bc4696246eef7556e81"
+        },
+        {
+          "path": "docs/research/wgx-gallery/README.md",
+          "start": 0,
+          "end": 760,
+          "kind": "text",
+          "sha256": "c5874c54e91e59f5bf4dd578e95d6896f0368302423a5b81060592e717cfe561"
+        },
+        {
+          "path": "docs/research/wgx-gallery/bahrain.png",
+          "start": 0,
+          "end": 810436,
+          "kind": "binary",
+          "sha256": "eaaf61266c98ff116451d9e938b933beb6a3424ddc32c535505b529cb63b6a18"
+        },
+        {
+          "path": "docs/research/wgx-gallery/monaco-eye.png",
+          "start": 0,
+          "end": 865752,
+          "kind": "binary",
+          "sha256": "3dedf52dde09e04cd0803212cecf91481ccbe819140c86d0fc6c58a77e0130db"
+        },
+        {
+          "path": "docs/research/wgx-gallery/montreal-eye.png",
+          "start": 0,
+          "end": 773708,
+          "kind": "binary",
+          "sha256": "c554acf6c7c4f7effbc9945d1b6cd4c9856753d5f98cc2576ca8df0db9a5bf34"
+        },
+        {
+          "path": "docs/research/wgx-gallery/montreal.png",
+          "start": 0,
+          "end": 772806,
+          "kind": "binary",
+          "sha256": "49c8911638903569df53c55de7e9bded22d2f68ffb8792fffdd76e2ab0575916"
+        },
+        {
+          "path": "docs/research/wgx-gallery/singapore.png",
+          "start": 0,
+          "end": 721518,
+          "kind": "binary",
+          "sha256": "3500c5b5d3c71c83e26eb0b82f4f839973bfa3a92d8f94d9ef63fa2b3aee702c"
+        },
+        {
+          "path": "docs/research/wgx-gallery/spa.png",
+          "start": 0,
+          "end": 851656,
+          "kind": "binary",
+          "sha256": "166e08ac91b4554d6b077c7f9a3a26ce090d383df1d3fb45f25dca58446cb59c"
+        },
+        {
+          "path": "docs/research/wgx-gallery/vegas.png",
+          "start": 0,
+          "end": 862518,
+          "kind": "binary",
+          "sha256": "c355c4a3cecb1e5003edbccb540dc5c5d3c6807b3e816755ef0939251ba02d24"
+        }
+      ],
+      "bytes": 39714,
+      "status": "unassigned"
+    }
+  ]
+}

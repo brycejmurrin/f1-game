@@ -1,0 +1,400 @@
+{
+  "group": "36",
+  "authority": "Historical provenance only; not command authority",
+  "coverage": {
+    "parts": 13,
+    "chunks": 19,
+    "bytes": 100000,
+    "chunk_max_bytes": 9000
+  },
+  "parts": [
+    {
+      "path": "docs/notes/VOICE-LAG-IPHONE-2026-10-01.md",
+      "start": 2420,
+      "end": 4332,
+      "kind": "text",
+      "sha256": "b502482610f788185fecd3704c502d0723c26e15f5de9a5e159b970a0078106e",
+      "whole_bytes": 4332,
+      "whole_sha256": "b502482610f788185fecd3704c502d0723c26e15f5de9a5e159b970a0078106e",
+      "manifest_match": true,
+      "part_bytes": 1912,
+      "part_sha256": "99c24e029861e2dd023d488c8be4279803bc03fa7ad81a8a2d02d3390c5c9a67",
+      "chunks": [
+        {
+          "start": 2420,
+          "end": 4332,
+          "bytes": 1912,
+          "sha256": "99c24e029861e2dd023d488c8be4279803bc03fa7ad81a8a2d02d3390c5c9a67"
+        }
+      ],
+      "date_producer": "2026-10-01; author unnamed",
+      "topics": "Recorded radio packs cover phrase pools, emitted cards, captured corpus, slots and words; shared audio nodes reduce per-line work. RECORDED suppresses uncovered synthesis; announcer remains synthesized outside races.",
+      "backlinks_producers": "RadioVoice, VoicePack.norm, voicepack and voice-corpus generators; announcer.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Tail begins mid coach row; prefix belongs to group 35. Implementation claims need current source corroboration."
+    },
+    {
+      "path": "docs/notes/VOICE-OPUS-TWINS-2026-10-25.md",
+      "start": 0,
+      "end": 691,
+      "kind": "text",
+      "sha256": "e6bba2ec3bd770f9995d8f73d6ec8048a1f0f454f09c6901cee925b973e55bf4",
+      "whole_bytes": 691,
+      "whole_sha256": "e6bba2ec3bd770f9995d8f73d6ec8048a1f0f454f09c6901cee925b973e55bf4",
+      "manifest_match": true,
+      "part_bytes": 691,
+      "part_sha256": "e6bba2ec3bd770f9995d8f73d6ec8048a1f0f454f09c6901cee925b973e55bf4",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 691,
+          "bytes": 691,
+          "sha256": "e6bba2ec3bd770f9995d8f73d6ec8048a1f0f454f09c6901cee925b973e55bf4"
+        }
+      ],
+      "date_producer": "2026-10-25; A\u00b7W51, option A",
+      "topics": "Opus twins generated for four default voices while MP3 binaries stay identical.",
+      "backlinks_producers": "PR #3729; iPhone decode probe A\u00b7D2 #3708; Kokoro and ffmpeg.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Other 20 packs await decision; device decode not measured here."
+    },
+    {
+      "path": "docs/notes/WEATHER-ROADMAP-2026-10-14.md",
+      "start": 0,
+      "end": 9306,
+      "kind": "text",
+      "sha256": "d9078397419d771043a33eb0eea16196812cd0c180b63ee3072fab9593ff9fbb",
+      "whole_bytes": 9306,
+      "whole_sha256": "d9078397419d771043a33eb0eea16196812cd0c180b63ee3072fab9593ff9fbb",
+      "manifest_match": true,
+      "part_bytes": 9306,
+      "part_sha256": "d9078397419d771043a33eb0eea16196812cd0c180b63ee3072fab9593ff9fbb",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "e8d4bb31a2e02351f8e1942a3341dcfe908be2f81e2ef6c09330b20bc10d6443"
+        },
+        {
+          "start": 9000,
+          "end": 9306,
+          "bytes": 306,
+          "sha256": "af62a6a3a88998bf85ef9253d340da9af3125ae69b09bb3d7aa6f93d9aa92e15"
+        }
+      ],
+      "date_producer": "2026-10-14; unnamed research/implementation lane",
+      "topics": "Weather research distinguishes sourced pages from snippets; plans storm, forecast, sector water and effects. Built addendum describes aquaplane grip/AI caps and seeded heading-based wind.",
+      "backlinks_producers": "AMS, Pirelli, NASA, iRacing, GT7 research; PHYSICS surface rules; TyreModel and wind subsystem.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Lap-wide wetness remains; settings/HUD/room wind wiring incomplete. Bench data is VM evidence; proposals are not current policy."
+    },
+    {
+      "path": "docs/notes/WHEEL-STATE-2026-10-19.md",
+      "start": 0,
+      "end": 6465,
+      "kind": "text",
+      "sha256": "159cae381a4a36566f2d5f2b8e94f05f62a57f499e0d034eb7832655e60adeca",
+      "whole_bytes": 6465,
+      "whole_sha256": "159cae381a4a36566f2d5f2b8e94f05f62a57f499e0d034eb7832655e60adeca",
+      "manifest_match": true,
+      "part_bytes": 6465,
+      "part_sha256": "159cae381a4a36566f2d5f2b8e94f05f62a57f499e0d034eb7832655e60adeca",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6465,
+          "bytes": 6465,
+          "sha256": "159cae381a4a36566f2d5f2b8e94f05f62a57f499e0d034eb7832655e60adeca"
+        }
+      ],
+      "date_producer": "2026-10-19; #1628 scoped wheel-state lane",
+      "topics": "Per-axle torque/slip state starts opt-in OFF. Later slice calibrates demand, feeds shortfall to speed and synchronizes placement; dry stops remain equal, storm lock/grass spin alter delivery.",
+      "backlinks_producers": "Mechanics-coherence Tier2 \u00a75; WheelState, PlayerForces, player-dynamics and characterization VM tests; #2924 ownership.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Earlier missing Fx wiring is superseded within this note. Default ON still requires ABS/TC and remeasurement; no current flag audit."
+    },
+    {
+      "path": "docs/notes/WHY-BOTH-LEVERS-COST-2026-09-16.md",
+      "start": 0,
+      "end": 5307,
+      "kind": "text",
+      "sha256": "d0ce42dcd58bbd41e126d9a654fcfe0e2f42573a89f75ab9f3807a478c6d9160",
+      "whole_bytes": 5307,
+      "whole_sha256": "d0ce42dcd58bbd41e126d9a654fcfe0e2f42573a89f75ab9f3807a478c6d9160",
+      "manifest_match": true,
+      "part_bytes": 5307,
+      "part_sha256": "d0ce42dcd58bbd41e126d9a654fcfe0e2f42573a89f75ab9f3807a478c6d9160",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5307,
+          "bytes": 5307,
+          "sha256": "d0ce42dcd58bbd41e126d9a654fcfe0e2f42573a89f75ab9f3807a478c6d9160"
+        }
+      ],
+      "date_producer": "2026-09-16; author unnamed",
+      "topics": "Multi-draw CPU submission benefit cannot be priced with GPU timers. Occlusion query costs depend on GPU architecture; both flags remain OFF in the dated decision.",
+      "backlinks_producers": "GPU census 146; GLX multi-draw test; MDN/Khronos, Apple, Imagination, Arm and Vulkan documentation.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Architecture explanation is dated research, not universal performance proof; real immediate-mode GPU measurements absent."
+    },
+    {
+      "path": "docs/notes/XR-PHASE0-ARCHITECTURE.md",
+      "start": 0,
+      "end": 4347,
+      "kind": "text",
+      "sha256": "17ef08ff33fd439bb6a3f4eb3d7f8baf4603686ff4812a6a8a67b0c4883e3b99",
+      "whole_bytes": 4347,
+      "whole_sha256": "17ef08ff33fd439bb6a3f4eb3d7f8baf4603686ff4812a6a8a67b0c4883e3b99",
+      "manifest_match": true,
+      "part_bytes": 4347,
+      "part_sha256": "17ef08ff33fd439bb6a3f4eb3d7f8baf4603686ff4812a6a8a67b0c4883e3b99",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4347,
+          "bytes": 4347,
+          "sha256": "17ef08ff33fd439bb6a3f4eb3d7f8baf4603686ff4812a6a8a67b0c4883e3b99"
+        }
+      ],
+      "date_producer": "2026-09-29 research onward; author unnamed",
+      "topics": "Manual XR layer, per-eye matrices, XR-owned frame loop and offset seat preserve engine camera contract. Post disabled and immersive buffer sizing protected. IWER workaround and single-evaluation frame waiter documented.",
+      "backlinks_producers": "three r186 and issues #32538/#32151/#33497/#33414; Meta IWER 2.5.0; XR boot/session/rig; lifecycle suite and Quest checklist.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "LOW half-resolution software emulation covers lifecycle only; cannot establish headset performance, multiview or projection layers."
+    },
+    {
+      "path": "docs/notes/XR-QUEST-ON-DEVICE.md",
+      "start": 0,
+      "end": 4263,
+      "kind": "text",
+      "sha256": "f36b80dfa041eaf1fd53c9dc2777155bc7548a7bb48e46cddaf6089b8b275980",
+      "whole_bytes": 4263,
+      "whole_sha256": "f36b80dfa041eaf1fd53c9dc2777155bc7548a7bb48e46cddaf6089b8b275980",
+      "manifest_match": true,
+      "part_bytes": 4263,
+      "part_sha256": "f36b80dfa041eaf1fd53c9dc2777155bc7548a7bb48e46cddaf6089b8b275980",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4263,
+          "bytes": 4263,
+          "sha256": "f36b80dfa041eaf1fd53c9dc2777155bc7548a7bb48e46cddaf6089b8b275980"
+        }
+      ],
+      "date_producer": "Phase 0; author unnamed, date not explicit",
+      "topics": "Quest checklist separates emulation from headset stereo, controls, foveation, thermal and compositor verification.",
+      "backlinks_producers": "Meta remote debugging/performance documentation; IWER #196; XR architecture note; XrBoot diagnostics.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Checklist unchecked; no Quest-ready claim. Experimental WebGPU feature grant must be confirmed on device."
+    },
+    {
+      "path": "docs/notes/garage-perf-2026-10-20.md",
+      "start": 0,
+      "end": 5301,
+      "kind": "text",
+      "sha256": "da470c4be6e4ad66113a626ba86d060ed02b563d6fd414dae17fec5f3e56fd9e",
+      "whole_bytes": 5301,
+      "whole_sha256": "da470c4be6e4ad66113a626ba86d060ed02b563d6fd414dae17fec5f3e56fd9e",
+      "manifest_match": true,
+      "part_bytes": 5301,
+      "part_sha256": "da470c4be6e4ad66113a626ba86d060ed02b563d6fd414dae17fec5f3e56fd9e",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5301,
+          "bytes": 5301,
+          "sha256": "da470c4be6e4ad66113a626ba86d060ed02b563d6fd414dae17fec5f3e56fd9e"
+        }
+      ],
+      "date_producer": "2026-10-20; B\u00b7L24 with B\u00b7H7 remeasurement",
+      "topics": "Garage census isolates program relink and shader growth from small mesh changes. Pipeline lifetime fix removes observed relinks; atlas-only livery taps avoid full rebuild; finish taps still rebuild.",
+      "backlinks_producers": "Bryce report via OrchB21; #3145/#3160/#3169/#3176; garage-census; pipeline lifecycle and mesh-free unit guards.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Software timings are CPU proxies; baseline loaded by parallel suite. Original idle-trigger hypothesis corrected later in same note."
+    },
+    {
+      "path": "docs/notes/orchestration-redesign-2026-10-27/README.md",
+      "start": 0,
+      "end": 2409,
+      "kind": "text",
+      "sha256": "62131537013a5d9834230df76cdb43e8beb50abdaceaca3bbc5f043df830a5f6",
+      "whole_bytes": 2409,
+      "whole_sha256": "62131537013a5d9834230df76cdb43e8beb50abdaceaca3bbc5f043df830a5f6",
+      "manifest_match": true,
+      "part_bytes": 2409,
+      "part_sha256": "62131537013a5d9834230df76cdb43e8beb50abdaceaca3bbc5f043df830a5f6",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2409,
+          "bytes": 2409,
+          "sha256": "62131537013a5d9834230df76cdb43e8beb50abdaceaca3bbc5f043df830a5f6"
+        }
+      ],
+      "date_producer": "2026-10-27; reviewer-agent evidence index",
+      "topics": "Indexes eight source reviews supporting orchestration redesign across bus, tooling, rulebook, outcomes, platforms and host transcripts.",
+      "backlinks_producers": "Orchestration redesign plan; sibling evidence reviews.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Index provenance only; counts belong to dated reviews, not a live fleet inventory."
+    },
+    {
+      "path": "docs/notes/orchestration-redesign-2026-10-27/bus.md",
+      "start": 0,
+      "end": 13057,
+      "kind": "text",
+      "sha256": "82d10f515e0d19ea3463619d15a5b0ec1492dbb1ab102b7a002bced0ca1723d4",
+      "whole_bytes": 13057,
+      "whole_sha256": "82d10f515e0d19ea3463619d15a5b0ec1492dbb1ab102b7a002bced0ca1723d4",
+      "manifest_match": true,
+      "part_bytes": 13057,
+      "part_sha256": "82d10f515e0d19ea3463619d15a5b0ec1492dbb1ab102b7a002bced0ca1723d4",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "d37b05c4707681ac6ec8311f8fa06f6045c10a666dca675a8fd96f8f02d39c50"
+        },
+        {
+          "start": 9000,
+          "end": 13057,
+          "bytes": 4057,
+          "sha256": "814666113abfa6b027c5f2250ce8176efa8537e439ca0ca7eab46cb32e3e3a9c"
+        }
+      ],
+      "date_producer": "2026-10-27; unnamed read-only bus reviewer",
+      "topics": "3735 lines show broadcast/status overload, stale identities, frequent rotations and weak strict addressed replies. READY/DONE and incident accounting expose duplicate traffic; typed chat reduced HANDOFF share.",
+      "backlinks_producers": "Fleet bus commit log 10-19 to 10-27; scratch analysis scripts; cross-host traffic and phantom merger incidents.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Timestamp correction applied to Pacific-stamping senders; broad reply tiers are upper bounds and off-bus DAD replies missing. No current coordination authority."
+    },
+    {
+      "path": "docs/notes/orchestration-redesign-2026-10-27/claude-sessions.md",
+      "start": 0,
+      "end": 20418,
+      "kind": "text",
+      "sha256": "dc23881ac9a9b08d141052d59e1c1e9500a54c1b5bc36cb5a357710f939d386f",
+      "whole_bytes": 20418,
+      "whole_sha256": "dc23881ac9a9b08d141052d59e1c1e9500a54c1b5bc36cb5a357710f939d386f",
+      "manifest_match": true,
+      "part_bytes": 20418,
+      "part_sha256": "dc23881ac9a9b08d141052d59e1c1e9500a54c1b5bc36cb5a357710f939d386f",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "6a03db69304e8b8e2de7b60f56b752418fe32bb53af80546164adfb2ee235e68"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "dfc13018fe8c54995313d8784c7e0c92b2a8a18fc0b3b35fead0cdffca777ae1"
+        },
+        {
+          "start": 18000,
+          "end": 20418,
+          "bytes": 2418,
+          "sha256": "8a5a78680796138f4df52b197a36ea493858cf78fa8b906b5b4b8503f10d3c3d"
+        }
+      ],
+      "date_producer": "2026-10-27; unnamed read-only Claude reviewer",
+      "topics": "24-session sample classifies no-op wakes, relay and rotation cost, launch gates, archive errors and stale messaging. Recommends simpler boot, durable addressing and status interface.",
+      "backlinks_producers": "60 transcript pages; session-transcript digest; prior Fleet B and system-audit transcript reviews; redesign plan.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Only one whole session end-to-end; other newest-page windows, three page collisions and unavailable Fleet A sessions limit totals. Proposals conflict with later GitHub-only coordination."
+    },
+    {
+      "path": "docs/notes/orchestration-redesign-2026-10-27/codex.md",
+      "start": 0,
+      "end": 18617,
+      "kind": "text",
+      "sha256": "1bc48840708c33eb8b8d58f25113881eca807386299cefa8b879c4e118efdfdf",
+      "whole_bytes": 18617,
+      "whole_sha256": "1bc48840708c33eb8b8d58f25113881eca807386299cefa8b879c4e118efdfdf",
+      "manifest_match": true,
+      "part_bytes": 18617,
+      "part_sha256": "1bc48840708c33eb8b8d58f25113881eca807386299cefa8b879c4e118efdfdf",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "63cd983ff9505373aab0c6fe86a6acf8224bdf7f3c53579068fb8c397f21f132"
+        },
+        {
+          "start": 9000,
+          "end": 18000,
+          "bytes": 9000,
+          "sha256": "750b9d0e0d0f121a747892541c631de52f75b9414b4cc89cd67f905264848351"
+        },
+        {
+          "start": 18000,
+          "end": 18617,
+          "bytes": 617,
+          "sha256": "7b29e2de5f6bd7f7308e0ded6052af089a468ba6a1bcf8cdb8d86f54ee87c62c"
+        }
+      ],
+      "date_producer": "2026-10-27; unnamed read-only Codex reviewer",
+      "topics": "409 export threads plus two full recent sessions show verification dominates tool time, reviewer-heavy children, human merge intervention and lack of inbound fleet wakes. Proposes bounded PR lanes and remote verdicts.",
+      "backlinks_producers": "Drive export/index, fleet bus, #3856 and two-session export; redesign plan.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Fleet-era full parts 032\u2013061 missing; index counts and bus substitute. Classification regex, overlapping message categories and missing usage fields limit conclusions; current tool capabilities must be rechecked."
+    },
+    {
+      "path": "docs/notes/orchestration-redesign-2026-10-27/cursor-agents.md",
+      "start": 0,
+      "end": 7907,
+      "kind": "text",
+      "sha256": "5dc8c4a2f66b69912ba56d1cb0dbd249f8d883e0179123c36a95e8af13a1bd49",
+      "whole_bytes": 14546,
+      "whole_sha256": "5dc8c4a2f66b69912ba56d1cb0dbd249f8d883e0179123c36a95e8af13a1bd49",
+      "manifest_match": true,
+      "part_bytes": 7907,
+      "part_sha256": "93cf54e638622b590f1c24f5504a25eaf33118d4c8b0b3bd5ef109e4a0a0b659",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7907,
+          "bytes": 7907,
+          "sha256": "93cf54e638622b590f1c24f5504a25eaf33118d4c8b0b3bd5ef109e4a0a0b659"
+        }
+      ],
+      "date_producer": "2026-10-27 ~02:00Z; unnamed Fleet D reviewer",
+      "topics": "Cursor sample contrasts implementation runs with many short standby/check-in wakes. DAD brief contradictions concern HANDOFF, timers, holds, labels, sync, generated files and identity variables.",
+      "backlinks_producers": "870-agent listing; 93 run/usage records; 17 conversations; 61 streams; DAD bus lines and train PRs.",
+      "current_use": "Decision and investigation provenance; corroborate with current code and WORKERS.md.",
+      "limits": "Assigned prefix ends mid PID-kill row; remainder belongs to group 37. Archived conversations unavailable, streams retain 24 hours, cost unreadable; no DAD transcript."
+    }
+  ],
+  "historical_archive_session_references": [
+    "/home/user/f1-h16-warm",
+    "claude/*-audit-20261005",
+    "cursor/orchb-queue*",
+    "docs/archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md",
+    "file:///workspace/apex-status/briefs/w35/W35d.txt",
+    "git worktree add scratch/wt-q origin/cursor/orchb-queue18-aq1h",
+    "node tools/gen/voicepack.mjs --opus-only --id <voice> --kokoro scratch/voicepack --ffmpeg /usr/bin/ffmpeg",
+    "origin/claude/fleet-bus",
+    "scratch/h7-garage.mjs",
+    "scratch/wheel-state-char-on.mjs",
+    "scratchpad/an/{parse,q1,q2b,q3,q5,q10,q11}.py",
+    "scratchpad/bus.log",
+    "scratchpad/claude-tx/*.json",
+    "scratchpad/claude-tx/<id>-pN.json",
+    "scratchpad/codex-scripts/",
+    "scratchpad/cursor-scripts/",
+    "scratchpad/cursor-tx/",
+    "scratchpad/ledger.csv",
+    "scratchpad/out/<id>.txt"
+  ],
+  "comment_cleanup_candidates": [
+    "Mark weather built/planned boundaries",
+    "Mark superseded first-slice wheel wiring",
+    "Keep corrected garage relink hypothesis explicit",
+    "Mark retired fleet role/protocol recommendations as historical"
+  ]
+}

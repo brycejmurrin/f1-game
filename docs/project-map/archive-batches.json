@@ -1,0 +1,2567 @@
+{
+  "goal": "Complete original tracked scope; every source/prose byte read, binary metadata inspected. Half-open byte ranges; source hashes bind to original files.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "docs/archive/2026-08-architecture-review-journal.md",
+          "start": 0,
+          "end": 74486,
+          "kind": "text",
+          "sha256": "7781e0da4f324eb3e0a296f9912e0dad28a34f0ff2581b992678bf8b80334b35"
+        },
+        {
+          "path": "docs/archive/2026-08-repo-audit.md",
+          "start": 0,
+          "end": 24771,
+          "kind": "text",
+          "sha256": "1abb16f60e5d3d28264142899ce458473c1badc75b554924601b93a549147c8a"
+        },
+        {
+          "path": "docs/archive/ATTIC.md",
+          "start": 0,
+          "end": 10320,
+          "kind": "text",
+          "sha256": "a0c20c59534a3cd12a77804163429c68237c3073358fbd460567491fe9d16959"
+        },
+        {
+          "path": "docs/archive/SCENERY-UPGRADE-PLAN.md",
+          "start": 0,
+          "end": 22134,
+          "kind": "text",
+          "sha256": "8fc239fe5928d2e044eed00015a551866769663cb32ade720e561d183726b8db"
+        },
+        {
+          "path": "docs/archive/manual-probes/act-probe.spec.js",
+          "start": 0,
+          "end": 11332,
+          "kind": "text",
+          "sha256": "638f71fa871841a96a8285afbd41a77b78005ca9854be034d725d94e4db20e9f"
+        },
+        {
+          "path": "docs/archive/manual-probes/banking-probe.spec.js",
+          "start": 0,
+          "end": 3844,
+          "kind": "text",
+          "sha256": "5b698089af01f47f6f6783cde644513c813d17dda5db659630add2438de772d6"
+        },
+        {
+          "path": "docs/archive/manual-probes/skid-probe.spec.js",
+          "start": 0,
+          "end": 8874,
+          "kind": "text",
+          "sha256": "1c63dc0cf0124ee07bc4b4bef6fe3ca38a298ac0c18166a9ffc23f3a8ad1f000"
+        },
+        {
+          "path": "docs/archive/manual-probes/throttle-rescue-probe.spec.js",
+          "start": 0,
+          "end": 4239,
+          "kind": "text",
+          "sha256": "6961a41f09c23f183489887e0a12f5e16247f8a894af3e8b7b4b1295957032fe"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "docs/archive/manual-probes/throttle-rescue-probe.spec.js",
+          "start": 4239,
+          "end": 8613,
+          "kind": "text",
+          "sha256": "6961a41f09c23f183489887e0a12f5e16247f8a894af3e8b7b4b1295957032fe"
+        },
+        {
+          "path": "docs/archive/moves/README.md",
+          "start": 0,
+          "end": 373,
+          "kind": "text",
+          "sha256": "a81fba81254147066078e7ae784c13fafa0384e39827361ebd44d00fddf8b6f9"
+        },
+        {
+          "path": "docs/archive/moves/batches/b1-foundation.json",
+          "start": 0,
+          "end": 955,
+          "kind": "text",
+          "sha256": "43be75371add526adda9acb78fbd251ca8d78a2e9636d39a2b0da48e61de8dcc"
+        },
+        {
+          "path": "docs/archive/moves/batches/b2-presentation.json",
+          "start": 0,
+          "end": 1496,
+          "kind": "text",
+          "sha256": "577e8b8992eef261215242ce09c9f4a6dbdad2a0a3bf403ec7869e62f89deaea"
+        },
+        {
+          "path": "docs/archive/moves/batches/b3-domain.json",
+          "start": 0,
+          "end": 1266,
+          "kind": "text",
+          "sha256": "14a4a302261fb1e5bf2edd2bc8b0a9653c75f2ef14957f63f5d103875fd7a6af"
+        },
+        {
+          "path": "docs/archive/moves/batches/b4-render-track.json",
+          "start": 0,
+          "end": 1520,
+          "kind": "text",
+          "sha256": "b68f7723f267a12451f611c986835d6102fba6d54891c2a025fbce317b09f981"
+        },
+        {
+          "path": "docs/archive/moves/phase2.json",
+          "start": 0,
+          "end": 4749,
+          "kind": "text",
+          "sha256": "8c638ad9d6b33f6cbd1209fcb05c07b141438aa8e691e8721899538c788acfa5"
+        },
+        {
+          "path": "docs/archive/moves/phase4-tools-a.json",
+          "start": 0,
+          "end": 3622,
+          "kind": "text",
+          "sha256": "222786cac7d4afb3106720b57f8bd641727613855fc0fd04a55cda75848da58d"
+        },
+        {
+          "path": "docs/archive/moves/phase4-tools-b.json",
+          "start": 0,
+          "end": 3271,
+          "kind": "text",
+          "sha256": "5813c71228e456f7d1396b4f55402b7a531dc14207a2dd673751821ba53fd199"
+        },
+        {
+          "path": "docs/archive/moves/phase4-tools-c.json",
+          "start": 0,
+          "end": 2922,
+          "kind": "text",
+          "sha256": "06f7343c23c1e1378e1846741c80b4dc12b824d1a0ceb7602dc9a8691159ecec"
+        },
+        {
+          "path": "docs/archive/moves/phase4-tools.json",
+          "start": 0,
+          "end": 10058,
+          "kind": "text",
+          "sha256": "d1a75033d5513f4c7de9f1181444adc7793d80bc40c4d964f2a6d2120db487fa"
+        },
+        {
+          "path": "docs/archive/moves/spike-backends.json",
+          "start": 0,
+          "end": 4130,
+          "kind": "text",
+          "sha256": "75474542a554102fa68f8a14cd1f28e312563cad3f2911c25a04088f595232d0"
+        },
+        {
+          "path": "docs/archive/notes/AGENT-HISTORY-2026-10-26.md",
+          "start": 0,
+          "end": 16426,
+          "kind": "text",
+          "sha256": "84a3fc43404b79b34f146ff7769721bdf826c75b099f6b89fb0f78438cf8e2fd"
+        },
+        {
+          "path": "docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md",
+          "start": 0,
+          "end": 55857,
+          "kind": "text",
+          "sha256": "f8b02e2e31e9a4bbb74d8700e80a5fc2adb08692baf115a55b7a69ea1613a333"
+        },
+        {
+          "path": "docs/archive/notes/AGENT-TOOLS-REVIEW-2026-10-17.md",
+          "start": 0,
+          "end": 12380,
+          "kind": "text",
+          "sha256": "75de3ec182f11e1c3225d72101ce5cd214001bb7ca10aadcd968b73aadf3b191"
+        },
+        {
+          "path": "docs/archive/notes/AGENT-WORK-TRACKING-2026-10-14.md",
+          "start": 0,
+          "end": 22801,
+          "kind": "text",
+          "sha256": "9c0c30723d968d99787e6df60be4dd07c4911e0c85b31e091be034dca29a3cf4"
+        },
+        {
+          "path": "docs/archive/notes/AGENT-WORKFLOW-EXPERIMENTS-2026-10-19.md",
+          "start": 0,
+          "end": 8513,
+          "kind": "text",
+          "sha256": "108d3e181af3c76b04f7de963a852a48a674b8d895ec146ed8377ee13f9fe65d"
+        },
+        {
+          "path": "docs/archive/notes/AI-PASS-COMPLETE-LONGEST-EPISODE-2026-10-16.md",
+          "start": 0,
+          "end": 2062,
+          "kind": "text",
+          "sha256": "10dba84ea74fdd1305b5e052a585dbabc5151e6366547942095e18f3d43c0884"
+        },
+        {
+          "path": "docs/archive/notes/AI-PASS-COMPLETION-2026-10-19.md",
+          "start": 0,
+          "end": 3089,
+          "kind": "text",
+          "sha256": "a45ee9156e81a9ffb42958411187b348885624c13219a25841b933e0e022c20a"
+        },
+        {
+          "path": "docs/archive/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md",
+          "start": 0,
+          "end": 136,
+          "kind": "text",
+          "sha256": "f21b6802d3c1fff7bbea0fc8c0f023cdf833d8f957ec923fb1cab8d45d88c37d"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "docs/archive/notes/ASSET-WEIGHT-AUDIT-2026-10-18.md",
+          "start": 136,
+          "end": 3680,
+          "kind": "text",
+          "sha256": "f21b6802d3c1fff7bbea0fc8c0f023cdf833d8f957ec923fb1cab8d45d88c37d"
+        },
+        {
+          "path": "docs/archive/notes/AUTOCOMPACT-TRIAL-2026-10-19.md",
+          "start": 0,
+          "end": 1729,
+          "kind": "text",
+          "sha256": "0eb5337cb967eca620ae7a2f1d32c358e27f41fad9999a1ea54f1bce0db49422"
+        },
+        {
+          "path": "docs/archive/notes/BACKEND-DRAWCALL-RESEARCH-2026-09-16.md",
+          "start": 0,
+          "end": 5316,
+          "kind": "text",
+          "sha256": "a06e91294a333bebbfd287722424afb5dde4dd1d9cfd983b1e9ca795e8764174"
+        },
+        {
+          "path": "docs/archive/notes/BASH-GUARD-TIMEOUT-MEASURE-2026-10-18.md",
+          "start": 0,
+          "end": 1714,
+          "kind": "text",
+          "sha256": "fddbb7f8f3107af34a29ecb389d7be0ecebcd04ef07f0f8540614ef612509322"
+        },
+        {
+          "path": "docs/archive/notes/BOOST-EVERY-PRESS-2026-10-24.md",
+          "start": 0,
+          "end": 4428,
+          "kind": "text",
+          "sha256": "ee4934bef17482d70259f7c9f2d0b4c9e0d362bf1dc4f815541c9d2051cdfcc9"
+        },
+        {
+          "path": "docs/archive/notes/BOOT-LOAD-TOOLING-RESEARCH-2026-10-21.md",
+          "start": 0,
+          "end": 11636,
+          "kind": "text",
+          "sha256": "dd95457ebf4c421faa77a3e4718527a56343ea563b22eb1e7d75ebb6cd695b41"
+        },
+        {
+          "path": "docs/archive/notes/CAR-LIVERY-TOOLING-RESEARCH-2026-10-21.md",
+          "start": 0,
+          "end": 6169,
+          "kind": "text",
+          "sha256": "17ab25cd6ada640fc27db102d1cc394f92675786e90737de290e640ac321e215"
+        },
+        {
+          "path": "docs/archive/notes/CAR-MESH-BUDGET-H13-2026-10-20.md",
+          "start": 0,
+          "end": 7703,
+          "kind": "text",
+          "sha256": "7f7b6e85a9fdca96e59845461cf94c5a4575e8b0626704e19fe2733cf3727c2e"
+        },
+        {
+          "path": "docs/archive/notes/CENTRELINE-KINKS-2026-10-18.md",
+          "start": 0,
+          "end": 2596,
+          "kind": "text",
+          "sha256": "00edc9d512610a382a3e2b838724ac48e75facb17c3d6f94a07fae36856b4d1e"
+        },
+        {
+          "path": "docs/archive/notes/CHUNK-MIRROR-PROBE-2026-10-17.md",
+          "start": 0,
+          "end": 4800,
+          "kind": "text",
+          "sha256": "556f55909bc6d5c5ba100da8fcba74f4ee2620867c22ee31617446b81cefeb13"
+        },
+        {
+          "path": "docs/archive/notes/CI-PAGES-SINGLE-FLIGHT-2026-10-06.md",
+          "start": 0,
+          "end": 1164,
+          "kind": "text",
+          "sha256": "11f573c807ed0e9e4d7ed0361d86194928518dfe2775dceb1e91d98f0b967171"
+        },
+        {
+          "path": "docs/archive/notes/CI-PR-LIFECYCLE-REMEASURE-2026-10-18.md",
+          "start": 0,
+          "end": 1715,
+          "kind": "text",
+          "sha256": "d61ddbcb7c5e9f319c9dd242a19b97a4cc22e5d702705f2f1e07584e327ac7f0"
+        },
+        {
+          "path": "docs/archive/notes/CI-TOOLING-RESEARCH-2026-10-21.md",
+          "start": 0,
+          "end": 11752,
+          "kind": "text",
+          "sha256": "c2bbbb53d65c8fe57444f6f61d7b8c116bd21d5b7532f3700b407e8ff2abc7f1"
+        },
+        {
+          "path": "docs/archive/notes/CI-WALL-TIME-HUNT-2026-10-21.md",
+          "start": 0,
+          "end": 6831,
+          "kind": "text",
+          "sha256": "4be8bee2dd4d3b3a5b09b5c89575e78ac7a7f4d56c00cfdf238ca6cac16fb8e9"
+        },
+        {
+          "path": "docs/archive/notes/CLAUDE-HOST-EFFICIENCY-2026-10-19.md",
+          "start": 0,
+          "end": 10207,
+          "kind": "text",
+          "sha256": "c44d0cfcca3dbc5d3599b8c65f2152c881ef3721d115cbf28a21f6cd76ea4c49"
+        },
+        {
+          "path": "docs/archive/notes/CLAUDE-TRANSCRIPT-MINING-2026-10-19.md",
+          "start": 0,
+          "end": 6758,
+          "kind": "text",
+          "sha256": "c7cf64f5d6a0105cc501a6b16baec08ddb3d897de4c64a8b76d80f427c6bd18a"
+        },
+        {
+          "path": "docs/archive/notes/CLAUDE-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md",
+          "start": 0,
+          "end": 18734,
+          "kind": "text",
+          "sha256": "c7d50c7db892d3e203bd3cef414a0df6c4944053091fa0301005170ed4f77559"
+        },
+        {
+          "path": "docs/archive/notes/COCKPIT-REAR-MIRROR-DESIGN.md",
+          "start": 0,
+          "end": 8434,
+          "kind": "text",
+          "sha256": "af542461fd6aecc7bbf1f6065a1e0dba35dbeb265fc60e330cdfc7e6b5f824c2"
+        },
+        {
+          "path": "docs/archive/notes/COLD-FIRST-RACE-WARM-2026-10-23.md",
+          "start": 0,
+          "end": 5495,
+          "kind": "text",
+          "sha256": "fec705a2828ccc5cd5578d4423238dc5f27588ea79d2f781754825a6bada66fa"
+        },
+        {
+          "path": "docs/archive/notes/COMMIT-GUARD-CACHE-2026-10-19.md",
+          "start": 0,
+          "end": 2773,
+          "kind": "text",
+          "sha256": "0fe4a51a40dba1e46b247d9b4d4880d1f544e5acbfce421d90dd45e14b013d12"
+        },
+        {
+          "path": "docs/archive/notes/COMPILE-CACHE-TRIAL-2026-10-18.md",
+          "start": 0,
+          "end": 1521,
+          "kind": "text",
+          "sha256": "5210403ba7be6cbd036cccec6a81f20fd3658bdaecf6628a0fa5aa2fa7b78042"
+        },
+        {
+          "path": "docs/archive/notes/CREW-ANIM-2026-10-24.md",
+          "start": 0,
+          "end": 4372,
+          "kind": "text",
+          "sha256": "b5e037f6a3bc45c0480efc0a657556c142f26863f547ea5e987608dfff12df12"
+        },
+        {
+          "path": "docs/archive/notes/CROSS-ACCOUNT-INBOX-2026-10-25.md",
+          "start": 0,
+          "end": 4459,
+          "kind": "text",
+          "sha256": "72624c4fdfb946d0c72bb1f1957fe62075d9b0708207bc7ae7d305ba769a1bea"
+        },
+        {
+          "path": "docs/archive/notes/CURSOR-SDK-RESEARCH-2026-10-20.md",
+          "start": 0,
+          "end": 18438,
+          "kind": "text",
+          "sha256": "ce8e9c955eda6dbd4ea285c61a3eb7cd12f8a2cd554ad992b78196b536439bd4"
+        },
+        {
+          "path": "docs/archive/notes/CURSOR-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md",
+          "start": 0,
+          "end": 7712,
+          "kind": "text",
+          "sha256": "70f6db42270aa0d3e4589b4ee6438e144f1ed15b1382435c250df2dc18c98df4"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": "docs/archive/notes/CURSOR-TRANSCRIPT-TOKEN-AUDIT-2026-10-18.md",
+          "start": 7712,
+          "end": 18988,
+          "kind": "text",
+          "sha256": "70f6db42270aa0d3e4589b4ee6438e144f1ed15b1382435c250df2dc18c98df4"
+        },
+        {
+          "path": "docs/archive/notes/DEEP-RESEARCH-CLAUDE-CODE-FLEET-2026-10-15.md",
+          "start": 0,
+          "end": 46382,
+          "kind": "text",
+          "sha256": "d7d6e1e900ef3c45731884d60f203871b08754356272e57ee473a2a7b72701b0"
+        },
+        {
+          "path": "docs/archive/notes/DESIGN-MATRIX-TOOL.md",
+          "start": 0,
+          "end": 3360,
+          "kind": "text",
+          "sha256": "c8b54dde7e1be8f0efe90d3f83046ef35c7752f7d797d1e59d4cbf9a88e527c2"
+        },
+        {
+          "path": "docs/archive/notes/DOCS-SURVEY-2026-10-06.md",
+          "start": 0,
+          "end": 15144,
+          "kind": "text",
+          "sha256": "15863c7f2ae37acc6d09b1f8c0e0b6703b4dfe423245de7a73a0329ae8e904a6"
+        },
+        {
+          "path": "docs/archive/notes/F1-2026-REGS-REALISM-2026-10-18.md",
+          "start": 0,
+          "end": 5020,
+          "kind": "text",
+          "sha256": "a397164e1436edb394179aa1b9c42e0883d675e7a17775508ce1ef753ffa9409"
+        },
+        {
+          "path": "docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md",
+          "start": 0,
+          "end": 24590,
+          "kind": "text",
+          "sha256": "88f10e2746ea00cb8f96aadfdd209a8ac238f79054d2f0423993a2c5632e9aa7"
+        },
+        {
+          "path": "docs/archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md",
+          "start": 0,
+          "end": 9557,
+          "kind": "text",
+          "sha256": "f9ac83ef0bd96d24a3ddeeaac8274da153648092acf0238ad27644d2f3641d7d"
+        },
+        {
+          "path": "docs/archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md",
+          "start": 0,
+          "end": 16487,
+          "kind": "text",
+          "sha256": "5f7c91ab00279090ebfe47e3d288e492c6ef99aea29c332cbf86c908f3719b71"
+        },
+        {
+          "path": "docs/archive/notes/FLEET-BOARD-2026-10-19.md",
+          "start": 0,
+          "end": 3005,
+          "kind": "text",
+          "sha256": "63274994972dfedb56faebe85443c436c0211e8a67516bef2e677a4a4fbf6d13"
+        },
+        {
+          "path": "docs/archive/notes/FLEET-BUS-2026-10-19.md",
+          "start": 0,
+          "end": 6896,
+          "kind": "text",
+          "sha256": "c964b64202839cfac859fa23a097d2c671d8d977b3d27eb98d52ea5d406b24e1"
+        },
+        {
+          "path": "docs/archive/notes/FLEET-COST-2026-10-19.md",
+          "start": 0,
+          "end": 4903,
+          "kind": "text",
+          "sha256": "e45998d8d57fd51722630fa044e81241cdb7e19d788393f24dd69f8c4b43c1af"
+        },
+        {
+          "path": "docs/archive/notes/FLEET-ROLES-2026-10-19.md",
+          "start": 0,
+          "end": 13380,
+          "kind": "text",
+          "sha256": "844805312c041a1ae86af7c13d15ccc0a05cc3e3b4ea36070bd3901f6c87ce09"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "05",
+      "parts": [
+        {
+          "path": "docs/archive/notes/FLEET-ROLES-2026-10-19.md",
+          "start": 13380,
+          "end": 34587,
+          "kind": "text",
+          "sha256": "844805312c041a1ae86af7c13d15ccc0a05cc3e3b4ea36070bd3901f6c87ce09"
+        },
+        {
+          "path": "docs/archive/notes/GARAGE-CAR-CAPTURE-PERFORMANCE.md",
+          "start": 0,
+          "end": 4180,
+          "kind": "text",
+          "sha256": "7283e14e0a590c119ca4fc8eaf2bbe8a9af046715ed7a2ca3426276ee9a420d2"
+        },
+        {
+          "path": "docs/archive/notes/GPU-MEM-CENSUS-2026-10-17.md",
+          "start": 0,
+          "end": 7887,
+          "kind": "text",
+          "sha256": "fe061eff51cf74e710269ef6737193cba7f709324fdbc90d3483cbb34566b49f"
+        },
+        {
+          "path": "docs/archive/notes/GRAPHICS-DETAIL-SURVEY-2026-10-01.md",
+          "start": 0,
+          "end": 25025,
+          "kind": "text",
+          "sha256": "8695ccfcfbb15945aef4daba073b5585e25b9b43d763f9ebffdb95c4ebcb04a3"
+        },
+        {
+          "path": "docs/archive/notes/GRAPHICS-TEXTURE-HUNT-2026-10-21-7E31.md",
+          "start": 0,
+          "end": 14828,
+          "kind": "text",
+          "sha256": "8112824fb48f4cfd13d8b87436590e5a2d84cb3ff429e6177f72afd36ad3347a"
+        },
+        {
+          "path": "docs/archive/notes/GROK-API-2026-10-22.md",
+          "start": 0,
+          "end": 24396,
+          "kind": "text",
+          "sha256": "e4bc233af8de352715560608192bca13674f867f882042eac65edef7d787ebec"
+        },
+        {
+          "path": "docs/archive/notes/HARNESS-AUDIT-2026-10-18.md",
+          "start": 0,
+          "end": 6895,
+          "kind": "text",
+          "sha256": "afe17aff0ddc546003457b5c9501526a55b1f10acaef1f659c3a9087b52e1c95"
+        },
+        {
+          "path": "docs/archive/notes/HEAP-CENSUS-MEASUREMENT-CONTRACT.md",
+          "start": 0,
+          "end": 3883,
+          "kind": "text",
+          "sha256": "4a5b59b2ab1346e66da146c8e20051dd7216e07ea6288dd7980330145dd1292d"
+        },
+        {
+          "path": "docs/archive/notes/HOOK-IF-FILTERS-2026-10-16.md",
+          "start": 0,
+          "end": 1132,
+          "kind": "text",
+          "sha256": "5650a314a9b28e7ab883ce31b6da5d3a29e4c25f8da21ed373fd9f0d73ea75f2"
+        },
+        {
+          "path": "docs/archive/notes/HUD-ADAPT-2026-10-14.md",
+          "start": 0,
+          "end": 10174,
+          "kind": "text",
+          "sha256": "942613f88d058fe0eb42defc57d234952efb3bed077308dba0701f718447bab5"
+        },
+        {
+          "path": "docs/archive/notes/HUD-ARRANGER-USABILITY-2026-10-19.md",
+          "start": 0,
+          "end": 1897,
+          "kind": "text",
+          "sha256": "8130ce1c2181c2c90c7fcd16c6a83d3b0ef64bb8c674d807770b354ad4b317a8"
+        },
+        {
+          "path": "docs/archive/notes/HUD-BORDER-ZOOM-2026-10-20.md",
+          "start": 0,
+          "end": 3186,
+          "kind": "text",
+          "sha256": "efb5b71f5a094dd8a3d24dc2d846ceb278025e8f240efe3be814bb2846d91733"
+        },
+        {
+          "path": "docs/archive/notes/HUD-PHONE-LAYOUT-PLAN-2026-10-10.md",
+          "start": 0,
+          "end": 18694,
+          "kind": "text",
+          "sha256": "d160b913c4bc060a53934ae7ccfe75347357790426b5792ad83c2afea8aadc14"
+        },
+        {
+          "path": "docs/archive/notes/HUD-PR-REVIEW-2026-10-10.md",
+          "start": 0,
+          "end": 16616,
+          "kind": "text",
+          "sha256": "fb221b673cad6498e468b333d4d5586e80e3d3b6bb65c0be2efbc290e5ac9809"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "06",
+      "parts": [
+        {
+          "path": "docs/archive/notes/HUD-PR-REVIEW-2026-10-10.md",
+          "start": 16616,
+          "end": 29053,
+          "kind": "text",
+          "sha256": "fb221b673cad6498e468b333d4d5586e80e3d3b6bb65c0be2efbc290e5ac9809"
+        },
+        {
+          "path": "docs/archive/notes/IDEAS-GAMEPLAY-2026-10-22.md",
+          "start": 0,
+          "end": 56593,
+          "kind": "text",
+          "sha256": "9c745c385d76de1dbf3ac3528889b02055b968fc8dcba0257cda68716b610ff6"
+        },
+        {
+          "path": "docs/archive/notes/IDEAS-PHONE-UX-2026-10-22.md",
+          "start": 0,
+          "end": 26606,
+          "kind": "text",
+          "sha256": "ac148f2974773bee6f1302e597e3e559690696627e1fa6c781123bc4262c8e16"
+        },
+        {
+          "path": "docs/archive/notes/IMPROVEMENT-CANDIDATES-2026-10-22.md",
+          "start": 0,
+          "end": 10794,
+          "kind": "text",
+          "sha256": "0e51a82de25ddcf5a77bf78b45e76345fab4210c30a2d85f6bde55891ba08645"
+        },
+        {
+          "path": "docs/archive/notes/INPUT-HUD-TESTING-RESEARCH-2026-10-21.md",
+          "start": 0,
+          "end": 6579,
+          "kind": "text",
+          "sha256": "95521f51bd0a6eabde502d93908055dec5015ad1a9c8f3c9634fa78880b541cf"
+        },
+        {
+          "path": "docs/archive/notes/IPHONE-TLX-WEBGPU-2026-10-23.md",
+          "start": 0,
+          "end": 16467,
+          "kind": "text",
+          "sha256": "57ef1cdf701b7a665435a7ef67627711bdfcbc7b215b019aa45f79cf0b8f9496"
+        },
+        {
+          "path": "docs/archive/notes/ISSUE-TRIAGE-1518-2649-2026-10-22.md",
+          "start": 0,
+          "end": 30524,
+          "kind": "text",
+          "sha256": "80947d2d110d83109e155716dd1e4791cad3ad37ca6297519bf56bfa27f88262"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "07",
+      "parts": [
+        {
+          "path": "docs/archive/notes/ISSUE-TRIAGE-1518-2649-2026-10-22.md",
+          "start": 30524,
+          "end": 35046,
+          "kind": "text",
+          "sha256": "80947d2d110d83109e155716dd1e4791cad3ad37ca6297519bf56bfa27f88262"
+        },
+        {
+          "path": "docs/archive/notes/ISSUE-TRIAGE-2026-10-19.md",
+          "start": 0,
+          "end": 4106,
+          "kind": "text",
+          "sha256": "4a3119438c783d960417d0e8a3de1a506c2797790bf3641ad41f564afb434098"
+        },
+        {
+          "path": "docs/archive/notes/ISSUE-TRIAGE-2650-3304-2026-10-22.md",
+          "start": 0,
+          "end": 29218,
+          "kind": "text",
+          "sha256": "48fddfc9fdeb8f8802a6ea03c179102c973c2f958b218faa08b1a71c749bad71"
+        },
+        {
+          "path": "docs/archive/notes/ISSUE-TRIAGE-3305-UP-2026-10-22.md",
+          "start": 0,
+          "end": 24082,
+          "kind": "text",
+          "sha256": "e951e407d3c7dcb4ec826729d3344530f16d9f872aed590435353d4a1ccd9ba1"
+        },
+        {
+          "path": "docs/archive/notes/LIGHTING-TUNER-WIRING-AUDIT-2026-10-06.md",
+          "start": 0,
+          "end": 4258,
+          "kind": "text",
+          "sha256": "1a8891d1c8e53f51f5dc3a75891c8961b19e10120f34f4dc98d2536557499859"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-AUDIO-DATA-NET-2026-10-22.md",
+          "start": 0,
+          "end": 3084,
+          "kind": "text",
+          "sha256": "72690eb4b5388c342640b24fd067b6a802c54f5fe6cc49c08a96f4a7c4b579cf"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-AUDIO-INPUT-2026-10-16.md",
+          "start": 0,
+          "end": 8187,
+          "kind": "text",
+          "sha256": "50f1b429d2f1737ad72072e2cbc24bf16ece7806069c4ae79e4209873771df61"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-BOOT-2026-10-21.md",
+          "start": 0,
+          "end": 5316,
+          "kind": "text",
+          "sha256": "08f73bd4d1528255d52666301b0057d9a838e4d0786d27f57f998ecb382d940a"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-BOOT-PWA-2026-10-16.md",
+          "start": 0,
+          "end": 11544,
+          "kind": "text",
+          "sha256": "bd8250ddb154b49aa4fdb95355f1b831495e48c359f11b9512fc5c7eb9a5092d"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-CAREER-2-2026-10-17.md",
+          "start": 0,
+          "end": 4694,
+          "kind": "text",
+          "sha256": "11438fe7625583cccba293c021197e75ad20e915d0b6888372ae8ed19989d802"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-CAREER-2026-10-16.md",
+          "start": 0,
+          "end": 7249,
+          "kind": "text",
+          "sha256": "cad3f5fa742a65dc885d485bf4a594d208b26879a750b46ace0c4a7291b721fd"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-CAREER-GARAGE-2026-10-22.md",
+          "start": 0,
+          "end": 7099,
+          "kind": "text",
+          "sha256": "55ce7be86ca023347396b732d6d248a289eebf2b67e463c8f0e6d56e55bce238"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-CARS-2026-10-16.md",
+          "start": 0,
+          "end": 9434,
+          "kind": "text",
+          "sha256": "b806fed2338cb53acca3d99272c2e84e89b776e9cf3e96065c7e2e7808d9db0a"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-DATA-2026-10-16.md",
+          "start": 0,
+          "end": 11525,
+          "kind": "text",
+          "sha256": "0620debbe53458a3f530ec97786b082d84c26dbbd586c0ee83e63405de04fd36"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-EDITOR-2026-10-16.md",
+          "start": 0,
+          "end": 12170,
+          "kind": "text",
+          "sha256": "5a65f3aa1914bb7305e03eae1b053669fef3d6277729e50f6c91450894dbca5d"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-HUD-2026-10-21.md",
+          "start": 0,
+          "end": 5311,
+          "kind": "text",
+          "sha256": "f3fcba26083390c9824d2b754123ac7ebefa85c7f0331e5cf239bf723dcd8dae"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-HUNT-2026-10-16.md",
+          "start": 0,
+          "end": 8201,
+          "kind": "text",
+          "sha256": "0a10978b8691cd424d9b8e532ec084c9993d8e461dd16e8ceb3faceb5700406a"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "08",
+      "parts": [
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-HUNT-2026-10-16.md",
+          "start": 8201,
+          "end": 16388,
+          "kind": "text",
+          "sha256": "0a10978b8691cd424d9b8e532ec084c9993d8e461dd16e8ceb3faceb5700406a"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-INCIDENTS-2-2026-10-16.md",
+          "start": 0,
+          "end": 5783,
+          "kind": "text",
+          "sha256": "a9668602e73d3a1d71b1ddbb9b2b9366681c43159640b22f5321452ef98df3c0"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-INCIDENTS-2026-10-16.md",
+          "start": 0,
+          "end": 7515,
+          "kind": "text",
+          "sha256": "35e2e9983a08bfa24a05c6595bd0c8f0d7e1a0a93714c9439b6b5de91543e566"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-LIGHTING-SEASON-2026-10-16.md",
+          "start": 0,
+          "end": 9091,
+          "kind": "text",
+          "sha256": "8b97b7f0a0e583367cb15f5be5970bfcea6f29e456878e15c92fd359f826907c"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-MEMLEAK-WEBGPU-2026-10-17.md",
+          "start": 0,
+          "end": 4971,
+          "kind": "text",
+          "sha256": "9d5cbdbf7763599d5e42b22a2be2529d93abb2c8312ac407eddcf379c7246ac8"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-NET-2026-10-16.md",
+          "start": 0,
+          "end": 12421,
+          "kind": "text",
+          "sha256": "e90ac1fcb1a770942578a8b1bca15dd811bc9234494e38da8b2c4826217af466"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-RACE-2-2026-10-17.md",
+          "start": 0,
+          "end": 5192,
+          "kind": "text",
+          "sha256": "f66beb085ccd55d94f27a104fc4a86f77cbb506bfae774a8a487474e6cbb02c0"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-RACE-2026-10-22.md",
+          "start": 0,
+          "end": 4281,
+          "kind": "text",
+          "sha256": "edd1ad5352ec69a0026416d1b989afba7a128cfa53f12bf36d293f41a74e5869"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-RENDER-2026-10-21.md",
+          "start": 0,
+          "end": 4938,
+          "kind": "text",
+          "sha256": "baead1c451a6bbf9199d27daf402b358c6db6d4d4eb8ee79e971db2360b2e99f"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-SIM-2026-10-21.md",
+          "start": 0,
+          "end": 2006,
+          "kind": "text",
+          "sha256": "674b9742a842ac6995d789730a1982fc512464c8efe30b0d0e6bd843adfd957a"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-TLX-DRAWCALLS-2026-10-17.md",
+          "start": 0,
+          "end": 4129,
+          "kind": "text",
+          "sha256": "641402e153354c556efb22ae3d4712d70a2786f07e175e7b71e643b374dccc0a"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-TLX-FRAMEJS-2026-10-17.md",
+          "start": 0,
+          "end": 3660,
+          "kind": "text",
+          "sha256": "a2a8bcf207cbd1d121a01892a59441849754716cf6dd8abfe31bc4bdc0618952"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-TLX-GPUMEM-2026-10-17.md",
+          "start": 0,
+          "end": 6713,
+          "kind": "text",
+          "sha256": "65ddd6cf9ff46c9f3b34cd743844b8f711e255c2c9c6b6a3de5f3d46d777c178"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-VERIFY-2-2026-10-17.md",
+          "start": 0,
+          "end": 3825,
+          "kind": "text",
+          "sha256": "4d3527196f9fa26cfc12bdd1f136a8097cf7257f462e823cecc4accdbfcd434f"
+        },
+        {
+          "path": "docs/archive/notes/LIVE-DEBUGGER-VERIFY-2-F6-2026-10-17.md",
+          "start": 0,
+          "end": 1770,
+          "kind": "text",
+          "sha256": "7cd364178feb95ee13e013563f68d8ed8a6279e182793b0ff3ee4c9ff148b417"
+        },
+        {
+          "path": "docs/archive/notes/LIVERY-EDITOR-AUDIT-2026-10-18.md",
+          "start": 0,
+          "end": 12306,
+          "kind": "text",
+          "sha256": "b4b6efbe72fc80806cec113ced1a22dbb1fcd908d2c3e2699b60b812a142398b"
+        },
+        {
+          "path": "docs/archive/notes/LSP-NAVIGATION-EFFICIENCY-2026-10-18.md",
+          "start": 0,
+          "end": 7081,
+          "kind": "text",
+          "sha256": "6874fe91158337870c9bb9b5222678c1d3a945e407051b5f3b204056463fd4e8"
+        },
+        {
+          "path": "docs/archive/notes/MCP-ASYNC-TIMEOUT-OPPORTUNITIES-2026-10-07.md",
+          "start": 0,
+          "end": 1351,
+          "kind": "text",
+          "sha256": "bec218f65d97887e8c8456a4d95293d6bd0d8e8b4776e0ec99ccae4ea5c48445"
+        },
+        {
+          "path": "docs/archive/notes/MCP-BUG-SURVEY-2026-10-10.md",
+          "start": 0,
+          "end": 3981,
+          "kind": "text",
+          "sha256": "6b9323746afce1c90a7283eca1bf6247a3bee6deb07bfc1a345160cb0b0272ca"
+        },
+        {
+          "path": "docs/archive/notes/MCP-REVIEW-2026-10-18.md",
+          "start": 0,
+          "end": 10896,
+          "kind": "text",
+          "sha256": "1210a515b1c6fffeb2b2aaeb8af708a2bdc314501719b1409d5be1fa8fddeb93"
+        },
+        {
+          "path": "docs/archive/notes/MCP-TOOL-TEST-2026-10-18.md",
+          "start": 0,
+          "end": 24271,
+          "kind": "text",
+          "sha256": "accb461ecbe4233875573372a3c616d2acfe6a3a51b85549d8965aef30f3bd45"
+        },
+        {
+          "path": "docs/archive/notes/MESH-EFFICIENCY-RESEARCH-2026-10-17.md",
+          "start": 0,
+          "end": 7767,
+          "kind": "text",
+          "sha256": "b1b8f1269979bf5ae7b95d3e01a7b1dc8911fce0a17e1ce0db2dbc03d01404ac"
+        },
+        {
+          "path": "docs/archive/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md",
+          "start": 0,
+          "end": 7865,
+          "kind": "text",
+          "sha256": "b25da9071007e795fbff7b20e400e6663f95bc305a212a394494f1a1763f342e"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "09",
+      "parts": [
+        {
+          "path": "docs/archive/notes/MULTI-AGENT-ORCHESTRATION-2026-10-10.md",
+          "start": 7865,
+          "end": 9788,
+          "kind": "text",
+          "sha256": "b25da9071007e795fbff7b20e400e6663f95bc305a212a394494f1a1763f342e"
+        },
+        {
+          "path": "docs/archive/notes/NIGHT-WASHOUT-FLEET-2026-10-15.md",
+          "start": 0,
+          "end": 2796,
+          "kind": "text",
+          "sha256": "1b31c4fad558b794da9f3e10d78092ea15f4114c1425aca4761181afa5188dde"
+        },
+        {
+          "path": "docs/archive/notes/ORCHESTRATION-AUDIT-A-B-2026-10-22.md",
+          "start": 0,
+          "end": 34232,
+          "kind": "text",
+          "sha256": "8018b3399bd9ba5508e5b0189e8c2a86958ebbefe18261e73cc93db93e244ca8"
+        },
+        {
+          "path": "docs/archive/notes/PASS-CENSUS-2026-10-17.md",
+          "start": 0,
+          "end": 4775,
+          "kind": "text",
+          "sha256": "0c97d3ad73b151b56fd75493a00042705da4f2df43e30c566d8ef048c06352e7"
+        },
+        {
+          "path": "docs/archive/notes/PERF-CPU-LOAD-2026-10-19.md",
+          "start": 0,
+          "end": 5510,
+          "kind": "text",
+          "sha256": "01dc718d06c18a4a4196409a7eaa6b5bafac6cda251e006f659d8b39a91e52af"
+        },
+        {
+          "path": "docs/archive/notes/PERF-DEBUG-E5B2-2026-10-21.md",
+          "start": 0,
+          "end": 7564,
+          "kind": "text",
+          "sha256": "6acaf1ab60f2e95e1df09fe4cb6835eec575b1917e63765e2e828009f6c98b3b"
+        },
+        {
+          "path": "docs/archive/notes/PERF-FRESH-HUNT-2026-10-21.md",
+          "start": 0,
+          "end": 10158,
+          "kind": "text",
+          "sha256": "4d6d314ce4ed803f9b930d6fc105972f5d15e26f60c2559274e1302c60001e33"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-BOOT-2026-10-17.md",
+          "start": 0,
+          "end": 2727,
+          "kind": "text",
+          "sha256": "4f6aaf6444ada067cd10e95459b63008c3798d91047210faffe24a653b3f3428"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-P7-2026-10-17.md",
+          "start": 0,
+          "end": 3508,
+          "kind": "text",
+          "sha256": "3220235518341a28ac3a724b01c1f4e8aea490cfb5c4bc3701b17f16b43103c5"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-RACELOOP-2026-10-17.md",
+          "start": 0,
+          "end": 3452,
+          "kind": "text",
+          "sha256": "e719c6da0e81f29afdde8af3ab3b913b452ec50a19039f5ea8723b712b160335"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-RENDER-2026-10-17.md",
+          "start": 0,
+          "end": 4560,
+          "kind": "text",
+          "sha256": "d6db09e6e46b55e572f62210b8c24066df9f23713f114a206a3d3c3d8f1a60b2"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-SESSION-MEMORY-2026-10-17.md",
+          "start": 0,
+          "end": 3356,
+          "kind": "text",
+          "sha256": "2dc60019c2a8f9601bf325614da926683af4296eb481cdc77d4490ad03eff1a3"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-SESSION-MEMORY-R2-2026-10-17.md",
+          "start": 0,
+          "end": 3760,
+          "kind": "text",
+          "sha256": "9682dbdcabd3f5f6a4628fe58b7d6b280105d91ddce3a140ec78d7329223ac53"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-TLX-2026-10-17-R3.md",
+          "start": 0,
+          "end": 2143,
+          "kind": "text",
+          "sha256": "18e828d5874fef1a20b476cf1effcbb661090af062e733c02b317a316d128f16"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-WGX-GLX-2026-10-17.md",
+          "start": 0,
+          "end": 2165,
+          "kind": "text",
+          "sha256": "192ff142c49fdb068fe24ffc6f24f7b617b77f291978a36c071f1a25a242d038"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-WGX-GLX-ROUND2-2026-10-17.md",
+          "start": 0,
+          "end": 2826,
+          "kind": "text",
+          "sha256": "3b56041ffa3f30d0d6cb86aa93e4dec2f77d230e2a4c96de9619332d2e62bba6"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-WGX-GLX-ROUND3-2026-10-17.md",
+          "start": 0,
+          "end": 3664,
+          "kind": "text",
+          "sha256": "206ecf2092a3fd04217b08db19aa1c0d7570ff8445218826bee6d74642c1d67d"
+        },
+        {
+          "path": "docs/archive/notes/PERF-HUNT-WGX-GLX-ROUND4-2026-10-17.md",
+          "start": 0,
+          "end": 2082,
+          "kind": "text",
+          "sha256": "0d4eb6b6cea7448b0772594e10258c0834d1f7fda83583f39f7d03874719759c"
+        },
+        {
+          "path": "docs/archive/notes/PERF-LAYOUT-SHOWNLAYER-2026-10-17.md",
+          "start": 0,
+          "end": 1625,
+          "kind": "text",
+          "sha256": "c4fece97948117d5359619542406611a381e87eb935e80d420f8b98265d6119b"
+        },
+        {
+          "path": "docs/archive/notes/PERF-PLAYBACK-DOM-2026-10-21.md",
+          "start": 0,
+          "end": 3568,
+          "kind": "text",
+          "sha256": "55df377743c0c481fa9dd9e6a4704f786679bcdd0375f72b80ecf63976bf35cf"
+        },
+        {
+          "path": "docs/archive/notes/PERF-TLX-WEBGPU-2026-10-19.md",
+          "start": 0,
+          "end": 8241,
+          "kind": "text",
+          "sha256": "38149c9af4e85170406ea969745ab4c40d9b27d687db6fafe69f7befa91e6270"
+        },
+        {
+          "path": "docs/archive/notes/PERF-UI-LAYOUT-2026-10-21.md",
+          "start": 0,
+          "end": 4846,
+          "kind": "text",
+          "sha256": "263295c05c289f1d9813aa5a65800a81e76ffac5fb907b03bc1c1ab64ba8d6a1"
+        },
+        {
+          "path": "docs/archive/notes/PERF-WGX-PHONE-SSR-2026-10-21.md",
+          "start": 0,
+          "end": 2829,
+          "kind": "text",
+          "sha256": "3c8b5f2ca60e94000190dfbe0fd82acda49ce0ceaaf2a85d448475782ed64b8a"
+        },
+        {
+          "path": "docs/archive/notes/PERFORMANCE-AUDIT-FIXES.md",
+          "start": 0,
+          "end": 14083,
+          "kind": "text",
+          "sha256": "3f7d4710471eeffbbcc23dfff87bd40ef8bcd3ca3b7beb37a72c4aa4473a1c31"
+        },
+        {
+          "path": "docs/archive/notes/PERFORMANCE-CALLSITE-AUDIT-2026-10-21.md",
+          "start": 0,
+          "end": 14624,
+          "kind": "text",
+          "sha256": "ea472ece252bb96f0288f5f37bbd132034954fb765a395ca8d4b17768cd440f5"
+        },
+        {
+          "path": "docs/archive/notes/PERFORMANCE-DEBUGGING-2026-10-21-C91F.md",
+          "start": 0,
+          "end": 8983,
+          "kind": "text",
+          "sha256": "9f49e837b97a7867a9cef7ced02c50cca98ed951b3b0e8e0664b3799eb2a2b46"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "10",
+      "parts": [
+        {
+          "path": "docs/archive/notes/PERFORMANCE-DEBUGGING-2026-10-21-C91F.md",
+          "start": 8983,
+          "end": 15094,
+          "kind": "text",
+          "sha256": "9f49e837b97a7867a9cef7ced02c50cca98ed951b3b0e8e0664b3799eb2a2b46"
+        },
+        {
+          "path": "docs/archive/notes/PERFORMANCE-RESEARCH-C71E-2026-10-21.md",
+          "start": 0,
+          "end": 17043,
+          "kind": "text",
+          "sha256": "3146eb7ab388ff3a9fb057bff9797cf8b04029af982ef01b0a46df182f0a7be1"
+        },
+        {
+          "path": "docs/archive/notes/PHYSICS-CATCHUP-CAP-2026-10-23.md",
+          "start": 0,
+          "end": 4232,
+          "kind": "text",
+          "sha256": "bfeb0d25b91a804a1ac580ea0dd1fddcf175d7854718f511c776a311e278759b"
+        },
+        {
+          "path": "docs/archive/notes/PLUGIN-SKILL-POLICY-2026-10-18.md",
+          "start": 0,
+          "end": 8075,
+          "kind": "text",
+          "sha256": "89f6547894737dab63fc6bad77ae4eb791ba8ee3d83a168b44360a3175e78187"
+        },
+        {
+          "path": "docs/archive/notes/PROCESS-SPEEDUP-2026-09-16.md",
+          "start": 0,
+          "end": 11888,
+          "kind": "text",
+          "sha256": "f1aa0a2152d4c0601c86182bc5c6dd7709c387b2fb2ee08aa6d4e828398dcac0"
+        },
+        {
+          "path": "docs/archive/notes/RAPIER-PIN-2026-10-19.md",
+          "start": 0,
+          "end": 4180,
+          "kind": "text",
+          "sha256": "a75ed6e68f342c3a0847c9506669cdfc206ca3b938d46cc1e025350ff7bc6818"
+        },
+        {
+          "path": "docs/archive/notes/RENDER-LIVE-DEBUG-TLX-GLX-2026-10-19.md",
+          "start": 0,
+          "end": 7455,
+          "kind": "text",
+          "sha256": "888fd0580cfb6d23345a66f7c67c3874c1913b7c13f106d132daab923aba1049"
+        },
+        {
+          "path": "docs/archive/notes/RENDERER-ALTERNATIVES-2026-10-24.md",
+          "start": 0,
+          "end": 3341,
+          "kind": "text",
+          "sha256": "833765710ead9dc4b91dd190ceaf26021867ae3e398ced2bcaacb2baa3965ef1"
+        },
+        {
+          "path": "docs/archive/notes/RES-SCALE-FIXED-TARGETS-2026-10-17.md",
+          "start": 0,
+          "end": 3101,
+          "kind": "text",
+          "sha256": "c59bbda211f1b5e25075272a126a6e18b30d7b0cdf467aba284f148394d474d5"
+        },
+        {
+          "path": "docs/archive/notes/ROLE-REVIEW-2026-10-17.md",
+          "start": 0,
+          "end": 15943,
+          "kind": "text",
+          "sha256": "f8d1fd914e01951617c4084cb7acf3be0de9af9dde958e0a56b00dd87627a590"
+        },
+        {
+          "path": "docs/archive/notes/SHARED-BRANCH-COORDINATION.md",
+          "start": 0,
+          "end": 5244,
+          "kind": "text",
+          "sha256": "fc4789476d96a4ab00c21194ce283e1b3011b1463476ae3b3e25d8dc5966cb13"
+        },
+        {
+          "path": "docs/archive/notes/SILVERSTONE-PASS2-TREES-2026-10-10.md",
+          "start": 0,
+          "end": 1473,
+          "kind": "text",
+          "sha256": "ec6f62fdacc21f5750b6845a48fd5432972b1bfe4e6628132a36a8ed4c37e2dc"
+        },
+        {
+          "path": "docs/archive/notes/SKILL-TESTDRIVE-2026-10-05.md",
+          "start": 0,
+          "end": 4138,
+          "kind": "text",
+          "sha256": "36fa8af4e6d8c078c46c9eb88347ec2ae962b382121b43abb193d147773957ba"
+        },
+        {
+          "path": "docs/archive/notes/SPEC-TIMINGS-AUDIT-2026-10-10.md",
+          "start": 0,
+          "end": 3983,
+          "kind": "text",
+          "sha256": "dbe3edf9b0e63ceab8d3c76db95eb00a2ac11b29fa40283fff8612c973a22648"
+        },
+        {
+          "path": "docs/archive/notes/SYNC-CHURN-AND-BATCH-TRAIN-2026-10-16.md",
+          "start": 0,
+          "end": 17064,
+          "kind": "text",
+          "sha256": "de9ecd9d147241d2f4e40b2f1396aa012d20c4bcdda6862629bb002bb592a059"
+        },
+        {
+          "path": "docs/archive/notes/THERMAL-GOVERNOR-2652.md",
+          "start": 0,
+          "end": 3145,
+          "kind": "text",
+          "sha256": "8e12a00d77d8566ac4a1d72b6e66676b3a592e7b6301e2e285e0c8407f6c232f"
+        },
+        {
+          "path": "docs/archive/notes/TLX-DRAW-ORDER-AUDIT-2026-10-17.md",
+          "start": 0,
+          "end": 3027,
+          "kind": "text",
+          "sha256": "b29c080cef71764ca5d9a742710a93c362696c7376b6f0d7320262e1e3f368b3"
+        },
+        {
+          "path": "docs/archive/notes/TLX-FORCED-MOBILE-DEVICE-LOST-2026-10-20.md",
+          "start": 0,
+          "end": 1921,
+          "kind": "text",
+          "sha256": "ea3881831d04389ce3febc480763ca65b40f027b3e2aaa58d72ab78cb5184725"
+        },
+        {
+          "path": "docs/archive/notes/TLX-RENDER-BUNDLES-2026-10-25.md",
+          "start": 0,
+          "end": 3118,
+          "kind": "text",
+          "sha256": "ba88ed45a91f72c5c50aad6661e21f578d5a5ddd06d65127e7bb59d5dfd6f7dc"
+        },
+        {
+          "path": "docs/archive/notes/TLX-SHADER-IDEAS-2026-10-01.md",
+          "start": 0,
+          "end": 11419,
+          "kind": "text",
+          "sha256": "86c8e142d27f185df51edc569770da22756b928b727974d47f8d810dcbf40391"
+        },
+        {
+          "path": "docs/archive/notes/TLX-WEBGPU-PERF-2026-10-18.md",
+          "start": 0,
+          "end": 5761,
+          "kind": "text",
+          "sha256": "269e27e423619b58dea838edebdbc36044919e88ad43563c1d7345977133d71f"
+        },
+        {
+          "path": "docs/archive/notes/TOKEN-EFFICIENCY-2026-10-18.md",
+          "start": 0,
+          "end": 15210,
+          "kind": "text",
+          "sha256": "70d3544512cf6e51b3fcd9a0ecf66a7e569342c9f07a29fe86e5a1e68462849d"
+        },
+        {
+          "path": "docs/archive/notes/TOKEN-TOOL-PROBES-2026-10-18.md",
+          "start": 0,
+          "end": 3128,
+          "kind": "text",
+          "sha256": "7e8874a42024c844faaaf5bf4220bda87f8aed9158e955f3baada7d0fbcf9bc0"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "11",
+      "parts": [
+        {
+          "path": "docs/archive/notes/TOKEN-TOOL-PROBES-2026-10-18.md",
+          "start": 3128,
+          "end": 10260,
+          "kind": "text",
+          "sha256": "7e8874a42024c844faaaf5bf4220bda87f8aed9158e955f3baada7d0fbcf9bc0"
+        },
+        {
+          "path": "docs/archive/notes/UI-AUDIT-ALL-2026-10-18.md",
+          "start": 0,
+          "end": 12282,
+          "kind": "text",
+          "sha256": "c0c5330f9fae9bd11cd798acfc7757b80ce21ebefdec6b128d163d287641c199"
+        },
+        {
+          "path": "docs/archive/notes/UI-FIX-D-2026-10-17.md",
+          "start": 0,
+          "end": 1731,
+          "kind": "text",
+          "sha256": "400ec1a6b86a9cfd9ce68ec6f440c65b1ab655b3c00767fb35f8e5d953dca37e"
+        },
+        {
+          "path": "docs/archive/notes/UI-FIX-E-2026-10-17.md",
+          "start": 0,
+          "end": 3734,
+          "kind": "text",
+          "sha256": "b7a39ec9611f4d25aa6b6105b2fd1b120e9e906c9401465fc36785a0a62ddcb4"
+        },
+        {
+          "path": "docs/archive/notes/UI-INSPECTOR-SWEEP-2026-10-17.md",
+          "start": 0,
+          "end": 10256,
+          "kind": "text",
+          "sha256": "9e46060069c1d7f754b54871795b048cad6aee673d36bbb330db62ee28891a67"
+        },
+        {
+          "path": "docs/archive/notes/UI-LANE-A-GARAGE-2026-10-17.md",
+          "start": 0,
+          "end": 2063,
+          "kind": "text",
+          "sha256": "010a8204c5c28aecf155f55518ee26b2e0ec860a1ec65ee9eb5723918292c963"
+        },
+        {
+          "path": "docs/archive/notes/UI-LANE-B-MENUS-2026-10-17-round2.md",
+          "start": 0,
+          "end": 1843,
+          "kind": "text",
+          "sha256": "45da60b0fa7b09adc3860c317ea505bb502335e0f1a63c5ca43db6790e66150f"
+        },
+        {
+          "path": "docs/archive/notes/UI-LANE-B-MENUS-2026-10-17.md",
+          "start": 0,
+          "end": 1828,
+          "kind": "text",
+          "sha256": "2cf19f8307d01ded724820a4fd876f897846f73cfee5d260af95dcb69f398220"
+        },
+        {
+          "path": "docs/archive/notes/UI-LANE-C-HUD-2026-10-17.md",
+          "start": 0,
+          "end": 2869,
+          "kind": "text",
+          "sha256": "84656d11b0f667451e8f0c3d014e5c7ea293082acd82f5a4fc6036664228e154"
+        },
+        {
+          "path": "docs/archive/notes/UI-LIVERY-CS-OPTIONS-FIT-2026-10-19.md",
+          "start": 0,
+          "end": 1227,
+          "kind": "text",
+          "sha256": "083f70de253b26a1465a31a6d7faf072723db549ab008e8d91993bd0df6994a4"
+        },
+        {
+          "path": "docs/archive/notes/VISOR-SUN-BEHIND-WASH-2026-10-24.md",
+          "start": 0,
+          "end": 3153,
+          "kind": "text",
+          "sha256": "2af0e6a5462d77dddc068af5de070783b9b6c646c0816508b5942561ee38eb41"
+        },
+        {
+          "path": "docs/archive/notes/WX-GRID-TOOL.md",
+          "start": 0,
+          "end": 3441,
+          "kind": "text",
+          "sha256": "10b17af544317aba9f3683fc40a9660efcb6680da2379d4df323114184ccf7a1"
+        },
+        {
+          "path": "docs/archive/notes/career-dsq-clean-rewards.md",
+          "start": 0,
+          "end": 1064,
+          "kind": "text",
+          "sha256": "b632958e9478cf020186b7a3048079224627752bc621b6efb129db4c71d5f2c0"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/PLANS.md",
+          "start": 0,
+          "end": 55152,
+          "kind": "text",
+          "sha256": "75a1b8dc1f96042dc5da147d583fb3991a9d2cc6cd85c3b6a7e9a52c3c2c73ee"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/README.md",
+          "start": 0,
+          "end": 2112,
+          "kind": "text",
+          "sha256": "e2c42a0059d9fc8b91ee19dcc9186a7f89901e0533094840f5b2d21250965c80"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/SYNTHESIS.md",
+          "start": 0,
+          "end": 50113,
+          "kind": "text",
+          "sha256": "9d63d1930f22c6ac3b08a0698bcadbf535c57e2be07a08a76dd68bf330ee7306"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "12",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/SYNTHESIS.md",
+          "start": 50113,
+          "end": 58139,
+          "kind": "text",
+          "sha256": "9d63d1930f22c6ac3b08a0698bcadbf535c57e2be07a08a76dd68bf330ee7306"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/batches.json",
+          "start": 0,
+          "end": 43068,
+          "kind": "text",
+          "sha256": "b24d7ac6ae661e82cce74159c93725aa6409454eebead5056db07ba6f9e35c3c"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/findings.jsonl",
+          "start": 0,
+          "end": 108906,
+          "kind": "text",
+          "sha256": "dc4621343bccceb0ce47cea578178ad51926e3a80abb4d270e53db5977fb771a"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "13",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/findings.jsonl",
+          "start": 108906,
+          "end": 268906,
+          "kind": "text",
+          "sha256": "dc4621343bccceb0ce47cea578178ad51926e3a80abb4d270e53db5977fb771a"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "14",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/findings.jsonl",
+          "start": 268906,
+          "end": 376771,
+          "kind": "text",
+          "sha256": "dc4621343bccceb0ce47cea578178ad51926e3a80abb4d270e53db5977fb771a"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/audio-1.md",
+          "start": 0,
+          "end": 19694,
+          "kind": "text",
+          "sha256": "1b7d81c2264611a725297652622b9872e4112923a00a86528e7d4facba5a1de6"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/car-1.md",
+          "start": 0,
+          "end": 23029,
+          "kind": "text",
+          "sha256": "c77d8a9b48440bfd3f4ca6b0872ff47785852c89e951a0803fa39698796e73be"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/car-2.part-1ofn.md",
+          "start": 0,
+          "end": 9412,
+          "kind": "text",
+          "sha256": "6ceea5d9f250f4251462e8735ca60a8df0723504c91d8e661213ea5a00410ff8"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "15",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/car-2.part-1ofn.md",
+          "start": 9412,
+          "end": 13618,
+          "kind": "text",
+          "sha256": "6ceea5d9f250f4251462e8735ca60a8df0723504c91d8e661213ea5a00410ff8"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/car-2.part-2of2.md",
+          "start": 0,
+          "end": 7930,
+          "kind": "text",
+          "sha256": "30f2dfe481811d8d6679c0216a8972a9ec2ee5902be9d39186cd59c344f234e1"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/modes-1.md",
+          "start": 0,
+          "end": 20336,
+          "kind": "text",
+          "sha256": "4bfd0d351f1a28a67fc16b28fda01494095936d7970d44c7e28a9d388782e706"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/net.md",
+          "start": 0,
+          "end": 22034,
+          "kind": "text",
+          "sha256": "1867f297b089a91485237f860e5db0c9780e4e65d8afd16080770c12b08090a6"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-1.addendum-debugger.md",
+          "start": 0,
+          "end": 8214,
+          "kind": "text",
+          "sha256": "d3040a1a226a947c95dde6f7fa29b068f7c3b5e88baad63b853ee81ecf79850f"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-1.md",
+          "start": 0,
+          "end": 23869,
+          "kind": "text",
+          "sha256": "60aad7803c35be7138427d6312075eec7bdf062fee0ebccf5500862b4fa34de1"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-1of2.md",
+          "start": 0,
+          "end": 30401,
+          "kind": "text",
+          "sha256": "668f42bb1c79b356a8584780e33ae6ca466b57220f06384736577575dcebec3f"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-2of2.md",
+          "start": 0,
+          "end": 2486,
+          "kind": "text",
+          "sha256": "622a14e17fba6b4de58ef936dd54680cb60ecca99a23286b536cc40379af424f"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-3aof3.md",
+          "start": 0,
+          "end": 7517,
+          "kind": "text",
+          "sha256": "fd592f263b89c922f8907d5a05baa275fd0f5933b653c4c3bba428783e5f167d"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-3bof3.md",
+          "start": 0,
+          "end": 7627,
+          "kind": "text",
+          "sha256": "615ea0f3645de91110f031e299d731d7915f43bc9a67a1b149004cef127f2b19"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/physics-2.part-3cof3.md",
+          "start": 0,
+          "end": 4715,
+          "kind": "text",
+          "sha256": "56f7bb391981f3046b3ba2795c1ce01abdc1c2c5ce9aedf5f6def8948f8dc06d"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/platform.part-1ofn.md",
+          "start": 0,
+          "end": 10975,
+          "kind": "text",
+          "sha256": "d9c89886366c8ce593ff6eac9614874d60b31313b56825840b9297173202556a"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/platform.part-2of2.md",
+          "start": 0,
+          "end": 7131,
+          "kind": "text",
+          "sha256": "108b3be8a4e4c0e822ee2a1a139e9ed30b17d1543b70b49a4ddf544061557654"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/race-1.part-1ofn.md",
+          "start": 0,
+          "end": 2559,
+          "kind": "text",
+          "sha256": "50280605fc5b00e81affe88348c21d55313537c26015d2516b0b1b46f2771c34"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "16",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/race-1.part-1ofn.md",
+          "start": 2559,
+          "end": 18793,
+          "kind": "text",
+          "sha256": "50280605fc5b00e81affe88348c21d55313537c26015d2516b0b1b46f2771c34"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/race-1.part-2of2.md",
+          "start": 0,
+          "end": 5648,
+          "kind": "text",
+          "sha256": "9c254c637e58648c273789e2f440c93ec226aaeab972cd68c3c8c0be7a43094d"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/race-2.part-1ofn.md",
+          "start": 0,
+          "end": 13608,
+          "kind": "text",
+          "sha256": "d054ad775a4e27dc176ded17b85b446093b88755e7f7f24199bc1a4d6441499a"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/race-2.part-2of2.md",
+          "start": 0,
+          "end": 4118,
+          "kind": "text",
+          "sha256": "e1558bca3eaf677f54ce98c2e1e5ba43a2363472a9c78eb58b24720686d6eb8a"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/race-2.part-3of3.md",
+          "start": 0,
+          "end": 6350,
+          "kind": "text",
+          "sha256": "71225ae2fb4970407c0683deb054e09c0952f9e4ca25c0eecec65cec819aa2ff"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/render-1.amended-debugger.md",
+          "start": 0,
+          "end": 6250,
+          "kind": "text",
+          "sha256": "86697332eefbebe8156582cd3bbf5f7eb5f4eb6915fbdd93ee5035dfb9cf61b5"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/render-1.md",
+          "start": 0,
+          "end": 11764,
+          "kind": "text",
+          "sha256": "a79190247ed7f10f9f74e7f4fc0172ce80e9e7367f396ae3e97ff5c3b73097ab"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/render-2.addendum-mutation.md",
+          "start": 0,
+          "end": 10176,
+          "kind": "text",
+          "sha256": "c6791d2e008a4b4ad626481bfe3bca756fb030f82cd8c89b48a31020294f1c6d"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/render-2.md",
+          "start": 0,
+          "end": 23998,
+          "kind": "text",
+          "sha256": "ec32711e1dafd7fc1704c07cbfb6ce9b81c716b242bbc04cf0eb847606e6a322"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/render-3.part-1of2.md",
+          "start": 0,
+          "end": 14359,
+          "kind": "text",
+          "sha256": "792279aa3f499e610fc57687ce0ebc061c4df7b40af225b23add5c3f4b0b28e9"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/render-3.part-2of2.md",
+          "start": 0,
+          "end": 7877,
+          "kind": "text",
+          "sha256": "fe9d5ee98550611fcd1ea183e1bec3b82eab9ad5f232d5eb64e8634c8e1e0272"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tooling-1.md",
+          "start": 0,
+          "end": 20798,
+          "kind": "text",
+          "sha256": "73257606ac23f23cfc8384f2f7e2fbaf8dbae22a63dd26eaa4227f29c2ffb8b6"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tooling-2.md",
+          "start": 0,
+          "end": 18820,
+          "kind": "text",
+          "sha256": "53c606256c82ab3c53266e4913767273cf5e617b9d9d9049bb0e3f9371e5199b"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "17",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tooling-2.md",
+          "start": 18820,
+          "end": 25888,
+          "kind": "text",
+          "sha256": "53c606256c82ab3c53266e4913767273cf5e617b9d9d9049bb0e3f9371e5199b"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tooling-3.md",
+          "start": 0,
+          "end": 33067,
+          "kind": "text",
+          "sha256": "d2543e4bbf8d96e93b7cd3e739d0039dd1cf3625599fd6ed978a6c82673409eb"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tooling-4.md",
+          "start": 0,
+          "end": 28892,
+          "kind": "text",
+          "sha256": "1ca5ef2cb64ab152582b076b5a3545881af471100ffdbc20386ca9ff342ed43a"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tooling-5.md",
+          "start": 0,
+          "end": 19207,
+          "kind": "text",
+          "sha256": "b014b35f33811781bfc42bcb9cb3ff93e94e8e9cbbe705e182029aee0cb8b9ba"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tracks-1.md",
+          "start": 0,
+          "end": 17334,
+          "kind": "text",
+          "sha256": "0822dbe1d56d2b324a9a7d6685debff2abbca0917e8b8e64d21ee7a48070843a"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tracks-2.addendum-specs.md",
+          "start": 0,
+          "end": 1464,
+          "kind": "text",
+          "sha256": "f9f163ed720d0741d9c779ec653c3e1afbc1110285f8bad22c1aafd1a431299d"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tracks-2.part-1ofn.md",
+          "start": 0,
+          "end": 15879,
+          "kind": "text",
+          "sha256": "b36780fabe330d2c0df79560ef5f605c6a493e6fc2859204e153d85897d80f4f"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/tracks-2.part-2of2.md",
+          "start": 0,
+          "end": 5935,
+          "kind": "text",
+          "sha256": "834d17304f7edf6dda7187f1e221cc443f92b3cf8472f18f66963c5d27b8bbe2"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/ui-1.md",
+          "start": 0,
+          "end": 21335,
+          "kind": "text",
+          "sha256": "54ddede68842fa2c8bed3c6d1f3a9dddb2d931f0b35730ff85a8fbcd5a4ab87d"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-1ofn.md",
+          "start": 0,
+          "end": 9819,
+          "kind": "text",
+          "sha256": "0a3c2b47165a3b8cac6b103f80b5c830ecd3dd2af6f95908141731ef7a9e1852"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "18",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-1ofn.md",
+          "start": 9819,
+          "end": 24876,
+          "kind": "text",
+          "sha256": "0a3c2b47165a3b8cac6b103f80b5c830ecd3dd2af6f95908141731ef7a9e1852"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/reports/ui-2.part-2ofn.md",
+          "start": 0,
+          "end": 5785,
+          "kind": "text",
+          "sha256": "b05dc295f54f913f6fba76cdcbf5afeacd1bde035a1a9343af72f57803e779c6"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/build.py",
+          "start": 0,
+          "end": 6838,
+          "kind": "text",
+          "sha256": "c0268b6240fa1b0bdba6b3664b3fd11772f0077cc0f0f7fd8feebaf5da176a2f"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/lanes.py",
+          "start": 0,
+          "end": 43285,
+          "kind": "text",
+          "sha256": "281e6cae97e9ff367f05be1cfd5218e2b2a06f149ae0fa1d6c6b646af3449b38"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/mkreports.py",
+          "start": 0,
+          "end": 2067,
+          "kind": "text",
+          "sha256": "2cfb7e51cd455312820cb58d3049a3172a3a8a17f76b0f89ed547564f0f2a128"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/reportmap.json",
+          "start": 0,
+          "end": 2703,
+          "kind": "text",
+          "sha256": "15adda648bda2e03e714292d3205d88f50f672385448f99c88c004635b03d9fb"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows.py",
+          "start": 0,
+          "end": 28115,
+          "kind": "text",
+          "sha256": "dd496f179fb6896a39e0b1b5d0a99798804aadef273e08b24a1c7b7bdd3dca66"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_audio1.py",
+          "start": 0,
+          "end": 13631,
+          "kind": "text",
+          "sha256": "3adc6670819bd5b24d7bbc2e97acab7a5749eee7c9ceb6caca2393052d6751ee"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch6a.py",
+          "start": 0,
+          "end": 42519,
+          "kind": "text",
+          "sha256": "07515d02cdbec894d77686d4dcf40a14495c0d1ce4765c79e38b586cde2a9288"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "19",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch6a.py",
+          "start": 42519,
+          "end": 44686,
+          "kind": "text",
+          "sha256": "07515d02cdbec894d77686d4dcf40a14495c0d1ce4765c79e38b586cde2a9288"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch6b.py",
+          "start": 0,
+          "end": 48669,
+          "kind": "text",
+          "sha256": "f8c0e9887938459ebb6add21b16c48adb383f93fb8ed62cd526718c7dfa6053e"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_batch7.py",
+          "start": 0,
+          "end": 18337,
+          "kind": "text",
+          "sha256": "c87fb09c8ac3c08d81c23db8ba323dd3a03f95ccda35543fbb4bd952b146905f"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_late.py",
+          "start": 0,
+          "end": 14111,
+          "kind": "text",
+          "sha256": "9b54524e0d495a2eb7ea5b79e0358f62aac8dd6fbe041ccf508dc165b3177bc6"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_physics.py",
+          "start": 0,
+          "end": 26477,
+          "kind": "text",
+          "sha256": "d87aa5e146c76411fbaebc41a8ec63aab0e1b9f59d82261f47bf0fc3a3fbc24b"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_race2p2.py",
+          "start": 0,
+          "end": 2463,
+          "kind": "text",
+          "sha256": "2284b32355ae411e61dbb6555ef452e9282a2bc2ae6662722e919221655b5403"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_race_car_ui.py",
+          "start": 0,
+          "end": 29752,
+          "kind": "text",
+          "sha256": "2b5af4157a4b6d42e387660734b54aeae89c7d1a62f9546d01bfaf209e50cf4f"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_render2_mut.py",
+          "start": 0,
+          "end": 14719,
+          "kind": "text",
+          "sha256": "e1feec78686d386dc33b9c25b8a4e88110c3c82d6b0112dd6acbe404f7cc926a"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_tooling2.py",
+          "start": 0,
+          "end": 3305,
+          "kind": "text",
+          "sha256": "7a96c4b543e3da259bf72c6fa2aeb73f8d4da233003ddf3d186af51b8ee95370"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "20",
+      "parts": [
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_tooling2.py",
+          "start": 3305,
+          "end": 17748,
+          "kind": "text",
+          "sha256": "7a96c4b543e3da259bf72c6fa2aeb73f8d4da233003ddf3d186af51b8ee95370"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_tooling4.py",
+          "start": 0,
+          "end": 15552,
+          "kind": "text",
+          "sha256": "933c721e65b2ff4cf4fdb293b5d740bdbef72b7d4a762ae5c38ab538e1ec2924"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_tooling5.py",
+          "start": 0,
+          "end": 15348,
+          "kind": "text",
+          "sha256": "e55852ce4c316ec8fe4a94ecb8b76794151e1accace080691ffd11da6a2ba64e"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/rows_tracks.py",
+          "start": 0,
+          "end": 25664,
+          "kind": "text",
+          "sha256": "c3edf3ae0e2c1ee118cd8a44b2a482df8e707a5bb76acb3fac037b97009729cd"
+        },
+        {
+          "path": "docs/archive/notes/test-review-2026-10-19/src/status.py",
+          "start": 0,
+          "end": 19757,
+          "kind": "text",
+          "sha256": "f19442ae1531ba12be772cbe2f4eb422affb5bf7294dfa49821f718726c9fbdd"
+        },
+        {
+          "path": "docs/archive/research/AUDIT-SYNTHESIS-2026-08.md",
+          "start": 0,
+          "end": 24444,
+          "kind": "text",
+          "sha256": "8045f37feee37d1064100a3ec2db90acba6507caed68fe0cafb6c7dc221b111c"
+        },
+        {
+          "path": "docs/archive/research/BROWSER-GRAPHICS-2026.md",
+          "start": 0,
+          "end": 12374,
+          "kind": "text",
+          "sha256": "9fed972fa9b36b97f4405d4b18f75e1487a5c3859dde4115062afb22b184c79e"
+        },
+        {
+          "path": "docs/archive/research/CAMPAIGN-2026-08.md",
+          "start": 0,
+          "end": 32418,
+          "kind": "text",
+          "sha256": "6ae27ba36f8c14ab04a9214e816fadd864e6f32111b3ec3be54a102c5822f1f6"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "21",
+      "parts": [
+        {
+          "path": "docs/archive/research/CAMPAIGN-2026-08.md",
+          "start": 32418,
+          "end": 76819,
+          "kind": "text",
+          "sha256": "6ae27ba36f8c14ab04a9214e816fadd864e6f32111b3ec3be54a102c5822f1f6"
+        },
+        {
+          "path": "docs/archive/research/CLEANUP-SWEEP-2026-08-18.md",
+          "start": 0,
+          "end": 6564,
+          "kind": "text",
+          "sha256": "03c1862b681242b6c9c316b8ec2e81b85f281111ffea3df29ed23a6fb36c2c19"
+        },
+        {
+          "path": "docs/archive/research/CODE-SURVEY-2026-09.md",
+          "start": 0,
+          "end": 37835,
+          "kind": "text",
+          "sha256": "7e490627b902e74280e4e21787204c7ef8a435c495d0f69a4dd1bfca43c4f06b"
+        },
+        {
+          "path": "docs/archive/research/EXTERNAL-MODEL-SOURCES.md",
+          "start": 0,
+          "end": 17089,
+          "kind": "text",
+          "sha256": "af235fd61d7167e57158835f407abde794634314dc05903ac1781198b0824c38"
+        },
+        {
+          "path": "docs/archive/research/PERF-LEDGER-2026-08.md",
+          "start": 0,
+          "end": 25545,
+          "kind": "text",
+          "sha256": "ca2b0790fddec348a5ee81ffa171926b156b2bbc219f7a0fb8175572f801b8bf"
+        },
+        {
+          "path": "docs/archive/research/RENDERING-IMPROVEMENTS.md",
+          "start": 0,
+          "end": 16644,
+          "kind": "text",
+          "sha256": "8f156a4cc2c468cb62abb7f3d3c7a67ee13f669a866834fe0b2aed437a83be34"
+        },
+        {
+          "path": "docs/archive/research/RESEARCH-WAVE-2026-08.md",
+          "start": 0,
+          "end": 7126,
+          "kind": "text",
+          "sha256": "fba004d6baecade1b6ef8bd414d27c8fd72de3e2c0145794659dabba06695623"
+        },
+        {
+          "path": "docs/archive/research/SURVEY-BUGS-PERF-2026-08-17.md",
+          "start": 0,
+          "end": 4796,
+          "kind": "text",
+          "sha256": "dd20d192cf9051a1cff1a930e48506900513446ef2aeaffacae15ea1ec712fca"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "22",
+      "parts": [
+        {
+          "path": "docs/archive/research/SURVEY-BUGS-PERF-2026-08-17.md",
+          "start": 4796,
+          "end": 14197,
+          "kind": "text",
+          "sha256": "dd20d192cf9051a1cff1a930e48506900513446ef2aeaffacae15ea1ec712fca"
+        },
+        {
+          "path": "docs/archive/research/TEST-AUDIT-2026-08.md",
+          "start": 0,
+          "end": 100511,
+          "kind": "text",
+          "sha256": "aa166fe4653f03a00f7f7eb5a6b91cc58c3d28663b73ef99d2778294a332c0d0"
+        },
+        {
+          "path": "docs/archive/research/TOTAL-AUDIT-2026-08.md",
+          "start": 0,
+          "end": 50088,
+          "kind": "text",
+          "sha256": "e4b6bf6ef5198c13200ba336decaf1d8f43fce89c5d19986818065222f571950"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "23",
+      "parts": [
+        {
+          "path": "docs/archive/research/TOTAL-AUDIT-2026-08.md",
+          "start": 50088,
+          "end": 73108,
+          "kind": "text",
+          "sha256": "e4b6bf6ef5198c13200ba336decaf1d8f43fce89c5d19986818065222f571950"
+        },
+        {
+          "path": "docs/archive/research/UI-CSS-RESEARCH-2026-08.md",
+          "start": 0,
+          "end": 19713,
+          "kind": "text",
+          "sha256": "bff3caef354c65597e8953f48a5122207a83720bf609ca73cc0640051bcc3c51"
+        },
+        {
+          "path": "docs/archive/research/UI-LAYOUT-CRITIQUE-2026-08.md",
+          "start": 0,
+          "end": 9513,
+          "kind": "text",
+          "sha256": "2427fede461956b9d7d38ebe5ff2c7dc688322a48705fe34e7ca7beadddc7ef1"
+        },
+        {
+          "path": "docs/archive/research/UI-LAYOUT-RESEARCH.md",
+          "start": 0,
+          "end": 35203,
+          "kind": "text",
+          "sha256": "50eb9af840e555fd790838d1c35b6727057d2f38306a4de898035575425832fb"
+        },
+        {
+          "path": "docs/archive/research/UI-REDESIGN-2026-08.md",
+          "start": 0,
+          "end": 24127,
+          "kind": "text",
+          "sha256": "1467b7f123acac128154132e4dd3cad5e6826f7be84b7706cb8da5d2ed788c3a"
+        },
+        {
+          "path": "docs/archive/research/UI-REMODEL-DECISION-2026-08.md",
+          "start": 0,
+          "end": 8571,
+          "kind": "text",
+          "sha256": "c34eeff7d51eda89b95e4319e5928142d7b9a5c4437e20bdde889824aea27be9"
+        },
+        {
+          "path": "docs/archive/research/UI-SCALE-AND-ZOOM.md",
+          "start": 0,
+          "end": 17483,
+          "kind": "text",
+          "sha256": "5b291ee331f129a6816a48123c6697868b355a7f387a6a6809c3ddf469c8aabe"
+        },
+        {
+          "path": "docs/archive/research/W4-AUDIT-2026-08.md",
+          "start": 0,
+          "end": 22370,
+          "kind": "text",
+          "sha256": "6e382c7db84c42557538531956492e025f3da6814b341e4a2a42b49e9bb0320b"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "24",
+      "parts": [
+        {
+          "path": "docs/archive/research/W4-AUDIT-2026-08.md",
+          "start": 22370,
+          "end": 37311,
+          "kind": "text",
+          "sha256": "6e382c7db84c42557538531956492e025f3da6814b341e4a2a42b49e9bb0320b"
+        },
+        {
+          "path": "docs/archive/research/ZOOM-ORIENTATION-STRUCTURE-2026-08.md",
+          "start": 0,
+          "end": 14606,
+          "kind": "text",
+          "sha256": "8cfe9e2088b24e5990bef92e9f7433e16cca84a3f2d602b60cc10ea68eee040a"
+        },
+        {
+          "path": "docs/archive/research/physics-redesign.md",
+          "start": 0,
+          "end": 5375,
+          "kind": "text",
+          "sha256": "818425a718fd5f57648d08f0d64f254b67f60bf428ff0f897f4e4f3a461fd3f1"
+        },
+        {
+          "path": "docs/archive/research/raw/2026-08-audit-workflow.json",
+          "start": 0,
+          "end": 102519,
+          "kind": "text",
+          "sha256": "306a1f599d071b9e89e89c512a74fc28d2f1ea3a7f762e049d01f7453ab5b71d"
+        },
+        {
+          "path": "docs/archive/research/raw/2026-08-redesign-panel.json",
+          "start": 0,
+          "end": 22559,
+          "kind": "text",
+          "sha256": "72887a4ab6a783f149fe8986efd9b52b0a368c9a16943469f290200922703f8e"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "25",
+      "parts": [
+        {
+          "path": "docs/archive/research/raw/2026-08-redesign-panel.json",
+          "start": 22559,
+          "end": 92742,
+          "kind": "text",
+          "sha256": "72887a4ab6a783f149fe8986efd9b52b0a368c9a16943469f290200922703f8e"
+        },
+        {
+          "path": "docs/archive/research/raw/2026-08-test-audit.json",
+          "start": 0,
+          "end": 89817,
+          "kind": "text",
+          "sha256": "c59fd9bf71a9d7347e75a401f6028ad68a2f8c72574324c292a6d5c653333cb2"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "26",
+      "parts": [
+        {
+          "path": "docs/archive/research/raw/2026-08-test-audit.json",
+          "start": 89817,
+          "end": 192006,
+          "kind": "text",
+          "sha256": "c59fd9bf71a9d7347e75a401f6028ad68a2f8c72574324c292a6d5c653333cb2"
+        },
+        {
+          "path": "docs/archive/research/raw/2026-08-total-audit.json",
+          "start": 0,
+          "end": 57811,
+          "kind": "text",
+          "sha256": "7d0e370454e3e20dc2aeeda6926d9e8e2e4980188b4a748d9621aad26f30bd1b"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "27",
+      "parts": [
+        {
+          "path": "docs/archive/research/raw/2026-08-total-audit.json",
+          "start": 57811,
+          "end": 205898,
+          "kind": "text",
+          "sha256": "7d0e370454e3e20dc2aeeda6926d9e8e2e4980188b4a748d9621aad26f30bd1b"
+        },
+        {
+          "path": "docs/archive/research/raw/2026-09-code-survey.json",
+          "start": 0,
+          "end": 11913,
+          "kind": "text",
+          "sha256": "8186ca8f353371b95e2b51c815f51ed607d6e0dd2202c14e6ed30d1169943067"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "28",
+      "parts": [
+        {
+          "path": "docs/archive/research/raw/2026-09-code-survey.json",
+          "start": 11913,
+          "end": 138712,
+          "kind": "text",
+          "sha256": "8186ca8f353371b95e2b51c815f51ed607d6e0dd2202c14e6ed30d1169943067"
+        },
+        {
+          "path": "docs/archive/research/raw/w4-audit.json",
+          "start": 0,
+          "end": 33201,
+          "kind": "text",
+          "sha256": "e424ccb31a57f1faa449354242647fdbc6238c00fdc0cd37e683470739532667"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "29",
+      "parts": [
+        {
+          "path": "docs/archive/research/raw/w4-audit.json",
+          "start": 33201,
+          "end": 142904,
+          "kind": "text",
+          "sha256": "e424ccb31a57f1faa449354242647fdbc6238c00fdc0cd37e683470739532667"
+        },
+        {
+          "path": "docs/archive/research/workflows/redesign-judge-panel.js",
+          "start": 0,
+          "end": 7676,
+          "kind": "text",
+          "sha256": "35b48370bcbe36b3da441136fc5cfe2f3876dc85851e940767807658f5115c66"
+        },
+        {
+          "path": "docs/archive/research/workflows/test-semantics-audit.js",
+          "start": 0,
+          "end": 7825,
+          "kind": "text",
+          "sha256": "b2cbd9146d512c18117d4d0d81470b94d189161f931d036e655c10f1284330c1"
+        },
+        {
+          "path": "docs/archive/slider-effect/README.md",
+          "start": 0,
+          "end": 1392,
+          "kind": "text",
+          "sha256": "36fa134b48f3e9b0d08f2af5d784b1de72feb8131683d598b068bf665ab34a56"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-08-17-release-safety-implementation.md",
+          "start": 0,
+          "end": 9638,
+          "kind": "text",
+          "sha256": "c890357c318daceed71bf21519cbcfddc0c6355f1a658c8dfa17408f66ea8d03"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-08-18-apex-tools-mcp-week1.md",
+          "start": 0,
+          "end": 2528,
+          "kind": "text",
+          "sha256": "a988e4cd372b28291190e5fddc628c7520ecc57746f98beeb5aaf7c59d4cd8db"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-08-18-apex-tools-mcp-week2.md",
+          "start": 0,
+          "end": 1262,
+          "kind": "text",
+          "sha256": "f712c3f3c141f01757cd818d568ceaccd31be7cce858b5bc8f78ac1bad8431aa"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-08-18-apex-tools-mcp-week3.md",
+          "start": 0,
+          "end": 757,
+          "kind": "text",
+          "sha256": "2a28f12348c19696e093cf164eac4c421ac53c89614d7fce639b9f29ce00e308"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-08-18-apex-tools-mcp-week4.md",
+          "start": 0,
+          "end": 446,
+          "kind": "text",
+          "sha256": "dbde45d794abeeb938102722cceb8eb58563a9493fd34d187e0ba9e074322f60"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-09-09-livery-open-gaps-plan.md",
+          "start": 0,
+          "end": 13615,
+          "kind": "text",
+          "sha256": "0f23a9c5f25ed2d0dd78a8103ef07110ee9b0c34dea5c2d439fad89f42f80f64"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-09-09-recent-performance-regressions.md",
+          "start": 0,
+          "end": 4814,
+          "kind": "text",
+          "sha256": "6625fb002bbc89ed0269dbec51966d1a8819d152f61ba8b15e6ee4f6bfa4c4ce"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-09-09-spatial-upscale-all-backends.md",
+          "start": 0,
+          "end": 344,
+          "kind": "text",
+          "sha256": "078e87d586abaa2410081290d1070972ec345884b22080f9179fcc63b6dd6df1"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "30",
+      "parts": [
+        {
+          "path": "docs/archive/superpowers/plans/2026-09-09-spatial-upscale-all-backends.md",
+          "start": 344,
+          "end": 594,
+          "kind": "text",
+          "sha256": "078e87d586abaa2410081290d1070972ec345884b22080f9179fcc63b6dd6df1"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-09-09-spine-design-pass.md",
+          "start": 0,
+          "end": 2519,
+          "kind": "text",
+          "sha256": "1105442f900bc515b95da0da92be234c3145328bbb2e24683ec1bea691ce9440"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-09-09-spine-zones-bind.md",
+          "start": 0,
+          "end": 16700,
+          "kind": "text",
+          "sha256": "badceaeedc57d58850a7d96c8499258585886bbe946268b41e8878af7d352540"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-09-10-logo-only-mark-colours.md",
+          "start": 0,
+          "end": 2386,
+          "kind": "text",
+          "sha256": "a2fe6927a3ac3c02aed9185a01f597f76dd11ae946b9ec85f36cad8f84dd8a3a"
+        },
+        {
+          "path": "docs/archive/superpowers/plans/2026-09-10-paint-sheet-redesign.md",
+          "start": 0,
+          "end": 2360,
+          "kind": "text",
+          "sha256": "564f3c0949c9f8c1706506e326353b2f9b4bd347f99f3debd2b9e41cec5521d5"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-08-17-audit-remediation-design.md",
+          "start": 0,
+          "end": 4362,
+          "kind": "text",
+          "sha256": "793092ca76fd354b4136e005b59571c4f349b3e7967d8af368ecbbf15636c361"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-08-17-perf-hunt-fixes-design.md",
+          "start": 0,
+          "end": 2428,
+          "kind": "text",
+          "sha256": "f8b8069f667f401491ba8ab0bfc85395da2a6813bd55d70418209750b9d30406"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-09-09-livery-open-gaps-design.md",
+          "start": 0,
+          "end": 8598,
+          "kind": "text",
+          "sha256": "d7f5ffc452b1193805740fe67f0f30000da28148c94a957971b535655e309205"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-09-09-recent-performance-regressions-design.md",
+          "start": 0,
+          "end": 1962,
+          "kind": "text",
+          "sha256": "2b431798a88ca9007753745116f7e9e23ceb34452ee9dd3856b407c332be4ca0"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-09-09-spatial-upscale-all-backends-design.md",
+          "start": 0,
+          "end": 785,
+          "kind": "text",
+          "sha256": "6ce5d07ae7ee8079f1686cc2735f2b42dcff1a63fc61c8e4f07d054d719bbd19"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-09-09-spatial-upscale-followups-design.md",
+          "start": 0,
+          "end": 1970,
+          "kind": "text",
+          "sha256": "09720b565b34b9794ebdb8985e6cb8c870e143e9263f2c6168f0c086103db38f"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-09-09-spine-design-pass-design.md",
+          "start": 0,
+          "end": 4969,
+          "kind": "text",
+          "sha256": "aac83b3a1bde64bc608b1770f185ff2a1db49eeff4f2dc6b0eb9e16248648eab"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-09-09-spine-zones-bind-design.md",
+          "start": 0,
+          "end": 10765,
+          "kind": "text",
+          "sha256": "ad52b9239ee741a2207dd57309bef6de6a953b71c3e773c1b132bfee14714815"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-09-10-logo-only-mark-colours-design.md",
+          "start": 0,
+          "end": 2130,
+          "kind": "text",
+          "sha256": "0557a0a693bf9b2e5641e169257812243ae3812f482d79d4dc84757cc4895d44"
+        },
+        {
+          "path": "docs/archive/superpowers/specs/2026-09-10-paint-sheet-redesign-design.md",
+          "start": 0,
+          "end": 3863,
+          "kind": "text",
+          "sha256": "a23ef207b3313d702c69fb9de171037b97edc4d3df9305d1492764e3d7c8aa2a"
+        },
+        {
+          "path": "docs/archive/tools/README.md",
+          "start": 0,
+          "end": 306,
+          "kind": "text",
+          "sha256": "38161f0a37e779d42e60ad1d6ebb8e70cd923b9b8666ac40495f9c457bfd39f7"
+        },
+        {
+          "path": "docs/archive/tools/gfx/README.md",
+          "start": 0,
+          "end": 486,
+          "kind": "text",
+          "sha256": "8b9da6ff23f6030c6c523ea4e2597f0e20c750ed3589bf8e7262faaf6ae05e4f"
+        },
+        {
+          "path": "docs/archive/tools/gfx/heap-stages.mjs",
+          "start": 0,
+          "end": 11527,
+          "kind": "text",
+          "sha256": "62a3404077643aaff5a74fc73a8a99d945949c72c4e8d4f27d77f2db80d0380c"
+        },
+        {
+          "path": "docs/archive/tools/gfx/soft-present-bench.mjs",
+          "start": 0,
+          "end": 6395,
+          "kind": "text",
+          "sha256": "503e4be8e501c72fed11bea33f377bbeb71f9e76805034990313795787ddad10"
+        },
+        {
+          "path": "docs/archive/tools/gfx/wgpu-flag-test.mjs",
+          "start": 0,
+          "end": 6284,
+          "kind": "text",
+          "sha256": "05a9bc36cd8cc14a9489820e2261ede8c6ca0d9d545033e3c800e8a260ac9297"
+        },
+        {
+          "path": "docs/archive/tools/gfx/wgx-vid-repro.mjs",
+          "start": 0,
+          "end": 14884,
+          "kind": "text",
+          "sha256": "7ef75eaab73a54fdc0bf87239b7e08eff879547d457aa731c2dc501784a5f033"
+        },
+        {
+          "path": "docs/archive/tools/hud-metrics-audit.mjs",
+          "start": 0,
+          "end": 5627,
+          "kind": "text",
+          "sha256": "930e21b098c501a1e1ac01e349d71620be9400d75144fa84815fd655987aa1eb"
+        },
+        {
+          "path": "docs/archive/tools/ui-readable-survey-mcp.py",
+          "start": 0,
+          "end": 12557,
+          "kind": "text",
+          "sha256": "5e7946d66f9406a1ac961f2321d206799e9ce06fb36eb50023ab5a8155349536"
+        },
+        {
+          "path": "docs/archive/tracks/HANDOFF-STARTFRAC.md",
+          "start": 0,
+          "end": 11084,
+          "kind": "text",
+          "sha256": "8a2bc446e20875ec695bb3b50795411e22d8a5a32a286e16d9728c0f0ad02452"
+        },
+        {
+          "path": "docs/archive/tracks/RESEARCH-LEDGER.md",
+          "start": 0,
+          "end": 16802,
+          "kind": "text",
+          "sha256": "57e1abb0efecf4e0ca88c9a573b383cffc89b41eb7cc0b46cc6a74c84f4ac8d3"
+        },
+        {
+          "path": "docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md",
+          "start": 0,
+          "end": 8001,
+          "kind": "text",
+          "sha256": "c26e750214dcefcefde1cc47396d62ed4b9b13b17558f4bd89d7a81db4128321"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "31",
+      "parts": [
+        {
+          "path": "docs/archive/webgpu/WEBGPU-MAINTAINABILITY.md",
+          "start": 8001,
+          "end": 29421,
+          "kind": "text",
+          "sha256": "c26e750214dcefcefde1cc47396d62ed4b9b13b17558f4bd89d7a81db4128321"
+        },
+        {
+          "path": "docs/archive/webgpu/WEBGPU-MIGRATION.md",
+          "start": 0,
+          "end": 31814,
+          "kind": "text",
+          "sha256": "75eea2aaa2ab0421785303fa288ddb743081cc6ac0e78b5745b9eb55d5ed2edc"
+        },
+        {
+          "path": "docs/archive/workflows/audit-verify-restructure.js",
+          "start": 0,
+          "end": 13524,
+          "kind": "text",
+          "sha256": "b09889b9b0809251bad86d26a6d9e7768b0f5d8491f3c5450ddad8930486ad7d"
+        }
+      ],
+      "bytes": 66758,
+      "status": "unassigned"
+    }
+  ]
+}

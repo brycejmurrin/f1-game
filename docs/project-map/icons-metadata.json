@@ -1,0 +1,1245 @@
+[
+  {
+    "path": "icons/icon-180.png",
+    "bytes": 613,
+    "sha256": "70326d12cdd624633d83af4264a383d2645541f0ebb4bf6e1d54441642ebb804",
+    "width": 180,
+    "height": 180,
+    "bitdepth": 8,
+    "colorType": 2,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/icon-192.png",
+    "bytes": 3667,
+    "sha256": "a5ecef0aa4538262cb18c16a0c3803c8d89ceefa47795d1b8a54702993e29d4a",
+    "width": 192,
+    "height": 192,
+    "bitdepth": 8,
+    "colorType": 2,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "sRGB",
+      "eXIf",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/icon-512.png",
+    "bytes": 2042,
+    "sha256": "bbaa7cda99c4e7189a542eeec1f01ffc475f0e79c4b2f68d6985a203799c0fc3",
+    "width": 512,
+    "height": 512,
+    "bitdepth": 8,
+    "colorType": 2,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/icon-maskable-512.png",
+    "bytes": 10797,
+    "sha256": "815b481ca7b1142666715481d69ea4792abd65d26924ede7e793114ef385343a",
+    "width": 512,
+    "height": 512,
+    "bitdepth": 8,
+    "colorType": 2,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "gAMA",
+      "cHRM",
+      "eXIf",
+      "iTXt",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcut-96.png",
+    "bytes": 1765,
+    "sha256": "414416380d8fb0f465ecc2fbcae53cb6b4a6eb30d0e19776a8bfdafdfb4f5b40",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 2,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/apple-touch-180.png",
+    "bytes": 4553,
+    "sha256": "6e5505c320ef559e03b8a0c574ca8da87f8c2d75a721ca8ce78638d1c917c71f",
+    "width": 180,
+    "height": 180,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/controller-96.png",
+    "bytes": 3791,
+    "sha256": "d40dd052964ea90d7bb4b440d68b7a69eb95caf402c01b9a8da67a1059915d36",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/controller-maskable-96.png",
+    "bytes": 2366,
+    "sha256": "4282bec745f6f2acbf02a697ecf123d48ee3dc902a63a18f31339220ac91ba6c",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/daily-96.png",
+    "bytes": 5256,
+    "sha256": "06206b7d16a46a8c93f74e0a5e98fa810fa0f442f26acdc9065742a13ef44f6e",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/daily-maskable-96.png",
+    "bytes": 3606,
+    "sha256": "228de29679da640a388cebb999a094feb3739923cee9d53d3e94a1ba5a7c07c8",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/favicon-32.png",
+    "bytes": 1437,
+    "sha256": "137cc6fa460bba75d6b38f2689cb7c9afc499a0128ef5ce4b20e1791600823ac",
+    "width": 32,
+    "height": 32,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/garage-96.png",
+    "bytes": 6163,
+    "sha256": "0c0cc63245918957a676555383227d13314cb1dbab2630a17e9c42c624a10c16",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/garage-maskable-96.png",
+    "bytes": 4074,
+    "sha256": "9e8daf254beeefdf8e7a313101cfe6a67f875993c9a5e2a8bb88611ffc1e14da",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/nextgp-96.png",
+    "bytes": 2813,
+    "sha256": "5a95a2b3093d4191a7caea782979fa99c5b849fe4acf153922e5443f3b5a79ab",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/nextgp-maskable-96.png",
+    "bytes": 1357,
+    "sha256": "9711bfe141bdef4459fc5ae4ff8d211463e1b3c23be2107ca671756f73a6323b",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/race-96.png",
+    "bytes": 3165,
+    "sha256": "f68191b0931fab0e1046e45188ef82dd538b47d1e3765213366a25230e79c28f",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/A/race-maskable-96.png",
+    "bytes": 1971,
+    "sha256": "9b5f7b9098d29c5da6833fe0dee51eb3465423c0772b40870fe8ba6c4b44ea1f",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/apple-touch-180.png",
+    "bytes": 4789,
+    "sha256": "99bc9b4a89f15b2235582520f7d766353f7cd4230baf46f738b0279083716f01",
+    "width": 180,
+    "height": 180,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/controller-96.png",
+    "bytes": 3595,
+    "sha256": "64c64ca373c790b1a6944c1e32fbead47e3827f731aabd51496a1666e0aedeb3",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/controller-maskable-96.png",
+    "bytes": 2084,
+    "sha256": "919e16cd460882264c690780f3ee9da5180692dc73758b7b1449163aabe19e9e",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/daily-96.png",
+    "bytes": 4848,
+    "sha256": "24ef19dd954f867fd664a4f3011f7f3b91e11a3b3576d2e7065ccc38878fd691",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/daily-maskable-96.png",
+    "bytes": 3158,
+    "sha256": "424a0b857f5c4b7526bbc77aa5bafdb7fcd67b1aefe3c2260bb1d4015fa84e0e",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/favicon-32.png",
+    "bytes": 1255,
+    "sha256": "dd72a993a2f949841175ed585834f74da59c8336932c1d84f1e2fbf573875e09",
+    "width": 32,
+    "height": 32,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/garage-96.png",
+    "bytes": 5530,
+    "sha256": "eaa3fc9941cdc110ffc41d95859cd1adac407985f43eb13b853da5256ca00688",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/garage-maskable-96.png",
+    "bytes": 3637,
+    "sha256": "eb05eaf86f45eb57dfe24d50dbb1bc62680b9e342a124de400011022b02a6215",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/nextgp-96.png",
+    "bytes": 2711,
+    "sha256": "fbb9fffb604953c032975f108470daf96475053f9d97d19b605d5c580e0be97c",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/nextgp-maskable-96.png",
+    "bytes": 1287,
+    "sha256": "8906b2e2be1e50d7ecda6c690d521e24df1a0156cf46316a71e321d593c3059e",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/race-96.png",
+    "bytes": 3090,
+    "sha256": "ca8c2a55d56af4a90221855b4e2ede431a90619dc4beb2867b696b77fe9a83a8",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/B/race-maskable-96.png",
+    "bytes": 1794,
+    "sha256": "0efcd8b99088aed8761df7cea47fa8a8f1f4f26ff26927e84b55bafbcb7ed833",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/apple-touch-180.png",
+    "bytes": 5301,
+    "sha256": "2c04513ef699e4f35ce1c348235ff337a39ec347f6a3bdb8d9219d0d4c21815b",
+    "width": 180,
+    "height": 180,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/controller-96.png",
+    "bytes": 4017,
+    "sha256": "7e3a2c803557bbe8bde2e0aa784681ab7f661faf728a2686ca42d8c6902a340f",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/controller-maskable-96.png",
+    "bytes": 2300,
+    "sha256": "a5dbb674850db5612fadfed1184ce5e0e4e401da329e321fcfe24070e31d535d",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/daily-96.png",
+    "bytes": 5566,
+    "sha256": "686ff232ea9d4813d5285eaf957ca10bed626542c064704db55784bb5875369f",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/daily-maskable-96.png",
+    "bytes": 3514,
+    "sha256": "382c8a91d5c99651754a7d3e6010b4b322a2fe537766e09107c0340a0ddc0c5f",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/favicon-32.png",
+    "bytes": 1515,
+    "sha256": "893f8fa160c21191ec1e50fba7a70f9b34ee04b97e1656cebe94e03321ae9910",
+    "width": 32,
+    "height": 32,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/garage-96.png",
+    "bytes": 6056,
+    "sha256": "a4042fe36ccb778d988f34b54da76828fae7c8d66848376561abf906980b7153",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/garage-maskable-96.png",
+    "bytes": 3978,
+    "sha256": "2d4731975089eee00e9241172adf04045f6d8f336e4f33ce5bf770cd3311133e",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/nextgp-96.png",
+    "bytes": 3101,
+    "sha256": "712f53ae8f066f8bcb44b56891a246786bbe6c9d1f08080dcd256b098d65500f",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/nextgp-maskable-96.png",
+    "bytes": 1367,
+    "sha256": "82798492069a3f070cad29480d0cfe52d1e92e8c616e1230cd535988aa51f698",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/race-96.png",
+    "bytes": 3456,
+    "sha256": "e99e5056cb20126059dd30165ddf003bc3d4983ed4a27bde2e2eb72f7cb03459",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/C/race-maskable-96.png",
+    "bytes": 2016,
+    "sha256": "0d79ace56598aa2b3c407b4469719c81c0bad77edb93d7fc7b4298f02d7fcdda",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/apple-touch-180.png",
+    "bytes": 8563,
+    "sha256": "2047a2168325a84b03327bb6920a1416fce47c519f5cec304b4a3422d72a29fb",
+    "width": 180,
+    "height": 180,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/controller-96.png",
+    "bytes": 5417,
+    "sha256": "08084e283ca990112e6e4fdec231e8308d0a18d4d09fc7bdd22bdc30fd642570",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/controller-maskable-96.png",
+    "bytes": 3851,
+    "sha256": "7fce061b665c58d3b2ccc050de0bf10aef2633280941c142ae124334bfcc17e8",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/daily-96.png",
+    "bytes": 6458,
+    "sha256": "388522b20b561d9de5e1961926c82d9142d08be103ed40b801a808698024905b",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/daily-maskable-96.png",
+    "bytes": 4606,
+    "sha256": "a671cfc08eb3330755114239eb0fd5dba61f18b3f5854637ec21fa7a73cabcad",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/favicon-32.png",
+    "bytes": 1751,
+    "sha256": "07c7f92ce86247820964a468a0d21b07a362a0fb6766c53b03c7370cb896b8f9",
+    "width": 32,
+    "height": 32,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/garage-96.png",
+    "bytes": 7443,
+    "sha256": "4f3cb43d94ecfbc69dff6ca1cd8e04b9b72902c2a4af478db0cb2844e1e2df09",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/garage-maskable-96.png",
+    "bytes": 5263,
+    "sha256": "87368688b04b37004b8d28873c1c1c3ce5412f965f541e2ff9e27b7502c2ef42",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/nextgp-96.png",
+    "bytes": 4402,
+    "sha256": "27ac9c72d1aecc74a66744ff1acd7514b892fab56fc170c92198c6efe58fcb10",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/nextgp-maskable-96.png",
+    "bytes": 2813,
+    "sha256": "b00701b8b2a88e4e7f17cc95dd33d143cd572731ec86d3ad04c5d864e3c1e651",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/race-96.png",
+    "bytes": 4737,
+    "sha256": "ba4b838095cedf0b9db4166f62d38043e29c1369f7681b4038461b889f4e96d2",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/D/race-maskable-96.png",
+    "bytes": 3385,
+    "sha256": "fee07c19b7850d4ef14ecbcf179c1c7373249ea3ed5962ab352650f6aa24cc63",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/apple-touch-180.png",
+    "bytes": 4636,
+    "sha256": "d9c27f4d991365d69f638f493c5180b1c391de84d2510ddca991292e7cdb4190",
+    "width": 180,
+    "height": 180,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/controller-96.png",
+    "bytes": 3639,
+    "sha256": "ffc1c86063ed34fdad05d42e6aa7c2f52727f3b5e5b5150cc73c7696ce6beeda",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/controller-maskable-96.png",
+    "bytes": 2153,
+    "sha256": "2aaea3147d3546f63e566e162f4928951ba9a1ae91ee954f120b9bfa32d56ed5",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/daily-96.png",
+    "bytes": 4916,
+    "sha256": "19e5d72648fc3c5ab5b1bc7d2f330355eb8f732fad0d89ce4b44f9d45a8f504f",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/daily-maskable-96.png",
+    "bytes": 3222,
+    "sha256": "0c6fc66eaefd3f22b8a92321d944ce8b8d82416f8f51be6aa5b045eb9764c502",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/favicon-32.png",
+    "bytes": 1339,
+    "sha256": "dde67edfd39d8299aea22368edff722d17b469aec8cdea0599da76abd34d9706",
+    "width": 32,
+    "height": 32,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/garage-96.png",
+    "bytes": 5714,
+    "sha256": "32b92ee3317693254f2e07fa603f91726d11182e084df75d604d973cb24018a0",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/garage-maskable-96.png",
+    "bytes": 3755,
+    "sha256": "1981b5f975bcaafd628fe9390f4314b05dd3fac0397920745b60fb8e78442496",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/nextgp-96.png",
+    "bytes": 2822,
+    "sha256": "b3bcdea4c75a3742be00dd3f92a61a8f499c3f9a2eeada6a38487f1774fe87a5",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/nextgp-maskable-96.png",
+    "bytes": 1366,
+    "sha256": "3bfc7ea182feb58f35c302439f09478b7a15e0c1176e38a3c5f1557ab301ec32",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/race-96.png",
+    "bytes": 3218,
+    "sha256": "b30b84460385a57ba88f5c05f80981b71c8aa5cc9647a238c60b879b225996be",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/E/race-maskable-96.png",
+    "bytes": 1938,
+    "sha256": "2fcbc9334a213de898039e3db917962672c049ba9dacc77cfb64a76c56ad6057",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/apple-touch-180.png",
+    "bytes": 4535,
+    "sha256": "82e7afe79f6a2f70577d4802a44c77b0fcb1900a19ee218358a43f0808f8d138",
+    "width": 180,
+    "height": 180,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/controller-96.png",
+    "bytes": 3597,
+    "sha256": "511887abb425c393f01006b2cc2822c3e6a96c8c581cbf848b8d7a56956867b3",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/controller-maskable-96.png",
+    "bytes": 2162,
+    "sha256": "999871208538a64b56999af3536b6a12de8e59bd5781177bf0d628e839144630",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/daily-96.png",
+    "bytes": 4932,
+    "sha256": "d991279f7454884298c75f580fd7e4ab3145b127caae9ead71d91d0302250526",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/daily-maskable-96.png",
+    "bytes": 3104,
+    "sha256": "d4c90a56a0a262c1a4ceafa9d112d98ce71b8cd774d77312e021746d7afba40a",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/favicon-32.png",
+    "bytes": 1280,
+    "sha256": "0f157b0941d71f2897727ae40203807371a697c94ff88f2b377da7f70e8bc21e",
+    "width": 32,
+    "height": 32,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/garage-96.png",
+    "bytes": 5400,
+    "sha256": "a95d9f598c51afe8c50be245aaefd42a62d0ec78c46a65d7e0f3d53a840d19f7",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/garage-maskable-96.png",
+    "bytes": 3734,
+    "sha256": "15f446d8f2c0a87e39113a8dc8e11762a19853b02169519d0d135e06446afcf9",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/nextgp-96.png",
+    "bytes": 2713,
+    "sha256": "c3e343eb1a4a7e5ed36021a815b312c28a27c1265120cc2a0d1725d7e2f62a27",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/nextgp-maskable-96.png",
+    "bytes": 1270,
+    "sha256": "b24b1093102e5e97eb10529e9a96f131899bfad41eccc17202fa7e00d5c536ce",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/race-96.png",
+    "bytes": 3088,
+    "sha256": "4f0c0e6ccf4d8de0235ba229548d552a15dfe28a165c15e2938404a1afdf2865",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/F/race-maskable-96.png",
+    "bytes": 1789,
+    "sha256": "c6ca21634443cdce46a94b234d0841899be7d5f030a209c5f9591d3652939a00",
+    "width": 96,
+    "height": 96,
+    "bitdepth": 8,
+    "colorType": 6,
+    "crcValid": true,
+    "chunkTypes": [
+      "IHDR",
+      "IDAT",
+      "IEND"
+    ],
+    "allBytesAccounted": true
+  },
+  {
+    "path": "icons/shortcuts/README.md",
+    "bytes": 662,
+    "sha256": "8a46c19d4879188bf771471c45fd1f210f8ef91f701e2a72b9c52518a9ce1b50"
+  }
+]

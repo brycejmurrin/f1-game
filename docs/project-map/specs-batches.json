@@ -1,0 +1,1475 @@
+{
+  "goal": "Complete original tracked scope; every source/prose byte read, binary metadata inspected. Half-open byte ranges; source hashes bind to original files.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "tests/specs/abudhabi-foundation.spec.js",
+          "start": 0,
+          "end": 5684,
+          "kind": "text",
+          "sha256": "d8f63f4a255414c2b9e7f6c58cf6894c989e2cbfb26cc6dca7b28621141b1c3f"
+        },
+        {
+          "path": "tests/specs/active-aero.spec.js",
+          "start": 0,
+          "end": 12858,
+          "kind": "text",
+          "sha256": "2ade4f2925c8d9f075db80af4b2af28a226d2976643890c6cc673dd5c269c76e"
+        },
+        {
+          "path": "tests/specs/aero-zones.spec.js",
+          "start": 0,
+          "end": 20779,
+          "kind": "text",
+          "sha256": "58834d3c77bc26e7d38b14a716643c6472098c4bc5d9b9b5f288a12142dd1185"
+        },
+        {
+          "path": "tests/specs/agent-determinism-frame.spec.js",
+          "start": 0,
+          "end": 2787,
+          "kind": "text",
+          "sha256": "d9adc9233690ad7859be60567f75e9a293a829d9d9435a547f59762a08908914"
+        },
+        {
+          "path": "tests/specs/agent-determinism.spec.js",
+          "start": 0,
+          "end": 6172,
+          "kind": "text",
+          "sha256": "591677f02790deec9071807a52f71d71c92115deb9bd7b47405d10ae643a68ad"
+        },
+        {
+          "path": "tests/specs/agent-drive-bench.spec.js",
+          "start": 0,
+          "end": 9210,
+          "kind": "text",
+          "sha256": "8ca985153c34697f7537b30b976f4c1d271d2120f702c51849e12ba98369f03f"
+        },
+        {
+          "path": "tests/specs/agent-view.spec.js",
+          "start": 0,
+          "end": 93011,
+          "kind": "text",
+          "sha256": "01fc032cff30d3f542876b396809bc14456d12c0c357474514877df88029ea5a"
+        },
+        {
+          "path": "tests/specs/albert-park-foundation.spec.js",
+          "start": 0,
+          "end": 3792,
+          "kind": "text",
+          "sha256": "5ecb197fd2ae7687893b749ba9b79ef3a060c473315778c33939147e4bf5b51e"
+        },
+        {
+          "path": "tests/specs/assets-api.spec.js",
+          "start": 0,
+          "end": 5707,
+          "kind": "text",
+          "sha256": "a95f2ab115e17393f5ca847dbbd1dd4dec52d0d2f1990b870f981391cf444d7b"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "tests/specs/assets-api.spec.js",
+          "start": 5707,
+          "end": 11242,
+          "kind": "text",
+          "sha256": "a95f2ab115e17393f5ca847dbbd1dd4dec52d0d2f1990b870f981391cf444d7b"
+        },
+        {
+          "path": "tests/specs/audio-smoke.spec.js",
+          "start": 0,
+          "end": 13146,
+          "kind": "text",
+          "sha256": "6a689c29e429d55123d496a97227c2fe0e0fa048702e1a38147e871f6999725b"
+        },
+        {
+          "path": "tests/specs/audit.spec.js",
+          "start": 0,
+          "end": 13254,
+          "kind": "text",
+          "sha256": "d318f6378ea5c9c0adbc19f832a96d70390cba62f11fd37c63cc10f1e5688a72"
+        },
+        {
+          "path": "tests/specs/autopilot.spec.js",
+          "start": 0,
+          "end": 17028,
+          "kind": "text",
+          "sha256": "50de3e6ae3ce0ef8ac227430cc11ff40fcca06f04a15e898e03436ca0fafe901"
+        },
+        {
+          "path": "tests/specs/bahrain-foundation.spec.js",
+          "start": 0,
+          "end": 11803,
+          "kind": "text",
+          "sha256": "36bdcf1101fb1ed09a6bc59f0538a60ba3aeaa2a6b4b876b2bb30b89f547a965"
+        },
+        {
+          "path": "tests/specs/boot-guard.spec.js",
+          "start": 0,
+          "end": 6777,
+          "kind": "text",
+          "sha256": "40506baa33046396f40ece969a00edc427a033dbe15592c9c9cbf8d0172397cf"
+        },
+        {
+          "path": "tests/specs/browser-ui-hunt.spec.js",
+          "start": 0,
+          "end": 16212,
+          "kind": "text",
+          "sha256": "0477e4efc285044de06aebf329eb828eaad3733285ea9d449adbe4e76bcabd0d"
+        },
+        {
+          "path": "tests/specs/camera-driving-hooks.spec.js",
+          "start": 0,
+          "end": 15725,
+          "kind": "text",
+          "sha256": "1acf4c53215b04fdcc150fe40b2e4c79595536b7549937619fa6c8dd1e3ab237"
+        },
+        {
+          "path": "tests/specs/camera-hooks.spec.js",
+          "start": 0,
+          "end": 7177,
+          "kind": "text",
+          "sha256": "4e01b09f0e6835244688d86772957498e0d82282ee4dede7e595c13af1e95b73"
+        },
+        {
+          "path": "tests/specs/camera-tuner.spec.js",
+          "start": 0,
+          "end": 18459,
+          "kind": "text",
+          "sha256": "cbaad796547ad5c9f267553319e1d8864ecc6fbf97d3286309646b3458193469"
+        },
+        {
+          "path": "tests/specs/camera.spec.js",
+          "start": 0,
+          "end": 8886,
+          "kind": "text",
+          "sha256": "b255dd6c79cf9ca399cd7bcb5d4dced02392f02fe228fdd1bcc89bb56f57be26"
+        },
+        {
+          "path": "tests/specs/car-effects.spec.js",
+          "start": 0,
+          "end": 14444,
+          "kind": "text",
+          "sha256": "6df32f0a1f5657c1fde2f38cec9c070d9c48b24ac9cd5715b495c550f8f209b5"
+        },
+        {
+          "path": "tests/specs/career-hub.spec.js",
+          "start": 0,
+          "end": 11554,
+          "kind": "text",
+          "sha256": "716f18d58ace41e06ed1e8e135ad3460351f9ea5db8c818ab81e10038f03d6b7"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "tests/specs/career-hub.spec.js",
+          "start": 11554,
+          "end": 35271,
+          "kind": "text",
+          "sha256": "716f18d58ace41e06ed1e8e135ad3460351f9ea5db8c818ab81e10038f03d6b7"
+        },
+        {
+          "path": "tests/specs/career-season.spec.js",
+          "start": 0,
+          "end": 42754,
+          "kind": "text",
+          "sha256": "e45cb788a110901a74ea3f5f1ce9490c851efe7f6c74d6e3674b82ac9f64246a"
+        },
+        {
+          "path": "tests/specs/career.spec.js",
+          "start": 0,
+          "end": 39916,
+          "kind": "text",
+          "sha256": "7c8bddb9f5bc1d266e76bca8eef3e1f514ad8633436afa3da4bb6acb55bc1a9f"
+        },
+        {
+          "path": "tests/specs/carview-parts.spec.js",
+          "start": 0,
+          "end": 5901,
+          "kind": "text",
+          "sha256": "172843e687da876270d2ba0edfdacecdae33450d783d53ae89abb030bfbfecf1"
+        },
+        {
+          "path": "tests/specs/collision-ai-fixes.spec.js",
+          "start": 0,
+          "end": 18696,
+          "kind": "text",
+          "sha256": "9a721aeec8a57b57296f6555632e3dba617cd11aa0ded9821bb91fe52c11ab6b"
+        },
+        {
+          "path": "tests/specs/collisions-deep.spec.js",
+          "start": 0,
+          "end": 21063,
+          "kind": "text",
+          "sha256": "981e2d0f13d8fa661bd0787b4f1fded97fd55300577ad70ea3779166abc27c03"
+        },
+        {
+          "path": "tests/specs/collisions.spec.js",
+          "start": 0,
+          "end": 5456,
+          "kind": "text",
+          "sha256": "2f7a6bf77939964100b72a7179c0080b9e7c671fe666ce5b3c653f7754f0d4df"
+        },
+        {
+          "path": "tests/specs/cota-foundation.spec.js",
+          "start": 0,
+          "end": 2497,
+          "kind": "text",
+          "sha256": "1d1dda41554febde17bff9069a73e77692382516f78178ab5e1ea79048481ec1"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": "tests/specs/cota-foundation.spec.js",
+          "start": 2497,
+          "end": 7281,
+          "kind": "text",
+          "sha256": "1d1dda41554febde17bff9069a73e77692382516f78178ab5e1ea79048481ec1"
+        },
+        {
+          "path": "tests/specs/css-player-smoke.spec.js",
+          "start": 0,
+          "end": 3695,
+          "kind": "text",
+          "sha256": "c3f90c5498e2e40f39a9051d27734d4829fc748eeb669cef52f311514824cef6"
+        },
+        {
+          "path": "tests/specs/custom-team.spec.js",
+          "start": 0,
+          "end": 14182,
+          "kind": "text",
+          "sha256": "16afd5d89d2405840bf45dd1637e9210a00bc599fdac7e1649f0632b0560c3e4"
+        },
+        {
+          "path": "tests/specs/data-lifecycle.spec.js",
+          "start": 0,
+          "end": 22861,
+          "kind": "text",
+          "sha256": "533b54661d093708c31257fadb7b6e6d576d49a14d1f989214a5deeb79bbb720"
+        },
+        {
+          "path": "tests/specs/debris.spec.js",
+          "start": 0,
+          "end": 16113,
+          "kind": "text",
+          "sha256": "5089204ee35a4fde45fe46d0d32b9763ec7648c89ea4b05e7fad82a67b3352d7"
+        },
+        {
+          "path": "tests/specs/dev-tools-dom.spec.js",
+          "start": 0,
+          "end": 3463,
+          "kind": "text",
+          "sha256": "2595a9bbce22b825f0bf6e25413c8dc87a285f3680f899da5209b5a003a64ef0"
+        },
+        {
+          "path": "tests/specs/dev-tools.spec.js",
+          "start": 0,
+          "end": 24430,
+          "kind": "text",
+          "sha256": "30133d1ba91f73b7aa103e9d28207f10f86f0a6337fc9d95f9f9e5a5cb83157c"
+        },
+        {
+          "path": "tests/specs/drift.spec.js",
+          "start": 0,
+          "end": 7973,
+          "kind": "text",
+          "sha256": "7c48222e90bebd9d3a1cc80af4cae609e6a3350e23f2cd90196907befdba6f0c"
+        },
+        {
+          "path": "tests/specs/elevation-tracks.spec.js",
+          "start": 0,
+          "end": 24191,
+          "kind": "text",
+          "sha256": "7cb170045ad6dc048fd05196fc7b21d5a7dd4d334e4a46eefe39526d26d54ec7"
+        },
+        {
+          "path": "tests/specs/engine-audio-offline.spec.js",
+          "start": 0,
+          "end": 7873,
+          "kind": "text",
+          "sha256": "7cfa414b2dfb40b40b44e4d02b00ab137de04ad7f382f51b061841fb0906252a"
+        },
+        {
+          "path": "tests/specs/f1-track-accuracy.spec.js",
+          "start": 0,
+          "end": 8634,
+          "kind": "text",
+          "sha256": "a5d5c09fc949a7a816b4dcba1f308e27962576fca68f053f62de722010655fa1"
+        },
+        {
+          "path": "tests/specs/gamepad.spec.js",
+          "start": 0,
+          "end": 21801,
+          "kind": "text",
+          "sha256": "82c9a8868c880ab38b92a9c5ab3e29b80dff4d1582fc923646d322ce2accd528"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "05",
+      "parts": [
+        {
+          "path": "tests/specs/gamepad.spec.js",
+          "start": 21801,
+          "end": 31093,
+          "kind": "text",
+          "sha256": "82c9a8868c880ab38b92a9c5ab3e29b80dff4d1582fc923646d322ce2accd528"
+        },
+        {
+          "path": "tests/specs/garage-aero.spec.js",
+          "start": 0,
+          "end": 15227,
+          "kind": "text",
+          "sha256": "dfe73e2f8e7fbf8a67ee534e9178370490e3e0896f469ef7727667234ea608b2"
+        },
+        {
+          "path": "tests/specs/garage-close-one-click.spec.js",
+          "start": 0,
+          "end": 2113,
+          "kind": "text",
+          "sha256": "f240c897351aeab65448c8c4d3eaf617c088eec1fe190825b232d8d5e05f051a"
+        },
+        {
+          "path": "tests/specs/garage-first-frame.spec.js",
+          "start": 0,
+          "end": 13165,
+          "kind": "text",
+          "sha256": "8ad513d497d8a35d0fc8398133421bbe30cc0ab418982ef349d86e6fb72f772a"
+        },
+        {
+          "path": "tests/specs/garage-livery-churn.spec.js",
+          "start": 0,
+          "end": 12110,
+          "kind": "text",
+          "sha256": "309c9669abfdef40b66ce64683d9f4a5205eaf79bde9148280913b06660628c6"
+        },
+        {
+          "path": "tests/specs/garage-livery-fit.spec.js",
+          "start": 0,
+          "end": 7381,
+          "kind": "text",
+          "sha256": "6e0118e0911fca081fb43a8c2b0c9f13f741b414c57c33529f5ebfaeba3d0112"
+        },
+        {
+          "path": "tests/specs/garage-out-before-card.spec.js",
+          "start": 0,
+          "end": 24282,
+          "kind": "text",
+          "sha256": "8879e053ad9bcfabfb366037dd0507485a195083d22051c1f1a41c4a89e35489"
+        },
+        {
+          "path": "tests/specs/garage-pick-cost.spec.js",
+          "start": 0,
+          "end": 8261,
+          "kind": "text",
+          "sha256": "396389545517b08b40168fe1588aa125b5c72b551b4ecf29484381162846055c"
+        },
+        {
+          "path": "tests/specs/garage-prebuild.spec.js",
+          "start": 0,
+          "end": 2927,
+          "kind": "text",
+          "sha256": "01121677979f4fbcd7546cb6962e14d0e7249f45a74d1c15ad860959d7509f7b"
+        },
+        {
+          "path": "tests/specs/gpu-capture.spec.js",
+          "start": 0,
+          "end": 3627,
+          "kind": "text",
+          "sha256": "f6ab8d1fec75501a7fb15e06f5d13fc4dec9098c84ec122826dda83681f8c8fc"
+        },
+        {
+          "path": "tests/specs/headless-api.spec.js",
+          "start": 0,
+          "end": 12574,
+          "kind": "text",
+          "sha256": "25388df8528ac19328cfa0fa68affd027dc193d8d42dc197676b5843b875c719"
+        },
+        {
+          "path": "tests/specs/hud-audit.spec.js",
+          "start": 0,
+          "end": 4120,
+          "kind": "text",
+          "sha256": "c7509717b7d55ecbfa2e1908b4d43686644589282ef3836252e96dedfe1f226f"
+        },
+        {
+          "path": "tests/specs/hud-layout.spec.js",
+          "start": 0,
+          "end": 44921,
+          "kind": "text",
+          "sha256": "164340a787ddb27d75ea0224f9a493c3deb80a2b1bb81d4ae74d3a3609ab7975"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "06",
+      "parts": [
+        {
+          "path": "tests/specs/hud-layout.spec.js",
+          "start": 44921,
+          "end": 106339,
+          "kind": "text",
+          "sha256": "164340a787ddb27d75ea0224f9a493c3deb80a2b1bb81d4ae74d3a3609ab7975"
+        },
+        {
+          "path": "tests/specs/hud-mirror.spec.js",
+          "start": 0,
+          "end": 24572,
+          "kind": "text",
+          "sha256": "f18db29dc92d79c827822fb45bd15556bc341765bb02f38355f5e82e2404f6b0"
+        },
+        {
+          "path": "tests/specs/hungaroring-foundation.spec.js",
+          "start": 0,
+          "end": 3951,
+          "kind": "text",
+          "sha256": "0f3199d4718068d27a96ce137d8402d91a31fabf63d4b83c3fa70fb9a72c6a12"
+        },
+        {
+          "path": "tests/specs/image-grade-visual.spec.js",
+          "start": 0,
+          "end": 26263,
+          "kind": "text",
+          "sha256": "bd214017eb0c7fbd08a150c425b029812f5531349e31a3c06ed05e28756eb30c"
+        },
+        {
+          "path": "tests/specs/imola-foundation.spec.js",
+          "start": 0,
+          "end": 5378,
+          "kind": "text",
+          "sha256": "639e98358da0148739581c6f5954c86c149c3003f0c72d2d0beda873f19a4515"
+        },
+        {
+          "path": "tests/specs/instanced-draw.spec.js",
+          "start": 0,
+          "end": 6921,
+          "kind": "text",
+          "sha256": "2929b4a346e675c636e6f013095d8f1ee7e9348a74e2c67fbfef04eaee7e0a1e"
+        },
+        {
+          "path": "tests/specs/interlagos-foundation.spec.js",
+          "start": 0,
+          "end": 5177,
+          "kind": "text",
+          "sha256": "b04106b5ae9bdc74d1618ce5cf5741ccff21a9454b6924ce1399b084117613a9"
+        },
+        {
+          "path": "tests/specs/jump-start.spec.js",
+          "start": 0,
+          "end": 7915,
+          "kind": "text",
+          "sha256": "14ec96fa502168a1c473b4df71aae272239db1c6792fa29f2516ec181a4e93e7"
+        },
+        {
+          "path": "tests/specs/lighting-ab.spec.js",
+          "start": 0,
+          "end": 14626,
+          "kind": "text",
+          "sha256": "3b2a5ab2a42802f5055b95dd3cc032792bb6348d9ae9766459ddbae52aa2fdc1"
+        },
+        {
+          "path": "tests/specs/lighting-tuner-grade.spec.js",
+          "start": 0,
+          "end": 3779,
+          "kind": "text",
+          "sha256": "96be2816d96a9448c035b673f9ed4f284198518edb9c615bf6914e29ffc9d72c"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "07",
+      "parts": [
+        {
+          "path": "tests/specs/lighting-tuner-grade.spec.js",
+          "start": 3779,
+          "end": 20046,
+          "kind": "text",
+          "sha256": "96be2816d96a9448c035b673f9ed4f284198518edb9c615bf6914e29ffc9d72c"
+        },
+        {
+          "path": "tests/specs/livery-sidewall.spec.js",
+          "start": 0,
+          "end": 2409,
+          "kind": "text",
+          "sha256": "da083244b34a9ab09052e47c837e1afe8752afbd8b716d2ee29a0315a9d9207e"
+        },
+        {
+          "path": "tests/specs/livery-wheels.spec.js",
+          "start": 0,
+          "end": 2353,
+          "kind": "text",
+          "sha256": "11707b16413ba418df4647fd14d9f2c12e5fb517ff33c5df56c47b6adab1cfe9"
+        },
+        {
+          "path": "tests/specs/logging.spec.js",
+          "start": 0,
+          "end": 5489,
+          "kind": "text",
+          "sha256": "e192f0d35dcbab4493644c3a4b42ae2221e88517ca7039a9d6ca108ee27d8adf"
+        },
+        {
+          "path": "tests/specs/longitudinal.spec.js",
+          "start": 0,
+          "end": 12655,
+          "kind": "text",
+          "sha256": "41ed8febc5819be097071d676ae97d1221315ae7e907423b1c8f04c4a716aec0"
+        },
+        {
+          "path": "tests/specs/map-hooks.spec.js",
+          "start": 0,
+          "end": 3295,
+          "kind": "text",
+          "sha256": "622d2f6c0f9028e6e5b06adc31e134d3e5506224d81c953592574e55d714db0d"
+        },
+        {
+          "path": "tests/specs/material-shimmer.spec.js",
+          "start": 0,
+          "end": 8935,
+          "kind": "text",
+          "sha256": "dbe6ff2f5a825efeea68c6d111674b0b861e3b8f06592a838c33671746e36359"
+        },
+        {
+          "path": "tests/specs/menu-baseline.spec.js",
+          "start": 0,
+          "end": 12444,
+          "kind": "text",
+          "sha256": "e1dc7ae44a5a8f79008d4381dc87984566053c7b992fe68fbae56bfbcdb08f54"
+        },
+        {
+          "path": "tests/specs/menu-baseline.spec.js-snapshots/garage-desktop-render-linux.png",
+          "start": 0,
+          "end": 134429,
+          "kind": "binary",
+          "sha256": "4d42d6596ad503f3020dc7014e6e71a3e21b310b3718f25530909b716fdce0e1"
+        },
+        {
+          "path": "tests/specs/menu-baseline.spec.js-snapshots/garage-phone-landscape-render-linux.png",
+          "start": 0,
+          "end": 54950,
+          "kind": "binary",
+          "sha256": "47d306694a81b51cbd71b232018df7476a1e22bdd57d504a6873cf6cad17ce75"
+        },
+        {
+          "path": "tests/specs/menu-baseline.spec.js-snapshots/select-desktop-render-linux.png",
+          "start": 0,
+          "end": 398797,
+          "kind": "binary",
+          "sha256": "8b7baa6e90ca8b2b446ca598c2f8e58dd8475eb15f01695fb10a057b58be2182"
+        },
+        {
+          "path": "tests/specs/menu-baseline.spec.js-snapshots/select-phone-landscape-render-linux.png",
+          "start": 0,
+          "end": 148101,
+          "kind": "binary",
+          "sha256": "03b381289ae3a3b3284d9f94d7ca6c136e20ca47d80048e6e6926436a85d1ac5"
+        },
+        {
+          "path": "tests/specs/menu-baseline.spec.js-snapshots/title-desktop-render-linux.png",
+          "start": 0,
+          "end": 947406,
+          "kind": "binary",
+          "sha256": "8da4f373792b151112435b2be44aee6b6aff676a52f79587dba3293038e70036"
+        },
+        {
+          "path": "tests/specs/menu-baseline.spec.js-snapshots/title-phone-landscape-render-linux.png",
+          "start": 0,
+          "end": 206874,
+          "kind": "binary",
+          "sha256": "f1ca2451026478d23a26c1051953fce86371d4531e4c31d3209d3b630ae9dc59"
+        },
+        {
+          "path": "tests/specs/menu-keyboard.spec.js",
+          "start": 0,
+          "end": 46293,
+          "kind": "text",
+          "sha256": "cb4b2f543ffb2358006e919c1035afccdd66d23986faddc41ff7b2501737e660"
+        },
+        {
+          "path": "tests/specs/menu-survey.spec.js",
+          "start": 0,
+          "end": 13207,
+          "kind": "text",
+          "sha256": "8fd133dab33049601740d2bb832b92a23bcdf433f7316622ad8d1fdeb28c4ede"
+        },
+        {
+          "path": "tests/specs/menu-traversal.spec.js",
+          "start": 0,
+          "end": 21932,
+          "kind": "text",
+          "sha256": "d00cd9302e635a88946061d2d00362832cde71b71d49d15718f92c73a7b56078"
+        },
+        {
+          "path": "tests/specs/monaco-foundation.spec.js",
+          "start": 0,
+          "end": 9796,
+          "kind": "text",
+          "sha256": "4101b12fa4555ed98d8d4ef6e27a4e3badbbe032854403a3ff1196d050cc82ec"
+        },
+        {
+          "path": "tests/specs/montreal-foundation.spec.js",
+          "start": 0,
+          "end": 4925,
+          "kind": "text",
+          "sha256": "13eff4d878e17f814bfdab413987e62f065282fdfcd64a8cfff7678415cc751a"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "08",
+      "parts": [
+        {
+          "path": "tests/specs/montreal-foundation.spec.js",
+          "start": 4925,
+          "end": 11387,
+          "kind": "text",
+          "sha256": "13eff4d878e17f814bfdab413987e62f065282fdfcd64a8cfff7678415cc751a"
+        },
+        {
+          "path": "tests/specs/monza-foundation.spec.js",
+          "start": 0,
+          "end": 6474,
+          "kind": "text",
+          "sha256": "83f7e0f1e7a3e40c95b8ad494cf2a368460358e24920a900ed1216b8252e5cb9"
+        },
+        {
+          "path": "tests/specs/multiplayer-lobby.spec.js",
+          "start": 0,
+          "end": 16748,
+          "kind": "text",
+          "sha256": "2bfe698bcb49bfb16c7775423443d1e3ca110512f70c0c3694b559a36226cc74"
+        },
+        {
+          "path": "tests/specs/multiplayer-npeer.spec.js",
+          "start": 0,
+          "end": 6170,
+          "kind": "text",
+          "sha256": "6795edc84440b0d0815809d4dc50520f00d72cad3a2b908ad0c720ca94bf0245"
+        },
+        {
+          "path": "tests/specs/multiplayer-roles.spec.js",
+          "start": 0,
+          "end": 8268,
+          "kind": "text",
+          "sha256": "5de094cac872fcec8f89bbb4f1634bf4cd7c060a6cf31b170e7521d7aa094725"
+        },
+        {
+          "path": "tests/specs/multiplayer-room.spec.js",
+          "start": 0,
+          "end": 18493,
+          "kind": "text",
+          "sha256": "25adbf04d60d8b0b5e7fbd8d60f3683ff182df9c1a880978482ff244a3fdddbd"
+        },
+        {
+          "path": "tests/specs/multiplayer-scan-cancel.spec.js",
+          "start": 0,
+          "end": 5260,
+          "kind": "text",
+          "sha256": "1a175a72591c9268965271b69f54b6ff33a70161b7112dde809cf1f4b7688ade"
+        },
+        {
+          "path": "tests/specs/multiplayer-scan.spec.js",
+          "start": 0,
+          "end": 5996,
+          "kind": "text",
+          "sha256": "e78b321e5e435b338767412a9b711c98407fbb623aef91b82318f03e807cb15e"
+        },
+        {
+          "path": "tests/specs/multiplayer-seats.spec.js",
+          "start": 0,
+          "end": 11799,
+          "kind": "text",
+          "sha256": "a597e97ca4328046daad44c0d66253016bb06da8459803626eefd8b733a1b9c6"
+        },
+        {
+          "path": "tests/specs/multiplayer-session.spec.js",
+          "start": 0,
+          "end": 30462,
+          "kind": "text",
+          "sha256": "f3eed8ebcd87d282279690e93452cf56321fd0b4c811c6b469fa582318bf7cd8"
+        },
+        {
+          "path": "tests/specs/music-library.spec.js",
+          "start": 0,
+          "end": 24403,
+          "kind": "text",
+          "sha256": "1b3e255cf2446200f22d239dae7677b769ee951db8f212ec4c84cbb5f06be2ab"
+        },
+        {
+          "path": "tests/specs/new-hooks.spec.js",
+          "start": 0,
+          "end": 19465,
+          "kind": "text",
+          "sha256": "c021948b6e561c85ade13ea31b10a7193af613fe5ca53f2a0193994f6aac244b"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "09",
+      "parts": [
+        {
+          "path": "tests/specs/new-hooks.spec.js",
+          "start": 19465,
+          "end": 43850,
+          "kind": "text",
+          "sha256": "c021948b6e561c85ade13ea31b10a7193af613fe5ca53f2a0193994f6aac244b"
+        },
+        {
+          "path": "tests/specs/obs-act-edge.spec.js",
+          "start": 0,
+          "end": 11678,
+          "kind": "text",
+          "sha256": "8bf011a81e0117fe7a3697e07077ed001af968982eb2b8cdcfdb5c5885871bb9"
+        },
+        {
+          "path": "tests/specs/offtrack.spec.js",
+          "start": 0,
+          "end": 10333,
+          "kind": "text",
+          "sha256": "babc5f4af283ac81ebd7e49020a2736761941af1cc6efb77c5ccab3eef2a7e33"
+        },
+        {
+          "path": "tests/specs/output-paths.spec.js",
+          "start": 0,
+          "end": 2956,
+          "kind": "text",
+          "sha256": "73c700d84d2affa16a07df37b18b9cce6203c53d55978d7365f5801455487699"
+        },
+        {
+          "path": "tests/specs/parts-budget.spec.js",
+          "start": 0,
+          "end": 13791,
+          "kind": "text",
+          "sha256": "347b5a0c68cbd835c24c23a3455c352405c4e77e05d6d84918edbc5cb43d0e0d"
+        },
+        {
+          "path": "tests/specs/parts-catalog.spec.js",
+          "start": 0,
+          "end": 14028,
+          "kind": "text",
+          "sha256": "07d16926b1f5d764bb4f5944bfd6aab0451a577c401a95f7b2e00c227de0777f"
+        },
+        {
+          "path": "tests/specs/parts-ers.spec.js",
+          "start": 0,
+          "end": 6821,
+          "kind": "text",
+          "sha256": "b492ac42748863d4257a8ee4ab524f4ed9ac413d45af4305d0ad81bebb39decb"
+        },
+        {
+          "path": "tests/specs/parts-factory-presets.spec.js",
+          "start": 0,
+          "end": 6184,
+          "kind": "text",
+          "sha256": "e8b34412aef2849c34d5b40e684018970493c1d7bc69530aefd165b9318f5cb2"
+        },
+        {
+          "path": "tests/specs/parts-liveries.spec.js",
+          "start": 0,
+          "end": 25601,
+          "kind": "text",
+          "sha256": "9d3a89c4b21489eccb7bee8e82da7c4999c21e0c0acb6433c31ec81c1ec26b9b"
+        },
+        {
+          "path": "tests/specs/parts-livery-contrast.spec.js",
+          "start": 0,
+          "end": 26804,
+          "kind": "text",
+          "sha256": "c6117eeb345f1aa514fae8a48a660cdda4648febead50e5f6c94be922d72a8e9"
+        },
+        {
+          "path": "tests/specs/parts-livery-crest.spec.js",
+          "start": 0,
+          "end": 4096,
+          "kind": "text",
+          "sha256": "580e6b79e4a7e07d2a6beeab5ea8ffce02de95d5b4e41c33eec64ad3021f0391"
+        },
+        {
+          "path": "tests/specs/parts-livery-designs.spec.js",
+          "start": 0,
+          "end": 11226,
+          "kind": "text",
+          "sha256": "48b9f490dfe1cd43ec0a8753d784f05a72bc37d0a4582e5d320faa17c005d056"
+        },
+        {
+          "path": "tests/specs/parts-livery-zones.spec.js",
+          "start": 0,
+          "end": 2097,
+          "kind": "text",
+          "sha256": "29823a22703b79fbe669a2e9cc4fc2551b32ddd8944cc3a111b6e22172b913dd"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "10",
+      "parts": [
+        {
+          "path": "tests/specs/parts-livery-zones.spec.js",
+          "start": 2097,
+          "end": 10975,
+          "kind": "text",
+          "sha256": "29823a22703b79fbe669a2e9cc4fc2551b32ddd8944cc3a111b6e22172b913dd"
+        },
+        {
+          "path": "tests/specs/parts-mesh-cache.spec.js",
+          "start": 0,
+          "end": 30896,
+          "kind": "text",
+          "sha256": "3d5e1926c43e5768271084ace3e5934a5be53f154ea05e1f6598f66f3f641860"
+        },
+        {
+          "path": "tests/specs/parts-persistence.spec.js",
+          "start": 0,
+          "end": 10463,
+          "kind": "text",
+          "sha256": "4570b59fbdfbc7dec43845cee4fd24e18ecb39e4464a4804a8abae74df8c3ca6"
+        },
+        {
+          "path": "tests/specs/parts-physics.spec.js",
+          "start": 0,
+          "end": 90322,
+          "kind": "text",
+          "sha256": "226bb997139abb56e3ffa83c51a9d6f1ecf75ca5db373a2c7a6e4d41e7a52cc1"
+        },
+        {
+          "path": "tests/specs/parts-setup-ids.spec.js",
+          "start": 0,
+          "end": 19441,
+          "kind": "text",
+          "sha256": "d944d0a675a44f26f847915534c7ca268e74654e5ffab2a90117db3c59c10ff3"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "11",
+      "parts": [
+        {
+          "path": "tests/specs/parts-setup-ids.spec.js",
+          "start": 19441,
+          "end": 20559,
+          "kind": "text",
+          "sha256": "d944d0a675a44f26f847915534c7ca268e74654e5ffab2a90117db3c59c10ff3"
+        },
+        {
+          "path": "tests/specs/perf-boost-press-pipelines-gl.spec.js",
+          "start": 0,
+          "end": 3150,
+          "kind": "text",
+          "sha256": "3a8dea6371a1129a2464bea22594042a2d67f0c35d73a7b2f5b6844ea0ad0617"
+        },
+        {
+          "path": "tests/specs/perf-boost-press-pipelines.spec.js",
+          "start": 0,
+          "end": 3579,
+          "kind": "text",
+          "sha256": "0640b94a6211338656dc0159896f5888136f2f6e6b2592458ea77730903b1983"
+        },
+        {
+          "path": "tests/specs/perf-frametime.spec.js",
+          "start": 0,
+          "end": 7605,
+          "kind": "text",
+          "sha256": "c0cd85ea4c40a54acd18566fa4d40d1d00210ce5f90bdfd5f87fc7aed71dfece"
+        },
+        {
+          "path": "tests/specs/perf-idle-pipeline-churn.spec.js",
+          "start": 0,
+          "end": 2347,
+          "kind": "text",
+          "sha256": "353768974b31ccf8b65f112747d11443cca86ba4b477c3d0e1ec4b8afe6882bc"
+        },
+        {
+          "path": "tests/specs/perf-race-entry.spec.js",
+          "start": 0,
+          "end": 5302,
+          "kind": "text",
+          "sha256": "67c0e4ae302bea504d6ac0a420c7c54b70826aaaf47bb7aae38799c294d575c9"
+        },
+        {
+          "path": "tests/specs/perf-sw-cache-hit.spec.js",
+          "start": 0,
+          "end": 4875,
+          "kind": "text",
+          "sha256": "09cbd71df61f505ed250c2ad72ef4e6b6d4c6747cb371bcdb29f56979d710eb4"
+        },
+        {
+          "path": "tests/specs/persistence-dom.spec.js",
+          "start": 0,
+          "end": 3187,
+          "kind": "text",
+          "sha256": "fd4609ea1641e4c25d90fbf97e56be037f9acafbc6ecb8d6bd9dea4d07d65a16"
+        },
+        {
+          "path": "tests/specs/persistence.spec.js",
+          "start": 0,
+          "end": 5289,
+          "kind": "text",
+          "sha256": "010926e62697d8079ebb93d29e8e9fd70ac272d77f717204638bf314d9462924"
+        },
+        {
+          "path": "tests/specs/phone-recorder.spec.js",
+          "start": 0,
+          "end": 2745,
+          "kind": "text",
+          "sha256": "19d9c47f4eb3c4f3aa3edb0c62aa68e91397defe2e2b1636d4bd295c28f8f29e"
+        },
+        {
+          "path": "tests/specs/photo-studio-conditions.spec.js",
+          "start": 0,
+          "end": 8668,
+          "kind": "text",
+          "sha256": "4a93906979182421fcdd34189ab3b6bf42c4afbd9573c61fd7f6f90c6b029cdd"
+        },
+        {
+          "path": "tests/specs/photo-studio.spec.js",
+          "start": 0,
+          "end": 19281,
+          "kind": "text",
+          "sha256": "f1b4a68ea1ba5cebf418e4f3bce7d0ad4bee4df935feaf7d3b4261fb55883457"
+        },
+        {
+          "path": "tests/specs/physics-boot.spec.js",
+          "start": 0,
+          "end": 4018,
+          "kind": "text",
+          "sha256": "4fe82db32fa49ed5d32b6f382d24826555808a95fd663d8fa50bf3c8d646028e"
+        },
+        {
+          "path": "tests/specs/physics-characterization.spec.js",
+          "start": 0,
+          "end": 10211,
+          "kind": "text",
+          "sha256": "dc94edab511dc752a94aa90d585e3e603d4dfb2bb5b9b800014034ef7b3cb5ca"
+        },
+        {
+          "path": "tests/specs/physics-fixes.spec.js",
+          "start": 0,
+          "end": 6426,
+          "kind": "text",
+          "sha256": "dfe2a932767a6e9c7440042ae0da5d15c2d9e3ab8debe2d71507223618d9ccad"
+        },
+        {
+          "path": "tests/specs/physics-hotpath.spec.js",
+          "start": 0,
+          "end": 11692,
+          "kind": "text",
+          "sha256": "b52f71a9a8e5d08f5ef16eb4b5a515e1dbb0d1d4427de229e9a5daef81d7e4f0"
+        },
+        {
+          "path": "tests/specs/picker-edit-button.spec.js",
+          "start": 0,
+          "end": 4119,
+          "kind": "text",
+          "sha256": "29c178480c99790376633f70a008aa485ffef0653ff53527a951d52f0c416df5"
+        },
+        {
+          "path": "tests/specs/picker-tab-inplace.spec.js",
+          "start": 0,
+          "end": 3684,
+          "kind": "text",
+          "sha256": "cd7c577c8ce7ddbf14bc83fded7d49edcaa8a27eb448fe4835aff78f18c9a8ca"
+        },
+        {
+          "path": "tests/specs/pit-lane.spec.js",
+          "start": 0,
+          "end": 25752,
+          "kind": "text",
+          "sha256": "e40f25aed431a8690da3e6e667d6afa17de30fc6286a3abbe423cd96a39f39d8"
+        },
+        {
+          "path": "tests/specs/pit-signs.spec.js",
+          "start": 0,
+          "end": 2567,
+          "kind": "text",
+          "sha256": "b64c64cd7c96b7bcff6a0953c47c7e56ece2da143da69f0fee6662c2cdd139e9"
+        },
+        {
+          "path": "tests/specs/presets.spec.js",
+          "start": 0,
+          "end": 6040,
+          "kind": "text",
+          "sha256": "f23afa02ab1d45b30fec41944aa2ea3d67ec9f5660a5b0e15f2ef0e3e2197601"
+        },
+        {
+          "path": "tests/specs/props-over-road.spec.js",
+          "start": 0,
+          "end": 12167,
+          "kind": "text",
+          "sha256": "a99fc39acedbd2e1f906b706b0a3f54e424bd076942282fc111ae8eb19f94333"
+        },
+        {
+          "path": "tests/specs/qatar-foundation.spec.js",
+          "start": 0,
+          "end": 6178,
+          "kind": "text",
+          "sha256": "bc380f10a36f91b8c4d81f2f1c6182dff78ec80bf15de3f8382963465f41bf02"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "12",
+      "parts": [
+        {
+          "path": "tests/specs/qatar-foundation.spec.js",
+          "start": 6178,
+          "end": 8828,
+          "kind": "text",
+          "sha256": "bc380f10a36f91b8c4d81f2f1c6182dff78ec80bf15de3f8382963465f41bf02"
+        },
+        {
+          "path": "tests/specs/quali.spec.js",
+          "start": 0,
+          "end": 22975,
+          "kind": "text",
+          "sha256": "85efcf41c1054fb04646bd7d5a8633329fd5f8daeda2ee2cd5ad23386908eda8"
+        },
+        {
+          "path": "tests/specs/race-control.spec.js",
+          "start": 0,
+          "end": 5686,
+          "kind": "text",
+          "sha256": "fe00453173f28d25a8a810bbd71eb876ebe1ccb81fe13ecedc14a63d5acde744"
+        },
+        {
+          "path": "tests/specs/race-cycle-memory.spec.js",
+          "start": 0,
+          "end": 10697,
+          "kind": "text",
+          "sha256": "db95afa83a4971c599c9932a6210f1ad6dab924c249f4a02eec2299962a5235d"
+        },
+        {
+          "path": "tests/specs/real-race.spec.js",
+          "start": 0,
+          "end": 17906,
+          "kind": "text",
+          "sha256": "4234b351dec8d4fb3ec55b0b35ea26e2e12961fbd3efc33f95e3926323dc0572"
+        },
+        {
+          "path": "tests/specs/redbull-foundation.spec.js",
+          "start": 0,
+          "end": 4219,
+          "kind": "text",
+          "sha256": "9c69e56a40a4c44d55418fa82efce6645144739d520be7d16876611547030a73"
+        },
+        {
+          "path": "tests/specs/render-boot.spec.js",
+          "start": 0,
+          "end": 8037,
+          "kind": "text",
+          "sha256": "82dcab00215bcf08fd7fccf785e1bb54dfe9cc0b70162af8d09d28050b45df09"
+        },
+        {
+          "path": "tests/specs/render-lifecycle.spec.js",
+          "start": 0,
+          "end": 3831,
+          "kind": "text",
+          "sha256": "3063f8fb1c91429e8bea1060b95b0d39e84efb77d9c3426307bd9950bc2e903c"
+        },
+        {
+          "path": "tests/specs/rotation-recovery.spec.js",
+          "start": 0,
+          "end": 5920,
+          "kind": "text",
+          "sha256": "8dec811dcea8bcc7b676da8a420e927f10f4ba80d3f65d32c30303690eeea9e2"
+        },
+        {
+          "path": "tests/specs/scenery-kits.spec.js",
+          "start": 0,
+          "end": 7603,
+          "kind": "text",
+          "sha256": "909b953399622250bba7637fec7d784f423daad7aebdd898863323608bbfa5f4"
+        },
+        {
+          "path": "tests/specs/season-format.spec.js",
+          "start": 0,
+          "end": 13716,
+          "kind": "text",
+          "sha256": "6dbda1c1872de628fb68f1a7e754574c6f353616ba1329652e9a6825f2cb4f88"
+        },
+        {
+          "path": "tests/specs/season.spec.js",
+          "start": 0,
+          "end": 8758,
+          "kind": "text",
+          "sha256": "c1af49e840650c7fb1a780ac6455e832d3e26c9c88f6de0caf35b1a46e648e0a"
+        },
+        {
+          "path": "tests/specs/settings-reload.spec.js",
+          "start": 0,
+          "end": 3744,
+          "kind": "text",
+          "sha256": "62738497d6b75dcf78a4d24963afa14362f0d5309575b7815fc194a12726863b"
+        },
+        {
+          "path": "tests/specs/sliders.spec.js",
+          "start": 0,
+          "end": 25900,
+          "kind": "text",
+          "sha256": "87ae47d691e500ee6345fd99c45e44524f252e12a1824309134d242d2aedc12f"
+        },
+        {
+          "path": "tests/specs/smoke.spec.js",
+          "start": 0,
+          "end": 18358,
+          "kind": "text",
+          "sha256": "a236a39785cd4ac09c44b0db9e442f7b9380321782a1794e111eae9ec802b982"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "13",
+      "parts": [
+        {
+          "path": "tests/specs/smoke.spec.js",
+          "start": 18358,
+          "end": 25715,
+          "kind": "text",
+          "sha256": "a236a39785cd4ac09c44b0db9e442f7b9380321782a1794e111eae9ec802b982"
+        },
+        {
+          "path": "tests/specs/soak-run.spec.js",
+          "start": 0,
+          "end": 2728,
+          "kind": "text",
+          "sha256": "e00e25bf38eea7625f58f130a0b97d7996fd7c8aa304229e31279797aa6b6ad1"
+        },
+        {
+          "path": "tests/specs/spa-foundation.spec.js",
+          "start": 0,
+          "end": 10672,
+          "kind": "text",
+          "sha256": "6e0d99d91f2dec2dd8779273f3c3af635a7b17d9e36990ae6ce22c9f46d85bbb"
+        },
+        {
+          "path": "tests/specs/steer-migration.spec.js",
+          "start": 0,
+          "end": 13980,
+          "kind": "text",
+          "sha256": "e1b7a959d73e5c1ef849910568d16a6a3909c9200cc017608f4f68d883a5e98b"
+        },
+        {
+          "path": "tests/specs/steering.spec.js",
+          "start": 0,
+          "end": 36937,
+          "kind": "text",
+          "sha256": "4e3386ab29785bd2a0f0733bcfa88a321a86e28f2406aad63b1bd7f212fac3d8"
+        },
+        {
+          "path": "tests/specs/suzuka-foundation.spec.js",
+          "start": 0,
+          "end": 4214,
+          "kind": "text",
+          "sha256": "0ce48dd743a3578e0861eab3dc5373fb096280e96a14e3708e332b35e22c2972"
+        },
+        {
+          "path": "tests/specs/telemetry-compare.spec.js",
+          "start": 0,
+          "end": 9013,
+          "kind": "text",
+          "sha256": "1de9e8ca2a87d811f8509dfe147f8862e9a7e73d502adf75ebbd837eb370389f"
+        },
+        {
+          "path": "tests/specs/telemetry-fit.spec.js",
+          "start": 0,
+          "end": 7605,
+          "kind": "text",
+          "sha256": "182f2af5179e5b5fc2351710299238facde1464d86cbb3efeee2f81284530d86"
+        },
+        {
+          "path": "tests/specs/terrain-over-road.spec.js",
+          "start": 0,
+          "end": 15306,
+          "kind": "text",
+          "sha256": "fe9641792fb7e0509902552f04a37d76f38d39b8f1cdbf3174b95095c43e47d9"
+        },
+        {
+          "path": "tests/specs/tilt-pipeline.spec.js",
+          "start": 0,
+          "end": 23799,
+          "kind": "text",
+          "sha256": "daf6cd016b3ef65bcbffb6946d88d0917cf5796520e0fb8136c642be52cf932c"
+        },
+        {
+          "path": "tests/specs/time-trial.spec.js",
+          "start": 0,
+          "end": 28389,
+          "kind": "text",
+          "sha256": "5752b7eed8961d4b59e908bc5172bd8d1a2edd0d7e7ad1122cdf5181e7a5f03a"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "14",
+      "parts": [
+        {
+          "path": "tests/specs/time-trial.spec.js",
+          "start": 28389,
+          "end": 38152,
+          "kind": "text",
+          "sha256": "5752b7eed8961d4b59e908bc5172bd8d1a2edd0d7e7ad1122cdf5181e7a5f03a"
+        },
+        {
+          "path": "tests/specs/title-menu-rotation.spec.js",
+          "start": 0,
+          "end": 19796,
+          "kind": "text",
+          "sha256": "4d0d90fd09fe654880e097e3403eb8f95a305f50ae9deaef6982f67288e20e1f"
+        },
+        {
+          "path": "tests/specs/tlx-probes.spec.js",
+          "start": 0,
+          "end": 43997,
+          "kind": "text",
+          "sha256": "bbc34ec60aaf5e3aaf3c94714643275e5191649f12006b1bd839df3a01aefd12"
+        },
+        {
+          "path": "tests/specs/touch-buttons.spec.js",
+          "start": 0,
+          "end": 9507,
+          "kind": "text",
+          "sha256": "aa41a64e2e8f553a98bc3f5906f6216f34374370efffafe0ac9ffbfb96460be6"
+        },
+        {
+          "path": "tests/specs/touch-pedals.spec.js",
+          "start": 0,
+          "end": 7023,
+          "kind": "text",
+          "sha256": "36e15f7908a1ec394a2ea5831be491aa8c5f24f255c282cae417b6e688606952"
+        },
+        {
+          "path": "tests/specs/touch-steer.spec.js",
+          "start": 0,
+          "end": 7646,
+          "kind": "text",
+          "sha256": "d4e54f124e63a07161795a9a254cc23677186a0a1d0f8e9f5b956e58f8c749b4"
+        },
+        {
+          "path": "tests/specs/track-designer.spec.js",
+          "start": 0,
+          "end": 62268,
+          "kind": "text",
+          "sha256": "d17ad6c5feaef80ee4a3efec11a4ee7566b6833d3a677a8da54a0a9ac80151f9"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "15",
+      "parts": [
+        {
+          "path": "tests/specs/track-designer.spec.js",
+          "start": 62268,
+          "end": 63162,
+          "kind": "text",
+          "sha256": "d17ad6c5feaef80ee4a3efec11a4ee7566b6833d3a677a8da54a0a9ac80151f9"
+        },
+        {
+          "path": "tests/specs/track-switch-memory.spec.js",
+          "start": 0,
+          "end": 7523,
+          "kind": "text",
+          "sha256": "4d4f88000e79e91a7c2e90528d99d3c050e92d1bae654ff2fd964c9c0ff97cbe"
+        },
+        {
+          "path": "tests/specs/track-switch-release.spec.js",
+          "start": 0,
+          "end": 2859,
+          "kind": "text",
+          "sha256": "7beba4f5668b02a594f49a3eb2543acbfb81c2f8b51be2890e64c6239d6b2cb8"
+        },
+        {
+          "path": "tests/specs/tracks-walls-a.spec.js",
+          "start": 0,
+          "end": 1045,
+          "kind": "text",
+          "sha256": "36a1b86395f19be4b5ca7869fd44da05650239cb60132ecf61f146155a67ac99"
+        },
+        {
+          "path": "tests/specs/tracks-walls-b.spec.js",
+          "start": 0,
+          "end": 1046,
+          "kind": "text",
+          "sha256": "83058e03b3454352529b22c0444fbb4ad97616b4305815654d816f3c8617bbe8"
+        },
+        {
+          "path": "tests/specs/tracks-walls.spec.js",
+          "start": 0,
+          "end": 6540,
+          "kind": "text",
+          "sha256": "f57d925308978ea81a5ebedcbbd28a128e8161a6fb998710dc8888d7c1499eee"
+        },
+        {
+          "path": "tests/specs/ui-audit.spec.js",
+          "start": 0,
+          "end": 26776,
+          "kind": "text",
+          "sha256": "1d4f1d9ff2c5dd40c3db1abb3ae63e24face3f0ef4ab888128bbb48e4e3412d9"
+        },
+        {
+          "path": "tests/specs/ui-button-touch.spec.js",
+          "start": 0,
+          "end": 92971,
+          "kind": "text",
+          "sha256": "2fc8b25f49b601f4ab478bf335569fe69baa9bdfe19624fda8b59d91009ea37c"
+        },
+        {
+          "path": "tests/specs/ui-redesign.spec.js",
+          "start": 0,
+          "end": 20346,
+          "kind": "text",
+          "sha256": "1669712a4bcbaca89270f6d4e885fcacd055afd6b43ffcc8fb695a22cdee12e3"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "16",
+      "parts": [
+        {
+          "path": "tests/specs/ui-redesign.spec.js",
+          "start": 20346,
+          "end": 65399,
+          "kind": "text",
+          "sha256": "1669712a4bcbaca89270f6d4e885fcacd055afd6b43ffcc8fb695a22cdee12e3"
+        },
+        {
+          "path": "tests/specs/ui-resize.spec.js",
+          "start": 0,
+          "end": 31527,
+          "kind": "text",
+          "sha256": "ecb82a9e76a0ac6773c1fda4da145edc4624ab2770c71c83fbab194d567182c3"
+        },
+        {
+          "path": "tests/specs/ui-scale.spec.js",
+          "start": 0,
+          "end": 83420,
+          "kind": "text",
+          "sha256": "1e39cc2ab8cf8f65d7c94ccf3391a21fdf548b968e9aec64f473e81b566bd278"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "17",
+      "parts": [
+        {
+          "path": "tests/specs/ui-scale.spec.js",
+          "start": 83420,
+          "end": 103854,
+          "kind": "text",
+          "sha256": "1e39cc2ab8cf8f65d7c94ccf3391a21fdf548b968e9aec64f473e81b566bd278"
+        },
+        {
+          "path": "tests/specs/understeer-cue.spec.js",
+          "start": 0,
+          "end": 21517,
+          "kind": "text",
+          "sha256": "6db46351ba40ec0c14afcde42449a412544db1719f73099c636c015e2481d0a0"
+        },
+        {
+          "path": "tests/specs/vegas-foundation.spec.js",
+          "start": 0,
+          "end": 5966,
+          "kind": "text",
+          "sha256": "97d1552bad4457cf2f01b11b67241161deda6ff4077e5f8a108409324d167f8b"
+        },
+        {
+          "path": "tests/specs/vr-emulated.spec.js",
+          "start": 0,
+          "end": 22424,
+          "kind": "text",
+          "sha256": "91aa77603de5edae3bc5d4d19fe566a7b364302f1752faaf936474067274fd96"
+        },
+        {
+          "path": "tests/specs/wake-lock.spec.js",
+          "start": 0,
+          "end": 16661,
+          "kind": "text",
+          "sha256": "874897edf9ceb49fd626faa8f2f7339034dd25594608b268bcc0dc47a960b665"
+        },
+        {
+          "path": "tests/specs/watch-transport-layout.spec.js",
+          "start": 0,
+          "end": 2308,
+          "kind": "text",
+          "sha256": "936ab2dbe500e2ad16d479d4b2bbe8f0732ba475b4d21d873490a1a299b0c2c1"
+        },
+        {
+          "path": "tests/specs/webgl-probes.spec.js",
+          "start": 0,
+          "end": 12841,
+          "kind": "text",
+          "sha256": "4376c098a62a2e9bea06bff25bac72f43ee410ed150b92e9abf7af339f9f64a4"
+        },
+        {
+          "path": "tests/specs/webkit-boot.spec.js",
+          "start": 0,
+          "end": 7586,
+          "kind": "text",
+          "sha256": "c12680fb6799dc0adbe6ee391ebfcf8c62e26ccdb5bb1166553c1bcb43e7c189"
+        },
+        {
+          "path": "tests/specs/world-physics.spec.js",
+          "start": 0,
+          "end": 9859,
+          "kind": "text",
+          "sha256": "bb0e3bdac9c4eadd40240f3b97ce2aa66012554fb12c45acd362930478eb576b"
+        },
+        {
+          "path": "tests/specs/xr-plan.spec.js",
+          "start": 0,
+          "end": 4048,
+          "kind": "text",
+          "sha256": "4eac0a214cd708464124aa6ecc1e212da2378612cf62513ca31754ba46c4996f"
+        },
+        {
+          "path": "tests/specs/zandvoort-foundation.spec.js",
+          "start": 0,
+          "end": 3952,
+          "kind": "text",
+          "sha256": "1d62430c322786338b13a07df753df15bea17f373ae0d521f5ccd0865540a965"
+        }
+      ],
+      "bytes": 127596,
+      "status": "unassigned"
+    }
+  ]
+}

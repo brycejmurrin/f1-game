@@ -1,0 +1,761 @@
+{
+  "goal": "Complete original tracked source/prose/data scope; every assigned text byte read, binary metadata inspected, historical material is provenance not authority. Half-open byte spans.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": "examples/visor-lab/README.md",
+          "start": 0,
+          "end": 5444,
+          "kind": "text",
+          "sha256": "694611edc3c4c3474cbb5ec474ba2aa48ca7bf71a4dda04c047e5c626bac074c"
+        },
+        {
+          "path": "examples/visor-lab/app.js",
+          "start": 0,
+          "end": 6302,
+          "kind": "text",
+          "sha256": "a59aa2f78d0ed0be0659aa98aceb44bd6d2b8f73610d7f3994ddaf6fedf4b427"
+        },
+        {
+          "path": "examples/visor-lab/capture-example.json",
+          "start": 0,
+          "end": 370,
+          "kind": "text",
+          "sha256": "55a2947a1023bea387ff7725c8c7125b33c8c96b76ba105b03cfb1a3824bbb0b"
+        },
+        {
+          "path": "examples/visor-lab/capture-lens-study.json",
+          "start": 0,
+          "end": 6750,
+          "kind": "text",
+          "sha256": "3982c388c67e3c6e998063ccc2428c4c572a693a41e62a613d7bced3eda40b6f"
+        },
+        {
+          "path": "examples/visor-lab/capture-visor-beams.json",
+          "start": 0,
+          "end": 2367,
+          "kind": "text",
+          "sha256": "a41f24a7492283d8f961474e3eaa078f2151238006d43e473429cf7c47c9df76"
+        },
+        {
+          "path": "examples/visor-lab/capture-visor-optics.json",
+          "start": 0,
+          "end": 11255,
+          "kind": "text",
+          "sha256": "c30e4213770eb4cc1bd3b25815fbd849aaae186b43cd2eda5960e79c536ab8e6"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/00b85be58c9362174f1c3efa92121686c213e1f821be75979fd9ec952776464b.webp",
+          "start": 0,
+          "end": 236424,
+          "kind": "binary",
+          "sha256": "00b85be58c9362174f1c3efa92121686c213e1f821be75979fd9ec952776464b"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/07571e1386d9582bea63e74226de4c4fe379ca2558046549cfe310f07bff94b9.webp",
+          "start": 0,
+          "end": 204232,
+          "kind": "binary",
+          "sha256": "07571e1386d9582bea63e74226de4c4fe379ca2558046549cfe310f07bff94b9"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/086e45817797ca5ea28c30d52932180af93b431ed9021b2709c7a4a14ed58007.webp",
+          "start": 0,
+          "end": 190870,
+          "kind": "binary",
+          "sha256": "086e45817797ca5ea28c30d52932180af93b431ed9021b2709c7a4a14ed58007"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/09526f85509851d64d2b82eefdb08e11610f40dcc9b6235ca785f74952c54f46.webp",
+          "start": 0,
+          "end": 242484,
+          "kind": "binary",
+          "sha256": "09526f85509851d64d2b82eefdb08e11610f40dcc9b6235ca785f74952c54f46"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7.webp",
+          "start": 0,
+          "end": 1407620,
+          "kind": "binary",
+          "sha256": "09dd38050caa15763fc9277ae8ce2ad2bdf3bbf20e936d07d15108f0e9630ec7"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/0d5173283f19c3d09ad734b7c31795c9e953002245936117d81afd1bfdd0c40c.webp",
+          "start": 0,
+          "end": 261250,
+          "kind": "binary",
+          "sha256": "0d5173283f19c3d09ad734b7c31795c9e953002245936117d81afd1bfdd0c40c"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/0ff989d1c95655cf8e890a332d677120bafa125c89b9d32202b0ba7e9a6272bc.webp",
+          "start": 0,
+          "end": 274250,
+          "kind": "binary",
+          "sha256": "0ff989d1c95655cf8e890a332d677120bafa125c89b9d32202b0ba7e9a6272bc"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/127931b1befc899c4bd1e11d0d829e6dabb4a65efb80d2de1ffee08acda0f82a.webp",
+          "start": 0,
+          "end": 1552416,
+          "kind": "binary",
+          "sha256": "127931b1befc899c4bd1e11d0d829e6dabb4a65efb80d2de1ffee08acda0f82a"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/1793a26553afcfecc1711999f7a32d17ead48242a5cd3cdb0ae8f01b9a4fef18.webp",
+          "start": 0,
+          "end": 1639118,
+          "kind": "binary",
+          "sha256": "1793a26553afcfecc1711999f7a32d17ead48242a5cd3cdb0ae8f01b9a4fef18"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/19447223e69704b5c4256b5453e2cfcc860bea6de4b037000464f61d559a006c.webp",
+          "start": 0,
+          "end": 1272096,
+          "kind": "binary",
+          "sha256": "19447223e69704b5c4256b5453e2cfcc860bea6de4b037000464f61d559a006c"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/1b14979c16332386e92a17b13ff3a7e8910c13aab2f2f59fc8d2673bbff4dd4a.webp",
+          "start": 0,
+          "end": 253154,
+          "kind": "binary",
+          "sha256": "1b14979c16332386e92a17b13ff3a7e8910c13aab2f2f59fc8d2673bbff4dd4a"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/1eef78564c811851e56eba723771b51523c4f95d677508fc0507feabf2bf2c87.webp",
+          "start": 0,
+          "end": 1276212,
+          "kind": "binary",
+          "sha256": "1eef78564c811851e56eba723771b51523c4f95d677508fc0507feabf2bf2c87"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/22052f856a114e4042f42a639e7fc8279cb92d59adaaaf3f050ca198837f2810.webp",
+          "start": 0,
+          "end": 1561518,
+          "kind": "binary",
+          "sha256": "22052f856a114e4042f42a639e7fc8279cb92d59adaaaf3f050ca198837f2810"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/25f39040b6608807c2b50110b2164c6e22ffba42322cdc7b103587b8dd7ba9fe.webp",
+          "start": 0,
+          "end": 222088,
+          "kind": "binary",
+          "sha256": "25f39040b6608807c2b50110b2164c6e22ffba42322cdc7b103587b8dd7ba9fe"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/2fca03600c90d243dd0646d4818e61a658a59e4267025b09a10c07e49166dac6.webp",
+          "start": 0,
+          "end": 214632,
+          "kind": "binary",
+          "sha256": "2fca03600c90d243dd0646d4818e61a658a59e4267025b09a10c07e49166dac6"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/34266d03e7ad9e6247058aa645b8571528dd40ee3e6c8c151216d6964128e0e9.webp",
+          "start": 0,
+          "end": 1553466,
+          "kind": "binary",
+          "sha256": "34266d03e7ad9e6247058aa645b8571528dd40ee3e6c8c151216d6964128e0e9"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/39e35121d231ad85954a8bf15563ee1de2b2a6e99ec388e991270350b1a31b4d.webp",
+          "start": 0,
+          "end": 199310,
+          "kind": "binary",
+          "sha256": "39e35121d231ad85954a8bf15563ee1de2b2a6e99ec388e991270350b1a31b4d"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/3a1b90b8c423b4b9a95b3bc8a2597b4114410e6df9d21cad3f5ffc0d82860965.webp",
+          "start": 0,
+          "end": 1538122,
+          "kind": "binary",
+          "sha256": "3a1b90b8c423b4b9a95b3bc8a2597b4114410e6df9d21cad3f5ffc0d82860965"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/3d3e2ea226d391db2d27fcc594b66546fbe970555be6397bf46fe5407c6454cf.webp",
+          "start": 0,
+          "end": 213100,
+          "kind": "binary",
+          "sha256": "3d3e2ea226d391db2d27fcc594b66546fbe970555be6397bf46fe5407c6454cf"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/49d718e297704621f31fa712c024f405541a55f7696311982ce7e75558ba737b.webp",
+          "start": 0,
+          "end": 259486,
+          "kind": "binary",
+          "sha256": "49d718e297704621f31fa712c024f405541a55f7696311982ce7e75558ba737b"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/49ee5beffa433cd173b4227a58a887f856532f295600f0fc930dbfe6ac27498a.webp",
+          "start": 0,
+          "end": 1307556,
+          "kind": "binary",
+          "sha256": "49ee5beffa433cd173b4227a58a887f856532f295600f0fc930dbfe6ac27498a"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/4a2d3ecbfe1b3683113a9289feeabb07a3448cb8814147097fdfaf04cca9f0b9.webp",
+          "start": 0,
+          "end": 201372,
+          "kind": "binary",
+          "sha256": "4a2d3ecbfe1b3683113a9289feeabb07a3448cb8814147097fdfaf04cca9f0b9"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed.webp",
+          "start": 0,
+          "end": 1316698,
+          "kind": "binary",
+          "sha256": "4f406f44fb37eb4579a35ae6606fa6b8d517ecce5c3a162ee0e0d47863c5cbed"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/5247505ee012c8a7aab1d48d55391132b73c666d06180cc0707cb204efb85cc8.webp",
+          "start": 0,
+          "end": 1557696,
+          "kind": "binary",
+          "sha256": "5247505ee012c8a7aab1d48d55391132b73c666d06180cc0707cb204efb85cc8"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/55a3f0dd1c54e56b2ec6cf0f606577f206ec93e0f9b49913633cecdbca71885a.webp",
+          "start": 0,
+          "end": 1559910,
+          "kind": "binary",
+          "sha256": "55a3f0dd1c54e56b2ec6cf0f606577f206ec93e0f9b49913633cecdbca71885a"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/587c4e9e10c3a9e3f918868605b03e1a0b1bd9d1cad0ed98b4874d39013ed010.webp",
+          "start": 0,
+          "end": 257730,
+          "kind": "binary",
+          "sha256": "587c4e9e10c3a9e3f918868605b03e1a0b1bd9d1cad0ed98b4874d39013ed010"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/589031a76e1c22df29b703a455ab8f07d71130bc808de3d3d82c1a1008bab525.webp",
+          "start": 0,
+          "end": 214594,
+          "kind": "binary",
+          "sha256": "589031a76e1c22df29b703a455ab8f07d71130bc808de3d3d82c1a1008bab525"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/5b519c4286c3e5f538d565d3e1a5830d8451728c738aa6eaa71a51af862bf507.webp",
+          "start": 0,
+          "end": 1199114,
+          "kind": "binary",
+          "sha256": "5b519c4286c3e5f538d565d3e1a5830d8451728c738aa6eaa71a51af862bf507"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/5b9c752c0e92b9e894cdb8d5a2e44e3affd5d1f434c40e289fc9b891aff50b01.webp",
+          "start": 0,
+          "end": 169526,
+          "kind": "binary",
+          "sha256": "5b9c752c0e92b9e894cdb8d5a2e44e3affd5d1f434c40e289fc9b891aff50b01"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/5fb0a2617269a7838e19eb3c3b49f241195c92585ad44bf83ce394cd4de717e8.webp",
+          "start": 0,
+          "end": 1315562,
+          "kind": "binary",
+          "sha256": "5fb0a2617269a7838e19eb3c3b49f241195c92585ad44bf83ce394cd4de717e8"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/62ee3fb87c187b4d55fd8ed0ef21b4562a5f7330f86df62727b4f509fc87f859.webp",
+          "start": 0,
+          "end": 262724,
+          "kind": "binary",
+          "sha256": "62ee3fb87c187b4d55fd8ed0ef21b4562a5f7330f86df62727b4f509fc87f859"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/65f2ad2a8827c7e435d5f0e81b8f6a168399072f6f8986bf59a81281f3b3af7d.webp",
+          "start": 0,
+          "end": 255786,
+          "kind": "binary",
+          "sha256": "65f2ad2a8827c7e435d5f0e81b8f6a168399072f6f8986bf59a81281f3b3af7d"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee.webp",
+          "start": 0,
+          "end": 1315948,
+          "kind": "binary",
+          "sha256": "65f538505aaf918c9f18bcbbf13bb73c3378ac73b230c2f2084721e9adb534ee"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/6780e96d07fd0b462ec8003913f5484e074fe2b9bf4351aabe41772aac92c194.webp",
+          "start": 0,
+          "end": 1302202,
+          "kind": "binary",
+          "sha256": "6780e96d07fd0b462ec8003913f5484e074fe2b9bf4351aabe41772aac92c194"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/70b35eda55405ff3c1f9cbcacde877c09d022e2b65a0e8e67b6abd4894764c96.webp",
+          "start": 0,
+          "end": 1315950,
+          "kind": "binary",
+          "sha256": "70b35eda55405ff3c1f9cbcacde877c09d022e2b65a0e8e67b6abd4894764c96"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/765cd180998486c1cb538beb774b358ab15be428523e34afc314dd1f11067042.webp",
+          "start": 0,
+          "end": 258930,
+          "kind": "binary",
+          "sha256": "765cd180998486c1cb538beb774b358ab15be428523e34afc314dd1f11067042"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/766a85dc9e002002be9762058bc419ad33923a0de3d5a6bd7f745aefa7714ca8.webp",
+          "start": 0,
+          "end": 244706,
+          "kind": "binary",
+          "sha256": "766a85dc9e002002be9762058bc419ad33923a0de3d5a6bd7f745aefa7714ca8"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/76e87c2e218152184952c9a741a16dee0816b972a8737ccc9cc8937fa267d465.webp",
+          "start": 0,
+          "end": 1299214,
+          "kind": "binary",
+          "sha256": "76e87c2e218152184952c9a741a16dee0816b972a8737ccc9cc8937fa267d465"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/77e60602a03adb9f7c1005eef519a85e8670df64853eac8e744d66651f1953ca.webp",
+          "start": 0,
+          "end": 235760,
+          "kind": "binary",
+          "sha256": "77e60602a03adb9f7c1005eef519a85e8670df64853eac8e744d66651f1953ca"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/7d1d6b0ac416d3ca28bedb57561b6f4739064b3cabe043d418a2ccde0cf43804.webp",
+          "start": 0,
+          "end": 1310806,
+          "kind": "binary",
+          "sha256": "7d1d6b0ac416d3ca28bedb57561b6f4739064b3cabe043d418a2ccde0cf43804"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/801b7a52b6be052feba0405fea086a42094a2e268009bc29f03c99a36138e487.webp",
+          "start": 0,
+          "end": 1459072,
+          "kind": "binary",
+          "sha256": "801b7a52b6be052feba0405fea086a42094a2e268009bc29f03c99a36138e487"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/86cc82ee23841da9e22c1f224a415298210052083aabc4bfe83343943352eed0.webp",
+          "start": 0,
+          "end": 229514,
+          "kind": "binary",
+          "sha256": "86cc82ee23841da9e22c1f224a415298210052083aabc4bfe83343943352eed0"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/89c335ad5ad39e9b5565603a158ac05d4102f98f96215971eeda97191f0ccc00.webp",
+          "start": 0,
+          "end": 1394518,
+          "kind": "binary",
+          "sha256": "89c335ad5ad39e9b5565603a158ac05d4102f98f96215971eeda97191f0ccc00"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/8a2db153c82224131692f7d8c6a104b59ff880d356ed2704168f3dc229ac1328.webp",
+          "start": 0,
+          "end": 1301574,
+          "kind": "binary",
+          "sha256": "8a2db153c82224131692f7d8c6a104b59ff880d356ed2704168f3dc229ac1328"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/8aaec5474ccfb261d50e2b44eb1f6b66e1e170b3d470a15e0f48a89d0b9851a5.webp",
+          "start": 0,
+          "end": 237152,
+          "kind": "binary",
+          "sha256": "8aaec5474ccfb261d50e2b44eb1f6b66e1e170b3d470a15e0f48a89d0b9851a5"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/979489c9c4884216766144036fc7b57864ae76ab7a090f6c0ea1d37bf7703ca9.webp",
+          "start": 0,
+          "end": 204158,
+          "kind": "binary",
+          "sha256": "979489c9c4884216766144036fc7b57864ae76ab7a090f6c0ea1d37bf7703ca9"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/9d78fdf4d500bce4fc0f0c1eca58e658827d79cbf83b2b20fbc9bcb5c4c8ae3b.webp",
+          "start": 0,
+          "end": 219862,
+          "kind": "binary",
+          "sha256": "9d78fdf4d500bce4fc0f0c1eca58e658827d79cbf83b2b20fbc9bcb5c4c8ae3b"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/a357572939f46ebc7a27b25b9150bd6e3c675ec2e567eb0cd1bc4d18ee9a7e2d.webp",
+          "start": 0,
+          "end": 248858,
+          "kind": "binary",
+          "sha256": "a357572939f46ebc7a27b25b9150bd6e3c675ec2e567eb0cd1bc4d18ee9a7e2d"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69.webp",
+          "start": 0,
+          "end": 1306538,
+          "kind": "binary",
+          "sha256": "a5734efdb6403002a60403e85c160277b7ce6910c5cda3e99fb24ca163febc69"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/a68cf72b2c4d409a84790a69b575729be0964b6fd6e0f0427db9b104ff8df4ce.webp",
+          "start": 0,
+          "end": 198770,
+          "kind": "binary",
+          "sha256": "a68cf72b2c4d409a84790a69b575729be0964b6fd6e0f0427db9b104ff8df4ce"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/a6ef1e6b1f8389fd3525ee47c5c443feea1997ab6c6b3d6332f26b5e3c825407.webp",
+          "start": 0,
+          "end": 237648,
+          "kind": "binary",
+          "sha256": "a6ef1e6b1f8389fd3525ee47c5c443feea1997ab6c6b3d6332f26b5e3c825407"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/a7739814d49fc971e876902d2691306a98efdbd54c2a427e7a599975337cba9b.webp",
+          "start": 0,
+          "end": 275584,
+          "kind": "binary",
+          "sha256": "a7739814d49fc971e876902d2691306a98efdbd54c2a427e7a599975337cba9b"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/ac24957a36d51aa8712f23c3691fb57bad77d1c774ba69939cdca19217b9f409.webp",
+          "start": 0,
+          "end": 207862,
+          "kind": "binary",
+          "sha256": "ac24957a36d51aa8712f23c3691fb57bad77d1c774ba69939cdca19217b9f409"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/ad17db7327f3c33c756a6af9444a69281f621658617f8e92f93cb8c9063e9491.webp",
+          "start": 0,
+          "end": 255056,
+          "kind": "binary",
+          "sha256": "ad17db7327f3c33c756a6af9444a69281f621658617f8e92f93cb8c9063e9491"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/ae782ab9aa361a27b4d9a83caddd896676d1872d9e994a2d349043f73824142c.webp",
+          "start": 0,
+          "end": 239022,
+          "kind": "binary",
+          "sha256": "ae782ab9aa361a27b4d9a83caddd896676d1872d9e994a2d349043f73824142c"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/b06a13aca2a9e9483358701e31af3d46d4d029a8bb0140d578aafeb08ddbd293.webp",
+          "start": 0,
+          "end": 175288,
+          "kind": "binary",
+          "sha256": "b06a13aca2a9e9483358701e31af3d46d4d029a8bb0140d578aafeb08ddbd293"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/b0794f4cf2f64ad5047cd251c0daf10836353693339c28920aa687987ac4a194.webp",
+          "start": 0,
+          "end": 305636,
+          "kind": "binary",
+          "sha256": "b0794f4cf2f64ad5047cd251c0daf10836353693339c28920aa687987ac4a194"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/b94f7c7147355e32ddd6faee309c761eeccbb5ceb55265e16c8567394020b925.webp",
+          "start": 0,
+          "end": 1395546,
+          "kind": "binary",
+          "sha256": "b94f7c7147355e32ddd6faee309c761eeccbb5ceb55265e16c8567394020b925"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/bc470c7c7169f94051990e6e5a24700a6231d79f0e323b26a61921ac5c751288.webp",
+          "start": 0,
+          "end": 258036,
+          "kind": "binary",
+          "sha256": "bc470c7c7169f94051990e6e5a24700a6231d79f0e323b26a61921ac5c751288"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/c26f0a4f67f06b4a98bda732b0a6724efda2cf3eaebe5922946dc4e68e8cd6b8.webp",
+          "start": 0,
+          "end": 1543926,
+          "kind": "binary",
+          "sha256": "c26f0a4f67f06b4a98bda732b0a6724efda2cf3eaebe5922946dc4e68e8cd6b8"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/c521a62c41b5f9ca29b3ee50caaf45c0e86e851103a806f78faddc68870125ba.webp",
+          "start": 0,
+          "end": 1189262,
+          "kind": "binary",
+          "sha256": "c521a62c41b5f9ca29b3ee50caaf45c0e86e851103a806f78faddc68870125ba"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/c69e3642a801c38baa21e11adf1ec870c06479e43bef0c982fd06438babab5a5.webp",
+          "start": 0,
+          "end": 215196,
+          "kind": "binary",
+          "sha256": "c69e3642a801c38baa21e11adf1ec870c06479e43bef0c982fd06438babab5a5"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/c6aaab69be7eb869620358411dfe7bb48fdacc5f32fdf956113ecc7f505779a2.webp",
+          "start": 0,
+          "end": 1558366,
+          "kind": "binary",
+          "sha256": "c6aaab69be7eb869620358411dfe7bb48fdacc5f32fdf956113ecc7f505779a2"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/cf77c55a082d78e32dd05f8f011416fab620e5c8c13a71cd74f0db307340efd5.webp",
+          "start": 0,
+          "end": 256084,
+          "kind": "binary",
+          "sha256": "cf77c55a082d78e32dd05f8f011416fab620e5c8c13a71cd74f0db307340efd5"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/d5c19201225fb48ca5d23487870c95b8c281c23fe513b54834a737ff3ded289f.webp",
+          "start": 0,
+          "end": 1639656,
+          "kind": "binary",
+          "sha256": "d5c19201225fb48ca5d23487870c95b8c281c23fe513b54834a737ff3ded289f"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/e0251427e868b94db192676b296fcd25287daf6a25b84180cc5674d7ff7317a5.webp",
+          "start": 0,
+          "end": 1162158,
+          "kind": "binary",
+          "sha256": "e0251427e868b94db192676b296fcd25287daf6a25b84180cc5674d7ff7317a5"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/e2ce4ee9e8b67d7cfb1469c00573d4663eeeb6c9b4a85829a3027f3f55053083.webp",
+          "start": 0,
+          "end": 268526,
+          "kind": "binary",
+          "sha256": "e2ce4ee9e8b67d7cfb1469c00573d4663eeeb6c9b4a85829a3027f3f55053083"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/e4da77cd83008b4e5a1fa4b361a47335593847745d093d8d9aa80d1d95fdd416.webp",
+          "start": 0,
+          "end": 213534,
+          "kind": "binary",
+          "sha256": "e4da77cd83008b4e5a1fa4b361a47335593847745d093d8d9aa80d1d95fdd416"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/e7d58f51a173667fd33ba9d611913e3c7a2af79f5ebfca0e83afcd163283b8bc.webp",
+          "start": 0,
+          "end": 238944,
+          "kind": "binary",
+          "sha256": "e7d58f51a173667fd33ba9d611913e3c7a2af79f5ebfca0e83afcd163283b8bc"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/ec7324fe5dbf02a9953cc212ec692006be41278bb972bcb73c7838f325f6005e.webp",
+          "start": 0,
+          "end": 1415790,
+          "kind": "binary",
+          "sha256": "ec7324fe5dbf02a9953cc212ec692006be41278bb972bcb73c7838f325f6005e"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/f01bd64e0c1e147e4aa2bd2332829b74001cef8b4487f577aa57f742948ed19a.webp",
+          "start": 0,
+          "end": 293740,
+          "kind": "binary",
+          "sha256": "f01bd64e0c1e147e4aa2bd2332829b74001cef8b4487f577aa57f742948ed19a"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/f47a04c22000975fbebf9bcea9eccfd361ba524ebc17088c305bab8d2f31fa06.webp",
+          "start": 0,
+          "end": 270760,
+          "kind": "binary",
+          "sha256": "f47a04c22000975fbebf9bcea9eccfd361ba524ebc17088c305bab8d2f31fa06"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/f6c428bc69e9869856e4c194095f3b54c379ef0f29fbee2abf20956af5ac3f64.webp",
+          "start": 0,
+          "end": 287108,
+          "kind": "binary",
+          "sha256": "f6c428bc69e9869856e4c194095f3b54c379ef0f29fbee2abf20956af5ac3f64"
+        },
+        {
+          "path": "examples/visor-lab/comparison-images/fceb5c60a5fab527dab9ee832e91e7b3aef1bc3f357ce4e0de128ea364bae74a.webp",
+          "start": 0,
+          "end": 238568,
+          "kind": "binary",
+          "sha256": "fceb5c60a5fab527dab9ee832e91e7b3aef1bc3f357ce4e0de128ea364bae74a"
+        },
+        {
+          "path": "examples/visor-lab/comparisons.css",
+          "start": 0,
+          "end": 2903,
+          "kind": "text",
+          "sha256": "533fac710afa0107e0c07fd323679ccacd101699a325bb25b22fc549a9ccdd98"
+        },
+        {
+          "path": "examples/visor-lab/comparisons.html",
+          "start": 0,
+          "end": 2691,
+          "kind": "text",
+          "sha256": "a4bcea75d28ddf5fb0aa584e7c9d43fb9289d7e12e1f993cf1916522914729f5"
+        },
+        {
+          "path": "examples/visor-lab/comparisons.js",
+          "start": 0,
+          "end": 5377,
+          "kind": "text",
+          "sha256": "0d077501223cf5df5d4185e03268ea31c62a012f90218bbea2c46e5e21800b8d"
+        },
+        {
+          "path": "examples/visor-lab/comparisons.json",
+          "start": 0,
+          "end": 116541,
+          "kind": "text",
+          "sha256": "de7fa68605dd2da10563eedf344b68ec8247d56b7c8e996e8ac9e2df9f29c06e"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "examples/visor-lab/comparisons.json",
+          "start": 116541,
+          "end": 133129,
+          "kind": "text",
+          "sha256": "de7fa68605dd2da10563eedf344b68ec8247d56b7c8e996e8ac9e2df9f29c06e"
+        },
+        {
+          "path": "examples/visor-lab/drive-by/bahrain-night-frames.json",
+          "start": 0,
+          "end": 4726,
+          "kind": "text",
+          "sha256": "59910ad5f5a5a46d88a34d5f1c1c50cd24501da02da50ff7c9f87ef3fc4b84c2"
+        },
+        {
+          "path": "examples/visor-lab/drive-by/bahrain-night-strip.webp",
+          "start": 0,
+          "end": 416022,
+          "kind": "binary",
+          "sha256": "6fa4ee26e85501392c6f650dfe6c9d61a96dbfa6bc680fd0148d225b89896917"
+        },
+        {
+          "path": "examples/visor-lab/drive-by/monaco-night-frames.json",
+          "start": 0,
+          "end": 3698,
+          "kind": "text",
+          "sha256": "afdb1737d5771121c2648f446411fcffcff3f644d47d0a9eabde0d7e886f0e86"
+        },
+        {
+          "path": "examples/visor-lab/drive-by/monaco-night-strip.webp",
+          "start": 0,
+          "end": 350934,
+          "kind": "binary",
+          "sha256": "1f4fc0a4dfc918d5956bb1d043161831f35d2f9f7581c25f72530824a6db11d7"
+        },
+        {
+          "path": "examples/visor-lab/drive-by/spa-dusk-frames.json",
+          "start": 0,
+          "end": 4189,
+          "kind": "text",
+          "sha256": "d4938f4c07c2e7e06d121c482c21b3f45526dd9961866d73c7775757fd8c74b1"
+        },
+        {
+          "path": "examples/visor-lab/drive-by/spa-dusk-strip.webp",
+          "start": 0,
+          "end": 447198,
+          "kind": "binary",
+          "sha256": "663eaa2c3c73cfbc1fd699236d83915e843a694bf1127b80d6effe1c7697fa2b"
+        },
+        {
+          "path": "examples/visor-lab/images/bahrain-dawn-fog--off.webp",
+          "start": 0,
+          "end": 173264,
+          "kind": "binary",
+          "sha256": "6e13b385ab571da23d7d0363e6dfaddf9bae1631e5a80cea2cc7776697a477ee"
+        },
+        {
+          "path": "examples/visor-lab/images/bahrain-day-dry--off.webp",
+          "start": 0,
+          "end": 199160,
+          "kind": "binary",
+          "sha256": "cbdb686aa22a23512f0b846f7924a99c46edd87e086e6136bcb17332ba83ef0c"
+        },
+        {
+          "path": "examples/visor-lab/images/bahrain-day-storm--off.webp",
+          "start": 0,
+          "end": 965368,
+          "kind": "binary",
+          "sha256": "497ec36eba865a2991eec55395ab93ff03a4e7b51d4ec18a2efdcaa77bebec37"
+        },
+        {
+          "path": "examples/visor-lab/images/bahrain-day-wet--off.webp",
+          "start": 0,
+          "end": 1114482,
+          "kind": "binary",
+          "sha256": "4d61a51c6839dd98ac520168858b4bfc350c82a941c19418b3ff846670cf8f39"
+        },
+        {
+          "path": "examples/visor-lab/images/bahrain-dusk-overcast--off.webp",
+          "start": 0,
+          "end": 193310,
+          "kind": "binary",
+          "sha256": "741375b1c2de4aa6ceac3d67458ae515565644cd40a3e807484d942492a39e62"
+        },
+        {
+          "path": "examples/visor-lab/images/bahrain-night-dry--off.webp",
+          "start": 0,
+          "end": 217072,
+          "kind": "binary",
+          "sha256": "c2dab99dd29016408c9adfa5c1d45c0bdcc8e23bcb05f83bc6b0a8cb9515b645"
+        },
+        {
+          "path": "examples/visor-lab/images/bahrain-night-rain--off.webp",
+          "start": 0,
+          "end": 1162158,
+          "kind": "binary",
+          "sha256": "e0251427e868b94db192676b296fcd25287daf6a25b84180cc5674d7ff7317a5"
+        },
+        {
+          "path": "examples/visor-lab/images/monza-night-rain--off.webp",
+          "start": 0,
+          "end": 1211372,
+          "kind": "binary",
+          "sha256": "50347cbe29857c00902f614ba57be054bc4b3d5c6bc35c4e5bf5df716c90d034"
+        },
+        {
+          "path": "examples/visor-lab/index.html",
+          "start": 0,
+          "end": 5367,
+          "kind": "text",
+          "sha256": "4c7172734f5519b890df8d72506d7e73d7238c0a403af6a48d1f959fa6c14986"
+        },
+        {
+          "path": "examples/visor-lab/optics.html",
+          "start": 0,
+          "end": 11425,
+          "kind": "text",
+          "sha256": "d31ffc88af2e844980c99ef5a3a934a83043cc3078e42627a62a63788440c1c5"
+        },
+        {
+          "path": "examples/visor-lab/settled-weather.json",
+          "start": 0,
+          "end": 114007,
+          "kind": "text",
+          "sha256": "974cde498af28023bac3a1a04ed62dc5fd2d8f4c8761abdf93627e2add058951"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "examples/visor-lab/settled-weather.json",
+          "start": 114007,
+          "end": 120909,
+          "kind": "text",
+          "sha256": "974cde498af28023bac3a1a04ed62dc5fd2d8f4c8761abdf93627e2add058951"
+        },
+        {
+          "path": "examples/visor-lab/shots.json",
+          "start": 0,
+          "end": 143068,
+          "kind": "text",
+          "sha256": "d01b1f9a3807dc93b54f20e0956d8f1e79942b612973cd0c7b62d8119773cf7f"
+        },
+        {
+          "path": "examples/visor-lab/style.css",
+          "start": 0,
+          "end": 9704,
+          "kind": "text",
+          "sha256": "944cdf46f905150b407d6c70c428ef55e0d863fc423e0fc31922e3fe76e958d9"
+        }
+      ],
+      "bytes": 159674,
+      "status": "unassigned"
+    }
+  ]
+}

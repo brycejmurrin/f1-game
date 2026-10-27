@@ -1,0 +1,464 @@
+{
+  "batch": "40",
+  "assigned_bytes": 100000,
+  "read_bytes": 100000,
+  "range_convention": "half-open byte offsets",
+  "entries": [
+    {
+      "path": "docs/notes/system-audit-4/cursor-lanes.md",
+      "whole_bytes": 10934,
+      "whole_sha256": "44841b37d9a468878d4dd2a52077ee47cf50f7eeb1f8e410526d64ecbcbd714b",
+      "manifest_sha256": "44841b37d9a468878d4dd2a52077ee47cf50f7eeb1f8e410526d64ecbcbd714b",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 6888,
+        "end": 10934,
+        "bytes": 4046,
+        "sha256": "d385ca68d74064bc5f26b04eaaecb1c28428ba865ff95aa615b19469c57f3e51"
+      },
+      "chunks": [
+        {
+          "start": 6888,
+          "end": 10934,
+          "bytes": 4046,
+          "sha256": "d385ca68d74064bc5f26b04eaaecb1c28428ba865ff95aa615b19469c57f3e51",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "partial file; adjacent batch owns remainder",
+      "topics": "Cursor brief contradictions: identity, sync, holds, timer/event support and webhook reachability",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/docs-claims-core.md",
+      "whole_bytes": 9470,
+      "whole_sha256": "16eb95504a7db0358be6251308445378a40fa9587b2fdd9fa8cc6406ce8a30b9",
+      "manifest_sha256": "16eb95504a7db0358be6251308445378a40fa9587b2fdd9fa8cc6406ce8a30b9",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 9470,
+        "bytes": 9470,
+        "sha256": "16eb95504a7db0358be6251308445378a40fa9587b2fdd9fa8cc6406ce8a30b9"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9470,
+          "bytes": 9470,
+          "sha256": "16eb95504a7db0358be6251308445378a40fa9587b2fdd9fa8cc6406ce8a30b9",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Core reference accuracy, stale counts, duplicate rules and unguarded claims",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/skills/new-track.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/docs-claims-rules.md",
+      "whole_bytes": 10565,
+      "whole_sha256": "4570642dc8b44c89331a26c75f124071df95a6c96b4c0a380583153983bef142",
+      "manifest_sha256": "4570642dc8b44c89331a26c75f124071df95a6c96b4c0a380583153983bef142",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 10565,
+        "bytes": 10565,
+        "sha256": "4570642dc8b44c89331a26c75f124071df95a6c96b4c0a380583153983bef142"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 10000,
+          "bytes": 10000,
+          "sha256": "5dfa3b27cc191b21fdf19627b715b1a191af32d337ee9955b18ff7c7cec04fc0",
+          "read": "fully returned individually without truncation"
+        },
+        {
+          "start": 10000,
+          "end": 10565,
+          "bytes": 565,
+          "sha256": "e8e1977b9222bd6285f1316b7fddaf79b411bb1ff4e68464af167d532a57ba61",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Rulebook/host contradictions, generated twins, stale plan/research status and coverage gaps",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/skills/renderer-debug.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/economics.md",
+      "whole_bytes": 10346,
+      "whole_sha256": "dab08be7f97ed1f3b4fa0172e8c0a7687abfac23a81d7a5323c0db23066dbe9f",
+      "manifest_sha256": "dab08be7f97ed1f3b4fa0172e8c0a7687abfac23a81d7a5323c0db23066dbe9f",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 10346,
+        "bytes": 10346,
+        "sha256": "dab08be7f97ed1f3b4fa0172e8c0a7687abfac23a81d7a5323c0db23066dbe9f"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 10000,
+          "bytes": 10000,
+          "sha256": "a5d19bcda03a172c9a911b1a807386507144a87384d96d038e2d11f6cda6fdb7",
+          "read": "fully returned individually without truncation"
+        },
+        {
+          "start": 10000,
+          "end": 10346,
+          "bytes": 346,
+          "sha256": "75c573bf9acf7237a8e094ff67c029e2751920bfa93f8eb69ec345c291e4ab96",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Fleet-B list-equivalent costs, weekly limits, context and wake overhead, Actions sampling",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/hunt-core-b.md",
+      "whole_bytes": 9927,
+      "whole_sha256": "13853a87a7bb5758ddb647d60a41640085bb7974e1b1cc20879559918e2ae166",
+      "manifest_sha256": "13853a87a7bb5758ddb647d60a41640085bb7974e1b1cc20879559918e2ae166",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 9927,
+        "bytes": 9927,
+        "sha256": "13853a87a7bb5758ddb647d60a41640085bb7974e1b1cc20879559918e2ae166"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9927,
+          "bytes": 9927,
+          "sha256": "13853a87a7bb5758ddb647d60a41640085bb7974e1b1cc20879559918e2ae166",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Service-worker integrity, scenery shifts, seeded state, banking, read hooks and dead APIs",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/hunt-core.md",
+      "whole_bytes": 4429,
+      "whole_sha256": "102d072f9e1320e3ef72a58acaec93db4a26f54915b210a9b43029ae60b2b5dc",
+      "manifest_sha256": "102d072f9e1320e3ef72a58acaec93db4a26f54915b210a9b43029ae60b2b5dc",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 4429,
+        "bytes": 4429,
+        "sha256": "102d072f9e1320e3ef72a58acaec93db4a26f54915b210a9b43029ae60b2b5dc"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4429,
+          "bytes": 4429,
+          "sha256": "102d072f9e1320e3ef72a58acaec93db4a26f54915b210a9b43029ae60b2b5dc",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Core entry/lazy lifecycle, shell guard and extraction candidates",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/hunt-core-b.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/hunt-physics-ai.md",
+      "whole_bytes": 5069,
+      "whole_sha256": "433aa51ad32fdcd5fd60263b1751a8029f8629af127984f3391fcc460d8083b7",
+      "manifest_sha256": "433aa51ad32fdcd5fd60263b1751a8029f8629af127984f3391fcc460d8083b7",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 5069,
+        "bytes": 5069,
+        "sha256": "433aa51ad32fdcd5fd60263b1751a8029f8629af127984f3391fcc460d8083b7"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5069,
+          "bytes": 5069,
+          "sha256": "433aa51ad32fdcd5fd60263b1751a8029f8629af127984f3391fcc460d8083b7",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Player arc isolation, grip input contract, pooled tick work and unused exports",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/hunt-physics-b.md",
+        "docs/notes/system-audit-4/cards/physics-contract-auditor.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/hunt-physics-b.md",
+      "whole_bytes": 11307,
+      "whole_sha256": "5ba9e3be8d9325f664f5b1c8ef6a85bffaa0aad8c811d0781574ba768b079ef9",
+      "manifest_sha256": "5ba9e3be8d9325f664f5b1c8ef6a85bffaa0aad8c811d0781574ba768b079ef9",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 11307,
+        "bytes": 11307,
+        "sha256": "5ba9e3be8d9325f664f5b1c8ef6a85bffaa0aad8c811d0781574ba768b079ef9"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 10000,
+          "bytes": 10000,
+          "sha256": "08bab1322025cb7c14c746ddc34ac38b12c55c7ad5c0f6af5bfa6ede252a9e27",
+          "read": "fully returned individually without truncation"
+        },
+        {
+          "start": 10000,
+          "end": 11307,
+          "bytes": 1307,
+          "sha256": "f6e9878d4d4b98b08fb50f2e2570bdaca8d0e2d60ec445de9b746a3f2274b7d4",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "AI marbles arc channel, snapshot ordering, allocations, wall scrub and collision asymmetry",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/skills/race-weekend.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/hunt-render-b.md",
+      "whole_bytes": 9288,
+      "whole_sha256": "d6721b40d0f762fdcc147fc5e641460dbb0be6d8f5e38342be7f0d68eb8b00ca",
+      "manifest_sha256": "d6721b40d0f762fdcc147fc5e641460dbb0be6d8f5e38342be7f0d68eb8b00ca",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 9288,
+        "bytes": 9288,
+        "sha256": "d6721b40d0f762fdcc147fc5e641460dbb0be6d8f5e38342be7f0d68eb8b00ca"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9288,
+          "bytes": 9288,
+          "sha256": "d6721b40d0f762fdcc147fc5e641460dbb0be6d8f5e38342be7f0d68eb8b00ca",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Renderer lifecycle, duplicate body function, lamp-cell pin, WGX listeners and model decode",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/skills/garage-parts-livery.md",
+        "docs/notes/system-audit-4/skills/lighting-tuner.md",
+        "docs/notes/system-audit-4/skills/renderer-debug.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/hunt-render.md",
+      "whole_bytes": 4325,
+      "whole_sha256": "752b685c800987065867fcb3bb7233bd18bf7989a05d2cbb509e051f2248ea62",
+      "manifest_sha256": "752b685c800987065867fcb3bb7233bd18bf7989a05d2cbb509e051f2248ea62",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 4325,
+        "bytes": 4325,
+        "sha256": "752b685c800987065867fcb3bb7233bd18bf7989a05d2cbb509e051f2248ea62"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4325,
+          "bytes": 4325,
+          "sha256": "752b685c800987065867fcb3bb7233bd18bf7989a05d2cbb509e051f2248ea62",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Visor race-exit paint, canvas sizing, fallback handling and cross-backend pack parity",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/hunt-render-b.md",
+        "docs/notes/system-audit-4/cards/code-hunter.md",
+        "docs/notes/system-audit-4/skills/renderer-debug.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/hunt-ui-b.md",
+      "whole_bytes": 9397,
+      "whole_sha256": "3d00aa8b5c69311d6f402616973cb047230e3530aa9fc1da6a27a83830533ace",
+      "manifest_sha256": "3d00aa8b5c69311d6f402616973cb047230e3530aa9fc1da6a27a83830533ace",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 9397,
+        "bytes": 9397,
+        "sha256": "3d00aa8b5c69311d6f402616973cb047230e3530aa9fc1da6a27a83830533ace"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9397,
+          "bytes": 9397,
+          "sha256": "3d00aa8b5c69311d6f402616973cb047230e3530aa9fc1da6a27a83830533ace",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "iOS first gesture, pad polling/rate limits, relative HUD layouts and static CSS/a11y",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/skills/css-play.md",
+        "docs/notes/system-audit-4/skills/multiplayer-debug.md",
+        "docs/notes/system-audit-4/skills/ui-menu-a11y.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/hunt-ui.md",
+      "whole_bytes": 5279,
+      "whole_sha256": "9c157a200d565f4ab0edc3a93e7404b1d296cea49a5bde8c318e09f620ec7401",
+      "manifest_sha256": "9c157a200d565f4ab0edc3a93e7404b1d296cea49a5bde8c318e09f620ec7401",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 5279,
+        "bytes": 5279,
+        "sha256": "9c157a200d565f4ab0edc3a93e7404b1d296cea49a5bde8c318e09f620ec7401"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5279,
+          "bytes": 5279,
+          "sha256": "9c157a200d565f4ab0edc3a93e7404b1d296cea49a5bde8c318e09f620ec7401",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "whole file",
+      "topics": "Audio retry observers, touch release, modal focus, safe areas and static HUD checks",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/hunt-ui-b.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    },
+    {
+      "path": "docs/notes/system-audit-4/live-site.md",
+      "whole_bytes": 6960,
+      "whole_sha256": "3e7c8e4a6b332c0244fe2558adb4173a9eac6eb6c0267fe40209d19b23708f26",
+      "manifest_sha256": "3e7c8e4a6b332c0244fe2558adb4173a9eac6eb6c0267fe40209d19b23708f26",
+      "manifest_hash_matches": true,
+      "part": {
+        "start": 0,
+        "end": 6552,
+        "bytes": 6552,
+        "sha256": "9813c81ef14b7d9c53fcec579c51e8b6e4990e2dbd7effed87b0021ae8b5e5c7"
+      },
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6552,
+          "bytes": 6552,
+          "sha256": "9813c81ef14b7d9c53fcec579c51e8b6e4990e2dbd7effed87b0021ae8b5e5c7",
+          "read": "fully returned individually without truncation"
+        }
+      ],
+      "coverage": "partial file; adjacent batch owns remainder",
+      "topics": "Historical live deployment hashes, train lag, payload, cache headers and shell freshness",
+      "date": "2026-10-26 audit; earlier 2026-10-19 onward evidence where stated",
+      "producer": "system-audit-4 named slice author; individual identity not established in assigned bytes; hunt-ui explicitly saved by main",
+      "backlinks": [
+        "docs/notes/system-audit-4/README.md",
+        "docs/notes/system-audit-4/cards/deploy-research.md",
+        "docs/notes/system-audit-4/skills/pwa-cache-service-worker.md"
+      ],
+      "current_use": "historical audit provenance and investigation leads; no current defect or live-site verification",
+      "limits": "Read-only mapping. Original runtime/device/performance and sampling exclusions remain; source fixes and latest status not checked."
+    }
+  ],
+  "cleanup_findings": [
+    {
+      "finding": "Retain audit as dated evidence; route present-day decisions to canonical references and fresh verification.",
+      "action": "No deletion or source changes."
+    },
+    {
+      "finding": "Follow-up hunts explicitly fill first-pass gaps; preserve paired reports and their original limits.",
+      "action": "Avoid collapsing plausible, code-traced and measured findings into one verified defect list."
+    },
+    {
+      "finding": "Scratch scripts/ledgers and old host paths are historical producer artifacts, not guaranteed checkout dependencies.",
+      "action": "Keep raw historical paths in this JSON only."
+    }
+  ]
+}

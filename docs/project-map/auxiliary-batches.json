@@ -1,0 +1,978 @@
+{
+  "goal": "Complete original tracked source/prose/data scope; every assigned text byte read, binary metadata inspected, historical material is provenance not authority. Half-open byte spans.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": ".codex/config.toml",
+          "start": 0,
+          "end": 2025,
+          "kind": "text",
+          "sha256": "85e09937d37d272f82bb7aa0e61afb5801792821fbf5d86a03c45605f16be7ce"
+        },
+        {
+          "path": ".codex/hooks.json",
+          "start": 0,
+          "end": 559,
+          "kind": "text",
+          "sha256": "a1dea5dccf6b118c1670a3cc49d3ef2909f220928e8d0b7111b13d9f156504d0"
+        },
+        {
+          "path": ".codex/hooks/mcp-guard.sh",
+          "start": 0,
+          "end": 2040,
+          "kind": "text",
+          "sha256": "48701bffcda31f96ef34f89b3010a362f2867acc8761a9d77bf384836c788f6f"
+        },
+        {
+          "path": ".codex/hooks/shell-guard.sh",
+          "start": 0,
+          "end": 1551,
+          "kind": "text",
+          "sha256": "2ecbd335e69a1819d55cfecb881e622a0d95d53600b8b2d16e99fcf9b36528ad"
+        },
+        {
+          "path": ".cursor/BUGBOT.md",
+          "start": 0,
+          "end": 1198,
+          "kind": "text",
+          "sha256": "ebf92b4c852da0c2d952d03824dbf9e43302d4bb8471711ede259ba259cd80ca"
+        },
+        {
+          "path": ".cursor/config/bugbot.yaml",
+          "start": 0,
+          "end": 177,
+          "kind": "text",
+          "sha256": "d3e7f915d75e0b5e45f0f7c74f8fcbf8b093cf353e1a456add4d6846826fb50f"
+        },
+        {
+          "path": ".cursor/environment.json",
+          "start": 0,
+          "end": 843,
+          "kind": "text",
+          "sha256": "41532072d2ed21727bbd4633978d8e49313037b887a4450598d2acfaee7f62bb"
+        },
+        {
+          "path": ".cursor/hooks.json",
+          "start": 0,
+          "end": 409,
+          "kind": "text",
+          "sha256": "842bd32d576023cf317b019d4c229fd5f352927561e31d02748949c17fab1a99"
+        },
+        {
+          "path": ".cursor/hooks/edit-guard.sh",
+          "start": 0,
+          "end": 6309,
+          "kind": "text",
+          "sha256": "0e60da907c02f0fcd8f07cf74121a8d371461563a6301bd5b8705ea36b8bc07d"
+        },
+        {
+          "path": ".cursor/hooks/mcp-guard.sh",
+          "start": 0,
+          "end": 1593,
+          "kind": "text",
+          "sha256": "ab8d023002ba63eea0427707f69b3bfd682e20eb38c3169d7ac8a2f733d293c9"
+        },
+        {
+          "path": ".cursor/hooks/shell-guard.sh",
+          "start": 0,
+          "end": 3247,
+          "kind": "text",
+          "sha256": "33417298b3836df6f234a86d52f7b63249c60b37659989ac3d49bb8c653f607d"
+        },
+        {
+          "path": ".cursor/mcp.json",
+          "start": 0,
+          "end": 1677,
+          "kind": "text",
+          "sha256": "62da68560e1725e09f58e55c8b37d5bca279f22382e809cb08504de1c04c1114"
+        },
+        {
+          "path": ".cursor/rules/apex-shared.mdc",
+          "start": 0,
+          "end": 2007,
+          "kind": "text",
+          "sha256": "d13b52272cce6c1805d65b9a8c7726e1ac4b23ae70d9ea9a75417cc6e2c0ea52"
+        },
+        {
+          "path": ".cursor/rules/ci-tools.mdc",
+          "start": 0,
+          "end": 585,
+          "kind": "text",
+          "sha256": "8729c72bc55536881134eb0f356e3e0797aa6bc11c1f235c98d8434397813713"
+        },
+        {
+          "path": ".cursor/rules/claude-config.mdc",
+          "start": 0,
+          "end": 3087,
+          "kind": "text",
+          "sha256": "49b7f4ce0d88c9b3f0abc15f74c5f7c9a3b068881a7472424f4d231362503fd8"
+        },
+        {
+          "path": ".cursor/rules/game-code.mdc",
+          "start": 0,
+          "end": 2301,
+          "kind": "text",
+          "sha256": "b9a302ed1129144806ee12c484d6f453262dccfec36be12be1655f68903c08eb"
+        },
+        {
+          "path": ".cursor/rules/js-nav.mdc",
+          "start": 0,
+          "end": 1521,
+          "kind": "text",
+          "sha256": "6fcd8a88124a4fc75130ba3ca9095284793e58bb8df56e483cfd9b336cdf2666"
+        },
+        {
+          "path": ".cursor/rules/render-tlx.mdc",
+          "start": 0,
+          "end": 2261,
+          "kind": "text",
+          "sha256": "f920681f25d2ff1e76f0a90c3028d0dc5173f188d3920e5aea65a412b71b0113"
+        },
+        {
+          "path": ".cursor/rules/render-wgx.mdc",
+          "start": 0,
+          "end": 2902,
+          "kind": "text",
+          "sha256": "88c1b5da07a012a28f87dc6d29b6b55874d5dc26452a0da8cfce4df90208f473"
+        },
+        {
+          "path": ".cursor/rules/tests-specs.mdc",
+          "start": 0,
+          "end": 723,
+          "kind": "text",
+          "sha256": "f46c492d8fa1359222572e5c10309d70de4c87d299bec594a9ecb43492d586f4"
+        },
+        {
+          "path": ".githooks/pre-commit",
+          "start": 0,
+          "end": 9072,
+          "kind": "text",
+          "sha256": "3695299fb48ae60ef00a77ec3da9efb36b2b994d38c05e9f786116d40a773501"
+        },
+        {
+          "path": ".githooks/pre-push",
+          "start": 0,
+          "end": 1853,
+          "kind": "text",
+          "sha256": "716451b052665544864e49b97d4bccca361e325d47940a07051be95305d5185d"
+        },
+        {
+          "path": "artifacts/findings.md",
+          "start": 0,
+          "end": 2794,
+          "kind": "text",
+          "sha256": "754fc68bdeeae86d1dd2b12f50334237520caf67206866caad2f623c5e4948d5"
+        },
+        {
+          "path": "artifacts/night-lamps-after/albert_park-night.jpg",
+          "start": 0,
+          "end": 113709,
+          "kind": "binary",
+          "sha256": "1033cf4c5f9287c81141425162b65b2ad4483b8f1a2ff8e4ca1c6775fc0f8edb"
+        },
+        {
+          "path": "artifacts/night-lamps-after/albert_park-night.jpg.capture.json",
+          "start": 0,
+          "end": 8719,
+          "kind": "text",
+          "sha256": "4cc6a8bf05e3bf491a50345e4289b6e05e5d0845c50dbfe00917078269dbf54e"
+        },
+        {
+          "path": "artifacts/night-lamps-after/dijon-night.jpg",
+          "start": 0,
+          "end": 50551,
+          "kind": "binary",
+          "sha256": "8ebe4714a2818289ef39925d327fbf59485cb6bebec63cb8f01bc9ebb6671438"
+        },
+        {
+          "path": "artifacts/night-lamps-after/dijon-night.jpg.capture.json",
+          "start": 0,
+          "end": 8677,
+          "kind": "text",
+          "sha256": "dcf104b6fb82c90e05a9696632f6ec66a09e08a2880ce12206b12128bcfb6b46"
+        },
+        {
+          "path": "artifacts/night-lamps-after/kyalami-night.jpg",
+          "start": 0,
+          "end": 115366,
+          "kind": "binary",
+          "sha256": "11de2cdf7f20741bdf57bbcb6506bd197852045aed0e7742a2637877275d6c77"
+        },
+        {
+          "path": "artifacts/night-lamps-after/kyalami-night.jpg.capture.json",
+          "start": 0,
+          "end": 8699,
+          "kind": "text",
+          "sha256": "fa4461a05bbf3caf3386fa20c04b20178470f41363e2b1f67fb4bf819b6d4451"
+        },
+        {
+          "path": "artifacts/night-lamps-after/mexico-night.jpg",
+          "start": 0,
+          "end": 113003,
+          "kind": "binary",
+          "sha256": "b9f909f39a5e1ed20281535c7188ab3c0b1e69c22d714d61660b29c21aec9150"
+        },
+        {
+          "path": "artifacts/night-lamps-after/mexico-night.jpg.capture.json",
+          "start": 0,
+          "end": 8688,
+          "kind": "text",
+          "sha256": "ff67667d4dc50181f0b573a9b5bfcb855529d402a7c4f11500795bd5524c77db"
+        },
+        {
+          "path": "artifacts/night-lamps-before/albert_park-night.jpg",
+          "start": 0,
+          "end": 104334,
+          "kind": "binary",
+          "sha256": "b897d9a601a39de86c27c89f9aa194544167b9d2d31479cfc6e14c85f69cd113"
+        },
+        {
+          "path": "artifacts/night-lamps-before/albert_park-night.jpg.capture.json",
+          "start": 0,
+          "end": 8734,
+          "kind": "text",
+          "sha256": "3496da56112def3fc3c5edefed3fd0b8e5f56c41c26adcb7765a34460d60562e"
+        },
+        {
+          "path": "artifacts/night-lamps-before/dijon-night.jpg",
+          "start": 0,
+          "end": 48261,
+          "kind": "binary",
+          "sha256": "0fb938fb0395b0f6025f2e8f5ac0203e3cea468f4bf41087ed7bf67d74ae6f40"
+        },
+        {
+          "path": "artifacts/night-lamps-before/dijon-night.jpg.capture.json",
+          "start": 0,
+          "end": 8685,
+          "kind": "text",
+          "sha256": "d9412c7cdb9fb071631701ff84780e50d8927488834d030466254693318cc1c2"
+        },
+        {
+          "path": "artifacts/night-lamps-before/kyalami-night.jpg",
+          "start": 0,
+          "end": 133771,
+          "kind": "binary",
+          "sha256": "871e0bec9274f629fb3119bbc2296e3dde64bf9a75d97c517102a3b2247da1af"
+        },
+        {
+          "path": "artifacts/night-lamps-before/kyalami-night.jpg.capture.json",
+          "start": 0,
+          "end": 8686,
+          "kind": "text",
+          "sha256": "1a24de7183d391c548fa16c6b33c93def9f749d6acf420b3d8b4607c6a039d1d"
+        },
+        {
+          "path": "artifacts/night-lamps-before/mexico-night.jpg",
+          "start": 0,
+          "end": 108117,
+          "kind": "binary",
+          "sha256": "c0c4b46d6f57bc151a6523010d5ca03ccacffa8bd6a059f5b59fcedfdeaa4364"
+        },
+        {
+          "path": "artifacts/night-lamps-before/mexico-night.jpg.capture.json",
+          "start": 0,
+          "end": 8697,
+          "kind": "text",
+          "sha256": "4c639be51db7e0dca25799afae0fc9a3927e84e978eda113dc4321d7a457f2b2"
+        },
+        {
+          "path": "cursor-plugins/README.md",
+          "start": 0,
+          "end": 1437,
+          "kind": "text",
+          "sha256": "d735f02a5ccb1630243ade9e31b667225c87350341f1fabd5cd0b205be5d7199"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/.cursor-plugin/plugin.json",
+          "start": 0,
+          "end": 338,
+          "kind": "text",
+          "sha256": "fa9fa86cb20af6ff957eea6093efadcfd130dd9fdad55259cb472b2bb4bb7be5"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/LICENSE",
+          "start": 0,
+          "end": 1069,
+          "kind": "text",
+          "sha256": "392aebb02cc192a9b9dd3353daa8579f5972fa19eba4eab59b7b9f462a67af41"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/README.md",
+          "start": 0,
+          "end": 940,
+          "kind": "text",
+          "sha256": "b591a1b42a11c6c860a14d8e06967a71f851f10d757ca96f1f00b5aa416be273"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/commands/apex-insights.md",
+          "start": 0,
+          "end": 259,
+          "kind": "text",
+          "sha256": "8c8dce0e6b1d1eeb02c190bd9799f7d0f74a1e16c6da034e711a8fa12d6a25e8"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/commands/apex-pr-status.md",
+          "start": 0,
+          "end": 233,
+          "kind": "text",
+          "sha256": "6b724a9a1305645593cd5a8e4077fec7a0f5411b9ced22bb37908911c3ecf5d5"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/rules/apex-lanes.mdc",
+          "start": 0,
+          "end": 773,
+          "kind": "text",
+          "sha256": "456d188bf298f1042c9ba5de7d052ac771594b3d76b9b21bd0717ee1adcfa2d0"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/skills/apex-ci-and-pages-watch/SKILL.md",
+          "start": 0,
+          "end": 5527,
+          "kind": "text",
+          "sha256": "74f24d7ede31e28335e06f03d73759d40a1e638bb3eb7934b40482cad7a8455a"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/skills/apex-cloud-agent-launch/SKILL.md",
+          "start": 0,
+          "end": 3839,
+          "kind": "text",
+          "sha256": "1c8c3a56a5a0a0ccdd8f5e3f4b58bb713618611c18b48ca440e19a3662ed6bb7"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/skills/apex-garage-collision-guard/SKILL.md",
+          "start": 0,
+          "end": 1245,
+          "kind": "text",
+          "sha256": "3472386850a701549f13d8367b823463baba170ca6ddc519524dc202affa6856"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/skills/apex-insights-digest/SKILL.md",
+          "start": 0,
+          "end": 1077,
+          "kind": "text",
+          "sha256": "1c6765f58652ed953a8be30df802bd8387d4b58d8c1fff092bb0e0daf2591d0c"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/skills/apex-open-pr-status-matrix/SKILL.md",
+          "start": 0,
+          "end": 1194,
+          "kind": "text",
+          "sha256": "717f901274fb76e07a97b3315c37ddd9605cb2d5217c65c7f9df99bcb9d3f33e"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/skills/apex-specialty-handoff/SKILL.md",
+          "start": 0,
+          "end": 1558,
+          "kind": "text",
+          "sha256": "9b120a88828b705a54f791fd2ed1f83aea06fadc8e66380c06b084408639cfb7"
+        },
+        {
+          "path": "cursor-plugins/apex-f1-game/skills/apex-ui-screenshot-runbook/SKILL.md",
+          "start": 0,
+          "end": 1289,
+          "kind": "text",
+          "sha256": "9488056919529281c8caa016b9a8ed8fa182d9915adb74cc507ef375c12393a0"
+        },
+        {
+          "path": "design-preview/concept-bodies/README.md",
+          "start": 0,
+          "end": 1958,
+          "kind": "text",
+          "sha256": "31fc710af1cfe1916679ce8d3df0601c09f9bacd5ccf3cc6d02d0d83632045e6"
+        },
+        {
+          "path": "design-preview/concept-bodies/build-gallery.mjs",
+          "start": 0,
+          "end": 6441,
+          "kind": "text",
+          "sha256": "85f6612703549bfb21cdc865aeb496001ada9317520d04dac173d769ec9898dc"
+        },
+        {
+          "path": "design-preview/concept-bodies/cmp.mjs",
+          "start": 0,
+          "end": 2018,
+          "kind": "text",
+          "sha256": "3d673c09758d2667ec9c1350d8e36754c6abf79ce3c6c41346b1feccf42bd55a"
+        },
+        {
+          "path": "design-preview/concept-bodies/envelope-limits.mjs",
+          "start": 0,
+          "end": 522,
+          "kind": "text",
+          "sha256": "177751031ce2b9e516cf9e86224a74c5a55c4950f67f7c4764d4d82db27df46c"
+        },
+        {
+          "path": "design-preview/concept-bodies/envelope.mjs",
+          "start": 0,
+          "end": 1917,
+          "kind": "text",
+          "sha256": "f3e638843b11da8eb7c4757c0b8cb7715de6e917240aff737336fcd6895088f0"
+        },
+        {
+          "path": "design-preview/concept-bodies/fit-diff.mjs",
+          "start": 0,
+          "end": 1833,
+          "kind": "text",
+          "sha256": "5a1fbb7af7bb7f0c2a23a4a96d4fd8858900099caaec65e7b4c6af76c6c7daef"
+        },
+        {
+          "path": "design-preview/concept-bodies/fit-probe.mjs",
+          "start": 0,
+          "end": 2329,
+          "kind": "text",
+          "sha256": "40043317b5ae066d8fb4b9bcada1d571199232e3d2d7d9aa84c251a290e874b4"
+        },
+        {
+          "path": "design-preview/concept-bodies/identical.mjs",
+          "start": 0,
+          "end": 1527,
+          "kind": "text",
+          "sha256": "42a8e13e72daa408c30219490f94c5175d976cfe0bb1ec7e87a09ed9c2331705"
+        },
+        {
+          "path": "design-preview/concept-bodies/measure.mjs",
+          "start": 0,
+          "end": 358,
+          "kind": "text",
+          "sha256": "436c59345e8453ae4b350bf04037b17842b7d0961b00ab219a7f9e25a6c7c397"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": "design-preview/concept-bodies/measure.mjs",
+          "start": 358,
+          "end": 3000,
+          "kind": "text",
+          "sha256": "436c59345e8453ae4b350bf04037b17842b7d0961b00ab219a7f9e25a6c7c397"
+        },
+        {
+          "path": "design-preview/concept-bodies/overlay.mjs",
+          "start": 0,
+          "end": 3827,
+          "kind": "text",
+          "sha256": "442fd85d9cc5a18b18eb4d10fb385e81ddcf5cc38ff59dd53f93351a37d81bb5"
+        },
+        {
+          "path": "design-preview/concept-bodies/p75-3160.json",
+          "start": 0,
+          "end": 238,
+          "kind": "text",
+          "sha256": "81668a78f75bb674a3a393e59d4064049c9af5a65e44310bf8bfc3b3e3e9b28f"
+        },
+        {
+          "path": "design-preview/concept-bodies/solve-cam.mjs",
+          "start": 0,
+          "end": 3505,
+          "kind": "text",
+          "sha256": "f040c0ea1cda8436ffe07d184b6aa8682c8cec9366eb1b0a3a65e332a874e6d4"
+        },
+        {
+          "path": "plugins/f1-dev-tools/README.md",
+          "start": 0,
+          "end": 5487,
+          "kind": "text",
+          "sha256": "94b66f496c74bc7c2f8ad6b198e14b5912a49c83c0f6b262b3fb9d2d6199a3bd"
+        },
+        {
+          "path": "plugins/f1-dev-tools/plugin.json",
+          "start": 0,
+          "end": 1676,
+          "kind": "text",
+          "sha256": "a219ff8cfd4cf908810e41d346f2460583e8cbb161df80d8e2946d01801a91db"
+        },
+        {
+          "path": "plugins/f1-dev-tools/skills/f1-dev-tools/SKILL.md",
+          "start": 0,
+          "end": 7589,
+          "kind": "text",
+          "sha256": "10f3f3a9ec404c17fa7417ca462da0b6f59a8d64be67f1c53690858ee52aeea4"
+        },
+        {
+          "path": "plugins/f1-dev-tools/skills/f1-dev-tools/references/garage-parts.md",
+          "start": 0,
+          "end": 4345,
+          "kind": "text",
+          "sha256": "dae06b804c0b92861f11fba6f91f0ed3b7dfbbaf74b5d616f90033e9965b5a4a"
+        },
+        {
+          "path": "plugins/f1-dev-tools/skills/f1-dev-tools/references/profiling.md",
+          "start": 0,
+          "end": 10189,
+          "kind": "text",
+          "sha256": "6a67220b3fac09f81dd49e65946173c96451b6ac13abd2910b4a6fa73031d8ad"
+        },
+        {
+          "path": "plugins/f1-dev-tools/skills/f1-dev-tools/references/ui-inspection.md",
+          "start": 0,
+          "end": 3157,
+          "kind": "text",
+          "sha256": "7439ee084f641af3804825e95adbfb70c3a52d1361f20a1223c347de36c417eb"
+        },
+        {
+          "path": "plugins/f1-dev-tools/skills/f1-dev-tools/references/workflows.md",
+          "start": 0,
+          "end": 9601,
+          "kind": "text",
+          "sha256": "cd5af797c51fbdc38a6a45fae9cee40f1de634f462b985befd32ca1b0f069e75"
+        },
+        {
+          "path": "plugins/f1-dev-tools/skills/f1-dev-tools/scripts/browser.js",
+          "start": 0,
+          "end": 15324,
+          "kind": "text",
+          "sha256": "1330ca94ac118b80afc8035b5c9f4fd3e4a9cdb479692e2afb20fdde4021cd3a"
+        },
+        {
+          "path": "plugins/f1-dev-tools/skills/f1-dev-tools/scripts/compare.mjs",
+          "start": 0,
+          "end": 6262,
+          "kind": "text",
+          "sha256": "f0894c499542676cd1d612f754ad3c245926f23cb6460e4021ed26a95489e1b6"
+        },
+        {
+          "path": "scratch/analyze-garage-retry.mjs",
+          "start": 0,
+          "end": 27764,
+          "kind": "text",
+          "sha256": "8098cfb87ae03be4656a43d1d774cc554aa19ff433cdb838740efd5183a0fbec"
+        },
+        {
+          "path": "scratch/garage-livery-census.mjs",
+          "start": 0,
+          "end": 15902,
+          "kind": "text",
+          "sha256": "2d3ad95c7eb0eefe4650be0e99b070f5643cbe9414c262d20152d9882615fe5e"
+        },
+        {
+          "path": "scratch/garage-retry-ab.mjs",
+          "start": 0,
+          "end": 12480,
+          "kind": "text",
+          "sha256": "2717aeb8b7422253cd5e71d16ca84f79d1078f9998954b80e08e727bdd9652d6"
+        },
+        {
+          "path": "scratch/garage-webgpu-allocation-init.mjs",
+          "start": 0,
+          "end": 4690,
+          "kind": "text",
+          "sha256": "8993316fe0dd68220dd335ff632989b6738ebe719db5a6a2d8eacdf14754def2"
+        },
+        {
+          "path": "scratch/h10-pixdiff.mjs",
+          "start": 0,
+          "end": 753,
+          "kind": "text",
+          "sha256": "79a6844a635fc2b383b321fe0fbcbdaf73ce253fffc8318d7683bf719f6628dc"
+        },
+        {
+          "path": "scratch/h10-split-ab-run1.log",
+          "start": 0,
+          "end": 5126,
+          "kind": "text",
+          "sha256": "c85cc2b8b37c64db86fbac7e8f20aee80944bf12561aaa04ae649146c087a3da"
+        },
+        {
+          "path": "scratch/h10-split-ab.mjs",
+          "start": 0,
+          "end": 3943,
+          "kind": "text",
+          "sha256": "e416ed9e193780c930067eb514ef8d560a4fc1424cb86332af7c41a6e9b5e90f"
+        },
+        {
+          "path": "scratch/h15/drawcount.mjs",
+          "start": 0,
+          "end": 2561,
+          "kind": "text",
+          "sha256": "09b8073d9c31138326279e94744d7e37ec5ac38d0faacc0163b1275b1cfa374b"
+        },
+        {
+          "path": "scratch/h15/run-matrix.sh",
+          "start": 0,
+          "end": 423,
+          "kind": "text",
+          "sha256": "910617096c117bb980e76e02a3b1334cff90319781303db5df64358f9db4d31c"
+        },
+        {
+          "path": "scratch/h15/run-pix.sh",
+          "start": 0,
+          "end": 173,
+          "kind": "text",
+          "sha256": "bbb66e5f796bd4bce617536af69f1dfcf13bbcd18eb2a02a0beb0b8a30276182"
+        },
+        {
+          "path": "scratch/h15/split-pix.mjs",
+          "start": 0,
+          "end": 3419,
+          "kind": "text",
+          "sha256": "6035f1567bfb2edac4b4ed59ffc0823483c2990e51b951fe1514f7637b5c884b"
+        },
+        {
+          "path": "scratch/h23/ab.mjs",
+          "start": 0,
+          "end": 8924,
+          "kind": "text",
+          "sha256": "3a06517f44f727786f75192d2eaad8708d1c1a4cf9d2d962d720adb956a8ef0e"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": "scratch/h23/ab.mjs",
+          "start": 8924,
+          "end": 15300,
+          "kind": "text",
+          "sha256": "3a06517f44f727786f75192d2eaad8708d1c1a4cf9d2d962d720adb956a8ef0e"
+        },
+        {
+          "path": "scratch/h23/build_gallery.py",
+          "start": 0,
+          "end": 10059,
+          "kind": "text",
+          "sha256": "ebc1349e3c01ded842c4adb390e8f66f086ae80897a22b2b2ab48c70a867b694"
+        },
+        {
+          "path": "scratch/h23/census/game-glx-macos-latest.json",
+          "start": 0,
+          "end": 60972,
+          "kind": "text",
+          "sha256": "315c9b5e1c76e5bdc0a08083bf0d4073fabd6dfb3c634e84cd6e11b4e1522608"
+        },
+        {
+          "path": "scratch/h23/census/game-webgl2-macos-latest.json",
+          "start": 0,
+          "end": 82593,
+          "kind": "text",
+          "sha256": "52dbbe98b1013187ccea45e6ef44a817e73c4353c92aa2d9e310add3531fae66"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": "scratch/h23/census/game-webgl2-macos-latest.json",
+          "start": 82593,
+          "end": 82788,
+          "kind": "text",
+          "sha256": "52dbbe98b1013187ccea45e6ef44a817e73c4353c92aa2d9e310add3531fae66"
+        },
+        {
+          "path": "scratch/h23/diff.py",
+          "start": 0,
+          "end": 2354,
+          "kind": "text",
+          "sha256": "3c59876f1fd058d94d8932c3ac684337409b1a8690478bcd4847b98b72b1c230"
+        },
+        {
+          "path": "scratch/h23/facts.json",
+          "start": 0,
+          "end": 7584,
+          "kind": "text",
+          "sha256": "50623e99bcd9f0d4d3c2c4668a249f2992061686049c7131869a040753327978"
+        },
+        {
+          "path": "scratch/h23/gallery/pairs.json",
+          "start": 0,
+          "end": 2368,
+          "kind": "text",
+          "sha256": "e389a0bd03963835b0b0499aa5a96a3df0ebfab920d51433ee372e2deaea855f"
+        },
+        {
+          "path": "scratch/h23/out/mem-three.json",
+          "start": 0,
+          "end": 1588,
+          "kind": "text",
+          "sha256": "5e3ddb46e5fc160a9c427963f495333224ffd514352383270a0431e6a5ab2a33"
+        },
+        {
+          "path": "scratch/h23/out/mem-webgl2.json",
+          "start": 0,
+          "end": 1543,
+          "kind": "text",
+          "sha256": "3f0f3dd5eda7145af49dd5353b238129474a716443e3cb306c315ace520c0a04"
+        },
+        {
+          "path": "scratch/h23/out/perf-low-three-x4.json",
+          "start": 0,
+          "end": 2249,
+          "kind": "text",
+          "sha256": "dae7ad03c342189fb4bf5b0de5de70db21e5d35583f718ea082488e8b531bf16"
+        },
+        {
+          "path": "scratch/h23/out/perf-low-three.json",
+          "start": 0,
+          "end": 2249,
+          "kind": "text",
+          "sha256": "4b5052f9dcc33aa8017f670b265da5375af055b71dece2d574e3bd469f13526b"
+        },
+        {
+          "path": "scratch/h23/out/perf-low-webgl2-x4.json",
+          "start": 0,
+          "end": 2220,
+          "kind": "text",
+          "sha256": "1b75c1362ec00204a1b1f6c4b8a7f63a6619800393e1a891ff9b3a1b9eaeabac"
+        },
+        {
+          "path": "scratch/h23/out/perf-low-webgl2.json",
+          "start": 0,
+          "end": 2252,
+          "kind": "text",
+          "sha256": "291655df7e9645a2916865e48cc1100e6b426126a315c1d05e5fe19562e32a56"
+        },
+        {
+          "path": "scratch/h23/out/stills-low-three.json",
+          "start": 0,
+          "end": 5512,
+          "kind": "text",
+          "sha256": "d9e09524c7aac3b14e592d28958c7fd3ff3b968b95d2450b420ab7d77a40052f"
+        },
+        {
+          "path": "scratch/h23/out/stills-low-webgl2.json",
+          "start": 0,
+          "end": 5256,
+          "kind": "text",
+          "sha256": "97085105a98d61290f181253e92103685c717fbb86ddc73f4d159c7f2b89c039"
+        },
+        {
+          "path": "scratch/h23/out/stills-med-three.json",
+          "start": 0,
+          "end": 1062,
+          "kind": "text",
+          "sha256": "0abb848ca8cde226d58e7be8d2b712e3022d4da5d4a1b5b8a00d38a3d1c13c47"
+        },
+        {
+          "path": "scratch/h23/out/stills-med-webgl2.json",
+          "start": 0,
+          "end": 1078,
+          "kind": "text",
+          "sha256": "3f22504e00adf08101d7c4bbe01c1566aba1a5943da944352eb54e2dbf796d82"
+        },
+        {
+          "path": "scratch/render-submit-metrics.mjs",
+          "start": 0,
+          "end": 3704,
+          "kind": "text",
+          "sha256": "9fa6aeda97db15088b66e33e43bba84c72136c02b204a3be1653ca5d902dd4aa"
+        },
+        {
+          "path": "scratch/summarize-livery-census.mjs",
+          "start": 0,
+          "end": 2144,
+          "kind": "text",
+          "sha256": "d6a11e402b29802933474952fe7fdd0b05cbf9b31cb6f8d82380ec376f24e75b"
+        },
+        {
+          "path": "sites/design-lab/README.md",
+          "start": 0,
+          "end": 2768,
+          "kind": "text",
+          "sha256": "2ab2ad3a9ca7edf828324cebf5e0b15c2fcebb948a09795f49c99e355b7699e0"
+        },
+        {
+          "path": "sites/design-lab/app.js",
+          "start": 0,
+          "end": 17883,
+          "kind": "text",
+          "sha256": "f4f245cc8556912df101e025c06adcadd7ae5d9fa77d29d925d166ca281f18b2"
+        },
+        {
+          "path": "sites/design-lab/index.html",
+          "start": 0,
+          "end": 69212,
+          "kind": "text",
+          "sha256": "9c45630bd5a8b5dd7c826e553da3667a708fbe84c1955ed32e3353687595f877"
+        },
+        {
+          "path": "sites/design-lab/styles.css",
+          "start": 0,
+          "end": 26779,
+          "kind": "text",
+          "sha256": "628680e7899308425ea28fbec685c29bb4813e2186899b81531c29475845e78c"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "05",
+      "parts": [
+        {
+          "path": "sites/design-lab/styles.css",
+          "start": 26779,
+          "end": 29666,
+          "kind": "text",
+          "sha256": "628680e7899308425ea28fbec685c29bb4813e2186899b81531c29475845e78c"
+        },
+        {
+          "path": "spike/ADOPTION-PLAN.md",
+          "start": 0,
+          "end": 14259,
+          "kind": "text",
+          "sha256": "a994df6dce469d16c9e8e98448b3012947e100b06c8bc8632ba9095120f462f7"
+        },
+        {
+          "path": "spike/PACKAGE-RESEARCH.md",
+          "start": 0,
+          "end": 12010,
+          "kind": "text",
+          "sha256": "0c124737e7b4e2114c2a03a077b5ac11dfba4f43e62cb2e7f94d40ac5830d6ac"
+        },
+        {
+          "path": "spike/README.md",
+          "start": 0,
+          "end": 10194,
+          "kind": "text",
+          "sha256": "81fdcc87734d988cff513eb9cbe44e87bc8756d121899a3741472a63d53d8e78"
+        },
+        {
+          "path": "spike/UI-RESEARCH.md",
+          "start": 0,
+          "end": 8984,
+          "kind": "text",
+          "sha256": "0c69ac6682cee85e223caa428f75f8d19f02b9922204f18dfee1896aed65cf85"
+        },
+        {
+          "path": "spike/backends/README.md",
+          "start": 0,
+          "end": 762,
+          "kind": "text",
+          "sha256": "0ec5e39d15a50565e6e3f94a0cc40e965b54c06b2cfba53d79d56066db925cc2"
+        },
+        {
+          "path": "spike/capture-m8.mjs",
+          "start": 0,
+          "end": 6212,
+          "kind": "text",
+          "sha256": "57edf952d5c2fed2a2a73f2931b18a5222683fb3c02f4bd29dbb5d84a87ceab5"
+        },
+        {
+          "path": "spike/capture.mjs",
+          "start": 0,
+          "end": 11567,
+          "kind": "text",
+          "sha256": "9bd083feca0c83effbad60c898fbfc4e53e6371968974ea3225c15d0cf8dd281"
+        },
+        {
+          "path": "spike/physics/.gitignore",
+          "start": 0,
+          "end": 16,
+          "kind": "text",
+          "sha256": "e12a78422f4414653e09b5239862a66283388acfab63abe5137b4f22aaeac041"
+        },
+        {
+          "path": "spike/physics/DEEP-DIVE.md",
+          "start": 0,
+          "end": 16759,
+          "kind": "text",
+          "sha256": "b688ea5f9355e0e1e12d0dcf50d872a07895ec29455d0cced5f6383b559d7801"
+        },
+        {
+          "path": "spike/physics/README.md",
+          "start": 0,
+          "end": 11888,
+          "kind": "text",
+          "sha256": "01daac8258b6121640252ae8b7b156fed66e6f9d4b7296ad86127992892bc95b"
+        },
+        {
+          "path": "spike/physics/build-geometry.cjs",
+          "start": 0,
+          "end": 3829,
+          "kind": "text",
+          "sha256": "2e8fa2e655da0fe98f55bd22a9805d25c61cc4aefc29e37aa23997ec99187448"
+        },
+        {
+          "path": "spike/physics/deep-handover.mjs",
+          "start": 0,
+          "end": 13848,
+          "kind": "text",
+          "sha256": "e08e61e2eb12b5a73c037f1c8d7bbcebcad95de527bfad4e07f5d74174d4368a"
+        },
+        {
+          "path": "spike/physics/deep-sideworld-run.mjs",
+          "start": 0,
+          "end": 4766,
+          "kind": "text",
+          "sha256": "75747db41a033cd428fddfc6bc3d56faa75aacf45a3fa63e674377c95df0601d"
+        },
+        {
+          "path": "spike/physics/deep-sideworld.js",
+          "start": 0,
+          "end": 9567,
+          "kind": "text",
+          "sha256": "23b1042d09b0a3f927b3918d02fa257dc183226c1fa542898d47bae1daf44791"
+        },
+        {
+          "path": "spike/physics/deep-tuning.mjs",
+          "start": 0,
+          "end": 26126,
+          "kind": "text",
+          "sha256": "b9e77994f1f3f339edda0445da8543eb03931569c55df3e19d15fdbba229a2bb"
+        },
+        {
+          "path": "spike/physics/rapier-eval.mjs",
+          "start": 0,
+          "end": 6326,
+          "kind": "text",
+          "sha256": "2605a74ada4a88e97a2311852625315664c17b270bcbf93a60f9ce9bc9579b5a"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "06",
+      "parts": [
+        {
+          "path": "spike/physics/rapier-eval.mjs",
+          "start": 6326,
+          "end": 15635,
+          "kind": "text",
+          "sha256": "2605a74ada4a88e97a2311852625315664c17b270bcbf93a60f9ce9bc9579b5a"
+        },
+        {
+          "path": "spike/physics/side-world.html",
+          "start": 0,
+          "end": 552,
+          "kind": "text",
+          "sha256": "d427dd8829dce56e4ba65399f29f8579986a2ae1494ad43511021dbf29a5d3f5"
+        },
+        {
+          "path": "spike/spike-data.js",
+          "start": 0,
+          "end": 4067,
+          "kind": "text",
+          "sha256": "335489da625fef3834d17a89dda559d3ce893ae20bef05510d02ef945bdd7d0a"
+        },
+        {
+          "path": "spike/three-spike.html",
+          "start": 0,
+          "end": 3005,
+          "kind": "text",
+          "sha256": "c38d6fc71f17f9ed3a9e417d77e824967d1b36dcc427349d7cc457dfc516e61b"
+        },
+        {
+          "path": "spike/three-spike.js",
+          "start": 0,
+          "end": 19009,
+          "kind": "text",
+          "sha256": "5d77be6f2c1470ac6a1a5a80ed2e4446e8f9bc4e5b2b05678b0e0bec78218922"
+        }
+      ],
+      "bytes": 35942,
+      "status": "unassigned"
+    }
+  ]
+}

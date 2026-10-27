@@ -1,0 +1,601 @@
+{
+  "group": "43",
+  "classification": "Historical provenance only; no execution authority",
+  "assigned_bytes": 100000,
+  "read_chunks": 19,
+  "coverage": "All 16 assigned half-open intervals read fully in 19 individually returned untruncated calls, each <=8000 bytes for split files and <=10000 bytes overall. Incident opening and worker remainder belong to adjacent groups.",
+  "sources": [
+    {
+      "source": "docs/notes/system-audit-4/skills/race-incidents-control.md",
+      "whole_bytes": 4720,
+      "whole_sha256": "54ab2dc2ea3edfd63120067e75d766861a6252ce5bbed9906cc8e0384bb14d7c",
+      "manifest_sha256": "54ab2dc2ea3edfd63120067e75d766861a6252ce5bbed9906cc8e0384bb14d7c",
+      "manifest_matches": true,
+      "range": [
+        2767,
+        4720
+      ],
+      "part_bytes": 1953,
+      "part_sha256": "1972ea5f9c83061e51b8b282fa8f0b3ece5300ac3b6aec3aea9be95f1d4bfa3a",
+      "chunks": [
+        {
+          "start": 2767,
+          "end": 4720,
+          "bytes": 1953,
+          "sha256": "1972ea5f9c83061e51b8b282fa8f0b3ece5300ac3b6aec3aea9be95f1d4bfa3a"
+        }
+      ],
+      "topic": "Incident-control tail: marble arc-rule dispute, stale symbol anchor, single-spec runner gaps",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        "docs/PHYSICS.md",
+        "tests/specs/",
+        "tools/ci/test-bg.mjs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/race-weekend.md",
+      "whole_bytes": 5951,
+      "whole_sha256": "15bf91812c494678a5bb2ba8a82ed92be398d4424d5ac357bf5a920197d87744",
+      "manifest_sha256": "15bf91812c494678a5bb2ba8a82ed92be398d4424d5ac357bf5a920197d87744",
+      "manifest_matches": true,
+      "range": [
+        0,
+        5951
+      ],
+      "part_bytes": 5951,
+      "part_sha256": "15bf91812c494678a5bb2ba8a82ed92be398d4424d5ac357bf5a920197d87744",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5951,
+          "bytes": 5951,
+          "sha256": "15bf91812c494678a5bb2ba8a82ed92be398d4424d5ac357bf5a920197d87744"
+        }
+      ],
+      "topic": "Race-weekend routing, pit geometry classification and oversized verification",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        "docs/ARCHITECTURE.md",
+        "docs/PHYSICS.md",
+        "docs/research/PIT-*.md",
+        "docs/research/TYRE-STRATEGY-DESIGN.md",
+        "tests/groups.json",
+        "tests/specs/",
+        "tests/specs/pit-lane.spec.js",
+        "tests/unit/adapted-specs.test.mjs",
+        "tools/manifest.cjs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/renderer-debug.md",
+      "whole_bytes": 5538,
+      "whole_sha256": "4c8223cf80d4f263bca79022527faa222719054cb72d3347039fc83fc52b4daa",
+      "manifest_sha256": "4c8223cf80d4f263bca79022527faa222719054cb72d3347039fc83fc52b4daa",
+      "manifest_matches": true,
+      "range": [
+        0,
+        5538
+      ],
+      "part_bytes": 5538,
+      "part_sha256": "4c8223cf80d4f263bca79022527faa222719054cb72d3347039fc83fc52b4daa",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5538,
+          "bytes": 5538,
+          "sha256": "4c8223cf80d4f263bca79022527faa222719054cb72d3347039fc83fc52b4daa"
+        }
+      ],
+      "topic": "Renderer troubleshooting: phone Metal path, census permissions, stale overlays and duplicate definitions",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        ".claude/rules/render-tlx.md",
+        ".github/gpu-census-request.json",
+        "js/car/",
+        "js/car/car-body-geom.js",
+        "js/render/fx",
+        "tests/specs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/scenery-dress.md",
+      "whole_bytes": 5155,
+      "whole_sha256": "014fe770a0a16ceb6b6d63950f8820396e3eabb6ab555f9bf47fde0f5aa50ed2",
+      "manifest_sha256": "014fe770a0a16ceb6b6d63950f8820396e3eabb6ab555f9bf47fde0f5aa50ed2",
+      "manifest_matches": true,
+      "range": [
+        0,
+        5155
+      ],
+      "part_bytes": 5155,
+      "part_sha256": "014fe770a0a16ceb6b6d63950f8820396e3eabb6ab555f9bf47fde0f5aa50ed2",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5155,
+          "bytes": 5155,
+          "sha256": "014fe770a0a16ceb6b6d63950f8820396e3eabb6ab555f9bf47fde0f5aa50ed2"
+        }
+      ],
+      "topic": "Scenery workflow: generated location map, frozen API, instancing checks and frame duplication",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        ".claude/rules/game-code.md",
+        ".claude/skills",
+        "docs/SCENERY-API.md",
+        "js/circuits/AGENTS.md",
+        "js/track/AGENTS.md",
+        "js/track/AGENTS.md.",
+        "tests/groups.json",
+        "tests/specs/instanced-draw.spec.js",
+        "tools/gen",
+        "tools/lib/generated-paths.mjs",
+        "tools/shot/gen-scenery-locations.cjs",
+        "tools/shot/scenery-locations.json",
+        "tools/track/measure-props-over-road.mjs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/season-mode.md",
+      "whole_bytes": 5336,
+      "whole_sha256": "d85dd36149488e7a386c91bb60de6d44d80e0892134358d994e02e2ffbaaeb5e",
+      "manifest_sha256": "d85dd36149488e7a386c91bb60de6d44d80e0892134358d994e02e2ffbaaeb5e",
+      "manifest_matches": true,
+      "range": [
+        0,
+        5336
+      ],
+      "part_bytes": 5336,
+      "part_sha256": "d85dd36149488e7a386c91bb60de6d44d80e0892134358d994e02e2ffbaaeb5e",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5336,
+          "bytes": 5336,
+          "sha256": "d85dd36149488e7a386c91bb60de6d44d80e0892134358d994e02e2ffbaaeb5e"
+        }
+      ],
+      "topic": "Season/career routing regex, sprint ownership and verification cost",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        ".claude/hooks/skill-hint.py",
+        ".claude/skills/career-mode/SKILL.md",
+        ".claude/skills/season-mode/SKILL.md",
+        "tests/groups.json",
+        "tests/specs/season.spec.js",
+        "tests/unit/season-cal.test.mjs",
+        "tools/ci/test-bg.mjs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/ship.md",
+      "whole_bytes": 4737,
+      "whole_sha256": "996dc42075eff527fccd3bdfeecde93c3864080da8e502de0be57d2be30391e8",
+      "manifest_sha256": "996dc42075eff527fccd3bdfeecde93c3864080da8e502de0be57d2be30391e8",
+      "manifest_matches": true,
+      "range": [
+        0,
+        4737
+      ],
+      "part_bytes": 4737,
+      "part_sha256": "996dc42075eff527fccd3bdfeecde93c3864080da8e502de0be57d2be30391e8",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4737,
+          "bytes": 4737,
+          "sha256": "996dc42075eff527fccd3bdfeecde93c3864080da8e502de0be57d2be30391e8"
+        }
+      ],
+      "topic": "Shipping router: readiness refusals, draft transition and receipt/watch ownership",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        ".github/pull_request_template.md",
+        "docs/VERIFICATION.md",
+        "tools/ci/{deploy"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/slim-bloat.md",
+      "whole_bytes": 5256,
+      "whole_sha256": "d415c05a3a0858f6563a71243d7c3439294c07b65b36c44d8cd0ebe01d34099c",
+      "manifest_sha256": "d415c05a3a0858f6563a71243d7c3439294c07b65b36c44d8cd0ebe01d34099c",
+      "manifest_matches": true,
+      "range": [
+        0,
+        5256
+      ],
+      "part_bytes": 5256,
+      "part_sha256": "d415c05a3a0858f6563a71243d7c3439294c07b65b36c44d8cd0ebe01d34099c",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5256,
+          "bytes": 5256,
+          "sha256": "d415c05a3a0858f6563a71243d7c3439294c07b65b36c44d8cd0ebe01d34099c"
+        }
+      ],
+      "topic": "Bloat routing contradictions, dead CSS ownership, coverage handback and carve targets",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        ".claude/agents/bloat-auditor.md",
+        ".claude/skills/agent-config/SKILL.md",
+        ".claude/skills/css-play/SKILL.md",
+        "docs/ARCHITECTURE.md"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/steward.md",
+      "whole_bytes": 4762,
+      "whole_sha256": "e4eba44b91a130a8ffa96fe454d853ba97d2e676dd96c5e1bf33842685a9b897",
+      "manifest_sha256": "e4eba44b91a130a8ffa96fe454d853ba97d2e676dd96c5e1bf33842685a9b897",
+      "manifest_matches": true,
+      "range": [
+        0,
+        4762
+      ],
+      "part_bytes": 4762,
+      "part_sha256": "e4eba44b91a130a8ffa96fe454d853ba97d2e676dd96c5e1bf33842685a9b897",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4762,
+          "bytes": 4762,
+          "sha256": "e4eba44b91a130a8ffa96fe454d853ba97d2e676dd96c5e1bf33842685a9b897"
+        }
+      ],
+      "topic": "PR stewardship: CI watch flags, duplicated hold grammar and forwarding stub",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        "docs/notes.",
+        "docs/notes/PREPUSH-GATE-LADDER.md",
+        "tools/check/doctor.mjs",
+        "tools/ci/{needs-sync"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/survey-track.md",
+      "whole_bytes": 7439,
+      "whole_sha256": "7391264a866e759426aa308f82d3467b3589d18e6626e2cb7ae7e65fad8d854d",
+      "manifest_sha256": "7391264a866e759426aa308f82d3467b3589d18e6626e2cb7ae7e65fad8d854d",
+      "manifest_matches": true,
+      "range": [
+        0,
+        7439
+      ],
+      "part_bytes": 7439,
+      "part_sha256": "7391264a866e759426aa308f82d3467b3589d18e6626e2cb7ae7e65fad8d854d",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 7439,
+          "bytes": 7439,
+          "sha256": "7391264a866e759426aa308f82d3467b3589d18e6626e2cb7ae7e65fad8d854d"
+        }
+      ],
+      "topic": "Track realism routing, surveyor assignment isolation, merge handback and stale counts",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        ".claude/agents/track-surveyor.md",
+        ".claude/hooks/protect-files.py",
+        ".claude/skills/survey-track/SKILL.md",
+        ".claude/skills/survey-track/ground-profile.mjs",
+        ".claude/skills/survey-track/references/campaign.md",
+        "docs/AGENT-SURFACE.md.",
+        "docs/EVIDENCE-STORAGE.md",
+        "docs/tracks/",
+        "js/circuits/",
+        "js/track/core/def.js",
+        "scratch/artifacts",
+        "tools/lib/track-build-vm.cjs",
+        "tools/shot/{frame-report",
+        "tools/track/*.cjs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/survey-ui-matrix.md",
+      "whole_bytes": 2735,
+      "whole_sha256": "8ca4f2c9f703ed6c62375d6f40a19b16bb8a65accafffeb33e25bc6255c37537",
+      "manifest_sha256": "8ca4f2c9f703ed6c62375d6f40a19b16bb8a65accafffeb33e25bc6255c37537",
+      "manifest_matches": true,
+      "range": [
+        0,
+        2735
+      ],
+      "part_bytes": 2735,
+      "part_sha256": "8ca4f2c9f703ed6c62375d6f40a19b16bb8a65accafffeb33e25bc6255c37537",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2735,
+          "bytes": 2735,
+          "sha256": "8ca4f2c9f703ed6c62375d6f40a19b16bb8a65accafffeb33e25bc6255c37537"
+        }
+      ],
+      "topic": "UI matrix evidence publishing, parent-only contradictions and phone viewport default",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated; card reviewer hand-back saved by main",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        ".claude/skills/survey-ui-matrix/SKILL.md",
+        "docs/EVIDENCE-STORAGE.md",
+        "scratch/**.md",
+        "tools/ui/menu-screens.mjs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/tune-physics.md",
+      "whole_bytes": 5160,
+      "whole_sha256": "fd2fb0f536ac329965384c041969070c6a9c1035caa9d82dadd70e5381734cbd",
+      "manifest_sha256": "fd2fb0f536ac329965384c041969070c6a9c1035caa9d82dadd70e5381734cbd",
+      "manifest_matches": true,
+      "range": [
+        0,
+        5160
+      ],
+      "part_bytes": 5160,
+      "part_sha256": "fd2fb0f536ac329965384c041969070c6a9c1035caa9d82dadd70e5381734cbd",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5160,
+          "bytes": 5160,
+          "sha256": "fd2fb0f536ac329965384c041969070c6a9c1035caa9d82dadd70e5381734cbd"
+        }
+      ],
+      "topic": "Physics tuning: missing shaped-lock check, arc auditor and invalid spec runner",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        ".claude/agents/physics-contract-auditor.md",
+        "docs/PHYSICS.md",
+        "js/physics/player-forces.js",
+        "scratch/...",
+        "tests/specs/",
+        "tests/specs/understeer-cue.spec.js",
+        "tools/...",
+        "tools/check/",
+        "tools/check/physics-tune-sweep.mjs.",
+        "tools/check/player-dyn.mjs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/skills/ui-menu-a11y.md",
+      "whole_bytes": 5011,
+      "whole_sha256": "17a4e09247f992b38ff16ed6f69373f1eae9ff6dff23eeacb4956a00ead0f813",
+      "manifest_sha256": "17a4e09247f992b38ff16ed6f69373f1eae9ff6dff23eeacb4956a00ead0f813",
+      "manifest_matches": true,
+      "range": [
+        0,
+        5011
+      ],
+      "part_bytes": 5011,
+      "part_sha256": "17a4e09247f992b38ff16ed6f69373f1eae9ff6dff23eeacb4956a00ead0f813",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5011,
+          "bytes": 5011,
+          "sha256": "17a4e09247f992b38ff16ed6f69373f1eae9ff6dff23eeacb4956a00ead0f813"
+        }
+      ],
+      "topic": "Menu accessibility: phone viewport, audio unlock, layer query frequency and verification",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [],
+      "historical_path_mentions": [
+        "docs/notes/",
+        "docs/notes/ARCHITECTURE-REVIEW.md",
+        "js/ui/*",
+        "scratch/sysaudit4/hunt-ui-b.md",
+        "tests/specs/*",
+        "tests/specs/...",
+        "tests/unit/*",
+        "tools/ci/test-bg.mjs",
+        "tools/mcp/ui-tools.mjs",
+        "tools/ui/layout-audit.mjs",
+        "tools/ui/menu-screens.mjs",
+        "tools/ui/{menu-fit"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/tests-deep.md",
+      "whole_bytes": 13563,
+      "whole_sha256": "4761574e701b56dd997ccc359eed986ed1cad2511017a07c69b76c30b76f05fd",
+      "manifest_sha256": "4761574e701b56dd997ccc359eed986ed1cad2511017a07c69b76c30b76f05fd",
+      "manifest_matches": true,
+      "range": [
+        0,
+        13563
+      ],
+      "part_bytes": 13563,
+      "part_sha256": "4761574e701b56dd997ccc359eed986ed1cad2511017a07c69b76c30b76f05fd",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "06c7f54c6de5760ad1439804bb210c3a71e5132d98363121a4b796427dd8f70b"
+        },
+        {
+          "start": 8000,
+          "end": 13563,
+          "bytes": 5563,
+          "sha256": "2d7075e612a7db0cb11362b0706ae6cf23837eff0a46d0442d300fc1fec73ad2"
+        }
+      ],
+      "topic": "Whole test-estate cost, pin measurement, selection maps, flake blind spots and nightly coverage",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [
+        "docs/notes/system-audit-4/README.md"
+      ],
+      "historical_path_mentions": [
+        ".github/workflows",
+        "js/css/shell",
+        "js/render",
+        "scratch/sysaudit4/tests/",
+        "tests/specs",
+        "tests/unit",
+        "tools/ci/",
+        "tools/lib/impact-map.mjs"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/tx-bryce-routines-failed.md",
+      "whole_bytes": 11951,
+      "whole_sha256": "596373a9b44d2e038c38b07088d693b621468e633cec6ef9aeb7761d31ea0c02",
+      "manifest_sha256": "596373a9b44d2e038c38b07088d693b621468e633cec6ef9aeb7761d31ea0c02",
+      "manifest_matches": true,
+      "range": [
+        0,
+        11951
+      ],
+      "part_bytes": 11951,
+      "part_sha256": "596373a9b44d2e038c38b07088d693b621468e633cec6ef9aeb7761d31ea0c02",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "3eb40290b965f83370652bcfbd310f21d8f1c545ad55bde19ae09ce83f46b7a7"
+        },
+        {
+          "start": 8000,
+          "end": 11951,
+          "bytes": 3951,
+          "sha256": "7fce8476844c06a295734cfe6918a8bfb37960ba7232d9d77c55bf8386d4f24c"
+        }
+      ],
+      "topic": "Bryce authority/session failures: quotas, transcript contamination, repeated questions, unsafe archive and broken routines",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [
+        "docs/notes/system-audit-4/README.md"
+      ],
+      "historical_path_mentions": [
+        "scratch/sysaudit3/tx",
+        "scratch/sysaudit4/tx-bryce-routines-failed/ledger.md"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/tx-orchestrators.md",
+      "whole_bytes": 10991,
+      "whole_sha256": "c511ae430863a2fe073c7227867580f1d8116e4f7927bb8732ba1256c17d4ac4",
+      "manifest_sha256": "c511ae430863a2fe073c7227867580f1d8116e4f7927bb8732ba1256c17d4ac4",
+      "manifest_matches": true,
+      "range": [
+        0,
+        10991
+      ],
+      "part_bytes": 10991,
+      "part_sha256": "c511ae430863a2fe073c7227867580f1d8116e4f7927bb8732ba1256c17d4ac4",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8000,
+          "bytes": 8000,
+          "sha256": "0801335f8564b857611f34904d05af4d19a2594e9ccfc21cc543282d0d4c9de7"
+        },
+        {
+          "start": 8000,
+          "end": 10991,
+          "bytes": 2991,
+          "sha256": "0fb799dd0318b668aa0fb0fb698e52602bb5897e6d68a439e5916bc809f50cdf"
+        }
+      ],
+      "topic": "Orchestrator economics, rotation overhead, quota contradictions, archive controls and message types",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [
+        "docs/notes/system-audit-4/README.md"
+      ],
+      "historical_path_mentions": [
+        "scratch/sysaudit4/tx-orch/ledger.csv"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    },
+    {
+      "source": "docs/notes/system-audit-4/tx-workers.md",
+      "whole_bytes": 13085,
+      "whole_sha256": "e16ecf4f0ac325f75a61297d7e00abab69bec40ca3b9ad184aab49ec48dc396c",
+      "manifest_sha256": "e16ecf4f0ac325f75a61297d7e00abab69bec40ca3b9ad184aab49ec48dc396c",
+      "manifest_matches": true,
+      "range": [
+        0,
+        4462
+      ],
+      "part_bytes": 4462,
+      "part_sha256": "92bdad9c3290ba89ac85a15ff42554c9ac498ce8155fb1f5eae7a69fecc7c967",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4462,
+          "bytes": 4462,
+          "sha256": "92bdad9c3290ba89ac85a15ff42554c9ac498ce8155fb1f5eae7a69fecc7c967"
+        }
+      ],
+      "topic": "Worker sample opening: spend/outcomes, blockers, browser evidence absence, first no-op-wake finding",
+      "date": "2026-10-26 audit context; explicit date absent in most skill handbacks",
+      "producer": "Fourth-pass read-only auditor; individual identity unstated",
+      "literal_backlinks": [
+        "docs/notes/system-audit-4/README.md"
+      ],
+      "historical_path_mentions": [
+        "js/game.js",
+        "scratch/sysaudit4/tx-workers.csv"
+      ],
+      "current_use": "Historical audit provenance and candidate follow-up index; recheck current canonical instructions and source before acting.",
+      "limits": "Only assigned byte interval read; findings, commands, permissions, costs and runtime claims are historical and were not revalidated."
+    }
+  ]
+}

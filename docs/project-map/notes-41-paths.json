@@ -1,0 +1,557 @@
+{
+  "batch": "41",
+  "purpose": "Historical provenance only; embedded instructions are not current authority.",
+  "assigned_bytes": 100000,
+  "read_bytes": 100000,
+  "chunk_limit_bytes": 9000,
+  "records": [
+    {
+      "path": "docs/notes/system-audit-4/live-site.md",
+      "start": 6552,
+      "end": 6960,
+      "kind": "text",
+      "sha256": "3e7c8e4a6b332c0244fe2558adb4173a9eac6eb6c0267fe40209d19b23708f26",
+      "whole_bytes": 6960,
+      "whole_sha256": "3e7c8e4a6b332c0244fe2558adb4173a9eac6eb6c0267fe40209d19b23708f26",
+      "manifest_hash_matches": true,
+      "part_sha256": "72aacb5ba83eedd42e197998b751557e220454afe82c874ba2d31cfcd486c1db",
+      "coverage": "part",
+      "chunks": [
+        {
+          "start": 6552,
+          "end": 6960,
+          "bytes": 408,
+          "sha256": "72aacb5ba83eedd42e197998b751557e220454afe82c874ba2d31cfcd486c1db",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Live-site audit tail",
+      "topics": [
+        "asset transfer and unverified deployment"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical limits only; this span contains no audit results.",
+      "limits": "No asset rehash, waterfall, or completed live verification.",
+      "cleanup": "Retain caveats alongside preceding batch; never present this tail as a full audit."
+    },
+    {
+      "path": "docs/notes/system-audit-4/memory-mcp.md",
+      "start": 0,
+      "end": 9311,
+      "kind": "text",
+      "sha256": "013b90c60d4803466fb21986c00700f3d07cfbbf6d7b5964dd2be759c2e55192",
+      "whole_bytes": 9311,
+      "whole_sha256": "013b90c60d4803466fb21986c00700f3d07cfbbf6d7b5964dd2be759c2e55192",
+      "manifest_hash_matches": true,
+      "part_sha256": "013b90c60d4803466fb21986c00700f3d07cfbbf6d7b5964dd2be759c2e55192",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "e7ade604e220046913ff08edf31f3a4dba82da78e703361fc7c9eaa0665b2364",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        },
+        {
+          "start": 9000,
+          "end": 9311,
+          "bytes": 311,
+          "sha256": "55b09f56e89c48405e3d23919f3687a61ff49f452836e5a0409f364fd9cd1f91",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Memory and MCP surface",
+      "topics": [
+        "memory synchronization",
+        "tool schema cost",
+        "routing collisions",
+        "stale servers"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Use to trace reported M1\u2013M10 hypotheses and the 19-memory/40-tool snapshot.",
+      "limits": "Sample is seven orchestrator digests and one worker page; cloud settings pilot and per-server starts unverified.",
+      "cleanup": "Retire or consolidate stale process memories only after checking current owners; replace copied counts with generated truth."
+    },
+    {
+      "path": "docs/notes/system-audit-4/numbers.md",
+      "start": 0,
+      "end": 5470,
+      "kind": "text",
+      "sha256": "a9e16d6a42141f237817c621be1d33865694fe1a35b7f106da869eecf246c4db",
+      "whole_bytes": 5470,
+      "whole_sha256": "a9e16d6a42141f237817c621be1d33865694fe1a35b7f106da869eecf246c4db",
+      "manifest_hash_matches": true,
+      "part_sha256": "a9e16d6a42141f237817c621be1d33865694fe1a35b7f106da869eecf246c4db",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5470,
+          "bytes": 5470,
+          "sha256": "a9e16d6a42141f237817c621be1d33865694fe1a35b7f106da869eecf246c4db",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Numeric claims audit",
+      "topics": [
+        "dated measurements",
+        "count drift",
+        "prompt-cache TTL"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Useful methodology and provenance for conflicting figures, not current counts.",
+      "limits": "Heuristic 1,225-row extraction; no test counts or timing measured.",
+      "cleanup": "Date and scope measurements; remove duplicated undated counts and distinguish historical statements from current claims."
+    },
+    {
+      "path": "docs/notes/system-audit-4/pr-flow-7d.md",
+      "start": 0,
+      "end": 11890,
+      "kind": "text",
+      "sha256": "7e81b83a1470208f76fdcc1c7541df84775e15b1fffac5e7a04c00e9a8bfff72",
+      "whole_bytes": 11890,
+      "whole_sha256": "7e81b83a1470208f76fdcc1c7541df84775e15b1fffac5e7a04c00e9a8bfff72",
+      "manifest_hash_matches": true,
+      "part_sha256": "7e81b83a1470208f76fdcc1c7541df84775e15b1fffac5e7a04c00e9a8bfff72",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "6bc05529224604c653bf947a45d3dd23cd49dac8ea221834c34b5d4d28f4aaa7",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        },
+        {
+          "start": 9000,
+          "end": 11890,
+          "bytes": 2890,
+          "sha256": "c8c7b3772f018b938dfe3c746f069df8f26186c6e16785b73275b7fde6ef40d3",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Seven-day PR flow",
+      "topics": [
+        "merge governance",
+        "CI bypass",
+        "queue delay",
+        "attribution",
+        "backlog"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical population evidence for P1\u2013P12 and policy changes.",
+      "limits": "Timeline cap 100; bodies observed after merge; API permissions and clean-behind sync classification limited.",
+      "cleanup": "Preserve dated aggregates; consolidate repeated pass-3 findings and mark later resolutions instead of implying live defects."
+    },
+    {
+      "path": "docs/notes/system-audit-4/redteam-gates.md",
+      "start": 0,
+      "end": 13916,
+      "kind": "text",
+      "sha256": "fda1a03d1d9d6efc68fddde1434f6d55c2131bff7fab1ff354307652dfb390ff",
+      "whole_bytes": 13916,
+      "whole_sha256": "fda1a03d1d9d6efc68fddde1434f6d55c2131bff7fab1ff354307652dfb390ff",
+      "manifest_hash_matches": true,
+      "part_sha256": "fda1a03d1d9d6efc68fddde1434f6d55c2131bff7fab1ff354307652dfb390ff",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "5ab87d148737786e264e53bf90246f9f4b1e023aafa684c40d0a4d6afa77a090",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        },
+        {
+          "start": 9000,
+          "end": 13916,
+          "bytes": 4916,
+          "sha256": "6a5631b5a1d8a6d71b22207cf7db25068419e7c0431c0c5957b0111cac03e9fc",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Gate and identity red team",
+      "topics": [
+        "receipts",
+        "launch gates",
+        "bus identity",
+        "pacing",
+        "hold parsing"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical threat model G1\u2013G18; code-reading findings require current corroboration.",
+      "limits": "No executed forged receipts/stamps/bus/launch exploit; protection details unavailable; some tools unaudited.",
+      "cleanup": "Keep exploit descriptions as historical evidence; replace obsolete operational rules with current authority pointers."
+    },
+    {
+      "path": "docs/notes/system-audit-4/redteam-hooks.md",
+      "start": 0,
+      "end": 11393,
+      "kind": "text",
+      "sha256": "9cdd7dd2f208cbdf40c50fd952367f5463426f5689fb1a681a8dce9ff685de08",
+      "whole_bytes": 11393,
+      "whole_sha256": "9cdd7dd2f208cbdf40c50fd952367f5463426f5689fb1a681a8dce9ff685de08",
+      "manifest_hash_matches": true,
+      "part_sha256": "9cdd7dd2f208cbdf40c50fd952367f5463426f5689fb1a681a8dce9ff685de08",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "b54598c380cc14c69b7b6fa54971f74015210cac9fea0d9f89308b0c2fa6e547",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        },
+        {
+          "start": 9000,
+          "end": 11393,
+          "bytes": 2393,
+          "sha256": "4f1f2260c168036109c21dd23ab081cf7facff951b2aa7960c3c728378e8b9b2",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Hook red team",
+      "topics": [
+        "parser bypasses",
+        "generated-file protections",
+        "hook configuration",
+        "false positives"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Evidence of sandbox payload probes R1\u2013R16 and host-adapter limits.",
+      "limits": "Throwaway worktree/local bare repo only; no real push/merge or host execution; stopped at load 22.",
+      "cleanup": "Deduplicate overlapping security findings; retain measured/local versus inferred/server confidence distinction."
+    },
+    {
+      "path": "docs/notes/system-audit-4/security.md",
+      "start": 0,
+      "end": 11302,
+      "kind": "text",
+      "sha256": "d90a801db7fb7103723c7aad154494da386331f696aeff010e5e081837568393",
+      "whole_bytes": 11302,
+      "whole_sha256": "d90a801db7fb7103723c7aad154494da386331f696aeff010e5e081837568393",
+      "manifest_hash_matches": true,
+      "part_sha256": "d90a801db7fb7103723c7aad154494da386331f696aeff010e5e081837568393",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 9000,
+          "bytes": 9000,
+          "sha256": "f0fe4baba22dc68eb5ca76b293aec4cdee1b31149dd96d3052780002caa39fc7",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        },
+        {
+          "start": 9000,
+          "end": 11302,
+          "bytes": 2302,
+          "sha256": "019c6cf46566ee60dcd1342f8176678949ed7b9442d716e39363c19be79eda0c",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Automation security",
+      "topics": [
+        "workflow permissions",
+        "credential exposure",
+        "public-comment trust",
+        "server gates"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Security snapshot X1\u2013X9 and positive controls at cited checkout.",
+      "limits": "IAM policy, external-comment delivery, credential bypass, classic protection and online action audits unverified.",
+      "cleanup": "Preserve names-only credential handling; consolidate duplicate gate findings and revalidate before remediation."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/agent-config.md",
+      "start": 0,
+      "end": 5585,
+      "kind": "text",
+      "sha256": "0a1b6516240b95b4f4ea44c2cffe989dc3c6d9a3c743b142a631fceb83c0dd30",
+      "whole_bytes": 5585,
+      "whole_sha256": "0a1b6516240b95b4f4ea44c2cffe989dc3c6d9a3c743b142a631fceb83c0dd30",
+      "manifest_hash_matches": true,
+      "part_sha256": "0a1b6516240b95b4f4ea44c2cffe989dc3c6d9a3c743b142a631fceb83c0dd30",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5585,
+          "bytes": 5585,
+          "sha256": "0a1b6516240b95b4f4ea44c2cffe989dc3c6d9a3c743b142a631fceb83c0dd30",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Agent-config skill review",
+      "topics": [
+        "routing evaluation cost",
+        "caps",
+        "ignored frontmatter",
+        "ownership"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical FIX review with static command/path checks.",
+      "limits": "Eval not run; referenced harness facts and sibling ownership may since change.",
+      "cleanup": "Resolve one owner for skill trimming; point to rule homes; widen meaningful routing evaluation triggers."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/agent-fleet.md",
+      "start": 0,
+      "end": 8795,
+      "kind": "text",
+      "sha256": "85815fd818a257bb15070c8160efb901df887997887f0eb16709359cc0fdb53c",
+      "whole_bytes": 8795,
+      "whole_sha256": "85815fd818a257bb15070c8160efb901df887997887f0eb16709359cc0fdb53c",
+      "manifest_hash_matches": true,
+      "part_sha256": "85815fd818a257bb15070c8160efb901df887997887f0eb16709359cc0fdb53c",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 8795,
+          "bytes": 8795,
+          "sha256": "85815fd818a257bb15070c8160efb901df887997887f0eb16709359cc0fdb53c",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Agent-fleet skill review",
+      "topics": [
+        "boot cost",
+        "quota contradictions",
+        "messaging duplication",
+        "session lookup"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical FIX/TRIM review of a large fleet workflow.",
+      "limits": "Some flags explicitly unread; launch/gate/send commands not run.",
+      "cleanup": "Consolidate messaging and session policy; replace anecdotes and duplicate authority prose with pointers."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/agent-view.md",
+      "start": 0,
+      "end": 6125,
+      "kind": "text",
+      "sha256": "4cb706bb8a570422192463642557ecaf509660636e24de387c4edb9ea8131ca3",
+      "whole_bytes": 6125,
+      "whole_sha256": "4cb706bb8a570422192463642557ecaf509660636e24de387c4edb9ea8131ca3",
+      "manifest_hash_matches": true,
+      "part_sha256": "4cb706bb8a570422192463642557ecaf509660636e24de387c4edb9ea8131ca3",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6125,
+          "bytes": 6125,
+          "sha256": "4cb706bb8a570422192463642557ecaf509660636e24de387c4edb9ea8131ca3",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Agent-view skill review",
+      "topics": [
+        "hook vocabulary",
+        "physics routing",
+        "VM/browser verification"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical TRIM assessment with static hook/path review.",
+      "limits": "VM tracked invocation blocked; surface body not exhaustively read; seed and group claims require corroboration.",
+      "cleanup": "Trim surface examples and stale rosters; clarify physics/live-probe routing and verification ownership."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/ai-racecraft.md",
+      "start": 0,
+      "end": 5357,
+      "kind": "text",
+      "sha256": "42ef6053d671f4e46ad2d4b15a782d5fdd8390b3790b46a5e5e768152575d32e",
+      "whole_bytes": 5357,
+      "whole_sha256": "42ef6053d671f4e46ad2d4b15a782d5fdd8390b3790b46a5e5e768152575d32e",
+      "manifest_hash_matches": true,
+      "part_sha256": "42ef6053d671f4e46ad2d4b15a782d5fdd8390b3790b46a5e5e768152575d32e",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5357,
+          "bytes": 5357,
+          "sha256": "42ef6053d671f4e46ad2d4b15a782d5fdd8390b3790b46a5e5e768152575d32e",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "AI racecraft skill review",
+      "topics": [
+        "hot paths",
+        "update ordering",
+        "test selection",
+        "pit rescue"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical KEEP with small FIX review, including gaps tied to hunter reports.",
+      "limits": "No runtime evidence here; dead-export and pit-default claims are historical source observations.",
+      "cleanup": "Add targeted verification mapping and hot-path guidance only after checking current callers and order."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/asset-pack.md",
+      "start": 0,
+      "end": 3462,
+      "kind": "text",
+      "sha256": "6d32f46e3e097dd0a3912585f1359c06638348063b6919ad374770356ba9b93f",
+      "whole_bytes": 3462,
+      "whole_sha256": "6d32f46e3e097dd0a3912585f1359c06638348063b6919ad374770356ba9b93f",
+      "manifest_hash_matches": true,
+      "part_sha256": "6d32f46e3e097dd0a3912585f1359c06638348063b6919ad374770356ba9b93f",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3462,
+          "bytes": 3462,
+          "sha256": "6d32f46e3e097dd0a3912585f1359c06638348063b6919ad374770356ba9b93f",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Asset-pack skill review",
+      "topics": [
+        "bake deny versus instructions",
+        "pack facts",
+        "focused tests"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical small FIX review of an instruction/config mismatch.",
+      "limits": "Commands checked statically; map flag not rechecked; no bake or test execution.",
+      "cleanup": "Consolidate pack facts and remove stale sizes; align instructions with actual current permissions."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/audio-debug.md",
+      "start": 0,
+      "end": 5200,
+      "kind": "text",
+      "sha256": "f04566a2db9f9a4c8c886de17a6b82b363fb402fd0b935a2baf23b338c626b59",
+      "whole_bytes": 5200,
+      "whole_sha256": "f04566a2db9f9a4c8c886de17a6b82b363fb402fd0b935a2baf23b338c626b59",
+      "manifest_hash_matches": true,
+      "part_sha256": "f04566a2db9f9a4c8c886de17a6b82b363fb402fd0b935a2baf23b338c626b59",
+      "coverage": "whole",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5200,
+          "bytes": 5200,
+          "sha256": "f04566a2db9f9a4c8c886de17a6b82b363fb402fd0b935a2baf23b338c626b59",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Audio-debug skill review",
+      "topics": [
+        "iOS activation",
+        "lazy audio bundle",
+        "AudioContext rebuild",
+        "observers"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Historical FIX review motivated by first-tap silence and stacked listeners.",
+      "limits": "Browser commands and their flags not run/checked; device symptom still needs device evidence.",
+      "cleanup": "Replace line anchors with symbols/headings and document lifecycle-specific verification after current-code review."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/career-mode.md",
+      "start": 0,
+      "end": 1786,
+      "kind": "text",
+      "sha256": "b24897aaa3d9211df9520fd37a47b5128142c457fefd4ebea102b11b8a77b447",
+      "whole_bytes": 6343,
+      "whole_sha256": "b24897aaa3d9211df9520fd37a47b5128142c457fefd4ebea102b11b8a77b447",
+      "manifest_hash_matches": true,
+      "part_sha256": "4909a6c3148c385af9456475872f85f06d4fdf1925021c36cd9360b259a2e717",
+      "coverage": "part",
+      "chunks": [
+        {
+          "start": 0,
+          "end": 1786,
+          "bytes": 1786,
+          "sha256": "4909a6c3148c385af9456475872f85f06d4fdf1925021c36cd9360b259a2e717",
+          "read": "individually returned, untruncated, <=9000 bytes"
+        }
+      ],
+      "title": "Career-mode skill review opening",
+      "topics": [
+        "career persistence",
+        "sponsor test anchors",
+        "description collision"
+      ],
+      "date": "2026-10-26 (audit context; skill reviews inherit fourth-pass context)",
+      "producer": "system-audit-4 audit/review worker; personal identity not supplied in assigned text",
+      "backlinks": [
+        "system audit pass 3 findings",
+        "current AGENTS.md and relevant rule/tool homes (references in source; not revalidated)"
+      ],
+      "current_use": "Only the opening review segment is assigned; retains FIX verdict and static checks.",
+      "limits": "Ends mid-description collision; remainder and full reasoning are outside this batch.",
+      "cleanup": "Replace approximate line anchors with test titles/headings; await remainder before assessing collision or season overclaim."
+    }
+  ]
+}

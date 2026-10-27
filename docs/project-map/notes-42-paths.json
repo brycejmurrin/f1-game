@@ -1,0 +1,806 @@
+{
+  "batch": "42",
+  "purpose": "Historical provenance only",
+  "assigned_bytes": 100000,
+  "read_bytes": 100000,
+  "coverage": "Every half-open assigned span returned individually, untruncated; one chunk per part, each <=10000 bytes.",
+  "date_context": "Fourth-pass audit context: 2026-10-26 as established by adjacent batch; embedded dates are extracted per source, not asserted authorship timestamps.",
+  "producer": "Audit reviewers identified by skill slice; no personal attribution established",
+  "backlink_method": "Outbound support references extracted from assigned text; these are historical citations, not verified inbound backlinks or current existence checks.",
+  "files": [
+    {
+      "path": "docs/notes/system-audit-4/skills/career-mode.md",
+      "label": "career-mode.md",
+      "title": "Career calendar and routing",
+      "start": 1786,
+      "end": 6343,
+      "assigned_bytes": 4557,
+      "whole_bytes": 6343,
+      "whole_sha256": "b24897aaa3d9211df9520fd37a47b5128142c457fefd4ebea102b11b8a77b447",
+      "manifest_sha256": "b24897aaa3d9211df9520fd37a47b5128142c457fefd4ebea102b11b8a77b447",
+      "manifest_hash_matches": true,
+      "part_sha256": "5e375b8a05294d52982d5fd3bfdaa06772e4ff852c5a2fecdfed2770c43a232c",
+      "complete_file": false,
+      "chunks": [
+        {
+          "start": 1786,
+          "end": 6343,
+          "bytes": 4557,
+          "sha256": "5e375b8a05294d52982d5fd3bfdaa06772e4ff852c5a2fecdfed2770c43a232c",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Stamped calendar versus season roster; standalone season boundary; persistence and UI verification.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/skills/season-mode/SKILL.md",
+        "docs/CAREER.md",
+        "js/career/career.js"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Partial source: adjacent batch owns omitted bytes.",
+      "cleanup_findings": "Correct overclaim only after current source review; shorten duplicated workflow and approximate anchors."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/check-changes.md",
+      "label": "check-changes.md",
+      "title": "Change verification",
+      "start": 0,
+      "end": 4371,
+      "assigned_bytes": 4371,
+      "whole_bytes": 4371,
+      "whole_sha256": "4e90b49dcaa3739f57bdc6d935ede10e900c68735b7d9bfb48c3a4f6b0910781",
+      "manifest_sha256": "4e90b49dcaa3739f57bdc6d935ede10e900c68735b7d9bfb48c3a4f6b0910781",
+      "manifest_hash_matches": true,
+      "part_sha256": "4e90b49dcaa3739f57bdc6d935ede10e900c68735b7d9bfb48c3a4f6b0910781",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4371,
+          "bytes": 4371,
+          "sha256": "4e90b49dcaa3739f57bdc6d935ede10e900c68735b7d9bfb48c3a4f6b0910781",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Host commit guard claims, gate latency figures, verification routing and output budgets.",
+      "dates": [
+        "2026-10-14",
+        "2026-10-26"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/hooks/bash-guard.sh",
+        ".codex/hooks.json",
+        ".codex/hooks/shell-guard.sh",
+        ".cursor/hooks.json",
+        ".cursor/hooks/shell-guard.sh",
+        "docs/agent-output/README.md",
+        "docs/agent-output/README.md."
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Consolidate guard and output authority; retire duplicated timing figures."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/check.md",
+      "label": "check.md",
+      "title": "Status reporting",
+      "start": 0,
+      "end": 5349,
+      "assigned_bytes": 5349,
+      "whole_bytes": 5349,
+      "whole_sha256": "94c6c04316394a22b5adb264f26571f515c975a6814ae2191a3174ba8f081373",
+      "manifest_sha256": "94c6c04316394a22b5adb264f26571f515c975a6814ae2191a3174ba8f081373",
+      "manifest_hash_matches": true,
+      "part_sha256": "94c6c04316394a22b5adb264f26571f515c975a6814ae2191a3174ba8f081373",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5349,
+          "bytes": 5349,
+          "sha256": "94c6c04316394a22b5adb264f26571f515c975a6814ae2191a3174ba8f081373",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "PR-board latency, shallow ancestry, report templates and routing controls.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "docs/notes/system-audit-3/tools.md",
+        "tests/data/skill-routing/queries",
+        "tools/ci/pr-board.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Keep unknown liveness distinct from negative ancestry; date timings and resolve reporter versus fixer policy."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/code-nav.md",
+      "label": "code-nav.md",
+      "title": "Code navigation",
+      "start": 0,
+      "end": 3474,
+      "assigned_bytes": 3474,
+      "whole_bytes": 3474,
+      "whole_sha256": "bbdf60a2b5d43062ca8baee30ddef74fb55778747739b8aabcdcfd60acbc7fde",
+      "manifest_sha256": "bbdf60a2b5d43062ca8baee30ddef74fb55778747739b8aabcdcfd60acbc7fde",
+      "manifest_hash_matches": true,
+      "part_sha256": "bbdf60a2b5d43062ca8baee30ddef74fb55778747739b8aabcdcfd60acbc7fde",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 3474,
+          "bytes": 3474,
+          "sha256": "bbdf60a2b5d43062ca8baee30ddef74fb55778747739b8aabcdcfd60acbc7fde",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "LSP attachment, body caps, measured latency and source-only checks.",
+      "dates": [
+        "2026-10-18"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/hooks/lsp-hint.py",
+        "docs/AGENT-SURFACE.md",
+        "docs/notes/LSP-MCP-2026-10-18.md",
+        "docs/research/AGENT-CODE-INVESTIGATIONS.md.",
+        "tests/unit/lsp-mcp{",
+        "tools/agent-run.mjs",
+        "tools/mcp/lsp-eval.mjs",
+        "tools/mcp/lsp-mcp.sh",
+        "tools/mcp/lsp-mcp.{mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Use dated performance evidence and explicit defaults; refresh trigger vocabulary."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/css-play.md",
+      "label": "css-play.md",
+      "title": "CSS iteration",
+      "start": 0,
+      "end": 5008,
+      "assigned_bytes": 5008,
+      "whole_bytes": 5008,
+      "whole_sha256": "0314822fe9ffedc9703ec42ee0b6c9386971b9ad83afc1024f21775d4fad6e26",
+      "manifest_sha256": "0314822fe9ffedc9703ec42ee0b6c9386971b9ad83afc1024f21775d4fad6e26",
+      "manifest_hash_matches": true,
+      "part_sha256": "0314822fe9ffedc9703ec42ee0b6c9386971b9ad83afc1024f21775d4fad6e26",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5008,
+          "bytes": 5008,
+          "sha256": "0314822fe9ffedc9703ec42ee0b6c9386971b9ad83afc1024f21775d4fad6e26",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Dead-CSS owner collision, phone viewport, safe-inset tokens and matrix versus single-screen audits.",
+      "dates": [
+        "2026-08-08",
+        "2026-10-26"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "scratch/sysaudit4/hunt-ui-b.md",
+        "tests/groups.json",
+        "tools/check/class-usage.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Resolve ownership ping-pong and stale numbered rules; point to current tokens."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/data-hub.md",
+      "label": "data-hub.md",
+      "title": "Data Hub",
+      "start": 0,
+      "end": 4882,
+      "assigned_bytes": 4882,
+      "whole_bytes": 4882,
+      "whole_sha256": "b7b425cebcd53f8ac4c4d92889ca6fc53736c706eb79ba9200f86abecf397d0f",
+      "manifest_sha256": "b7b425cebcd53f8ac4c4d92889ca6fc53736c706eb79ba9200f86abecf397d0f",
+      "manifest_hash_matches": true,
+      "part_sha256": "b7b425cebcd53f8ac4c4d92889ca6fc53736c706eb79ba9200f86abecf397d0f",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4882,
+          "bytes": 4882,
+          "sha256": "b7b425cebcd53f8ac4c4d92889ca6fc53736c706eb79ba9200f86abecf397d0f",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "API cache/year triage, egress proxy, mocked tests and lifecycle group membership.",
+      "dates": [
+        "2026-09-27"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "docs/notes/REAL-RACE-2026-09-27.md",
+        "js/data.",
+        "js/data/api.js",
+        "js/data/{hub",
+        "js/race/{real-race",
+        "tests/groups.json",
+        "tests/helpers/f1-api-mock.js",
+        "tests/specs/data-lifecycle.spec.js",
+        "tests/unit/data-*/telemetry-trace",
+        "tools/check/html-sink-lint.mjs",
+        "tools/ci/test-solo.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Replace line anchors and copied group lists with symbols and authoritative sources."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/f1-animation-cameras.md",
+      "label": "f1-animation-cameras.md",
+      "title": "Animation and cameras",
+      "start": 0,
+      "end": 6800,
+      "assigned_bytes": 6800,
+      "whole_bytes": 6800,
+      "whole_sha256": "dd15b79810387772bcce13a41cb3ceea8de68c0e75ab87f14b5d5e9756c0a5ad",
+      "manifest_sha256": "dd15b79810387772bcce13a41cb3ceea8de68c0e75ab87f14b5d5e9756c0a5ad",
+      "manifest_hash_matches": true,
+      "part_sha256": "dd15b79810387772bcce13a41cb3ceea8de68c0e75ab87f14b5d5e9756c0a5ad",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6800,
+          "bytes": 6800,
+          "sha256": "dd15b79810387772bcce13a41cb3ceea8de68c0e75ab87f14b5d5e9756c0a5ad",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Camera owner inventory, WATCH seek locks and lag measurement versus code changes.",
+      "dates": [
+        "2026-10-14"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/skills/f1-animation-cameras/references/cut-jump.md",
+        ".claude/skills/game-feel/SKILL.md",
+        ".claude/skills/playwright-probe/SKILL.md",
+        ".claude/skills/tune-physics/SKILL.md",
+        "js/agent/apex-cam.js",
+        "js/camera",
+        "js/camera/director.js",
+        "js/camera/director.js?",
+        "js/camera/{mode-switch",
+        "js/garage/{arrival",
+        "js/race/{real-replay",
+        "js/ui/watch-transport.js",
+        "tools/shot/capture-contract.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Clarify measurement/fix split; refresh generated owner inventory and phone profile."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/game-feel.md",
+      "label": "game-feel.md",
+      "title": "Game feel",
+      "start": 0,
+      "end": 5306,
+      "assigned_bytes": 5306,
+      "whole_bytes": 5306,
+      "whole_sha256": "194db3ebc12978975d43c226452ab16aac2a5ff9ca10b5ffebd4b7a2351d4054",
+      "manifest_sha256": "194db3ebc12978975d43c226452ab16aac2a5ff9ca10b5ffebd4b7a2351d4054",
+      "manifest_hash_matches": true,
+      "part_sha256": "194db3ebc12978975d43c226452ab16aac2a5ff9ca10b5ffebd4b7a2351d4054",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5306,
+          "bytes": 5306,
+          "sha256": "194db3ebc12978975d43c226452ab16aac2a5ff9ca10b5ffebd4b7a2351d4054",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Cosmetic determinism, race hash coverage, accessibility and haptics.",
+      "dates": [
+        "2026-09-08"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "docs/notes/system-audit-3/skills-a-l.md",
+        "tests/data/physics-baseline.json",
+        "tests/specs/agent-determinism.spec.js",
+        "tests/specs/physics-characterization.spec.js",
+        "tests/unit/determinism-replay-vm.test.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Retain separate feel skill per audit rebuttal; verify race determinism and device support."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/garage-parts-livery.md",
+      "label": "garage-parts-livery.md",
+      "title": "Garage parts and livery",
+      "start": 0,
+      "end": 6276,
+      "assigned_bytes": 6276,
+      "whole_bytes": 6276,
+      "whole_sha256": "eb663a4841a93ecf862b8cc408303abb77ccb0031c4e90b3aebebe48dcc7cf2a",
+      "manifest_sha256": "eb663a4841a93ecf862b8cc408303abb77ccb0031c4e90b3aebebe48dcc7cf2a",
+      "manifest_hash_matches": true,
+      "part_sha256": "eb663a4841a93ecf862b8cc408303abb77ccb0031c4e90b3aebebe48dcc7cf2a",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6276,
+          "bytes": 6276,
+          "sha256": "eb663a4841a93ecf862b8cc408303abb77ccb0031c4e90b3aebebe48dcc7cf2a",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Car geometry facade versus modules, duplicate function declaration and capture/code routing.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "docs/CAREER.md",
+        "docs/notes.",
+        "js/car",
+        "js/car-draw.js",
+        "js/car-mesh.js",
+        "js/car/car-body-geom.js",
+        "js/car/car3d.js",
+        "js/garage",
+        "js/garage.",
+        "js/garage/livery-design-editor.js",
+        "js/garage/setup-sheet.js",
+        "tools/car/{spine-station",
+        "tools/check/",
+        "tools/garage-angles-fetch.mjs",
+        "tools/shot/garage-angles.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Refresh module ownership; trim history/count duplication; corroborate duplicate-definition finding."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/handoff.md",
+      "label": "handoff.md",
+      "title": "Handoff",
+      "start": 0,
+      "end": 4815,
+      "assigned_bytes": 4815,
+      "whole_bytes": 4815,
+      "whole_sha256": "a562cf2aeaabd25b229f638acd2813688f680f5b3e2f7ca96c49c7403c8e711e",
+      "manifest_sha256": "a562cf2aeaabd25b229f638acd2813688f680f5b3e2f7ca96c49c7403c8e711e",
+      "manifest_hash_matches": true,
+      "part_sha256": "a562cf2aeaabd25b229f638acd2813688f680f5b3e2f7ca96c49c7403c8e711e",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4815,
+          "bytes": 4815,
+          "sha256": "a562cf2aeaabd25b229f638acd2813688f680f5b3e2f7ca96c49c7403c8e711e",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Successor context, size-stop authority, fleet brief and staged commit procedure.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "tools/ci/session-status.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Point to compact instructions rather than duplicate lists or cap numbers."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/input-controls.md",
+      "label": "input-controls.md",
+      "title": "Input controls",
+      "start": 0,
+      "end": 6034,
+      "assigned_bytes": 6034,
+      "whole_bytes": 6034,
+      "whole_sha256": "f3e64ec7a4b852bb497f5d519222c99815e9e29932d3b19ffe92a40132e8d219",
+      "manifest_sha256": "f3e64ec7a4b852bb497f5d519222c99815e9e29932d3b19ffe92a40132e8d219",
+      "manifest_hash_matches": true,
+      "part_sha256": "f3e64ec7a4b852bb497f5d519222c99815e9e29932d3b19ffe92a40132e8d219",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6034,
+          "bytes": 6034,
+          "sha256": "f3e64ec7a4b852bb497f5d519222c99815e9e29932d3b19ffe92a40132e8d219",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Grip-steer slider versus physics ownership, phone send cadence and touch activation.",
+      "dates": [
+        "2026-10-26"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "docs/research",
+        "js/audio/engine.js",
+        "js/core/lazy-bundles.js",
+        "js/input/",
+        "js/input/*.js",
+        "js/input/phone-pad.js",
+        "js/physics/player-forces.js",
+        "tests/specs/tilt-pipeline.spec.js"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Lead with phone reproduction; clarify controller page and maths ownership."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/js-debugger.md",
+      "label": "js-debugger.md",
+      "title": "JavaScript debugger",
+      "start": 0,
+      "end": 4890,
+      "assigned_bytes": 4890,
+      "whole_bytes": 4890,
+      "whole_sha256": "fde10b7eb154ac6687d141d12967d3832a48245596260c0504903fea8ebc44fc",
+      "manifest_sha256": "fde10b7eb154ac6687d141d12967d3832a48245596260c0504903fea8ebc44fc",
+      "manifest_hash_matches": true,
+      "part_sha256": "fde10b7eb154ac6687d141d12967d3832a48245596260c0504903fea8ebc44fc",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4890,
+          "bytes": 4890,
+          "sha256": "fde10b7eb154ac6687d141d12967d3832a48245596260c0504903fea8ebc44fc",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Profiling while attached, pause tokens, browser exclusivity and stale server restart.",
+      "dates": [
+        "2026-10-26"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/hooks/mcp-browser-guard.sh",
+        "docs/AGENT-SURFACE.md",
+        "docs/TESTING.md",
+        "docs/research",
+        "docs/research/AGENT-JS-DEBUGGER-MCP.md",
+        "scratch/sysaudit4/memory-mcp.md",
+        "tools/check/skill-smoke.mjs",
+        "tools/mcp/js-debugger-*.mjs",
+        "tools/mcp/{js-debugger-mcp.sh",
+        "tools/perf",
+        "tools/status"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Route profiling to attached debugger; remove dated move note and document restart boundaries."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/lighting-tuner.md",
+      "label": "lighting-tuner.md",
+      "title": "Lighting tuner",
+      "start": 0,
+      "end": 4811,
+      "assigned_bytes": 4811,
+      "whole_bytes": 4811,
+      "whole_sha256": "f48750bf40f5efb84a40d33322c11fa252125cd956b5e164d31fbafb5f3f48d9",
+      "manifest_sha256": "f48750bf40f5efb84a40d33322c11fa252125cd956b5e164d31fbafb5f3f48d9",
+      "manifest_hash_matches": true,
+      "part_sha256": "f48750bf40f5efb84a40d33322c11fa252125cd956b5e164d31fbafb5f3f48d9",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4811,
+          "bytes": 4811,
+          "sha256": "f48750bf40f5efb84a40d33322c11fa252125cd956b5e164d31fbafb5f3f48d9",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Targeted verification, cache-bust pointer, preset full replacement versus delta.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/rules/game-code.md",
+        "docs/DEBUG-HOOKS.md",
+        "docs/LIGHTING-TUNER-SLIDERS.md",
+        "docs/LIGHTING.md",
+        "js/agent/apex.js",
+        "js/lighting/",
+        "js/lighting/*",
+        "js/lighting/presets.js",
+        "js/merge-proposals.mjs",
+        "js/merge-proposals.mjs/preset-validation.mjs",
+        "tests/data/skill-routing/queries/",
+        "tests/data/skill-routing/queries/lighting-tuner.json",
+        "tools/ci/geometry-paths.mjs",
+        "tools/lighting/*"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Consolidate repeated warning; replace stale authority pointer and distinguish venue accuracy routing."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/mcp-probe.md",
+      "label": "mcp-probe.md",
+      "title": "MCP probe",
+      "start": 0,
+      "end": 4074,
+      "assigned_bytes": 4074,
+      "whole_bytes": 4074,
+      "whole_sha256": "e3c6cf1626b2dae244f1d9b267f8a64a84269aa46daedded83dd2e71a99d8d7b",
+      "manifest_sha256": "e3c6cf1626b2dae244f1d9b267f8a64a84269aa46daedded83dd2e71a99d8d7b",
+      "manifest_hash_matches": true,
+      "part_sha256": "e3c6cf1626b2dae244f1d9b267f8a64a84269aa46daedded83dd2e71a99d8d7b",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4074,
+          "bytes": 4074,
+          "sha256": "e3c6cf1626b2dae244f1d9b267f8a64a84269aa46daedded83dd2e71a99d8d7b",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Boot evidence citation, local versus deployed probes and browser launch boundaries.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/rules/render-wgx.md",
+        ".claude/skills/mcp-probe/references/recipes.md",
+        ".claude/skills/renderer-debug/SKILL.md",
+        ".cursor/mcp.json",
+        "docs/AGENT-SURFACE.md.",
+        "docs/ARCHITECTURE.md"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Repair authority pointer; reconcile local-only guidance and trim index hops."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/multiplayer-debug.md",
+      "label": "multiplayer-debug.md",
+      "title": "Multiplayer",
+      "start": 0,
+      "end": 4557,
+      "assigned_bytes": 4557,
+      "whole_bytes": 4557,
+      "whole_sha256": "291bdde4e1be0c8c40ed1e54fe032ebf29db707544d1fb121cd225af94f7483e",
+      "manifest_sha256": "291bdde4e1be0c8c40ed1e54fe032ebf29db707544d1fb121cd225af94f7483e",
+      "manifest_hash_matches": true,
+      "part_sha256": "291bdde4e1be0c8c40ed1e54fe032ebf29db707544d1fb121cd225af94f7483e",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4557,
+          "bytes": 4557,
+          "sha256": "291bdde4e1be0c8c40ed1e54fe032ebf29db707544d1fb121cd225af94f7483e",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Single-spec versus full-group verification, phone sends and signalling endpoint homes.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/hooks",
+        "docs/DEBUG-HOOKS.md.",
+        "docs/MULTIPLAYER.md",
+        "js/agent/apex.js",
+        "js/input/phone-pad.js",
+        "js/net/*.js",
+        "js/net/nostr.js",
+        "js/net/rendezvous.js",
+        "js/net/session.js",
+        "scratch/sysaudit4/hunt-ui-b.md",
+        "tests/groups.json",
+        "tests/specs/multiplayer-lobby.spec.js",
+        "tests/unit",
+        "tests/unit/phone-pad.test.mjs",
+        "tools/ci/test-bg.mjs",
+        "tools/net/nostr-probe.mjs.",
+        "tools/net/{rtc-e2e"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Prefer symptom-specific tests; link relay configuration and canonical hook manifest."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/new-track.md",
+      "label": "new-track.md",
+      "title": "New track",
+      "start": 0,
+      "end": 4754,
+      "assigned_bytes": 4754,
+      "whole_bytes": 4754,
+      "whole_sha256": "bc024760c4e1e0268c4ac6fad844614fcce07ec85b095107d5162db01f93ff1f",
+      "manifest_sha256": "bc024760c4e1e0268c4ac6fad844614fcce07ec85b095107d5162db01f93ff1f",
+      "manifest_hash_matches": true,
+      "part_sha256": "bc024760c4e1e0268c4ac6fad844614fcce07ec85b095107d5162db01f93ff1f",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 4754,
+          "bytes": 4754,
+          "sha256": "bc024760c4e1e0268c4ac6fad844614fcce07ec85b095107d5162db01f93ff1f",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Lazy circuit registration, generated metadata, roster pins and editor manifest.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "docs/ARCHITECTURE.md",
+        "js/track/circuit-meta.js",
+        "tests/groups.json",
+        "tests/specs/*-foundation.spec.js",
+        "tests/unit/",
+        "tests/unit/circuit-meta.test.mjs",
+        "tools/manifest.cjs",
+        "tools/track/*"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Replace obsolete script-tag registration; use generated metadata and manifest as authority."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/phone-browser.md",
+      "label": "phone-browser.md",
+      "title": "Phone browser",
+      "start": 0,
+      "end": 5596,
+      "assigned_bytes": 5596,
+      "whole_bytes": 5596,
+      "whole_sha256": "63e726fed4b421122bcf6b00d8f5ffa5f9b9b92a14d9428d4e4e6daa9414a060",
+      "manifest_sha256": "63e726fed4b421122bcf6b00d8f5ffa5f9b9b92a14d9428d4e4e6daa9414a060",
+      "manifest_hash_matches": true,
+      "part_sha256": "63e726fed4b421122bcf6b00d8f5ffa5f9b9b92a14d9428d4e4e6daa9414a060",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5596,
+          "bytes": 5596,
+          "sha256": "63e726fed4b421122bcf6b00d8f5ffa5f9b9b92a14d9428d4e4e6daa9414a060",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Grok connector scope, eval credential URL, local working tree versus deployed build.",
+      "dates": [
+        "2026-10-19"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "scratch/browser-http/",
+        "tests/data/skill-routing/queries/phone-browser.json",
+        "tests/unit/browser-http-{mcp",
+        "tools/mcp/browser-http-up.mjs",
+        "tools/mcp/browser-http.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Preserve security caveats; narrow routing and reconcile tunnel/viewport descriptions."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/playwright-probe.md",
+      "label": "playwright-probe.md",
+      "title": "Playwright probe",
+      "start": 0,
+      "end": 6438,
+      "assigned_bytes": 6438,
+      "whole_bytes": 6438,
+      "whole_sha256": "10f9acd89235da12b8f37a0db9a52c7b032958fa9043b1451d4093acf43a2b8e",
+      "manifest_sha256": "10f9acd89235da12b8f37a0db9a52c7b032958fa9043b1451d4093acf43a2b8e",
+      "manifest_hash_matches": true,
+      "part_sha256": "10f9acd89235da12b8f37a0db9a52c7b032958fa9043b1451d4093acf43a2b8e",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 6438,
+          "bytes": 6438,
+          "sha256": "10f9acd89235da12b8f37a0db9a52c7b032958fa9043b1451d4093acf43a2b8e",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Canonical performance profiler, A/B evidence, camera lag routing and launch flags.",
+      "dates": [],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        ".claude/skills/mcp-probe/SKILL.md",
+        "tools/lib/browser-workers.mjs",
+        "tools/perf/profile.mjs",
+        "tools/shot/probe-page.mjs",
+        "tools/shot/profile-gameloop.mjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Prefer canonical profiler; verify unread harness details and explain mode subsets."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/pwa-cache-service-worker.md",
+      "label": "pwa-cache-service-worker.md",
+      "title": "PWA/cache/service worker",
+      "start": 0,
+      "end": 5241,
+      "assigned_bytes": 5241,
+      "whole_bytes": 5241,
+      "whole_sha256": "2cc1e30cf02eee60d751f64b0864fdf832c3fc6448c3c9c1a30c7f9cec5088ed",
+      "manifest_sha256": "2cc1e30cf02eee60d751f64b0864fdf832c3fc6448c3c9c1a30c7f9cec5088ed",
+      "manifest_hash_matches": true,
+      "part_sha256": "2cc1e30cf02eee60d751f64b0864fdf832c3fc6448c3c9c1a30c7f9cec5088ed",
+      "complete_file": true,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 5241,
+          "bytes": 5241,
+          "sha256": "2cc1e30cf02eee60d751f64b0864fdf832c3fc6448c3c9c1a30c7f9cec5088ed",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "Generated shell blocks, stale line anchors, local version changes and measured cache policy.",
+      "dates": [
+        "2026-10-26"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "js/css",
+        "tools/ci/bump-cache.mjs",
+        "tools/manifest.cjs"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Whole assigned file read; referenced destinations not revalidated.",
+      "cleanup_findings": "Use symbols/generated sources; date live-cache measurements and narrow moving-version warning."
+    },
+    {
+      "path": "docs/notes/system-audit-4/skills/race-incidents-control.md",
+      "label": "race-incidents-control.md",
+      "title": "Race incidents and control",
+      "start": 0,
+      "end": 2767,
+      "assigned_bytes": 2767,
+      "whole_bytes": 4720,
+      "whole_sha256": "54ab2dc2ea3edfd63120067e75d766861a6252ce5bbed9906cc8e0384bb14d7c",
+      "manifest_sha256": "54ab2dc2ea3edfd63120067e75d766861a6252ce5bbed9906cc8e0384bb14d7c",
+      "manifest_hash_matches": true,
+      "part_sha256": "d496e60784610cdb51d6277d9dda24b7c188684d8af672fb5ac5f41126963bf1",
+      "complete_file": false,
+      "chunks": [
+        {
+          "start": 0,
+          "end": 2767,
+          "bytes": 2767,
+          "sha256": "d496e60784610cdb51d6277d9dda24b7c188684d8af672fb5ac5f41126963bf1",
+          "returned_untruncated": true
+        }
+      ],
+      "topics": "AI-derived marble path reaching player forces, arc-rule classification and incident trace anchors.",
+      "dates": [
+        "2026-10-05"
+      ],
+      "producer": "Fourth-pass skill-review audit role; personal author not identified in assigned text",
+      "backlinks": [
+        "docs/PHYSICS.md",
+        "js/agent/apex.js",
+        "js/game.js"
+      ],
+      "current_use": "Historical source-inspection and routing/cleanup leads; no current runtime or closure validation",
+      "limits": "Archived commands and recommendations are evidence, never execution authority. Partial source: adjacent batch owns omitted bytes.",
+      "cleanup_findings": "Corroborate physics classification; replace stale anchors; retain boundary caveat for incomplete ending."
+    }
+  ]
+}

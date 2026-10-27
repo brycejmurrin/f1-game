@@ -1,0 +1,285 @@
+{
+  "goal": "Complete original tracked source/prose/data scope; every assigned text byte read, binary metadata inspected, historical material is provenance not authority. Half-open byte spans.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": ".github/ISSUE_TEMPLATE/bug.yml",
+          "start": 0,
+          "end": 752,
+          "kind": "text",
+          "sha256": "be0f2f9184a3ee7125a03f9793ad72b56cd1315f26d9ac84d8d75605addfc25f"
+        },
+        {
+          "path": ".github/ISSUE_TEMPLATE/config.yml",
+          "start": 0,
+          "end": 27,
+          "kind": "text",
+          "sha256": "13064e7bea658e01e718b414fbb7b3b244f36411fe25ee2055c151f7b534547a"
+        },
+        {
+          "path": ".github/ISSUE_TEMPLATE/task.yml",
+          "start": 0,
+          "end": 1223,
+          "kind": "text",
+          "sha256": "3d733933ead90954e0a9d0a45b1997a385d58111055093d0676257ce71b97e52"
+        },
+        {
+          "path": ".github/actionlint.yaml",
+          "start": 0,
+          "end": 1158,
+          "kind": "text",
+          "sha256": "0b67d6713f858511b8849488ab585df05458f4224b5ccbdd583dbc573a061400"
+        },
+        {
+          "path": ".github/actions/mesa-xvfb/action.yml",
+          "start": 0,
+          "end": 3535,
+          "kind": "text",
+          "sha256": "9b6b87e18c7396ae2a05988183b3a91dbb7dbf4bcdb3f1fe959c1a3e6c141bed"
+        },
+        {
+          "path": ".github/actions/playwright-chromium/action.yml",
+          "start": 0,
+          "end": 2231,
+          "kind": "text",
+          "sha256": "1fbad53bea0a3e4fcb5c3a64568c40af8cfd2d31fcebbaf7f0249d8648eb499f"
+        },
+        {
+          "path": ".github/actions/setup-apex/action.yml",
+          "start": 0,
+          "end": 767,
+          "kind": "text",
+          "sha256": "0edea9d8b796c0ad885294d0788f2c8783b5c8214d9ccb73c2b25187ae6191c3"
+        },
+        {
+          "path": ".github/capture-gallery-request.json",
+          "start": 0,
+          "end": 327,
+          "kind": "text",
+          "sha256": "72c02374a241077d511b0e4c523d4caaea068dcd9acc6bd23a7cf69a7bdfd9f6"
+        },
+        {
+          "path": ".github/dependabot.yml",
+          "start": 0,
+          "end": 1361,
+          "kind": "text",
+          "sha256": "084e52ba9615ab494b02928bd435726888ef05dbe3ccfe6822bac50274455ba4"
+        },
+        {
+          "path": ".github/gpu-census-request.json",
+          "start": 0,
+          "end": 148,
+          "kind": "text",
+          "sha256": "75796dd0a8bf798bd0dee4166384eda42cb48bdce0e65c2823d5442f21102533"
+        },
+        {
+          "path": ".github/labels.json",
+          "start": 0,
+          "end": 4169,
+          "kind": "text",
+          "sha256": "565703df2eaa9bc1d0031e41d70668e2377f175e6abe5209bcc0362b15dc9d43"
+        },
+        {
+          "path": ".github/pull_request_template.md",
+          "start": 0,
+          "end": 3196,
+          "kind": "text",
+          "sha256": "9b702489beb5b8b21a1d5baf2c106c7e5ae6ce828d2ae9c14be3416d4d48377b"
+        },
+        {
+          "path": ".github/workflows/archive-evidence.yml",
+          "start": 0,
+          "end": 7927,
+          "kind": "text",
+          "sha256": "18a269780129db8aa3528fc75176d9515813863593864dcd35fc6cf1502e1fd5"
+        },
+        {
+          "path": ".github/workflows/browser-group.yml",
+          "start": 0,
+          "end": 6283,
+          "kind": "text",
+          "sha256": "e277561bf632ea3ddde77550e257852ac694a413285bb43a48ce770607f406e1"
+        },
+        {
+          "path": ".github/workflows/capture-gallery.yml",
+          "start": 0,
+          "end": 1538,
+          "kind": "text",
+          "sha256": "d3357b63292c9737f2ac03dccf90e2a48068518d71804bab7f5ec6ee027d8374"
+        },
+        {
+          "path": ".github/workflows/car-shot.yml",
+          "start": 0,
+          "end": 6121,
+          "kind": "text",
+          "sha256": "32ea0e3e2fddcee7f04ea36ffc1393e23e3a24d1051c5c755f8a45c584e81168"
+        },
+        {
+          "path": ".github/workflows/changelog-fold.yml",
+          "start": 0,
+          "end": 6444,
+          "kind": "text",
+          "sha256": "c974d820ec98d3f64ba44e2405a0d99bc73a499212868b0d00124704d209a11a"
+        },
+        {
+          "path": ".github/workflows/ci-cancel-on-close.yml",
+          "start": 0,
+          "end": 3303,
+          "kind": "text",
+          "sha256": "8b5805477a5609302278e7e9acd0aeba3f689732cc4abe685f5c3bb9a796bcea"
+        },
+        {
+          "path": ".github/workflows/ci.yml",
+          "start": 0,
+          "end": 109490,
+          "kind": "text",
+          "sha256": "d615b39496e01177025a6dde9dbdd6edd5d8314942a9adaca3cb8ead2bf0f1d6"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "start": 109490,
+          "end": 213506,
+          "kind": "text",
+          "sha256": "d615b39496e01177025a6dde9dbdd6edd5d8314942a9adaca3cb8ead2bf0f1d6"
+        },
+        {
+          "path": ".github/workflows/desktop.yml",
+          "start": 0,
+          "end": 10007,
+          "kind": "text",
+          "sha256": "8458ecbc83fba37bd05e68e8abf8b2ccd54fa25e724204037c38d0641c31b1b0"
+        },
+        {
+          "path": ".github/workflows/flake-tally.yml",
+          "start": 0,
+          "end": 3167,
+          "kind": "text",
+          "sha256": "be845ada2c906bb771b393c735ee55320c1dfd26509d0c30431afdf07103ec42"
+        },
+        {
+          "path": ".github/workflows/garage-before.yml",
+          "start": 0,
+          "end": 7086,
+          "kind": "text",
+          "sha256": "09b860fc0b6a14a8b62e77b25bc2e09884a5ab15d5171a0e89f4eb451d79a97b"
+        },
+        {
+          "path": ".github/workflows/gpu-census.yml",
+          "start": 0,
+          "end": 35724,
+          "kind": "text",
+          "sha256": "5232dc24b199167f2bfcf902d6847c939b0ef78c9516c47b6b7d483ecbf4cf41"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": ".github/workflows/gpu-census.yml",
+          "start": 35724,
+          "end": 43050,
+          "kind": "text",
+          "sha256": "5232dc24b199167f2bfcf902d6847c939b0ef78c9516c47b6b7d483ecbf4cf41"
+        },
+        {
+          "path": ".github/workflows/hud-survey.yml",
+          "start": 0,
+          "end": 6555,
+          "kind": "text",
+          "sha256": "807e23358199fafc47367da2f634b26ecc582398bd2b40b45938a62cbcbcdaec"
+        },
+        {
+          "path": ".github/workflows/import-models.yml",
+          "start": 0,
+          "end": 9641,
+          "kind": "text",
+          "sha256": "7102ad40780c5f1e2933af89ddb3f07f0dfbad6f54edb9fdf342f6af076d9fac"
+        },
+        {
+          "path": ".github/workflows/land.yml",
+          "start": 0,
+          "end": 13283,
+          "kind": "text",
+          "sha256": "e0d217aa9d341e4d5cbb814e2ee2c9b266888c567f7f6b92b8da79fa49782c94"
+        },
+        {
+          "path": ".github/workflows/lit-wgsl-advisory.yml",
+          "start": 0,
+          "end": 4086,
+          "kind": "text",
+          "sha256": "4680fc623ff5dcbab6bb03bf70ee118d56452e01fe48f0a89cf30a06023e1bff"
+        },
+        {
+          "path": ".github/workflows/pages.yml",
+          "start": 0,
+          "end": 26651,
+          "kind": "text",
+          "sha256": "8bae4c19f2ef963163988f30e950e17cdb0713832c05c9a2dc88c2f2074ebdf9"
+        },
+        {
+          "path": ".github/workflows/process-dashboard.yml",
+          "start": 0,
+          "end": 4459,
+          "kind": "text",
+          "sha256": "d1f1d8b18302831beec421ff250d928e76e49d94704e555e8804ced498e245e4"
+        },
+        {
+          "path": ".github/workflows/prune-branches.yml",
+          "start": 0,
+          "end": 5351,
+          "kind": "text",
+          "sha256": "44dd2f5c2c4283f3084c7809f22f71c724029425c4d1275e1aaecc4b9b46f8c4"
+        },
+        {
+          "path": ".github/workflows/ratchets-fold.yml",
+          "start": 0,
+          "end": 7461,
+          "kind": "text",
+          "sha256": "b0d4b23c5ea57bc6ffd37eed4e484483c3705cbfff13d45f9a78978da71fde6c"
+        },
+        {
+          "path": ".github/workflows/repo-size.yml",
+          "start": 0,
+          "end": 1540,
+          "kind": "text",
+          "sha256": "c47f7c91f2f4a280624ba313adcde740ac4783d9f8d822e4958520917fe4b380"
+        },
+        {
+          "path": ".github/workflows/spec-timings.yml",
+          "start": 0,
+          "end": 11428,
+          "kind": "text",
+          "sha256": "bd47c9ebce9838ca84aa4e61b42aef1fb59c8bf5204240c7b0013482b85505be"
+        },
+        {
+          "path": ".github/workflows/webkit-leg.yml",
+          "start": 0,
+          "end": 3884,
+          "kind": "text",
+          "sha256": "5292d939bd5462f7a04fde7a52e804298e0eeb3390d0e6f70032da2608d95e95"
+        },
+        {
+          "path": ".github/zizmor.yml",
+          "start": 0,
+          "end": 902,
+          "kind": "text",
+          "sha256": "fe596badce593d069668e475c60dca9c8a91df6cec66554b7e54153ea43d525b"
+        }
+      ],
+      "bytes": 102567,
+      "status": "unassigned"
+    }
+  ]
+}

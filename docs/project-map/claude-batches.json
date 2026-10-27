@@ -1,0 +1,1510 @@
+{
+  "goal": "Complete original tracked source/prose/data scope; every assigned text byte read, binary metadata inspected, historical material is provenance not authority. Half-open byte spans.",
+  "groups": [
+    {
+      "id": "01",
+      "parts": [
+        {
+          "path": ".claude/agent-memory/bloat-auditor/MEMORY.md",
+          "start": 0,
+          "end": 548,
+          "kind": "text",
+          "sha256": "152712ece76fbd19c5daad968b5474dd5d07c743c68cfe3a5019db34facd1f9f"
+        },
+        {
+          "path": ".claude/agent-memory/verify-agent/MEMORY.md",
+          "start": 0,
+          "end": 156,
+          "kind": "text",
+          "sha256": "7e36333bba12a257c5b9dfa7d7c04f64592ab0777d1da586ece58ee325fb1e02"
+        },
+        {
+          "path": ".claude/agents/README.md",
+          "start": 0,
+          "end": 8105,
+          "kind": "text",
+          "sha256": "774d7417490a1bf43f216ac24fa554231a715b22f49659a1c46eb29e15863ef9"
+        },
+        {
+          "path": ".claude/agents/agent-surface-reviewer.md",
+          "start": 0,
+          "end": 4655,
+          "kind": "text",
+          "sha256": "d3111e054fc5070e00619308f71b54cd7ecadb29da516db73a001457292e4c15"
+        },
+        {
+          "path": ".claude/agents/bloat-auditor.md",
+          "start": 0,
+          "end": 6098,
+          "kind": "text",
+          "sha256": "0dd62a39348ecba7df8eddda71996e3273b49f9b619c1c219d420ede0e9fb84f"
+        },
+        {
+          "path": ".claude/agents/ci-red-triage.md",
+          "start": 0,
+          "end": 8659,
+          "kind": "text",
+          "sha256": "dbe4caf32a60426ad99309fec89d83a82e9f555a07747b5a3d7a4ca4460cce5b"
+        },
+        {
+          "path": ".claude/agents/code-hunter.md",
+          "start": 0,
+          "end": 4963,
+          "kind": "text",
+          "sha256": "9159c9d7aff101d1e4ff9188366b02f2339a659d470869f9871496889644bcd3"
+        },
+        {
+          "path": ".claude/agents/deploy-research.md",
+          "start": 0,
+          "end": 9126,
+          "kind": "text",
+          "sha256": "aa8b2b02b5febd424f089bd489fe0e92bb874530a4c1c22eae85b472b190c362"
+        },
+        {
+          "path": ".claude/agents/finding-verifier.md",
+          "start": 0,
+          "end": 4297,
+          "kind": "text",
+          "sha256": "6c24dd2db17f355615894db3fb70398c8aab38f98c56bdf1e788cc376d95346a"
+        },
+        {
+          "path": ".claude/agents/physics-contract-auditor.md",
+          "start": 0,
+          "end": 4981,
+          "kind": "text",
+          "sha256": "2b593342273efe4609e5a7d0054e95cbfae288b2ba82c486cbff7683da4d8623"
+        },
+        {
+          "path": ".claude/agents/prior-art-scout.md",
+          "start": 0,
+          "end": 3991,
+          "kind": "text",
+          "sha256": "fbbbf3f6c267718e3f7f7095cb6bda2f394ae35dffbce1a62003fcb357e135b5"
+        },
+        {
+          "path": ".claude/agents/track-surveyor.md",
+          "start": 0,
+          "end": 6827,
+          "kind": "text",
+          "sha256": "0c642be1eda65a94cbc6dd8f6e2595e12856c2932e23bc97343c4c4d6f7a55c7"
+        },
+        {
+          "path": ".claude/agents/verify-agent.md",
+          "start": 0,
+          "end": 6112,
+          "kind": "text",
+          "sha256": "61375672a1b197bfd89de8e96ff3e9a00f192e4173831a6e76bdd2b6ba6d858d"
+        },
+        {
+          "path": ".claude/agents/worker.md",
+          "start": 0,
+          "end": 9823,
+          "kind": "text",
+          "sha256": "c660704687ef5ae0c1a2fbd0f800ed2fca6d1703d8e19094a408524f0503cd32"
+        },
+        {
+          "path": ".claude/hooks/bash-guard.sh",
+          "start": 0,
+          "end": 47561,
+          "kind": "text",
+          "sha256": "e5cbc324d0f3f2c2a6f5e24b93fd6bc846fe7b5082776bc12d50c2e352c000b7"
+        },
+        {
+          "path": ".claude/hooks/context-cap.py",
+          "start": 0,
+          "end": 7159,
+          "kind": "text",
+          "sha256": "af6d8663acc693772f1bdb256f929892bdef7f198d983dee2a2c3eb0b8c81a7e"
+        },
+        {
+          "path": ".claude/hooks/foreign_push.py",
+          "start": 0,
+          "end": 7559,
+          "kind": "text",
+          "sha256": "196ec8c2896b3194c98c0ba25d9d6d98968bdb043c01191faffd8552b9c2d651"
+        },
+        {
+          "path": ".claude/hooks/github-mcp-guard.sh",
+          "start": 0,
+          "end": 7302,
+          "kind": "text",
+          "sha256": "180095f4c31d7918f390e3b4d126684d971b79d957a89c76842a854d5d4ce75f"
+        },
+        {
+          "path": ".claude/hooks/launch-gate.py",
+          "start": 0,
+          "end": 4274,
+          "kind": "text",
+          "sha256": "316236039d2008ee509f2eee9b248ca2c32ec42bd9b718ab0e29711d8bc814c2"
+        },
+        {
+          "path": ".claude/hooks/launch-page.py",
+          "start": 0,
+          "end": 2315,
+          "kind": "text",
+          "sha256": "7dadcdfdae408f447cc57c6bf908c11595f57f8d86db7696fdf79df3eec40fe7"
+        },
+        {
+          "path": ".claude/hooks/live-run.py",
+          "start": 0,
+          "end": 2159,
+          "kind": "text",
+          "sha256": "158e5eb7289331cbf9e49c848f00b7ac59526800ad2fd764376c35dac5e56b5f"
+        },
+        {
+          "path": ".claude/hooks/lsp-hint.py",
+          "start": 0,
+          "end": 3330,
+          "kind": "text",
+          "sha256": "31a987751267ef201996dfc01a875b495aaf154ac6250ab14639c340ef028e30"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "02",
+      "parts": [
+        {
+          "path": ".claude/hooks/lsp-hint.py",
+          "start": 3330,
+          "end": 6315,
+          "kind": "text",
+          "sha256": "31a987751267ef201996dfc01a875b495aaf154ac6250ab14639c340ef028e30"
+        },
+        {
+          "path": ".claude/hooks/mcp-browser-guard.sh",
+          "start": 0,
+          "end": 4130,
+          "kind": "text",
+          "sha256": "0aef70286a86c22fa4befbe8c3b9f88c5fa0d9412333ef58436adcfdc6d150c5"
+        },
+        {
+          "path": ".claude/hooks/memory-sync.sh",
+          "start": 0,
+          "end": 12535,
+          "kind": "text",
+          "sha256": "f72e22c8d0185dc7cd36d24fdf70332257268bce774cddd41b063e675062e6fe"
+        },
+        {
+          "path": ".claude/hooks/merge_policy.py",
+          "start": 0,
+          "end": 13230,
+          "kind": "text",
+          "sha256": "8796fe90fbec84c42e6cff22229d796dbd6869833c1b76bd6c78bbc27d89caee"
+        },
+        {
+          "path": ".claude/hooks/post-edit.sh",
+          "start": 0,
+          "end": 5700,
+          "kind": "text",
+          "sha256": "badc83e5315e40e986f95b7e46df7096d9e8920158b3cb2fecb4ea7aac18ee15"
+        },
+        {
+          "path": ".claude/hooks/protect-files.py",
+          "start": 0,
+          "end": 26270,
+          "kind": "text",
+          "sha256": "2a9640cbbe0c2334e9929fad106fd1d3f2fe2beb70d765c106088a0ce67895ed"
+        },
+        {
+          "path": ".claude/hooks/protect-files.sh",
+          "start": 0,
+          "end": 2575,
+          "kind": "text",
+          "sha256": "7452a7042869a1ac5288145290cff14ae0c2967ae86851cc5115a5bfb007baba"
+        },
+        {
+          "path": ".claude/hooks/session-start.sh",
+          "start": 0,
+          "end": 4118,
+          "kind": "text",
+          "sha256": "8733e01849afb20273dc73111923f6b336fe420295804f35d8bff0187f57ed1c"
+        },
+        {
+          "path": ".claude/hooks/shellparse.py",
+          "start": 0,
+          "end": 88457,
+          "kind": "text",
+          "sha256": "0e6d0b08fc6bb53ddd476158b32f515dc5d88d46f5947d519ff43a29b5167ea3"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "03",
+      "parts": [
+        {
+          "path": ".claude/hooks/shellparse.py",
+          "start": 88457,
+          "end": 104642,
+          "kind": "text",
+          "sha256": "0e6d0b08fc6bb53ddd476158b32f515dc5d88d46f5947d519ff43a29b5167ea3"
+        },
+        {
+          "path": ".claude/hooks/skill-hint.py",
+          "start": 0,
+          "end": 6112,
+          "kind": "text",
+          "sha256": "68cc5eb4083fa7d03b4daff0dac9c1380d3316e0b3959f99c3618b812e334de4"
+        },
+        {
+          "path": ".claude/hooks/stop-guard.sh",
+          "start": 0,
+          "end": 2656,
+          "kind": "text",
+          "sha256": "40f162f2412583cdbfe6a20aa819c4f7edcab73dc2966077842f9f672a0ab08d"
+        },
+        {
+          "path": ".claude/hooks/subagent-contract.py",
+          "start": 0,
+          "end": 8435,
+          "kind": "text",
+          "sha256": "5fc307f979d845c0b2ff3c582774cffb601d44d14198277473b72fcf6be05237"
+        },
+        {
+          "path": ".claude/hooks/ui-fixer-uncommitted.sh",
+          "start": 0,
+          "end": 1411,
+          "kind": "text",
+          "sha256": "001b02599c59784170fad0aa337170b83c5df70f252bf850c931c68cb1f09a0c"
+        },
+        {
+          "path": ".claude/memory/MEMORY.md",
+          "start": 0,
+          "end": 2665,
+          "kind": "text",
+          "sha256": "686554a15fee561fc252cc1d425b76ee51e8b950f18e819dd7018e14a824b8a7"
+        },
+        {
+          "path": ".claude/memory/ask-via-askuserquestion.md",
+          "start": 0,
+          "end": 1488,
+          "kind": "text",
+          "sha256": "3ffbc3df1e5c80d5b467e5c733ba3c002f7f974c1f816b98775da8fd4cc7531a"
+        },
+        {
+          "path": ".claude/memory/bryce-iphone-tlx-webgpu.md",
+          "start": 0,
+          "end": 968,
+          "kind": "text",
+          "sha256": "756d7efa7edbbaec70dcd87e85325f41e36afd5f71e0908529f60ba7383d4bd2"
+        },
+        {
+          "path": ".claude/memory/design-lanes-living-artifact.md",
+          "start": 0,
+          "end": 884,
+          "kind": "text",
+          "sha256": "67f9107738391f6b97d5f24ad8837299ccd66099f1b7cfdbcae6b75f25601c00"
+        },
+        {
+          "path": ".claude/memory/fan-out-with-subagents.md",
+          "start": 0,
+          "end": 889,
+          "kind": "text",
+          "sha256": "e3fac2b1687606aae5e139a18d41ada56844b4bc71e8382c9a89e5ce552942d6"
+        },
+        {
+          "path": ".claude/memory/one-subagent-per-skill.md",
+          "start": 0,
+          "end": 1039,
+          "kind": "text",
+          "sha256": "18b4910eb50294487dc9d3bbd5d5b5395bb749a14ed17afd29ba5afdf189168c"
+        },
+        {
+          "path": ".claude/memory/parallel-survey-and-review.md",
+          "start": 0,
+          "end": 1633,
+          "kind": "text",
+          "sha256": "9a656e3132b516d9642be251de930f846c4993ed64a2c938f1b5832c538552ba"
+        },
+        {
+          "path": ".claude/memory/preview-must-look-different.md",
+          "start": 0,
+          "end": 1083,
+          "kind": "text",
+          "sha256": "91d5413a4fb4a7865193cad6a719349455ce0061cdfdd97b92d66884d5855cb0"
+        },
+        {
+          "path": ".claude/memory/rules-are-agent-written-drafts.md",
+          "start": 0,
+          "end": 1155,
+          "kind": "text",
+          "sha256": "70882aef8dc8a71636c730aeed67fa70fbfebcc9e3628aa70e76e7ad6d59f274"
+        },
+        {
+          "path": ".claude/memory/small-steps-for-api-analysis.md",
+          "start": 0,
+          "end": 638,
+          "kind": "text",
+          "sha256": "5c01912568fef191fb7f360d61049fb97e2fc9f23c495b969f4cd70148ee3d8d"
+        },
+        {
+          "path": ".claude/memory/survey-then-fix.md",
+          "start": 0,
+          "end": 1102,
+          "kind": "text",
+          "sha256": "71ac63fd5adb5325de8388579df28105032ad22896d93d2e2fdc45928b90b3b9"
+        },
+        {
+          "path": ".claude/memory/synced-plugins-not-in-child-sessions.md",
+          "start": 0,
+          "end": 1685,
+          "kind": "text",
+          "sha256": "f01600d1f8e93a8da7402c9028037eab126d296b82da04886ecfeaca39db027e"
+        },
+        {
+          "path": ".claude/memory/train-ratchet-standing-ok.md",
+          "start": 0,
+          "end": 1087,
+          "kind": "text",
+          "sha256": "a5cd68c1572063c2513252110825b2d388c2ff3372081f68aa594cc8c4f7aa32"
+        },
+        {
+          "path": ".claude/memory/user-plays-on-phone.md",
+          "start": 0,
+          "end": 1057,
+          "kind": "text",
+          "sha256": "0110a96d650289976afa2a629a11a4c851f63cb3da8c35d9acc91c93d623bbe1"
+        },
+        {
+          "path": ".claude/memory/user-timezone-pacific.md",
+          "start": 0,
+          "end": 593,
+          "kind": "text",
+          "sha256": "4645c6f636ae4a620ec58cc9bc617f8b6ac7aa46cb57904f3546c0405f25c815"
+        },
+        {
+          "path": ".claude/rules/ci-tools.md",
+          "start": 0,
+          "end": 456,
+          "kind": "text",
+          "sha256": "ad28e69b972fdcce10969cbc0ba261cea5f03f695a29c5b0a960a0f2e313571b"
+        },
+        {
+          "path": ".claude/rules/claude-config.md",
+          "start": 0,
+          "end": 2928,
+          "kind": "text",
+          "sha256": "0f3558d7447ba4093e6f8e07eacba742e2db241597cdf288b836ce999ead0714"
+        },
+        {
+          "path": ".claude/rules/game-code.md",
+          "start": 0,
+          "end": 2097,
+          "kind": "text",
+          "sha256": "cdf2ca813984233b5fde9591bd15cf26b7ef3ee67d89a490baea44d6cd924886"
+        },
+        {
+          "path": ".claude/rules/js-nav.md",
+          "start": 0,
+          "end": 1366,
+          "kind": "text",
+          "sha256": "a40fa9fcbb8fb354cf976d60f178fb9db9b05423e4baa10a5235d6b8a342b5b4"
+        },
+        {
+          "path": ".claude/rules/render-tlx.md",
+          "start": 0,
+          "end": 2092,
+          "kind": "text",
+          "sha256": "3845c2d31490ab933d1dc3c68b9db200bd163e5b39cd849a88180e8c77508f4d"
+        },
+        {
+          "path": ".claude/rules/render-wgx.md",
+          "start": 0,
+          "end": 2740,
+          "kind": "text",
+          "sha256": "687a21863664a8ab2fdb234ce9dcaa556442ed49bd303b6ca21ef237545c42ab"
+        },
+        {
+          "path": ".claude/rules/tests-specs.md",
+          "start": 0,
+          "end": 564,
+          "kind": "text",
+          "sha256": "2b7fa91dadf8b7f54b2b6c44bc89be107f17884b1c2fc0475987235fac0b6d3c"
+        },
+        {
+          "path": ".claude/settings.json",
+          "start": 0,
+          "end": 12745,
+          "kind": "text",
+          "sha256": "aba4dfe8d0e4857402da3806e51fcb74ef0a91c4dcc5a780a19b8f82cc6c238a"
+        },
+        {
+          "path": ".claude/skills/README.md",
+          "start": 0,
+          "end": 13620,
+          "kind": "text",
+          "sha256": "74c154f6f3359bfe493706fedb5e39c95072b630e642c4aed132957c3d14879d"
+        },
+        {
+          "path": ".claude/skills/agent-config/SKILL.md",
+          "start": 0,
+          "end": 5382,
+          "kind": "text",
+          "sha256": "843143211bce8e3f4425574e3bc612ccb5daaf733f361faa6d2d771e29300899"
+        },
+        {
+          "path": ".claude/skills/agent-view/SKILL.md",
+          "start": 0,
+          "end": 3448,
+          "kind": "text",
+          "sha256": "a08555e79ffa5e4cd3912c137838cfaceb833cb36bd427067e48d916181c646e"
+        },
+        {
+          "path": ".claude/skills/agent-view/references/debug-tracks-sweeps.md",
+          "start": 0,
+          "end": 3511,
+          "kind": "text",
+          "sha256": "dd8b0f7ce6937b8b6ac5d69f400c5f3806ad54aa5b2ecdb6e970b204b5a662b9"
+        },
+        {
+          "path": ".claude/skills/agent-view/references/state.md",
+          "start": 0,
+          "end": 3988,
+          "kind": "text",
+          "sha256": "001f74620fab503958a0ebc1cdc89c5a15880c122dac4049ee6899020b64ad9b"
+        },
+        {
+          "path": ".claude/skills/agent-view/references/surface.md",
+          "start": 0,
+          "end": 16450,
+          "kind": "text",
+          "sha256": "6d9585f3c27af007b6ca8d0ca376132c079fe19c6bcde7851452c7ccf03d0a1a"
+        },
+        {
+          "path": ".claude/skills/agent-view/references/track-geometry.md",
+          "start": 0,
+          "end": 6003,
+          "kind": "text",
+          "sha256": "ca634b07d42fd1d50ea7f7539a92ce3e1d9e187181791254de9d4d495982b98f"
+        },
+        {
+          "path": ".claude/skills/ai-racecraft/SKILL.md",
+          "start": 0,
+          "end": 7068,
+          "kind": "text",
+          "sha256": "3497c7f52c4c60bf52ec602f982633994a3fa8ac61baddd9e09833d57bb1cdc3"
+        },
+        {
+          "path": ".claude/skills/ai-racecraft/references/pace.md",
+          "start": 0,
+          "end": 634,
+          "kind": "text",
+          "sha256": "8bc94bbb2f707285e39c0054d344e3c84bce19f9ba5df743b2e350ec3fc4f374"
+        },
+        {
+          "path": ".claude/skills/ai-racecraft/references/stuck.md",
+          "start": 0,
+          "end": 2130,
+          "kind": "text",
+          "sha256": "d8af39a469e6dd11fd04b4255b0e37355d434be649ae375659d784a2d5811572"
+        },
+        {
+          "path": ".claude/skills/ai-racecraft/references/tactics.md",
+          "start": 0,
+          "end": 2921,
+          "kind": "text",
+          "sha256": "1a9985f372a78678818114bd1a10a71560080cc4b379453d07c6e91a80b48470"
+        },
+        {
+          "path": ".claude/skills/asset-pack/SKILL.md",
+          "start": 0,
+          "end": 3688,
+          "kind": "text",
+          "sha256": "33e0c9c3fba2c701ba7ac90f310f4564867e54fb57be294b364a318c97d49abe"
+        },
+        {
+          "path": ".claude/skills/asset-pack/references/workflow.md",
+          "start": 0,
+          "end": 7456,
+          "kind": "text",
+          "sha256": "abaf8e6f2587351dcfd49567d33aa9160e5aa51d79983056e21bd5762b0f3a9d"
+        },
+        {
+          "path": ".claude/skills/audio-debug/SKILL.md",
+          "start": 0,
+          "end": 4020,
+          "kind": "text",
+          "sha256": "17efa55cd6adb227f96f1226ee65b5932871686364fc208984b6dace94ce7a2e"
+        },
+        {
+          "path": ".claude/skills/audio-debug/references/diagnose.md",
+          "start": 0,
+          "end": 1928,
+          "kind": "text",
+          "sha256": "a08ead0a40b1daf2c19d67bc3e3235f47dcb8883ae7c20e05422d70e8273889c"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "04",
+      "parts": [
+        {
+          "path": ".claude/skills/audio-debug/references/diagnose.md",
+          "start": 1928,
+          "end": 11166,
+          "kind": "text",
+          "sha256": "a08ead0a40b1daf2c19d67bc3e3235f47dcb8883ae7c20e05422d70e8273889c"
+        },
+        {
+          "path": ".claude/skills/career-mode/SKILL.md",
+          "start": 0,
+          "end": 5298,
+          "kind": "text",
+          "sha256": "793ce886f4bfba685c4c5d1ebf42fed5599344bbb7fb60fe8647473bbac90b5d"
+        },
+        {
+          "path": ".claude/skills/career-mode/references/persistence.md",
+          "start": 0,
+          "end": 1829,
+          "kind": "text",
+          "sha256": "f1cd528ff8d05217a8a2eab09ceddfeb4b4a1de1de3adc74348befb8681fbafa"
+        },
+        {
+          "path": ".claude/skills/career-mode/references/workflow.md",
+          "start": 0,
+          "end": 8738,
+          "kind": "text",
+          "sha256": "4a21af7c0bdf6dfd842fbd797ee3cbebc03f9e56032b5893df2ffa75db62de8b"
+        },
+        {
+          "path": ".claude/skills/check-changes/SKILL.md",
+          "start": 0,
+          "end": 5783,
+          "kind": "text",
+          "sha256": "ee95002c2c741b48fe1278c458950c154e8c936e46a9304ac4b347c0878dafe3"
+        },
+        {
+          "path": ".claude/skills/check-changes/references/bump.md",
+          "start": 0,
+          "end": 1962,
+          "kind": "text",
+          "sha256": "b0bc2b6d121e16d2132cd1e30f974f0990bdc09611b6714b6fe66077ff1e3343"
+        },
+        {
+          "path": ".claude/skills/check-changes/references/deploy.md",
+          "start": 0,
+          "end": 5486,
+          "kind": "text",
+          "sha256": "842819ac26e32084c4a21bc6d6fb14a4ac0e3212668f14625e06c157ae2acf7a"
+        },
+        {
+          "path": ".claude/skills/check-changes/references/engine-physics.md",
+          "start": 0,
+          "end": 1382,
+          "kind": "text",
+          "sha256": "466dc024bb860b0b63c7d4fb5adebe3ebb2294d5b49ff566494f721b76170ed0"
+        },
+        {
+          "path": ".claude/skills/check-changes/references/guards.md",
+          "start": 0,
+          "end": 4327,
+          "kind": "text",
+          "sha256": "0cfdfe7e35792708c5a6904292a686da68911d00a4f6f72d1a8051b95d2676a2"
+        },
+        {
+          "path": ".claude/skills/check-changes/references/sync-pr.md",
+          "start": 0,
+          "end": 2318,
+          "kind": "text",
+          "sha256": "6578da0dc49d793dd942d1f23ad19a6b85d02d379b412c75b24f04ed195e767a"
+        },
+        {
+          "path": ".claude/skills/check-changes/references/triage.md",
+          "start": 0,
+          "end": 5939,
+          "kind": "text",
+          "sha256": "f31b949625ecd53349238b4f47e8886c8bdcf0bbdd20ee599f642c460291eb4b"
+        },
+        {
+          "path": ".claude/skills/check-changes/references/vm-twin.md",
+          "start": 0,
+          "end": 2656,
+          "kind": "text",
+          "sha256": "0387bf46a7d4fa66bad813765f4f6c5d1ec7d805076eab42ba121ade63d7f784"
+        },
+        {
+          "path": ".claude/skills/check/SKILL.md",
+          "start": 0,
+          "end": 2422,
+          "kind": "text",
+          "sha256": "dc7b46cee67382519103ef1fcb9b59f84ed7379a8a6b1e9202c72e508204486b"
+        },
+        {
+          "path": ".claude/skills/code-nav/SKILL.md",
+          "start": 0,
+          "end": 5246,
+          "kind": "text",
+          "sha256": "ec73c911fa39f0d724037ee74bb963ac6208232a86a3ba33057d28eaa2da1353"
+        },
+        {
+          "path": ".claude/skills/code-nav/references/output-and-limits.md",
+          "start": 0,
+          "end": 3125,
+          "kind": "text",
+          "sha256": "9dbbf5d380f28bc1f0ff9d6d05215aafc0375e7b3fc5ee3c97fc7d077ff7f447"
+        },
+        {
+          "path": ".claude/skills/css-play/SKILL.md",
+          "start": 0,
+          "end": 5042,
+          "kind": "text",
+          "sha256": "57b9cf650ba230bdcb91fa87bd1dca39a0338ef73e572fdb107637aa1f7c84db"
+        },
+        {
+          "path": ".claude/skills/css-play/references/loop.md",
+          "start": 0,
+          "end": 5997,
+          "kind": "text",
+          "sha256": "27aebdd7e7271365920a6bc1f61bfb6373ed8b1e2a199ba55720076afacfd8d9"
+        },
+        {
+          "path": ".claude/skills/css-play/references/restructure-screens-css-rules.md",
+          "start": 0,
+          "end": 10582,
+          "kind": "text",
+          "sha256": "e35bdb0ab2df58c08e0dc17f4ad42eaea72002eae3c2385126b2cb092b0dff89"
+        },
+        {
+          "path": ".claude/skills/css-play/references/restructure.md",
+          "start": 0,
+          "end": 3197,
+          "kind": "text",
+          "sha256": "dc60a7f230d55901fd72246a804bfdc6dd3a1ae09715e570c463673c85182ae3"
+        },
+        {
+          "path": ".claude/skills/data-hub/SKILL.md",
+          "start": 0,
+          "end": 4338,
+          "kind": "text",
+          "sha256": "46738969d2ad05fd8eba7568a8b827de5207bdaa8efcb72110aa61805cddc874"
+        },
+        {
+          "path": ".claude/skills/data-hub/references/export.md",
+          "start": 0,
+          "end": 1041,
+          "kind": "text",
+          "sha256": "662b35831748f0f04092670992f59344008cf54c28d5510ce02ae99d6e577775"
+        },
+        {
+          "path": ".claude/skills/data-hub/references/season-year.md",
+          "start": 0,
+          "end": 1783,
+          "kind": "text",
+          "sha256": "309055893cc9656bd0a5e90f5492ba683f46a77f786db244b5cc395d88eab7fb"
+        },
+        {
+          "path": ".claude/skills/f1-animation-cameras/SKILL.md",
+          "start": 0,
+          "end": 1810,
+          "kind": "text",
+          "sha256": "c40f06b4fa94399dfac4cf151399d66d33398a2893a56b76c701221ce7a0bfe8"
+        },
+        {
+          "path": ".claude/skills/f1-animation-cameras/references/cut-jump.md",
+          "start": 0,
+          "end": 2841,
+          "kind": "text",
+          "sha256": "b551957804874507679f74ae4f1c4e46e4a5092d3bf905542e45eda68a0651c7"
+        },
+        {
+          "path": ".claude/skills/f1-animation-cameras/references/game.md",
+          "start": 0,
+          "end": 2360,
+          "kind": "text",
+          "sha256": "f9f01d4569972296a606f23d71cbf17973f238d4319755f7f5bb986432426849"
+        },
+        {
+          "path": ".claude/skills/f1-animation-cameras/references/replay-diagnosis.md",
+          "start": 0,
+          "end": 1797,
+          "kind": "text",
+          "sha256": "068328c937aa041755ce4495ea61b503004504e1345c27cb311032aa84ebfd9c"
+        },
+        {
+          "path": ".claude/skills/f1-animation-cameras/references/replay-workflow.md",
+          "start": 0,
+          "end": 2126,
+          "kind": "text",
+          "sha256": "68d90d8a1640d5344dfc28f33562fcee1ee0030e358d186b3cd251e095d23548"
+        },
+        {
+          "path": ".claude/skills/f1-animation-cameras/references/replay.md",
+          "start": 0,
+          "end": 1696,
+          "kind": "text",
+          "sha256": "af50ea5387590304ad25063a6e56d25e2e2e7ec1f8add7206a5432c573099dc9"
+        },
+        {
+          "path": ".claude/skills/game-feel/SKILL.md",
+          "start": 0,
+          "end": 3058,
+          "kind": "text",
+          "sha256": "87038ec455e5ae1da84bd9a3480c12c72d9bf4a56add63484796cdb387f62e62"
+        },
+        {
+          "path": ".claude/skills/game-feel/references/feedback-recipes.md",
+          "start": 0,
+          "end": 4264,
+          "kind": "text",
+          "sha256": "c6823178b852e3a6aa84452b36b833a4835d7769799035c7e673ce4e952505b7"
+        },
+        {
+          "path": ".claude/skills/game-feel/references/workflow.md",
+          "start": 0,
+          "end": 3334,
+          "kind": "text",
+          "sha256": "2a8a343a014197c6da81f0d094e9a9457d110b60a6070d5a24f2d0157e8a22f7"
+        },
+        {
+          "path": ".claude/skills/garage-parts-livery/SKILL.md",
+          "start": 0,
+          "end": 6898,
+          "kind": "text",
+          "sha256": "1e410cfe637fcf0fc99ce4b8216aeb48073f8454f9530823075a14c58d3f42b8"
+        },
+        {
+          "path": ".claude/skills/garage-parts-livery/references/before-pack.md",
+          "start": 0,
+          "end": 1118,
+          "kind": "text",
+          "sha256": "833aca3a797e2e5c7ae99f8e7f416971a9a5f86d5689eef2c96871dbcebcd9c9"
+        },
+        {
+          "path": ".claude/skills/garage-parts-livery/references/design-loop.md",
+          "start": 0,
+          "end": 1236,
+          "kind": "text",
+          "sha256": "34b0c8cb441cbded935a177399f8b67d9d8767b4c8780fa0bec9589096226212"
+        },
+        {
+          "path": ".claude/skills/garage-parts-livery/references/garage-angles.md",
+          "start": 0,
+          "end": 22269,
+          "kind": "text",
+          "sha256": "b8cf214259c80e7049ef35fecb20cbf9ba4cb01af41b4978eeeb1eb905300591"
+        },
+        {
+          "path": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+          "start": 0,
+          "end": 7464,
+          "kind": "text",
+          "sha256": "a0a8638bea059c28616acac896c4288ad0b5c521f2f73103782d6de9d400bd86"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "05",
+      "parts": [
+        {
+          "path": ".claude/skills/garage-parts-livery/references/livery-fields.md",
+          "start": 7464,
+          "end": 10003,
+          "kind": "text",
+          "sha256": "a0a8638bea059c28616acac896c4288ad0b5c521f2f73103782d6de9d400bd86"
+        },
+        {
+          "path": ".claude/skills/garage-parts-livery/references/placement.md",
+          "start": 0,
+          "end": 17578,
+          "kind": "text",
+          "sha256": "a97e852f67f4d0375d1634e674a0bd8473c03f38d11adaa5967b5ceec233b2c4"
+        },
+        {
+          "path": ".claude/skills/garage-parts-livery/references/shot-cli.md",
+          "start": 0,
+          "end": 1543,
+          "kind": "text",
+          "sha256": "4d9cf987139bba08b0f675be9484ed4a18becc24fdb1ca9f2545d0398f4adf27"
+        },
+        {
+          "path": ".claude/skills/garage-parts-livery/references/workflow.md",
+          "start": 0,
+          "end": 7345,
+          "kind": "text",
+          "sha256": "eadce1a6baeeeb834c3958bba5d3f4668b95ed35323edd5416ca8c7ac5eede43"
+        },
+        {
+          "path": ".claude/skills/handoff/SKILL.md",
+          "start": 0,
+          "end": 2564,
+          "kind": "text",
+          "sha256": "e006067caf3dcb57647c7c6b80d6a4d16224dbef5a1c0050db0d3b60d3a51f0b"
+        },
+        {
+          "path": ".claude/skills/input-controls/SKILL.md",
+          "start": 0,
+          "end": 8034,
+          "kind": "text",
+          "sha256": "e5c940fc0242aac3566ad644784e079e47c9ec1b942450f8f13506d3cdfbbe66"
+        },
+        {
+          "path": ".claude/skills/input-controls/references/menu-leak-touch.md",
+          "start": 0,
+          "end": 3169,
+          "kind": "text",
+          "sha256": "df19a1e0adbff0714858f9e7fd0345a59a07f8fb07333c04b3aedafc218b7fba"
+        },
+        {
+          "path": ".claude/skills/input-controls/references/pad-drift.md",
+          "start": 0,
+          "end": 1607,
+          "kind": "text",
+          "sha256": "7c3afe4dacc575af429d3fb0b642d1d7d4850d5cc3525bce68a0676b84a17fec"
+        },
+        {
+          "path": ".claude/skills/js-debugger/SKILL.md",
+          "start": 0,
+          "end": 6430,
+          "kind": "text",
+          "sha256": "19ee41ab04ff75c682151c689fe466ee69dff63a43af34098b1a9797e9221727"
+        },
+        {
+          "path": ".claude/skills/js-debugger/references/step-loop.md",
+          "start": 0,
+          "end": 3211,
+          "kind": "text",
+          "sha256": "abbdcd4e757e67d169c10209db5178dddca1cd8336821a0094eac09499bafadc"
+        },
+        {
+          "path": ".claude/skills/js-debugger/references/tools.md",
+          "start": 0,
+          "end": 2371,
+          "kind": "text",
+          "sha256": "a597e982369391be6983e96ae8c59e281505e2a81c9ef32cb6aafb118251fe7a"
+        },
+        {
+          "path": ".claude/skills/lighting-tuner/SKILL.md",
+          "start": 0,
+          "end": 5272,
+          "kind": "text",
+          "sha256": "32a0a6076d73ec15c780a7a49717271e6307e0e49f7442428383146db13483cf"
+        },
+        {
+          "path": ".claude/skills/lighting-tuner/references/bake.md",
+          "start": 0,
+          "end": 6985,
+          "kind": "text",
+          "sha256": "389722dba5d962ffe06cd7becc7919f8ca7fbce4d9be37c0dd4e940ce9906744"
+        },
+        {
+          "path": ".claude/skills/lighting-tuner/references/graphics-atmosphere-playbook.md",
+          "start": 0,
+          "end": 958,
+          "kind": "text",
+          "sha256": "3ba114c60a7cf1e768845871f9c5d8591ccbddfaee0658ed5f33d4ce6b03abae"
+        },
+        {
+          "path": ".claude/skills/lighting-tuner/references/symptoms.md",
+          "start": 0,
+          "end": 6018,
+          "kind": "text",
+          "sha256": "72d5c68e6d35fc753b6af0a26870c1bdb1311d5259d5487167db318173f992be"
+        },
+        {
+          "path": ".claude/skills/lighting-tuner/scripts/bake.mjs",
+          "start": 0,
+          "end": 6575,
+          "kind": "text",
+          "sha256": "0061c40e0e9b3b111b10311c48ba1182c32abb47793b37a8a666d1078d8660ed"
+        },
+        {
+          "path": ".claude/skills/lighting-tuner/scripts/merge-proposals.mjs",
+          "start": 0,
+          "end": 10416,
+          "kind": "text",
+          "sha256": "f5118df4ab3b82dc887154cde61c1bb8263f8d4d1018a4f9774563869bbb85d1"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/SKILL.md",
+          "start": 0,
+          "end": 7304,
+          "kind": "text",
+          "sha256": "4f171afd8643731ac3d468be8c6897c6dbcaea2a74f023da8060189ae442d166"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/chrome.md",
+          "start": 0,
+          "end": 9603,
+          "kind": "text",
+          "sha256": "5bfd54e955d4a816cb87796a967c9633a2f6eb62aa3887dfb8389e9df5b7f4f2"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/device-report.md",
+          "start": 0,
+          "end": 1972,
+          "kind": "text",
+          "sha256": "bdfa9aea0dbf66524c1f53bb39ca3eb5beee3bed129484b0c7e168d7722bbf81"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/hud-freeze.md",
+          "start": 0,
+          "end": 1152,
+          "kind": "text",
+          "sha256": "3fdf8e7ce0adf2a5440c7140c5546d75ca657a23515a7af794da0cf3ae9188ad"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/offline.md",
+          "start": 0,
+          "end": 3203,
+          "kind": "text",
+          "sha256": "387090ccda4fc1c8f1e1f5463598220e05758c189a5e86a05b0e3ad60934f956"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/recipes.md",
+          "start": 0,
+          "end": 1583,
+          "kind": "text",
+          "sha256": "dffd6d2a0a6af8a05745696f5a90c2043710ff85c76bb0c4264c0b26d66300d7"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/renderer.md",
+          "start": 0,
+          "end": 4312,
+          "kind": "text",
+          "sha256": "2ca5519f6e81f9ab9f0f4e52d7f1569bfa9f943ebcd04e52e1548a907ad439d1"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/research.md",
+          "start": 0,
+          "end": 1755,
+          "kind": "text",
+          "sha256": "ac1c2af0f710ec5295dc419b5aae83d1fba31de4e9b18950d78f22064bf3cb83"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/traps-camera.md",
+          "start": 0,
+          "end": 10568,
+          "kind": "text",
+          "sha256": "08539e1a6cdb222417bda04945418c76d53a3ec7635eb390da4e32e22826cf7a"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/traps-chrome.md",
+          "start": 0,
+          "end": 8541,
+          "kind": "text",
+          "sha256": "3efe0b0d9cdb8008dc4ae1aef476ab0f642bcaa6d01245e1b87279281fee76c3"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/traps-scene.md",
+          "start": 0,
+          "end": 8773,
+          "kind": "text",
+          "sha256": "ee005e9561c1e2a8f6998472dd56a34953855c66ddf3cf7734802b52f1a72e05"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/traps.md",
+          "start": 0,
+          "end": 613,
+          "kind": "text",
+          "sha256": "57733addc5d13a003ce4291a72dd46210c72184a1b62dd9e5285d6d6f011e7af"
+        },
+        {
+          "path": ".claude/skills/mcp-probe/references/web-egress.md",
+          "start": 0,
+          "end": 736,
+          "kind": "text",
+          "sha256": "59e0287ac9e96d569ca3bea33d1e95f9e29c01d4627319e479a6acac5744ddd2"
+        },
+        {
+          "path": ".claude/skills/multiplayer-debug/SKILL.md",
+          "start": 0,
+          "end": 5160,
+          "kind": "text",
+          "sha256": "1d1253494599bc2a8293e8f5a74f871eade2ba024b8c7c2ae19aebe89f3d5f22"
+        },
+        {
+          "path": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+          "start": 0,
+          "end": 2110,
+          "kind": "text",
+          "sha256": "0f5a9cd3359744cc1a3d8e7b28b6a1f1df16c25ecb9f4392ed63943e81905b1d"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "06",
+      "parts": [
+        {
+          "path": ".claude/skills/multiplayer-debug/references/phone-nat.md",
+          "start": 2110,
+          "end": 2214,
+          "kind": "text",
+          "sha256": "0f5a9cd3359744cc1a3d8e7b28b6a1f1df16c25ecb9f4392ed63943e81905b1d"
+        },
+        {
+          "path": ".claude/skills/multiplayer-debug/references/workflow.md",
+          "start": 0,
+          "end": 12548,
+          "kind": "text",
+          "sha256": "693162637f5804826361464cc15f2f45cd7074a3387f89514e237f8536f0cc35"
+        },
+        {
+          "path": ".claude/skills/new-track/SKILL.md",
+          "start": 0,
+          "end": 3017,
+          "kind": "text",
+          "sha256": "eccbf030a944c73f9c19adccb6a0123d6d3859fd2d0298c77d6684ab8465d648"
+        },
+        {
+          "path": ".claude/skills/new-track/references/editor.md",
+          "start": 0,
+          "end": 5182,
+          "kind": "text",
+          "sha256": "bfaabcdca647c9d0bd4c2050a5b8b6dbd6424ad1859f686d4f29ef36e373868a"
+        },
+        {
+          "path": ".claude/skills/new-track/references/schema.md",
+          "start": 0,
+          "end": 2724,
+          "kind": "text",
+          "sha256": "49c30c66fed077533ac162ca0a0617232734881549b5d492d3c4db9d0a45678e"
+        },
+        {
+          "path": ".claude/skills/new-track/references/workflow.md",
+          "start": 0,
+          "end": 14188,
+          "kind": "text",
+          "sha256": "d5faf375a2cec2ccedccc9e36a13936be51762d7cba8b794fbee56f477b2a48c"
+        },
+        {
+          "path": ".claude/skills/phone-browser/SKILL.md",
+          "start": 0,
+          "end": 3289,
+          "kind": "text",
+          "sha256": "6170eea4230b984daf0ea21ca85b824539ae7b296e8ed317c5676616b0d5d0b8"
+        },
+        {
+          "path": ".claude/skills/phone-browser/references/failures.md",
+          "start": 0,
+          "end": 1350,
+          "kind": "text",
+          "sha256": "56f6613651e32824f1e73cdcb423a4b4516a1b30fe3e1788e1cf570e7e2a8637"
+        },
+        {
+          "path": ".claude/skills/playwright-probe/SKILL.md",
+          "start": 0,
+          "end": 7695,
+          "kind": "text",
+          "sha256": "732e6cf0c96e6c7f8bf49b00625647cec213ddf32351de890663eaacab7960a9"
+        },
+        {
+          "path": ".claude/skills/playwright-probe/references/cameras.md",
+          "start": 0,
+          "end": 3394,
+          "kind": "text",
+          "sha256": "030eb3d8a861083c13e746a2cbd1e9ebd7aa346578f3e0306794a456c052482f"
+        },
+        {
+          "path": ".claude/skills/playwright-probe/references/car-studio.md",
+          "start": 0,
+          "end": 4043,
+          "kind": "text",
+          "sha256": "b51b411104064cd0f743059bfb5fcb5a6283d6578f6469b43a0c7c8e7ba56cfd"
+        },
+        {
+          "path": ".claude/skills/playwright-probe/references/car-viewer-presets.md",
+          "start": 0,
+          "end": 4447,
+          "kind": "text",
+          "sha256": "558adbc7f787935f4aa6b27e4181c4350c4997a118bbaa75081b0d3b6d4f11bb"
+        },
+        {
+          "path": ".claude/skills/playwright-probe/references/debug-cameras-framing.md",
+          "start": 0,
+          "end": 4776,
+          "kind": "text",
+          "sha256": "02402be9f8caa2e37ff2affa6c7b60931558b71dce2c133699a880e5984e9c0e"
+        },
+        {
+          "path": ".claude/skills/playwright-probe/references/motion-capture.md",
+          "start": 0,
+          "end": 4537,
+          "kind": "text",
+          "sha256": "3d36022846e0ff7ad3d1ff1049822aa3ee2c280c352002dd5a2a402fe751527b"
+        },
+        {
+          "path": ".claude/skills/playwright-probe/references/perf-profile.md",
+          "start": 0,
+          "end": 4390,
+          "kind": "text",
+          "sha256": "655df0cd55e6fb35ab1b6a57e353e0339cc6dc6f035e1ed3f96606e6ec109a5f"
+        },
+        {
+          "path": ".claude/skills/playwright-probe/references/recipes.md",
+          "start": 0,
+          "end": 10738,
+          "kind": "text",
+          "sha256": "d6ae954c021a55401c4f195857622c6dfa5b016556008cba0ef6742f8eec44d0"
+        },
+        {
+          "path": ".claude/skills/pwa-cache-service-worker/SKILL.md",
+          "start": 0,
+          "end": 4689,
+          "kind": "text",
+          "sha256": "b3427199894d1551fed588d7b5e6d4fa1f647b847df85fa238e700696b2ac170"
+        },
+        {
+          "path": ".claude/skills/pwa-cache-service-worker/references/sw-internals.md",
+          "start": 0,
+          "end": 2790,
+          "kind": "text",
+          "sha256": "ae7d97e4d47aa8a5642b09f1e56c5233f4f2de95cee4690cb2fbcd288ee7702a"
+        },
+        {
+          "path": ".claude/skills/pwa-cache-service-worker/references/workflow.md",
+          "start": 0,
+          "end": 6263,
+          "kind": "text",
+          "sha256": "f81a52431ec0b9860f243413f18e3ca4f7233c8a8b0b5c30c59edd9894c4b712"
+        },
+        {
+          "path": ".claude/skills/race-incidents-control/SKILL.md",
+          "start": 0,
+          "end": 5038,
+          "kind": "text",
+          "sha256": "3e34d318cb343557b439f165bfd2c7bf7ce56a6096b63e8d94f4e4e405c51408"
+        },
+        {
+          "path": ".claude/skills/race-incidents-control/references/reliability-trace.md",
+          "start": 0,
+          "end": 1207,
+          "kind": "text",
+          "sha256": "3bd541920bf75494133d96c836bd16e6bbcd514d349b755dacd2df1c06ca86f1"
+        },
+        {
+          "path": ".claude/skills/race-incidents-control/references/workflow.md",
+          "start": 0,
+          "end": 11782,
+          "kind": "text",
+          "sha256": "4978574adffd87210f3db648e82307aa2894fb69754100e509a4bda5357f3c6f"
+        },
+        {
+          "path": ".claude/skills/race-weekend/SKILL.md",
+          "start": 0,
+          "end": 5429,
+          "kind": "text",
+          "sha256": "0a30f54522668d68dc63a1f1d15a41e80fb70b98a80738b0217878035932afa2"
+        },
+        {
+          "path": ".claude/skills/renderer-debug/SKILL.md",
+          "start": 0,
+          "end": 8256,
+          "kind": "text",
+          "sha256": "c48382431c27c9ce2ebf73c5a5a42ac0271069722c74d914f2bc920b375df797"
+        },
+        {
+          "path": ".claude/skills/renderer-debug/references/chrome-devtools-perf.md",
+          "start": 0,
+          "end": 1227,
+          "kind": "text",
+          "sha256": "52f109025fb14723896956c35ba8a4d94339cf7bb20ec7bb0d76cb97296a56e9"
+        },
+        {
+          "path": ".claude/skills/renderer-debug/references/glx-failures.md",
+          "start": 0,
+          "end": 7125,
+          "kind": "text",
+          "sha256": "0812001c40d85853f7113e63e05c808d44ee87bd7d53e4b3bca96a31787903d3"
+        },
+        {
+          "path": ".claude/skills/renderer-debug/references/glx.md",
+          "start": 0,
+          "end": 6555,
+          "kind": "text",
+          "sha256": "f8e7e0d9d9835bd60e8b8de761ab303c44c8784735b8e0e08f384c8ba2826a83"
+        },
+        {
+          "path": ".claude/skills/renderer-debug/references/tlx-transparent-cars.md",
+          "start": 0,
+          "end": 1016,
+          "kind": "text",
+          "sha256": "6045bd0a4dca6a8cc01ed2c0b1dbf14fcf787e9ea65eb867fc865a638378d38c"
+        },
+        {
+          "path": ".claude/skills/renderer-debug/references/wgx-defects.md",
+          "start": 0,
+          "end": 5897,
+          "kind": "text",
+          "sha256": "a0f74c5b03d8fd2029b578df2318b6ed20ee06248ec71e5c6dc895a8d0909991"
+        },
+        {
+          "path": ".claude/skills/renderer-debug/references/wgx.md",
+          "start": 0,
+          "end": 5480,
+          "kind": "text",
+          "sha256": "6b8af924a9c6f4dfa36c674cc70ebac98dbb6b9cad1c0c0fa7498660364f8502"
+        },
+        {
+          "path": ".claude/skills/renderer-debug/references/xr.md",
+          "start": 0,
+          "end": 824,
+          "kind": "text",
+          "sha256": "a686dbda7543ee38c55595884a6541377ab516f0a0b79cf633167ef56a206c36"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "07",
+      "parts": [
+        {
+          "path": ".claude/skills/renderer-debug/references/xr.md",
+          "start": 824,
+          "end": 3353,
+          "kind": "text",
+          "sha256": "a686dbda7543ee38c55595884a6541377ab516f0a0b79cf633167ef56a206c36"
+        },
+        {
+          "path": ".claude/skills/scenery-dress/SKILL.md",
+          "start": 0,
+          "end": 4243,
+          "kind": "text",
+          "sha256": "5248187ef92738bb4aa2479837e246a52c802b08860e43375d314fdb07a62ef3"
+        },
+        {
+          "path": ".claude/skills/scenery-dress/references/float-fix.md",
+          "start": 0,
+          "end": 1380,
+          "kind": "text",
+          "sha256": "625deacfceddb5ec0d5121732e299676693b5ad98e6b6df62fc592b8b4011859"
+        },
+        {
+          "path": ".claude/skills/scenery-dress/references/instancing.md",
+          "start": 0,
+          "end": 5360,
+          "kind": "text",
+          "sha256": "00a8dabee6698c42d80c3cef8cc1cc69303a04b62066e430e6af5a45dc39dccd"
+        },
+        {
+          "path": ".claude/skills/scenery-dress/references/rules.md",
+          "start": 0,
+          "end": 5003,
+          "kind": "text",
+          "sha256": "41def4946b310446da4e5615c0ef19143eb8d1b602282118c7039b974146ae3d"
+        },
+        {
+          "path": ".claude/skills/season-mode/SKILL.md",
+          "start": 0,
+          "end": 6696,
+          "kind": "text",
+          "sha256": "2a5e9408bb99f093bfdcf1796b3ddd4c65f5be2a28bc0effeeb38e37500900b2"
+        },
+        {
+          "path": ".claude/skills/season-mode/references/sprint-scoring.md",
+          "start": 0,
+          "end": 1482,
+          "kind": "text",
+          "sha256": "735e267dfe020b9f972512f5892ff4593ff49efe67a8c5435be283fe5543d171"
+        },
+        {
+          "path": ".claude/skills/ship/SKILL.md",
+          "start": 0,
+          "end": 1991,
+          "kind": "text",
+          "sha256": "45433a53c05d9f3208d780905b00baec72e37d2c7be396f72dd2d17759fdc697"
+        },
+        {
+          "path": ".claude/skills/slim-bloat/SKILL.md",
+          "start": 0,
+          "end": 3968,
+          "kind": "text",
+          "sha256": "675b2eeb3f028f78c77f7c4e3d3a1f4d91a2f3d0b9edd0c658925aafdf470bbb"
+        },
+        {
+          "path": ".claude/skills/slim-bloat/references/carves.md",
+          "start": 0,
+          "end": 3613,
+          "kind": "text",
+          "sha256": "e0e7a33b4178465b18af715eec5330785063c5338d931c8e69608132630e216c"
+        },
+        {
+          "path": ".claude/skills/slim-bloat/references/do-not.md",
+          "start": 0,
+          "end": 3083,
+          "kind": "text",
+          "sha256": "6542d7217df6a28d2d6a0fdf39a9798b2a60a95e062e0e822e6fd2104d6ca4db"
+        },
+        {
+          "path": ".claude/skills/steward/SKILL.md",
+          "start": 0,
+          "end": 9395,
+          "kind": "text",
+          "sha256": "c68fecd115e4996c453d807e034f198f620bc10929a224cb497f262a44cf24e5"
+        },
+        {
+          "path": ".claude/skills/steward/references/host-watch.md",
+          "start": 0,
+          "end": 987,
+          "kind": "text",
+          "sha256": "09733a13016aff63d2e1373232dd35f3b85506ce73d9246a7c01b46aac990eff"
+        },
+        {
+          "path": ".claude/skills/survey-track/SKILL.md",
+          "start": 0,
+          "end": 7002,
+          "kind": "text",
+          "sha256": "c2feaf3d57ea0b206996e738e740970b4131231b8323a1a97594b592d5c08533"
+        },
+        {
+          "path": ".claude/skills/survey-track/ground-profile.mjs",
+          "start": 0,
+          "end": 4648,
+          "kind": "text",
+          "sha256": "55191589632859ce6757238ec60e7a46784ba1b5a70d26c1382cea32d26c2b5f"
+        },
+        {
+          "path": ".claude/skills/survey-track/references/campaign-workflow.md",
+          "start": 0,
+          "end": 8908,
+          "kind": "text",
+          "sha256": "8ed369c7023c6588fdcaa7390ac77adcff0070241b3a5a451d62e9f31f786bbb"
+        },
+        {
+          "path": ".claude/skills/survey-track/references/campaign.md",
+          "start": 0,
+          "end": 2394,
+          "kind": "text",
+          "sha256": "628a191d3d1375b09a30a543cb3ead42ad1f4110c2c11d2ba3ce20131db786fb"
+        },
+        {
+          "path": ".claude/skills/survey-track/references/delegation.md",
+          "start": 0,
+          "end": 1083,
+          "kind": "text",
+          "sha256": "175f5fcaf4db0a0bfa903ce8204362e1c1743a841edec424aa121049e43c3a0f"
+        },
+        {
+          "path": ".claude/skills/survey-track/references/evidence-template.json",
+          "start": 0,
+          "end": 1799,
+          "kind": "text",
+          "sha256": "a603fd5d6e1b273e758c4fea9d28dce39f0624ba85cfa08415495e136fc8bf8b"
+        },
+        {
+          "path": ".claude/skills/survey-track/references/loop.md",
+          "start": 0,
+          "end": 6262,
+          "kind": "text",
+          "sha256": "b0d97e4f6e8f27dbcd985122846ae18efc971e81d42900dcc022606bf6951d58"
+        },
+        {
+          "path": ".claude/skills/survey-ui-matrix/SKILL.md",
+          "start": 0,
+          "end": 8621,
+          "kind": "text",
+          "sha256": "d658de42fcb6fb52a8cead9866bbb67174d77b971fb3eb477c722653c56752f6"
+        },
+        {
+          "path": ".claude/skills/survey-ui-matrix/references/hud-mock.md",
+          "start": 0,
+          "end": 1151,
+          "kind": "text",
+          "sha256": "4490845fd478e6809adcf90cc5b132f46036f6be21cfa5d02ff6c6a11551f777"
+        },
+        {
+          "path": ".claude/skills/survey-ui-matrix/references/hud-survey.md",
+          "start": 0,
+          "end": 1801,
+          "kind": "text",
+          "sha256": "b8279db7e3518c5db06273a1908a624593ea7c2019dcbecbc3622e5481ffebcc"
+        },
+        {
+          "path": ".claude/skills/survey-ui-matrix/references/probes.md",
+          "start": 0,
+          "end": 14532,
+          "kind": "text",
+          "sha256": "b405443572f921603c2a2fb0291c1543f0a064955eaa0d9aca4577739f3ef118"
+        },
+        {
+          "path": ".claude/skills/survey-ui-matrix/references/setup.md",
+          "start": 0,
+          "end": 4060,
+          "kind": "text",
+          "sha256": "5080ec7f840d06cef5bc2121e8cff1a66fa59b0cb9e7b916a07824b4d416aea7"
+        },
+        {
+          "path": ".claude/skills/tune-physics/SKILL.md",
+          "start": 0,
+          "end": 5590,
+          "kind": "text",
+          "sha256": "6ecbb9d223c0016dcdda5529f7aa3a68018034f1926544bf5c8c99400fd60a4b"
+        },
+        {
+          "path": ".claude/skills/tune-physics/references/harness.md",
+          "start": 0,
+          "end": 3254,
+          "kind": "text",
+          "sha256": "77210242e1c7fbd882236e3fc1090bac880ed8bbcf7323993837b4dcc2e1d329"
+        },
+        {
+          "path": ".claude/skills/tune-physics/references/understeer-recipe.md",
+          "start": 0,
+          "end": 2684,
+          "kind": "text",
+          "sha256": "2877093d34f41d7804bfbe9dab71ed1af6b03eb0a3920c8acfdb840d5677a236"
+        },
+        {
+          "path": ".claude/skills/ui-menu-a11y/SKILL.md",
+          "start": 0,
+          "end": 3906,
+          "kind": "text",
+          "sha256": "b8585d65275eecd1314ce3dabd08ef330be90f73c12f68213f0530b1c0a0a22a"
+        },
+        {
+          "path": ".claude/skills/ui-menu-a11y/references/workflow.md",
+          "start": 0,
+          "end": 8762,
+          "kind": "text",
+          "sha256": "37e06c92ce4512978eb6bea6dde014caf826f32a077b4624e914becc5425f6e7"
+        },
+        {
+          "path": ".claude/workflows/README.md",
+          "start": 0,
+          "end": 3123,
+          "kind": "text",
+          "sha256": "4a696666b7cbf294dade2fad553c44363553b26d3535410416fc634c92ee9c48"
+        },
+        {
+          "path": ".claude/workflows/code-survey.js",
+          "start": 0,
+          "end": 20690,
+          "kind": "text",
+          "sha256": "22e7ca58517534f2b8645158b1e0c6dd19a9dd0b4f342c06a3f146b8a1e93873"
+        }
+      ],
+      "bytes": 160000,
+      "status": "unassigned"
+    },
+    {
+      "id": "08",
+      "parts": [
+        {
+          "path": ".claude/workflows/code-survey.js",
+          "start": 20690,
+          "end": 39398,
+          "kind": "text",
+          "sha256": "22e7ca58517534f2b8645158b1e0c6dd19a9dd0b4f342c06a3f146b8a1e93873"
+        },
+        {
+          "path": ".claude/workflows/total-audit.js",
+          "start": 0,
+          "end": 19410,
+          "kind": "text",
+          "sha256": "3ed8892da8dd5810ddc85781b412d98d5bc7560596ba4e71977def3a03f6039e"
+        }
+      ],
+      "bytes": 38118,
+      "status": "unassigned"
+    }
+  ]
+}

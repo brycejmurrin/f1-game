@@ -1,0 +1,96 @@
+{
+  "group": "54",
+  "references": [
+    {
+      "source": "tests/unit/tlx-inst-cells.test.mjs",
+      "line": 7,
+      "reference": "docs/notes/PERF-FINDINGS.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tlx-pipe-pin-warm.test.mjs",
+      "line": 7,
+      "reference": "docs/notes/MIRROR-WARM-2026-10-24.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tooling-fast-runner.test.mjs",
+      "line": 302,
+      "reference": "docs/README.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tooling-fast-runner.test.mjs",
+      "line": 506,
+      "reference": "docs/README.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tooling-timings.test.mjs",
+      "line": 6,
+      "reference": "docs/notes/BUILD-HUNT-2026-10-24.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tools-a12-guards.test.mjs",
+      "line": 124,
+      "reference": "docs/LIGHTING-TUNER-SLIDERS.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tools-a12-guards.test.mjs",
+      "line": 124,
+      "reference": "docs/DEBUG-HOOKS.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tools-a12-guards.test.mjs",
+      "line": 124,
+      "reference": "docs/ARCHITECTURE.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tools-runnable.test.mjs",
+      "line": 112,
+      "reference": "docs/PERF-FINDINGS.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tools-runnable.test.mjs",
+      "line": 148,
+      "reference": "docs/PERF-FINDINGS.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tools-runnable.test.mjs",
+      "line": 181,
+      "reference": "docs/PERF-FINDINGS.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tools-runnable.test.mjs",
+      "line": 200,
+      "reference": "docs/PERF-FINDINGS.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    },
+    {
+      "source": "tests/unit/tools-runnable.test.mjs",
+      "line": 761,
+      "reference": "docs/notes/AI-FIELD-RESEARCH.md",
+      "exists": true,
+      "role": "historical source comment or diagnostic text; not proof of the mapped behavior"
+    }
+  ]
+}
