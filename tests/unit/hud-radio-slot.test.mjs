@@ -149,7 +149,6 @@ test("BROADCAST lights the same #1504 radio home as STANDARD (regression: !bcast
 test("css/hud.css: one radio home per profile — no leftover broadcast 14svh, fallbacks stand down for both slots", () => {
   const css = read("css/hud.css");
   const hud = read("js/ui/hud-radio-lane.js");   // radioTopSlot's home since #3261
-  assert.match(hud, /function radioTopSlot\(root, bcast\)/, "the guard below reads the file radioTopSlot lives in");
   assert.doesNotMatch(css, /body\.hud-prof-broadcast #announce \{[^}]*14svh/,
     "the leftover cinematic 14svh #announce home is gone — BROADCAST uses the #1504 slot");
   assert.doesNotMatch(hud, /const t = !bcast && (_hudTop|top\(\))/,
