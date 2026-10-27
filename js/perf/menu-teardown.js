@@ -98,7 +98,6 @@ const MenuTeardown = (function () {
   return {
     cover, pauseSheetUp, garageBusyPlate, runSync, deferUi, deferQuitTail, report,
     beginQuit, endQuit, beginGarageClose, endGarageClose,
-    active: cover,
   };
 })();
 Object.freeze(MenuTeardown);

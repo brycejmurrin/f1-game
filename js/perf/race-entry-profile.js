@@ -130,10 +130,6 @@ const RaceEntryProfile = (() => {
     return Math.max(0, introBudgetMs - (now() - introBudgetT0));
   }
 
-  function introBudgetExpired() {
-    return introBudgetArmed && introBudgetLeft() <= 0;
-  }
-
   function setProgressSink(fn) {
     progressSink = typeof fn === "function" ? fn : null;
   }
@@ -228,8 +224,10 @@ const RaceEntryProfile = (() => {
   }
 
   /** Arm on the UI Start Race tap so cover→paint marks survive until startRace.
-   *  startRace's runSession uses continueWindow once; a later startRace still
-   *  calls begin() so generation bumps and old observers are dropped. */
+   *  startRace's runSession uses continueWindow once while this handoff is live
+   *  (armed && menuEntrySession). A later startRace after end() must call
+   *  begin() — an old entry: mark alone must not re-arm without resetting
+   *  sawReady / endAfterReady (that left armed() true forever). */
   function beginUi(tag) {
     if (armed) { mark("ui:tap"); return; }
     menuEntrySession = true;
@@ -239,14 +237,10 @@ const RaceEntryProfile = (() => {
   }
 
   function continueWindow(tag) {
-    const resumeMenu = marks.some((m) => /^entry:/.test(m.n));
-    if ((armed && uiPending) || resumeMenu) {
-      if (!armed) {
-        armed = true;
-        disarmObserver();
-        generation++;
-        armObserver();
-      }
+    // Resume only while this UI handoff is still live. Marks survive end(), so
+    // testing for an entry: mark after a finished window would re-arm without
+    // begin() and leave sawReady stuck (notePresent never arms endAfterReady).
+    if (armed && (uiPending || menuEntrySession)) {
       uiPending = false;
       // The body's legs start HERE: without this, its first lap ("scenery")
       // absorbed the garage-out, flyby and intro build since beginUi.
@@ -433,7 +427,7 @@ const RaceEntryProfile = (() => {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, noteWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
-    introBudgetLeft, introBudgetExpired, setProgressSink, softwareRaster,
+    introBudgetLeft, setProgressSink, softwareRaster,
     legs: () => legs.slice(),
     warmHistory: () => warmHistory.slice(),
     menuEntrySession: () => menuEntrySession,

@@ -175,6 +175,33 @@ test("continueWindow restarts the leg clock: the body's first lap is not the gar
   assert.equal(JSON.stringify(P.snapshot().legs.map((l) => [l.n, l.ms])), JSON.stringify([["scenery", 10], ["resets", 50]]));
 });
 
+test("continueWindow after a finished beginUi window calls begin(): sawReady resets so the next race can end", () => {
+  let t = 0;
+  const P = load({ performance: { now: () => t } });
+  P.beginUi("uiStart");
+  t = 100;
+  P.notePresent(false);
+  P.continueWindow("startRace");
+  P.clearMenuEntrySession();
+  t = 120; P.tickFrame();
+  t = 140; P.tickFrame();
+  assert.equal(P.armed(), false, "first entry window ends after ready + two frames");
+  assert.ok(P.snapshot().windowMs >= 140, "finished window kept its span");
+  const marksBefore = P.snapshot().marks.map((m) => m.n);
+  assert.ok(marksBefore.some((n) => /^entry:/.test(n)));
+  t = 5000;
+  P.continueWindow("startRace");
+  assert.equal(P.armed(), true);
+  assert.equal(P.snapshot().marks.some((m) => /^entry:/.test(m.n)), false,
+    "begin() cleared the previous entry: marks");
+  assert.ok(P.snapshot().marks.some((m) => m.n === "begin:startRace"));
+  P.notePresent(false);
+  assert.ok(P.snapshot().marks.some((m) => m.n === "present:ready"));
+  t = 5010; P.tickFrame();
+  t = 5020; P.tickFrame();
+  assert.equal(P.armed(), false, "second entry can still end");
+});
+
 test("manifest lists the module before quality-preset (load order)", () => {
   const man = fs.readFileSync(path.join(ROOT, "tools/manifest.cjs"), "utf8");
   const a = man.indexOf('"js/perf/race-entry-profile.js"');
@@ -470,13 +497,15 @@ test("software GL reports span starts to the progress sink", () => {
   assert.deepEqual(labels, ["Prepare", "Prepare"]);
 });
 
-test("introBudgetExpired fires after the soft budget elapses", () => {
-  let t = 0;
+test("introBudgetLeft reaches 0 after the soft budget elapses", () => {
+  let t = 1;   // snapshot.budgetLeftMs is null when introBudgetT0 is 0 (falsy stamp)
   const P = load({ performance: { now: () => t }, PerfGov: { softwareRaster: () => true } });
   P.begin("race");
-  assert.equal(P.introBudgetExpired(), false);
-  t = 45001;
-  assert.equal(P.introBudgetExpired(), true);
+  assert.equal(P.introBudgetLeft(), 45000);
+  assert.equal(P.snapshot().budgetLeftMs, 45000);
+  t = 45002;
+  assert.equal(P.introBudgetLeft(), 0);
+  assert.equal(P.snapshot().budgetLeftMs, 0);
 });
 
 test("successful completion waits for presentation even when no handoff exists", async () => {
