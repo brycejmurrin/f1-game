@@ -942,9 +942,28 @@ def _gh_pr_number(words):
     return None
 
 
+def _gh_drops_hold(argv):
+    """True when a `gh pr|issue edit` argv removes the `hold` label: `--remove-label hold`, `--remove-label=a,hold`."""
+    for i, a in enumerate(argv):
+        v = None
+        if a == "--remove-label" and i + 1 < len(argv):
+            v = argv[i + 1]
+        elif a.startswith("--remove-label="):
+            v = a.split("=", 1)[1]
+        if v is not None and any(x.strip().lower() == "hold" for x in v.split(",")):
+            return True
+    return False
+
+
+def _hold_text():
+    import merge_policy as P
+    return P.ASK_HOLD
+
+
 GH_GQL_CLOSE = re.compile(r"\bclosePullRequest\b")
 GH_GQL_REF = re.compile(r"\b(createRef|updateRef|updateRefs|deleteRef|createCommitOnBranch)\b")
 GH_GQL_BRANCH_MERGE = re.compile(r"\bmergeBranch\b")
+GH_GQL_LABEL_DROP = re.compile(r"\b(removeLabelsFromLabelable|clearLabelsFromLabelable|deleteLabel|updateLabel)\b")
 _KV = r"[\"']?\s*[:=]\s*[\"']?"
 
 
@@ -984,6 +1003,8 @@ def api_classify(method, endpoint, blob):
             return ("deny-ref", "", ep)
         if GH_GQL_BRANCH_MERGE.search(b):
             return ("ask", P.ASK_REF, ep)
+        if GH_GQL_LABEL_DROP.search(b):
+            return ("ask", P.ASK_HOLD, ep)   # label ids are opaque: any removal may be `hold`
         return None
     if m in ("GET", "HEAD", "OPTIONS"):
         return None
@@ -1003,6 +1024,8 @@ def api_classify(method, endpoint, blob):
             return ("ask", P.ASK_READY, ep)
         if re.search(r"\bstate" + _KV + r"closed\b", b, re.I):
             return ("ask", P.ASK_CLOSE, ep)
+        if "issues/" in ep and m == "PATCH" and re.search(r"\blabels\b", b) and not re.search(r"\bhold\b", b, re.I):
+            return ("ask", P.ASK_HOLD, ep)   # a PATCH `labels` replaces the list
         return None
     if re.search(r"(^|/)git/refs(/|$)", ep):
         return ("deny-ref", "", ep)
@@ -1010,6 +1033,14 @@ def api_classify(method, endpoint, blob):
         return ("ask", P.ASK_REF, ep)
     if re.search(r"(^|/)contents(/|$)", ep) and m in ("PUT", "DELETE", "POST", "PATCH"):
         return ("deny-write", "", ep)
+    # WP-L4 (2026-10-27): removing `hold` asks on every REST route — DELETE …/issues/<n>/labels/hold, DELETE of
+    # the whole list, a PUT that replaces the list without hold, and a DELETE/PATCH of the repo label itself.
+    if re.search(r"(^|/)(issues|pulls)/[^/]+/labels/(hold|X)$", ep, re.I) and m == "DELETE":
+        return ("ask", P.ASK_HOLD, ep)
+    if re.search(r"(^|/)(issues|pulls)/[^/]+/labels$", ep) and (m == "DELETE" or (m == "PUT" and not re.search(r"\bhold\b", b, re.I))):
+        return ("ask", P.ASK_HOLD, ep)
+    if re.search(r"(^|/)repos/[^/]+/[^/]+/labels/(hold|X)$", ep, re.I) and m in ("DELETE", "PATCH"):
+        return ("ask", P.ASK_HOLD, ep)
     w = re.search(r"(^|/)actions/workflows/([^/]+)/dispatches$", ep)
     if w and m == "POST" and (P.gated_workflow(w.group(2)) or w.group(2) == "X"):
         return ("ask", P.ASK_DISPATCH, ep)
@@ -1138,7 +1169,7 @@ def http_issues(text, cwd=None):
 
 
 POLL_WATCH = re.compile(r"\b(ci-watch(\.mjs)?|gh\s+(run|api|pr\s+(checks|view|status|list))|git\s+(log|ls-remote|fetch)|"
-                        r"api\.github\.com|pr-board(\.mjs)?|fleet-bus(\.mjs)?\s+read|who-is-on-it(\.mjs)?)\b")
+                        r"api\.github\.com|pr-board(\.mjs)?)\b")
 
 
 def _blank_quotes(t):
@@ -1220,6 +1251,10 @@ def gh_issues(text, cwd=None):
         elif words[:2] == ["pr", "ready"]:
             if "--undo" not in argv:
                 out.append({"cmd": cmd, "decision": "ask", "kind": "ready", "pr": _gh_pr_number(words[2:]), "why": "gh pr ready"})
+        elif words[:2] in (["pr", "edit"], ["issue", "edit"]) and _gh_drops_hold(argv):
+            out.append({"cmd": cmd, "decision": "ask", "ask": _hold_text(), "why": f"gh {words[0]} edit --remove-label hold"})
+        elif words[:2] in (["label", "delete"], ["label", "edit"]) and any(w.lower() == "hold" for w in words[2:3]):
+            out.append({"cmd": cmd, "decision": "ask", "ask": _hold_text(), "why": f"gh label {words[1]} hold"})
         elif words[:1] == ["api"]:
             k, method, fields, endpoint = 1, None, [], None
             while k < len(argv):
@@ -1614,7 +1649,7 @@ def guard(payload, root):
     if unsigned:
         sys.stderr.write("BLOCKED: `" + unsigned[0]["cmd"] + "` turns commit signing off (" + "; ".join(unsigned[0]["why"])
                          + ") — shared safety ban 5 (Transcript Auditor batch 9). Commits stay signed; if signing "
-                         "fails, report the error to your orchestrator instead of disabling it.\n")
+                         "fails, report the error in your PR or to Bryce instead of disabling it.\n")
         return 2
     refs = [x for x in gh if x["decision"] == "deny-ref"]
     if refs:
@@ -1640,40 +1675,29 @@ def guard(payload, root):
     if deny:
         P.emit("deny", P.DENY_METHOD + " (" + deny[0]["why"] + ")")
         return 0
-    # `gh pr merge <n>` / `gh pr ready <n>` take the same receipt as the MCP door (merge_policy.receipt_check,
-    # 2026-10-19): a merge needs artifacts/merge-gate/<n>.json (the head pin is `--match-head-commit`, else the
-    # gated head stands), a ready flip artifacts/ready-gate/<n>.json. No receipt, no merge, desk or not.
-    gated = [x for x in gh if x.get("kind") in ("merge", "ready")]
+    # `gh pr merge` is denied outright, like the MCP door (WP-L4, 2026-10-27: no session merges or arms; the old
+    # receipt path opened only to a hand-written artifacts/merge-gate/<n>.json). `gh pr ready <n>` takes the
+    # ready receipt, tied to the PR's LIVE head (merge_policy.live_head); an unknown head refuses.
+    merges = [x for x in gh if x.get("kind") == "merge"]
+    if merges:
+        P.emit("deny", P.DENY_GATE_MERGE + " (" + merges[0]["why"] + ")")
+        return 0
+    gated = [x for x in gh if x.get("kind") == "ready"]
     receipts = P.project_root()   # CLAUDE_PROJECT_DIR, the same root github-mcp-guard.sh reads
     for x in gated:
-        head = None
-        if x["kind"] == "merge":
-            # pass-4 red-team G6: without --match-head-commit, gh merges whatever the head is NOW while the check
-            # compared the receipt's head with itself. The pin is required; the gate prints the exact flag.
-            m = re.search(r"--match-head-commit[= ]+([0-9a-fA-F]{7,40})", x["cmd"])
-            head = m.group(1) if m else None
-        ok, why = P.receipt_check(receipts, x["kind"], x.get("pr"), head, verify_files=True)
+        live = P.live_head(receipts, x.get("pr")) if x.get("pr") else None
+        ok, why = P.receipt_check(receipts, "ready", x.get("pr"), live, verify_files=True, require_head=True)
         if not ok:
-            P.emit("deny", (P.DENY_GATE_MERGE if x["kind"] == "merge" else P.DENY_GATE_READY) + " (" + x["why"] + ": " + why + ")")
+            P.emit("deny", P.DENY_GATE_READY + " (" + x["why"] + ": " + why + ")")
             return 0
     # 2026-10-26: no APEX_MERGE_DESK silent pass here any more (system audit §10: the env was set for EVERY session,
     # so a worker's GraphQL/REST merge-by-id or ready flip never asked). An ask asks whoever runs the session.
-    rest = [x for x in gh if x.get("kind") not in ("merge", "ready")]
+    rest = [x for x in gh if x.get("kind") != "ready"]
     if rest:
         P.emit("ask", (rest[0].get("ask") or P.ASK_MERGE) + " (" + rest[0]["why"] + ")", ctx)
     elif ctx:
         P.emit(None, None, ctx)
     return 0
-
-
-def _receipt_head(root, pr):
-    """The head a merge receipt gated, so `gh pr merge <n>` without --match-head-commit is checked against it."""
-    import merge_policy as P
-    try:
-        with open(P.receipt_path(root, "merge", pr), encoding="utf8") as f:
-            return json.load(f).get("head")
-    except Exception:
-        return None
 
 
 # ---- writes -------------------------------------------------------------------

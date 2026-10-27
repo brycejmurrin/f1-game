@@ -210,6 +210,17 @@ test("speed vignette defaults off and persists", () => {
   assert.equal(store.get("speedVignette"), true);
 });
 
+test("speed vignette lives in #hud, first child, behind every HUD element (#3952)", () => {
+  const src = fs.readFileSync(path.join(root, "js/camera/feel.js"), "utf8");
+  // #overlay is hidden during races; #hud (z-index 10) is its own stacking context.
+  assert.match(src, /getElementById\("hud"\)/);
+  assert.match(src, /hud\.insertBefore\(_vigEl, hud\.firstChild\)/);
+  assert.match(src, /pointer-events:none;z-index:-1;/);
+  assert.doesNotMatch(src, /getElementById\("overlay"\)/);
+  const css = fs.readFileSync(path.join(root, "css/hud.css"), "utf8");
+  assert.match(css, /#hud \{ position: fixed; inset: 0; pointer-events: none; z-index: 10; \}/);
+});
+
 test("vantage.js routes FOV and look-back through CamFeel", () => {
   const src = fs.readFileSync(path.join(root, "js/camera/vantage.js"), "utf8");
   assert.match(src, /CamFeel\.modeFov/);

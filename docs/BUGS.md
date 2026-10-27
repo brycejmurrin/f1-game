@@ -14,10 +14,10 @@ broken; medium = wrong outcome on a reachable path; low = cosmetic or rare.
 
 ---
 
-## Fixed in this PR
+## Fixed by the 2026-09-24 hunt
 
 ### B1 — Wheel-wizard axis capture survived settings close / resume
-**Severity:** high · **Status:** FIXED here
+**Severity:** high · **Status:** FIXED (2026-09-24 hunt)
 
 **Where:** `js/ui/key-binds.js` (`disarmAll`), `js/game.js` (`setPaused`)
 
@@ -32,7 +32,7 @@ calls `closeSettings()` so every resume path disarms.
 **Test:** `tests/unit/key-binds.test.mjs` — disarm clears axis capture.
 
 ### B2 — Time trial still ran the +5 s track-limits ladder
-**Severity:** low · **Status:** FIXED here
+**Severity:** low · **Status:** FIXED (2026-09-24 hunt)
 
 **Where:** `js/game.js`
 
@@ -44,7 +44,7 @@ still did `penalty += 5` and announced `+5s TRACK LIMITS PENALTY`.
 **Test:** `tests/unit/tt-lap-validity-vm.test.mjs` — fourth cut leaves `penalty` at 0.
 
 ### B3 — Lobby READY is not host-relayed (3–4 player guest UI lies)
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/net/lobby.js` READY handler
 
@@ -57,7 +57,7 @@ a guest that is always the host peer, other guests' READY never arrived.
 **Test:** `tests/unit/net-lobby-lifecycle.test.mjs` — READY relay + `from` keying.
 
 ### B4 — Championship points / FL / countback for cars that never finished
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/career/season-cal.js` `award()`; `js/game.js` `endRace` FL from
 `fin` only
@@ -83,7 +83,7 @@ unclassified one does not), and the fastest-lap point no longer requires
 flag may take it. The tests assert that instead (`tests/unit/season-cal.test.mjs`).
 
 ### B5 — Cross-tab + quota can overwrite a newer mirror-only save
-**Severity:** high · **Status:** FIXED here · **Confidence:** medium-high
+**Severity:** high · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** medium-high
 
 **Where:** `js/core/store.js` IDB flush
 
@@ -97,7 +97,7 @@ upgrade (boot healed disk) still lands.
 **Test:** `tests/unit/store-cross-tab.test.mjs` — older `lsOk:true` refused.
 
 ### B6 — Launch / tyre / phase / mistake hashes ignored career season seed
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/game.js` grid arm; `js/race/weather-arc.js`; mistake path
 
@@ -108,7 +108,7 @@ phaseRoll/mistake hashes used bare `simSeed()` / `raceIndex`.
 (same contract as `armReliability`).
 
 ### B7 — Settings export lacked oneOf for steer / HUD / driving line
-**Severity:** low · **Status:** FIXED here · **Confidence:** high
+**Severity:** low · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/ui/settings-export.js`; `js/game.js` `setSteerMode`
 
@@ -121,7 +121,7 @@ phaseRoll/mistake hashes used bare `simSeed()` / `raceIndex`.
 **Test:** `tests/unit/settings-export.test.mjs` — oneOf allowlists.
 
 ### B8 — Garage `customLogo` import accepts any string
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/ui/settings-export.js` `garageValue`
 
@@ -141,7 +141,7 @@ catalogue: [SCENERY-API.md](SCENERY-API.md). `scenery(api)` surface frozen at
 **114 members** by `tests/unit/scenery-api-contract.test.mjs`.
 
 ### S1 — `along()` + wrapped helpers double-apply `_sceneryShift`
-**Severity:** high · **Status:** FIXED here · **Confidence:** high
+**Severity:** high · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/build-props.js` `transformSceneryApi`; `js/track/core/space.js`
 `sceneryNodeToAuthored`
@@ -158,7 +158,7 @@ Engine-internal `ctx.along` (walls/fences) unchanged.
 within tens of metres (not kilometres).
 
 ### S2 — `furniture.tree: "pine"` silently became broadleaf
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/nature.js` `canopyR`; five circuit defs;
 `tests/unit/circuit-vocab.test.mjs`
@@ -210,7 +210,7 @@ unsafe (estoril lesson). Prefer frame audits over blanket zeroing. S1 no longer
 double-shifts on these; residual shift remains authoring debt.
 
 ### S4 — `pits.js` `sweep()` invisible to primitive audits
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/pits.js` `sweep`
 
@@ -235,7 +235,7 @@ seated 2 cm deeper and `waterOccupied` skips stacked bands (S7). Did **not**
 explode `FIGHT_MAX` (no baseline campaign).
 
 ### S6 — Props-over-road blind to band-spanning solids
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `tools/track/measure-props-over-road.mjs`;
 `tests/specs/props-over-road.spec.js`
@@ -247,7 +247,7 @@ whose y-span covers the whole band had no qualifying face.
 `[road+TOL, road+CEIL]`.
 
 ### S7 — Overlapping `waterBand` slabs
-**Severity:** low–medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** low–medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/build-props.js` `waterEmit`
 
@@ -257,7 +257,7 @@ whose y-span covers the whole band had no qualifying face.
 deeper (pairs with S5).
 
 ### S8 — `SceneryThemes.variants` tables unused
-**Severity:** low · **Status:** FIXED here · **Confidence:** high
+**Severity:** low · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/themes.js`
 
@@ -296,7 +296,7 @@ consumer read them.
 
 `docs/notes/DEFECT-LEDGER.md` is the long chronological register. This file is
 the **current credible shortlist** from the 2026-09-24 architecture/bug-hunt
-pass: B1–B8 and S1–S2 / S4–S10 FIXED here; S3 remains OPEN as measured frame
+pass: B1–B8 and S1–S2 / S4–S10 FIXED (2026-09-24 hunt); S3 remains OPEN as measured frame
 debt. Prefer linking here from PRs; promote lasting open items into the ledger
 when a campaign owns them.
 
@@ -308,8 +308,8 @@ From the 2026-10-09 read-only hunt (15 hunters on tip `88f2b21a6`; every row bel
 session before listing). The full ledger, with the Tier-1 rows and the open-PR verdicts, is the note
 `BUG-HUNT-LEDGER-2026-10-09` on branch `cursor/bug-hunt-ledger-88f2` (not on the deploy branch yet). Severity is the
 hunt's; line numbers are as of that tip. L9/L12/L13/M36 (tooling) are fixed by the `ci-adapted-guard` PR; M2 and M9, M13-M16
-are held by the session that owns them. Rows marked fixed-in-#NNNN are in this session's open PRs; everything else below is **assigned to sibling sessions
-2026-10-09**, except the last line, which has no owner yet.
+were held by an owning session on that date. Rows marked fixed-in-#NNNN were fixed by that PR; the rest were handed
+to other sessions on 2026-10-09 (the last line had no owner). Today's owner of a row is its GitHub issue, if any.
 
 - M19 replay — `clear()` zeroes `prevStatus`, so every retired/finished car re-tags as a fresh event after a timeline discard. `js/camera/replay-buf.js:81` · low · **fixed in #2222**
 - M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low · **fixed in #1289**

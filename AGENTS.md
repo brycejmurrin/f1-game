@@ -14,10 +14,10 @@ Agent-written drafts: Bryce's word wins.
 npx serve -l 3456 .                   # serve locally (or: python3 -m http.server 3456)
 node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (the table below; select-specs.mjs: per-SPEC)
 #                                       2. make ALL edits, then verify ONCE (rule 2); a new test file = a tests/groups.json group + a TESTING.md §5 row + `npm run gen`
-node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. diff-aware check; with ONE relevant spec (or verify-track) it is the worker floor (docs/WORKERS.md §3)
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. diff-aware check; with ONE spec it is the pre-push floor (rule 3)
 node tools/ci/test-bg.mjs <group>     # 4. optional, Bryce-attended: ONE browser group in the background → artifacts/logs/<group>.log (rule 5)
 node tools/ci/test-bg.mjs --wait --timeout 45   # 5. its waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
-node tools/ci/deploy.mjs --gate-only  # 6. optional, Bryce-attended: the deploy's node suites; a worker leaves the full tiers to the PR (rule 3)
+node tools/ci/deploy.mjs --gate-only  # 6. optional: the deploy's node suites, to reproduce a gate-only red (rule 3)
 git commit && git push -u origin cursor/<topic>-<hash>   # 7. commit runs test:guards; push, refresh the DRAFT PR's Plan + Hand-off (rule 12)
 ```
 Docs-only fast path — every changed path is prose (`docs/`, `*.md`, `.claude/skills/`, `.claude/agents/`; no generated
@@ -52,10 +52,12 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
 2. Make ALL source edits first, then verify ONCE: tests serve `js/` and `css/` from the working tree, so a run in flight forbids source edits, `index.html` included (`protect-files.sh` enforces it).
 3. THE GATE IS A LADDER, EACH RUNG A SUBSET — green below never means green above: `test:guards` (the commit hook) ⊂
    `test:tooling-fast` (`gen-ladder-figures.mjs --table` sizes it) ⊂ `deploy.mjs --gate-only` (the deploy's node half;
-   pushes nothing, dirty tree fine; `docs/notes/PREPUSH-GATE-LADDER.md`). A worker's floor before a push is
-   `docs/WORKERS.md` §3 (`tooling-fast --changed` plus ONE spec or `verify-track`); the full tiers and the landing gate
-   run on the PR (`ci.yml`, `browser-group.yml`, `land.yml`). The full `test:tooling-fast` and `--gate-only` are
-   optional tools for a Bryce-attended session: a lane never runs them in the foreground to prove what CI will prove.
+   pushes nothing, dirty tree fine; `docs/notes/PREPUSH-GATE-LADDER.md`). THE PRE-PUSH FLOOR (its one home) before a
+   code push is `tooling-fast --changed --jobs=3 --quiet` plus the ONE spec `pick-tests`/`select-specs` names, run in
+   the background as `test-bg.mjs --spec <file>` (`verify-track` for a circuit; prose: the docs-only fast path). The
+   full `test:tooling-fast` runs on the PR as `Structural guards` A–D, beside the other tiers and the landing gate
+   (`ci.yml`, `browser-group.yml`, `land.yml`); `--gate-only` is optional, to reproduce a gate-only red. Never run
+   either in the foreground to prove what CI will prove.
 4. BLOCK OR BACKGROUND, by duration and whether the NEXT step needs the answer. Foreground: under 2 min and needed now (`test:guards`, one `node --test`, `verify-track`, `pick-tests`).
    Background, ONE Bash `run_in_background` task logging to `artifacts/logs/`: ~20 min for a full `tooling-fast` (`gen-ladder-figures.mjs --table` sizes it; `--changed` is the edit loop), `deploy.mjs --gate-only`, and a browser group (`test-bg.mjs <group>`, then `test-bg.mjs --wait --timeout 45` as the task; exit 1 = red, 124 = still running).
    While it runs, do work that does not touch it: research, docs/tools/tests edits, a read-only subagent, or the NEXT change in a linked worktree (`EnterWorktree`). Never `js/`/`css/` in this checkout, a second browser group, or a CPU-heavy node suite on top of a browser run — that load IS the timeout.
@@ -79,9 +81,9 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
     Open a DRAFT PR into the deploy branch at the FIRST commit, before the work is verified (GitHub MCP, `draft: true`, labels and `Closes #<n>` per `docs/WORKERS.md` §2; a draft gets CI only with the `run-ci` label, ready the full tier). Not `deploy.mjs --pr`: it opens a NON-draft PR with no Plan or Hand-off.
     The body (`.github/pull_request_template.md`) IS the session log, written for an agent arriving cold: Goal, Plan (a `- [ ]` checklist, one verifiable step per item, exactly one marked now:), Verified / Not run, and the Hand-off block (`docs/WORKERS.md` §The Hand-off block).
     Keep the Plan live with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line), add discovered work, strike a dropped item with why, never delete one; refresh the Hand-off block at every push. The Plan's last item is the template's gate-exempt `- [ ] land: …` line, never a "merge" step. A wait on something outside the PR is a Plan item, never a hold.
-13. WATCH CI ONLY WHILE YOU OWN THE HEAD: after a code push, subscribe on the PR (Claude Code `subscribe_pr_activity`) while CI runs on your head. A worker's session ENDS at `land` (`docs/WORKERS.md` §5); it does not wait out the full tier, and a red after that is a dispatcher takeover.
+13. WATCH CI ONLY WHILE YOU OWN THE HEAD: after a code push, subscribe on the PR (Claude Code `subscribe_pr_activity`) while CI runs on your head. A worker ends its turn at `land` and does not wait out the full tier; its subscription wakes it on PR events until the dispatcher archives it (`docs/WORKERS.md` §5).
     A Bryce-attended session that keeps watching may add a `Monitor` on `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (`--pages` after a train) and should call `subscribe_pr_activity` again after a draft→ready flip (it has died at the flip).
-    No timers, no shell-poll loops, no standby wakes: a lane that has nothing to do ends its turn, and the dispatcher re-owns a PR that falls silent (`docs/WORKERS.md`).
+    No timers, no shell-poll loops, no standby wakes: a lane ends its turn only once its PR is subscribed (`subscribe_pr_activity`) or handed to its parent, never with a question to the user (unattended: ask `@parent` or label `needs-decision`), and the dispatcher re-owns a PR that falls silent (`docs/WORKERS.md`).
     A ready flip on a dirty PR starts no CI: sync first (`needs-sync.mjs`, `sync-pr.mjs`). `ci-watch.mjs` takes the newest run per workflow (rule 8's dedupe is not a red); a red job on your own head while you still own it is work NOW (agent `ci-red-triage`, fix, push; skill `steward`); no `= ci` line means still running, not green.
     PR CI and Pages are separate verdicts ("live" needs Pages and `version.json`; skill `steward` §7). Never claim done on a red.
 
@@ -114,7 +116,7 @@ in `tools/manifest.cjs`, `ensureCircuit` in `js/core/lazy-bundles.js`). The modu
 
 ## Critical conventions
 Coding conventions for `js/`, `css/` and the shell (IIFE globals, cache busting, the size ratchets and the commit hook's
-≤ 40-line absorb, coordinates, logging, `_sceneryShift`): `.claude/rules/game-code.md`. Regenerable output goes in `artifacts/` or `scratch/` only, never `/tmp`.
+line absorb, coordinates, logging, `_sceneryShift`): `.claude/rules/game-code.md`. Regenerable output goes in `artifacts/` or `scratch/` only, never `/tmp`.
 
 ## Physics
 Full reference `docs/PHYSICS.md`. `PACE` is a ground-speed scale, not a cap: compare speeds through
@@ -173,7 +175,7 @@ exactly that commit (dispatch = "deploy now"; gated publish ~20 min median, p90 
 (agent `deploy-research`; `docs/TESTING.md` §Release train).
 
 ## Coordination
-`docs/WORKERS.md` is the one home for the lane contract (finding and claiming work, the draft PR, the local floor,
+`docs/WORKERS.md` is the one home for the lane contract (finding and claiming work, the draft PR,
 `land`, the cost cap, takeovers, labels, the dispatcher): GitHub is the only state store and the only bus, and
 comments are the only inter-agent message.
 - GitHub lands PRs; no session merges or arms: a worker adds `land` and `land.yml`'s `gate` check arms auto-merge.

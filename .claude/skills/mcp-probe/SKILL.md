@@ -43,18 +43,23 @@ node tools/mcp/mcp-cli.mjs probe --backend webgpu --wait 12000 --eval '...'
 ```
 
 HUD/menu glitch repro: serve `python3 -m http.server 3456`, `chrome-start`, navigate
-`http://127.0.0.1:3456/`, `__apex.race(id); go()` ([references/chrome.md](references/chrome.md)), then
+`http://127.0.0.1:3456/`, `await __apex.race(id); __apex.go()` ([references/chrome.md](references/chrome.md)
+§Setup: `race()` is a promise, and `go()` before it settles finds no grid), then
 `take_snapshot` (DOM/a11y text, cheap) before any screenshot; the HUD is DOM, so
 `awaitPresent()` matters only if the 3D behind it must be current. Done = the
 glitch reproduced as a snapshot/`evaluate_script` value (element text/rect), then
 `navigate_page about:blank` + `chrome-stop`. Flags: `node tools/lib/webgpu-chrome-args.cjs [mcp|json]`.
 Heap leak across races, console errors → [chrome.md](references/chrome.md)
-§Heap leak across N races (`take_heapsnapshot` needs `filePath`; `list_console_messages`).
+§Heap leak across N races (`take_heapsnapshot` needs `filePath` under the repo's `artifacts/`,
+never `/tmp`; `list_console_messages`). `obs()`/`physState()` return `null` until the player
+exists: awaited `race()` + `go()`, then `jump()` (+ `snapCam()`) or `step()`. `null` = not
+initialised, not broken.
 Heap/CPU while a **js-debugger** session is attached to that page → its `debugger_profile` (one owner per page).
 
 **Census tools** (measured before/after for phone memory, heap growth, CPU-side
 copies, GPU budgets; folded from the perf-memory-census skill):
 `node tools/perf/runtime-memory.mjs`, `tools/perf/vm-leak-census.mjs`,
+`tools/gfx/mem-census.mjs` (scripted track-switch heap-snapshot compare),
 `tools/perf/mesh-census.mjs` and `tools/perf/garage-census.mjs` (flags in
 each file's header); `tools/perf/profile.mjs` / `query.mjs` for game-loop CPU. Record
 track and backend (`__apex.diag().env.backend`) with every number, cite MB

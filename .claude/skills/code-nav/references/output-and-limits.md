@@ -24,8 +24,8 @@ Moved out of `SKILL.md` on 2026-10-26 to keep the skill body an index.
   globals (`PhysicsConsts`, `CssZoom`) and for files ending in
   `module.exports = X` (`ghost.js`, `ghost-share.js`, `input-ghost.js`,
   `forecast.js`, `share-code.js`), which the checker scopes to their own file.
-- An error such as "has no member" or "not found" is the answer. Fall back to
-  `lsp_symbols`; don't guess a neighbour.
+- An error such as "has no member" or "not found" is the answer; the next step is
+  SKILL.md §Which call (on a miss).
 - Long output pages: the footer names the next `offset`, and `format: "concise"`
   on `lsp_references` drops the source text. Start with counts (`files: true`)
   when file scope is enough; otherwise use a bounded page. Follow the footer's

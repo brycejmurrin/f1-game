@@ -19,4 +19,6 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Design lanes: one living artifact](design-lanes-living-artifact.md) — each design session republishes ONE gallery to the same URL per round; Bryce iterates on it
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first
 - [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — Bryce 2026-10-26: reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR
+- [Decide and act](decide-and-act.md) — 2026-10-27: Bryce delegates open decisions; pick, record, proceed; only refusals/settings go back to him
+- [Workers never wait for user](workers-never-wait-for-user.md) — unattended sessions ask @parent/dispatcher, subscribe for CI; parents nudge stalled children
 - [Fan out with subagents](fan-out-with-subagents.md) — 2026-10-26: multi-part tasks go to worker subagents in worktrees

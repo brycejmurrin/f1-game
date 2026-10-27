@@ -11,6 +11,7 @@ Load from the SKILL.md index when the task needs this detail.
 - Galleries and image budget
 - Custom-harness skeleton (parent-owned browser)
 - Shared Playwright fixtures (`tests/helpers/fixtures.js`)
+- Tunnel before/after (Monaco bore, GLX and TLX)
 
 ## UI screens (DOM, not canvas)
 
@@ -105,8 +106,8 @@ helped asset fetch; they are not the current harness.
 
 ## Backends and display
 
-- Pinning: `apex-eval` / `flicker-gate` default to TLX; pin with `--backend three|webgl2|webgpu`
-  (apex-eval) / `--backend three` (flicker-gate; its default webgl2 = GLX). A `GLX.*()` read under
+- Pinning: `apex-eval` defaults to TLX (`--backend three|webgl2|webgpu`); `flicker-gate` defaults
+  to GLX (`webgl2`; pass `--backend three` for TLX). A `GLX.*()` read under
   the TLX default answers for TLX. `shot.mjs` takes `--backend three|webgl2|webgpu` (default three;
   webgl2 costs ~4 min a boot on SwiftShader vs ~40 s for TLX); the `apex_eval` / `apex_shot` MCP
   wraps pass none.
@@ -179,11 +180,11 @@ test('example', async ({ page, pageErrors, racePage }) => {
 
 `racePage` navigates to `/` and waits for `window.__apex` (`BOOT_MS` from the fixtures) before
 handing the page to the test. `pageErrors` collects every `pageerror` event.
-```
 
 ## Tunnel before/after (Monaco bore, GLX and TLX)
 
-`park` is the chase rig and sits behind the car; use `eye` or `cinematic` inside a bore. Mid-bore fracs
+`park` is the chase rig and sits behind the car; use `eye` (`eyeAt(frac, 0, 2.5)`) inside a bore.
+`cinematic`/`orbit` put the eye `--dist` out (45 m default), in the rock: only with a small `--dist`. Mid-bore fracs
 come from `node tools/shot/flicker-gate.mjs --list` (`monaco-tunnel-vault` 0.47, `monaco-tunnel-top` 0.49).
 
 ```sh

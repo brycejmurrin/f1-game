@@ -28,36 +28,35 @@ agent-surface edits also run the focused `agent-config` checks.
 The SessionStart hook installs both (AGENTS.md §Verification 1); the manual
 fallback is `bash tools/env/cloud-agent-install.sh`.
 
-The suite is slow software rendering. **One command composes the rest**
-(`pick-tests` selection, inline `verify-track` / `graph-parity` /
-`tooling-fast` / `bump-cache --check`, then `test-bg` with **one browser
-group per batch**):
+## The minimum before a push (one floor)
+
+The pre-push floor is AGENTS.md rule 3 → docs/WORKERS.md §3 (its one home). In practice, two commands:
+
+```sh
+node tools/ci/verify-change.mjs --fast --json      # the fast phase: tooling-fast (when warranted), verify-track, graph-parity, bump-cache; no browsers
+node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # the ONE spec, background; pick it: select-specs.mjs --since <base>
+```
+
+(a circuit edit swaps the spec for `node tools/track/verify-track.cjs <id>`). The PR's tiers run the rest of the
+ladder; name the groups `pick-tests` lists as not-run in the PR, or run one on the pushed branch with
+`node tools/ci/remote-group.mjs <group>`. A started run's verdict is its log's `= run …` line (`references/triage.md`).
 
 ```sh
 node tools/ci/verify-change.mjs --plan       # what this change needs (JSON); explicit paths override the diff: --plan js/circuits/monza.js .claude/skills/x/SKILL.md
-node tools/ci/verify-change.mjs --fast --json # machine-readable edit-loop verdict; no browsers — default for verify-agent
-node tools/ci/verify-change.mjs              # fast gate + start batch 1 (background)
-node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
+node tools/ci/verify-change.mjs              # NOT a floor: starts batch 1, a WHOLE browser group (AGENTS.md §Verification's cost) — only when asked
+node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked; prefer remote-group.mjs
 ```
 
-`--fast` is the edit-loop rung; the worker floor before a code push is docs/WORKERS.md §3, and the
-PR's tiers run the rest of the ladder (AGENTS.md rule 3). A started batch's verdict is its log's `= run …` line
-(`references/triage.md`).
-
-Cursor and Codex commits reach CI unguarded only when no hook ran (the 2026-10-26 claim
-that they always do was wrong). The commit gate (two-call procedure: AGENTS.md rule 12) guards them too: their
-`shell-guard.sh` hooks route `git commit` through `bash-guard.sh`, or leave it to
-`.githooks/pre-commit` when `core.hooksPath` points there (`npm install`'s `prepare` sets it).
-Run `npm run test:guards` by hand only in a clone where `git config core.hooksPath` is unset.
+The commit hook guards Cursor and Codex commits too (AGENTS.md §Agent extensions; two calls: rule 12).
 
 - **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /
   pages / nightly conclusions; `verify-agent --base <ref>` answers `DELTA: same-red |
   new-on-session | already-red-on-ref`; a red you did not cause → claim first (AGENTS.md §Git branch & deploy).
   A baseline comparison with no selected checks or unread results is unknown;
   both scoped runs green means no red, not a pre-existing failure.
-- **Which groups, in what order?** `--plan`'s `batches` can exceed AGENTS.md §Verification's
-  cap. Order: plan, then the two most specific groups one at a time (the master-gate spec
-  alone for a quick signal), the rest named not-run, then the gate: `references/engine-physics.md`.
+- **Which groups, in what order?** `--plan`'s `batches` are the groups; locally run ONE spec
+  (`test-bg.mjs --spec`), the groups on the pushed PR (`remote-group.mjs`), the rest named not-run:
+  `references/engine-physics.md`.
 
 Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 

@@ -28,7 +28,7 @@ function trial(phys) {
   return o;  // o.x, o.speed, o.slipFactor, o.k, o.clearL/R, o.offT, o.wrongWay
 }
 
-const a = trial({ frontGrip: 0.89 });
+const a = trial({ frontGrip: 0.94 });
 const b = trial({ frontGrip: 1.00 });
 // higher frontGrip should hold a tighter line (smaller |x|) / keep more apex speed
 ```
@@ -61,7 +61,7 @@ const {createGame} = require("./tools/lib/game-vm.cjs");
 const g = await createGame({track:"suzuka"});
 try {
   const a=g.apex; a.seed(42); await g.race("suzuka"); a.go(); a.headless(true);
-  for (const frontGrip of [0.89,1.0]) {
+  for (const frontGrip of [0.94,1.0]) {
     a.setPhysics({frontGrip});
     let o=a.reset(0.30,60,0,42);
     if (!o) throw new Error("player not staged");

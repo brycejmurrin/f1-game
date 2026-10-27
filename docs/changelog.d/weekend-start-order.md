@@ -1,0 +1,1 @@
+Fixed: a career race whose modules failed to load (BACK on the retry card), hit a save conflict or lost the GPU context no longer locks the round's objective brief or escrows the planning budget; the weekend now counts as started only once the race is actually built.
