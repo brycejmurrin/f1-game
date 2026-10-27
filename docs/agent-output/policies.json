@@ -261,6 +261,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/check/brake-cue-calibrate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/check-gctx.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
