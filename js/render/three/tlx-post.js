@@ -118,7 +118,9 @@
     let hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend);
     // BLOOM FORMAT (hunt D6): R11F_G11F_B10F as GLX when it is RENDERABLE (and
     // blendable — the UP passes add): WebGL2 needs EXT_color_buffer_float (not
-    // the half-float one: iOS Safari stays RGBA16F); WebGPU the
+    // the half-float one; the probe below decides per device, and iOS is
+    // reported to expose it, web3dsurvey ~100 %, so do not assume RGBA16F
+    // there); WebGPU the
     // "rg11b10ufloat-renderable" feature three requests whenever the adapter
     // has it. Every bloom reader takes .rgb only. apex26.tlxBloom11=0 reverts.
     let bloom11 = false;
