@@ -1,0 +1,25 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "author": {
+    "email": "brycejmurrin@gmail.com",
+    "name": "Bryce Murrin"
+  },
+  "description": "Inspect, diagnose, profile and validate Apex 26 UI, garage, camera and replay workflows using the existing game checkout tools.",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "capabilities": [],
+        "category": "Developer Tools",
+        "defaultPrompt": "Use F1 Dev Tools to inspect and diagnose f1-game through its existing checkout tools. Discover current tool schemas, use one browser at a time, and validate camera or replay changes with matching rendered evidence.",
+        "developerName": "Bryce Murrin",
+        "displayName": "F1 Dev Tools",
+        "longDescription": "Project-specific UI inspection, profiling, garage, camera and replay workflows through the existing F1 Cloud MCP app. Local bridge helpers are optional and require a compatible executor.",
+        "shortDescription": "Apex inspection & diagnostics"
+      },
+      "apps": "./.app.json"
+    }
+  },
+  "name": "f1-dev-tools",
+  "version": "0.3.0",
+  "skills": "./skills"
+}

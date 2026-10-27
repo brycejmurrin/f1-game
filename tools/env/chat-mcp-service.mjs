@@ -9,6 +9,7 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import {parseArgs} from 'node:util';
 const ROOT=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const require=createRequire(import.meta.url);
+const GATEWAY=path.join(ROOT,'tools/mcp/chat-gateway.mjs');
 export function environmentChecks(root=ROOT){
   const checks=[];
   for(const name of ['axe-core','@modelcontextprotocol/sdk','gltf-validator','@gltf-transform/core','@gltf-transform/functions','playwright','sharp']){
@@ -21,7 +22,7 @@ export function environmentChecks(root=ROOT){
     checks.push({name,status:result.status===0?'pass':'skip',action:result.status===0?undefined:'Optional system package; install through the environment image setup.'});
   }
   checks.push({name:'tunnelCredentialReference',status:process.env.CONTROL_PLANE_API_KEY?'present':'missing',action:'Presence is not proof of authorization; use tunnel-client doctor and a live native call.'});
-  return {ok:!checks.some(c=>c.status==='fail'),checks};
+  return {ok:!checks.some(c=>c.status==='fail'||c.status==='missing'),checks};
 }
 function identity(pid){try{return fs.readFileSync(`/proc/${pid}/stat`,'utf8').replace(/^.*\) /,'').split(' ')[19];}catch{return null;}}
 export function readService(record){
@@ -48,7 +49,7 @@ export async function main(argv=process.argv.slice(2)){
   if(!profile||!executable)throw new Error('Supply existing --profile FILE and --tunnel-client EXECUTABLE. No credentials in arguments.');
   const profilePath=fs.realpathSync(profile),binary=fs.realpathSync(executable);
   if(!values.run){
-    const ready=spawnSync(binary,['doctor','--profile-file',profilePath],{stdio:'ignore',timeout:20000});
+    const ready=spawnSync(binary,['doctor','--profile-file',profilePath,'--mcp.command',`command=${JSON.stringify(process.execPath)} ${JSON.stringify(GATEWAY)},channel=main`],{stdio:'ignore',timeout:20000});
     if(ready.status!==0)throw new Error('Tunnel profile readiness failed. Run tunnel-client doctor --profile-file FILE for actionable checks.');
     const log=fs.openSync(path.join(state,'service.log'),'a',0o600);
     const child=spawn(process.execPath,[fileURLToPath(import.meta.url),'start','--run','--profile',profilePath,'--tunnel-client',binary],{cwd:ROOT,detached:true,stdio:['ignore',log,log]});child.unref();fs.closeSync(log);
@@ -67,7 +68,8 @@ export async function main(argv=process.argv.slice(2)){
   const finish=()=>{save('stopped');try{fs.rmdirSync(lock);}catch{}process.exit(0);};
   process.once('SIGTERM',stop);process.once('SIGINT',stop);
   const launch=()=>{
-    save('running');child=spawn(binary,['run','--profile-file',profilePath,'--log.level','warn'],{cwd:ROOT,stdio:'ignore'});
+    try{fs.unlinkSync(path.join(state,'health.url'));}catch(error){if(error.code!=='ENOENT')throw error;}
+    save('running');child=spawn(binary,['run','--health.url-file',path.join(state,'health.url'),'--profile-file',profilePath,'--log.level','warn','--mcp.stdio-send-initialized-notification','--mcp.command',`command=${JSON.stringify(process.execPath)} ${JSON.stringify(GATEWAY)},channel=main`],{cwd:ROOT,stdio:'ignore'});
     child.once('error',()=>{save('failed');});
     child.once('close',()=>{child=null;if(stopping)return finish();if(++restarts>5){save('failed');try{fs.rmdirSync(lock);}catch{}process.exit(1);}save('restarting');timer=setTimeout(launch,Math.min(30000,1000*2**restarts));});
   };launch();
