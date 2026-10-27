@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 
@@ -14,7 +15,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-strategy.js"), "utf8");
 
 function load(extra = {}) {
   const ctx = { console, ...extra };
-  vm.createContext(ctx);
+  vm.createContext(ctx); withI18n(ctx);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-strategy.js") });   // a filename, so V8 coverage attributes the run to the file
   vm.runInContext("this.HudStrategy = HudStrategy;", ctx);
   return ctx.HudStrategy;

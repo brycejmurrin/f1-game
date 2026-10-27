@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -16,7 +17,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-inputs.js"), "utf8");
 
 function load(extra = {}) {
   const ctx = { console, Float32Array, ...extra };
-  vm.createContext(ctx);
+  vm.createContext(ctx); withI18n(ctx);
   vm.runInContext(SRC, ctx, { filename: absSrc("js/ui/hud-inputs.js") });   // a filename, so V8 coverage attributes the run to the file
   vm.runInContext("this.HudInputs = HudInputs;", ctx);
   return ctx.HudInputs;
@@ -43,7 +44,7 @@ test("paused preference changes clear input history before another HUD frame", (
   const store = { get: (k, d) => values.has(k) ? values.get(k) : d,
     set(k, v) { values.set(k, v); for (const fn of listeners) fn({ key: k }); },
     subscribe(fn) { listeners.push(fn); } };
-  const ctx = vm.createContext({ GameStore: { store } });
+  const ctx = withI18n(vm.createContext({ GameStore: { store } }));
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/hud-elements.js"), "utf8"), ctx);
   const elements = vm.runInContext("HudElements", ctx), d = fakeDom();
   const I = load({ document: d.doc, window: d.win, HudElements: elements, GameStore: { store } });

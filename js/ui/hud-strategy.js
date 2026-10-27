@@ -191,9 +191,9 @@ const HudStrategy = (function () {
       nodes.cov.textContent = cov ? (behind.code || "") : "";
     }
     if (dirty) {
-      root.setAttribute("aria-label", "Strategy: tyres " + last.tyre + ", pit loss " + last.loss + ", next stop " + last.next
-        + (uc ? ", undercut on " + (a.code || "the car ahead") : "")
-        + (cov ? ", cover from " + (behind.code || "the car behind") : ""));
+      root.setAttribute("aria-label", I18n.t("hud.strategy.label", { tyre: last.tyre, loss: last.loss, next: last.next }, "Strategy: tyres {tyre}, pit loss {loss}, next stop {next}")
+        + (uc ? ", " + I18n.t("hud.strategy.undercut", { who: a.code || I18n.t("hud.strategy.carAhead", null, "the car ahead") }, "undercut on {who}") : "")
+        + (cov ? ", " + I18n.t("hud.strategy.cover", { who: behind.code || I18n.t("hud.strategy.carBehind", null, "the car behind") }, "cover from {who}") : ""));
     }
   }
 

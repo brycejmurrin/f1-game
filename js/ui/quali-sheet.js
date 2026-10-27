@@ -39,15 +39,15 @@ function create(G) {
       const sw = span("res-swatch");
       sw.style.background = G.cssCol(team ? team.color : [0.5, 0.5, 0.5]);
       const nm = span("res-name", `${r.code}  ${r.name}`);
-      if (driven) nm.appendChild(span("q-real-tag", " DRIVEN"));
-      const tm = span("res-pts q-time", r.noTime ? "NO TIME" : r.pos === 1 ? poleClock(r.t) : `+${r.gap.toFixed(3)}`);
+      if (driven) nm.appendChild(span("q-real-tag", " " + I18n.t("quali.driven", null, "DRIVEN")));
+      const tm = span("res-pts q-time", r.noTime ? I18n.t("quali.noTime", null, "NO TIME") : r.pos === 1 ? poleClock(r.t) : `+${r.gap.toFixed(3)}`);
       row.append(span("res-pos", r.pos), sw, nm, tm);
       body.appendChild(row);
     }
     const title = $("q-title");
     if (title) {
       const you = rows.find((r) => r.isPlayer);
-      const name = G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
+      const name = G.seasonMode && typeof SeasonCal !== "undefined" && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : I18n.t("quali.title", null, "QUALIFYING");
       title.textContent = you ? `${name} — P${you.pos}` : name;
     }
     // LICENCE BADGES: a DRIVEN pole only — a simulated time for a player who
@@ -59,7 +59,7 @@ function create(G) {
     if (poleNew) {
       const card = document.createElement("div"); card.className = "res-personal";
       card.setAttribute("role", "status");
-      const head = document.createElement("strong"); head.textContent = "BADGE UNLOCKED";
+      const head = document.createElement("strong"); head.textContent = I18n.t("results.badgeUnlocked", null, "BADGE UNLOCKED");
       card.append(head, span("", Badges.labelOf("pole")));
       body.appendChild(card);
     }

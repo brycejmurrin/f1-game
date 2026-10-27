@@ -35,13 +35,15 @@ const HudTyres = (function () {
   /** The spoken twin of the chip: "Medium tyres, cold, about 5 laps left".
    *  temp ok says nothing (the normal state is not news); a worn-out set says so. */
   function label(code, temp, lapsLeft, spent) {
-    const name = NAMES[code] || (code ? String(code) : "Unknown");
-    let out = name + " tyres";
-    if (temp === "cold" || temp === "hot") out += ", " + temp;
-    if (spent >= 1) out += ", worn out";
+    const name = NAMES[code] || (code ? String(code) : I18n.t("hud.tyre.unknown", null, "Unknown"));
+    let out = I18n.t("hud.tyre.label", { name }, "{name} tyres");
+    if (temp === "cold") out += ", " + I18n.t("hud.tyre.cold", null, "cold");
+    else if (temp === "hot") out += ", " + I18n.t("hud.tyre.hot", null, "hot");
+    if (spent >= 1) out += ", " + I18n.t("hud.tyre.worn", null, "worn out");
     else if (lapsLeft != null && isFinite(lapsLeft)) {
       const n = Math.max(0, Math.min(99, Math.round(lapsLeft)));
-      out += lapsLeft < 0.5 ? ", under a lap left" : ", about " + n + (n === 1 ? " lap" : " laps") + " left";
+      out += ", " + (lapsLeft < 0.5 ? I18n.t("hud.tyre.underLap", null, "under a lap left")
+        : I18n.t("hud.tyre.lapsLeft", { n }, "about {n, plural, one {# lap} other {# laps}} left"));
     }
     return out;
   }

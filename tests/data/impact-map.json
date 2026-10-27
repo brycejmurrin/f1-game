@@ -16150,6 +16150,12 @@
       ]
     },
     "js/ui/dom.js": {
+      "fmtLap": [
+        "tests/unit/i18n-number-format.test.mjs"
+      ],
+      "fmtRaceClock": [
+        "tests/unit/i18n-number-format.test.mjs"
+      ],
       "*": [
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/data-lifecycle.spec.js",
@@ -16533,7 +16539,8 @@
       ],
       "fmtGap": [
         "tests/unit/hud-gap-decimals.test.mjs",
-        "tests/unit/hud-relative.test.mjs"
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/i18n-number-format.test.mjs"
       ],
       "lapsApart": [
         "tests/unit/hud-readouts.test.mjs",

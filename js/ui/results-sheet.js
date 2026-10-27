@@ -142,6 +142,12 @@ function awardBadges(order, duel) {
   });
 }
 
+// I18n.t with English defaults; the bare fallback keeps VM tests that load this file alone working.
+const tr = (key, vars, def) => typeof I18n !== "undefined" ? I18n.t(key, vars, def)
+  : String(def).replace(/\{(\w+)\}/g, (m, k) => (vars && vars[k] != null ? vars[k] : m));
+
+const trN = (x) => typeof I18n !== "undefined" ? I18n.n(x) : x.toLocaleString();   // prose numbers localise; lap times and gaps stay "."-formatted
+
 // The points column for a car that scored nothing: DSQ or DNF.
 const outLabel = (why) => (String(why).indexOf("DSQ") === 0 ? "DSQ" : "DNF");
 
@@ -149,7 +155,7 @@ const outLabel = (why) => (String(why).indexOf("DSQ") === 0 ? "DSQ" : "DNF");
 function badgeCard(ids) {
   const card = document.createElement("div"); card.className = "res-personal";
   card.setAttribute("role", "status");
-  const heading = document.createElement("strong"); heading.textContent = ids.length > 1 ? "BADGES UNLOCKED" : "BADGE UNLOCKED";
+  const heading = document.createElement("strong"); heading.textContent = ids.length > 1 ? tr("results.badgesUnlocked", null, "BADGES UNLOCKED") : tr("results.badgeUnlocked", null, "BADGE UNLOCKED");
   const detail = document.createElement("span"); detail.textContent = ids.map(Badges.labelOf).join(" · ");
   card.append(heading, detail);
   return card;
@@ -177,7 +183,7 @@ function stintStrip(c) {
   strip.setAttribute("role", "img");
   const names = { S: "Soft", M: "Medium", H: "Hard", I: "Intermediate", W: "Wet", SS: "Super soft", HS: "Hyper soft" };
   const description = list.map((s) => `${names[s.code] || s.code} — completed laps ${s.lap0}-${s.lap1}`).join("; ");
-  strip.setAttribute("aria-label", "Tyre stints: " + description);
+  strip.setAttribute("aria-label", tr("results.stints.label", { stints: description }, "Tyre stints: {stints}"));
   list.forEach((s) => {
     const seg = document.createElement("div");
     seg.className = "res-stint";
@@ -189,7 +195,7 @@ function stintStrip(c) {
     strip.appendChild(seg);
   });
   const details = document.createElement("details"); details.setAttribute("data-stint-details", "");
-  const summary = document.createElement("summary"); summary.textContent = "TYRE STINTS";
+  const summary = document.createElement("summary"); summary.textContent = tr("results.stints.title", null, "TYRE STINTS");
   const text = document.createElement("div"); text.setAttribute("data-stint-text", ""); text.textContent = description;
   details.append(summary, text);
   return { strip, details };
@@ -294,7 +300,7 @@ function buildResults(order, race) {
   if (playerPlace >= 0 && !watched) {
     const self = order[playerPlace], verdict = sourceOf(self), elapsed = correctedFinish(verdict);
     const card = document.createElement("div"); card.className = "res-personal";
-    const heading = document.createElement("strong"); heading.textContent = "YOUR RACE · " + (dnfOf(self) ? outLabel(dnfOf(self)) : self.classified === false ? "NC" : "P" + (playerPlace + 1));
+    const heading = document.createElement("strong"); heading.textContent = tr("results.yourRace", null, "YOUR RACE") + " · " + (dnfOf(self) ? outLabel(dnfOf(self)) : self.classified === false ? "NC" : "P" + (playerPlace + 1));
     const detail = document.createElement("span");
     // The card the player reads without scrolling to their row: where they
     // started (gridPos, game.js's grid build) and the places gained, their best
@@ -305,12 +311,12 @@ function buildResults(order, race) {
     const classified = !dnfOf(self) && self.classified !== false;
     if (self.gridPos > 0) {
       const gained = classified ? self.gridPos - (playerPlace + 1) : 0;
-      parts.push("FROM P" + self.gridPos + (gained ? " (" + (gained > 0 ? "▲" : "▼") + Math.abs(gained) + ")" : ""));
+      parts.push(tr("results.fromGrid", { pos: self.gridPos }, "FROM P{pos}") + (gained ? " (" + (gained > 0 ? "▲" : "▼") + Math.abs(gained) + ")" : ""));
     }
     if (isFinite(self.best) && self.best > 0) {
       let fl = Infinity;
       for (const c of order) if (!c.retired && !c.dsq && c.best < fl) fl = c.best;
-      parts.push("BEST " + lapClock(G, self.best) + (self.best === fl ? " ★" : ""));
+      parts.push(tr("results.best", null, "BEST") + " " + lapClock(G, self.best) + (self.best === fl ? " ★" : ""));
     }
     const pen = verdict && verdict.penalty;
     const penWhy = verdict && verdict.penaltyWhy;
@@ -322,19 +328,19 @@ function buildResults(order, race) {
   const incidents = G.coach && G.coach.insights && !watched ? G.coach.insights.settle() : [];
   if (incidents.length) {
     const card = document.createElement("div"); card.className = "res-personal"; card.id = "res-incidents";
-    const heading = document.createElement("strong"); heading.textContent = "INCIDENTS & PENALTIES";
+    const heading = document.createElement("strong"); heading.textContent = tr("results.incidents", null, "INCIDENTS & PENALTIES");
     const detail = document.createElement("span");
-    detail.textContent = incidents.slice(-8).map((e) => "LAP " + e.lap + " · " + e.text).join("  ·  ");
+    detail.textContent = incidents.slice(-8).map((e) => tr("results.lapN", { lap: e.lap }, "LAP {lap}") + " · " + e.text).join("  ·  ");
     card.append(heading, detail); els.resultsTable.appendChild(card);
   }
   const coaching = G.coach && G.coach.feedback && G.coach.feedback();
   if (coaching && coaching.enabled && coaching.latest) {
     const card = document.createElement("div"); card.className = "res-personal";
-    const heading = document.createElement("strong"); heading.textContent = "COACH INSIGHT";
+    const heading = document.createElement("strong"); heading.textContent = tr("results.coach", null, "COACH INSIGHT");
     const detail = document.createElement("span");
-    detail.textContent = (coaching.latest.turn ? "Turn " + coaching.latest.turn + " · " : "") + coaching.latest.detail;
+    detail.textContent = (coaching.latest.turn ? tr("results.turnN", { turn: coaching.latest.turn }, "Turn {turn}") + " · " : "") + coaching.latest.detail;
     const more = document.createElement("button"); more.type = "button";
-    more.textContent = "VIEW IN DRIVING SETTINGS";
+    more.textContent = tr("results.viewCoach", null, "VIEW IN DRIVING SETTINGS");
     more.onclick = () => { if (G.openCoachDetails) G.openCoachDetails(); };
     card.append(heading, detail, more); els.resultsTable.appendChild(card);
   }
@@ -373,7 +379,7 @@ function buildResults(order, race) {
     if (other) {
       // Text as well as colour, for the same reason the quali sheet does it.
       const tag = document.createElement("span");
-      tag.className = "q-real-tag"; tag.textContent = " PLAYER";
+      tag.className = "q-real-tag"; tag.textContent = " " + tr("results.player", null, "PLAYER");
       nm.appendChild(tag);
     }
     const pt = document.createElement("span"); pt.className = "res-pts";
@@ -385,7 +391,7 @@ function buildResults(order, race) {
     // shows those points, and its reason stays in the name suffix above.
     // NOT CLASSIFIED: still running below 90 % of the winner's laps (RaceControl.classify).
     const paid = c.classified !== false && ((!dnf && !nc) || (c.classified && !c.dsq));
-    pt.textContent = G.practice && !watched ? "Unscored"
+    pt.textContent = G.practice && !watched ? tr("results.unscored", null, "Unscored")
       : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : nc ? "0 pts" : outLabel(dnf);
     row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
@@ -396,7 +402,7 @@ function buildResults(order, race) {
         const gapText = "+" + gap.toFixed(3) + "s";
         const gapEl = document.createElement("span");
         gapEl.className = "q-time"; gapEl.textContent = gapText;
-        gapEl.setAttribute("aria-label", gapText + " behind winner");
+        gapEl.setAttribute("aria-label", tr("results.gapBehind", { gap: gapText }, "{gap} behind winner"));
         nm.appendChild(gapEl);
       }
     }
@@ -431,7 +437,7 @@ function buildResults(order, race) {
     // missed brief pays nothing, and a column of zeroes reads as a bug.
     const line = (k, v, cls) => {
       if (!v) return;
-      addRow(`res-settle-row${cls ? ` ${cls}` : ""}`, k, `${v > 0 ? "+" : "\u2212"}${Math.abs(v).toLocaleString()} cr`);
+      addRow(`res-settle-row${cls ? ` ${cls}` : ""}`, k, `${v > 0 ? "+" : "\u2212"}${trN(Math.abs(v))} cr`);
     };
     line(`Prize money — P${st.pos}`, st.prize);
     line(`Prize money — team-mate P${st.matePos}`, st.matePrize);   // MY TEAM owns both cars
@@ -448,7 +454,7 @@ function buildResults(order, race) {
         (v.met ? "MET" : "MISSED") + (v.reason ? " · " + v.reason : ""));
     }
     line("Driver wages", -st.wages);
-    addRow("res-settle-row total", "BALANCE", `${st.money.toLocaleString()} cr`);
+    addRow("res-settle-row total", "BALANCE", `${trN(st.money)} cr`);
     addRow("res-settle-row rep", "Reputation", `${Math.round(st.rep)} / 100`);
     // Craft pays reputation, never money, so it sits BELOW the balance line and
     // outside the credit column — a percentage there would read as an unpaid fee.

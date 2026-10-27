@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "path";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -11,7 +12,7 @@ const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-tyres.js"), "utf8");
 
 function load() {
   const ctx = { console };
-  vm.createContext(ctx);
+  vm.createContext(ctx); withI18n(ctx);
   vm.runInContext(SRC + "; this.HudTyres = HudTyres;", ctx);
   return ctx.HudTyres;
 }
@@ -75,7 +76,7 @@ test("compoundChip and paint: COLOURBLIND CUES stamps data-compound on the code 
   assert.equal(chip.dataset.compound, undefined);
 
   const ctx = { console, A11yOpts: { cuesOn: () => true, compoundLetter: (n) => (n.indexOf("SOFT") === 0 ? "S" : "M") } };
-  vm.createContext(ctx);
+  vm.createContext(ctx); withI18n(ctx);
   vm.runInContext(SRC + "; this.HudTyres = HudTyres;", ctx);
   const Hon = ctx.HudTyres;
   assert.equal(Hon.compoundChip("SOFT"), "S");
