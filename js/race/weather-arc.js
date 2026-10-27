@@ -359,12 +359,13 @@ const WeatherArc = (function () {
         if (typeof a.w0 !== "number") adopt(a);
         w = RainCells.sample(segs(a), s / len);
       }
-      return Number.isFinite(x) && len > 0 && Number.isFinite(s) ? w * (1 - DRYLINE_K * dryLine(s / len, x) * Math.sqrt(Math.max(0, 1 - w))) : w;
+      return a && Number.isFinite(x) && len > 0 && Number.isFinite(s) ? w * (1 - DRYLINE_K * dryLine(s / len, x) * Math.sqrt(Math.max(0, 1 - w))) : w;
     }
     // ── Drying line (#1627) — a lateral field on top of the along-lap wetness ──
     // SURFACE channel (docs/PHYSICS.md): the groove is where traffic has worn the rubber in, a fixed smooth
-    // wander about the centreline hashed from the lap fraction alone — no curvature, no racing-line read —
-    // so every car at the same (s, x) and every peer sees the same water. It dries first (up to DRYLINE_K of
+    // wander about the centreline hashed from the lap fraction alone — no curvature, no racing-line read — and only a live arc has one (static weather, the characterization pins, is one even wetness) —
+    // so every car at the same (s, x) and every peer sees the same water. Only a live arc has a line: a static
+    // weather (the characterization pins) is one even wetness. It dries first (up to DRYLINE_K of
     // the wetness) when the road is part-dry; a soaked (1) or bone-dry (0) road has no line.
     const DRYLINE_K = 0.6, DRYLINE_W = 2.2, DRYLINE_AMP = 2.5;   // max share dried; groove half-width m; wander m
     function grooveX(frac) {

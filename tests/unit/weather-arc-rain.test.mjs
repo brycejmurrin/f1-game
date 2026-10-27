@@ -332,6 +332,8 @@ test("drying line: on a drying road the groove is drier than off-line; soaked an
   assert.equal(wa.viewWetness(), on, "the view and grip read the same field at (s, x)");
   wa.syncWetness(0);
   assert.equal(G.frame.wetness, on, "frame.wetness agrees with wetnessAt at the player's (s, x)");
+  const stat = raced("wet"); stat.G.track = { total: 5800 };
+  assert.equal(stat.wa.wetnessAt(s, best), stat.wa.wetness(), "no arc (static weather): no line");
   const dry = raced("dry"); dry.G.track = { total: 5800 };
   assert.equal(dry.wa.wetnessAt(s, best), 0, "bone dry: no line");
   const wet = raced("rain"); wet.G.track = { total: 5800 };
