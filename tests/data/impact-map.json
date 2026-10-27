@@ -10090,6 +10090,9 @@
       "fillSlope": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
+      "hookCounts": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
       "phaseStats": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
@@ -10187,6 +10190,9 @@
         "tests/unit/metrics.test.mjs"
       ],
       "snapshot": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "stallRow": [
         "tests/unit/metrics.test.mjs"
       ],
       "toggle": [
