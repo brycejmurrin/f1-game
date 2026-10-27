@@ -7118,6 +7118,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
       "startRaceCovered": [
@@ -7310,7 +7311,6 @@
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/profile-lib.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
