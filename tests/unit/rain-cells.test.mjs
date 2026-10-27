@@ -223,7 +223,7 @@ test("frame.wetness follows the CAMERA's position under a local shower", () => {
 
 test("source guards: gripMult reads the surface at the car, tread advice the lap mean; manifest order", () => {
   const game = gameSource();
-  assert.match(game, /function gripMult\(c\) \{ return TyreModel\.weatherGrip\(c \? \(c\.tread == null \? TyreModel\.treadFor\(raceWeather, trackWetness\(\)\) : c\.tread\) : 0, c && wxArc \? wxArc\.wetnessAt\(c\.s\) : trackWetness\(\)\); \}/);
+  assert.match(game, /function gripMult\(c\) \{ return TyreModel\.weatherGrip\(c \? \(c\.tread == null \? TyreModel\.treadFor\(raceWeather, trackWetness\(\)\) : c\.tread\) : 0, c && wxArc \? wxArc\.wetnessAt\(c\.s, c\.x\) : trackWetness\(\)\); \}/);
   assert.match(game, /function trackWetness\(\) \{ return wxArc \? wxArc\.wetness\(\)/);
   const man = read("tools/manifest.cjs");
   assert.ok(man.indexOf('"js/race/rain-cells.js"') >= 0 && man.indexOf('"js/race/rain-cells.js"') < man.indexOf('"js/race/weather-arc.js"'));
