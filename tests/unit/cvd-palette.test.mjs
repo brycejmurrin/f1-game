@@ -283,16 +283,16 @@ test("HUD colour sources route hues through CvdPalette / tokens (#1595)", () => 
     });
     rows.forEach(([re], k) => assert.ok(used.has(k), `${file}: LITERAL_OK row ${re} matches nothing — drop it`));
   }
-  // The routed sites read the palette, and its off values are the old literals.
+  // The off palette is the old literals, and hud.css :root (the race-only tokens' off values) agrees.
+  // The scan above already fails a routed site that goes back to a literal.
   const hud = read("css/hud.css");
-  for (const c of "SMHIW") assert.match(hud, new RegExp(`\\.bc-tyre\\[data-c="${c}"\\] \\{ color: var\\(--tyre-${c.toLowerCase()}\\)`));
   const { P } = load();
   const OLD = { tyreS: "#ff3b3b", tyreM: "#ffd12e", tyreH: "#f2f2f2", tyreI: "#3ccf4e", tyreW: "#3a8dff", thr: "#2ecc71", brk: "#ff3b3b",
     cnrHairpin: "#f87171", cnrSlow: "#fb923c", cnrMedium: "#facc15", cnrFast: "#4ade80" };
-  const offRoot = (hud.match(/^:root \{[^}]*\}/m) || [""])[0];
+  const offRoot = Object.fromEntries([...((hud.match(/^:root \{[^}]*\}/m) || [""])[0]).matchAll(/(--[\w-]+): (#[0-9a-f]{6});/g)].map((m) => [m[1], m[2]]));
   for (const [key, hex] of Object.entries(OLD)) {
     assert.equal(P.hex(key), hex, `off ${key} keeps today's colour`);
-    if (P.HUD_CSS_OF[key]) assert.match(offRoot, new RegExp(`${P.HUD_CSS_OF[key]}: ${hex};`), `hud.css :root ${P.HUD_CSS_OF[key]}`);
+    if (P.HUD_CSS_OF[key]) assert.equal(offRoot[P.HUD_CSS_OF[key]], hex, `hud.css :root ${P.HUD_CSS_OF[key]}`);
   }
   // A CVD mode paints the race-only tokens inline (no CSS block), and they read on the plate like the other inks.
   const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
@@ -308,7 +308,4 @@ test("HUD colour sources route hues through CvdPalette / tokens (#1595)", () => 
   }
   Q.set("off");
   for (const name of Object.values(Q.HUD_CSS_OF)) assert.equal(style.has(name), false, `off leaves ${name} to hud.css`);
-  assert.match(read("js/ui/hud-inputs.js"), /ink\("thr"\)[\s\S]*ink\("brk"\)/);
-  assert.match(read("js/ui/track-maps.js"), /CvdPalette\.hex\(CLASS_KEY\[cls\]\)/);
-  assert.match(read("js/ui/hud-minimap.js"), /CvdPalette\.hex\("you"\)/);
 });
