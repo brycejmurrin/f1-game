@@ -217,6 +217,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
+        "tests/unit/ratchets.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
@@ -10092,7 +10093,8 @@
       ],
       "*": [
         "tests/specs/image-grade-visual.spec.js",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/tooling-fast-runner.test.mjs"
       ]
     },
     "js/perf/gpu-test-run.js": {
@@ -12268,7 +12270,8 @@
       "*": [
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/race/quali-model.js": {
@@ -13306,6 +13309,9 @@
       ],
       "vmaxMul": [
         "tests/unit/wind.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/render/gfx.js": {
