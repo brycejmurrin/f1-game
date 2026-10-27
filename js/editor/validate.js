@@ -239,11 +239,24 @@ const TrackValidate = (function () {
       // The pit opening, scanned on its own: a node inside the pit window, the
       // other road within the opening's reach on the PIT side of it (tr.rx/rz
       // is the +right normal; absent → either side), not bridged over it.
-      if (pitReach > 2 && pitIn) {
+      // An overlap (rank 3) already outranks it; else the reach bound
+      // (dist < need + pitReach ≤ 2·max hw + pitReach) hashes the other road
+      // into cells of that size, so each window node visits its 3×3 block, not
+      // the lap. Candidates run in ascending b, the order a full scan would.
+      if (pitReach > 2 && pitIn && !(worst && worst.rank === 3)) {
+        let hwTop = 0;
+        for (let k = 0; k < n; k++) if (hwA[k] > hwTop) hwTop = hwA[k];
+        const pc = 2 * hwTop + pitReach + 1, pg = new Map(), cand = [];
+        const pk = (cx, cz) => cx * 65536 + cz;
+        for (let k = 0; k < n; k++) { const key = pk(Math.floor(px[k] / pc), Math.floor(pz[k] / pc)); const l = pg.get(key); if (l) l.push(k); else pg.set(key, [k]); }
         for (let a = 0; a < n; a++) {
           if (!pitIn(a)) continue;
-          for (let b = 0; b < n; b++) {
-            const dg = Math.abs(a - b);
+          const cx = Math.floor(px[a] / pc), cz = Math.floor(pz[a] / pc);
+          cand.length = 0;
+          for (let ox = -1; ox <= 1; ox++) for (let oz = -1; oz <= 1; oz++) { const l = pg.get(pk(cx + ox, cz + oz)); if (l) for (let q = 0; q < l.length; q++) cand.push(l[q]); }
+          cand.sort((u, v) => u - v);
+          for (let q = 0; q < cand.length; q++) {
+            const b = cand[q], dg = Math.abs(a - b);
             if (Math.min(dg, n - dg) <= Dnodes || Math.abs(py[a] - py[b]) >= LIMITS.bridgeSep) continue;
             const dist = Math.hypot(px[a] - px[b], pz[a] - pz[b]), need = hwA[a] + hwA[b];
             if (dist < need + 2 || dist >= need + pitReach) continue;
