@@ -1,0 +1,1 @@
+Fixed: a cold track-build worker fetches its scripts together and then runs them in order, instead of waiting out one network round trip per file, and mesh channels other than the road and terrain arrive as typed arrays so the page does not copy them on the main thread. Baked model downloads start while the track-build scripts are still loading.

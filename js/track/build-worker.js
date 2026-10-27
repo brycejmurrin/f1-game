@@ -27,8 +27,34 @@ function importScriptUrl(u, bust) {
   if (!bust) return u;
   return u + (u.indexOf("?") >= 0 ? "&" : "?") + "retry=" + bust;
 }
+// Chromium follows the HTML steps: importScripts fetches one URL, runs it,
+// then fetches the next (https://html.spec.whatwg.org/multipage/workers.html#dom-workerglobalscope-importscripts).
+// A parallel fetch of the same URLs fills the HTTP cache the following
+// importScripts reads. Measured in headless Chromium, 40 files delayed 40 ms
+// each: 1678 ms one-at-a-time, 1670 ms in one importScripts(...) call, 322 ms
+// when fetch ran first, and the server saw one hit per file (the import was a
+// cache hit, not a second download). One URL has nothing to overlap.
+async function warmScriptCache(list) {
+  if (list.length < 2 || typeof fetch !== "function") return 0;
+  const t0 = performance.now();
+  await Promise.all(list.map(async (u) => {
+    const res = await fetch(u, { credentials: "same-origin" });
+    if (!res || !res.ok) {
+      const err = new Error("HTTP " + (res && res.status));
+      err.name = "NetworkError";
+      throw err;
+    }
+    if (typeof res.arrayBuffer === "function") await res.arrayBuffer();
+  }));
+  return performance.now() - t0;
+}
 async function importScriptsRetry(urls) {
   const list = Array.isArray(urls) ? urls : [urls];
+  let warmMs = 0;
+  try { warmMs = await warmScriptCache(list); }
+  catch (_) { /* a failed warm leaves the per-URL retry below to cache-bust */ }
+  const nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : 0);
+  const tImport = nowMs();
   // importScripts evaluates in order. Retry only the failed URL: replaying a
   // successful prefix redeclares its top-level consts in this worker global.
   for (const u of list) for (let attempt = 0; ; attempt++) {
@@ -40,6 +66,7 @@ async function importScriptsRetry(urls) {
       if (!e || e.name !== "NetworkError" || attempt >= IMPORT_RETRY_MS.length) throw e;
     }
   }
+  return { warmMs, importMs: nowMs() - tImport, files: list.length };
 }
 
 // Relative URLs resolve against the PAGE (init's `base`), not this script:
@@ -93,7 +120,7 @@ function transferables(root) {
 const isU32 = (v) => v >= 0 && v <= 4294967295 && v === Math.floor(v);
 function typedRibbon(geo) {
   if (!geo) return;
-  for (const k of ["pos", "nrm", "col", "mat", "trk", "idx"]) {
+  for (const k of ["pos", "nrm", "col", "uv", "mat", "trk", "idx"]) {
     const a = geo[k];
     if (!Array.isArray(a)) continue;
     let ok = true;
@@ -101,6 +128,14 @@ function typedRibbon(geo) {
     else { for (let i = 0; i < a.length && ok; i++) ok = typeof a[i] === "number"; }
     if (ok) geo[k] = k === "idx" ? Uint32Array.from(a) : Float64Array.from(a);
   }
+}
+// Every mesh the reply carries, not only the road and terrain. A props or pit
+// channel left as a plain array is structured-cloned element by element on the
+// page when the answer lands (monza still had ~610 KB of those; vegas ~500 KB).
+function typePostedChannels(track, recs) {
+  const geos = track ? [track.roadGeo, track.terrainGeo, track.propsGeo, track.pitSigns, track.pitSignal] : [];
+  for (const r of recs || []) if (r && r.args) geos.push(r.args[0]);
+  for (const g of geos) typedRibbon(g);
 }
 
 // Only opted-in callers require a page permit. Cancellation while model
@@ -141,7 +176,7 @@ async function build(m, job) {
   // it transfers for free, and its geo still IS track.terrainGeo after the clone
   // (structured clone keeps shared references) — the page's first terrainY
   // (flyby groundAt, lamp bake) no longer rebuilds it in a 10-60 ms long task.
-  typedRibbon(track.roadGeo); typedRibbon(track.terrainGeo);
+  typePostedChannels(track, recs);
   const prepareStart = performance.now();
   const S = self.TLXShaders, config = m.prepare;
   // Bound additional typed payload across this reply, retaining raw inputs for
@@ -177,8 +212,10 @@ self.onmessage = async (e) => {
     if (m.type === "init") {
       if (!_loaded) {
         pageRelativeFetch(m.base);
-        await importScriptsRetry(m.files);
+        const timing = await importScriptsRetry(m.files);
         _loaded = true;   // no model prefetch: each build fetches its own circuit's set
+        self.postMessage({ type: "ready", warmMs: timing.warmMs, importMs: timing.importMs, files: timing.files });
+        return;
       }
       self.postMessage({ type: "ready" });
     } else if (m.type === "buildPermit") {

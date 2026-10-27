@@ -79,6 +79,23 @@ function preload(files, opts) {
   }
   return n;
 }
+// Fill the HTTP cache for hrefs the build worker is about to importScripts.
+// importScripts does not join an in-flight <link rel=preload> (that hint is
+// CORS-anonymous; classic worker imports are no-cors), but it does reuse a
+// completed fetch() of the same URL. Fire-and-forget: the worker awaits its
+// own fetch of these exact strings and then imports. Returns how many bodies
+// were read. hrefs are final URLs (pageUrls), not bare paths — do not re-key them.
+function warm(hrefs) {
+  if (typeof fetch !== "function" || !hrefs || !hrefs.length) return Promise.resolve(0);
+  return Promise.all(hrefs.map(async (href) => {
+    try {
+      const res = await fetch(href, { credentials: "same-origin" });
+      if (!res || !res.ok) return 0;
+      if (typeof res.arrayBuffer === "function") await res.arrayBuffer();
+      return 1;
+    } catch (_) { return 0; }
+  })).then((xs) => xs.reduce((a, b) => a + b, 0));
+}
 // A hung lazy file (a stalled phone connection) never fires load OR error, so
 // the caller's loading card waited forever (#2582). After SLOW_MS `opts.onSlow`
 // fires (the UI may say "still loading"); after DEADLINE_MS of main-thread-responsive time the file counts as
@@ -249,6 +266,6 @@ function loadBackendScripts(files, edges, opts) {
 
 return { load: loadBackendScripts };
 }
-  return { create, url, preload };
+  return { create, url, preload, warm };
 })();
 Object.freeze(ScriptLoader);
