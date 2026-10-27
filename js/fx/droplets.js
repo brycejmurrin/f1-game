@@ -1,6 +1,6 @@
 /* Apex 26 — Droplets: rain on the lens / visor for the ONBOARD cameras (cockpit, hood, visor, helmet, T-cam).
  * A renderer-agnostic 2D overlay: the static <canvas id="fx-droplets"> in index.html sits above #game and
- * #game-soft (z-index 2, css/overlays.css) and below the HUD, so GLX, TLX and WGX all get the same water and
+ * #game-soft (z-index 2, css/tokens.css) and below the HUD, so GLX, TLX and WGX all get the same water and
  * no backend pays a pass for it. game.js calls tick() once per rendered frame; everything else is here.
  *
  * Water uses a cached atlas of three asymmetric, translucent menisci rather than bright rings.
