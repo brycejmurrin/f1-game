@@ -11947,6 +11947,15 @@
       ]
     },
     "js/race/jump-start-penalty.js": {
+      "create": [
+        "tests/unit/carve-a-modules.test.mjs"
+      ],
+      "tickAtGreen": [
+        "tests/unit/carve-a-modules.test.mjs"
+      ],
+      "tickReaction": [
+        "tests/unit/carve-a-modules.test.mjs"
+      ],
       "*": [
         "tests/unit/sporting-regs.test.mjs"
       ]
@@ -13057,6 +13066,7 @@
       ],
       "info": [
         "tests/specs/jump-start.spec.js",
+        "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
@@ -13076,6 +13086,7 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "tick": [
+        "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ]

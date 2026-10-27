@@ -8,7 +8,8 @@
  *     different dry specifications; breaking it is a disqualification, or 30 s
  *     when the race was suspended and not resumed. Whether the rule APPLIES
  *     (race length, dry, not a sprint, pits available) is PitLane's
- *     twoCompoundRule — one test, shared with the AI's planner.
+ *     twoCompoundApplies() (its private twoCompoundRule) — one test, shared
+ *     with the AI's planner.
  *  2. NO PASSING UNDER THE SAFETY CAR OR VSC (B5.12.2(c), B5.13.2(c)). A place
  *     gained under a caution must be given back; the 2026 Penalty Guidelines
  *     price one kept place at 10 s. Two and more are priced here at a

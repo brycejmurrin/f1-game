@@ -92,6 +92,11 @@ test("pins vTop/vStd/aStd/gearHi/rpmFor across PACE values (pre-refactor)", () =
         "rpm g=" + row.g + " s=" + row.s + " pace=" + g.pace);
     }
   }
+  // PACE === 1 (OVERALL SPEED notch 14) is the identity for aStd — not the
+  // retired "pace 5" notch of the old piecewise-linear slider.
+  env.setPACE(1);
+  assert.equal(env.api.aStd(3.5), 3.5);
+  assert.equal(env.api.aStd(-2), -2);
 });
 
 test("pins X-mode / ERS / aeroDfMult car snaps (pace-invariant; pre-refactor)", () => {

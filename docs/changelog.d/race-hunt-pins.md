@@ -1,0 +1,1 @@
+Fixed: marshal light panels no longer stay dark for a whole session when the first lookup runs before scenery fills `props.list` (same memo class as start lights); JumpStartPenalty seeds an unset `penalty` so a stub car cannot NaN the total; LightTuneEdit rising-edge latch clears are pinned for both chunk knobs and ENV REFLECTION.

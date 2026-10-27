@@ -42,8 +42,9 @@ const PaceMath = (function () {
     function vTop() { return getVMAX() * Math.max(getPACE(), 0.05); }
     function vStd(v) { return v * getVMAX() / vTop(); }
     // aStd() is vStd() for m/s^2, written as the divisor rather than the
-    // VMAX/vTop() round trip so that at pace 5 (PACE === 1) it is the identity
-    // to the bit.
+    // VMAX/vTop() round trip so that at PACE === 1 (OVERALL SPEED notch 14) it
+    // is the identity to the bit. ("pace 5" was the old piecewise-linear notch
+    // that used to land on 1.0 — docs/PHYSICS.md §PACE.)
     function aStd(a) { return a / Math.max(getPACE(), 0.05); }
 
     function aeroLoadOf(c) { return c && c.aeroLoad != null ? c.aeroLoad : 0.5; }

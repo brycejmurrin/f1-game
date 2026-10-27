@@ -105,7 +105,12 @@ var RaceFacts = (function () {
     const pairKey = (x, y) => x * 1048576 + y;   // ids are small ints; exact below 2^53
     // The car's own flag time when it has one: a VS FRIEND rival is drawn
     // ~100 ms in the past, so the tick race-facts SAW it cross is late.
-    const clockOf = (c) => (c.finishT > 0 ? c.finishT : st.get(c).finT || 0) + (c.penalty || 0);
+    // st.get(c) is null only for a finished car never seen by observe() — belt
+    // so a peer bag that arrives already flagged cannot throw mid-rank.
+    const clockOf = (c) => {
+      const s = st.get(c);
+      return (c.finishT > 0 ? c.finishT : (s && s.finT) || 0) + (c.penalty || 0);
+    };
     const byRace = (a, b) => {
       // TWO FLAGGED CARS go by laps, then by who took the flag first — never
       // by distance: each froze wherever its last timestep left it past the
