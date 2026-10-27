@@ -389,6 +389,17 @@ test("WP-L7 F6: a stale PR a live role:worker session names is not re-owned; an 
   assert.equal(notWorker.launches.length, 1, "only a role:worker session protects a PR");
 });
 
+test("a stale PR is owned by a live worker its hand-off `owner:` names, or one tagged with the issue it closes", () => {
+  const sid = "session_01BatchBatchBatch";
+  const sess = (tags) => ({ id: sid, title: "[Worker] batch", status: "SESSION_STATUS_RUNNING", bucket: "", tags: ["role:worker", ...tags] });
+  const plan = (body, tags) => planDispatch(state({ prs: [pr(96, { updated_at: ago(3), body })], sessions: [sess(tags)] }), cfg(), NOW);
+  const byHandoff = plan(`\`\`\`handoff\nowner: claude:${sid}\n\`\`\``, []);
+  assert.deepEqual([byHandoff.launches.length, byHandoff.labels.length], [0, 0]);
+  assert.equal(plan("Closes #3104", ["issue:3104"]).launches.length, 0);
+  assert.equal(plan("Closes #3105", ["issue:3104"]).launches.length, 1, "another issue's worker does not own it");
+  assert.equal(plan("no hand-off", []).launches.length, 1);
+});
+
 test("WP-L7 F6: --apply with no --sessions while GitHub names children launches nothing; with no children it may launch", () => {
   const sid = "session_01ChildChildChild";
   const api = (named) => (p, o) => {

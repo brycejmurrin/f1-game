@@ -237,6 +237,16 @@ export function sessionRefs(s) {
   const issues = [...new Set([...tag(/^issue:(\d+)$/), ...[...title.matchAll(/#(\d{1,6})\b/g)].map((m) => Number(m[1])).filter((n) => !prs.includes(n))])];
   return { prs, issues };
 }
+/** Does session `s` name PR `p`: by its pr field, a `pr:<n>` tag or a `PR #n` title, by the PR's ```handoff `owner:`
+ *  line, or by an issue the PR body closes (`Closes #n`; batch workers tag `issue:<n>` and name the PR only in the
+ *  hand-off — dispatcher report 2026-10-27, #4016–#4021 planned as orphans). Pure. */
+export function ownsPr(s, p) {
+  const refs = sessionRefs(s);
+  if (refs.prs.includes(Number(p.number))) return true;
+  if (String(parseHandoff(p.body)?.owner || "").includes(s.id)) return true;
+  const closes = [...String(p.body || "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d{1,6})\b/gi)].map((m) => Number(m[1]));
+  return closes.some((n) => refs.issues.includes(n));
+}
 /** A PR's last activity: its updated_at (push, comment, edit, label) or its newest comment, the dispatcher's own launch
  *  comments excluded (header: why not the head commit's committer date). Pure. */
 export const activityAt = (p) => Math.max(t(p.updated_at), t(p.last_comment_at),
@@ -362,7 +372,7 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     if (isBotPr(p)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but a fold bot's PR (never re-owned)`); continue; }
     if (has(p, "land") && !landProblem(p, now, limit, flags.mergePause)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but labelled land and waiting on CI/gate/train`); continue; }
     if (has(p, "hold") || has(p, "needs-decision")) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but ${has(p, "hold") ? "hold" : "needs-decision"}`); continue; }
-    const owner = sessions.find((s) => isLiveWorker(s) && sessionRefs(s).prs.includes(Number(p.number)));
+    const owner = sessions.find((s) => isLiveWorker(s) && ownsPr(s, p));
     if (owner) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but live worker ${owner.id} names it`); continue; }
     const l = liveLaunch(p.comments, now, claimH, sessions);
     if (l) { skip(`PR #${p.number}`, `takeover launched ${ageLabel(l.at, now)} ago (live claim)`); continue; }
