@@ -1040,3 +1040,15 @@ test("stop-guard.sh lets a stop through when Claude is already continuing, and o
   assert.notEqual(junk.status, 1, `a malformed payload must not crash the hook: ${junk.stderr}`);
 });
 
+
+// Claude Code's own skill validator (Claude Academy, "Troubleshooting skills"; needs Claude Code
+// v2.1.233+). It catches a SKILL.md whose frontmatter does not parse, which the budget tests above
+// only see through our own parser. It skips where the CLI is absent or too old (CI runners).
+test("claude plugin validate accepts every project skill", { timeout: 90000 }, (t) => {
+  const r = spawnSync("claude", ["plugin", "validate", ".claude/skills"], { cwd: ROOT, encoding: "utf8", timeout: 80000 });
+  if (r.error && r.error.code === "ENOENT") return t.skip("claude CLI not on PATH");
+  const out = `${r.stdout}${r.stderr}`;
+  if (/unknown command|not a (known|valid) command|unknown option/i.test(out)) return t.skip("claude CLI too old for `plugin validate`");
+  assert.equal(r.status, 0, `claude plugin validate .claude/skills failed:\n${out}`);
+  assert.match(out, /Validation passed/);
+});
