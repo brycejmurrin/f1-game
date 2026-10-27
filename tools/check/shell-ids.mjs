@@ -58,6 +58,7 @@ const AUXILIARY_HOSTS = {
  *  KNOWN_EXTERNAL_READS in tests/unit/global-registry.test.mjs: every entry is a
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
+  "as-slang":         "audio/panel.js builds the SPOKEN LANGUAGE row with SettingRow.build after RADIO SOUND (the shell's node count is a shrink-only ratchet); its paint/wire reads are null-guarded",
   "pm-ckfinish-wheel": "CockpitFinishes.initUI builds pm-ckfinish-<name> through SettingRow.build for wheel/body/halo; this null-guarded lookup prevents duplicate insertion",
   "cs-tab-tune": "SetupUI creates cs-tab-<tab.id> buttons dynamically; SetupExperiments reads the TUNE tab after the garage panel is built",
   "apex-lazy-integrity": "bump-cache.mjs adds the full lazy-script SRI map only to staged deployments; ScriptLoader treats its absence in dev and legacy shells as optional",
