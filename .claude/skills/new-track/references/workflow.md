@@ -60,11 +60,13 @@ Load from the SKILL.md index when the task needs this detail.
    `docs/notes/TUMFTM-RACETRACK-DATABASE.md`.
 
 2. **Register it** (new tracks only): add the id to the `CIRCUITS` array in
-   `tools/manifest.cjs` (load-order source of truth), then run
-   `node tools/gen/gen-shell.mjs` so the `@gen-shell` script block in `index.html`
-   picks it up. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
-   `tests/unit/load-order.test.mjs` fails if manifest and shell diverge.
-   Tag order == `Tracks.LIST` == picker/season order:
+   `tools/manifest.cjs` (the roster source of truth), then run `npm run gen`. A circuit
+   has NO `<script>` tag: `gen-circuit-meta.mjs` (first step of `npm run gen`) rewrites the
+   picker roster `js/track/circuit-meta.js`, and the full def hydrates per pick via
+   `LAZY_CIRCUIT` / `ensureCircuit`. `circuit-meta.js` is GENERATED (AGENTS.md rule 11):
+   never hand-edit it; `npm run gen:check` names drift, and `tests/unit/circuit-meta.test.mjs`
+   fails on it. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
+   `CIRCUITS` order == `Tracks.LIST` == picker/season order:
 
    - **Season circuits** (24 rounds): append in calendar order at the end of the
      season block (before the `classic: true` section).
@@ -73,19 +75,18 @@ Load from the SKILL.md index when the task needs this detail.
      rounds (see the `// ── appended circuits … ──` comment in `manifest.cjs`).
      `Tracks.SEASON` is `LIST.filter(t => !t.classic)`, so a missing flag adds a
      25th round and breaks `SEASON.length`.
-   - **The roster count is asserted, in two places.**
-     `tests/unit/shared-track-foundation-characterization.test.cjs` and
-     `tests/unit/circuit-def-fields.test.mjs` both pin `Tracks.LIST.length`
-     (read the current value in the test). It is a forcing function, not a
-     budget — raise it deliberately, in the commit that adds the circuit, and say
-     why. Raising it means updating, in the same commit:
-     1. the two `Tracks.LIST.length` assertions (`SEASON.length` stays 24),
-     2. `tests/specs/f1-track-accuracy.spec.js` — the `waitForFunction` count, a
-        `CIRCUIT_MAP` row, AND a matching feature in
-        `tests/data/f1-circuit-reference.geojson`. The spec asserts the game's
-        circuits and the map are the same SET, so a circuit with no reference
-        feature fails outright.
-     3. `tools/check/offline-precache-check.cjs` — the scenery-file count,
+   - **The roster count is asserted.** It is a forcing function, not a budget — raise
+     it deliberately, in the commit that adds the circuit, and say why. Adding a circuit
+     means updating, in the same commit:
+     1. `index.html`'s `<meta name="description">` "Drive N real circuits" (a plain line,
+        not a `@gen-shell` block; `tests/unit/circuit-count-shell.test.mjs` pins it to
+        `Tracks.LIST.length`; `SEASON.length` stays 24),
+     2. `tests/specs/f1-track-accuracy.spec.js` — a `CIRCUIT_MAP` row AND a matching feature
+        in `tests/data/f1-circuit-reference.geojson` (its count derives from the map). The spec
+        asserts the game's circuits and the map are the same SET, so a circuit with no
+        reference feature fails outright.
+     3. `tools/check/offline-precache-check.cjs` — the literal scenery-file count (a
+        browser tool: the parent runs it),
      4. `js/ui/flags.js` if the country is new — `tests/unit/flags.test.mjs`
         fails on a circuit whose country has no drawn flag,
      5. `tests/data/landmarks/<id>.json` for a hero landmark (`js/circuits/AGENTS.md`),
@@ -96,13 +97,12 @@ Load from the SKILL.md index when the task needs this detail.
         clean rather than writing a 0.
      Removing a circuit instead is a FOUR-file pass, not the three this file
      used to name: `js/circuits/<id>.js`, `js/circuits/scenery/<id>.js`, its
-     `CIRCUITS` entry, and every row above. `index.html` is GENERATED — run
-     `node tools/gen/gen-shell.mjs`, never hand-edit the tag.
+     `CIRCUITS` entry, and every row above; then `npm run gen` (circuit-meta).
 
-3. **Headless build guard and shell sync** — the fast pre-push checks, no browser:
+3. **Headless build guard and generated-file sync** — the fast pre-push checks, no browser:
    ```sh
-   node tools/track/verify-track.cjs <id>     # OK <id>: props X verts (road Y, terrain Z)
-   node tools/gen/gen-shell.mjs --check       # or gen-shell.mjs after a manifest change (?v=dev, no bump)
+   node tools/track/verify-track.cjs <id>     # OK <id>: props X verts (road Y, terrain Z); --all for the fleet
+   npm run gen:check                          # circuit-meta + shell drift after a manifest change (?v=dev, no bump)
    ```
    A non-zero `verify-track` exit means the spline/road/terrain build or the
    `scenery(api)` callback **threw** — which in the running game would strand the
@@ -120,7 +120,10 @@ Load from the SKILL.md index when the task needs this detail.
 5. **Tests** — `node tools/ci/pick-tests.mjs` names the groups. The single
    browser check is that circuit's `tests/specs/<id>-foundation.spec.js`
    (AGENTS.md verification table; hyphenated file names, e.g. `albert-park-`), run via
-   `test-bg.mjs` in the background (AGENTS.md rules 4-5). Only 16 circuits have one (madrid does not):
+   `npm test -- tests/specs/<id>-foundation.spec.js` in the background (AGENTS.md rule 4; a subagent
+   reports it not run). A NEW `<id>-foundation.spec.js` needs no `tests/groups.json` row: the
+   `test:circuits` group globs `tests/specs/*-foundation.spec.js`; only a new non-glob test file needs a
+   groups row + TESTING.md §5 row + `npm run gen`. Not every circuit has one (madrid does not):
    with none, run what `pick-tests` names, plus `tests/specs/f1-track-accuracy.spec.js` and
    `terrain-over-road.spec.js` (terrain above the racing line) when geometry, elevation or a
    street/terrain flag moved. A whole group is the parent's call.

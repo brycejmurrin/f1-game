@@ -35,9 +35,9 @@ Moved out of `SKILL.md` on 2026-10-26 to keep the skill body an index.
   is needed; do not infer a complete body from a capped excerpt. Keep tool errors
   and diagnostics visible rather than summarizing them into a success.
 
-## Limits (measured)
+## Limits (measured 2026-10-18, `docs/notes/LSP-MCP-2026-10-18.md`)
 
-- The first call takes ~1 s (project load). After that it's 7–70 ms, and up to
+- The first call takes ~1–2 s (project load). After that it's 7–70 ms, and up to
   ~155 ms for text answers over `G`. `tsc` holds ~400 MB, starts on the first
   call and exits after 10 idle minutes (`APEX_LSP_IDLE_MS`).
 - JS parameters are optional to the checker: TS2554 catches too many

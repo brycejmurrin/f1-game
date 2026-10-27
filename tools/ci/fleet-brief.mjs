@@ -12,20 +12,22 @@
 //
 //   node tools/ci/fleet-brief.mjs --fleet B [--queue fleet/queue.json] [--board <saved pr-board --json>] \
 //     [--bus-json <saved fleet-bus read --json> | --no-bus] [--trigger trig_x …] [--ask "<Bryce's open question>" …] \
-//     [--slot "<text>"] [--out artifacts/fleet-brief] [--as <host>:<id>] [--json] [--queue-md scratch/orchb-queue.md]
+//     [--slot "<text>"] [--out artifacts/fleet-brief] [--as <host>:<id>] [--json]
 //
-// The size stop is read from launch-policy.md's table (`| orchestrator | 300k (boot + 200k) |`), never a literal: on
-// 2026-10-26 the queue file and the safety-net prompts said "boot + 100k" after the table said 300k, and the brief won.
-// --queue-md <file>: the hand-off section REPLACES every earlier `## ` section of that markdown queue file (the stable
-// header above the first `## ` stays; history stays in git). The queue file had 20 hand-offs, 315 lines and ~47 kB (audit 2
-// §orchestration finding 3). A header that states a budget is refused (the cap comes from launch-policy.md), and so is a
-// result over MAX_QUEUE_BYTES; nothing is written on a refusal.
+// (A `--queue-md` mode and a size stop read from launch-policy.md were documented here by 290012954 but never reached
+// this file; audit4 C1 dropped the claim. `--queue-md` is an unknown flag, exit 2.)
 //
-// Exit: 0 written, 1 usage or unreadable input, 2 refused (queue file over the cap or carrying a budget).
+// AUTHORITY (tx T1, 2026-10-26): brief.md's second line quotes AGENTS.md's STANDING AUTHORITY bullet verbatim (read at run
+// time), and an --ask or --slot that narrows it ("Launch only on my typed word", "merges only its own PRs") is refused:
+// a seed prompt carrying those two phrases cost Bryce three launch questions in 20 minutes.
+//
+// Exit: 0 written (or --help), 1 usage or unreadable input, 2 refused (a narrowing phrase) or an unknown flag.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readBus, whoAmI, cursorFile, addressed } from "./fleet-bus.mjs";
+import { makeFlags } from "../lib/cli-args.mjs";
+import { narrowingHits, standingAuthority } from "./launch-lane.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 export const MAX_BYTES = 2048;
@@ -88,9 +90,10 @@ export function fitBrief(brief, cap = MAX_BYTES) {
   return brief;
 }
 
-/** The ≤ MAX_LINES markdown digest of a fitted brief. Pure. */
-export function digest(b, maxLines = MAX_LINES) {
+/** The ≤ MAX_LINES markdown digest of a fitted brief; `authority` (AGENTS.md's bullet, one line) is quoted verbatim. Pure. */
+export function digest(b, maxLines = MAX_LINES, authority = "") {
   const head = [`# Fleet ${b.fleet} brief — ${b.at.slice(0, 16)}Z by ${short(b.by) || "?"}`,
+    ...(authority ? [`authority (AGENTS.md §Concurrent PRs, verbatim; nobody re-asks it): "${authority}"`] : []),
     `slot: ${b.slot ? (typeof b.slot === "string" ? b.slot : `${b.slot.text} (${b.slot.from} ${b.slot.sha})`) : "none"} · bus cursor ${b.cursor.bus || "-"} / tip ${b.cursor.tip || "-"}${b.dropped ? ` · ${b.dropped} item(s) dropped for the 2 KB cap` : ""}`];
   const sections = [
     ["## Lanes", ["| PR | state | owner | head | next |", "|---|---|---|---|---|"], b.lanes.map((r) => `| #${r.pr} | ${r.st} | ${short(r.owner) || "**none**"} | ${r.head || "-"} | ${cut(r.next, 60) || "-"} |`)],
@@ -112,16 +115,23 @@ export function digest(b, maxLines = MAX_LINES) {
   return out.slice(0, maxLines).join("\n") + "\n";
 }
 
-function usage(log, msg) {
+const USAGE = "usage: fleet-brief.mjs --fleet L [--queue F] [--board F] [--bus-json F | --no-bus] [--trigger ID …] [--ask T …] [--slot T] [--out DIR] [--as ID] [--last N] [--json]\n" +
+  "  Writes artifacts/fleet-brief/brief.{json,md} (≤ 2 KB, ≤ 40 lines). An --ask/--slot that narrows the standing authority is refused.\n" +
+  "  Exit 0 written, 1 usage or unreadable input, 2 refused or an unknown flag.";
+function usage(log, msg, code = 1) {
   if (msg) log(`fleet-brief: ${msg}`);
-  log("usage: fleet-brief.mjs --fleet L [--queue F] [--board F] [--bus-json F | --no-bus] [--trigger ID …] [--ask T …] [--slot T] [--out DIR] [--as ID] [--json]");
-  return 1;
+  log(USAGE);
+  return code;
 }
 
 export function main(argv, { cwd = ROOT, log = console.log, now = () => Date.now(), read = (f) => { try { return fs.readFileSync(f, "utf8"); } catch { return ""; } },
   bus = (o) => readBus(o), env = process.env } = {}) {
+  if (argv.includes("--help") || argv.includes("-h")) { log(USAGE); return 0; }
   const f = { trigger: [], ask: [] };
-  const VALUE = new Set(["fleet", "queue", "board", "bus-json", "slot", "out", "as", "last"]);
+  const VALUE = new Set(["fleet", "queue", "board", "bus-json", "slot", "out", "as", "last", "trigger", "ask"]);
+  const valueAt = (i) => i > 0 && argv[i - 1].startsWith("--") && VALUE.has(argv[i - 1].slice(2));
+  try { makeFlags(argv.filter((a, i) => !valueAt(i)), ["--help", "--json", "--no-bus", ...[...VALUE].map((k) => `--${k}`)]); }
+  catch (e) { return usage(log, e.message.split("\n")[0], 2); }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--json") f.json = true;
@@ -133,6 +143,12 @@ export function main(argv, { cwd = ROOT, log = console.log, now = () => Date.now
   const L = String(f.fleet || "").toUpperCase();
   if (!/^[A-Z]$/.test(L)) return usage(log, "--fleet takes one letter");
   const me = whoAmI(env, f.as || "");
+  const authority = standingAuthority(ROOT);
+  const narrow = narrowingHits([...f.ask, f.slot || ""].join("\n"));
+  if (narrow.length) {
+    log(`= brief REFUSED: ${narrow.map((h) => `"${h}"`).join(", ")} narrows the standing authority; drop it. AGENTS.md §Concurrent PRs: "${authority}"`);
+    return 2;
+  }
   try {
     const lanes = queueRows(read(path.resolve(cwd, f.queue || DEFAULT_QUEUE)));
     const board = f.board ? boardRows(read(path.resolve(cwd, f.board)), L) : [];
@@ -157,7 +173,7 @@ export function main(argv, { cwd = ROOT, log = console.log, now = () => Date.now
     });
     const out = path.resolve(cwd, f.out || DEFAULT_OUT);
     fs.mkdirSync(out, { recursive: true });
-    const md = digest(brief);
+    const md = digest(brief, MAX_LINES, authority);
     fs.writeFileSync(path.join(out, "brief.json"), JSON.stringify(brief) + "\n");
     fs.writeFileSync(path.join(out, "brief.md"), md);
     if (f.json) log(JSON.stringify(brief));

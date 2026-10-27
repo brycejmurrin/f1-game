@@ -618,8 +618,9 @@ const WGX = (function () {
     // Same-page GLX fallback must not inherit a soft GPU canvas or a live
     // device: tear them down before every post-soft _fail so #game is free
     // for webgl2 and the orphaned offscreen node is gone.
-    let _cssSizeCache = null;
+    let _cssSizeCache = null, _pageListenersOff = null;
     function _bootFail(reason) {
+      try { if (_pageListenersOff) _pageListenersOff(); } catch (_) { /* no document events */ }   // TLX _createUndo parity
       try { if (_cssSizeCache) _cssSizeCache.dispose(); } catch (_) { /* observer already gone */ }
       try {
         if (_gpuCanvas && _gpuCanvas.parentNode) _gpuCanvas.parentNode.removeChild(_gpuCanvas);
@@ -790,8 +791,10 @@ const WGX = (function () {
     const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
     let _shownAt = -1e9;
     try {
-      document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
-      window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+      let onShown = null, onPageShow = null;
+      document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
+      window.addEventListener("pageshow", onPageShow = function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+      _pageListenersOff = function () { document.removeEventListener("visibilitychange", onShown); window.removeEventListener("pageshow", onPageShow); };
     } catch (_) { /* no document events (harness) */ }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;

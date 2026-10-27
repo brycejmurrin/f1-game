@@ -25,11 +25,11 @@ follow-owner state → **f1-animation-cameras** (`references/replay.md`).
 | export | `loadExport` | 24 h |
 
 `MAX_AGE` controls reuse of tab DOM nodes (the check is `showTab` in
-`js/data/hub.js` ~374-386: `maxAge` then `st.node` younger than `maxAge` and not
+`js/data/hub.js`: `maxAge` then `st.node` younger than `maxAge` and not
 past its own `nextFlipAt`); it is independent of the API cache TTL in `js/data/api.js`
 (schedule responses: 24 h). Refreshing a tab can reuse a cached API response.
 A standings table tagged `LAST SEASON · <y> FINAL` is the intended fallback
-(`loadStandings` in `js/data/standings.js` ~124-130: the current year is empty,
+(`loadStandings` in `js/data/standings.js`: the current year is empty,
 so it fetches `season() − 1`), not a stale cache.
 
 RACE IT (`js/data/real-race-tab.js`) builds one Grand Prix's timing into the
@@ -66,8 +66,8 @@ through `node tools/ci/test-solo.mjs <path>` as one background task with a log i
 `test-bg.mjs hooks` group for changes that need its wider surface. Node-only, seconds, run first:
 `node --test tests/unit/data-api-status.test.mjs` (also `data-standings`, `data-results`,
 `data-schedule-tz`, `data-lazy-loader`, `telemetry-trace`). The group
-`lifecycle-unit` is `async-lifecycle` + `tlx-chunked-lifecycle` (the first
-does read `api.js`/`live.js`), not the hub spec.
+`lifecycle-unit` is not the hub spec: its file list is `tests/groups.json`
+`test:lifecycle-unit` (only `async-lifecycle` reads `api.js`/`live.js`).
 
 Run `node tools/ci/pick-tests.mjs js/data/hub.js` (explicit-path form) for the groups (AGENTS.md rules 4-5). An empty tab with no error is usually
 `NO_RESULT_MSG` / `NO_LIVE_MSG` / `NO_TELEM_MSG`, not a fetch failure. Layout of

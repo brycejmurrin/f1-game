@@ -1239,7 +1239,63 @@ export const SOURCE_AFFECTED = [
   // A ui/car route never picked them, so #1290 shipped red there (Browser group
   // input 38015514694, Pages 38016755004); real-race owns the JUMP IN card.
   ...["quali", "steering", "real-race"].map((s) => [/^js\/(ui\/loading-screen|garage\/(setup-camera|arrival))\.js$/, `tests/specs/${s}.spec.js`]),
+  // SPEC-LESS DIRS (audit4 D1 / ci-7d C7, 2026-10-26): 13 game merges in 7 d
+  // touched these with only boot-guard / logging / smoke routed. The off-thread
+  // track build ships ON with a spare core, so a circuit build and a track
+  // switch are its browser evidence; bitmap decode feeds the garage livery
+  // atlas. js/overlay and js/share are node-covered (overlay-feed, share-card*),
+  // js/xr has its own job, js/roster.js is generated (jsCoverageGaps skips it).
+  ...["track-switch-release", "monza-foundation"].map((s) => [/^js\/track\/build-(worker|client)\.js$/, `tests/specs/${s}.spec.js`]),
+  [/^js\/workers\/bitmap-decode-(worker|client)\.js$/, "tests/specs/garage-livery-fit.spec.js"],
 ];
+
+/** Specs that prove nothing about a particular module: they boot the page or
+ *  read the log ring. A js dir whose only route is one of these has no
+ *  browser coverage of its own (ci-7d C7). */
+export const GENERIC_BOOT_SPECS = new Set([
+  "tests/specs/boot-guard.spec.js", "tests/specs/smoke.spec.js", "tests/specs/logging.spec.js",
+]);
+/** Generated js files: their source is covered where it lives (AGENTS.md rule 11). */
+const GENERATED_JS = new Set(["js/roster.js", "js/track/circuit-meta.js"]);
+
+let unitSources = null;
+/** Unit test files whose source names `file` (its repo path, or its path
+ *  under js/ without the extension: how the VM loaders and readers spell it). */
+export function nodeTestsNaming(file, root = ROOT) {
+  if (!unitSources || unitSources.root !== root) {
+    const dir = path.join(root, "tests/unit");
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => /\.test\.(mjs|cjs|js)$/.test(f)) : [];
+    unitSources = { root, rows: files.map((f) => [`tests/unit/${f}`, fs.readFileSync(path.join(dir, f), "utf8")]) };
+  }
+  const bare = file.replace(/^js\//, "").replace(/\.js$/, "");
+  return unitSources.rows.filter(([, src]) => src.includes(file) || src.includes(bare)).map(([f]) => f);
+}
+
+/** Touched js DIRS with neither a module-specific browser spec routed (pick
+ *  rules, SOURCE_AFFECTED, the narrow impact map; generic boot specs excluded)
+ *  nor a unit test naming one of its touched files. selected-verdict reds a
+ *  pull request on any (ci-7d C7: a dir that reaches only the boot specs ships
+ *  with no evidence about itself). `routeOf(file)` is injectable for tests. */
+export function jsCoverageGaps(changed, { root = ROOT, routeOf = null } = {}) {
+  const scripts = routeOf ? null : JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8")).scripts;
+  const browserOf = routeOf || ((f) => {
+    const g = pick([f]);
+    stripSpecOwner(g);
+    const groups = [...g.keys()].map((n) => `test:${n}`).filter((sc) => scripts[sc] && scripts[sc].includes("run-playwright"));
+    return [...specsOf(groups, scripts), ...specsAffectedBySource([f], root), ...specsAffectedByImpact([f], root)];
+  });
+  const dirs = new Map();
+  for (const f of changed) {
+    if (!/^js\/.+\.js$/.test(f) || GENERATED_JS.has(f) || !fs.existsSync(path.join(root, f))) continue;
+    const dir = path.posix.dirname(f);
+    const row = dirs.get(dir) || { dir, files: [], browser: new Set(), node: new Set() };
+    row.files.push(f);
+    for (const sp of browserOf(f)) if (!GENERIC_BOOT_SPECS.has(sp)) row.browser.add(sp);
+    for (const t of nodeTestsNaming(f, root)) row.node.add(t);
+    dirs.set(dir, row);
+  }
+  return [...dirs.values()].filter((r) => !r.browser.size && !r.node.size).map((r) => ({ dir: r.dir, files: r.files }));
+}
 export function specsAffectedBySource(changed, root = ROOT) {
   const hit = new Set();
   for (const f of changed) {
@@ -1441,6 +1497,7 @@ export function select(changedRef, budgetMin = DEFAULT_BUDGET_MIN, opts = {}) {
               changedSpecs, imported, racing, failed: failedInScope, failedDropped, ...cut,
               selected: prioritise(cut.selected, { changedSpecs, failed: failedInScope, imported }) };
   r.shards = shards(r);
+  r.coverageGaps = lightDiff ? [] : jsCoverageGaps(changed);
   return r;
 }
 
@@ -1502,6 +1559,8 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     `${s.overBudget ? `, cap from its own ${s.ownTimeoutSec}s/test` : ""}): ${s.file} (${s.tests} tests)`);
   for (const j of r.shards) console.error(
     `JOB ${j.name}: ${j.tests} tests, ~${j.sec} s expected, ${j.timeout} min cap${j.shard ? `, --shard=${j.shard}` : ""}: ${j.specs}`);
+  for (const g of r.coverageGaps || []) console.error(
+    `NO COVERAGE (no module-specific browser spec routed and no unit test names it; selected-verdict reds a PR): ${g.dir} (${g.files.join(", ")})`);
   // Printed LAST and loudly: this is the bucket that means the tool could not
   // read a candidate at all, which is the one state its report must never omit.
   for (const s of r.unreadable || []) console.error(

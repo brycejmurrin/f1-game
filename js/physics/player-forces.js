@@ -209,7 +209,7 @@ const PlayerForces = (function () {
     // Grip steer: own-state driverDelta cap (js/physics/grip-steer.js). Identity at OFF.
     const og = Vehicle.grip;
     og.muF = muF; og.csFront = CS_FRONT; og.af = af; og.ar = ar;
-    og.braking = braking; og.shaped = steer; og.dt = dt;
+    og.braking = braking; og.shaped = Math.sign(steer) * Math.pow(Math.abs(steer), G.STEER_EXPO); og.dt = dt;   // the SHAPED lock (game.js shaped), GripSteer's contract
     const gripped = (typeof GripSteer !== "undefined" && GripSteer.forPlayer)
       ? GripSteer.forPlayer(driverDelta, c, og)
       : driverDelta;

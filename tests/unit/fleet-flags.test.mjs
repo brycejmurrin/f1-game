@@ -1,7 +1,7 @@
 /* fleet-flags.test.mjs — tools/ci/fleet-flags.mjs: the four orchestrator flags from get_session JSON (#2666). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { assess, format } from "../../tools/ci/fleet-flags.mjs";
+import { assess, format, main } from "../../tools/ci/fleet-flags.mjs";
 
 const NOW = Date.parse("2026-10-17T12:00:00Z");
 const sess = (o = {}) => ({ ccr: { id: "session_01ABCDEFGH", title: "lane", session_status: "SESSION_STATUS_RUNNING", status_bucket: "SESSION_STATUS_BUCKET_WORKING", connection_status: "connected", configured_model: "claude-sonnet-5-5", updated_at: "2026-10-17T11:55:00Z", external_metadata: { last_served_model: "claude-sonnet-5-5", context_usage: { used_tokens: 100000, max_tokens: 1000000 } } }, ...o });
@@ -41,4 +41,26 @@ test("cost is read from external_metadata.usage.cost_usd; an explicit cost_usd w
   assert.equal(assess(s, NOW).cost, 20.5);
   assert.ok(assess(s, NOW).flags.some((x) => /cost \$20\.50 > cap \$15/.test(x)));
   assert.equal(assess({ ...s, cost_usd: 3 }, NOW).cost, 3);
+});
+
+test("CLI: empty stdin or file is a usage error (exit 2), not a JSON stack; --help exits 0; unknown flags exit 2 (cli-help S9)", () => {
+  const io = () => { const out = [], err = []; return { out, err, deps: { log: (l) => out.push(l), err: (l) => err.push(l), now: () => NOW } }; };
+  let c = io();
+  assert.equal(main([], { ...c.deps, stdin: () => "" }), 2);
+  assert.equal(c.err[0], "fleet-flags: no input (empty stdin)", "match /no input \\(empty stdin\\)/");
+  c = io();
+  assert.equal(main(["s.json"], { ...c.deps, read: () => "  \n" }), 2);
+  assert.equal(c.err[0], "fleet-flags: no input (s.json is empty)", "match /s\\.json is empty/");
+  c = io();
+  assert.equal(main(["s.json"], { ...c.deps, read: () => "{nope" }), 2);
+  assert.equal(c.err[0], "fleet-flags: s.json is not JSON: Expected property name or '}' in JSON at position 1 (line 1 column 2)", "match /not JSON/");
+  c = io();
+  assert.equal(main(["--help"], c.deps), 0);
+  assert.equal(c.out[0], "usage: node tools/ci/fleet-flags.mjs <sessions.json> [--cost-cap 15] [--context-cap 300000] [--stale-min 30] [--json]\n       cat sessions.json | node tools/ci/fleet-flags.mjs\n  Input: a JSON array (or one object) of get_session replies, each with an optional cost_usd.\n  Exit 0 flags printed (or --help), 2 no input, unreadable JSON or an unknown flag.", "match /^usage: node tools\\/ci\\/fleet-flags\\.mjs/");
+  c = io();
+  assert.equal(main(["--definitely-not-a-flag"], { ...c.deps, stdin: () => "[]" }), 2);
+  assert.equal(c.err[0], "fleet-flags: unknown flag --definitely-not-a-flag", "match /unknown flag --definitely-not-a-flag/");
+  c = io();
+  assert.equal(main(["--cost-cap", "50", "--json"], { ...c.deps, stdin: () => JSON.stringify(sess({ cost_usd: 36.6 })) }), 0);
+  assert.deepEqual(JSON.parse(c.out[0])[0].flags, []);
 });

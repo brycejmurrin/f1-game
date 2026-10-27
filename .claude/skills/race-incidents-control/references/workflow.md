@@ -22,6 +22,9 @@ Load from the SKILL.md index when the task needs this detail.
    - It must not write `px`, `pz`, `head`, speed, or `(s,x)`.
    - Gameplay-adjacent outputs are read-only scalars/state: hazards, panels,
      marble grip. The bespoke collision/barrier model remains authoritative.
+   - Marble grip is the exception that FEEDS THE PLAYER (SKILL.md, Marbles): its
+     input must be AI car state, never curvature; classify any change against
+     docs/PHYSICS.md's marble row.
 
 3. **Treat IncidentSim as the bounded exception.**
    - A takeover starts from a clear trigger and always hands back by settle or
@@ -88,12 +91,12 @@ All in `js/physics/incident-sim.js`; `__apex.incident()` is `status()`.
 1. `incident().count` / `incidents[].ticks` / `owned`: count 0 means no live
    takeover — the car is bespoke-stuck (next section), not owned.
 2. `postStep(dt)` is the only progress path and game.js calls it EVERY tick,
-   even with debris off (`js/game.js` ~4523-4534; `preStep` only while
-   `DebrisWorld.active()`). A paused or non-race state that skips the physics
+   even with debris off (the unconditional `postStep(dt)` call in `js/game.js`;
+   `preStep` only while `DebrisWorld.active()`). A paused or non-race state that skips the physics
    step also freezes the takeover.
 3. Normal exit per car: settle (`pose.sleeping` or speed < `SETTLE_V` and spin
    < `SETTLE_W`) for `SETTLE_HOLD_S` (0.30 s), or `inc.elapsed >= WINDOW_MAX_S`
-   (3.0 s hard cap) → `handbackCar(inc, i, false, pose)` (~381-382).
+   (3.0 s hard cap) → `handbackCar(inc, i, false, pose)`.
    `elapsed` advances by `dt`; a NaN/0 `dt` from the caller is the first suspect.
 4. Anomaly exits → `handbackCar(…, true)` restores last-good `inc.good`/`snap`
    (`_fallbacks++`): world inactive or `worldGen()` changed, no/NaN body pose,

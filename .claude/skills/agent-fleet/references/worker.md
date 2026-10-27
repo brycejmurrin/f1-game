@@ -110,7 +110,7 @@ Keep working on anything the blocker does not touch while you wait.
   red or a conflict after READY is still yours.
 - Idle-wake discipline: a duplicate or no-change event gets no tool call and at most one line;
   keep the rule-13 timer (inside the 1 h cache TTL, so the wake reads a warm cache).
-- Size stop: launch-policy.md §Size stop (STOP AT 150k at a verified checkpoint). Hand off
+- Size stop: launch-policy.md §Size stop (STOP AT 200k at a verified checkpoint). Hand off
   (PR body current) instead of idling in a big session: at 677k an idle wake costs $0.26–0.55.
 - `SendMessage` reaches in-session subagents only. A parent `session_…` id
   needs `mcp__claude-code-remote__send_message`.

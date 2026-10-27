@@ -12,7 +12,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, readBoard, pushBoard, parseCatFileBatch, parseRefs, fetchRefCache, main as whoMain, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
+import { parseClaims, claimCommit, claimSlug, sessionId, parseBoard, nextBoard, parseMerges, mergedRelease, readBoard, pushBoard, parseCatFileBatch, parseRefs, fetchRefCache, main as whoMain, CLAIMS_BOARD, BOARD_MAX_MIN, CLAIMS_PREFIX, RELEASED, STALE_MIN, EMPTY_TREE } from "../../tools/ci/who-is-on-it.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const NOW = 1_800_000_000;
@@ -146,6 +146,24 @@ test("the claims BOARD: one file per claim, a release removes it, a write drops 
   const board = [f("a-s1", 10), f("b-s2", BOARD_MAX_MIN + 1), f("c-s3", 5)];
   assert.deepEqual(nextBoard(board, "a-s1", null, NOW).map((x) => x.slug), ["c-s3"], "release removes mine, the day-old one goes");
   assert.deepEqual(nextBoard(board, "d-s4", "x", NOW).map((x) => x.slug), ["a-s1", "c-s3", "d-s4"], "a claim adds, never touches another session's");
+});
+
+test("a claim whose PR merged is released by the merge (audit3 #38): by #n or by its branch tag, never by an older merge", () => {
+  const merges = parseMerges([
+    `${NOW - 600}\tMerge pull request #3784 from brycejmurrin/cursor/fix-x-1a2b`,
+    `${NOW - 300}\tMerge pull request #3790 from brycejmurrin/cursor/other-9f9f`,
+    `${NOW - 100}\tMerge branch 'claude/f1-game-project-26h3ng' into cursor/y`,
+  ].join("\n"));
+  assert.deepEqual(merges.map((m) => [m.pr, m.branch]), [[3784, "cursor/fix-x-1a2b"], [3790, "cursor/other-9f9f"]]);
+  const claim = (agoMin, text) => ({ at: NOW - agoMin * 60, text });
+  assert.equal(mergedRelease(claim(20, "#3784 fixing the red  [cursor/zzz; session s1]"), merges)?.pr, 3784, "names the merged PR");
+  assert.equal(mergedRelease(claim(20, "pr3790 lane  [cursor/zzz; session s1]"), merges)?.pr, 3790);
+  assert.equal(mergedRelease(claim(20, "on the red  [cursor/fix-x-1a2b; session s1]"), merges)?.pr, 3784, "made from the merged branch");
+  assert.equal(mergedRelease(claim(2, "#3784 follow-up  [cursor/zzz; session s1]"), merges), null, "a claim made AFTER the merge stands");
+  assert.equal(mergedRelease(claim(20, "#3700 still open  [claude/f1-game-project-26h3ng; session s1]"), merges), null);
+  const f = (slug, agoMin, text) => ({ slug, content: `${NOW - agoMin * 60}\tClaude\t${text}\n` });
+  const board = [f("a-s1", 20, "#3784 on it  [cursor/q; session s1]"), f("b-s2", 20, "#3700 on it  [cursor/r; session s2]")];
+  assert.deepEqual(nextBoard(board, "c-s3", "x", NOW, merges).map((x) => x.slug), ["b-s2", "c-s3"], "a write drops the merged PR's claim");
 });
 
 test("against real git: two sessions claim on one board, one releases, and a stale tip still lands", () => {

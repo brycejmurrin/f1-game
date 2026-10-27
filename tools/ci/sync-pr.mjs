@@ -58,6 +58,8 @@ import { fileURLToPath } from "node:url";
 import { DEPLOY_BRANCH, plan, preflight, mergeDeployTip, gateNodeSuites, touchedCircuits, changedPaths } from "./deploy.mjs";
 import { plan as nodePlan } from "./node-plan.mjs";
 import { needsSync, verdictLine } from "./needs-sync.mjs";
+import { strictFlags } from "../lib/cli-args.mjs";
+import { gitRun, gitMust } from "../lib/git-run.mjs";
 import { register, release, stop as stopRun } from "../lib/run-pid.mjs";
 import { CLAIMS_BOARD, parseBoard, readBoard, sessionId } from "./who-is-on-it.mjs";
 
@@ -69,14 +71,9 @@ const branch = argv.find((a) => !a.startsWith("--"));
 const REMOTE = "origin";
 const log = (m) => process.stderr.write(`[sync-pr] ${m}\n`);
 
-function git(args, opts = {}) {
-  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", ...opts });
-  return { code: r.status, out: (r.stdout || "").trim(), err: (r.stderr || "").trim() };
-}
-function must(r, what) {
-  if (r.code !== 0) throw new Error(`${what} failed: ${r.err || r.out}`);
-  return r.out;
-}
+// The {code,out,err} git helper is tools/lib/git-run.mjs (audit3 T11).
+function git(args, opts = {}) { return gitRun(args, { cwd: ROOT, ...opts }); }
+const must = gitMust;
 /**
  * One stage, stopped at its timeout. Returns the exit code (124 on timeout).
  * SIGTERM, not SIGKILL: tooling-fast leads every test file in its own process group and reaps
@@ -138,8 +135,9 @@ export function foreignClaims(claims, prBranch, mySession = null) {
   });
 }
 
-function usage() {
-  console.log([
+export const KNOWN_FLAGS = ["--plan", "--push", "--resume", "--force-clean-behind", "--stop", "--ignore-claims", "--verify", "--from", "--wait-load"];
+function usage() { console.log(USAGE); }
+export const USAGE = [
     "usage: node tools/ci/sync-pr.mjs <branch> [--plan] [--push] [--verify=none|fast|full] [--resume [--from=<stage>]]",
     "  <branch>  the PR's own head branch, e.g. claude/ui-consistency-2026-09-15",
     "  --plan    print head/tip/conflicts for that branch against the deploy tip, run nothing",
@@ -150,8 +148,9 @@ function usage() {
     "  --force-clean-behind  sync although needs-sync.mjs says `no` (clean-behind is not a reason; exit 4 without it)",
     "  --ignore-claims  sync although another session holds a live who-is-on-it claim on the branch (refused with exit 3 without it)",
     "  --resume  re-verify the kept sync-pr-<branch> (no fetch, no merge); --from=<stage> starts at that stage",
-  ].join("\n"));
-}
+    "  --stop    stop a live sync of <branch> (its registered run); --wait-load=<min> waits up to <min> (default 10) for loadavg < 2.8, 0 refuses at once",
+    "  An unknown --flag prints this usage and exits 2, before any fetch.",
+  ].join("\n");
 
 // Cached refs only: no fetch, checkout, branch deletion or object-writing merge-tree.
 export function cachedPlan(prBranch, readGit = git) {
@@ -312,6 +311,7 @@ export async function main() {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  strictFlags(argv, KNOWN_FLAGS, USAGE);
   try { const r = main(); if (r && typeof r.then === "function") r.then((c) => process.exit(c), (e) => { log("ERROR " + e.message); process.exit(1); }); else process.exit(r); }
   catch (e) { log("ERROR " + (e && e.message ? e.message : e)); process.exit(1); }
 }

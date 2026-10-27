@@ -29,6 +29,8 @@ the acting session.
   written to `artifacts/fleet/sessions-<time>.json` and digested by `node tools/ci/fleet-archive.mjs <file> --json`):
   never `get_session` per sibling — each reply is ~10k tokens of another session's JSON, and the 14:40Z ORCH B
   reached 204k context in 9 minutes that way. The page carries `context_usage` and `cost_usd` per session.
+  This is the one home of the rule: `get_session` only on yourself (`rate_limit_info`) or, for the seed, on the
+  one child it just launched; never on a worker, never per sibling, never a roster sweep.
 - A worker is **stalled** when its state has not changed and its branch has
   not moved for ~90 min, or it passed its caps. Ask once, then interrupt and
   relaunch with NEW evidence or a narrower OWNED, never the same prompt.

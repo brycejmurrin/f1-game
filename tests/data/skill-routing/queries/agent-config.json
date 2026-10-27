@@ -7,5 +7,7 @@
 {"query":"Run the skill-routing eval A/B for my description change to tune-physics: base worktree vs head, three runs, then compare and list the flipped queries.","expect":"agent-config"},
 {"query":"AGENTS.md is close to the Codex 32 KiB project-doc cap and the js/track nested AGENTS.md chain is truncating. Move a rule out of the root file.","expect":"agent-config"},
 {"query":"js/game.js has saturated its size ratchet; find a self-contained block to extract and lower the ratchet without changing behaviour.","expect":"slim-bloat"},
-{"query":"I edited a few files under js/physics and tools/ci. Before pushing, which tests do I need and did I break anything?","expect":"check-changes"}
+{"query":"I edited a few files under js/physics and tools/ci. Before pushing, which tests do I need and did I break anything?","expect":"check-changes"},
+{"query": "Add a new skill SKILL.md for the pit-wall radio, with its description, routing queries and smoke recipe", "expect": "agent-config"},
+{"query": "This SKILL.md has grown to 600 lines and repeats AGENTS.md; trim the fat skill body", "expect": "agent-config"}
 ]

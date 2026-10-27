@@ -43,4 +43,4 @@ compare equal sim time and equal wall time separately.
   render instead: freeze the camera/particle/audio update for 1–3 frames while
   `updateCar` keeps stepping, so `obs()` and lap times are unchanged.
 - Random effects that change headless runs. Isolate RNG from the sim stream.
-- Ignoring reduce-intensity / low-end: cap shake/flash, decay quickly.
+- Ignoring reduce-intensity / low-end (`motionReduced()` / `camComfort()`): cap shake/flash, decay quickly.

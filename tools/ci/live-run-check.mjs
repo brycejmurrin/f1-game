@@ -3,7 +3,7 @@
 // @doc Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always.
 // Full description: the third waste detector from measurement.md / #1714. bash-guard.sh
 // (FORBIDDEN here; #2899) will wire this on `git push`; until then agents and tests call
-// it directly. Lifted from verify-change.mjs's liveCiRuns (proxyFetch, 3 s cap, ci.yml
+// it directly. The ONE liveCiRuns: verify-change.mjs imports it (proxyFetch, 3 s cap, ci.yml
 // path filter). Advisory only — never blocks. Refs #1714; bash-guard wiring is a follow-up.
 // @skill check-changes
 //
@@ -31,7 +31,7 @@ const defaultGit = (args, { cwd = ROOT } = {}) => {
  */
 export async function liveCiRuns({
   git = defaultGit,
-  fetch = proxyFetch,
+  fetch: fetchImpl = proxyFetch,   // the option keeps its name; the call below is never a bare global fetch (#2188 lint)
   timeoutMs = 3000,
   cwd = ROOT,
   userAgent = "apex26-live-run-check",
@@ -42,7 +42,7 @@ export async function liveCiRuns({
     const m = String(url).match(/github\.com[:/]([^/]+\/[^/.]+)/);
     if (!m || !branch || branch === "HEAD") return null;
     const api = `https://api.github.com/repos/${m[1]}/actions/runs?branch=${encodeURIComponent(branch)}&status=in_progress&per_page=5`;
-    const res = await fetch(api, {
+    const res = await fetchImpl(api, {
       signal: AbortSignal.timeout(timeoutMs),
       timeoutMs,
       headers: { Accept: "application/vnd.github+json", "User-Agent": userAgent },

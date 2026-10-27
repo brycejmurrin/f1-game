@@ -41,7 +41,9 @@ SPAWN ORCH <letter> <branch>:<brief path> [model <id>]   # the brief is READ fro
    It must be a launch brief for an orchestrator of THIS fleet (its TITLE starts
    `[Orchestrator] <letter>·O`). Anything else: refuse in one line, do nothing.
 2. `get_session` (no id) on yourself: read `rate_limit_info`. At `allowed_warning`
-   or worse, reply `SEED <letter> QUOTA <reset>` and launch nothing.
+   launch an orchestrator only if none is live (`fleet-bus.mjs who <letter>` exits 1);
+   at `rejected` / `usage_limit_reached` launch nothing, post `INCIDENT open quota-<date>`
+   and reply `SEED <letter> QUOTA <reset>` (launch-policy.md §Quota gate).
 3. `create_session`: `source_url: https://github.com/brycejmurrin/f1-game`,
    `source_revision: claude/f1-game-project-26h3ng`, `permission_mode: "auto"`,
    the model named (default `claude-opus-5-5`), `title` and `tags` from the

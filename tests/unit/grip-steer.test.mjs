@@ -141,6 +141,19 @@ test("forPlayer is identity at OFF and pools without changing the apply result",
   assert.ok(Math.abs(a) <= 0.3 + 1e-9);
 });
 
+test("PlayerForces hands GripSteer the SHAPED lock |stick|^STEER_EXPO, not the raw stick (audit4 P1, DECISIONS #5)", () => {
+  const pf = fs.readFileSync(path.join(ROOT, "js/physics/player-forces.js"), "utf8");
+  // (The value PlayerForces hands over is asserted in tests/unit/vehicle-tick-alloc.test.mjs: grip.shaped === 0.35^expo.)
+  assert.equal(/og\.shaped = steer;/.test(pf), false, "the raw stick is not the contract");
+  // Why it matters: the self-aligning term scales by 1 - 0.7·|shaped|. At half stick and the
+  // default expo (2.389) the shaped value is ~0.19, so the term keeps ~87 %, not 65 %.
+  const st = (shaped) => ({ speed: 40, vLat: 1.5, yawRate: 0.2, muF: 18, csFront: 130, af: 1.3, ar: 1.5, braking: false, shaped, capSm: 0.05, dt: 1 / 60 });
+  const expo = 2.389, half = Math.pow(0.5, expo);
+  const raw = GS.apply(0.05, st(0.5), 1).delta, shaped = GS.apply(0.05, st(half), 1).delta;
+  assert.notEqual(raw, shaped, "the shaped lock changes the self-aligning share");
+  assert.ok(half > 0.18 && half < 0.2);
+});
+
 test("PRESETS bundle gripSteer: ROOKIE/RELAX on, STANDARD/PRO off", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/input/steer-tuning.js"), "utf8");
   const at = src.indexOf("const PRESETS = {");

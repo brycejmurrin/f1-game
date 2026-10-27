@@ -30,15 +30,13 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { gitTry } from "../lib/git-run.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DEPLOY = "claude/f1-game-project-26h3ng";
 
-const git = (...args) => {
-  const r = spawnSync("git", args, { cwd: ROOT, encoding: "utf8" });
-  // Porcelain's first space is the index status column, not padding.
-  return r.status === 0 ? r.stdout.trimEnd() : "";
-};
+// Porcelain's first space is the index status column, not padding: trim the end only.
+const git = (...args) => gitTry(args, { cwd: ROOT, trim: "end" });   // "" on failure (tools/lib/git-run.mjs)
 
 /** The LAST verdict line a runner wrote: the Playwright reporter's `= run <s>`,
  *  tooling-fast's `[tooling-fast] = run <s>`, or test-bg's `= bg exit N` trailer
@@ -230,10 +228,9 @@ export function livePrLines({ at, pr, ci, localHead, error }) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  if (process.argv.includes("--help") || process.argv.includes("-h")) {
-    console.log("usage: node tools/ci/session-status.mjs [--summary] [--json] [--pr [N]]   # default: full handoff Markdown; --summary: bounded routine Markdown; --json: full data (takes precedence over --summary)");
-    process.exit(0);
-  }
+  const { strictFlags } = await import("../lib/cli-args.mjs");
+  strictFlags(process.argv.slice(2), ["--summary", "--json", "--pr"],
+    "usage: node tools/ci/session-status.mjs [--summary] [--json] [--pr [N]]   # default: full handoff Markdown; --summary: bounded routine Markdown; --json: full data (takes precedence over --summary)");
   const s = collect();
   const i = process.argv.indexOf("--pr");
   if (i >= 0) {

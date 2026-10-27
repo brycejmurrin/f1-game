@@ -59,6 +59,18 @@ test("--help prints the usage block and exits 0", () => {
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /--plan/);
   assert.match(r.stdout, /--pr/);
+  // audit3 T8: every flag the rulebook prescribes is in the usage.
+  const words = new Set(r.stdout.split(/[\s\[\]|]+/));
+  assert.deepEqual(["--train", "--status", "--wait", "--timeout", "--json", "--gate-only", "--log"].filter((f) => !words.has(f)), []);
+});
+
+test("a typo'd flag exits 2 with the usage BEFORE any fetch or log stamp (audit3 T7)", () => {
+  const r = spawnSync("node", ["tools/ci/deploy.mjs", "--gate-onyl", "--log", "artifacts/logs/deploy-typo-never.log"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 2, r.stderr);
+  const lines = r.stderr.split("\n");
+  assert.equal(lines[0], "unknown flag --gate-onyl — did you mean --gate-only?");
+  assert.equal(lines[3], "usage: node tools/ci/deploy.mjs [flags]");
+  assert.ok(!fs.existsSync(path.join(ROOT, "artifacts/logs/deploy-typo-never.log")), "no start stamp for a refused run");
 });
 
 test("touchedCircuits reads circuit and scenery ids out of a diff — exactly", () => {

@@ -36,6 +36,7 @@ class LiveReporter {
     this.skipped = 0;      // final results that were skips — never counted as executed
     this.failed = 0;       // running failure count — lets you abort a tailed run early
     this.durations = [];   // {name, dur} per completed test — for the slowest-N summary
+    this.firstErrors = new Map();  // test.id -> first failed attempt's error message
     this.flakyTests = [];  // {spec,title} of tests that FAILED then PASSED on retry (hidden flakiness)
     this.failures = [];    // names of tests that ended red — replayed as an end summary
     this.inflight = new Map();   // test -> {name, start, worker}
@@ -102,6 +103,9 @@ class LiveReporter {
     if (result.status === "skipped") this.skipped++;
     this.write(`[${ts()}] ${mark} ${this.done}/${this.total} ${this.name(test)} (${dur}s)`);
     if (result.status !== "passed" && result.status !== "skipped" && result.error) {
+      // The FIRST failed attempt's message is what a quarantine row's
+      // `signature` is matched on (flaky-policy.mjs rowCovers).
+      if (!this.firstErrors.has(test.id)) this.firstErrors.set(test.id, result.error.message || String(result.error));
       // Keep the first 4 NON-EMPTY lines. Playwright separates the custom
       // assertion message, the matcher line and the Expected/Received pair with
       // BLANK lines, so a raw 4-line cut silently drops the VALUES from every
@@ -120,7 +124,7 @@ class LiveReporter {
     if (result.status === "passed" || result.status === "skipped" ||
         test.results.length > test.retries) {
       this.durations.push({ name: this.name(test), dur: result.duration, ...this.key(test) });
-      if (test.outcome && test.outcome() === "flaky") this.flakyTests.push(this.key(test));
+      if (test.outcome && test.outcome() === "flaky") this.flakyTests.push({ ...this.key(test), error: this.firstErrors.get(test.id) || "" });
     }
     // On-failure diagnostics, echoed inline so a tailed log shows WHY without a
     // trip to the HTML report. tests/helpers/fixtures.js attaches all three (see its

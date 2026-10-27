@@ -9,6 +9,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { fleetBlock } from "../lib/fleet-block.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 export const BY = "fleet-board-snapshot.mjs";
@@ -30,17 +31,8 @@ export function pacific(iso) {
 
 const iso = (unixSeconds) => new Date(unixSeconds * 1000).toISOString();
 
-/** The ```fleet block of a PR body as key/values (`#` comments dropped); {} when absent. Pure. */
-export function parseFleetBlock(body) {
-  const m = /```fleet\s*\n([\s\S]*?)```/.exec(String(body || "").replace(/<!--[\s\S]*?-->/g, ""));
-  const out = {};
-  if (!m) return out;
-  for (const l of m[1].split(/\r?\n/)) {
-    const kv = /^\s*([a-z-]+)\s*:\s*(.*?)\s*(?:#.*)?$/.exec(l);
-    if (kv && kv[2] && !kv[2].startsWith("<")) out[kv[1]] = kv[2];
-  }
-  return out;
-}
+/** The ```fleet block of a PR body as key/values: tools/lib/fleet-block.mjs (first value wins, comments and placeholders dropped). Pure. */
+export const parseFleetBlock = fleetBlock;
 
 const sessionOf = (v = "") => String(v).replace(/^[a-z]+:/, "");
 
@@ -59,7 +51,7 @@ export function ciSummary(runs, jobsByRun, { verdict, latestPerWorkflow, labelNo
 }
 
 /** One PR row of prs.json. Pure: `fleet` is pr-board's fleetStatus() for the PR. */
-export function prRow({ pr, files = [], ci, fleet, hasMergeHold }) {
+export function prRow({ pr, files = [], ci, fleet, hasMergeHold, holds = null }) {
   const block = parseFleetBlock(pr.body);
   const blocker = fleet?.reason || (block.blocker && block.blocker !== "none" ? block.blocker : "");
   return {
@@ -81,7 +73,9 @@ export function prRow({ pr, files = [], ci, fleet, hasMergeHold }) {
     orchestrator: sessionOf(block.orchestrator),
     fleet_state: fleet?.state || block.state || "",
     blocker,
-    merge_hold: hasMergeHold ? "MERGE-HOLD" : "",
+    // pr-board parseHolds: a veto only in the full shape; an owner tag is OWNER, never a hold (DECISIONS #6).
+    merge_hold: (holds ? holds.holds.length > 0 : hasMergeHold) ? "MERGE-HOLD" : holds?.malformed.length ? "HOLD? malformed" : "",
+    owner: [...new Set([...(block.merger ? [block.merger] : []), ...(holds?.owners || [])])].join(","),
     url: pr.html_url || `https://github.com/brycejmurrin/f1-game/pull/${pr.number}`,
   };
 }
@@ -157,7 +151,7 @@ export function collect(io, { maxPrs = MAX_PRS } = {}) {
       }
       out.push(prRow({
         pr, files, ci: ciFor(pr.head.sha),
-        fleet: prBoard.fleetStatus(pr.body, comments), hasMergeHold: prBoard.hasMergeHold(pr.body),
+        fleet: prBoard.fleetStatus(pr.body, comments), holds: prBoard.parseHolds(pr.body),
       }));
     }
     return out;

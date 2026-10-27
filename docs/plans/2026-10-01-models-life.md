@@ -1,6 +1,8 @@
 # Models and life — real CC0 scenery, instancing, trees, crowds
 
-Status: **PLAN** (docs-only first). Items 6, 7, 8, 14, 15, 16 and 17 of the
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — slices A, C (first step) and D merged 2026-10-02; E-H waited on two decisions (see the plan's own Status 2026-10-02 note).
+
+Status when written: **PLAN** (docs-only first). Items 6, 7, 8, 14, 15, 16 and 17 of the
 second graphics-detail survey
 ([`../notes/GRAPHICS-DETAIL-SURVEY-2-2026-10-01.md`](../notes/GRAPHICS-DETAIL-SURVEY-2-2026-10-01.md)),
 sized as independently shippable slices. The survey's smaller items (1–5,

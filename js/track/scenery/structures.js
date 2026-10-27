@@ -387,6 +387,9 @@ const SceneryStructures = (function () {
         id: `gantry-${k}`, frac: s, clearance: h - 0.45,
         thickness: 0.9, depth: 1.4, span: hw[k] * 2 + 5,
         color: c,
+        // A cantilever plants its own single mast above; the span's default
+        // pair of legs would double it and grow one on the open side (#3280).
+        supports: st !== "cantilever",
       });
       // One dark housing bar under the beam's centre: the five lamps
       // js/race/start-lights.js lights during the countdown sit proud of its

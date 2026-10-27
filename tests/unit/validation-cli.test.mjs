@@ -48,7 +48,7 @@ test("selector and verifier reject typo and missing-value flags before diff sele
     assert.throws(() => validateSelectionArgs(args), /Unknown|requires/);
     for (const tool of ["pick-tests", "verify-change"]) {
       const result = cli(`tools/ci/${tool}.mjs`, args);
-      assert.equal(result.status, 1, result.stderr);
+      assert.equal(result.status, 2, result.stderr);   // a usage error exits 2 (audit4 cli-help)
       assert.match(result.stderr, /Unknown|requires/);
     }
   }

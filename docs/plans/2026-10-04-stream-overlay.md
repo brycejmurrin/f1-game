@@ -1,7 +1,9 @@
 # Stream overlay mode — broadcast graphics on a transparent page for OBS
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — overlay.html with js/overlay/feed.js and render.js exists (perf fix #3727).
+
 Date: 2026-10-04
-Status: **PLAN** — docs-only; implement as four draft PRs against
+Status when written: **PLAN** — docs-only; implement as four draft PRs against
 `claude/f1-game-project-26h3ng`, one slice each, in the order below. Do not merge.
 Scope: a read-only overlay page (timing tower, radio captions, battle graphic,
 sector flashes) that an OBS Browser Source composites over the player's own game

@@ -14,9 +14,13 @@ home); this file holds the policy numbers.
 - **Launch pins:** `source_revision` is a branch name or a full 40-hex sha, never a
   sha7 (a short sha returned a session id, then died `ref_not_found`, 2026-10-26);
   check with `git rev-parse --verify origin/<rev>` first.
-- **Quota gate:** `get_session` → `rate_limit_info` before each `create_session`
-  and each Agent wave > 5; at `allowed_warning` or worse launch nothing (#3777's
-  `launch-gate.py` enforces it); stagger ≥ 30 s and confirm each child.
+- **Quota gate:** `get_session` on yourself → `rate_limit_info` before each `create_session`
+  and each Agent wave > 5 (`launch-gate.py` / `launch-lane.mjs` enforce it). At
+  `allowed_warning` launch only owners/sync for PRs already READY (no hunters; an
+  orchestrator only if none is live); at `rejected` / `usage_limit_reached` launch
+  nothing and post `fleet-bus.mjs send INCIDENT --to '*' "open quota-<date> …"`;
+  the seed answers `SEED <letter> QUOTA <reset>` (DECISIONS 2026-10-26 #1). Stagger ≥ 30 s;
+  confirm each child from `create_session`'s result.
 - **Model by task** (Bryce 2026-10-19, "decide which workers should be opus or [sonnet] based on the issue. Make this standard.").
   Every `create_session` passes an explicit model and the brief carries `MODEL: <id> — <reason>`:
   - `claude-opus-5-5`: a design or look call, a rework of a rejected approach, a red with no known cause, or a
@@ -67,7 +71,7 @@ home); this file holds the policy numbers.
 | Role | Soft cap (context) |
 |---|---|
 | reviewer | 150k (base + 50k; size batches to about 25 files) |
-| worker | 150k (base + 50k), at a verified checkpoint |
+| worker | 200k (base + 100k), at a verified checkpoint; a 150k cap left ~50k of work after the ~100k boot (all three A·W9 lanes stopped within ~10 min, Bryce 2026-10-26) |
 | PR owner | 150k (base + 50k), docs-only too |
 | hunter | 150k (base + 50k) |
 | synth | 150k (base + 50k) |

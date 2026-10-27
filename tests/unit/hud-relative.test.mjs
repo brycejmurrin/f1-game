@@ -423,6 +423,33 @@ test("tick: a settled phone layout is fitted once, not forced to layout every 10
   assert.ok(reads > before, "a changed layout input refits at once");
 });
 
+test("tick: the 1 Hz net is read-only — a settled card is never reset, a moved control still refits (audit4 UB6)", () => {
+  let resets = 0, brakeLeft = 400;
+  const mk = () => {
+    const el = { hidden: true, attrs: {}, children: [], textContent: "", style: { setProperty() {}, removeProperty() { resets++; } },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, removeAttribute() {}, appendChild(c) { el.children.push(c); return c; } };
+    return el;
+  };
+  const root = mk();
+  root.clientHeight = 160; root.scrollHeight = 160; root.currentCSSZoom = 1;
+  root.getBoundingClientRect = () => ({ left: 50, right: 220, top: 100, bottom: 260, width: 170, height: 160 });
+  const brake = mk(); brake.hidden = false;
+  brake.getBoundingClientRect = () => ({ left: brakeLeft, right: brakeLeft + 80, top: 180, bottom: 260, width: 80, height: 80 });
+  const els = { "hud-rel": root, "btn-brake": brake };
+  const doc = { body: { className: "", classList: { contains: () => false } }, getElementById: (id) => els[id] || null, createElement: mk };
+  const R = load({ document: doc, HudElements: { isOn: () => true } });
+  const p = car("YOU", 1000, 3, { speed: 60, rank: 2 });
+  const G = { cars: [p, car("A1", 1100, 3, { rank: 1 }), car("A2", 1400, 3)], track: { total: L }, vTop: () => 90, cssCol: () => "", store: { rev: 1 } };
+  R.tick(G, p);
+  const fitted = resets;
+  assert.ok(fitted > 0, "precondition: the first tick fits (resets left / max-height)");
+  for (let i = 0; i < 30; i++) R.tick(G, p);
+  assert.equal(resets, fitted, "three 1 Hz nets over a settled layout reset the card's styles");
+  brakeLeft = 60;   // BRAKE moved under the card: nothing fitKey sees changed
+  for (let i = 0; i < 10; i++) R.tick(G, p);
+  assert.ok(resets > fitted, "the net saw the moved box and refitted");
+});
+
 test("refit: the phone stamp sync's per-tick call skips a settled REL, refits when forced (#2151)", () => {
   const mk = () => {
     const el = { hidden: true, attrs: {}, children: [], textContent: "", style: { setProperty() {}, removeProperty() {} },

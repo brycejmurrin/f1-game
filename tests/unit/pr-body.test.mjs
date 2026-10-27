@@ -86,6 +86,15 @@ test("fleet updates a key (keeping its comment) or adds one", () => {
   assert.throws(() => setFleet(BODY, "bad key", "x"), /word/);
 });
 
+test("--fleet never reads or edits a block inside <!-- --> (verify #37b): the template example stays untouched", () => {
+  const tpl = "## Goal\nx\n<!-- example:\n```fleet\nfleet: Z\nworker: ccc\n```\n-->\n";
+  assert.deepEqual(fleetEntries(tpl), [], "a commented-out block has no entries");
+  assert.equal(setFleet(tpl, "state", "working"), `${tpl}\n\`\`\`fleet\nstate: working\n\`\`\`\n`, "a new block; the example untouched");
+  const both = `${tpl}\n\`\`\`fleet\nfleet: A\nworker: aaa\nworker: bbb\n\`\`\`\n`;
+  assert.deepEqual(fleetEntries(both), [["fleet", "A"], ["worker", "aaa"], ["worker", "bbb"]]);
+  assert.equal(setFleet(both, "fleet", "B"), both.replace("fleet: A", "fleet: B"), "the live block is edited, the example keeps fleet: Z");
+});
+
 test("applyEdits changes only the targeted item (a concurrent edit survives)", () => {
   const live = BODY.replace("- [ ] second step", "- [ ] second step\n- [ ] orchestrator added this");
   const out = applyEdits(live, { tick: [[1, "ok"]], strike: [], defer: [], add: [], fleet: [] });

@@ -81,14 +81,24 @@ GameAudio.setEngine(0.75, 0.4, false, 0.6, 4);
 2. `GameAudio.debug().samplesReady` — if `false`, MP3s have not decoded
    (network/CORS, or CC0 files absent); synth fallback should be active.
    `usingSamples` says which core is running.
-3. Suspended AudioContext (autoplay): a user gesture resumes it.
-   Use a real UI click/tap or keyboard activation to unlock audio. Script-dispatched events do not establish trusted user activation; programmatic probes work only after unlock.
+3. Suspended AudioContext (autoplay; silent on iPhone or the first tap): a
+   user gesture resumes it, but only an activation-triggering event counts —
+   `touchend`, `pointerup`, `click`, a key press; NOT `pointerdown` (touch) or
+   `touchstart`. The real `GameAudio` arrives with the lazy audio bundle
+   (`js/core/lazy-bundles.js`, `LAZY_AUDIO`); until then calls hit `stub.js`,
+   and the bundle runs `GameAudio.init()` only when
+   `navigator.userActivation.hasBeenActive`. After the first tap read
+   `navigator.userActivation.hasBeenActive` and `GameAudio.debug().contextState`
+   (on the phone profile, 844×390 touch). Script-dispatched events do not
+   establish trusted user activation; programmatic probes work only after
+   unlock. Handlers doubled after a failed bundle load point at the bundle's
+   `onAudioReady` path, not at `engine.js`.
 4. Chrome DevTools → **Web Audio** — confirm oscillators / buffer sources
    reach the destination.
 5. `__apex.timing().raceT` should be increasing. A frozen sim means
    `setEngine()` never runs and pitch stays at the last value.
 6. Flat only at top speed: that is `rev` pinned at 1 (`rpmFor` caps at
-   `MAX_RPM·1.04` — `js/race/pace-math.js` ~91-97; `MAX_RPM` 15000 /
+   `MAX_RPM·1.04` — `rpmFor` in `js/race/pace-math.js`; `MAX_RPM` 15000 /
    `IDLE_RPM` 5000 in `js/physics/consts.js`; `revFrac` is clamped 0..1 in
    `js/game.js` just before the `GameAudio.setEngine` call), not a bug in the curve. Above 98.5%
    revs the limiter chops, and in top gear it fades to a steady note after

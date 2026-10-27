@@ -13,6 +13,11 @@ name: Merge attribution
 # Why a push workflow and not a session prompt: a push trigger reacts within seconds of the merge, costs no session
 # tokens, and needs no session alive. Node built-ins only: no npm install, seconds of runner time.
 # The merge API's commit_message (the trailer's carrier): https://docs.github.com/en/rest/pulls/pulls#merge-a-pull-request
+#
+# NOT FOLDED INTO pages.yml's post-publish job (audit4 D1 / ci-train F10,
+# 2026-10-26): the `done` job posts the bus DONE line within seconds of each
+# merge, and GAME-SLOT pacing reads it. After the train it would arrive a
+# publish later (p50 17 min, p90 28.5) and never on a red or replaced train.
 
 on:
   push:

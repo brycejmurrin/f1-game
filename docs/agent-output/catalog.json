@@ -489,6 +489,12 @@
       ]
     },
     {
+      "path": "tools/check/dup-functions.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/check/dup-keys.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1250,7 +1256,8 @@
       "outputPolicy": "page-results",
       "interpreter": "node",
       "nativeOutputFlagMentions": [
-        "--json"
+        "--json",
+        "--quiet"
       ]
     },
     {
@@ -2267,6 +2274,11 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/lib/fleet-block.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/lib/flicker-metric.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
@@ -2315,6 +2327,11 @@
     },
     {
       "path": "tools/lib/generated-paths.mjs",
+      "classification": "library",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/lib/git-run.mjs",
       "classification": "library",
       "outputPolicy": "no-direct-output"
     },
@@ -4106,7 +4123,7 @@
     },
     {
       "name": "test:node-slow",
-      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/cover-legibility.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/livery-contrast.test.mjs tests/unit/slider-effect.test.mjs"
+      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/car-mesh-anchors.test.mjs tests/unit/cockpit-crest-stripe.test.mjs tests/unit/cockpit-pale-surfaces.test.mjs tests/unit/cover-legibility.test.mjs tests/unit/crest-marks.test.mjs tests/unit/flyby-fleet.test.mjs tests/unit/flyby-frame-report.test.mjs tests/unit/foundation-core-vm.test.mjs tests/unit/livery-contrast.test.mjs tests/unit/slider-effect.test.mjs"
     },
     {
       "name": "test:perf-budget",
@@ -4158,7 +4175,7 @@
     },
     {
       "name": "test:sweeps",
-      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/baked-model-road-guard.test.mjs tests/unit/build-steps.test.mjs tests/unit/build-worker.test.mjs tests/unit/car-front-wing-width.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/driving-line-opts.test.mjs tests/unit/driving-line.test.mjs tests/unit/grid-boxes.test.mjs tests/unit/kerb-berm-surface.test.mjs tests/unit/kerb-stripes.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/pit-complex.test.mjs tests/unit/pit-signs.test.mjs tests/unit/prop-clipping.test.mjs tests/unit/props-over-road.test.mjs tests/unit/props-tri-ratchet.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/scenery-ground-audit.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/spline-project-height.test.mjs tests/unit/track-build-vm-release.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-validate-fleet.test.mjs tests/unit/water-local-level.test.mjs"
+      "command": "node --test --test-timeout=900000 --test-concurrency=1 tests/unit/baked-model-road-guard.test.mjs tests/unit/barrier-runoff-jumps.test.mjs tests/unit/build-steps.test.mjs tests/unit/build-worker.test.mjs tests/unit/car-front-wing-width.test.mjs tests/unit/coplanar-faces.test.mjs tests/unit/debris-hazard-hint.test.mjs tests/unit/driving-line-opts.test.mjs tests/unit/driving-line.test.mjs tests/unit/elevation-smoothness.test.mjs tests/unit/grid-boxes.test.mjs tests/unit/kerb-berm-surface.test.mjs tests/unit/kerb-stripes.test.mjs tests/unit/lamp-fixture-anchor.test.mjs tests/unit/pit-complex.test.mjs tests/unit/pit-signs.test.mjs tests/unit/prop-clipping.test.mjs tests/unit/props-over-road.test.mjs tests/unit/props-tri-ratchet.test.mjs tests/unit/road-under-floor.test.mjs tests/unit/scenery-ground-audit.test.mjs tests/unit/scenery-grounding.test.mjs tests/unit/shared-track-foundation-characterization.test.cjs tests/unit/spline-project-height.test.mjs tests/unit/track-build-vm-release.test.mjs tests/unit/track-line-circuits.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-validate-fleet.test.mjs tests/unit/water-local-level.test.mjs"
     },
     {
       "name": "test:sweeps-parts",
