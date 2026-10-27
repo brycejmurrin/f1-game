@@ -3444,6 +3444,7 @@
       "isOptionAvailable": [
         "tests/specs/parts-catalog.spec.js",
         "tests/unit/career-ai-dev.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
       ],
@@ -3469,6 +3470,7 @@
       ],
       "setLegality": [
         "tests/unit/career-ai-dev.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
@@ -3635,6 +3637,7 @@
     },
     "js/career/career-planning.js": {
       "cash": [
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "chooseSponsor": [
@@ -3650,12 +3653,14 @@
       "create": [
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
       "factory": [
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "sponsorOffers": [
@@ -3675,6 +3680,9 @@
       "create": [
         "tests/unit/career-ui-lazy.test.mjs",
         "tests/unit/load-order.test.mjs"
+      ],
+      "ensure": [
+        "tests/unit/career-ui-lazy.test.mjs"
       ]
     },
     "js/career/career-ui.js": {
@@ -4177,10 +4185,12 @@
     "js/career/regulations.js": {
       "bannedIds": [
         "tests/unit/career-ai-dev.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs"
       ],
       "eraFor": [
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-regulations.test.mjs"
       ],
       "isLegal": [
@@ -4192,6 +4202,7 @@
         "tests/unit/garage-sheet-round2.test.mjs"
       ],
       "seasonsLeft": [
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-regulations.test.mjs"
       ],
       "*": [
@@ -5060,6 +5071,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -5790,6 +5802,7 @@
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-hire-rating.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-round2.test.mjs",
@@ -11110,6 +11123,7 @@
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",

@@ -1429,8 +1429,10 @@ function rolloverDrivers(dStand) {
     const noise = (rnd(career.year, "dev", s.id) - 0.5) * 4;
     const drift = growth + form + noise;
     const d = career.dev[s.id] || (career.dev[s.id] = {});
-    // Pace takes the whole drift; the softer axes take half. A driver who has a
-    // year does not become a different person, they get quicker.
+    // Pace takes the whole drift; craft (the other developed axis) takes half —
+    // or the player's season craft mark when one exists. Awareness and
+    // consistency stay at the shipped rating for the career; the winter report
+    // still lists them so a zero delta is visible. Experience is a flat +4.
     bumpAxis(d, "pace", drift);
     // `seasonMark` is null for a season raced entirely before craft existed, and
     // for one settled only through simCareerRound before it drew the fields —

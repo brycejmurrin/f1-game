@@ -60,11 +60,27 @@ const CareerPlanning = (function () {
       if (!c()) return null;
       const level = api().facility();
       const team = Teams.LIST.find((t) => t.id === c().team);
+      // Match Career.researchCost: RESEARCH_MULT × (1 − facilityDiscount). Prefer
+      // the live Career constants so a cost tweak cannot leave the hub quote stale.
+      const mult = (typeof Career !== "undefined" && Career.RESEARCH_MULT) || 3;
+      const dMax = (typeof Career !== "undefined" && Career.FACILITY_DISCOUNT_MAX) || 0.4;
+      const dStep = dMax / ((typeof Career !== "undefined" && Career.FACILITY_MAX) || 8);
+      // Open-era Parts.isOptionAvailable is null, so the next era's banned ids
+      // would still count unless we exclude them here — the hub copy says
+      // "Future regulation inventory excluded."
+      const nextBan = (() => {
+        if (typeof Regulations === "undefined") return null;
+        const elapsed = api().seasonsElapsed();
+        const next = Regulations.eraFor(elapsed + Regulations.seasonsLeft(elapsed));
+        return Regulations.bannedIds(next.id);
+      })();
       let savings = 0, count = 0;
       for (const cat of (Parts.CATALOG || [])) for (const opt of cat.options) {
-        if ((!opt.cost || (c().owned || []).includes(opt.id)) || (Parts.isOptionAvailable && !Parts.isOptionAvailable(opt, team))) continue;
-        const current = Math.round((opt.cost || 0) * 3 * (1 - Math.min(0.4, level * 0.05)));
-        const next = Math.round((opt.cost || 0) * 3 * (1 - Math.min(0.4, (level + 1) * 0.05)));
+        if (!opt.cost || (c().owned || []).includes(opt.id)) continue;
+        if (Parts.isOptionAvailable && !Parts.isOptionAvailable(opt, team)) continue;
+        if (nextBan && nextBan.has(opt.id)) continue;
+        const current = Math.round(opt.cost * mult * (1 - Math.min(dMax, level * dStep)));
+        const next = Math.round(opt.cost * mult * (1 - Math.min(dMax, (level + 1) * dStep)));
         savings += current - next; count++;
       }
       return { savings, count, cost: api().facilityCost(), unlimited: api().freeMoney() };
@@ -75,9 +91,13 @@ const CareerPlanning = (function () {
       const wages = c().flavour === "myteam" ? (proposedWages == null
         ? (c().roster || []).reduce((n, d) => n + (Number(d.salary) || 0), 0) : Math.max(0, proposedWages)) : 0;
       const afterPurchase = c().money - (unlimited ? 0 : Math.max(0, Number(price) || 0));
-      const cars = c().flavour === "myteam" ? 2 : 1;
+      // MY TEAM runs two cars, but both cannot finish P1. Ceiling is P1+P2
+      // (driver careers stay prizeFor(1) alone).
+      const bestPrize = c().flavour === "myteam"
+        ? api().prizeFor(1) + api().prizeFor(2)
+        : api().prizeFor(1);
       return { afterPurchase, wages, low: Math.max(0, afterPurchase - wages),
-        high: Math.max(0, afterPurchase + api().prizeFor(1) * cars - wages), unlimited };
+        high: Math.max(0, afterPurchase + bestPrize - wages), unlimited };
     }
     function transition() {
       if (!c() || typeof Regulations === "undefined") return null;

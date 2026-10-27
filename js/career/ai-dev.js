@@ -22,7 +22,6 @@ const CareerAiDev = (function () {
 
   /** Soft fitted-cost ceiling for an AI team this winter (credits). */
   function teamCap(team, career) {
-    const legal = typeof Parts !== "undefined" && Parts.legalityKey ? Parts.legalityKey() : "";
     let works = 0;
     try {
       works = Parts.getCost(Parts.getFactorySetup(team), team);

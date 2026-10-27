@@ -190,3 +190,46 @@ test("career entry waits for writer readiness without blocking bundle loading", 
   await opening;
   assert.deepEqual(h.opened, [["slots", "title"]]);
 });
+
+test("a double-tap on #cr-go while LAZY_CAREER_UI loads fires the real handler once", async () => {
+  const dom = makeDom({
+    tagFor: (id) => (/^(cr-back|cr-go|cr-garage)$/.test(id) ? "button" : "div"),
+  });
+  const pending = [];
+  let goClicks = 0;
+  const sb = {
+    Math, console, Object, Array, String, Number, JSON, Promise,
+    Log: { info() {}, warn() {}, debug() {}, error() {} },
+    document: dom.document,
+    ApexRoster: { LAZY_CAREER_UI: ["js/career/career-ui.js"], LAZY_CAREER_UI_EDGES: [] },
+    ScriptLoader: {
+      create: () => ({
+        load: () => new Promise((resolve) => {
+          pending.push(() => {
+            sb.CareerScreen = {
+              create(G) {
+                G.$("cr-go").onclick = () => { goClicks++; };
+                return { openHub() {}, openSlots() {}, close() {}, build() {} };
+              },
+            };
+            resolve(true);
+          });
+        }),
+      }),
+    },
+  };
+  sb.window = sb;
+  vm.runInNewContext(src("js/career/career-ui-boot.js"), sb, { filename: absSrc("js/career/career-ui-boot.js") });
+  sb.CareerUI.create({ $: (id) => dom.byId(id), els: { overlay: dom.byId("overlay") } });
+
+  // Two taps while the fetch is still in flight — both used to re-fire the
+  // real onclick after create() rebound it.
+  assert.equal(pending.length, 1, "create() already kicked the lazy fetch");
+  dom.byId("cr-go").onclick();
+  dom.byId("cr-go").onclick();
+  assert.equal(pending.length, 1, "queued taps share the in-flight fetch");
+  pending.shift()();
+  // Drain the ensure() → create() → re-fire microtask chain.
+  for (let i = 0; i < 10 && goClicks === 0; i++) await Promise.resolve();
+  assert.equal(goClicks, 1, "only the latest queued #cr-go tap reaches CareerScreen");
+});
