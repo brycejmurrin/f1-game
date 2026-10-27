@@ -32,6 +32,11 @@ test("guardsVerdict: the aggregator decides; its shards are the fallback when it
   assert.equal(guardsVerdict([...shards("success").slice(0, 4), run(GUARDS_D, "queued", null, 5)]).state, "pending");
   assert.equal(guardsVerdict([run(GUARDS_A, "completed", "failure"), run(GUARDS_B, "completed", "success", 2)]).state, "failed");
   assert.equal(guardsVerdict([run("CI", "completed", "success")]).state, "none");
+  // WP-L8: A+B green with C/D missing is pending, never passed.
+  const ab = guardsVerdict([run(GUARDS_JOB, "completed", "cancelled"), run(GUARDS_A, "completed", "success", 2), run(GUARDS_B, "completed", "success", 3)]);
+  assert.deepEqual([ab.state, ab.code, ab.evidence], ["pending", 1, `${GUARDS_C}, ${GUARDS_D} missing (all four tooling shards must report)`]);
+  assert.equal(guardsVerdict([run(GUARDS_A, "completed", "success"), run(GUARDS_B, "completed", "success", 2), run(GUARDS_C, "completed", "success", 3)]).state, "pending");
+  assert.equal(guardsVerdict([run(GUARDS_C, "completed", "failure")]).state, "failed", "a red shard fails even when others are missing");
 });
 
 test("newestByName: the newest attempt per name wins; a skipped run never hides a real result (#3862)", () => {
