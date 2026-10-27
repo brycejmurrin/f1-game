@@ -45,7 +45,7 @@ stream carries no token counts. One snapshot, runs still going; the shares can m
   amber definitions), one cell expandable with repeated finding lines collapsed to a count. Checked against a real `audit.json`
   (4 cells; 12 clipped findings printed as 3 lines). A real run also showed that `layout-audit`'s geometry mode ignores `--out`
   and writes `artifacts/layout-audit/`, merging with earlier rows; the tool defaults there.
-- `tools/ci/lane-preamble.mjs`: the TOOLING block for a survey launch prompt (~1.1K characters in place of the 39K skill file),
+- `lane-preamble.mjs` (deleted 2026-10-27, unused): the TOOLING block for a survey launch prompt (~1.1K characters in place of the 39K skill file),
   with screens and viewports checked against `layout-audit --list` (a typo fails in a second, not after the grid). A real run
   found a parser bug fixtures had hidden (viewport names followed by one space were dropped: 8 of 11 found); the test pins the
   real catalog.
@@ -72,7 +72,7 @@ re-counted the headline numbers myself. The survey found two `dump` hangs, both 
 | re-reading big reference files | `docs/AGENT-SURFACE.md` (50K) read 18 times in 14 infra runs; `hud.js` 7-9 times per run; agents re-read their own spilled outputs 42 times (~320K) | an `mcp-inventory` table (< 2K) in place of AGENT-SURFACE.md; `lsp_outline` before any file over 500 lines; output over 50 lines goes to a file |
 | unbounded test output and waits | `tooling-fast --changed` printed 13-57K (it lists every pass); `while sleep 30` waiters; `wait-for.mjs` used 0 times | a failures-only mode for tooling-fast; name `wait-for.mjs` in the prompt |
 
-Built from this table (2026-10-21): `node tools/ci/lane-preamble.mjs --core` prints rows 1, 2, 5, 6 and 8 plus the glob
+Built from this table (2026-10-21): `lane-preamble.mjs --core` (deleted 2026-10-27) prints rows 1, 2, 5, 6 and 8 plus the glob
 and output rules as a ~1.4K WORKING RULES block for any launch prompt (a survey block now ends with it); `tooling-fast
 --quiet` prints only failures and the verdict (the log keeps every line); AGENTS.md rule 7's `ps` is capped at 160
 columns. Not built: `issue-digest.mjs`, an `mcp-inventory` table.

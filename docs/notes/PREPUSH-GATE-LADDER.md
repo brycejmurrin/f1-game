@@ -1,7 +1,9 @@
 # The pre-push gate is a ladder, and the rungs are not the same size
 
 Evidence behind AGENTS.md rule 3. Written 2026-09-18, after the third deploy to
-go red on the same shape.
+go red on the same shape. The pre-push floor itself is stated only in AGENTS.md
+rule 3 (2026-10-27: `tooling-fast --changed` plus one spec; the full rungs run on
+the PR); this note explains the rungs and why each is a subset of the next.
 
 ## The shape
 

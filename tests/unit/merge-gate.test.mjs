@@ -17,7 +17,7 @@ import {
   gameMergesBehind, distanceVerdict, baseHistory, distanceFor, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main,
   untrustedEnv,
 } from "../../tools/ci/merge-gate.mjs";
-import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem, readyClaimVerdict } from "../../tools/lib/gate-receipt.mjs";
+import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const scratch = (prefix) => { const d = path.join(ROOT, "artifacts", "tmp"); fs.mkdirSync(d, { recursive: true }); return fs.mkdtempSync(path.join(d, prefix)); };
@@ -355,24 +355,15 @@ test("audit 4: a future-dated receipt is refused; a ready receipt is pinned to t
   assert.notEqual(headPinProblem(HEAD, "aaaa"), "", "under 7 hex never pins");
 });
 
-test("audit 4: a READY claim checks the PR number, the live head and the gate files", () => {
+test("audit 4: gateFilesVerdict refuses a receipt whose gate-file hash differs from the checkout that wrote it", () => {
   const dir = scratch("ready-claim-");
   try {
-    const okFiles = () => ({ ok: true });
     writeReceipt(dir, "ready", { pr: 12, head: HEAD, ok: true }, { main: null });
-    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "#12 aaaaaaaa ready-gate 0", files: okFiles }).ok, true);
-    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "#13 ready", files: okFiles }).why, "the text names #13, but --pr is 12: one READY is for one PR");
-    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: okFiles, prHead: () => ({ sha: "c".repeat(40) }) }).why, "the PR head is cccccccccccc, but ready-gate passed on aaaaaaaaaaaa: re-run ready-gate on the current head");
-    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: okFiles, prHead: () => ({ error: "HTTP 502" }) }).why, "cannot read #12's current head (HTTP 502): a READY is checked against the live head; retry");
-    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: okFiles, prHead: () => ({ sha: HEAD }) }).ok, true);
-    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: () => ({ ok: false, why: "pr-board.mjs differs" }) }).why, "ready-gate receipt for #12: pr-board.mjs differs");
-    // the default check is gateFilesVerdict against the receipt's gateRoot (the real checkout, which writeReceipt
-    // hashed): a tampered hash refuses. (The old assertion passed only in a dirty worktree, audit4 merge.)
-    const rp = receiptPath(dir, "ready", 12), tampered = JSON.parse(fs.readFileSync(rp, "utf8"));
-    tampered.gateFiles["tools/ci/ready-gate.mjs"] = "0".repeat(64);
-    fs.writeFileSync(rp, JSON.stringify(tampered));
-    assert.deepEqual(readyClaimVerdict(dir, { pr: 12, text: "ready" }), { ok: false, pr: 12,
-      why: `ready-gate receipt for #12: tools/ci/ready-gate.mjs in ${tampered.gateRoot} is not the file that wrote this receipt: re-run the gate from this checkout` });
+    const rp = receiptPath(dir, "ready", 12), receipt = JSON.parse(fs.readFileSync(rp, "utf8"));
+    assert.equal(gateFilesVerdict(receipt.gateRoot, receipt, { run: () => ({ status: 0 }) }).ok, true, "the hashes writeReceipt took (git stubbed: this checkout may be dirty)");
+    receipt.gateFiles["tools/ci/ready-gate.mjs"] = "0".repeat(64);
+    assert.deepEqual(gateFilesVerdict(receipt.gateRoot, receipt), { ok: false,
+      why: `tools/ci/ready-gate.mjs in ${receipt.gateRoot} is not the file that wrote this receipt: re-run the gate from this checkout` });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

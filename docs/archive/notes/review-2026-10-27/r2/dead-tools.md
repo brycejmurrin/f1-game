@@ -1,5 +1,7 @@
 # Dead-tools survey — tools/{ci,env,lib,mcp,check,gen,shot} (2026-10-27, read-only)
 
+> Archived 2026-10-27: its deletions landed in #3935 (429399dca3, WP-D2), so the paths below name files that no longer exist.
+
 Method: one node pass (`scratchpad/r2dead/refs.mjs`) over 328 scripts (.mjs/.cjs/.js/.sh/.py; json/dirs skipped).
 Per basename, a path-anchored match counted in: package.json, .github/, tools/ (minus the script itself and tools/**/*.md,
 i.e. the generated tools/README.md), tests/unit, tests/ (other), .claude/{skills,agents,hooks,rules,settings.json},

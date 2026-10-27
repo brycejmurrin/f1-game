@@ -4,9 +4,9 @@
 // @section runner
 // @skill steward
 //
-// Why (docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7/Q1): the retired orchestrator.md
-// §Pre-launch quota check said "at `allowed_warning` or worse, launch nothing",
-// and OrchA 33 still launched 7 sessions into a 75 % weekly quota. Prose did not
+// Why (docs/archive/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7/Q1): the rule was "at
+// `allowed_warning` or worse, launch nothing" (then in the retired orchestrator agent),
+// and a launcher still started 7 sessions into a 75 % weekly quota. Prose did not
 // hold, so the rule is a receipt like merge-gate's: this tool reads ONE saved
 // `get_session` result (the MCP text, envelope and all, or raw JSON), and
 // `.claude/hooks/launch-gate.py` refuses `create_session` unless the receipt is

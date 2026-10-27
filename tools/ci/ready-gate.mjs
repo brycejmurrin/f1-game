@@ -71,16 +71,20 @@ export function guardsVerdict(checkRuns) {
     if (agg.conclusion === "failure" || agg.conclusion === "timed_out") return { state: "failed", evidence: `${GUARDS_JOB} ${agg.conclusion}`, code: 1 };
     // cancelled / skipped / neutral — fall through to the shards (reuse-draft path)
   }
-  const a = by.get(GUARDS_A), b = by.get(GUARDS_B), c = by.get(GUARDS_C), d = by.get(GUARDS_D);
-  if (a && b) {
-    const halves = [a, b, c, d].filter(Boolean);
-    if (halves.some((j) => j.status && j.status !== "completed")) return { state: "pending", evidence: `${halves.map((j) => j.name).join("/")} still running`, code: 1 };
-    if (halves.every((j) => j.conclusion === "success")) return { state: "passed", evidence: `${halves.map((j) => j.name).join(" + ")} success`, code: 0 };
-    const bad = halves.filter((j) => j.conclusion === "failure" || j.conclusion === "timed_out");
+  // Every shard must report (review 2026-10-27 WP-L8): A+B green with C/D missing or never started is NOT green.
+  const names = [GUARDS_A, GUARDS_B, GUARDS_C, GUARDS_D];
+  const shards = names.map((n) => by.get(n)).filter(Boolean);
+  if (shards.length) {
+    const bad = shards.filter((j) => j.status === "completed" && (j.conclusion === "failure" || j.conclusion === "timed_out"));
     if (bad.length) return { state: "failed", evidence: bad.map((j) => `${j.name} ${j.conclusion}`).join("; "), code: 1 };
+    const running = shards.filter((j) => j.status && j.status !== "completed");
+    if (running.length) return { state: "pending", evidence: `${running.map((j) => j.name).join("/")} still running`, code: 1 };
+    const missing = names.filter((n) => !by.get(n));
+    if (missing.length) return { state: "pending", evidence: `${missing.join(", ")} missing (all four tooling shards must report)`, code: 1 };
+    if (shards.every((j) => j.conclusion === "success")) return { state: "passed", evidence: `${shards.map((j) => j.name).join(" + ")} success`, code: 0 };
   }
-  if (!agg && !a && !b) return { state: "none", evidence: "no Structural guards check-run on tip", code: 1 };
-  return { state: "pending", evidence: `Structural guards inconclusive (agg=${agg?.conclusion || "—"} a=${a?.conclusion || "—"} b=${b?.conclusion || "—"})`, code: 1 };
+  if (!agg && !shards.length) return { state: "none", evidence: "no Structural guards check-run on tip", code: 1 };
+  return { state: "pending", evidence: `Structural guards inconclusive (agg=${agg?.conclusion || "—"}; ${names.map((n) => `${n.slice(-2, -1)}=${by.get(n)?.conclusion || "—"}`).join(" ")})`, code: 1 };
 }
 
 /** Tip and stamp match when either is a prefix of the other (min 7 hex). */

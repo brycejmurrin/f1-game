@@ -10,7 +10,7 @@ PLAUSIBLE was traced from source, not reproduced in the game.
 
 | Folder / file | What it holds |
 |---|---|
-| [r2/](r2/) | The second, from-scratch Opus pass (the plan's main source). `skill-*.md`: 36 skill reviews, each told not to read the first pass; all 36 returned FIX. `hunt-*.md`: 9 code-hunter slices (hunt reports are the parent's transcription of the hand-back rows: code-hunter cannot write files). `workflows.md`, `relay-fleet.md`, `agents-hooks.md`, `docs.md`, `dead-tools.md`, `landing-design.md`: the six domain reviews. |
+| [r2/](r2/) | The second, from-scratch Opus pass (the plan's main source). `skill-*.md`: 36 skill reviews, each told not to read the first pass; all 36 returned FIX. `hunt-*.md`: 9 code-hunter slices (hunt reports are the parent's transcription of the hand-back rows: code-hunter cannot write files). `workflows.md`, `relay-fleet.md`, `agents-hooks.md`, `docs.md`, `dead-tools.md`, `landing-design.md`: the six domain reviews (`relay-fleet.md` and `dead-tools.md` moved to [docs/archive/notes/review-2026-10-27/r2/](../../archive/notes/review-2026-10-27/r2/) once #3935 deleted what they list). |
 | [skills/](skills/) | The first Opus pass, one per skill. Kept as corroboration: a row both passes found is marked 2× in the plan. |
 | [hunts/](hunts/) | The first 8 Opus `code-hunter` passes. Each lists what it did NOT read: the slices were larger than one pass, so a clean row is not proof of no defect. |
 | [rulebook.md](rulebook.md) | The rulebook coherence review (AGENTS.md, CLAUDE.md, WORKERS.md, rule files) against the deploy tip before #3914. |

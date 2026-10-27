@@ -14,7 +14,8 @@ alwaysApply: false
   + `node tools/gen/gen-shell.mjs`.
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit
-  hook absorbs ≤ 40 lines of growth (the raise lands as `tests/data/ratchets.d/<branch>.json`); more blocks until
+  hook absorbs ≤ 20 lines of growth silently, ≤ 40 with a `Ratchet-Reason:` commit trailer
+  (`tools/hooks/ratchet-reason.mjs`; the raise lands as `tests/data/ratchets.d/<branch>.json`); more blocks until
   you extract or shrink. A tree-wide ceiling rises only when Bryce types the raise in the acting session
   (`APEX_RATCHET_RAISE_OK=1 node tools/check/ratchets.mjs --update --fragment --reason="<why>"`; safety ban 1,
   2026-10-22); `--update --lower-only` lowers.

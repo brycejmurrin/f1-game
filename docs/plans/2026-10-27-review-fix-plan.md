@@ -145,8 +145,8 @@ One line per skill: the first step an agent following it today gets wrong (full 
 
 ## 5. Rulebook, docs, tools and workflows
 
-Sources: [r2/docs.md](../notes/review-2026-10-27/r2/docs.md), [r2/relay-fleet.md](../notes/review-2026-10-27/r2/relay-fleet.md),
-[r2/dead-tools.md](../notes/review-2026-10-27/r2/dead-tools.md), [r2/workflows.md](../notes/review-2026-10-27/r2/workflows.md),
+Sources: [r2/docs.md](../notes/review-2026-10-27/r2/docs.md), [r2/relay-fleet.md](../notes/review-2026-10-27/README.md) (archived),
+[r2/dead-tools.md](../notes/review-2026-10-27/README.md) (archived), [r2/workflows.md](../notes/review-2026-10-27/r2/workflows.md),
 [rulebook.md](../notes/review-2026-10-27/rulebook.md).
 
 - [ ] **WP-R1 one pre-push floor (Bryce picks).** Four sources disagree (2×, three reviewers): AGENTS step 6
@@ -165,7 +165,7 @@ Sources: [r2/docs.md](../notes/review-2026-10-27/r2/docs.md), [r2/relay-fleet.md
   `github-fleet.cjs`; widen `rulebook-guards.test.mjs` to scan plugin-sources, cursor-plugins, `.cursor`, `.codex`;
   stale hook text ("ask your orchestrator", `QUEUE_BRANCH`, `fleet-bus` in the poll regex, `APEX_MERGE_DESK`) —
   hook edits need Bryce; `APEX-TOOLS-MCP.md` `apex_who_is_on_it`; `policies.json:747`; `ci-watch.mjs:323`.
-- [ ] **WP-D2 dead tools** (each with its `tests/groups.json` row + `npm run gen`): `tools/mcp/check-doctor-catalog.mjs`;
+- [ ] **WP-D2 dead tools** (landed in #3935, 429399dca3; each with its `tests/groups.json` row + `npm run gen`): `check-doctor-catalog.mjs`;
   `archive-sessions.mjs` (+ AGENTS.md:187, settings.json:74 — Bryce); `pr-body.mjs` + `fleet-block.mjs` (move the 3
   `planVerdict` cases to ready-gate's test first); `lane-preamble.mjs`; `measure-pr-ci-after-close.mjs`;
   `publish-shots.mjs`; `lsp-navigation-bench.mjs`; `readyClaimVerdict` in gate-receipt.mjs. Fix headers:

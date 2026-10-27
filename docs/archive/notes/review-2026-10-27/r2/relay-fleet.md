@@ -1,5 +1,7 @@
 # Leftovers of the old multi-fleet coordination: audit (r2, 2026-10-27)
 
+> Archived 2026-10-27: its deletions landed in #3935 (429399dca3, WP-D2), so the paths below name files that no longer exist.
+
 Tree: deploy tip `5a29eb35` (Merge #3917). Read-only. Seed grep (task regex) hit 595 files outside `.claude/worktrees/`
 and `__pycache__`. Most are false positives: the game's net relays (`js/net`, `tools/net`, `net-*.test`), the track/frame
 "fleet" (`frame-fleet`, `flyby-fleet`, `track-validate-fleet`, ci.yml's "fleet build"), "orchestration" in ARCHITECTURE,
