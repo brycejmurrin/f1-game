@@ -1343,6 +1343,8 @@
     "tests/unit/tlx-pipe-pin-warm.test.mjs",
     "// TLX post P2 / audit #6: fixed H/V blur + per-mip bloom materials (no .tex.value ping-pong).",
     "tests/unit/tlx-post-fixed-mats.test.mjs",
+    "// Phone orientation cover stays off on WebGPU: three r186 drops a target viewport equal to the canvas rect (2026-10-26 iPhone stretch).",
+    "tests/unit/tlx-post-orient-cover-webgpu.test.mjs",
     "// TLX phone post at half scene resolution (D·IP3 / BrowserStack GPU-bound fill).",
     "tests/unit/tlx-post-phone-res.test.mjs",
     "// TLX's mesh-pool prune keeps a gfx.pinMesh geometry's wrappers (the deploy-only ERS bar,",

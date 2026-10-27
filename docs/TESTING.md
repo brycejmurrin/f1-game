@@ -499,7 +499,9 @@ and aligned partial writes), `tlx-mirror-inset` (WGSL/GLSL derivative safety), a
 `tlx-smith-root` (generated lamp-root control-flow nesting), and
 `tlx-glow-instancing` (packed light records, instance layout, growth and isolated
 warm-probe ownership). `tlx-viewport` covers texture rebinds and post-chain reader
-retirement; `car-presentation-vm` covers shared/far cache generation and disposal.
+retirement; `tlx-post-orient-cover-webgpu` keeps the phone orientation cover
+(#3311) off on three's WebGPU backend, whose target viewport is dropped when it equals the
+canvas rect (the stretched-frame iPhone regression); `car-presentation-vm` covers shared/far cache generation and disposal.
 These Node checks do not measure device speed or replace rendered validation.
 
 ### Partitions (not topical — they do not count for coverage)

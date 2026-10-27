@@ -212,12 +212,16 @@
     // flag is off we still stand up a local VP and keep a square physical cover
     // of max(w,h) so a transpose only moves logical viewports. fixedOk() stays
     // false unless ctx.fixedTargets — tlx.js canvas sizing must not flip.
+    // Not on WebGPU: three r186 keeps rt.viewport only when it differs from the
+    // CANVAS rect, and the cover's logical rect IS the canvas, so the scene filled
+    // the square and every reader stretched it h/side (iPhone, 2026-10-26).
+    const webgpu = !!(renderer && renderer.backend && renderer.backend.isWebGPUBackend);
     if (ctx.fixedTargets && ctx.vp && ctx.vp.enabled && ctx.vp.scope) viewportScope = ctx.vp.scope();
     let VP = viewportScope || ctx.vp || null;
     const fixed = !!(ctx.fixedTargets && VP && VP.enabled);
     const phonePost = !!ctx.isMobile;
     let orientCover = false;
-    if (!fixed && phonePost && window.TLXShaders && TLXShaders.viewport) {
+    if (!fixed && phonePost && !webgpu && window.TLXShaders && TLXShaders.viewport) {
       try {
         VP = TLXShaders.viewport(THREE, TSL, { enabled: true });
         orientCover = !!(VP && VP.enabled);
