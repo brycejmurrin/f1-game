@@ -203,10 +203,10 @@ void main() {
   // uStrength == 0 is a SUPPORTED combination, not a degenerate one: the pass
   // also produces contact shadows, and haveAO (js/render/glx/post.js) arms it on
   // "aoStr > 0 || contactStr > 0" — so with the AO slider at zero and contact
-  // shadows on, these 8 taps ran and were then multiplied by zero on line 199.
-  // Each tap is a DEPENDENT depth fetch (viewPos reconstructs from the sampled
-  // depth), the most expensive kind. uStrength is a uniform, so this is uniform
-  // control flow — no divergence — and occ == 0.0 makes the skipped branch
+  // shadows on, these 8 taps used to run and then multiply by zero. Each tap is
+  // a DEPENDENT depth fetch (viewPos reconstructs from the sampled depth), the
+  // most expensive kind. uStrength is a uniform, so this is uniform control
+  // flow — no divergence — and occ == 0.0 makes the skipped branch
   // bit-identical to multiplying by zero.
   if (uStrength > 0.0) {
     // THE TAP SETUP BELONGS INSIDE THE GATE TOO. The 8 taps were moved in here
@@ -807,7 +807,7 @@ void main() {
   // 1. 'carPx > 0.3' gained '&& uCarReflect > 0.001'. The outer gate never
   //    consulted uCarReflect, so with the CAR reflection slider at zero every
   //    car-paint pixel still reconstructed P, ran 3 ssrViewPos, a cross, a
-  //    normalize and both masks before 'ssrGate > 0.001' (line 825) threw it
+  //    normalize and both masks before the later 'ssrGate > 0.001' threw it
   //    away. Exactly equivalent: ssrGate is max(roadMask*uReflect,
   //    carMask*uCarReflect), and both masks are products of smoothstep()s and
   //    carPx so both lie in [0,1] — hence if uReflect <= 0.001 (the only way

@@ -1650,9 +1650,9 @@ void main() {
     // Direct terms only (diffuse pool + GGX/clearcoat specular below): the
     // bounce fill and fog in-scatter stay unshadowed — they are indirect.
     float lampSh = 1.0;
-    // NoLl GATE, same argument as the GGX block 30 lines below (which already
-    // makes it in prose): lampSh has exactly two readers — line 1096, where the
-    // term is multiplied by NoLl, and the specular block, which is already
+    // NoLl GATE, same argument as the GGX block ~30 lines below (which already
+    // makes it in prose): lampSh has exactly two readers — the diffuse term
+    // below (multiplied by NoLl) and the specular block, which is already
     // inside 'if (NoLl > 0.0)'. A fragment facing AWAY from this lamp therefore
     // paid 4 dependent sampler2DShadow fetches, a mat4 transform, a perspective
     // divide and 5 bounds compares for a result multiplied by zero. This was the

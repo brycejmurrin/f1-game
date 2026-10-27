@@ -123,13 +123,13 @@ void main() {
     // GATED ON daytime, which is what both lines below multiply by. daytime is
     // smoothstep(0.35, 0.60, sunE) * (1.0 - nightSky) and sunE is a pure
     // function of uSunDir.y — so it is exactly 0 on EVERY night frame and on
-    // every dawn/dusk frame with the sun under ~14.5°, and on those frames
-    // line 108 is mix(c, X, 0.0) == c and line 110 is c *= 1.0. Both exact.
-    // The expensive part is line 109: an atan2 — one of the costliest
-    // transcendentals on a GPU — feeding a vnoise (4 hash2 + 3 mix), per pixel,
-    // over the whole frame, thrown away. Uniform control flow (uSunDir, uStars
-    // are uniforms), so no divergence. daytime itself stays live: 159 and 206
-    // still read it.
+    // every dawn/dusk frame with the sun under ~14.5°, and on those frames the
+    // mix(c, …) and c *= below are exact no-ops. The expensive part inside the
+    // gate is an atan2 — one of the costliest transcendentals on a GPU —
+    // feeding a vnoise (4 hash2 + 3 mix), per pixel, over the whole frame,
+    // thrown away. Uniform control flow (uSunDir, uStars are uniforms), so no
+    // divergence. daytime itself stays live: cloudRich / lit / cloud-cap
+    // readers below still consume it.
     if (daytime > 0.0) {
       float bandLM = (1.0 - smoothstep(0.06, 0.55, up)) * smoothstep(0.0, 0.06, up);
       vec3 deepBlue = vec3(0.10, 0.30, 0.72);

@@ -13610,7 +13610,8 @@
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/track-graph.test.mjs",
         "tests/unit/vertex-pack.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-post.js": {
@@ -13621,7 +13622,8 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-sky.js": {
@@ -13630,7 +13632,8 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
-        "tests/unit/surface-id-parity.test.mjs"
+        "tests/unit/surface-id-parity.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shadow.js": {
@@ -15121,6 +15124,9 @@
       ],
       "shadowEnd": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "*": [
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/webgpu/wgx.js": {
@@ -15376,7 +15382,8 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/puddles.test.mjs",
-        "tests/unit/validation-cli.test.mjs"
+        "tests/unit/validation-cli.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/roster.js": {
