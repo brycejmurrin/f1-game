@@ -6842,7 +6842,6 @@
       ],
       "enableTilt": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/boot-input-shape.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
