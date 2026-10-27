@@ -179,6 +179,12 @@ test("makeCars and the menu prep stamp cars through the one carVisual helper", (
   const stampExpr = 'Parts.CATALOG.map((cat) => setup[cat.id] || "").join(",")';
   assert.equal(cd.split(stampExpr).length - 1, 1, "car-draw builds a stamp in ONE place");
   assert.equal((symbolSource("function makeCars(") + prep).split("Parts.CATALOG.map(").length - 1, 0, "neither makeCars nor the prep builds its own");
+  // setPlayerParts restamps the live player through carVisual (M27 STANDARD Daily /
+  // mid-session garage): TT ghost teamMesh and stamp-keyed casters follow the
+  // recipe recomputePlayerMods just applied, not makeCars' once-stamped save.
+  const setParts = fnSource(cd, "function setPlayerParts(");
+  assert.match(setParts, /carVisual\(team, carDecalNum\(team, G\.player\), true, \(\) => recipe\)/, "setPlayerParts restamps via carVisual");
+  assert.match(cd.slice(0, cd.indexOf('"use strict"')), /the six helpers that could not leave game\.js/, "file header counts the six deps helpers");
 });
 
 // game.js resolves the first-person caster right after the grounded transform,
