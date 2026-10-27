@@ -21,12 +21,14 @@ Seed says it is near its 200k cap and wants a fresh [Seed] B·S0 (role-seed.md �
 B·R1 needs APEX_B_RELAY_URL/TOKEN in Fleet A's env to retest. B·R-sys stays archived; its check-in trig_01JQ7Ypu deleted.
 Bryce: "Wait for ORCH A" — no B launches until A agrees the split and lifts launch_pause.
 
-## Proposed B queue once launch_pause lifts (sent to A + D for agreement; not binding)
-1. #3505 flaky quarantine deadlines — garage-churn row due TODAY 10-27 (tests/specs/**, tests/data/flaky-quarantine.json). Sonnet.
-2. #3673 iPhone 14 WebGPU first-race >100 ms frames (Bryce's TLX WebGPU path; js/render/three/**, js/perf/**). Opus. Check A·W10 overlap.
-3. #3261 HUD/shell/garage CSS past edit size (css/**; UI lane mutex). Sonnet.
-4. #1682 source-text pins → behaviour assertions (tests/unit/**). Sonnet.
-Next: perf hunts #3109/#3110/#3115/#3117 (one per lane, disjoint dirs).
+## Wave 1 — LAUNCHED 01:45–01:47Z (Bryce: "All three (Recommended)", override receipt; split bus 436b8e9c/fba1799b)
+| slot | session | model | OWNED | item |
+|---|---|---|---|---|
+| B·W1·L1 | session_01QnGrf3iDQfzx8dKYjo6zMU | Opus | js/garage/**, garage-livery-churn spec, its quarantine row | #3505 garage row (D keeps menu-baseline/image-grade) |
+| B·W1·L2 | session_01Rn1YCL723qRAb2vv8Dpt89 | Sonnet | css/**, manifest CSS entries, gen outputs | #3261 CSS split (game PR: GAME-SLOT) |
+| B·W1·L3 | session_01A8VSsiEoU97RHz51tNCUvE | Sonnet | tests/unit/** (not css-path pins) | #1682 batch 1 |
+A·W11·L1 owns js/render/three/**, js/perf/**, tools/perf/** (#3673). Pauses LIFTED (436b8e9c). #3888 merged d50af27a (Pages train running).
+Next for B: perf hunts #3109/#3110/#3115/#3117 (avoid A's paths); #1682 batch 2.
 
 ## Timers
 Safety net trig_019axytjyUHsLUDZkLh2TqRY (send_later 02:16Z). FLEET BUS WATCH trig_01ANsLrvbDGnMapUzqRYmnVL (account-wide; never recreate).
