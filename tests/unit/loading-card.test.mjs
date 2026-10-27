@@ -43,6 +43,8 @@ const phaseCard = (phase) => ruleDecls(readCssSource("css/overlays.css"), `#load
 function load() {
   const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console };
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb,
+    { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
   assert.ok(sb.LoadingScreen, "js/ui/loading-screen.js assigns the LoadingScreen global");
@@ -242,6 +244,8 @@ function harness(stored = {}, storeOverride = null, docEl = null, nav = undefine
   };
   if (nav !== undefined) sb.navigator = nav;
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb,
+    { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
   const races = [];
@@ -666,7 +670,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
     GameAudio: { radioLeadS: () => 0.43, radioSting: (ch, life) => stings.push(life) },
   };
   sb.window = sb;
-  for (const f of ["js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-screen.js"]) {
+  for (const f of ["js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-card.js", "js/ui/loading-screen.js"]) {
     vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   }
   const screen = sb.LoadingScreen.create({

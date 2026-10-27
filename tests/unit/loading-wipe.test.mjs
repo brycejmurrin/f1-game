@@ -48,6 +48,7 @@ function boot(team) {
       { color: [1.0, 0.502, 0.0], color2: [0.122, 0.122, 0.122] },
     ] } };
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
   const store = { get: (k, d) => (k === "team" ? team : d), set() {} };
   const screen = sb.LoadingScreen.create({ $, store,
