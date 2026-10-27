@@ -1657,6 +1657,7 @@
       "files": [
         "tests/specs/albert-park-foundation.spec.js",
         "tests/specs/autopilot.spec.js",
+        "tests/specs/cota-foundation.spec.js",
         "tests/specs/logging.spec.js",
         "tests/unit/adapted-specs.test.mjs"
       ],
@@ -1668,7 +1669,6 @@
       "kind": "command",
       "files": [
         "tests/specs/agent-drive-bench.spec.js",
-        "tests/specs/cota-foundation.spec.js",
         "tests/specs/imola-foundation.spec.js",
         "tests/specs/parts-livery-contrast.spec.js",
         "tests/specs/physics-fixes.spec.js",

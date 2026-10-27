@@ -6,6 +6,9 @@
    the responsive/overlay sheets still win their overrides. See
    tools/manifest.cjs CSS. */
 /* ---------- HUD ---------- */
+/* HUD HUES (#1595), here because only the race reads them: tyre letters (CvdPalette repaints them per COLOUR VISION mode) and real-world signals (one colour in every mode). */
+:root { --tyre-s: #ff3b3b; --tyre-m: #ffd12e; --tyre-h: #f2f2f2; --tyre-i: #3ccf4e; --tyre-w: #3a8dff;
+  --flag-yellow: #ffd600; --flag-amber: #ffb300; --flag-sc: #f4f6ff; --light-on: #ff1a1a; }
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
 /* HUD SIZE, on the CLUSTERS rather than on #hud. #hud is the full-screen
@@ -79,6 +82,15 @@
    two different numbers. */
 .hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #hud-mirror,
 #lights, #announce, .hud-bottom { --vwzh: calc(1vw / var(--hud-z)); }
+/* Painted floor for every bare `var(--fs-micro)` inside a zoomed band: at HUD SIZE 70% the 14px token
+   painted 9.8px (hud-survey phoneL-chase-hud70, 9 tinyText). Re-derive it per band against the band's own
+   --hud-z with the same micro/1.4 floor as .hud-label, so TEXT SIZE still lifts it; --fs-hud-micro is the
+   untouched token (a custom property cannot reference itself). Identical at zoom >= 1. */
+:root { --fs-hud-micro: var(--fs-micro); }
+.hud-top, .hud-gaps, #minimap, #hud-flag, #hud-sectors, #hud-limits, #hud-damage, #hud-mirror,
+#lights, #announce, .hud-bottom, #bc-pip, #hud-rel, #hud-strat, #hud-inputs {
+  --fs-micro: max(var(--fs-hud-micro), calc(var(--fs-hud-micro) / 1.4 / var(--hud-z, 1)));
+}
 .hud-top {
   position: absolute;
   top: calc(8px + var(--sat) / var(--hud-z));
@@ -1009,15 +1021,15 @@ body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is
      on PER / gapAhead at phoneL HUD 150% (survey 2026-10-14). */
   position: absolute; top: max(calc(100px + var(--sat) / var(--hud-z)), calc(var(--mir-bot, 0px) + 8px), calc(var(--hud-gaps-b, 0px) + 8px)); left: 50%; transform: translateX(-50%);
   padding: calc(var(--gap) * 0.5) calc(var(--gap) * 4 / 3); border-radius: var(--r-sm); font-weight: 800;
-  background: #ffd600; color: #000;
+  background: var(--flag-yellow); color: #000;
   letter-spacing: 0.06em; white-space: nowrap;
   box-shadow: 0 2px 10px rgba(0,0,0,0.55);
 }
 /* B1 caution flag variants (debris cautions): local yellow, VSC, safety car. */
-#hud-flag.flag-yellow { background: #ffd600; color: #000; }
-#hud-flag.flag-vsc { background: #ffb300; color: #201400;
+#hud-flag.flag-yellow { background: var(--flag-yellow); color: #000; }
+#hud-flag.flag-vsc { background: var(--flag-amber); color: #201400;
   animation: pulse var(--hud-pulse) ease-in-out infinite; }
-#hud-flag.flag-sc { background: #f4f6ff; color: #101018; }
+#hud-flag.flag-sc { background: var(--flag-sc); color: #101018; }
 /* THE RED FLAG: the session is stopped. A FIXED flag red, like the yellow and
    the VSC amber above — not --slower, which COLOUR VISION remaps to an orange
    and which put light ink at 3.29:1 (2.66:1 deutan) on a weight-800 word that
@@ -1215,7 +1227,7 @@ body:not(.desktop) #hud-sectors {
   border-left: 3px solid color-mix(in srgb, var(--sec-slow) 55%, transparent);
   color: var(--text);
 }
-#hud-limits.limits-warn { border-left-color: #ffb300; color: var(--sec-slow); }
+#hud-limits.limits-warn { border-left-color: var(--flag-amber); color: var(--sec-slow); }
 #hud-limits.limits-hot { border-left-color: var(--slower); color: var(--slower); animation: pulse var(--hud-pulse) infinite; }
 .limits-dots { letter-spacing: 0.12em; font-variant-numeric: tabular-nums; }
 
@@ -1308,7 +1320,7 @@ body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
   z-index: 15;
 }
 .light { width: 26px; height: 26px; border-radius: 50%; background: #2a2a32; }
-.light.on { background: #ff1a1a; box-shadow: 0 0 18px rgba(255, 26, 26, 0.9); }
+.light.on { background: var(--light-on); box-shadow: 0 0 18px rgba(255, 26, 26, 0.9); }
 /* A JUMP IN's ROLLING HAND-OVER counts on the same plate, where the eye already
    looks for the start: 4, 3, 2, 1, GO (js/race/real-race.js via G.handoverCount).
    No node of its own (the shell is at its node ceiling): the lamps step aside and
@@ -2087,11 +2099,8 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
 #bc-tower .bc-code { font-weight: 800; letter-spacing: 0.04em; }
 #bc-tower .bc-gap { text-align: right; font-size: max(11px, calc(var(--fs-micro) / 1.4 / var(--hud-z))); color: var(--dim); white-space: nowrap; }
 #bc-tower .bc-tyre { font-size: max(10px, calc(var(--fs-micro) / 1.4 / var(--hud-z))); font-weight: 800; text-align: center; }
-#bc-tower .bc-tyre[data-c="S"] { color: #ff3b3b; }
-#bc-tower .bc-tyre[data-c="M"] { color: #ffd12e; }
-#bc-tower .bc-tyre[data-c="H"] { color: #f2f2f2; }
-#bc-tower .bc-tyre[data-c="I"] { color: #3ccf4e; }
-#bc-tower .bc-tyre[data-c="W"] { color: #3a8dff; }
+#bc-tower .bc-tyre[data-c="S"] { color: var(--tyre-s); } #bc-tower .bc-tyre[data-c="M"] { color: var(--tyre-m); } #bc-tower .bc-tyre[data-c="H"] { color: var(--tyre-h); }
+#bc-tower .bc-tyre[data-c="I"] { color: var(--tyre-i); } #bc-tower .bc-tyre[data-c="W"] { color: var(--tyre-w); }
 /* The car on camera; a fastest lap in purple; a stop; a retirement greyed. */
 #bc-tower .bc-row.on button { background: rgba(255, 255, 255, 0.18); }
 #bc-tower .bc-row.fl .bc-code { color: var(--sec-best); }
