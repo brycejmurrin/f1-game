@@ -62,6 +62,15 @@ Sources: [r2/landing-design.md](../notes/review-2026-10-27/r2/landing-design.md)
   **Label clobber (reported by the dispatcher, 2026-10-27):** the worker prompt's "add `claimed`" leads workers to
   MCP `issue_write` with `labels`, which REPLACES the list — #3263–#3267 lost `bug` / `area:ui` (restored by hand). The
   dispatch.mjs brief and docs/WORKERS.md say add it with `gh api POST issues/<n>/labels`, never `issue_write` labels.
+- [ ] **WP-L9 workers stall waiting for the user** (Bryce, 2026-10-27: "they are sometimes getting stuck waiting for
+  user instead of asking you or dispatcher message them and set this up"; evidence
+  [r2/worker-stalls.md](../notes/review-2026-10-27/r2/worker-stalls.md)). Bryce unblocked 5 of 8 children by typing
+  into them. Causes: STOP AT 150k leaves ~57k of work after a ~93k first request; last turns addressed to "you";
+  ending on CI without a working subscription; no "already fixed" exit; the dispatcher never messages a child.
+  Fix (in the WP-L7 dispatch PR): brief rules (never ask the user, decide or `needs-decision` or `@parent`; subscribe
+  before ending; `@parent` at the cap; close-as-fixed exit), cap 300k, `NUDGE_SESSION` lines for BLOCKED / idle
+  children with open work, immediate takeover when a worker adds its own `needs-owner`; AGENTS rule 13 wording (in
+  the WP-R1 PR). Interim: the dispatcher was asked to nudge children by hand each cycle.
 - [ ] WP-L8 small gate fixes: ready-gate's shard fallback accepts A+B of four (:68); archive-sessions checks only
   `session_status` (reuse dispatch's `archiveGuard`) — or delete it, see WP-D2.
 
@@ -72,8 +81,10 @@ Medium — one PR each:
   a VM); `validate.js:217-231` pit-opening check runs over every close pair on the lap, so parallel hairpin straights
   anywhere get a RED that blocks SAVE/RACE/SHARE — gate it on the pit window and side; `validate.js:228-233` the first
   matching pair masks a farther red.
-- [ ] **WP-G2 Mercedes setup defaults (2×)** — `setup-tune.js:30` arbF/arbR 7/7 vs `garage-defaults.js:71` 6/5: a fresh
-  install shows TUNED and reset cannot clear it. One source; test every team.
+- [x] ~~**WP-G2 Mercedes setup defaults (2×)** — `setup-tune.js:30` arbF/arbR 7/7 vs `garage-defaults.js:71` 6/5: a fresh
+  install shows TUNED and reset cannot clear it.~~ Intended, no change: the 6/5 is Bryce's deliberate tune (d0721f0530),
+  pinned by `garage-defaults.test.mjs:389` (asserts `isDefault("mercedes") === false`); `setup-tune.test.mjs:131` pins
+  reset() to the shipped sheet (#1289).
 - [ ] **WP-G3 career import with no undo** — `career-backup.js:610` the before-import restore point is not awaited;
   with IndexedDB down the import overwrites the slot anyway (the restore path refuses in that case).
 - [ ] **WP-G4 weekend marked started too early** — `game.js:2487` `Career.markWeekendStarted()` runs before
