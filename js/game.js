@@ -2597,6 +2597,8 @@ async function startRaceBody() {
   // Awaited so startRace's latch spans the sheet's build; openQuali lands its own failure on the menu.
   if (!isQuali() && gridFromQuali() && !quali.order(cars)) { loadingScreen.stop(); await openQuali(); return false; }
   RaceEntryProfile.mark("gridCountdown:start");
+  // M35/B6: raceIndex++ before gridUp so launch hashes share armReliability's round (drawRound on championship).
+  if (session === "race") { raceIndex++; }
   gridUp(gridOrderFor(gridFromQuali() ? quali.order(cars) : null));
   rlap("gridUp");
   wxArc.startChangeable(0);
@@ -2613,10 +2615,7 @@ async function startRaceBody() {
       `c${playerMods.cornering.toFixed(2)}/b${playerMods.braking.toFixed(2)}` : "none"} ` +
     `aeroLoad=${(playerAeroLoad ?? 0.5).toFixed(2)} assists=` +
     `help${driveTune.ROAD_FOLLOW.toFixed(2)}/line${raceLineAssist.toFixed(2)}`);
-  // Only a RACE can retire a car. A time trial is you against the clock and
-  // qualifying is one flying lap — losing the car to a gearbox there would end
-  // the session with nothing to show and no race to have lost it in.
-  if (session === "race") { raceIndex++; armReliability(cars); }
+  if (session === "race") armReliability(cars);
   resultT = 0; postFinish.since = -1;
   feel.camRoll = 0; camSlipSm = 0;
   feel.shake = 0; feel.hitStop = 0; stormFx._thunderT = -1; announce._waitAt = NaN;   // a crash's shake, a queued thunder or the WAITING card's quiet window from the last session must not reach this grid
