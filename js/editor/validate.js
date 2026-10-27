@@ -84,7 +84,7 @@ const TrackValidate = (function () {
       const n = tr.n, peaks = [];
       for (let k = 0; k < n; k++) { const v = Math.abs(tr.curv[k]); if (v >= Math.abs(tr.curv[(k - 1 + n) % n]) && v > Math.abs(tr.curv[(k + 1) % n]) && v > 0.002) peaks.push({ k, v }); }
       peaks.sort((a, b) => b.v - a.v);
-      turns = peaks.slice(0, Math.max(3, Math.min(peaks.length, 3))).map((p) => p.k / n);
+      turns = peaks.slice(0, 3).map((p) => p.k / n);
     }
     return turns.map((f) => ((f % 1) + 1) % 1).sort((a, b) => a - b);
   }
@@ -214,22 +214,49 @@ const TrackValidate = (function () {
       // whose centrelines clear the cars can still have the pit lane cross
       // the other road. Shipped defs have no design.pts, so the fleet oracle
       // does not take this gate.
-      let pitReach = 0;
+      let pitReach = 0, pitSide = 1, pitIn = null;
       if (Array.isArray(design.pts) && typeof TrackPit !== "undefined" && TrackPit.resolve) {
         try {
-          const off = TrackPit.resolve(def).off;
+          const pr = TrackPit.resolve(def), off = pr.off;
           pitReach = Math.max(0, ((off && off.workOut) || 0) - 0.9);
+          pitSide = pr.side === -1 ? -1 : 1;
+          // The complex stands only across the limiter window round s = 0 plus
+          // its entry / exit roads: a close pair elsewhere has no pit between.
+          const pw = TrackPit.window(tr, Tracks.curvature);
+          const back = pw.entryM + (TrackPit.ENTRY_ROAD || 0), fwd = pw.exitM + (TrackPit.EXIT_ROAD || 0);
+          pitIn = (k) => { const s = k * ds; return s <= fwd || s >= tr.total - back; };
         } catch (_) { pitReach = 0; }
       }
-      // The cell must out-reach the widest threshold below (both half-widths + the
-      // pit opening, or 10 m): at 26 m a pit-reach pair 35-45 m apart was found only
-      // when the hash put its two nodes in neighbouring cells.
-      const cell = Math.max(CLEAR_CELL, 2 * LIMITS.hwMax + Math.max(10, pitReach) + 2);
-      for (const w of S.clearance(px, pz, py, n, Dnodes, LIMITS.bridgeSep, cell, 6)) {
-        const need = hwA[w.i] + hwA[w.j];
-        if (w.dist < need + 2) { add("clearance", "red", "Two parts of the track overlap (" + Math.round(w.dist) + " m apart)", { s: w.i * ds, s2: w.j * ds, fix: "clearance" }); break; }
-        if (pitReach > 2 && w.dist < need + pitReach) { add("clearance", "red", "The pit opening crosses the other part of the track", { s: w.i * ds, s2: w.j * ds, fix: "clearance" }); break; }
-        if (w.dist < need + 10) { add("clearance", "amber", "Two parts of the track run very close (" + Math.round(w.dist) + " m)", { s: w.i * ds, s2: w.j * ds, fix: "clearance" }); break; }
+      // The cell must out-reach the widest threshold below (both half-widths + 10 m).
+      const cell = Math.max(CLEAR_CELL, 2 * LIMITS.hwMax + 12);
+      // Report the MOST SEVERE pair, not the first by centreline distance: each
+      // rule's threshold rides the pair's half-widths, so the scan ranks by the
+      // edge-to-edge gap and a closer narrow amber pair cannot mask a farther
+      // wide red one. Within a level the smallest gap wins.
+      let worst = null;
+      const consider = (w, rank) => { if (rank > (worst ? worst.rank : 0) || (worst && rank === worst.rank && w.gap < worst.w.gap)) worst = { w, rank }; };
+      for (const w of S.clearance(px, pz, py, n, Dnodes, LIMITS.bridgeSep, cell, 6, hwA)) consider(w, w.gap < 2 ? 3 : w.gap < 10 ? 1 : 0);
+      // The pit opening, scanned on its own: a node inside the pit window, the
+      // other road within the opening's reach on the PIT side of it (tr.rx/rz
+      // is the +right normal; absent → either side), not bridged over it.
+      if (pitReach > 2 && pitIn) {
+        for (let a = 0; a < n; a++) {
+          if (!pitIn(a)) continue;
+          for (let b = 0; b < n; b++) {
+            const dg = Math.abs(a - b);
+            if (Math.min(dg, n - dg) <= Dnodes || Math.abs(py[a] - py[b]) >= LIMITS.bridgeSep) continue;
+            const dist = Math.hypot(px[a] - px[b], pz[a] - pz[b]), need = hwA[a] + hwA[b];
+            if (dist < need + 2 || dist >= need + pitReach) continue;
+            if (tr.rx && tr.rz && ((px[b] - px[a]) * tr.rx[a] + (pz[b] - pz[a]) * tr.rz[a]) * pitSide <= 0) continue;
+            consider({ i: a, j: b, dist, gap: dist - need }, 2);
+          }
+        }
+      }
+      if (worst) {
+        const w = worst.w, at = { s: w.i * ds, s2: w.j * ds, fix: "clearance" };
+        if (worst.rank === 3) add("clearance", "red", "Two parts of the track overlap (" + Math.round(w.dist) + " m apart)", at);
+        else if (worst.rank === 2) add("clearance", "red", "The pit opening crosses the other part of the track", at);
+        else add("clearance", "amber", "Two parts of the track run very close (" + Math.round(w.dist) + " m)", at);
       }
       // Grade over a gradeWindowM (40 m) window; elevation range for the stats.
       let lo = Infinity, hi = -Infinity, gMax = 0, gAt = 0;
