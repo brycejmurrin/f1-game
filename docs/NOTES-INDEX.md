@@ -20,6 +20,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 
 | Note | What it records |
 |---|---|
+| [notes/review-2026-10-27/](notes/review-2026-10-27/README.md) | 2026-10-27: 36 Opus skill passes (all FIX), 8 Opus code hunts and the rulebook review behind the [review fix plan](plans/2026-10-27-review-fix-plan.md) |
 | [notes/orchestration-redesign-2026-10-27/](notes/orchestration-redesign-2026-10-27/README.md) | 2026-10-27: the eight read-only reviews (bus history, tooling, rulebook, measured outcomes, platform docs, Claude / Cursor / Codex transcripts) behind the [orchestration redesign plan](plans/2026-10-27-orchestration-redesign.md) |
 | [System audit, fourth pass](notes/SYSTEM-AUDIT-4-2026-10-26.md) | 2026-10-26: ~75 reviewers; re-verifies pass 3 (13 corrections), whole-population bus/PR/CI/session/Cursor/skill/card/docs/economics review; evidence in `notes/system-audit-4/` |
 | [System audit, third pass](notes/SYSTEM-AUDIT-3-2026-10-26.md) | 2026-10-26: 12 reviewers, 137 findings ranked into 39 items; what #3785/#3811 fixed; slice evidence in `notes/system-audit-3/` |
@@ -205,6 +206,7 @@ ledger lists.
 
 ## Orchestration
 
+- [Review fix plan, 2026-10-27](plans/2026-10-27-review-fix-plan.md): OPEN — every finding from the whole-surface Opus review as PR-sized work packages (landing safety first, then game bugs, skills, rulebook); evidence in [notes/review-2026-10-27/](notes/review-2026-10-27/README.md).
 - [Orchestration redesign: GitHub is the orchestrator](plans/2026-10-27-orchestration-redesign.md): shipped in #3895 on 2026-10-27 — labels, `land.yml` and the dispatcher replace the bus, claims board and orchestrators (the contract: [WORKERS.md](WORKERS.md)); evidence in [notes/orchestration-redesign-2026-10-27/](notes/orchestration-redesign-2026-10-27/README.md).
 - [Fleet redesign, 2026-10-19](plans/2026-10-19-fleet-redesign.md): superseded by the 2026-10-27 redesign; history only.
 
