@@ -1535,17 +1535,78 @@
       ]
     },
     "js/camera/feel.js": {
+      "applyFreeLook": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "consumeAimSnap": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "drive": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
       "follow": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "freeLookState": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
+      "isBuzzMode": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "isFreeLookMode": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "lookBackLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "lookingBackNow": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "modeFov": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetFollow": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetFreeLook": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "scoped": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "setLookBackLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "setSpeedVignette": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shake": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shakeNoise": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shouldLookBack": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "speedFov": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "speedVignette": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
       "tick": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "tickRace": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ]
     },
@@ -3504,6 +3565,9 @@
         "tests/unit/settings-export.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
+      "applyWithUndo": [
+        "tests/unit/career-backup.test.mjs"
+      ],
       "build": [
         "tests/unit/career-backup.test.mjs"
       ],
@@ -3859,6 +3923,7 @@
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "objective": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-settle.test.mjs"
       ],
       "objectiveChoices": [
@@ -4412,10 +4477,10 @@
     },
     "js/career/team-identity.js": {
       "capture": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/save-durability.test.mjs"
       ],
       "*": [
-        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-data-audio-improvements.test.mjs"
       ]
     },
@@ -4696,7 +4761,6 @@
     "js/circuits/spa.js": {
       "*": [
         "tests/unit/deploy-tool.test.mjs",
-        "tests/unit/fleet-owner.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -4868,7 +4932,6 @@
         "tests/specs/logging.spec.js",
         "tests/specs/telemetry-compare.spec.js",
         "tests/unit/agent-config.test.mjs",
-        "tests/unit/agent-history.test.mjs",
         "tests/unit/ambient-env-override.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/car-presentation-vm.test.mjs",
@@ -4890,8 +4953,10 @@
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/log-namespaces.test.mjs",
         "tests/unit/lsp-mcp.test.mjs",
+        "tests/unit/merge-gate.test.mjs",
         "tests/unit/phone-touch-surface.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/ready-gate.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/select-specs.test.mjs",
@@ -7118,6 +7183,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/loading-card.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/start-race-latch.test.mjs"
       ],
       "startRaceCovered": [
@@ -7208,7 +7274,6 @@
       "update": [
         "tests/specs/audio-smoke.spec.js",
         "tests/specs/ui-scale.spec.js",
-        "tests/unit/agent-config.test.mjs",
         "tests/unit/assets-pack.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/bash-guard-hardening.test.mjs",
@@ -7260,8 +7325,8 @@
         "tests/specs/multiplayer-seats.spec.js",
         "tests/specs/steer-migration.spec.js",
         "tests/specs/steering.spec.js",
+        "tests/unit/agent-config.test.mjs",
         "tests/unit/agent-output.test.mjs",
-        "tests/unit/apex-tools-mcp.test.mjs",
         "tests/unit/backend-surface-parity.test.mjs",
         "tests/unit/cam-comfort.test.mjs",
         "tests/unit/camera-defaults.test.mjs",
@@ -7278,7 +7343,6 @@
         "tests/unit/design-matrix.test.mjs",
         "tests/unit/desktop-app-protocol.test.mjs",
         "tests/unit/episode-transients.test.mjs",
-        "tests/unit/fleet-board-snapshot.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
         "tests/unit/garage-before.test.mjs",
@@ -7312,12 +7376,10 @@
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/profile-lib.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/radio-duration.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
         "tests/unit/ratchet-reason.test.mjs",
         "tests/unit/ratchets.test.mjs",
-        "tests/unit/ready-gate.test.mjs",
         "tests/unit/render-final-contracts.test.mjs",
         "tests/unit/report-server.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -13107,6 +13169,9 @@
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
+      "dryLine": [
+        "tests/unit/weather-arc-rain.test.mjs"
+      ],
       "endSession": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/storm-weather.test.mjs",
@@ -13153,7 +13218,8 @@
       ],
       "syncWetness": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
-        "tests/unit/rain-cells.test.mjs"
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "tick": [
         "tests/unit/forecast.test.mjs",
@@ -14792,7 +14858,6 @@
         "tests/unit/census-verdict.test.mjs",
         "tests/unit/ci-gate-selection.test.mjs",
         "tests/unit/deploy-tool.test.mjs",
-        "tests/unit/fleet-owner.test.mjs",
         "tests/unit/frame-hitch-analyse.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/lamp-chunks.test.mjs",
@@ -16649,7 +16714,6 @@
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/change-kind.test.mjs",
-        "tests/unit/fleet-owner.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
         "tests/unit/hud-inputs.test.mjs",
         "tests/unit/hud-portrait-cluster.test.mjs",

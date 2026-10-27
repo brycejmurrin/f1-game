@@ -6,9 +6,9 @@
  * js/ui/hud.js through updateHud on a mini-dom with fixed rects and assert what the
  * page ends up with, so they hold for ship's fitHud and for the allocator alike.
  *
- * Pins that FAIL on ship today are `todo` (node:test runs them and reports, the
- * suite stays green) and name the change that fixes them. When that change lands,
- * drop the `todo` — never loosen the assertion to make it pass.
+ * A pin that FAILS on ship is marked `todo` (node:test runs and reports it, the suite
+ * stays green) with the change that fixes it; drop the `todo` when that change lands —
+ * never loosen the assertion to make it pass.
  *
  * Run: node --test tests/unit/hud-pins.test.mjs
  */
@@ -242,7 +242,6 @@ test("pin: a HIDDEN readout never bounds the radio lane (visible-element-only ob
 });
 
 test("pin F-02: the lane comes back after the docks hide and return with the same geometry",
-  { todo: "hStyle's write cache survives a bare removeProperty (js/ui/hud.js announceLane) — fixed by hUnset on branch cursor/hud-band-allocator-5e2c" },
   () => {
     const h = boot();
     const first = h.lane();
@@ -254,7 +253,6 @@ test("pin F-02: the lane comes back after the docks hide and return with the sam
   });
 
 test("pin F-06: a radio card the fit collapsed off S3 stays collapsed for the rest of the tick",
-  { todo: "updateHud re-runs announceLane after fitHud's painted collapse and re-opens the lane (js/ui/hud.js ~:1836) — fixed by placeRadio on branch cursor/hud-band-allocator-5e2c" },
   () => {
     const h = boot();
     h.announce.hidden = false;

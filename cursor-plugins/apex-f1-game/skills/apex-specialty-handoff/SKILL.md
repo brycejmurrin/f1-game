@@ -1,36 +1,34 @@
 ---
-name: Apex specialty handoff
+name: Apex PR hand-off
 description: >-
-  Use when coordinating Apex specialty Grok bots: lane ownership, handoff
-  fields, and when to wake vs FYI.
+  Use when an Apex (f1-game) Cursor agent ends its run, hands work to another
+  agent, or writes its status: the PR's handoff block, labels and comments.
 ---
-# Apex specialty handoff
+# Apex PR hand-off
 
-Use when messaging an Apex specialty Grok bot or writing its status/digest.
+The contract is `docs/WORKERS.md`; this skill restates none of it beyond the shape.
 
-## Lanes (do not cross)
-- **UI Survey** — menus, HUD chrome, garage sheets, settings UI
-- **Cars** — meshes, liveries, garage presentation
-- **Tracks** — scenery, landmarks, audits
-- **Perf** — boot, CSS, particles, probes, GL backends
-- **CI Watch** — CI/Pages watcher; read-only watcher; merge authority follows `AGENTS.md` §Concurrent PRs and `.claude/rules/fleet-core.md`
-- **Audio** — radio, SFX, mute, spotter
-- **Net** — multiplayer, TURN, lobby, VS Friend net
-- **Docs** — indexes, handoffs, docs-only PRs
-- **Insights** — transcript digests, collision detection
+## The one hand-off
+The PR body IS the report (`.github/pull_request_template.md`: Goal, Plan, Verified / Not run, Hand-off). Its last
+section is the ```handoff block (`docs/WORKERS.md` §The Hand-off block):
 
-## Handoff shape (required)
-No "done" / "ready for review" without **all** of:
-1. **paths** — files/globs touched (or "none")
-2. **PR / bc links**
-3. **owned path globs** — `OWNED:` (and `FORBIDDEN:` if set)
-4. **ranked next ≤3**
-5. **blockers** — or explicit **`idle / no PR`**
+```handoff
+branch: <branch>
+head: <sha>
+owner: cursor:<agent id>
+lane: cursor
+verified: <what ran, verdict lines>
+not-run: <groups the change needs that did not run, and why>
+next: <the one next step>
+```
 
-Full stall-abort + merge-not-rebase text: `docs/notes/AGENT-STALL-HANDOFF-SYNC-2026-10-05.md`.
+Refresh it at every push. A takeover starts from this block and the Plan and reads nothing else.
 
-## Messaging
-- `priority: true` only if they must act or someone is waiting.
-- FYI / status → `priority: false`.
-- Do not fan out the same ask to every specialist unless the user asked.
-- Merge authority follows `AGENTS.md` §Concurrent PRs and `.claude/rules/fleet-core.md`; workers do not merge. Sync = merge origin ship, never rebase/force.
+## Messages
+- Comments on the issue or PR are the only messages between agents. There is no bus, no priority/FYI channel and no
+  orchestrator or watcher lane to report to.
+- A question only Bryce can answer: `needs-decision` plus one comment with the options and your pick, then keep
+  working on everything that does not depend on it (WORKERS §7).
+- A Cursor run ends at ready. You cannot set labels: the dispatcher sets `run-ci` and `land` from the Hand-off
+  block, and a red after your run is a dispatcher follow-up turn (WORKERS §Per vendor).
+- Never merge or arm; sync = merge origin's deploy branch via `sync-pr.mjs`, never rebase or force-push.

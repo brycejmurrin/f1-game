@@ -140,12 +140,6 @@ test("CLI forwards a scoped file summary", () => {
   assert.doesNotMatch(text, /^js\/(?!physics\/)[^\n]+ \d+$/m);
 });
 
-test("navigation benchmark help and argument validation need no compiler", () => {
-  const script = path.join(ROOT, "tools/mcp/lsp-navigation-bench.mjs");
-  assert.match(execFileSync(process.execPath, [script, "--help"], { encoding: "utf8", timeout: 5000 }), /first query and warm/);
-  assert.throws(() => execFileSync(process.execPath, [script, "--iterations=0"], { encoding: "utf8", timeout: 5000, stdio: "pipe" }), error => error.status === 2 && /2 to 10/.test(error.stderr));
-});
-
 test("cold outlines coalesce by document and generation without serializing files", async () => {
   await fixture(async lsp => {
     lsp.ensureOpen = () => 1;

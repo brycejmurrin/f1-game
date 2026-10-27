@@ -1,0 +1,28 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "apex-tools": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/scripts/apex-tools-bridge.mjs"
+      ]
+    },
+    "apex-lsp": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/scripts/apex-tools-bridge.mjs",
+        "apex-lsp"
+      ]
+    },
+    "js-debugger": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/scripts/apex-tools-bridge.mjs",
+        "js-debugger"
+      ]
+    }
+  }
+}

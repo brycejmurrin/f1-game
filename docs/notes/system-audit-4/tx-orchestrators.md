@@ -29,7 +29,7 @@ E0's three uncapped sessions (O23 $93 over 7.3 h, O24 $139 over 9.8 h ending at 
 **3. Rules still broken.** See the findings below (F1, F3–F7), each with session, time and the rule's home.
 
 **4. Questions Bryce got that the rules already answered (quoted).**
-- q11 07:39:12: "…That leaves 8 that are idle and finished or handed off. Which should I archive?" `fleet-core.md` "Archive by `node tools/ci/fleet-archive.mjs`" already answers this; the tool's own header cites "may I archive?" as the question it retires.
+- q11 07:39:12: "…That leaves 8 that are idle and finished or handed off. Which should I archive?" `fleet-core.md` "Archive by `node fleet-archive.mjs" already answers this; the tool's own header cites "may I archive?" as the question it retires.
 - q15 13:37:31: "…each still carries a MERGE-HOLD left by Fleet C's worker. The conditions that hold set … are now met. Only you can lift a MERGE-HOLD." `fleet-core.md`: a hold a worker wrote may be lifted by its writer, Bryce, or the orchestrator.
 - seed2 14:39:03: "May the orchestrator launch worker sessions while the seven_day limit is at allowed_warning?" Bryce had already answered "launch freely" at 14:24 (pass 3 T1). Root cause: F1.
 - Legitimate questions: q15 13:56:52 (a merge the gate refuses), seed 14:16:33 (Bryce had said stand down), O2 17:08:19 (PR trains, a new mechanism).

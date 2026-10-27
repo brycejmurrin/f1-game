@@ -9,13 +9,15 @@ Updated 2026-10-18 (#2901): one reviewed store for every host, explicit CLI,
 
 | store | where | loaded | written by |
 |---|---|---|---|
-| Instructions | `AGENTS.md` (via `CLAUDE.md`), `.claude/rules/` (`fleet-core` always-on) | every session | people, reviewed |
+| Instructions | `AGENTS.md` (via `CLAUDE.md`), `docs/WORKERS.md`, `.claude/rules/` (by `paths:`) | every session | people, reviewed |
 | Subagent memory | `.claude/agent-memory/<agent>/` (`memory: project`) | that subagent | the subagent; schema + expiry pinned by `agent-config.test.mjs` |
 | Auto memory (shared) | tracked: `.claude/memory/`; Claude live: `~/.claude/projects/<repo>/memory/` | every host reads the tracked copy; Claude also loads the first 200 lines / 25 KB of `MEMORY.md` into the live dir | people + Claude auto (types `user`, `feedback`, `project`, `reference`) |
 
-Fleet behaviour (merge commits, MERGE-HOLD, subscribe, PT, phone-first) lives in
-`.claude/rules/fleet-core.md` — not in the memory index. Cursor gets the
-generated twin via `npm run gen` (`gen-cursor-rules`).
+Coordination behaviour (merge commits, the `hold` label, `land`, subscribe, PT,
+phone-first) lives in AGENTS.md §Coordination and `docs/WORKERS.md` — not in the
+memory index. (Until 2026-10-27 it lived in an always-on `fleet-core` rule file,
+retired with the orchestration redesign, #3895.) Cursor gets the generated twins
+of `.claude/rules/` via `npm run gen` (`gen-cursor-rules`).
 
 ## Cross-host commands (Claude / Cursor / Codex)
 
@@ -93,8 +95,8 @@ closed (never "no memory edits").
 
 - Memories are committed, so they are reviewed like code; `agent-config.test.mjs`
   keeps the index under 200 lines, requires a typed frontmatter per topic file,
-  rejects secret-shaped strings, forbids duplicate index→file links, fleet-core
-  keyword restatements in the index, and `type: project` topics with a
+  rejects secret-shaped strings, forbids duplicate index→file links, AGENTS.md
+  §Coordination keyword restatements in the index, and `type: project` topics with a
   "Stale check" note.
 - Never auto-write `AGENTS.md`; promote a repeated lesson to a hook or test.
 - Opt out on one machine: `"env": {"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"}` in

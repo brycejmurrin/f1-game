@@ -8,8 +8,7 @@ paths:
 - Hooks (`.claude/hooks/**`) and `.claude/settings*.json` need Bryce's explicit
   yes before ready — do not edit them without that grant.
 - Memory (`.claude/memory/`) edits belong in a memory-focused PR unless Bryce
-  grants a combined one; `ready-gate` flags them on other PRs. Index lines must
-  not restate fleet-core topics.
+  grants a combined one; `ready-gate` flags them on other PRs.
 - Skills and agents live under `.claude/skills` / `.claude/agents`; keep the
   Codex mirror with `bash tools/env/mirror-skills.sh`. Never fork under
   `.cursor/skills/` or `.cursor/agents/`.
@@ -35,11 +34,12 @@ paths:
   (AGENTS.md rule 12). It also blocks `pkill -f`, PID kills of a test-bg run, a browser run inside a
   subagent (`mcp-browser-guard.sh` for the MCP browser tools) and any Actions run
   cancel. `github-mcp-guard.sh` and bash-guard's `gh pr merge`/`gh pr ready`/`gh api`
-  check (one text, `merge_policy.py`) deny squash/rebase and run cancels, and
-  require the merge-gate / ready-gate receipts.
-- `context-cap.py` names live context against the size stop and refuses spawns
-  over the hard cap; `launch-gate.py` refuses `create_session` without a fresh
-  quota receipt (#3777; `agent-fleet` `references/launch-policy.md`).
+  check (one text, `merge_policy.py`) deny squash/rebase and run cancels, refuse
+  every session merge or arm (land.yml lands; merge-gate writes no receipt) and
+  require the ready-gate receipt for a draft→ready flip.
+- `context-cap.py` names live context against the brief's `STOP AT` and refuses spawns over the hard
+  cap; `launch-gate.py` refuses `create_session` without a fresh quota receipt
+  (`tools/ci/launch-gate.mjs`, from the page `launch-page.py` records on `get_session`).
 - Advisory: `post-edit.sh` (a `js/` edit that does not parse or staled a generated
   file), `lsp-hint.py` (the apex-lsp call after a bare-symbol grep),
   `stop-guard.sh` (a turn ending over a live run), `subagent-contract.py` (a

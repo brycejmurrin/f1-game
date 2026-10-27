@@ -660,7 +660,7 @@ test("the printed pattern is the pattern deploy.mjs matches with", () => {
  * with it. proseOnly() is the predicate that ends that, and it is NARROW on
  * purpose — the interaction it claims does not exist has to actually not exist. */
 test("proseOnly is true for prose and false for anything that can interact", () => {
-  assert.equal(proseOnly(["docs/notes/SHARED-BRANCH-COORDINATION.md", "AGENTS.md"]), true);
+  assert.equal(proseOnly(["docs/archive/notes/SHARED-BRANCH-COORDINATION.md", "AGENTS.md"]), true);
   assert.equal(proseOnly(["docs/TESTING.md"]), true);
 
   // TESTS AND TOOLS ARE NOT PROSE. A guard this session added really can be
@@ -991,6 +991,6 @@ console.log(JSON.stringify({error:r.error?.code,survivors:r.survivors}));`;
   assert.deepEqual(JSON.parse(r.stdout), { error: "SIGTERM", survivors: [] });
 });
 
-test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (fleet-owner relies on it)", () => {
+test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (sync-pr conflict cure relies on it)", () => {
   for (const p of GENERATED_PATHS) assert.equal(cureableConflicts([p]).cureable, true, `${p} is listed as generated but deploy.mjs cannot cure a conflict in it`);
 });

@@ -252,17 +252,34 @@ const TrackDesigner = (function () {
    *  the control points both loops share — the unchanged head walked forward,
    *  the unchanged tail walked back (a stamp may thin the tail with RDP, so its
    *  survivors are a subsequence) — and a zone between two anchors keeps its
-   *  share of that stretch. When the start point itself changed there is no
-   *  anchor and the fractions stand — but heights are keyed by control-point
-   *  identity (coordinates), not arc fraction, so they are remapped regardless. */
-  function remapZones(d, oldPts, newPts) {
+   *  share of that stretch. When the edit moved the start onto a surviving old
+   *  point (a stamp over a span that wraps the line, deleting point 0) the old
+   *  loop is first rotated to that point, like setStart, so the zones keep their
+   *  ground. A brand-new start has no anchor and the fractions stand — but heights
+   *  are keyed by control-point identity (coordinates), so they remap regardless. */
+  function remapZones(d, oldPts, newPts, rotated) {
     const N = oldPts.length, M = newPts.length;
     const same = (p, q) => p[0] === q[0] && p[1] === q[1];
     if (!N || !M) return d;
-    if (!same(oldPts[0], newPts[0])) return Object.assign({}, d, { heights: remapHeights(d, oldPts, newPts) });
+    if (!same(oldPts[0], newPts[0])) {
+      const r = oldPts.findIndex((p) => same(p, newPts[0]));
+      if (r <= 0) return Object.assign({}, d, { heights: remapHeights(d, oldPts, newPts) });
+      const c = cumArc(oldPts), f = c[N] > 0 ? c[r] / c[N] : 0, hs = Array.isArray(d.heights) ? d.heights : [];
+      const rot = withZones(d, hs.length === N ? { heights: hs.slice(r).concat(hs.slice(0, r)) } : null, (v) => v - f, false);
+      return remapZones(rot, S.rotate(oldPts, r), newPts, true);
+    }
     const head = [[0, 0]];
     let i = 1, j = 1;
     while (i < N && j < M && same(oldPts[i], newPts[j])) head.push([i++, j++]);
+    // Rotated (the edit wrapped the line): the edited span is the loop's END,
+    // and a stamp's RDP pass may have thinned the survivors ahead of it, so the
+    // head is a subsequence like the tail.
+    if (rotated) for (; j < M; j++) {
+      let k = i;
+      while (k < N && !same(oldPts[k], newPts[j])) k++;
+      if (k >= N) break;
+      head.push([k, j]); i = k + 1;
+    }
     if (i === N && j === M) return d;                    // nothing changed
     const tail = [[N, M]];                               // both loops close back onto point 0
     for (let jn = M - 1, io = N - 1; jn >= j; jn--) {

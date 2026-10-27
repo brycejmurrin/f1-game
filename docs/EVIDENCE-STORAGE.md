@@ -199,8 +199,6 @@ This prevents future Git growth. It does not remove already committed images or
 change existing PR history. Continue existing survey PRs against their existing
 base; new image-only capture work needs an upload and links, not a Git image PR.
 Code or tooling fixes still use a normal deploy-branch PR.
-The older `tools/ci/publish-shots.mjs` writes Git image branches and is a legacy
-maintenance tool; use the release uploader for new evidence.
 
 The remaining history cleanup is tracked in the [deferred cleanup plan](plans/2026-10-19-deferred-history-cleanup.md). Development continues; that plan schedules no rewrite, maintenance freeze or recovery-ref purge.
 

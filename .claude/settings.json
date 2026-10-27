@@ -68,15 +68,11 @@
       "Bash(node --test *)",
       "Bash(node --check *)",
       "Bash(node -e *)",
-      "Bash(node tools/ci/agent-msg.mjs send *)",
       "Bash(node tools/ci/ready-gate.mjs *)",
       "Bash(node tools/ci/merge-gate.mjs *)",
       "Bash(node tools/ci/ci-watch.mjs *)",
-      "Bash(node tools/ci/fleet-bus.mjs *)",
-      "Bash(node tools/ci/fleet-owner.mjs *)",
-      "Bash(node tools/ci/fleet-archive.mjs *)",
-      "Bash(node tools/ci/fleet-brief.mjs *)",
-      "Bash(node tools/ci/launch-lane.mjs *)",
+      "Bash(node tools/ci/archive-sessions.mjs *)",
+      "Bash(node tools/ci/dispatch.mjs --plan*)",
       "Bash(node tools/ci/pr-board.mjs *)",
       "Bash(node tools/ci/session-status.mjs *)",
       "Bash(node tools/ci/session-transcript.mjs *)",
@@ -96,7 +92,6 @@
       "Bash(node tools/ci/deploy.mjs --plan*)",
       "Bash(node tools/ci/deploy.mjs --gate-only*)",
       "Bash(node tools/ci/sync-pr.mjs * --plan*)",
-      "Bash(node tools/ci/who-is-on-it.mjs *)",
       "Bash(node tools/track/verify-track.cjs *)",
       "Bash(node tools/track/graph-parity.cjs *)",
       "Bash(node tools/gen/gen-shell.mjs *)",
@@ -284,7 +279,7 @@
         ]
       },
       {
-        "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$",
+        "matcher": "^mcp__github__(enable_pr_auto_merge|merge_pull_request|update_pull_request|issue_write|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$",
         "hooks": [
           {
             "type": "command",

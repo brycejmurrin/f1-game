@@ -34,7 +34,7 @@
   until: READY+merge-gate", #3800 "| lift: DAD | until: merge by DAD") = shape-valid but still not a veto. 5 are waits (#3762, #3760
   READY, #3758, #3755, #3748: "deploy gate remains pending…"). pr-board.mjs:68-69 hasMergeHold = /^MERGE-HOLD:/m only; merge-gate:337
   uses it. Fix right; a shape check alone passes #3835/#3800, so the `owner:` line is the real fix.
-- 16 REFUTED (core) / CONFIRMED (cost): the rule IS in the repo — docs/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md:102-126 §7
+- 16 REFUTED (core) / CONFIRMED (cost): the rule IS in the repo — docs/archive/notes/FLEET-ADAPTIVE-COORDINATION-2026-10-22.md:102-126 §7
   "Train discipline", item 3 "Drain for the train: when a train has been queued for 10 min or more, orchestrators stop marking drafts
   ready, adding run-ci…", agreed by Bryce 2026-10-22 09:11Z (:112). Workers misapply it: they hold on in_progress ≥ 10 min (rule says
   queued), and it binds orchestrators, not workers. Bus: 36 records (33 BLOCKED, 3 HANDOFF), 29 senders (35 cursor, 1 claude A·O3

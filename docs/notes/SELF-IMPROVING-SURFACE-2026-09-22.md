@@ -1,6 +1,6 @@
 # Can the agent surface improve itself? — research, 2026-09-22
 
-Companion to [`AGENT-TOOLING-RESEARCH-2026-09-22.md`](AGENT-TOOLING-RESEARCH-2026-09-22.md),
+Companion to [`AGENT-TOOLING-RESEARCH-2026-09-22.md`](../archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md),
 which asked whether the surface matches current guidance. This asks a different
 question: **should each session write what it learned back into `AGENTS.md`, the
 skills, the docs and the tests — and does that make anything better?**

@@ -320,7 +320,7 @@ export const USAGE = `usage: node tools/ci/ci-watch.mjs [--sha <sha|ref>] [--pag
   run-ci label / ready / reopen; none = no floor). Details: the header of this file and AGENTS.md §Watching CI and Pages.
   An unknown flag prints this usage and exits 2.`;
 export const KNOWN_FLAGS = ["--sha", "--pages", "--once", "--failures-only", "--wait", "--jobs", "--state", "--timeout", "--interval", "--since"];
-// Only as the entry point: fleet-board-snapshot imports this module with its own argv.
+// Only as the entry point: a module that imports this one keeps its own argv.
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) strictFlags(argv, KNOWN_FLAGS, USAGE);
 const opt = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
 

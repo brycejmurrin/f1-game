@@ -10,6 +10,7 @@ with one pilot, then batches of two or three circuits once the approach works.
 Arguments: `$ARGUMENTS` — the circuit ids (and an optional target year) typed
 after `/survey-track`; every id must be in `Tracks.LIST`. Empty ids → ask before
 step 1. No year → take the era from the `docs/tracks/<id>.md` header, else ask once.
+In a worker, asking is `needs-decision` plus one comment with your pick (docs/WORKERS.md §7).
 
 1. Read repository and nested circuit guidance, current briefs and source.
    Pin the starting SHA; select circuit ids, target era and 3–5 observable

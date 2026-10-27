@@ -76,7 +76,7 @@ hands over to **new-track**, not dressing; routing is in the description.
 Parent (this session):
 1. Read the brief and source pair; run the `audit-circuit` baseline and take the
    captures (aerial/orbit/EYE, obliques) the surveyor will measure against; any HUD or
-   driver-view capture at 844×390 landscape first (fleet-core).
+   driver-view capture at 844×390 landscape first (AGENTS.md §Coordination).
 2. Spawn one `track-surveyor` with [delegation.md](references/delegation.md).
 3. Merge its branch into yours (AGENTS.md rule 10), capture the same framings
    after integration, then browser checks and shipping via **check-changes**.

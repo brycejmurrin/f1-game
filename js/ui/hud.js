@@ -929,10 +929,41 @@ function gapPaintedDrop() {
   if (gaps) void gaps.offsetHeight;
   return true;
 }
+/** Gap strip painted over the rear-view mirror frame (#3271: portrait cockpit, the dropped strip sits in the mirror's row). */
+function gapsMirrorPaintedClash() {
+  if (document.body.classList.contains("desktop") || !_mirEl || _mirEl.hidden || !document.body.classList.contains("hud-mirror-on")) return false;
+  const gaps = document.querySelector(".hud-gaps");
+  if (!gaps || gaps.hidden || manualHud(gaps) || manualHud(_mirEl) || document.body.classList.contains("hud-hide-gaps")) return false;
+  return _hudRectsHit(gaps.getBoundingClientRect(), _mirEl.getBoundingClientRect());
+}
+/** Park the strip under the mirror frame; css/hud.css reads --mir-paint-b through [data-gap-mir]. */
+function gapMirrorDrop() {
+  if (document.documentElement.dataset.gapMir || !gapsMirrorPaintedClash()) return false;
+  document.documentElement.dataset.gapMir = "1";
+  void document.documentElement.offsetHeight;
+  return true;
+}
+const _PEDAL_STEER = () => [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
+const _hitPedalSteer = (rr) => _PEDAL_STEER().some((el) => el && !el.hidden && _hudRectsHit(rr, el.getBoundingClientRect()));
+/** Slide #hud-aero right past a steer/pedal button it paints over (#3272), never into the right dock. */
+function nudgeAero(z) {
+  const aero = els.aero, ar = aero && !manualHud(aero) && !aero.hidden ? aero.getBoundingClientRect() : null;
+  if (!ar || !ar.width) return;
+  let need = 0, limit = Infinity;
+  for (const el of _PEDAL_STEER()) {
+    const b = el && !el.hidden ? el.getBoundingClientRect() : null;
+    if (!b || !_hudRectsHit(ar, b)) continue;
+    if (b.left + b.right < ar.left + ar.right) need = Math.max(need, b.right + 8 - ar.left);
+    else limit = Math.min(limit, b.left - 8 - ar.right);
+  }
+  if (need <= 0.5 || need > limit) return;
+  aero.style.position = "relative";
+  aero.style.left = ((parseFloat(aero.style.left) || 0) + need / z).toFixed(1) + "px";
+}
 /** Painted phone readout-on-control clashes the spec measures (not budget math). */
 function phonePaintedClash(boostIn) {
   if (document.body.classList.contains("desktop")) return false;
-  if (towerGapsPaintedClash()) return true;
+  if (towerGapsPaintedClash() || gapsMirrorPaintedClash()) return true;
   const sectors = els.hudSectors;
   const boost = boostIn !== undefined ? boostIn : _boostOnRightHalf();   // a caller that already measured it this tick passes it
   if (sectors && !manualHud(sectors) && !sectors.hidden && boost && _hudRectsHit(sectors.getBoundingClientRect(), boost.getBoundingClientRect())) return true;
@@ -947,14 +978,9 @@ function phonePaintedClash(boostIn) {
         if (box.width && box.height && _hudRectsHit(rr, box)) return true;
       }
     }
-    const pedalSteer = [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
-    for (let i = 0; i < pedalSteer.length; i++) {
-      const el = pedalSteer[i];
-      if (!el || el.hidden) continue;
-      const box = el.getBoundingClientRect();
-      if (box.width && box.height && _hudRectsHit(rr, box)) return true;
-    }
+    if (_hitPedalSteer(rr)) return true;
   }
+  if (els.aero && !manualHud(els.aero) && !els.aero.hidden && _hitPedalSteer(els.aero.getBoundingClientRect())) return true;
   return false;
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
@@ -1014,13 +1040,16 @@ function phoneFitStampSync(scale, force) {
   const sk = radioPaintedKey(root) + "|" + _fitKey + "|" + (typeof HudRelative !== "undefined" && HudRelative.fitKey ? HudRelative.fitKey() : "")
     + "|" + (els.hudSectors ? (els.hudSectors.hidden ? "h" : "v") : "-");
   if (!force && _fitStamped && !_fitPending && sk === _stampKey && --_stampWait > 0) return;
+  if (els.aero && els.aero.style.left) { els.aero.style.left = ""; els.aero.style.position = ""; }   // a stale #3272 nudge: the probe re-applies it
   // One probe per pass: the verdict after the last pass feeds the stamp below.
+  if (root.dataset && "gapMir" in root.dataset) delete root.dataset.gapMir;   // re-derived by the probe below
   let clash = phonePaintedClash();
   for (let pass = 0; pass < 8 && clash; pass++, clash = phonePaintedClash()) {
-    if (gapPaintedDrop()) continue;
+    if (gapPaintedDrop() || gapMirrorDrop()) continue;
     if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
     bumpDock();
     shrinkSectors();
+    nudgeAero((els.aero && els.aero.currentCSSZoom) || scale || 1);
   }
   // A custom property written on <html> invalidates style for the whole tree and
   // wakes sheet-shape's watchScale observer, so the 10 Hz tick must not rewrite

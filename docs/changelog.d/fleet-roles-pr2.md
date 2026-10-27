@@ -1,3 +1,0 @@
-New: `tools/ci/fleet-owner.mjs` says who owns a path — HELD by an open PR's diff, CLAIMED, or FREE — and prints the exact RELEASED/HELD bus answer, so cross-fleet release requests stop being typed by hand.
-New: bus lines addressed to a PR (`to:#<n>`) are mirrored as a comment on that PR by `tools/ci/fleet-bus-mirror.mjs` in the fleet workflow, so PR owners on every host see them; the bus now refuses recipients no session can receive.
-Improved: agent-fleet gains a seed role (one tiny session per fleet that launches orchestrators), one tested successor-launch path, and multi-host rules for Claude on two accounts, Codex and Cursor.

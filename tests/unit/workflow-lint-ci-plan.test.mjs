@@ -96,10 +96,6 @@ test("fold workflows FAIL when gh pr create is refused, and open one issue inste
   }
 });
 
-test("fleet.yml's cron is hourly: the 30-min schedule delivered 12.5 % of its runs (audit3 F5)", () => {
-  assert.deepEqual(wf("fleet.yml").on.schedule, [{ cron: "23 * * * *" }]);
-});
-
 test("selected-verdict reds a PR on a touched js dir with no coverage; the train only warns (ci-7d C7)", () => {
   assert.equal(job("select").outputs.coverage_gaps, "${{ steps.gaps.outputs.coverage_gaps }}");
   const gate = step("selected-verdict", "Every touched js dir has coverage");
