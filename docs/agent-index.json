@@ -2076,43 +2076,43 @@
     {
       "path": "js/audio/announcer-recorded.js",
       "global": "RecordedAnnouncer",
-      "order": 528,
+      "order": 529,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/announcer.js",
       "global": "Announcer",
-      "order": 529,
+      "order": 530,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/battle-earcon.js",
       "global": "BattleEarcon",
-      "order": 526,
+      "order": 527,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/car-sfx.js",
       "global": "CarSfx",
-      "order": 524,
+      "order": 525,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/crowd.js",
       "global": "CrowdAudio",
-      "order": 523,
+      "order": 524,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/driving-cues.js",
       "global": "DrivingCues",
-      "order": 531,
+      "order": 532,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/engine.js",
       "global": "GameAudio",
-      "order": 519,
+      "order": 520,
       "roster": "LAZY_AUDIO"
     },
     {
@@ -2122,15 +2122,21 @@
       "roster": "LAZY_AUDIO"
     },
     {
+      "path": "js/audio/mix-duck.js",
+      "global": "GameAudioMix",
+      "order": 519,
+      "roster": "LAZY_AUDIO"
+    },
+    {
       "path": "js/audio/music-lib.js",
       "global": "MusicLib",
-      "order": 520,
+      "order": 521,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/panel.js",
       "global": "AudioPanel",
-      "order": 530,
+      "order": 531,
       "roster": "LAZY_AUDIO"
     },
     {
@@ -2148,13 +2154,13 @@
     {
       "path": "js/audio/radio-voice.js",
       "global": "RadioVoice",
-      "order": 527,
+      "order": 528,
       "roster": "LAZY_AUDIO"
     },
     {
       "path": "js/audio/rivals.js",
       "global": "RivalAudio",
-      "order": 522,
+      "order": 523,
       "roster": "LAZY_AUDIO"
     },
     {
@@ -2172,7 +2178,7 @@
     {
       "path": "js/audio/spotify.js",
       "global": "SpotifyMusic",
-      "order": 521,
+      "order": 522,
       "roster": "LAZY_AUDIO"
     },
     {
@@ -2190,7 +2196,7 @@
     {
       "path": "js/audio/voice-pack.js",
       "global": "VoicePack",
-      "order": 525,
+      "order": 526,
       "roster": "LAZY_AUDIO"
     },
     {
@@ -2274,7 +2280,7 @@
     {
       "path": "js/camera/flyby-editor.js",
       "global": "FlybyEditor",
-      "order": 556,
+      "order": 557,
       "roster": "LAZY_CAM_EDITOR"
     },
     {
@@ -2352,7 +2358,7 @@
     {
       "path": "js/camera/tuner-panel.js",
       "global": "CamTunerEditor",
-      "order": 555,
+      "order": 556,
       "roster": "LAZY_CAM_EDITOR"
     },
     {
@@ -2526,7 +2532,7 @@
     {
       "path": "js/career/career-planning-ui.js",
       "global": "CareerPlanningUI",
-      "order": 557,
+      "order": 558,
       "roster": "LAZY_CAREER_UI"
     },
     {
@@ -2544,7 +2550,7 @@
     {
       "path": "js/career/career-ui.js",
       "global": "CareerScreen",
-      "order": 558,
+      "order": 559,
       "roster": "LAZY_CAREER_UI"
     },
     {
@@ -3456,19 +3462,19 @@
     {
       "path": "js/editor/bridge-panel.js",
       "global": "DesignerBridges",
-      "order": 546,
+      "order": 547,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/canvas.js",
       "global": "DesignerCanvas",
-      "order": 540,
+      "order": 541,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/codec.js",
       "global": "TrackCodec",
-      "order": 538,
+      "order": 539,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3480,37 +3486,37 @@
     {
       "path": "js/editor/designer.js",
       "global": "TrackDesigner",
-      "order": 548,
+      "order": 549,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/elev-presets.js",
       "global": "ElevPresets",
-      "order": 541,
+      "order": 542,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/fixes.js",
       "global": "TrackFixes",
-      "order": 537,
+      "order": 538,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/followup-tools.js",
       "global": "DesignerFollowup",
-      "order": 544,
+      "order": 545,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/insight.js",
       "global": "TrackInsight",
-      "order": 536,
+      "order": 537,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/profile.js",
       "global": "DesignerProfile",
-      "order": 542,
+      "order": 543,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3522,37 +3528,37 @@
     {
       "path": "js/editor/randomise.js",
       "global": "TrackRandom",
-      "order": 534,
+      "order": 535,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/scenery-panel.js",
       "global": "DesignerScenery",
-      "order": 545,
+      "order": 546,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/scenery-preview.js",
       "global": "DesignerSceneryPreview",
-      "order": 539,
+      "order": 540,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/selection-panel.js",
       "global": "DesignerSelection",
-      "order": 543,
+      "order": 544,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/shape.js",
       "global": "TrackShape",
-      "order": 532,
+      "order": 533,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/stamps.js",
       "global": "TrackStamps",
-      "order": 533,
+      "order": 534,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3564,13 +3570,13 @@
     {
       "path": "js/editor/validate.js",
       "global": "TrackValidate",
-      "order": 535,
+      "order": 536,
       "roster": "LAZY_EDITOR"
     },
     {
       "path": "js/editor/workspace.js",
       "global": "DesignerWorkspace",
-      "order": 547,
+      "order": 548,
       "roster": "LAZY_EDITOR"
     },
     {
@@ -5322,7 +5328,7 @@
     {
       "path": "js/xr/apex-xr.js",
       "global": "ApexXR",
-      "order": 553,
+      "order": 554,
       "roster": "LAZY_XR"
     },
     {
@@ -5334,7 +5340,7 @@
     {
       "path": "js/xr/xr-input.js",
       "global": "XrInput",
-      "order": 551,
+      "order": 552,
       "roster": "LAZY_XR"
     },
     {
@@ -5346,25 +5352,25 @@
     {
       "path": "js/xr/xr-plan.js",
       "global": "XRPlan",
-      "order": 549,
+      "order": 550,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-rig.js",
       "global": "XrRig",
-      "order": 550,
+      "order": 551,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-session.js",
       "global": "XrSession",
-      "order": 552,
+      "order": 553,
       "roster": "LAZY_XR"
     },
     {
       "path": "js/xr/xr-ui.js",
       "global": "XrUi",
-      "order": 554,
+      "order": 555,
       "roster": "LAZY_XR"
     }
   ]

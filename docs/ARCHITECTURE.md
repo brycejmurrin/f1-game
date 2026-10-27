@@ -453,6 +453,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `radio-fx.js` | `GameAudioRadioFx` | LAZY_AUDIO | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
 | `tone-model.js` | `GameAudioToneModel` | LAZY_AUDIO | GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite… |
 | `ers-layer.js` | `ErsLayer` | LAZY_AUDIO | ErsLayer — player-car MGU-K electric layer and overtake/boost cue. |
+| `mix-duck.js` | `GameAudioMix` | LAZY_AUDIO | GameAudioMix: radio and spotter duck holds, the SFX-bus dip, and the selective focus bus. create(host) reads live context, sfx bus, sfx level and the… |
 | `engine.js` | `GameAudio` | LAZY_AUDIO | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
 | `music-lib.js` | `MusicLib` | LAZY_AUDIO | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | LAZY_AUDIO | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
@@ -1267,8 +1268,10 @@ left/right steer halves on the lower screen when tilt off; `#btn-boost`,
 engine graph. `GameAudioToneModel` owns manufacturer/tune/profile definitions;
 `GameAudioSignal` owns loop analysis and noise/envelope primitives.
 `GameAudioSoundtrack` owns playlist/cache/playback state and
-`GameAudioRadioFx` owns radio decode/effect nodes. Factories receive live
-context/bus/service callbacks; context-bound state resets with the engine.
+`GameAudioRadioFx` owns radio decode/effect nodes. `GameAudioMix` owns the
+radio and spotter duck holds, the SFX-bus dip and the selective focus bus.
+Factories receive live context/bus/service callbacks; context-bound state
+resets with the engine.
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.

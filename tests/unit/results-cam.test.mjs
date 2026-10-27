@@ -306,7 +306,7 @@ function bootAudio() {
   };
   sb.window = sb;
   const vctx = vm.createContext(sb);
-  const SRC = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"]
+  const SRC = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"]
     .map(src).join("\n");
   vm.runInContext(SRC, vctx, { filename: absSrc("js/audio/engine.js") });
   const real = vm.runInContext("GameAudio", vctx);
