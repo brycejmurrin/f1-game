@@ -44,3 +44,17 @@ Per-body totals: needle 122, brick 145, wedge 118, anteater 111, arched 110, bar
 3. engineCover vs sidepods ZFIGHT: the cover/pod shoulder overlap at z -0.7.
 4. Gate once per fix: `--bodies=<id>` with a saved `--write-baseline` from this tip (~1 min per body).
    Coordinate with Codex car-design-expansion-84b2 on the same recipes.
+
+## Row 1 experiment (frontWing~chassis), second worker, NOT landed
+Cause: the five non-needle bodies all take `fitBodyDetails.noseMount()` (`js/car/car-body-geom.js`, ~line 1608). Every
+BODY_STYLES entry without its own `podProfile`/`podShape` gets `podSculpt`, so `seat = min(0.035, (top-bottom)*0.35)`
+puts the arm's lower end up to 35 mm ABOVE the nose underside at z 2.40, and the leaning arm (z 2.23-2.43) then sits
+41-46 mm inside the cone.
+Tried: `seat = -0.030` for podSculpt bodies. Result on ferrari: the penetration row vanished on all five bodies, but
+`--baseline` (six bodies x 11 cars, written at 8bd7c9a2, `--write-baseline`) showed NEW floating-wing GAP rows
+(frontWing~chassis 4.8 mm on brick, 18.9 mm on arched; frontWing~aeroFlaps/wheels/brakeDucts 4-14 mm), so -30 mm is too
+low. The bracket is between the old seat (+0..35 mm) and -30 mm: try -0.010 to -0.015 first, and make the seat per
+body (derive from `n.top - n.bottom`) rather than a constant. Reverted; no geometry is committed.
+Tip: a body audit is ~1 s per car (`--bodies=brick --team=ferrari --checks=PENETRATION,GAP`), the six-body baseline
+run ~60 s foreground.
+Rows 2 (bolsters) and 3 (engineCover~sidepods) were not started.
