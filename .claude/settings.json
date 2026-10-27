@@ -210,6 +210,8 @@
     "claude-context-optimizer@synced": false,
     "claude-cursor-orchestration@synced": false,
     "claude-review-loop@synced": false,
+    "cowork-plugin-management@synced": false,
+    "desktop-commander@synced": false,
     "handoff@synced": false
   },
   "worktree": {
