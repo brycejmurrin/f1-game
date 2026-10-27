@@ -98,15 +98,15 @@ const WGXPost = (function () {
               buffer: { type: "uniform", hasDynamicOffset: true, minBindingSize: core.Post.BLUR_UNIFORM_BYTES } },
           ] });
           const blurPL = core.device.createPipelineLayout({ bindGroupLayouts: [blurBGL] });
-          const blurPipe = (fmt) => {
-            const mod = core.device.createShaderModule({ code: core.Post.BLUR });
-            return core.device.createRenderPipeline({
-              layout: blurPL,
-              vertex: { module: mod, entryPoint: "vs_main" },
-              fragment: { module: mod, entryPoint: "fs_main", targets: [{ format: fmt }] },
-              primitive: { topology: "triangle-list" },
-            });
-          };
+          // SSAO (r8) and god-ray (hdr) are two pipelines over one module.
+          // Compiling BLUR twice parsed the same WGSL for both targets.
+          const blurMod = core.device.createShaderModule({ code: core.Post.BLUR });
+          const blurPipe = (fmt) => core.device.createRenderPipeline({
+            layout: blurPL,
+            vertex: { module: blurMod, entryPoint: "vs_main" },
+            fragment: { module: blurMod, entryPoint: "fs_main", targets: [{ format: fmt }] },
+            primitive: { topology: "triangle-list" },
+          });
           core.pBlur = blurPipe(core.SSAO_FORMAT);
           core.pBlurHDR = blurPipe(core.POST_HDR_FORMAT);
           core._blurBGL = blurBGL;

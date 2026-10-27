@@ -1694,8 +1694,8 @@ test("WGSL closes the documented GLX look gaps", () => {
     "the non-indexed merge is gated on vertex_index being provably dead");
   assert.match(WGX_SOURCE, /&& contig && vidDead && nightOK\) \{/,
     "and on contiguity, and on the night stand-down");
-  assert.match(WGX_SOURCE, /const nightOK = indexed \|\| !maskL;/,
-    "the night stand-down is ROAD-only — indexed meshes keep merging as today");
+  assert.match(WGX_SOURCE, /const nightOK = indexed \|\| !maskL \|\| \(run\.m0 === _lm0 && run\.m1 === _lm1\);/,
+    "an equal night mask still merges; a wider road mask does not; indexed meshes keep merging");
   assert.match(WGX_SOURCE, /hasTrk roads are (?:core\.)?createMesh pieces/,
     "hasTrk roads stay on createMesh pieces (chunks=null)");
   assert.match(WGX_SOURCE, /g2Layout/);
@@ -3792,6 +3792,33 @@ test("optional post publishes the complete successful buffer set", () => {
   const h = isolatedPost(); h.post.buildPost();
   assert.equal(h.owned.length, 6); assert.ok(h.owned.every((b) => b.destroys === 0));
   assert.ok(h.core.pComposite); assert.equal(h.core.ssrUBO, h.owned[5]);
+});
+
+test("SSAO and god-ray blur pipelines share one shader module", () => {
+  const h = isolatedPost();
+  h.core.SSAO_FORMAT = "r8unorm";
+  h.core.POST_HDR_FORMAT = "rgba16float";
+  const byCode = new Map();
+  const pipelines = [];
+  const origMod = h.core.device.createShaderModule;
+  const origPipe = h.core.device.createRenderPipeline;
+  h.core.device.createShaderModule = (desc) => {
+    const mod = origMod(desc);
+    const list = byCode.get(desc && desc.code) || [];
+    list.push(mod);
+    byCode.set(desc && desc.code, list);
+    return mod;
+  };
+  h.core.device.createRenderPipeline = (desc) => { pipelines.push(desc); return origPipe(desc); };
+  h.post.buildPost();
+  const blurMods = byCode.get("blur") || [];
+  assert.equal(blurMods.length, 1, "BLUR is compiled once");
+  const blur = blurMods[0];
+  const blurPipes = pipelines.filter((p) => p.fragment && p.fragment.module === blur);
+  assert.equal(blurPipes.length, 2, "r8 and hdr blur stay two pipelines");
+  assert.equal(blurPipes[0].vertex.module, blur);
+  assert.equal(blurPipes[1].vertex.module, blur);
+  assert.notEqual(blurPipes[0].fragment.targets[0].format, blurPipes[1].fragment.targets[0].format);
 });
 
 for (const scoped of [false, true]) test(`exhausted spatial variants retire the UBO (scoped=${scoped})`, async () => {
