@@ -518,6 +518,7 @@
     "js/net/lobby-codes.js",
     "js/net/lobby-roster.js",
     "js/net/lobby-settings.js",
+    "js/net/interp.js",
     "js/net/snapshot.js",
     "js/net/session.js",
     "js/net/spectate.js",
@@ -529,6 +530,10 @@
     [
       "js/net/ice.js",
       "js/net/transport.js"
+    ],
+    [
+      "js/net/interp.js",
+      "js/net/snapshot.js"
     ],
     [
       "js/net/snapshot.js",

@@ -45,6 +45,7 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 // exist by the time create() runs. Loading the real ones (rather than stubbing)
 // keeps the interp buffer honest and costs nothing.
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");   // shared math island — snapshot.js binds M4 at eval
+globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;

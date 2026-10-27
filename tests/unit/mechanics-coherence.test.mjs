@@ -74,7 +74,7 @@ test("network strategic state clamps telemetry and never changes car pose", () =
 });
 
 test("adaptive interpolation reacts to arrival jitter, stays bounded, and preserves prediction", () => {
-  const N=load(["js/net/snapshot.js"]).get("NetSnapshot");
+  const N=load(["js/net/interp.js", "js/net/snapshot.js"]).get("NetSnapshot");
   const a=N.createInterp({total:1000,adaptive:true}), b=N.createInterp({total:1000});
   for(let i=0;i<80;i++) {
     const st={s:i,lap:1,x:0,speed:20,head:0};
@@ -88,7 +88,7 @@ test("adaptive interpolation reacts to arrival jitter, stays bounded, and preser
 
 
 test("adaptive presentation cannot rewind when a burst grows the delay", () => {
-  const N=load(["js/net/snapshot.js"]).get("NetSnapshot");
+  const N=load(["js/net/interp.js", "js/net/snapshot.js"]).get("NetSnapshot");
   const a=N.createInterp({total:10000,adaptive:true});
   for(let i=0;i<8;i++) a.push(i*50,{s:i,lap:1,x:0,speed:20,head:0},i*50);
   const before=a.sample(400).s;

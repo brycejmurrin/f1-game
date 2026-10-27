@@ -25,6 +25,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 // snapshot.js binds M4.clamp/M4.wrapDelta at eval, exactly as the shell does.
 seedLogGlobal();   // snapshot.js logs dropped packets through Log
 globalThis.M4 = eval(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8") + ";M4");
+globalThis.NetInterp = eval(fs.readFileSync(path.join(ROOT, "js/net/interp.js"), "utf8") + ";NetInterp");
 const NetSnapshot = eval(
   fs.readFileSync(path.join(ROOT, "js/net/snapshot.js"), "utf8") + ";NetSnapshot");
 

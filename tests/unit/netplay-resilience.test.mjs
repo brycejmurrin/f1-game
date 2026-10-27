@@ -15,6 +15,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 seedLogGlobal();
 const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");
+globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 globalThis.NetIce = eval(src("js/net/ice.js") + ";NetIce");
 globalThis.NetTransport = eval(src("js/net/transport.js") + ";NetTransport");

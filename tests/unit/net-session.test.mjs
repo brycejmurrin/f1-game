@@ -30,6 +30,7 @@ const NetTransport = load("js/net/transport.js", "NetTransport");
 // state packet throws inside the message handler, the transport swallows the
 // throw (a handler bug must not read as a disconnect), and the session simply
 // never syncs its clock — a failure mode with no error message at all.
+const NetInterp = load("js/net/interp.js", "NetInterp");
 const NetSnapshot = load("js/net/snapshot.js", "NetSnapshot");
 const NetSession = load("js/net/session.js", "NetSession");
 

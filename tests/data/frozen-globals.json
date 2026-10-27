@@ -112,6 +112,7 @@
     "NetBytes",
     "NetHandshake",
     "NetIce",
+    "NetInterp",
     "NetLobby",
     "NetNostr",
     "NetPlay",

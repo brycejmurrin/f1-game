@@ -337,6 +337,7 @@ const NET_READY = {
   "js/net/qr.js": () => typeof NetQr !== "undefined",
   "js/net/scan.js": () => typeof NetScan !== "undefined",
   "js/net/ice.js": () => typeof NetIce !== "undefined",
+  "js/net/interp.js": () => typeof NetInterp !== "undefined",
   "js/net/transport.js": () => typeof NetTransport !== "undefined",
   "js/net/handshake.js": () => typeof NetHandshake !== "undefined",
   "js/net/lobby-codes.js": () => typeof LobbyCodes !== "undefined",

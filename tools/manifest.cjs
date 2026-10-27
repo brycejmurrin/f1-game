@@ -1289,6 +1289,7 @@ const LAZY_NET = [
   "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
   "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/lobby-settings.js", // LobbySettings: SETTINGS normalise + custom-circuit wire (#1587/#1655)
+  "js/net/interp.js",       // NetInterp: rival smoothing; NetSnapshot.createInterp forwards
   "js/net/snapshot.js",
   "js/net/session.js",
   "js/net/spectate.js",
@@ -1348,6 +1349,7 @@ const CONTROLLER = [
 // not one module gathering the rest.
 const LAZY_NET_EDGES = [
   ["js/net/ice.js", "js/net/transport.js"], // transport calls NetIce.create() while evaluating
+  ["js/net/interp.js", "js/net/snapshot.js"], // createInterp forwards at call time; keep the codec's dependency ordered
   ["js/net/snapshot.js", "js/net/session.js"],
   ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],
