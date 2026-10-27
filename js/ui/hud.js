@@ -929,6 +929,23 @@ function gapPaintedDrop() {
   if (gaps) void gaps.offsetHeight;
   return true;
 }
+const _PEDAL_STEER = () => [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
+const _hitPedalSteer = (rr) => _PEDAL_STEER().some((el) => el && !el.hidden && _hudRectsHit(rr, el.getBoundingClientRect()));
+/** Slide #hud-aero right past a steer/pedal button it paints over (#3272), never into the right dock. */
+function nudgeAero(z) {
+  const aero = els.aero, ar = aero && !manualHud(aero) && !aero.hidden ? aero.getBoundingClientRect() : null;
+  if (!ar || !ar.width) return;
+  let need = 0, limit = Infinity;
+  for (const el of _PEDAL_STEER()) {
+    const b = el && !el.hidden ? el.getBoundingClientRect() : null;
+    if (!b || !_hudRectsHit(ar, b)) continue;
+    if (b.left + b.right < ar.left + ar.right) need = Math.max(need, b.right + 8 - ar.left);
+    else limit = Math.min(limit, b.left - 8 - ar.right);
+  }
+  if (need <= 0.5 || need > limit) return;
+  aero.style.position = "relative";
+  aero.style.left = ((parseFloat(aero.style.left) || 0) + need / z).toFixed(1) + "px";
+}
 /** Painted phone readout-on-control clashes the spec measures (not budget math). */
 function phonePaintedClash(boostIn) {
   if (document.body.classList.contains("desktop")) return false;
@@ -947,14 +964,9 @@ function phonePaintedClash(boostIn) {
         if (box.width && box.height && _hudRectsHit(rr, box)) return true;
       }
     }
-    const pedalSteer = [els.btnBrake, els.btnThrottle, els.btnSteerLeft, els.btnSteerRight];
-    for (let i = 0; i < pedalSteer.length; i++) {
-      const el = pedalSteer[i];
-      if (!el || el.hidden) continue;
-      const box = el.getBoundingClientRect();
-      if (box.width && box.height && _hudRectsHit(rr, box)) return true;
-    }
+    if (_hitPedalSteer(rr)) return true;
   }
+  if (els.aero && !manualHud(els.aero) && !els.aero.hidden && _hitPedalSteer(els.aero.getBoundingClientRect())) return true;
   return false;
 }
 /** Phone-only: after REL/sectors/announce land, re-fit rows and publish stamp. */
@@ -1014,6 +1026,7 @@ function phoneFitStampSync(scale, force) {
   const sk = radioPaintedKey(root) + "|" + _fitKey + "|" + (typeof HudRelative !== "undefined" && HudRelative.fitKey ? HudRelative.fitKey() : "")
     + "|" + (els.hudSectors ? (els.hudSectors.hidden ? "h" : "v") : "-");
   if (!force && _fitStamped && !_fitPending && sk === _stampKey && --_stampWait > 0) return;
+  if (els.aero && els.aero.style.left) { els.aero.style.left = ""; els.aero.style.position = ""; }   // a stale #3272 nudge: the probe re-applies it
   // One probe per pass: the verdict after the last pass feeds the stamp below.
   let clash = phonePaintedClash();
   for (let pass = 0; pass < 8 && clash; pass++, clash = phonePaintedClash()) {
@@ -1021,6 +1034,7 @@ function phoneFitStampSync(scale, force) {
     if (typeof HudRelative !== "undefined" && HudRelative.fitRows) HudRelative.fitRows();
     bumpDock();
     shrinkSectors();
+    nudgeAero((els.aero && els.aero.currentCSSZoom) || scale || 1);
   }
   // A custom property written on <html> invalidates style for the whole tree and
   // wakes sheet-shape's watchScale observer, so the 10 Hz tick must not rewrite
