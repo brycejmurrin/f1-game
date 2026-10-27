@@ -15,14 +15,16 @@ Review, hunt or survey findings on the PR → agent `finding-verifier` before yo
 
 ## Drive to green — the loop
 
-1. Check out the PR's branch; if the PR has no live owner, comment `claims #<n> — <host>:<id>` on it and add `claimed` (§3).
+1. Check out the PR's branch. Claims are for issues (docs/WORKERS.md §1); a PR is yours because you opened it or
+   were launched on a `needs-owner` PR with `CONTINUE PR #<n>`: start from its Plan and Hand-off block, set `owner:`.
 2. Read CI on the current tip: `node tools/ci/ci-watch.mjs --sha <head> --once` (§1 for `cancelled`, §8 for `running`).
 3. Triage a red: agent `ci-red-triage` names the job, test and assertion.
 4. Fix on the branch; sync only when §2 says you must.
-5. Gate: `node tools/ci/deploy.mjs --gate-only` (§6).
+5. Verify at the local floor, docs/WORKERS.md §3 (§6).
 6. ONE push per verified batch; refresh the PR body's Plan and Hand-off block.
-7. Draft → ready → `land`: §12.
-8. Watch (§7, §9) until `= ci passed` on your head; the lane ends when `land` is on.
+7. Watch (§7–§9) only while CI runs on your head.
+8. Gate → ready → `land`: §12. The session ENDS at `land`; a red or conflict after it is a fresh
+   `CONTINUE PR #<n>` launch, not yours (docs/WORKERS.md §5).
 
 ## 1. `cancelled`: read the jobs, not the conclusion
 
@@ -75,18 +77,18 @@ and push"** (three sessions fixed one bug on 2026-09-18 and the result was a rev
 
 `claude/f1-game-project-26h3ng` is the only branch that ships, and work lands
 there by PR. A deploy is a MERGE of other sessions' work: re-measure on the
-merged tree, never force-push. `node tools/ci/deploy.mjs` is the whole protocol.
+merged tree, never force-push. A worker's change lands through the `land` label (§12).
 
 ## 5. Do not re-run a browser group to chase a flake
 
 A retry-pass is a red and is quarantined by name, never skipped or widened (AGENTS.md rule 9); a timeout on a busy box measures the machine (rule 8).
 
-## 6. Validate a fix push with the GATE, not the edit-loop check
+## 6. Validate a fix push at the floor; the PR runs the tiers
 
-    node tools/ci/deploy.mjs --gate-only     # pushes nothing; a dirty tree is fine
-
-Green below never means green above (AGENTS.md rule 3; counts in
-`docs/notes/PREPUSH-GATE-LADDER.md`). Push once per VERIFIED batch: a push over
+The local verification floor is docs/WORKERS.md §3 (its one home); the fast tier (`run-ci` on the draft), the full
+tier (ready) and the `gate` check prove the rest. Green below never means green above (AGENTS.md rule 3):
+`ready-gate.mjs` needs Structural guards green on the tip (the `run-ci` fast tier) or the stamp a full green
+`tooling-fast` writes. Push once per VERIFIED batch: a push over
 a live run cancels it, and a killed job runs no `if: always()` step, so its
 failures are lost. Ratchets: `.claude/rules/game-code.md`.
 
@@ -94,7 +96,7 @@ failures are lost. Ratchets: `.claude/rules/game-code.md`.
 
 - A green PR does not prove Pages. Watch by `head_sha`, one `Monitor` per push (AGENTS.md rule 13 is the home):
   `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (`--pages` after a deploy-branch
-  push); re-arm on expiry until the `= ci …` line. `pages.yml` gates the tip once and publishes exactly that commit.
+  push) while CI runs on your head; the watch ends with the session at `land`. `pages.yml` gates the tip once and publishes exactly that commit.
 - **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask `deploy-research` for it; never
   curl github.io from the main context. PR CI and Pages (`pages.yml`) are separate verdicts;
   the deploy push starts Pages' reusable CI gate, not a separate ship-push CI run.
@@ -127,16 +129,16 @@ Fix with Agent.
 
 ## 9. Host-neutral watch
 
-A claim is a PR or issue comment (`claims #<n> — <host>:<id>`) plus the `claimed` label on any host.
-Subscription per host (Claude Code `subscribe_pr_activity`; Cursor `subscribe_github_ci` + `subscribe_github_pr`)
-while CI runs on your head: AGENTS.md rule 13. Without a subscription: `references/host-watch.md`. Record missing
-capabilities as unverified.
+Ownership is host-neutral: an issue's claim comment plus `claimed`, a PR's Hand-off `owner:` line (docs/WORKERS.md).
+Watch per host (docs/WORKERS.md §4 and §Per vendor): Claude Code `subscribe_pr_activity` while CI runs on your
+head; a Cursor run ends at ready and the dispatcher owns reds after it. Without a subscription:
+`references/host-watch.md`. Record missing capabilities as unverified.
 
-## 10. Sweeping many PRs
+## 10. Sweeping many PRs is not a session's job
 
-PR board: `node tools/ci/pr-board.mjs --json` (read-only; exit 3 = no token). Stand down on a PR a live session
-pushed in the last ~10 min. SYNC only when `needs-sync.mjs` says conflict/stale-red. A SQUASH/REBASE auto-merge
-arm → `disable_pr_auto_merge` (retired methods).
+The dispatcher re-owns silent PRs (`needs-owner`, one takeover) and `land.yml` arms auto-merge (docs/WORKERS.md
+§The dispatcher). A session reads `node tools/ci/pr-board.mjs --json` (read-only; exit 3 = no token) to find who
+owns a red (§3); it does not sweep, disarm or take over another lane's PR.
 
 ## 11. Browser runs, if a fix needs one
 
@@ -148,10 +150,10 @@ Via `node tools/ci/test-bg.mjs <group>` only; AGENTS.md rules 5, 6 and 10 (one r
    permission classifier and was denied; the same push bare passed). Commit first in two calls (AGENTS.md rule 12).
 2. **Mergeable first**: a ready flip on a CONFLICTING/DIRTY head starts no CI (AGENTS.md rule 13); `needs-sync.mjs`,
    then `sync-pr.mjs`, then flip.
-3. **Flip**, then call `subscribe_pr_activity` again on the same PR: the subscription died at the draft→ready
-   flip on #3785 and no CI or merge event arrived after it.
-4. **Land**: `node tools/ci/ready-gate.mjs --pr <n>` exit 0 on the SAME head, then add the `land` label and refresh
-   the Hand-off block. The Plan's open terminal item `- [ ] land: …` is exempt from the gate
-   (`.github/pull_request_template.md`). A veto is the `hold` label, never body wording.
+3. **Gate on the draft**: `node tools/ci/ready-gate.mjs --pr <n>` exit 0 on the head you will flip. It refuses a
+   PR that is not a draft, and its `--pr` receipt is what the hooks demand before the flip. The Plan's open
+   terminal item `- [ ] land: …` is exempt (`.github/pull_request_template.md`).
+4. **Flip and land**: flip ready, add the `land` label, refresh the Hand-off block (docs/WORKERS.md §5). A veto is
+   the `hold` label, never body wording.
 5. `land.yml` runs the `gate` check and arms auto-merge; GitHub merges. Nothing in this session merges, arms or
-   waits for the merge: the lane ends at `land` (docs/WORKERS.md).
+   waits for the merge: the session ends at `land`.

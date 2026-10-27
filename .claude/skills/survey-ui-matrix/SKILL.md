@@ -13,7 +13,7 @@ applies fixes via `css-play` or `ui-menu-a11y`.
 
 ## Default-first visual verification
 
-Bryce's profile first: 844×390 landscape, touch (`ios-iphone-landscape-844`; fleet-core). Then fresh shipped
+Bryce's profile first: 844×390 landscape, touch (`ios-iphone-landscape-844`; AGENTS.md §Coordination). Then fresh shipped
 appearance and device input defaults (AGENTS.md §Seeing the game); stress scales,
 imported settings and legacy looks are separately labelled comparisons. Record requested scale and painted zoom.
 Inspect original full-size images with DOM/computed-style evidence. Thumbnails and zero inspector findings are

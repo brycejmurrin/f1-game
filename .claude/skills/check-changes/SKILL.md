@@ -40,8 +40,8 @@ node tools/ci/verify-change.mjs              # fast gate + start batch 1 (backgr
 node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the parent asked
 ```
 
-`--fast` is the edit-loop rung; before a code push run `node tools/ci/deploy.mjs --gate-only`
-once (the ladder: AGENTS.md rule 3). A started batch's verdict is its log's `= run …` line
+`--fast` is the edit-loop rung; the worker floor before a code push is docs/WORKERS.md §3, and the
+PR's tiers run the rest of the ladder (AGENTS.md rule 3). A started batch's verdict is its log's `= run …` line
 (`references/triage.md`).
 
 Cursor and Codex commits reach CI unguarded only when no hook ran (the 2026-10-26 claim

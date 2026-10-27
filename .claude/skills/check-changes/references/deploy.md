@@ -1,17 +1,19 @@
-# Merge with the deploy branch and ship (folded from the deploy-merge skill)
+# The deploy branch: union verification and the live check (folded from the deploy-merge skill)
 
 Deploy branch: `claude/f1-game-project-26h3ng` (`pages.yml` →
-https://brycejmurrin.github.io/f1-game/). Other sessions push there mid-hour.
-Never force-push. Never rebase published history. Never push without review.
-
-**The protocol is one command (2026-09-01):**
+https://brycejmurrin.github.io/f1-game/). Work reaches it only through a PR that
+GitHub merges (`/ship`, docs/WORKERS.md §5); a direct push is refused (GH006).
+Never force-push. Never rebase published history.
 
 ```sh
-node tools/ci/deploy.mjs --plan   # fetch, show their commits / ours / conflicts / touched circuits — runs nothing
-node tools/ci/deploy.mjs          # fetch → merge → test:tooling-fast → ci.yml's node suites → sweeps (if the union moves geometry) → verify-track (touched circuits) → push HEAD:<deploy> — REFUSED since 2026-09-30 (branch protection, GH006): use --pr
-node tools/ci/deploy.mjs --gate-only  # the same gate, pushes nothing (the pre-push check)
-node tools/ci/deploy.mjs --pr     # same checks, then push the session branch and open/update a PR into the deploy branch
+node tools/ci/deploy.mjs --plan       # fetch, show their commits / ours / conflicts / touched circuits — runs nothing
+node tools/ci/deploy.mjs --gate-only  # fetch → merge → test:tooling-fast → ci.yml's node suites → sweeps (if the union moves geometry) → verify-track; pushes nothing
 ```
+
+A worker's local floor is docs/WORKERS.md §3, not `--gate-only`: the PR's tiers
+and the `gate` check run the union. Plain `deploy.mjs` ends in a refused
+deploy-branch push, and `deploy.mjs --pr` opens a READY PR without the template
+body (no draft, no Hand-off block, no `ready-gate`): workers use `/ship`'s draft route.
 
 What changed underneath it, and why the old steps are gone:
 
@@ -34,17 +36,17 @@ What changed underneath it, and why the old steps are gone:
    run in the Actions tab. From a session, the host's fetch tool can read
    `version.json`, and `curl` reaches github.io too (see below) — never the
    in-repo wrapper.
-4. **`--pr` is the path that lands work** — since 2026-09-30 the deploy
-   branch is protected (a PR with its one required check `CI` green; admin
-   tokens bypass, `enforcement_level: non_admins`), so the default mode's direct push fails with GH006. GitHub
-   creates the merge commit, so the PR is a real record — a local
-   fast-forward auto-closes the PR instead (#67). `deploy.mjs` never arms
-   auto-merge: `land.yml` arms it once the `land` label is on a ready PR and the `gate` check passes (docs/WORKERS.md).
-   (never squash or rebase-merge; AGENTS.md §Cursor Cloud specific instructions).
+4. **A PR is the path that lands work** — the deploy branch is protected: its
+   ruleset requires the checks `CI` and `gate` and forbids direct pushes
+   (docs/WORKERS.md §`LAND_TOKEN`). GitHub creates the merge commit, so the PR
+   is a real record — a local fast-forward auto-closes the PR instead (#67).
+   No session arms auto-merge: `land.yml` arms it once the `land` label is on a
+   ready PR and the `gate` check passes. Merge commits only, never squash or
+   rebase-merge (AGENTS.md §Coordination).
 
 `deploy.mjs` refuses a dirty tree, loadavg ≥ 3, a live Playwright run, and any
 conflict outside the generated files it can re-derive (`index.html`, `version.json`, ratchets, …). Everything below is the manual
-equivalent, kept for when the tool itself is what broke.
+equivalent of its union check, kept for when the tool itself is what broke.
 
 ## Protocol (commands and sharp edges)
 
@@ -66,11 +68,7 @@ git merge-base --is-ancestor origin/claude/f1-game-project-26h3ng HEAD \
 - A shrunk count means the baseline must come DOWN (the anti-staleness
   assertion fails a cap above the measured count).
 
-### Push and live check
-
-```sh
-node tools/ci/deploy.mjs --pr   # a direct push to the deploy branch is refused (GH006)
-```
+### Live check
 
 Live `version.json`: subagent **deploy-research**, or
 `https://brycejmurrin.github.io/f1-game/version.json` via MCP fetch / WebFetch —
@@ -88,5 +86,3 @@ a just-fixed bug is usually on the previous build: check live version FIRST.
   starts `pages.yml` (the train gates the tip; its `ci / …` rows are the verdict).
 - After the deploy lands, clients may need one reload for the service worker to
   drop the old shell (`pwa-cache-service-worker`).
-- If `git push` is rejected (non-fast-forward), a session landed while you
-  verified — fetch and start again; do NOT `--force`.

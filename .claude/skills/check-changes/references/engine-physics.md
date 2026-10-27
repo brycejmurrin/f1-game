@@ -3,7 +3,7 @@
 `verify-change --plan <paths>` lists more browser groups than AGENTS.md §Verification allows.
 Cap: two browser groups, the two most specific, and the rest named not-run in the PR.
 
-0. Before the edit: check `node tools/ci/pr-board.mjs --json` for an open PR already on `js/game.js` (docs/WORKERS.md: one owner per path).
+0. Before the edit: check `node tools/ci/pr-board.mjs --json` for an open PR already on `js/game.js` (a path in an open PR's diff belongs to that PR: AGENTS.md §Git branch & deploy).
 1. Plan: `node tools/ci/verify-change.mjs --plan js/physics/consts.js js/game.js`
    (a consts/game.js edit lists circuits, collisions, hooks, physics-core, tiny, tooling-fast).
 2. Run `physics-core` and `collisions` (`node tools/ci/test-bg.mjs <group>`, one at a time, AGENTS.md rules 4-5).
@@ -13,5 +13,6 @@ Cap: two browser groups, the two most specific, and the rest named not-run in th
 4. Static checks that belong with this change:
    - `node tools/check/ratchets.mjs` — game.js growth over the ratchet (the commit hook absorbs <= 40 lines).
    - `node tools/check/vstd-lint.mjs` — PACE compared through `vTop()`/`vStd()`/`aStd()`.
-5. Before the push: `npm run test:tooling-fast`, then `node tools/ci/deploy.mjs --gate-only` (SKILL.md ladder).
-   Before draft to ready: `node tools/ci/ready-gate.mjs` must exit 0.
+5. Before the push: the local floor of docs/WORKERS.md §3; the PR's tiers run the rest.
+   Before draft to ready: `node tools/ci/ready-gate.mjs --pr <n>` must exit 0 (only `--pr` writes the receipt
+   the hooks need for the flip).
