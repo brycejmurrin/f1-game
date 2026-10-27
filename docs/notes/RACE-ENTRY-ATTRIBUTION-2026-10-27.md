@@ -19,7 +19,8 @@ below is CPU-side or wall time on software rendering, and is a ranking, not a de
    present) and 1.2 s from `session:committed` to the cover lowering. **The CPU stages this lane owns are 0.2 s of
    it** (`gridCountdown` 0.20 s, of which `warmCarAssets` 0.15 s; `loadTrack`, `scenery`, `resets` under 3 ms each,
    because the menu did them).
-3. **The device prior agrees.** Every iPhone 14 cold entry measured so far is dominated by the first-use Metal pipeline
+3. **The device run agrees** (§The device rows): on the iPhone 14 the CPU stages are about 1.5 s of the 29.8 s, and
+   `mirrorPrepare` (which wraps the program warm) is 27.9 s of it. **Earlier device prior:** Every iPhone 14 cold entry measured so far is dominated by the first-use Metal pipeline
    compile: race warm 14.0 s of an 18.4 s entry (ledger row 21, `DEVICE-FARM-ANALYSIS-2026-10-24.md`), menu warm 7.5 s.
    With the shader cache full the whole entry is 1.7–2.9 s (rows 10, 11). That warm belongs to the first-race warm-up
    lane (#3673) and the lit-WGSL stability lane (#3672); this lane does not touch it.
@@ -46,6 +47,29 @@ the same tree (`f41eb15c` plus this PR's tool change).
 APEX_PIN=three APEX_PROFILE=artifacts/perf/entry.cpuprofile node tools/perf/race-entry-timer.mjs api monza
 APEX_PIN=three APEX_ENTRY=menu APEX_HEAP=1 node tools/perf/race-entry-timer.mjs menu monza
 ```
+
+## The device rows behind the 29.8 s
+
+From the batch #3954 report (iPhone 14 unit 131A8714, build `01e64933`, TLX WebGPU, Monza day, first race of the
+session, `api` entry; Device Farm session `e7248d2e`), relayed by the batch worker on 2026-10-27 (the report itself is
+not committed). Window 29 805 ms, `blockMs` 0.
+
+| bucket | stage | ms on the iPhone 14 | owner |
+|---|---|---|---|
+| circuit hydrate + scenery fetch | `scenery` leg / `ensureScenery` | 204 / 202 | this lane |
+| lazy bundles + resets | `resets` | 113 | this lane |
+| track build | `loadTrack` | 901 | this lane |
+| car prep | `gridCountdown` (`warmCarAssets` 1344–1355 ms after the kick) | 129 | this lane |
+| pipeline warm | `programWarm` (1.8 → 14.0 s) | 12 176 | #3673 |
+| mirror prepare, wrapping the warm | `mirrorPrepare` (1.8 → 29.7 s) | 27 907 | #3673 |
+
+Warm detail: done, 0 failed, total 13 827 ms (scene 694, fx 465, post 2476, shadow 5, **mirror 9425**, draw 762);
+cockpit rig 4577 ms (34 pairs); the mirror's own prep pass is one pass of 4362 ms, ready at 16.6 s.
+
+Reading: **the CPU stages this lane owns are about 1.5 s of the 29.8 s on the device** (scenery 0.2, resets 0.1,
+loadTrack 0.9, car prep 0.1–0.3). Everything else sits inside `mirrorPrepare`: the program warm to 14.0 s, the mirror
+prep pass to 16.6 s, and then **about 13 s more until `mirrorPrepare:end` at 29.7 s** with no recorded stage in it. That
+tail is the largest single unexplained block of the entry; it belongs to the warm-up lane and is reported to it (#3673).
 
 ## Stage split, `api` entry (what the 29.8 s device window measures)
 
@@ -102,6 +126,7 @@ JS heap 154 MB; the GPU process limit (300 MB soft on the iPhone 14) is the tigh
 | rank | lever | evidence | expected gain on the phone | status |
 |---|---|---|---|---|
 | 1 | **Measure the player's path on the device.** Re-run the Monza day entry with `--entry menu` next to `--entry api` in the next approved batch, and record the menu prep time | §Answer 1–2 | turns the 29.8 s into the number a player waits; no code | asked on #3954 |
+| 1b | **Explain the ~13 s tail of `mirrorPrepare`** after the mirror's prep pass is ready (16.6 → 29.7 s on the iPhone 14) | §The device rows | up to 13 s of the cold entry | **not this lane**: reported to #3673 |
 | 2 | Shorten the menu prep wall on hardware: its local cost is software GPU idle and texture copies, so the device split is unknown | menu table | unknown until rank 1 runs | needs rank 1 |
 | 3 | Fetch the three race bundles (`LAZY_RACE_SESSION`, `LAZY_AUDIO`, `LAZY_RACE`) in one wave when RACE! is tapped before the idle prefetch ran | `resets` 1.86 s on `api` | one or two network round trips on a cold first tap; zero for a player who sat on the title for 12 s | not done: the evaluation order between the groups is load-bearing (`onRaceSessionReady`, `onAudioReady`), and the gain exists only on a cold fast tap |
 | 4 | Three's CPU geometry copies (~32 MB with chunked props) | heap table | 2–3 % of the iPhone 14 WebContent limit | left low, as `IPHONE-MEMORY-2026-10-24.md` ranks it |
