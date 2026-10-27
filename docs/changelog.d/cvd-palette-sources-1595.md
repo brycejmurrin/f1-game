@@ -1,0 +1,1 @@
+Fixed: COLOUR VISION modes now also recolour the broadcast tower's tyre letters, the INPUTS throttle/brake trace, the circuit maps' corner-class colours and sector arcs; default colours are unchanged.
