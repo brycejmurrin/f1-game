@@ -857,6 +857,96 @@
       "licence": "CC0",
       "author": "Kenney",
       "md5": "7b59c77c405e24d16712fef0b9c417c7"
+    },
+    "pine_lod0": {
+      "file": "models/pine_lod0.bin",
+      "verts": 72,
+      "tris": 36,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        1.59,
+        6.42,
+        1.43
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "2488e9f311568bd802647aed84d52137"
+    },
+    "pine_lod1": {
+      "file": "models/pine_lod1.bin",
+      "verts": 36,
+      "tris": 18,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        1.12,
+        5.92,
+        1.21
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "2ed1011f808b30647998f1baaec52142"
+    },
+    "tree_lod0": {
+      "file": "models/tree_lod0.bin",
+      "verts": 80,
+      "tris": 40,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        1.43,
+        7.59,
+        1.53
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "4f6bc8496036444fb98bf7e919445878"
+    },
+    "tree_lod1": {
+      "file": "models/tree_lod1.bin",
+      "verts": 40,
+      "tris": 20,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        1.41,
+        7.4,
+        1.58
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "c96ad54685ebefe1c8a87842db185bac"
+    },
+    "palm_lod0": {
+      "file": "models/palm_lod0.bin",
+      "verts": 110,
+      "tris": 80,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        7.08,
+        16.39,
+        7.21
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "1c23ec67760b3e5edb66b96e17509a84"
+    },
+    "palm_lod1": {
+      "file": "models/palm_lod1.bin",
+      "verts": 68,
+      "tris": 48,
+      "mat": "FOLIAGE",
+      "sizeM": [
+        7.9,
+        16.06,
+        7.86
+      ],
+      "source": "generated:tools/gen/trees/bake-trees.mjs",
+      "licence": "CC0",
+      "author": "Apex 26",
+      "md5": "cd4ccea2a977004d7e2e73bb367898e5"
     }
   },
   "env": {
@@ -1306,6 +1396,48 @@
       "author": "Kenney",
       "licence": "CC0",
       "source": "https://kenney.nl/media/pages/assets/racing-kit/933b8fd9fd-1677580949/kenney_racing-kit.zip"
+    },
+    {
+      "kind": "model",
+      "id": "pine_lod0",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "pine_lod1",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "tree_lod0",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "tree_lod1",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "palm_lod0",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
+    },
+    {
+      "kind": "model",
+      "id": "palm_lod1",
+      "author": "Apex 26",
+      "licence": "CC0",
+      "source": "generated:tools/gen/trees/bake-trees.mjs"
     },
     {
       "kind": "env",
