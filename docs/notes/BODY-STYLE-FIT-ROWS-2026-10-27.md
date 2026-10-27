@@ -80,3 +80,20 @@ Decision (orchestration session, 2026-10-27): keep the `body-styles` "supports p
 `noseMount()` seat is now `style.noseSeat` when set, else `-0.012` for podSculpt bodies, else `+0.012`. The six expansion
 bodies (hammerhead, swan, manta, wasp, scorpion, blade) pin `noseSeat: 0.012` because their thin noses must keep the cap inside.
 Measured: six-body `--baseline` PASS (0 NEW/WORSE, 146 s); `tooling-fast --changed` 81/81; no frontWing~chassis row remains.
+
+## Row 2 landed (bolsters) — third continuation, 2026-10-27
+Cause: the non-cockpit bolster block is fixed at x 0.24..0.40, but the pod inner wall is x 0.289 (z 0.12) / 0.279 (z -0.43)
+on every body and the concept tubs are wider than 0.24 at z 0.14, so the block ran 30-40 mm into sidepods and chassis
+(`chassis~bolsters` 31 rows, 32.4 mm; `bolsters~sidepods` 30-40 mm).
+Fix (`js/car/car3d.js`, "bolsters"): on concept bodies (`BODY_STYLES[styleKey] === teamStyle`, not the narrow-waisted
+needle, `waist < -0.2`, whose pods wrap the old block and which went WORSE on bodyDetail~sidepods 24->43 mm when changed)
+the inner edge is x 0.27 and the outer edge `podAt(z).inner + 0.004` at z 0.12 / -0.43. Factory cars keep 0.24/0.40.
+Measured (ferrari, anteater/wedge/barge/brick): chassis~bolsters 32.4 -> 4.4 mm, bolsters~chassis 31.3 -> 1.5 mm,
+bolsters~sidepods cleared. Six-body `--baseline` (written at e470b830): PASS, 0 NEW/WORSE, factory builds unchanged.
+
+## Row 3 deferred: engineCover~sidepods ZFIGHT
+deferred: shared cover/pod loft overlap, not a concept-body mount. Measured ZFIGHT engineCover~sidepods max cm2 per
+body over 11 cars: needle 127, brick 71, anteater 323, arched 181, wedge 332, barge 80 (z about 0.03, x -0.68, y 0.18:
+the cover foot and the pod top share a plane). Needle (near-factory) fails too, so the fix is in the shared
+`coverLoft`/pod seam (`js/car/car-shade.js`, `car-body-geom.js`), which moves factory cars; needs its own change with a
+factory-wide baseline.

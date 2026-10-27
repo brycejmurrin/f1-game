@@ -423,10 +423,14 @@ const Car3D = (function () {
       }
       addBox(out, 0, 0.432, 0.176, 0.088, 0.078, 0.034, [0.32, 0.32, 0.36], SURFACES.metal);
     } else {
+      // Concept bodies (not the narrow-waisted needle, whose pods wrap the old block) seat the block between
+      // the tub and the pod's inner wall: 0.24/0.40 ran 30-40 mm into both (#3156 row 2).
+      const fit = BODY_STYLES[styleKey] === teamStyle && !(teamStyle.waist < -0.2), iF = fit ? 0.27 : 0.24;
+      const bF = fit ? Math.min(0.40, anchors.podAt(0.12).inner + 0.004) : 0.40, bR = fit ? Math.min(0.40, anchors.podAt(-0.43).inner + 0.004) : 0.40;
       for (const s of [-1, 1]) {
         (shadeFlags.round ? CarShade.blockFn(addTri, { r: [0, 0.03, 0.07, 0.02] }) : addBlock)(out, [   // rounded: outer shoulder r 70 mm
-          [s*0.24, 0.42, 0.14], [s*0.40, 0.42, 0.14], [s*0.40, 0.60, 0.10], [s*0.24, 0.58, 0.10],
-          [s*0.24, 0.44, -0.42], [s*0.40, 0.44, -0.42], [s*0.40, 0.62, -0.44], [s*0.24, 0.60, -0.44],
+          [s*iF, 0.42, 0.14], [s*bF, 0.42, 0.14], [s*bF, 0.60, 0.10], [s*iF, 0.58, 0.10],
+          [s*0.24, 0.44, -0.42], [s*bR, 0.44, -0.42], [s*bR, 0.62, -0.44], [s*0.24, 0.60, -0.44],
         ], c1);
       }
     }
