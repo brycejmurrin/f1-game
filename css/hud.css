@@ -241,6 +241,11 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
 :root[data-gap-drop] .hud-gaps {
   top: calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px);
 }
+/* The dropped strip landed in the mirror's row (portrait cockpit, #3271): js/ui/hud.js gapMirrorDrop
+   sets data-gap-mir only on a painted overlap; park it under the frame (--mir-paint-b, screen px). */
+:root[data-gap-mir] .hud-gaps {
+  top: max(calc(8px + var(--sat) / var(--hud-z) + var(--hud-top-h, 54px) + 4px), calc(var(--mir-paint-b, 0px) / var(--hud-z) + 4px));
+}
 .hud-bottom {
   position: absolute;
   bottom: calc(12px + var(--sab) / var(--hud-z));
