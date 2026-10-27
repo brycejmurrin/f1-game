@@ -15,8 +15,9 @@ import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, HOLD_LABEL, MAX_BEHIND, ROWS, openVerdict, holdVerdict, planRow, ciVerdict, isGamePath, gameFiles,
   gameMergesBehind, distanceVerdict, baseHistory, distanceFor, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main,
+  untrustedEnv,
 } from "../../tools/ci/merge-gate.mjs";
-import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict } from "../../tools/lib/gate-receipt.mjs";
+import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem, readyClaimVerdict } from "../../tools/lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const scratch = (prefix) => { const d = path.join(ROOT, "artifacts", "tmp"); fs.mkdirSync(d, { recursive: true }); return fs.mkdtempSync(path.join(d, prefix)); };
@@ -280,7 +281,7 @@ test("a receipt records the gate files' sha256; gateFilesVerdict (JS) and gate_f
   const g = (...a) => spawnSync("git", ["-C", dir, ...a], { encoding: "utf8" });
   try {
     g("init", "-q"); g("config", "user.email", "t@t"); g("config", "user.name", "t");
-    for (const f of GATE_FILES) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); }
+    for (const f of gateClosure(ROOT)) { fs.mkdirSync(path.dirname(path.join(dir, f)), { recursive: true }); fs.copyFileSync(path.join(ROOT, f), path.join(dir, f)); }
     g("add", "-A"); g("commit", "-qm", "gate");
     writeReceipt(dir, "ready", { pr: 5, head: HEAD, ok: true }, { main: null, gateRoot: dir });
     const rc = readReceipt(dir, "ready", 5);
@@ -294,5 +295,73 @@ test("a receipt records the gate files' sha256; gateFilesVerdict (JS) and gate_f
     assert.ok(/differ from HEAD/.test(both({ ...rc, gateFiles: gateFileHashes(dir) }).why), "the edited gate hashed itself: still refused");
     fs.writeFileSync(f, orig);
     assert.ok(/no gate-file hashes/.test(both({ ...rc, gateFiles: undefined }).why));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("untrustedEnv: the merge result's scripts get no token and no runner file-command path (land.yml gate)", () => {
+  const env = untrustedEnv({
+    PATH: "/usr/bin", HOME: "/home/runner", CI: "true", GITHUB_REPOSITORY: "o/r", GITHUB_SHA: "abc",
+    GH_TOKEN: "x", GITHUB_TOKEN: "x", LAND_TOKEN: "x", NODE_AUTH_TOKEN: "x", ACTIONS_RUNTIME_TOKEN: "x", ACTIONS_ID_TOKEN_REQUEST_URL: "u",
+    GITHUB_OUTPUT: "/o", GITHUB_ENV: "/e", GITHUB_PATH: "/p", GITHUB_STATE: "/s", GITHUB_STEP_SUMMARY: "/sum", SOME_SECRET: "x",
+  });
+  assert.deepEqual(Object.keys(env).sort(), ["CI", "GITHUB_REPOSITORY", "GITHUB_SHA", "HOME", "PATH"]);
+});
+
+// System audit 4 (2026-10-26) group A1, ported from the base on the 2026-10-27 sync: the gate closure, future-dated
+// receipts, the ready head pin and the READY claim path (tools/lib/gate-receipt.mjs).
+test("audit 4: the hashed gate set is the static import closure, recorded in the receipt", () => {
+  assert.deepEqual(staticImports(`import a from "./a.mjs";\nimport {\n  b,\n  c as d\n} from "../lib/b.mjs";\nimport "./side.mjs";\nexport * from "./e.mjs";\nexport { f } from "./f.mjs";\nconst s = 'x from "./not.mjs"';\nimport fs from "node:fs";\n`),
+    ["./a.mjs", "../lib/b.mjs", "./side.mjs", "./e.mjs", "./f.mjs"]);
+  const c = gateClosure(ROOT);
+  assert.deepEqual([...GATE_FILES, "tools/ci/github-api.mjs", "tools/lib/cli-args.mjs"].filter((f) => !c.includes(f)), []);
+  assert.deepEqual(Object.keys(gateFileHashes(ROOT)).sort(), c);
+  const dir = scratch("gate-closure-");
+  try {
+    writeReceipt(dir, "ready", { pr: 3, head: HEAD, ok: true }, { main: null });
+    const rc = readReceipt(dir, "ready", 3);
+    assert.deepEqual(rc.gateClosure, c, "the list rides in the receipt for the Python twin");
+    assert.deepEqual(Object.keys(rc.gateFiles).sort(), c, "gateFiles maps every closure file");
+    // a receipt that recorded only the three seeds (an older gate) is refused by the closure check
+    const seeds = Object.fromEntries(GATE_FILES.map((f) => [f, rc.gateFiles[f]]));
+    const unrec = c.filter((f) => !GATE_FILES.includes(f));
+    assert.equal(gateFilesVerdict(ROOT, { ...rc, gateRoot: ROOT, gateFiles: seeds }).why,
+      `the receipt does not record ${unrec.slice(0, 4).join(", ")}${unrec.length > 4 ? ", ..." : ""} of the gate's import closure in ${ROOT} (an older gate or an edited import): re-run the gate`);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("audit 4: a future-dated receipt is refused; a ready receipt is pinned to the PR's current head", () => {
+  const now = Date.parse("2026-10-26T20:00:00Z");
+  const r = (sAhead, extra = {}) => ({ kind: "merge", pr: 7, head: HEAD, ok: true, at: new Date(now + sAhead * 1000).toISOString(), ...extra });
+  assert.equal(MAX_FUTURE_S, 60);
+  assert.equal(receiptVerdict(r(30), { kind: "merge", pr: 7, head: HEAD, now }).ok, true, "seconds of clock skew pass");
+  const future = (s) => `the merge-gate receipt for #7 is dated ${s} s in the future (max 60): a receipt is written by the gate, never by hand; re-run the gate`;
+  assert.equal(receiptVerdict(r(3600), { kind: "merge", pr: 7, head: HEAD, now }).why, future(3600));
+  assert.equal(receiptVerdict(r(0, { at: "2099-01-01T00:00:00Z" }), { kind: "merge", pr: 7, head: HEAD, now }).why, future(Math.round((Date.parse("2099-01-01T00:00:00Z") - now) / 1000)));
+  const ready = r(-60, { kind: "ready" });
+  assert.equal(receiptVerdict(ready, { kind: "ready", pr: 7, now }).ok, true, "no head known: age and ok only");
+  assert.equal(receiptVerdict(ready, { kind: "ready", pr: 7, head: HEAD.slice(0, 9), now }).ok, true);
+  assert.equal(receiptVerdict(ready, { kind: "ready", pr: 7, head: "b".repeat(40), now }).why, "the PR head is bbbbbbbbbbbb, but ready-gate passed on aaaaaaaaaaaa: re-run ready-gate on the current head");
+  assert.equal(headPinProblem(HEAD, HEAD.slice(0, 7)), "");
+  assert.notEqual(headPinProblem(HEAD, "aaaa"), "", "under 7 hex never pins");
+});
+
+test("audit 4: a READY claim checks the PR number, the live head and the gate files", () => {
+  const dir = scratch("ready-claim-");
+  try {
+    const okFiles = () => ({ ok: true });
+    writeReceipt(dir, "ready", { pr: 12, head: HEAD, ok: true }, { main: null });
+    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "#12 aaaaaaaa ready-gate 0", files: okFiles }).ok, true);
+    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "#13 ready", files: okFiles }).why, "the text names #13, but --pr is 12: one READY is for one PR");
+    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: okFiles, prHead: () => ({ sha: "c".repeat(40) }) }).why, "the PR head is cccccccccccc, but ready-gate passed on aaaaaaaaaaaa: re-run ready-gate on the current head");
+    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: okFiles, prHead: () => ({ error: "HTTP 502" }) }).why, "cannot read #12's current head (HTTP 502): a READY is checked against the live head; retry");
+    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: okFiles, prHead: () => ({ sha: HEAD }) }).ok, true);
+    assert.equal(readyClaimVerdict(dir, { pr: 12, text: "ready", files: () => ({ ok: false, why: "pr-board.mjs differs" }) }).why, "ready-gate receipt for #12: pr-board.mjs differs");
+    // the default check is gateFilesVerdict against the receipt's gateRoot (the real checkout, which writeReceipt
+    // hashed): a tampered hash refuses. (The old assertion passed only in a dirty worktree, audit4 merge.)
+    const rp = receiptPath(dir, "ready", 12), tampered = JSON.parse(fs.readFileSync(rp, "utf8"));
+    tampered.gateFiles["tools/ci/ready-gate.mjs"] = "0".repeat(64);
+    fs.writeFileSync(rp, JSON.stringify(tampered));
+    assert.deepEqual(readyClaimVerdict(dir, { pr: 12, text: "ready" }), { ok: false, pr: 12,
+      why: `ready-gate receipt for #12: tools/ci/ready-gate.mjs in ${tampered.gateRoot} is not the file that wrote this receipt: re-run the gate from this checkout` });
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });

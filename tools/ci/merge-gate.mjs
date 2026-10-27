@@ -156,6 +156,19 @@ export function distanceFor({ head, tip, cwd = ROOT, max = MAX_BEHIND, run = git
  * 2026-10-26: 63 of 86 named red-PR failures in three days). The PR's own CI tests the merge ref as of ITS last run;
  * a base that moved afterwards is not covered. Returns { ok, evidence }; a check that cannot run is a failure.
  */
+/**
+ * The environment for code from the merge result (gen:check, the ratchet tests): the PR's own scripts run there, so
+ * no token and none of the runner's file-command paths (GITHUB_OUTPUT, GITHUB_ENV, …) a script could write a forged
+ * gate verdict or a check run through. land.yml's `gate` job holds `checks: write`. Pure.
+ */
+export function untrustedEnv(env = process.env) {
+  const out = { ...env };
+  for (const k of Object.keys(out)) {
+    if (/TOKEN|SECRET|^GH_|^ACTIONS_|^GITHUB_(OUTPUT|ENV|PATH|STATE|STEP_SUMMARY)$/.test(k)) delete out[k];
+  }
+  return out;
+}
+
 export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
   const tail = (r) => `${r.stdout || ""}\n${r.stderr || ""}`.split("\n").map((l) => l.trim()).filter(Boolean).slice(-2).join(" | ").slice(0, 220);
   const counted = [
@@ -170,7 +183,7 @@ export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
   // `node --test` started inside another node test inherits NODE_TEST_CONTEXT and then exits 0 on a failing test
   // (measured 2026-10-21). The worktree's HEAD is the base tip and its working tree the merge result, so the pin
   // counters judge the growth THIS merge adds (ratchets.mjs ratchetMode), not an overage the tip already carries.
-  const env = { ...process.env, APEX_RATCHET_BASE_REF: "HEAD" };
+  const env = { ...untrustedEnv(), APEX_RATCHET_BASE_REF: "HEAD" };
   delete env.NODE_TEST_CONTEXT;
   delete env.APEX_RATCHET_ABSOLUTE;
   const bad = [];
@@ -214,7 +227,7 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
     return fail(conflicted.length ? `conflicts with the current tip ${tip.slice(0, 8)}: ${conflicted.slice(0, 6).join(", ")}${conflicted.length > 6 ? ", …" : ""} — sync-pr.mjs first` : `merge onto ${tip.slice(0, 8)} failed: ${(m.stderr || m.stdout || "").trim().split("\n")[0]}`);
   }
   try { fs.symlinkSync(path.join(cwd, "node_modules"), path.join(wt, "node_modules")); } catch { /* exists */ }
-  const gen = run("npm", ["run", "-s", "gen:check"], { cwd: wt, encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
+  const gen = run("npm", ["run", "-s", "gen:check"], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 600_000, maxBuffer: 16 << 20 });
   if (gen.status !== 0) {
     const first = `${gen.stdout || ""}\n${gen.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => l && !/^>|^npm /.test(l)).slice(-3).join(" | ");
     return fail(`gen:check fails on the merge onto ${tip.slice(0, 8)}: ${first || "see output"} — sync-pr.mjs (it runs npm run gen) and push`);

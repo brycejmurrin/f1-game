@@ -44,7 +44,10 @@ on:
     branches: [claude/f1-game-project-26h3ng]
   check_suite:
     types: [completed]
-  workflow_run:
+  # workflow_run re-gates after ci.yml (check_suite skips Actions-made suites, see the header). No job checks out
+  # the PR: `gate` checks out the deploy branch, and the merge result's scripts run under merge-gate.mjs untrustedEnv
+  # (no token, no GITHUB_OUTPUT/STEP_SUMMARY path); `resolve` keeps only PRs into the deploy branch.
+  workflow_run:   # zizmor: ignore[dangerous-triggers] see the three lines above: no PR checkout, PR scripts get no token
     workflows: ["CI", "Deploy to GitHub Pages"]
     types: [completed]
 
@@ -115,9 +118,11 @@ jobs:
             fi
           done
           landable=false; [ "$prs" != '[]' ] && landable=true
-          echo "landable=$landable" >> "$GITHUB_OUTPUT"
-          echo "prs=$prs" >> "$GITHUB_OUTPUT"
-          echo "disarm=$disarm" >> "$GITHUB_OUTPUT"
+          {
+            echo "landable=$landable"
+            echo "prs=$prs"
+            echo "disarm=$disarm"
+          } >> "$GITHUB_OUTPUT"
           echo "landable=$landable prs=$prs disarm=$disarm"
 
   # THE GATE: merge-gate.mjs --check on each landable PR (open, ready, `land`, no `hold`, Plan closed, `CI`
@@ -171,6 +176,7 @@ jobs:
             else
               conclusion=failure; refused=$((refused + 1))
             fi
+            # shellcheck disable=SC2016 # the backticks are Markdown for the job summary, not a command substitution
             printf '### gate PR #%s\n\n`%s`\n\n```\n%s\n```\n' "$n" "${verdict:-= merge-gate unknown (exit $code)}" "$out" >> "$GITHUB_STEP_SUMMARY"
             # Off a pull_request event this run's own check sits on the deploy tip, not the PR head: post one there.
             if [ "$EVENT" != pull_request ]; then
