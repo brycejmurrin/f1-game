@@ -432,7 +432,7 @@ Pins the wrap always applies (you cannot override them):
   enum or a bounded number, inline `preset` offsets and a `matrix` file (JSON
   under `artifacts/` or `scratch/`) are validated by the CLI's own pure
   validators before the lock; `matrix: exhaustive` (~4 h) is refused without
-  a `shard` (or dispatch `.github/workflows/hud-survey.yml`). A cell is ~2 min
+  a `shard`. A cell is ~2 min
   and the quick matrix ~10, past the host's ~60–120 s MCP call, so both default
   to `apex_job_start` kinds `hud_shot` / `hud_survey` and return a `jobId`
   (poll `apex_job_status`). `async: false` blocks instead; only that path's

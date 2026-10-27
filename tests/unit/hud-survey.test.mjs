@@ -663,24 +663,6 @@ test("MCP: results carry structuredContent, its serialized copy first, and resou
   assert.deepEqual(survey.content.filter((c) => c.type === "resource_link").map((c) => c.mimeType), ["text/markdown", "text/html", "application/json"]);
 });
 
-test("the dispatch-only workflow shards, runs llvmpipe, merges and stays opt-in", () => {
-  const yml = read(".github/workflows/hud-survey.yml");
-  assert.match(yml, /^on:\n  workflow_dispatch:/m);
-  assert.doesNotMatch(yml, /^\s+(push|pull_request|schedule):/m, "dispatch only");
-  assert.match(yml, /--shard "\$SHARD" --gl llvmpipe/);
-  assert.match(yml, /uses: \.\/\.github\/actions\/mesa-xvfb/);
-  assert.match(yml, /hud-survey\.mjs --merge/);
-  // Merge after red shards, never after a cancel or a failed plan (shard skipped).
-  assert.match(yml, /needs: \[shard\]\n(?:\s+#.*\n)*\s+if: \$\{\{ !cancelled\(\) && needs\.shard\.result != 'skipped' \}\}/);
-  assert.doesNotMatch(yml, /needs: \[shard\]\n(?:\s+#.*\n)*\s+if: always\(\)/, "always() merged after a failed plan");
-  for (const m of yml.matchAll(/uses: ([^\s]+)/g)) if (!m[1].startsWith("./")) assert.match(m[1], /@[0-9a-f]{40}$/, `${m[1]} is SHA-pinned`);
-  for (const choice of /options: \[(quick[^\]]*)\]/.exec(yml)[1].split(",").map((s) => s.trim())) assert.doesNotThrow(() => M.expandMatrix(choice));
-  // Inputs reach the shell through env only.
-  for (const l of yml.split("\n").filter((x) => /^\s+(run:|\s{2,}\S)/.test(x) && x.includes("${{ inputs."))) {
-    assert.doesNotMatch(l, /^\s+(node|echo|if|extra)/, `input interpolated into a script line: ${l.trim()}`);
-  }
-});
-
 // ── hud-live-sample: the LIVE (unfrozen) counterpart of the frozen survey cell ─────
 // hud-survey freezes the sim, so a moved piece whose words change width after the
 // cell's last fit is read stale (the 1280x720 cockpit AERO chip: right edge 1297,

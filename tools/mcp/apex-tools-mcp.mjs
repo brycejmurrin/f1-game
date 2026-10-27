@@ -1648,7 +1648,7 @@ export function hudSurveyArgv(args) {
   // exhaustive is ~4 h on this container: one MCP call may not hold it.
   if (m === "exhaustive" && !shard) {
     badArgs("matrix exhaustive needs a shard (≈ 4 h unsharded)",
-      'Pass {"matrix":"exhaustive","shard":"1/8"}, run the CLI in the background, or dispatch .github/workflows/hud-survey.yml.');
+      'Pass {"matrix":"exhaustive","shard":"1/8"}, or run the CLI in the background (--shard i/n, then --merge).');
   }
   if (["quick", "full", "leads", "exhaustive"].includes(m)) argv.push("--matrix", m);
   else {

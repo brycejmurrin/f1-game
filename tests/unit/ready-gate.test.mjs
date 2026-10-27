@@ -138,6 +138,13 @@ test("planVerdict: ticked, struck, deferred and `land:` items close; unticked on
   assert.equal(planVerdict(cursor).state, "done", "Cursor's agent slice wins when it carries a Plan (#2899)");
 });
 
+test("planVerdict on edited bodies (moved from pr-body.test.mjs): a struck or deferred item closes, `**now:**` stays open", () => {
+  const plan = "<!-- example:\n       - [x] done — sample\n       - [ ] todo -->\n- [ ] **now:** first step\n- [ ] second step\n- [x] third — sha";
+  assert.deepEqual(planVerdict(body(plan)).open, ["**now:** first step", "second step"], "commented example items do not count");
+  assert.deepEqual(planVerdict(body(plan.replace("- [ ] second step", "- [ ] ~~second step~~ — covered by #5"))).open.length, 1, "struck closes");
+  assert.deepEqual(planVerdict(body(plan.replace("- [ ] second step", "- [~] second step"))).open.length, 1, "deferred closes");
+});
+
 test("withPlan: an open Plan turns a green tip into plan-open (exit 1); no Plan warns; red and no-PR pass through", () => {
   const v = withPlan(GREEN, body("- [ ] one\n- [ ] two\n- [ ] three\n- [ ] four"));
   assert.deepEqual([v.state, v.code], ["plan-open", 1]);
