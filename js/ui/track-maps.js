@@ -25,19 +25,22 @@ const TrackMaps = (function () {
   // lightness and chroma, which every colour-vision type keeps. The literals
   // are only the fallback for a context with no computed style.
   const SECTOR_TOKENS = ["--gold", "--silver", "--bronze"];
+  // A COLOUR VISION mode swaps them for CvdPalette's sec1-3 (#1595).
   const SECTOR_COLORS = ["#ffd700", "#c0c0c0", "#cd9b5a"];
+  const cvdOn = () => typeof CvdPalette !== "undefined" && CvdPalette.mode() !== "off";
   function sectorColors() {
+    if (cvdOn()) return ["sec1", "sec2", "sec3"].map((k) => CvdPalette.hex(k));
     const root = typeof document !== "undefined" && document.documentElement;
     const cs = root && typeof getComputedStyle === "function" ? getComputedStyle(root) : null;
     return SECTOR_TOKENS.map((k, i) => (cs && String(cs.getPropertyValue(k) || "").trim()) || SECTOR_COLORS[i]);
   }
 
-  const CLASS_COLORS = {
-    HAIRPIN: "#f87171",
-    SLOW: "#fb923c",
-    MEDIUM: "#facc15",
-    FAST: "#4ade80"
-  };
+  // Corner class → CvdPalette row (its off shades are the old red → green
+  // ramp; a COLOUR VISION mode turns it into a lightness ramp, #1595).
+  const CLASS_KEY = { HAIRPIN: "cnrHairpin", SLOW: "cnrSlow", MEDIUM: "cnrMedium", FAST: "cnrFast" };
+  function classColor(cls) {
+    return CLASS_KEY[cls] && typeof CvdPalette !== "undefined" ? CvdPalette.hex(CLASS_KEY[cls]) : "";
+  }
 
   // Classify from approximate apex radius (m) + heading sweep (deg).
   // Peak |curvature| alone called every chicane a HAIRPIN (Rettifilo, Bus Stop);
@@ -566,7 +569,7 @@ const TrackMaps = (function () {
         for (let i = 0; i < cs.length; i++) {
           const x = PX(cs[i].x), y = PY(cs[i].y);
           const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
-          const col = CLASS_COLORS[cls] || (opts.cornerColor || "#fff");
+          const col = classColor(cls) || (opts.cornerColor || "#fff");
           g.fillStyle = col;
           g.beginPath(); g.arc(x, y, Math.max(1.5, rDot * 0.4), 0, Math.PI * 2); g.fill();
         }
@@ -577,7 +580,7 @@ const TrackMaps = (function () {
       for (let i = 0; i < cs.length; i++) {
         const x = PX(cs[i].x), y = PY(cs[i].y);
         const cls = cs[i].cls || classifyCorner(cs[i].r || (cs[i].v > 1e-6 ? 1 / cs[i].v : 999), 0);
-        const col = CLASS_COLORS[cls] || (opts.cornerColor || "#fff");
+        const col = classColor(cls) || (opts.cornerColor || "#fff");
         let dx = x - cx, dy = y - cy;
         const len = Math.hypot(dx, dy) || 1;
         dx /= len; dy /= len;
@@ -641,10 +644,10 @@ const TrackMaps = (function () {
       // was unreadable on the modal. Silver S2 is the grey sector stroke.
       if (opts.legend !== false && W >= 280 && H >= 200) {
         const legend = [
-          ["HAIRPIN", CLASS_COLORS.HAIRPIN],
-          ["SLOW", CLASS_COLORS.SLOW],
-          ["MEDIUM", CLASS_COLORS.MEDIUM],
-          ["FAST", CLASS_COLORS.FAST],
+          ["HAIRPIN", classColor("HAIRPIN")],
+          ["SLOW", classColor("SLOW")],
+          ["MEDIUM", classColor("MEDIUM")],
+          ["FAST", classColor("FAST")],
           ["S2", sectorColors()[1]]
         ];
         const fontPx = Math.max(12, Math.round(Math.min(W, H) / 36));
@@ -668,7 +671,7 @@ const TrackMaps = (function () {
 
   return {
     outline, aspect, fitCanvas, planPreview, corners, direction, drsZones, elevRange, elevProfile, themeColor, draw, detectCorners,
-    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, CLASS_COLORS, classifyCorner, measureApex, assignCornerClasses,
+    SECTOR_COLORS, SECTOR_TOKENS, sectorColors, classColor, classifyCorner, measureApex, assignCornerClasses,
     invalidate, cachedIds: () => Object.keys(cache),
   };
 })();
