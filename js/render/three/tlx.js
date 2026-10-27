@@ -6671,6 +6671,8 @@ const TLX = (function () {
             };
           },
           materialCacheSize() { return matCache.size; },
+          // #3673 first-race census: the matCache key a built pipeline's material was minted under (null: not a cached lit variant).
+          matKeyOf(m) { for (const [k, v] of matCache) if (v === m) return k; return null; },
           // What is growing when the GEOMETRY is not? A 4-minute race soak
           // measured the heap climbing 88-138 MB while geoCensus's registry
           // and attribute bytes both stayed flat (docs/PERF-FINDINGS.md 2o),
