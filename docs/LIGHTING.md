@@ -633,7 +633,7 @@ than extremes); never re-state a knob at its default; respect the `"*"` matte-pa
 
 Status: ⬜ todo · 🟨 proposed (agent) · ✅ baked into `presets.js`
 
-All 52 circuits have a full `tod × weather` grid (1,040 condition keys, plus `"*"`, the four `"*|<tod>"` keys, and the shared `"*|dawn|dry"` / `"*|dusk|dry"` / `"*|dusk|wet"` / `"*|night|dry"` / `"*|night|wet"` stamps; `light-presets.test.mjs` fails a circuit file without one). Batches B1a (fuji, okayama from kyalami) and B1b (korea, jerez from madrid / bahrain) baked 2026-09-30 with no `wetness` pins. The last eight were copied verbatim on 2026-10-04 from their nearest green-theme sibling (same country or climate): anderstorp ← nurburgring, brands_hatch and donington ← silverstone, buddh ← sepang, dijon ← magny_cours, mont_tremblant ← montreal, mosport ← watkins_glen, zolder ← spa.
+All 52 circuits have a full `tod × weather` grid (1,040 condition keys, plus `"*"`, the four `"*|<tod>"` keys, and the shared `"*|dawn|dry"` / `"*|dusk|dry"` / `"*|dusk|wet"` / `"*|night|dry"` / `"*|night|wet"` stamps; `light-presets.test.mjs` fails a circuit file without one). Batches B1a (fuji, okayama from kyalami) and B1b (korea, jerez from madrid / bahrain) baked 2026-09-30 with no `wetness` pins. The last eight were copied verbatim on 2026-10-04 from their nearest green-theme sibling (same country or climate): anderstorp ← nurburgring, brands_hatch and donington ← silverstone, buddh ← sepang, dijon ← magny_cours, mont_tremblant ← montreal, mosport ← watkins_glen, zolder ← spa. Their `day|dry` and `day|rain` entries were then hand-tuned per circuit on 2026-10-27 (#1615: sun elevation, haze/`fogTint`, foliage shadow strength, rain murk; rain stays darker than dry, no `wetness` pins); the other tod×weather keys remain donor copies until each circuit's look-survey sheet is reviewed.
 
 The `<track>|dusk|wet` profiles are short deltas (2026-10-04): `<track>|dusk|rain` minus its falling-rain knobs plus the wet-surface knobs of `<track>|day|wet`, replacing a COPY-ALL stamp with `ambientMul` 0 / `keyMul` 0.115. Dawn|dry fill is the shared stamp `LightPresets["*|dawn|dry"]` (`ambientMul` 0.5, twilight `keyMul` 0.29): per-track dawn|dry no longer pins those two knobs, so the fleet lift is one key (profiles.js resolves `*|<tod>|<wx>` between `"*"` and the track key). Dusk|dry uses `LightPresets["*|dusk|dry"]` (twilight ambient/key fill, lamp/bloom/floodEmit, buried-sun `sunElev` fixes on 15 tracks): per-track dusk|dry keeps sun/gr/tint and Spa #1136 twilight exceptions. Night|dry authenticity is the shared stamp `LightPresets["*|night|dry"]` (ambient fill up, nightAmbLift/bloom/key down, floodEmit up): per-track night|dry keeps only exceptions (Spa flood/cityGlow, Bahrain/Qatar mast pools, …). Dusk|wet uses `LightPresets["*|dusk|wet"]` (twilight sky fill, key/bloom/floodEmit for lamp read in rain sheen, exposure trimmed): per-track dusk|wet keeps fog/ssr/tint exceptions (Spa twilight fill #1136, …). Night|wet uses `LightPresets["*|night|wet"]` (band fill and key/bloom up for lamp read in rain sheen, city glow and exposure down): per-track night|wet keeps grade and fog exceptions (Monaco tunnel grade, Spa pools/fog, …).
 
@@ -710,14 +710,14 @@ Cross-cutting from the frames:
 | Okayama | `okayama` | green | day | ✅ (B1a donor kyalami; look-survey deferred) |
 | Korea | `korea` | modern | day | ✅ (B1b donor madrid; look-survey deferred) |
 | Jerez | `jerez` | desert | day | ✅ (B1b donor bahrain; look-survey deferred) |
-| Anderstorp | `anderstorp` | green | day | ✅ (donor nurburgring; look-survey deferred) |
-| Brands Hatch | `brands_hatch` | green | day | ✅ (donor silverstone; look-survey deferred) |
-| Buddh | `buddh` | green | day | ✅ (donor sepang; look-survey deferred) |
-| Dijon-Prenois | `dijon` | green | day | ✅ (donor magny_cours; look-survey deferred) |
-| Donington Park | `donington` | green | day | ✅ (donor silverstone; look-survey deferred) |
-| Mont-Tremblant | `mont_tremblant` | green | day | ✅ (donor montreal; look-survey deferred) |
-| Mosport | `mosport` | green | day | ✅ (donor watkins_glen; look-survey deferred) |
-| Zolder | `zolder` | green | day | ✅ (donor spa; look-survey deferred) |
+| Anderstorp | `anderstorp` | green | day | ✅ (donor nurburgring; day grid hand-tuned #1615; look-survey deferred) |
+| Brands Hatch | `brands_hatch` | green | day | ✅ (donor silverstone; day grid hand-tuned #1615; look-survey deferred) |
+| Buddh | `buddh` | green | day | ✅ (donor sepang; day grid hand-tuned #1615; look-survey deferred) |
+| Dijon-Prenois | `dijon` | green | day | ✅ (donor magny_cours; day grid hand-tuned #1615; look-survey deferred) |
+| Donington Park | `donington` | green | day | ✅ (donor silverstone; day grid hand-tuned #1615; look-survey deferred) |
+| Mont-Tremblant | `mont_tremblant` | green | day | ✅ (donor montreal; day grid hand-tuned #1615; look-survey deferred) |
+| Mosport | `mosport` | green | day | ✅ (donor watkins_glen; day grid hand-tuned #1615; look-survey deferred) |
+| Zolder | `zolder` | green | day | ✅ (donor spa; day grid hand-tuned #1615; look-survey deferred) |
 
 ---
 
