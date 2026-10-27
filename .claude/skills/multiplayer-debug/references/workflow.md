@@ -96,7 +96,8 @@ Load from the SKILL.md index when the task needs this detail.
 8. **Verify in order.**
    - Run `npm run test:net-unit` before any browser group; it covers transport,
      SDP, rendezvous, QR, snapshot, and session contracts.
-   - Run `test:net` in the background through `tools/ci/test-bg.mjs`.
+   - Then ONE spec for the symptom, backgrounded (AGENTS.md rule 4): `npm test -- tests/specs/multiplayer-<lobby|room|scan|seats|session|roles|npeer|scan-cancel>.spec.js`.
+     The whole `net` group (8 specs) is `node tools/ci/remote-group.mjs net` on the pushed branch; a subagent reports browser runs as not run.
    - Use real RTC scripts only for browser/ICE behavior that loopback cannot
      exercise.
 

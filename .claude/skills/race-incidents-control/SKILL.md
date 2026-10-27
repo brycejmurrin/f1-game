@@ -40,13 +40,21 @@ Do **not** use this for:
 | `js/race/race-control.js` | Read-only flag machine over `DebrisWorld.hazards()`; host-owned in multiplayer |
 | `js/race/reliability.js` | Staged DNF/retirement plan; deterministic and career-aware |
 
+**Marbles are not cosmetic.** AI cars drop marbles through `DebrisWorld.tyreMarble`, and
+`marbleGrip` then cuts the player's grip in the force path (`js/physics/player-forces.js`, floor
+0.93). Arc-rule class: **surface** (pass-4 audit DECISIONS #4): the drop signal must be the AI
+car's own measured lateral acceleration / tyre slip, never track curvature or the racing line — a
+curvature-derived drop is an arc-rule leak. The classification home is the marble row of
+docs/PHYSICS.md's legitimate-columns table; point there, do not copy it. Changing marbles is a
+physics change: tune-physics' arc check and agent `physics-contract-auditor`.
+
 Flags / storage:
 
 | Key | Meaning |
 |---|---|
 | `apex26.debris` | Rapier debris side-world; default OFF, only `"1"` enables (read once at boot) |
 | `apex26.breakBarriers` | Breakable barrier panels (`"0"` disables; likewise the keys below) |
-| `apex26.marbleGrip` | Marble grip scalar |
+| `apex26.marbleGrip` | Marble grip scalar — reaches the PLAYER's grip (see Marbles above) |
 | `apex26.r2Airborne` | Airborne/rollover takeover |
 | `apex26.r3Contact` | Heavy car-car contact takeover |
 | `apex26.c1Pileup` | Multi-car pile-up takeover |
@@ -56,7 +64,7 @@ Hooks:
 
 | Hook | Use |
 |---|---|
-| `__apex.debris(arg?)` | Enable/disable, inspect status, `{hazards:true}`, `{reset:true}`, `{burst:n}` — thin in DEBUG-HOOKS prose but fully documented in `apex.js` |
+| `__apex.debris(arg?)` | Enable/disable, inspect status, `{hazards:true}`, `{reset:true}`, `{burst:n}` (full contract: the hook's comment in `js/agent/apex.js`) |
 | `__apex.incident(arg?)` | R2/R3/C1 takeover status; `{launch:true}`, `{flags:{…}}`, `{reset:true}` to abort takeovers |
 | `__apex.caution(arg?)` | Inspect/toggle flags; pass `{hazards:true}` for live hazard list |
 | `__apex.retirements()` | Inspect planned and active DNFs |
@@ -70,7 +78,9 @@ Commands:
 npm run test:tooling-fast                      # background, AGENTS.md rule 4
 node --test tests/unit/race-control.test.mjs   # flags/caution rules, <1 s; also reliability, debris-*.test.mjs
 node --test tests/unit/incident-gate.test.mjs  # R2/R3/C1 takeovers: promote, window, handback, release
-npm test -- tests/specs/race-control.spec.js   # flags only (no IncidentSim); background (AGENTS.md rules 4-5); whole group: tools/ci/remote-group.mjs physics-core
+APEX_VM_PAGE=1 node --test tests/specs/race-control.spec.js   # flags only (no IncidentSim); NO browser (VM-adapted)
+npm test -- tests/specs/debris.spec.js         # BROWSER, one spec, background (AGENTS.md rule 4); a subagent reports it not run
+node tools/ci/remote-group.mjs physics-core     # the whole group, pushed branch only
 ```
 
 ## Load on demand

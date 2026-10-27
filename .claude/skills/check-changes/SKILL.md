@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, pick the minimum tests, validate/pre-push, verify track edits, js/css shell/cache policy, deploy-branch merge/push, or Playwright timeout triage. Red Actions → ci-red-triage."
+description: "Use when asked did I break anything, pick the minimum tests, validate/pre-push, verify track edits, js/css shell/cache policy, or Playwright timeout triage. Red Actions → ci-red-triage; landing on the deploy branch → ship."
 ---
 
 # Validate changes before committing/pushing
@@ -44,9 +44,11 @@ node tools/ci/verify-change.mjs --wait       # every batch — ONLY when the par
 once (the ladder: AGENTS.md rule 3). A started batch's verdict is its log's `= run …` line
 (`references/triage.md`).
 
-The commit hook (two-call procedure: AGENTS.md rule 12) runs only in Claude Code sessions: Cursor and
-Codex and Cursor route `git commit` through the shell guard, but a commit made through the GitHub API does not run it, so a
-non-Claude branch's first CI run is its guard run — run `npm run test:guards` by hand before that push.
+Cursor and Codex commits reach CI unguarded only when no hook ran (the 2026-10-26 claim
+that they always do was wrong). The commit gate (two-call procedure: AGENTS.md rule 12) guards them too: their
+`shell-guard.sh` hooks route `git commit` through `bash-guard.sh`, or leave it to
+`.githooks/pre-commit` when `core.hooksPath` points there (`npm install`'s `prepare` sets it).
+Run `npm run test:guards` by hand only in a clone where `git config core.hooksPath` is unset.
 
 - **Already red?** `node tools/ci/deploy.mjs --train` prints the deploy branch's last ci /
   pages / nightly conclusions; `verify-agent --base <ref>` answers `DELTA: same-red |
@@ -61,22 +63,10 @@ Full wrap map (every `apex_*`, never-wrap): `docs/AGENT-SURFACE.md`.
 
 ## Output and reading budget
 
-Agent-facing terminal calls default to compact through
-`node tools/agent-run.mjs -- <existing command and arguments>`. Select
-`--output-level diagnostic` or `--output-level full` before `--` when needed;
-retrieve saved artifacts with `--read` instead of repeating an action for detail.
-Configured MCP tools expose the same choices as `outputLevel` (default compact)
-and `output_read`. [The common contract](../../../docs/agent-output/README.md)
-explains saved evidence, pagination and the generated command catalog.
-
-Load the reference below that matches the change or failure; expand only when
-the evidence needs it. For routine reporting, return the verdict, required/not-run
-groups and log paths from the supported JSON result; JSON is structured output,
-not a promise of smaller output. Preserve the command's exit status and complete
-logs. On failure, read and include the actionable failure block and relevant
-cause/stack; offer full detail when requested or needed to diagnose. A partial,
-pending or truncated result never proves a pass. Do not rerun an unchanged check
-just to obtain a different output format.
+Output levels, saved evidence and `--read` retrieval: [the common
+contract](../../../docs/agent-output/README.md) (`node tools/agent-run.mjs -- <cmd>`).
+Report the verdict, required/not-run groups and log paths; keep the exit status;
+a partial, pending or truncated result never proves a pass.
 For routine handoff snapshots use `node tools/ci/session-status.mjs --summary`
 (`--pr <n>` adds live PR/CI state); omit `--summary` for the full handoff, or
 use `--json` for complete data. Local log counts are not current-tip verification.

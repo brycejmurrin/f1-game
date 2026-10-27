@@ -17,6 +17,12 @@
 // tag while staging, so each release automatically starts a fresh cache
 // generation and the old one is swept on activate.
 const CACHE_PREFIX = "apex26-";
+// RECORDED VOICES LIVE OUTSIDE THE GENERATIONS (audit4 B8). A voice pack is 2-7 MB
+// and unversioned; filed into apex26-<build> it was re-written into every new
+// generation and doubled while a prior settled one was retained. cacheBuild()
+// reads this name as NaN, so the stale sweep never deletes it; the shell's own
+// recovery reset (index.html, every apex26-* name) still clears it.
+const VOICE_CACHE = CACHE_PREFIX + "voice";
 // A navigation / version.json fetch races this before the cache answers.
 const NAV_RACE_MS = 3000;
 // An OPTIONAL precache asset is abandoned (and aborted) after this long.
@@ -185,20 +191,23 @@ async function matchPreferCurrent(req) {
   try { return await caches.match(req); } catch (_) { return undefined; }
 }
 
-// THE CACHED SHELL, ONLY WHEN IT IS AT LEAST BUILD `b`. The shell a plain
-// offline navigation would get (the first generation in cacheOrder() holding
-// index.html) — a shell is only ever written into its own build's cache, so
-// the cache name IS its build. Older (or an unnumbered cache) → undefined: a
-// `?b=` bust newer than anything cached must never be answered by a stale
-// shell, because the boot guard's one-shot sessionStorage key blocks a retry.
+// THE CACHED SHELL, ONLY WHEN IT IS AT LEAST BUILD `b`: the first generation
+// in cacheOrder() holding an index.html of build >= b — a shell is only ever
+// written into its own build's cache, so the cache name IS its build. The
+// order is settled-first, so an older settled shell is skipped, not returned
+// as a miss, when a newer unsettled cache already holds a qualifying shell
+// (#3284). None (or only unnumbered caches) → undefined: a `?b=` bust newer
+// than anything cached must never be answered by a stale shell, because the
+// boot guard's one-shot sessionStorage key blocks a retry.
 async function shellAtLeast(b) {
   const want = Number(b);
   if (!Number.isFinite(want)) return undefined;
   let ordered;
   try { ordered = await cacheOrder(); } catch (_) { return undefined; }
   for (const name of ordered) {
+    if (!(cacheBuild(name) >= want)) continue;
     const hit = await caches.match("index.html", { cacheName: name });
-    if (hit) return cacheBuild(name) >= want ? hit : undefined;
+    if (hit) return hit;
   }
   return undefined;
 }
@@ -449,7 +458,6 @@ async function precacheAssetLists() {
     "js/race/engineer.js",
     "js/race/radio-lines.js",
     "js/race/race-facts.js",
-    "js/race/event-journal.js",
     "js/race/spotter.js",
     "js/race/race-radio.js",
     "js/race/start-lights.js",
@@ -889,7 +897,9 @@ async function offlineStatus() {
 // Unversioned same-origin assets (no ?v= on the wire): network-first with cache
 // fallback. Used for assets/pack/ (MAT layer index) and assets/voice/ (.json +
 // .bin pairs from voice-pack.js).
-function packNetworkFirst(event, req) {
+// `fixedCache` (voice): write there, skip the write when the cached copy carries
+// the same ETag, and read it before the generations (older ones hold legacy copies).
+function packNetworkFirst(event, req, fixedCache) {
   let cacheWrite = Promise.resolve();
   const network = fetch(req).then((res) => {
     if (res && res.ok) {
@@ -897,7 +907,12 @@ function packNetworkFirst(event, req) {
       // a slow CacheStorage write may hold a successful download hostage.
       const copy = res.clone();
       cacheWrite = (async () => {
-        const cache = await openCache(await currentCacheName());
+        if (fixedCache) {
+          const tag = copy.headers.get("etag");
+          const had = tag && await caches.match(req, { cacheName: fixedCache });
+          if (had && had.headers.get("etag") === tag) return;
+        }
+        const cache = await openCache(fixedCache || await currentCacheName());
         await cache.put(req, copy);
       })().catch(noteCacheWriteFail);
     }
@@ -906,7 +921,9 @@ function packNetworkFirst(event, req) {
   // Register synchronously; the late write survives even if cached content won.
   event.waitUntil(network.then(() => cacheWrite, () => undefined));
   event.respondWith((async () => {
-    const cached = matchPreferCurrent(req);
+    const cached = fixedCache
+      ? caches.match(req, { cacheName: fixedCache }).then((hit) => hit || matchPreferCurrent(req))
+      : matchPreferCurrent(req);
     const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_RACE_MS));
     try {
       const res = await Promise.race([network, timeout]);
@@ -1101,10 +1118,11 @@ self.addEventListener("fetch", (event) => {
   // RECORDED RADIO VOICES ARE NETWORK-FIRST. assets/voice/*.json and *.bin are
   // fetched as unversioned pairs (js/audio/voice-pack.js); cache-first could
   // keep a rebaked voice stale for the whole cache generation. Same strategy
-  // as pack. Each response races independently; voice-pack.js verifies the
-  // manifest's binary digest before accepting a pair (including old bare keys).
+  // as pack, but filed in the fixed VOICE_CACHE (not each generation). Each response
+  // races independently; voice-pack.js verifies the manifest's binary digest
+  // before accepting a pair (including old bare keys).
   if (url.pathname.includes("/assets/voice/") && !DEV_HOST) {
-    packNetworkFirst(event, req);
+    packNetworkFirst(event, req, VOICE_CACHE);
     return;
   }
 

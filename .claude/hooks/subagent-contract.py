@@ -52,7 +52,7 @@ C = {
     },
     "agent-surface-reviewer": {
         "file": "agent-surface-reviewer.md", "prefix": "VERDICT", "cap": 1,
-        "row": r"^VERDICT (KEEP|TRIM|FIX|MERGE-INTO \S+|SPLIT|UNREAD)\b.*\| report: \S+",
+        "row": r"^VERDICT:? (KEEP|TRIM|FIX|MERGE-INTO \S+|SPLIT|UNREAD)\b.*\| report: \S+",   # pass 4: the card header writes `VERDICT:`
         "shape": "VERDICT KEEP|TRIM|FIX|MERGE-INTO <x>|SPLIT — <why> | report: <path>",
         "need": [r"^VERDICT ", r"^GAP1 ", r"^GAP2 "],
     },

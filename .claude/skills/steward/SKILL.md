@@ -89,14 +89,15 @@ A retry-pass is a red and is quarantined by name, never skipped or widened (AGEN
 Green below never means green above (AGENTS.md rule 3; counts in
 `docs/notes/PREPUSH-GATE-LADDER.md`). Push once per VERIFIED batch: a push over
 a live run cancels it, and a killed job runs no `if: always()` step, so its
-failures are lost. A deliberate ratchet raise is part of a fix: AGENTS.md §Critical conventions.
+failures are lost. Ratchets: `.claude/rules/game-code.md`.
 
 ## 7. "Live" is an ancestry test, not a build number
 
-- A green PR does not prove Pages. Poll by `head_sha`: `node tools/ci/ci-watch.mjs --sha <sha> [--pages]`
-  under a `Monitor` (AGENTS.md rule 13); `pages.yml` gates the tip once and publishes exactly that commit.
+- A green PR does not prove Pages. Watch by `head_sha`, one `Monitor` per push (AGENTS.md rule 13 is the home):
+  `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30 --failures-only` (`--pages` after a deploy-branch
+  push); re-arm on expiry until the `= ci …` line. `pages.yml` gates the tip once and publishes exactly that commit.
 - **Live means your commit is an ANCESTOR of the live `apex-sha`** — ask `deploy-research` for it; never
-  curl github.io from the main context. PR CI and Pages (`pages.yml`, workflow id `295002043`) are separate verdicts;
+  curl github.io from the main context. PR CI and Pages (`pages.yml`) are separate verdicts;
   the deploy push starts Pages' reusable CI gate, not a separate ship-push CI run.
 - After every push list all check runs on the head (ready-state jobs included) and read every failed log;
   on red name the exact test, assertion and lane. `deploy.mjs --train` prints the last ci/pages conclusions

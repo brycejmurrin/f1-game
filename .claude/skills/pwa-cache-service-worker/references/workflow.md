@@ -17,8 +17,9 @@ Playwright hang after a mid-run `version.json` bump.
      on next install. Committed tags stay `?v=dev`; the deploy stamps content
      hashes. Do **not** hand-bump numeric `?v=N`.
    - New file with **no tag** (DEFERRED backend, font, on-demand vendor) →
-     update `tools/manifest.cjs` `DEFERRED`, then `node tools/gen/gen-shell.mjs`
-     (writes `js/roster.js` and the `sw.js` optional seed).
+     update `tools/manifest.cjs` `DEFERRED`, then `npm run gen` (gen-shell writes
+     `js/roster.js` and the `sw.js` `@gen-shell:sw-optional` seed — both GENERATED, never
+     hand-edited, AGENTS.md rule 11; `npm run gen:check` names drift).
      `tests/unit/load-order.test.mjs` asserts the generated blocks match.
 
 2. **Edit `sw.js` carefully.**
@@ -34,15 +35,17 @@ Playwright hang after a mid-run `version.json` bump.
 
 4. **Shell sync (not a numeric bump).**
    ```sh
-   node tools/gen/gen-shell.mjs --check
-   # after a tools/manifest.cjs change:
-   node tools/gen/gen-shell.mjs
+   npm run gen:check      # after a tools/manifest.cjs change: npm run gen
    ```
-   Tags in the committed shell read `?v=dev`. `bump-cache --apply` refuses on
-   this repo. `version.json` is a generated file (the edit hook blocks a hand edit).
-   **Never deploy during a Playwright run:** the shell guard compares the page's
-   `<meta name="apex-build">` with a no-store `version.json`, and a newer build
-   reloads every open page mid-test (timeouts).
+   Tags in the committed shell read `?v=dev` (cache busting is the deploy's job:
+   `.claude/rules/game-code.md`). In repo mode `bump-cache.mjs` only checks; `--apply`
+   needs `--root` on a staged copy (its header). `version.json` is a generated file
+   (the edit hook blocks a hand edit).
+   **Mid-run reloads:** the shell guard compares the page's `<meta name="apex-build">`
+   with a no-store `version.json` and reloads once (per session per build) when the
+   served build is newer. A local run serves the committed `version.json`, so a deploy
+   cannot reload it; only a test pointed at the live host or a stubbed `version.json`
+   can hit this.
 
 5. **Test offline behaviour.**
    ```sh

@@ -125,3 +125,71 @@ test("the saved AUDIO DRIVING CUES level survives the LAZY_AUDIO reinjection", a
     assert.ok(d.brakeFired + d.callFired > 0, "40 s at Monza with CUES 7: no brake tone or corner call");
   } finally { g.close(); }
 });
+
+test("an activation-triggering pointerup unlocks a suspended context once the bundle landed (audit4 UB1)", async () => {
+  // iPhone: a touch pointerdown is not an activation-triggering event, so the context the
+  // late restoreOnEngine init made stays suspended. The engine's own listeners hear
+  // touchend/pointerdown/keydown only; the loader's capture listener must resume it on a
+  // pointerup (or click) and then step aside.
+  let fa = null, inits = 0;
+  const g = await createGame({ carMeshes: false, onSandbox: (sb) => { fa = install(sb); } });
+  const sb = g.sandbox;
+  try {
+    sb.dispatchEvent({ type: "pointerdown", pointerType: "touch", target: sb.document.body });
+    await settle(() => !sb.GameAudio._stub && !sb.AudioPanel._stub, 4000);
+    await turns(50);
+    assert.equal(fa.made.length, 1, "precondition: the landed bundle made a context");
+    const c = fa.made[0];
+    c.state = "suspended";   // what WebKit leaves a context made outside a gesture in
+    c.resume = () => { c.state = "running"; return Promise.resolve(); };
+    const init = sb.GameAudio.init;
+    sb.GameAudio.init = (...a) => { inits++; return init(...a); };
+    sb.dispatchEvent({ type: "pointerup", pointerType: "touch", target: sb.document.body });
+    assert.equal(c.state, "running", "a pointerup (activation-triggering for touch) did not resume the context");
+    assert.equal(inits, 1);
+    sb.dispatchEvent({ type: "click", target: sb.document.body });
+    assert.equal(inits, 1, "the unlock listener stays armed after the context is running");
+    c.state = "suspended";
+    sb.dispatchEvent({ type: "pointerup", pointerType: "touch", isTrusted: false, target: sb.document.body });
+    assert.equal(inits, 1, "a disarmed listener (or an untrusted event) reached init");
+  } finally { g.close(); }
+});
+
+test("a throw in onAudioReady retries only the part that threw (audit4 F1)", async () => {
+  // Re-running RadioVoice.create / Announcer.create on a retry stacked their page-lifetime
+  // MutationObservers and visibilitychange listeners once per attempt.
+  const calls = { radio: 0, announcer: 0, panel: 0 };
+  let threw = false, armed = false;   // armed at the gesture: boot's create() calls hit the stubs
+  const wrap = (sb, name, key, throwOnce) => {
+    let real = sb[name];
+    Object.defineProperty(sb, name, {
+      configurable: true, get() { return real; },
+      set(v) {
+        real = v && v.create ? Object.assign({}, v, { create(G) {
+          if (!armed) return v.create(G);
+          calls[key]++;
+          if (throwOnce && !threw) { threw = true; throw new Error("test: panel create threw"); }
+          return v.create(G);
+        } }) : v;
+      },
+    });
+  };
+  const g = await createGame({ carMeshes: false, onSandbox: (sb) => {
+    install(sb);
+    wrap(sb, "RadioVoice", "radio"); wrap(sb, "Announcer", "announcer"); wrap(sb, "AudioPanel", "panel", true);
+  } });
+  const sb = g.sandbox;
+  try {
+    armed = true;
+    sb.dispatchEvent({ type: "pointerdown", pointerType: "mouse", target: sb.document.body });
+    await settle(() => threw, 4000);
+    await turns(50);
+    assert.equal(calls.panel, 1, "precondition: the panel create threw once");
+    sb.dispatchEvent({ type: "click", target: sb.document.body });   // the next gesture retries the ready hook
+    await settle(() => calls.panel >= 2, 4000);
+    await turns(50);
+    assert.equal(calls.panel, 2, "the part that threw was retried");
+    assert.equal(calls.radio, 1, "RadioVoice.create re-ran on the retry (stacked observers)");
+    assert.equal(calls.announcer, 1, "Announcer.create re-ran on the retry (stacked observers)");
+  } finally { g.close(); }
+});

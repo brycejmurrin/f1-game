@@ -1,6 +1,6 @@
 ---
 name: season-mode
-description: "Use when the standalone Season screen changes — calendar, weekend format, sprint, quali-on/off, lap count, points table, fastest-lap point (flPoint), Season SETUP (#season-setup), season-cal.js, season-ui.js. A season, sprint or quali bug inside a DRIVER CAREER / MY TEAM save is career-mode (career always races Tracks.SEASON)."
+description: "Use when the standalone Season screen changes — calendar, weekend format, sprint, quali-on/off, lap count, points table, fastest-lap point (flPoint), Season SETUP (#season-setup), season-cal.js, season-ui.js. Not a season, sprint or quali bug inside a DRIVER CAREER / MY TEAM save → career-mode."
 ---
 
 # Standalone Season — calendar vs format
@@ -29,8 +29,12 @@ season sprint distance and its points table. Persist at `apex26.seasonCfg`
 
 ```sh
 node --test tests/unit/season-cal.test.mjs   # focused VM checks, no fixed count; <1 s, VM, no browser: gates, award(), sprint table
-node tools/ci/test-bg.mjs modes              # BROWSER group (season.spec.js, season-format.spec.js, ...): background it, AGENTS.md rule 4
+npm test -- tests/specs/season.spec.js       # BROWSER, one spec (format chips: season-format.spec.js); background it, AGENTS.md rule 4
 ```
+
+A subagent reports the browser spec as not run. `node tools/ci/test-bg.mjs modes` is the WHOLE group
+(30–45 min locally) — only when `node tools/ci/pick-tests.mjs` names it, and then preferably
+`node tools/ci/remote-group.mjs modes` on the pushed branch.
 
 Sprint points are scored in `SeasonCal.award()` (`SPRINT_POINTS`, `stage()`); the
 results sheet reads `race.sprint` in `js/ui/results-sheet.js` `buildResults`.
@@ -47,10 +51,9 @@ Sprint on/off:
 
 Quali on/off:
 - Chain: SETUP chip `ss-quali` (`season-ui.js` buildPool) -> `draft.quali` -> `normalize()` (only an explicit `false` turns it off) -> `SeasonCal.quali()` / `qualiNext()` / `qualiLabel(season)`.
-- `stage()` is `"race"|"sprint"` only and never reads `quali`, so a "qualifying stage" that survives quali-OFF is a consumer, not the SETUP screen: `js/race/race-settings.js` (START label, GRID row locked to QUALIFYING when `quali()`), `js/ui/quali-sheet.js`, `js/game.js` (`gridFromQuali`, `openQuali`; locate with `rg -n "gridFromQuali|openQuali" js/game.js`).
+- `stage()` is `"race"|"sprint"` only and never reads `quali`, so a "qualifying stage" that survives quali-OFF is a consumer, not the SETUP screen.
+- Consumers: `js/race/race-settings.js` (START label, GRID row locked to QUALIFYING when `quali()`), `js/ui/quali-sheet.js`, `js/game.js` (`gridFromQuali`, `openQuali`; locate with `rg -n "gridFromQuali|openQuali" js/game.js`).
 - Unit tests: `a season with qualifying off never qualifies` and `a no-qualifying sprint weekend...` in `season-cal.test.mjs`; the chip itself is browser-only (`season.spec.js`, `season-format.spec.js`).
-
-`modes` is a browser group; `node tools/ci/pick-tests.mjs` names the rest.
 
 ## Presets — "2026 REAL" and the calendar chips
 

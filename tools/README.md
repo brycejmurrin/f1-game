@@ -83,6 +83,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/cursor-transcript.mjs** | Parse Cursor run streams into rows: chat, tool calls (args, outcome, result head), failures, results; modes + masking. | steward |
 | **lib/custom-survey-locations.mjs** | Native custom-design imports and source-located authored scenery targets (no browser). | — |
 | **lib/deploy-status.mjs** | deploy.mjs verdict markers (`= deploy start/done` in artifacts/logs/deploy.log) and the reader for --status/--wait. | — |
+| **lib/fleet-block.mjs** | The one parser of a PR body's fleet block: first value of a key wins, HTML comments and placeholders skipped. | — |
 | **lib/flicker-metric.mjs** | Pure per-pixel temporal-instability metric for `shot/flicker-gate.mjs`: luma, flip masks, 8-connected clusters, verdict. | playwright-probe |
 | **lib/flyby-audit.cjs** | Fleet audit of the pre-race FLYBY path (FlybySeq.solve) in the node VM: jumps, lift, ground, grid sightline, pan rate. | playwright-probe |
 | **lib/frame-fleet.mjs** | Pure FLEET half of frame-report.mjs: compact per-circuit reports, worst-frame summary, and the old-vs-new diff. | — |
@@ -91,6 +92,7 @@ Shared harnesses and helpers other tools load: the browser+server harness, the t
 | **lib/game-vm.cjs** | Boots js/game.js + `__apex` in a Node VM (renderer/DOM stubbed); `createGame({track})` drives physics, no browser. | — |
 | **lib/gate-receipt.mjs** | Gate receipts under artifacts/{merge,ready}-gate/<pr>.json: a gate writes one, github-mcp-guard.sh requires it. | steward |
 | **lib/generated-paths.mjs** | Generator outputs, one list: deploy.mjs regenerates them at merge. | — |
+| **lib/git-run.mjs** | Shared git helpers: gitRun {code,out,err}, gitMust (throws), gitOut (throwing stdout), gitTry ("" on failure). | — |
 | **lib/harness.mjs** | Shared harness for the headless `__apex` tools: in-process static server + Chromium launch with teardown-safe shutdown. | playwright-probe |
 | **lib/hud-geometry.mjs** | In-page HUD box probe (rect, visibility, font px) + the pure overlap/safe-area rules of hud-layout.spec. | — |
 | **lib/hud-survey-matrix.mjs** | HUD survey core: cells, quick/full/exhaustive matrices, shards, expected-visible rules, findings, merge, report HTML. | — |
@@ -184,6 +186,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/destructure-usage.mjs** | Fails when a file destructures a name its script-global provider does not export (a dropped name after a rebase). | slim-bloat |
 | **check/determinism-bisect.mjs** | First-divergent-step finder: compare two per-step game-vm state traces (seeds or builds). | agent-view |
 | **check/doctor.mjs** | Read-only YAML/refs/mirrors/browser/deps doctor; --json and optional --catalog FILE. No browser or network. | check-changes |
+| **check/dup-functions.mjs** | Scans js/, tools/, tests/ for a function declared twice in one scope: the hoisted later copy wins, the first is dead. | check-changes |
 | **check/dup-keys.mjs** | Scans js/ for a DUPLICATE key in one object literal — the merge hazard where two sessions add a field and later wins. | check-changes |
 | **check/episode-diff.mjs** | Names the per-car field that broke seeded replay: replays a seed N times in the VM, diffs cold vs warm. | — |
 | **check/extract-module.mjs** | Reorg helper for `game.js` extractions: free-reference analysis of a line range, rewritten against `G.<name>` (`--out`). | slim-bloat |

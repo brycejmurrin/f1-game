@@ -5,6 +5,9 @@ run is long, hung, or targets a worker.
 
 ## Without pausing (hot loops, leaks)
 
+- `debugger_profile` start/stop/hitch: realtime CDP CPU profile, heap sampling and
+  rAF hitch capture on the attached page. Use it instead of chrome-devtools while
+  attached (one browser at a time).
 - `debugger_logpoint` records a value per hit into a bounded ring; read it with
   `debugger_logpoint_read`.
 - `debugger_exception_log` (start/read/clear/stop) collects exceptions without pausing.

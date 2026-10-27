@@ -1,6 +1,8 @@
 # Loading-screen flyby — improvement plan (2026-09-24)
 
-Status: **IN PROGRESS** — Phase 0.2, 0.3 and 0.5 done on the follow-up branch (see below). Built from the shipped rework (`c001f01`, "Flyby: reframe the
+Status: **OPEN** (checked against the code 2026-10-26) — Phase 0.2/0.3/0.5 shipped; the flyby code is js/camera/flyby-*.js; remaining phases were not re-audited.
+
+Status when written: **IN PROGRESS** — Phase 0.2, 0.3 and 0.5 done on the follow-up branch (see below). Built from the shipped rework (`c001f01`, "Flyby: reframe the
 pre-race loading shots") and four research passes run in parallel worktrees.
 Sections marked *PENDING* are still being measured and will be filled in when
 those passes report. A path written `js/<new>/camera/x.js` is a PROPOSED file (the path without `<new>/`), not one that exists yet.

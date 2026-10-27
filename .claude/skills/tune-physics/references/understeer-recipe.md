@@ -5,8 +5,9 @@ Node VM only, no browser (AGENTS.md rule 10 applies to Chromium; this boots none
 1. Baseline: `node tools/check/player-dyn.mjs --json > scratch/pd-base.json`. `TRACK`/`FRAC` only pick the straight the car is
    pinned to (position only), so they do not select a corner. Slow corner = the `skidpad` rows at `v` 20 and 30 m/s
    (`lockTaper` blend is 15-30 m/s, so these exercise it).
-2. Sweep with this script (verified 2026-10-18: ~25 s for three values, Node only). Save it as
-   `scratch/sweep-frontgrip.mjs` at the repo root; swap `frontGrip` for `yawInertia` or `wheelbase`:
+2. Sweep with this script (~25 s for three values, Node only). Save it as `scratch/sweep-frontgrip.mjs`
+   (the `../tools/…` imports resolve from `scratch/`) and run it from the repo root; swap `frontGrip` for
+   `yawInertia` or `wheelbase`:
    ```js
    import { createRequire } from "node:module";
    import { measure } from "../tools/check/player-dyn.mjs";
@@ -27,8 +28,9 @@ Node VM only, no browser (AGENTS.md rule 10 applies to Chromium; this boots none
 4. Improved = at the slow `v` rows, `yaw` rises (or `uF` falls) for the same `steer`, and `uR` stays below saturation
    (rear not the new limit). `skidpad` is steady state and `stepSteer` (`rise_ms`) runs at 50 m/s only, so "snappier" at slow speed
    is proven as more steady-state yaw, not a faster rise; no slow-speed transient probe exists (a scratch step at `reset(20-30)` copying that block would add one). Report the before/after rows; never assert absolute magnitudes.
-5. `node --test tests/unit/player-dynamics-vm.test.mjs` (shapes still hold), then ONE browser spec (`understeer-cue.spec.js`
-   or `physics-characterization.spec.js`) per the Verify note in SKILL.md.
+5. `node --test tests/unit/player-dynamics-vm.test.mjs` (shapes still hold), then ONE browser spec:
+   `npm test -- tests/specs/understeer-cue.spec.js` (or `physics-characterization.spec.js`), backgrounded; a subagent
+   reports it not run.
 6. Landing a winner: `setPhysics` is an A/B only. A shipped default for a slider-backed knob goes in
    `js/input/steer-tuning.js` / `js/ui/settings-export.js` (input-controls owns that); a game.js `let` costs
    ratchet lines (`tests/data/ratchets.json`, AGENTS.md); fixed constants live in `js/physics/consts.js`.

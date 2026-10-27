@@ -20,3 +20,4 @@ fix or delete it, do not follow it. Hosts: `npm run memory:list` /
 - [Bryce iPhone uses TLX WebGPU](bryce-iphone-tlx-webgpu.md) — plays THREE PATH: WEBGPU on iPhone and it works; measure that path first
 - [Rules are agent-written drafts](rules-are-agent-written-drafts.md) — Bryce 2026-10-26: reconsider AGENTS.md/CLAUDE.md/memory; audit improvements in one PR
 - [Fan out with subagents](fan-out-with-subagents.md) — 2026-10-26: multi-part fleet tasks go to worker subagents in worktrees
+- [Train ratchet standing OK](train-ratchet-standing-ok.md) — Bryce 2026-10-26: tree-ratchet +1..+3 from train combinations may be raised with a stated reason, no per-case ask

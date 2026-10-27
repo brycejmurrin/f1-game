@@ -1,6 +1,8 @@
 # Broadcast feel — TV director, instant replay, results highlights
 
-Status: **PLAN** (docs-only first). Workstream owned by the Cloud Agent on
+Status: **SHIPPED** (checked against the code 2026-10-26) — TV director js/camera/director.js, replay ring js/camera/replay-buf.js and results orbit js/camera/results-cam.js exist.
+
+Status when written: **PLAN** (docs-only first). Workstream owned by the Cloud Agent on
 `cursor/broadcast-feel-*`. Ship branch: `claude/f1-game-project-26h3ng`.
 
 A path written `js/<new>/camera/x.js` (or `tests/unit/<new>/x.test.mjs`) is a

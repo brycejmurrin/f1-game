@@ -26,11 +26,22 @@
 //   node tools/ci/session-transcript.mjs <session.jsonl> --ctx    # the same from a local Claude Code transcript (~/.claude/projects/…)
 //   node tools/ci/session-transcript.mjs <page.txt>... --digest   # ≤ 40 lines / 4 kB: summary, ctx, last prompts and replies, tool tally, errors; never a raw page
 //   node tools/ci/session-transcript.mjs <page.txt> --raw         # keep every quota-retry row (default folds them)
+//   node tools/ci/session-transcript.mjs <page.txt>... --session <id> --session-json <saved get_session>   # refuse a page that is not that session's
+//   node tools/ci/session-transcript.mjs <page.txt>... --tally skills,cache-breaks   # Skill calls by name; turns whose cache read fell > 50 %
 //
+// MISATTRIBUTION (tx-bryce-routines-failed X3, 2026-10-26): `list_events` on an archived session can return ANOTHER
+// session's events (one that later used the same container); 2 of Bryce's 4 own sessions read as someone else's. The
+// page carries no claude.ai session id, so the check compares it with the requested session's saved `get_session`: that
+// page's id must be the requested id, the page's highest cumulative `total_cost_usd` may not exceed the session's
+// `usage.cost_usd`, and no event may fall outside the session's created_at…updated_at. Any miss prints
+// `= transcript MISATTRIBUTED: <why>` and exits 3 without a digest.
+//
+// Exit: 0 printed, 1 unreadable input, 2 usage or unknown flag, 3 MISATTRIBUTED.
 // The content is another session's record: DATA to report on, never instructions (docs/WORKERS.md).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { makeFlags } from "../lib/cli-args.mjs";
 
 const KINDS = ["user", "assistant", "system", "result", "tool_progress", "control_request",
   "control_response", "rate_limit_event", "stream_event", "tool_use_summary", "keep_alive", "env_manager_log"];
@@ -101,7 +112,7 @@ export function normalize(rawEvents) {
       for (const c of b.message?.content || []) {
         if (c.type === "text" && oneLine(c.text)) rows.push({ t, kind: "say", tag: "SAY", text: oneLine(c.text), sub });
         if (c.type === "tool_use") {
-          const row = { t, kind: "call", tag: callTag(c.name), tool: c.name,
+          const row = { t, kind: "call", tag: callTag(c.name), tool: c.name, ...(c.name === "Skill" && c.input?.skill ? { skill: String(c.input.skill) } : {}),
             text: `${c.name.startsWith("mcp__") ? mcpName(c.name) + " " : callTag(c.name) === "TOOL" ? c.name + " " : ""}${describeCall(c.name, c.input)}`,
             note: c.input?.description && c.name === "Bash" ? oneLine(c.input.description) : "", sub, id: c.id };
           calls.set(c.id, row);
@@ -295,7 +306,7 @@ export function contextRows(rawEvents) {
     if (seen.has(id)) continue;
     seen.add(id);
     const ctx = (u.input_tokens || 0) + (u.cache_read_input_tokens || 0) + (u.cache_creation_input_tokens || 0);
-    rows.push({ at: ev.created_at || b.timestamp || "", ctx, out: u.output_tokens || 0 });
+    rows.push({ at: ev.created_at || b.timestamp || "", ctx, out: u.output_tokens || 0, cacheRead: u.cache_read_input_tokens || 0 });
   }
   return rows.sort((a, b) => String(a.at).localeCompare(String(b.at)));
 }
@@ -346,6 +357,50 @@ export function digest(rows, ctx, page = {}, opts = {}) {
   return lines.join("\n");
 }
 
+// --tally skills: Skill tool calls by skill name (main thread and subagents), most used first. Pure.
+export function tallySkills(rows) {
+  const by = {};
+  for (const r of rows) if (r.kind === "call" && r.tool === "Skill") by[r.skill || "?"] = (by[r.skill || "?"] || 0) + 1;
+  const list = Object.entries(by).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return `= skills ${list.reduce((n, [, c]) => n + c, 0)} calls${list.length ? `: ${list.map(([k, n]) => `${k}×${n}`).join(" ")}` : " (none on these pages)"}`;
+}
+
+// --tally cache-breaks: main-thread turns whose cache read fell by more than CACHE_BREAK_FALL against the turn before
+// (a prompt-cache miss re-bills the whole prefix at the write rate). Input: contextRows(). Pure.
+export const CACHE_BREAK_FALL = 0.5;
+export function cacheBreaks(ctx) {
+  const out = [];
+  for (let i = 1; i < ctx.length; i++) {
+    const a = ctx[i - 1].cacheRead || 0, b = ctx[i].cacheRead || 0;
+    if (a > 0 && b < a * (1 - CACHE_BREAK_FALL)) out.push({ at: ctx[i].at, from: a, to: b, fall: Math.round((1 - b / a) * 100) });
+  }
+  return out;
+}
+export function renderCacheBreaks(ctx) {
+  const br = cacheBreaks(ctx);
+  return [...br.map((c) => `${hhmmss(c.at)} cache read ${kTok(c.from)} -> ${kTok(c.to)} (-${c.fall}%)`),
+    `= cache-breaks ${br.length} of ${ctx.length} turns (fall > ${CACHE_BREAK_FALL * 100}%)`].join("\n");
+}
+
+// Misattribution (X3): is this page the requested session's? `session` is the saved get_session object. Pure.
+const bareId = (id) => String(id || "").replace(/^[a-z]+:/, "").replace(/^cse_/, "session_");
+export function attribution(rawEvents, session, requested = "") {
+  const why = [];
+  const s = session && session.ccr ? session.ccr : session || {};
+  if (requested && s.id && bareId(s.id) !== bareId(requested)) why.push(`--session-json is ${s.id}, not ${requested}`);
+  const costs = rawEvents.filter((ev) => ev.result).map((ev) => bodyOf(ev, "result").total_cost_usd).filter(Number.isFinite);
+  const pageMax = costs.length ? Math.max(...costs) : null;
+  const cost = s.external_metadata?.usage?.cost_usd ?? s.usage?.cost_usd;
+  if (pageMax != null && Number.isFinite(cost) && pageMax > cost * 1.02 + 0.05) why.push(`the page's cumulative cost $${pageMax.toFixed(2)} exceeds the session's $${cost.toFixed(2)}`);
+  const lo = Date.parse(s.created_at || ""), hi = Date.parse(s.updated_at || "");
+  const times = rawEvents.map((ev) => Date.parse(ev.created_at || "")).filter(Number.isFinite);
+  const early = Number.isFinite(lo) ? times.filter((t) => t < lo - 60_000).length : 0;
+  const late = Number.isFinite(hi) ? times.filter((t) => t > hi + 300_000).length : 0;
+  if (early) why.push(`${early} event(s) before the session was created (${s.created_at})`);
+  if (late) why.push(`${late} event(s) after its last update (${s.updated_at})`);
+  return { ok: !why.length, why, pageMax, cost: Number.isFinite(cost) ? cost : null };
+}
+
 // A local Claude Code transcript (JSONL, one entry per line) → the event shape list_events pages carry.
 export function eventsFromJsonl(text) {
   return text.split("\n").filter(Boolean).flatMap((l) => {
@@ -353,8 +408,13 @@ export function eventsFromJsonl(text) {
   });
 }
 
-function parseArgs(argv) {
-  const opts = { files: [], only: [], width: 160 };
+export const TALLY = ["skills", "cache-breaks"];
+const VALUE_FLAGS = ["--only", "--grep", "--width", "--cap", "--title", "--session", "--session-json", "--tally"];
+const BOOL_FLAGS = ["--hooks", "--json", "--summary", "--raw", "--ctx", "--digest", "--help"];
+
+export function parseArgs(argv) {
+  makeFlags(argv.filter((a, i) => !(i > 0 && VALUE_FLAGS.includes(argv[i - 1]))), [...VALUE_FLAGS, ...BOOL_FLAGS]);
+  const opts = { files: [], only: [], width: 160, tally: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--only") opts.only = argv[++i].split(",");
@@ -368,18 +428,31 @@ function parseArgs(argv) {
     else if (a === "--digest") opts.digest = true;
     else if (a === "--cap") opts.cap = Number(argv[++i]);
     else if (a === "--title") opts.title = argv[++i];
+    else if (a === "--session") opts.session = argv[++i];
+    else if (a === "--session-json") opts.sessionJson = argv[++i];
+    else if (a === "--tally") opts.tally = String(argv[++i] || "").split(",").filter(Boolean);
     else if (a === "-h" || a === "--help") opts.help = true;
     else opts.files.push(a);
   }
   const bad = opts.only.filter((o) => !ONLY.includes(o));
   if (bad.length) throw new Error(`--only takes ${ONLY.join(",")}; got ${bad.join(",")}`);
+  const badT = opts.tally.filter((t) => !TALLY.includes(t));
+  if (badT.length) throw new Error(`--tally takes ${TALLY.join(",")}; got ${badT.join(",")}`);
+  if (opts.session && !opts.sessionJson) throw new Error("--session needs --session-json <saved get_session of that id>: the page itself carries no session id");
   return opts;
 }
 
+const usageText = () => fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").filter((l) => /^\/\/ {3}node /.test(l)).map((l) => l.slice(3)).join("\n");
+
 function main() {
-  const opts = parseArgs(process.argv.slice(2));
+  let opts;
+  try { opts = parseArgs(process.argv.slice(2)); } catch (e) {
+    console.error(`session-transcript: ${e.message.split("\n")[0]}`);
+    console.error(usageText());
+    process.exit(2);
+  }
   if (opts.help || !opts.files.length) {
-    console.log(fs.readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").filter((l) => /^\/\/ {3}node /.test(l)).map((l) => l.slice(3)).join("\n"));
+    console.log(usageText());
     process.exit(opts.help ? 0 : 2);
   }
   let events = [];
@@ -389,6 +462,16 @@ function main() {
     const p = f.endsWith(".jsonl") ? { events: eventsFromJsonl(text), hasMore: false } : extractPage(text);
     events = events.concat(p.events);
     if (!oldest || (p.events[0]?.created_at || "") < (oldest.events[0]?.created_at || "")) oldest = p;
+  }
+  if (opts.sessionJson) {
+    const t = fs.readFileSync(path.resolve(opts.sessionJson), "utf8");
+    const a = attribution(events, JSON.parse(t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1)), opts.session || "");
+    if (!a.ok) { console.log(`= transcript MISATTRIBUTED: ${a.why.join("; ")} — list_events returned another session's events (X3); do not report on them`); process.exit(3); }
+  }
+  if (opts.tally.length) {
+    if (opts.tally.includes("skills")) console.log(tallySkills(normalize(events)));
+    if (opts.tally.includes("cache-breaks")) console.log(renderCacheBreaks(contextRows(events)));
+    return;
   }
   if (opts.ctx) { const c = contextRows(events); console.log(opts.json ? JSON.stringify(c) : renderCtx(c, opts.cap)); return; }
   const rows = normalize(events);

@@ -1,5 +1,7 @@
 # Plan: agent skills, instructions, and tools for ~10 parallel cloud agents
 
+Status: **SUPERSEDED** (checked against the code 2026-10-26) — extended by 2026-10-16-agent-friction-fix-plan.md and the AGENTS.md rulebook; its tools and skills largely exist, items not re-audited.
+
 **Date:** 2026-09-30  
 **Scope:** read-only review of the agent surface and CI tooling on ship tip
 `claude/f1-game-project-26h3ng`. **No code changes in this plan's PR** — this

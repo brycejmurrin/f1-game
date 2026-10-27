@@ -199,6 +199,11 @@ const WheelState = (function () {
   // Scratch bags — one step, no alloc.
   const _fOut = {};
   const _rOut = {};
+  // Pooled axleStep inputs (audit4 P2): axleStep reads them before it writes its out bag and keeps none.
+  const _fState = { vw: 0.5, kappa: 0.5 };
+  const _rState = { vw: 0.5, kappa: 0.5 };
+  const _fIn = { dt: 0.5, vx: 0.5, aReq: 0.5, muLong: 0.5, alphaN: 0.5 };
+  const _rIn = { dt: 0.5, vx: 0.5, aReq: 0.5, muLong: 0.5, alphaN: 0.5 };
   const _results = { latScaleF: 1, latScaleR: 1, fxF: 0, fxR: 0, shortfall: 0 };
 
   /**
@@ -236,12 +241,12 @@ const WheelState = (function () {
     const alphaNF = (opts.slipF || 0) * csF / muLatF / peakXF;
     const alphaNR = (opts.slipR || 0) * csR / muLatR / peakXR;
 
-    axleStep({ vw: c.vwF, kappa: c.kappaF }, {
-      dt, vx, aReq: aReqF, muLong: muLongF, alphaN: alphaNF,
-    }, _fOut);
-    axleStep({ vw: c.vwR, kappa: c.kappaR }, {
-      dt, vx, aReq: aReqR, muLong: muLongR, alphaN: alphaNR,
-    }, _rOut);
+    _fState.vw = c.vwF; _fState.kappa = c.kappaF;
+    _fIn.dt = dt; _fIn.vx = vx; _fIn.aReq = aReqF; _fIn.muLong = muLongF; _fIn.alphaN = alphaNF;
+    axleStep(_fState, _fIn, _fOut);
+    _rState.vw = c.vwR; _rState.kappa = c.kappaR;
+    _rIn.dt = dt; _rIn.vx = vx; _rIn.aReq = aReqR; _rIn.muLong = muLongR; _rIn.alphaN = alphaNR;
+    axleStep(_rState, _rIn, _rOut);
 
     c.vwF = _fOut.vw;
     c.vwR = _rOut.vw;

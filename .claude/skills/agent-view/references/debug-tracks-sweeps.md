@@ -18,9 +18,7 @@ node tools/shot/apex-eval.mjs suzuka "a.trackProfile(40)" --raw --vm     # full 
 ## Street circuits (`street: true`)
 
 Street layouts are track defs with `street: true` — continuous barrier envelope,
-no terrain ribbon. Currently: **monaco**, **singapore**, **vegas**, **baku**,
-**jeddah** (verify with `grep 'street: true' js/circuits/*.js` if the roster
-changes). `wallStats().street` mirrors the flag; `trackProfile().hw` is still the
+no terrain ribbon. List them with `grep -l 'street: true' js/circuits/*.js`. `wallStats().street` mirrors the flag; `trackProfile().hw` is still the
 **road** half-width — compare the two, not either alone.
 
 ### Half-width vs barrier (one-liner)

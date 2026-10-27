@@ -22,8 +22,13 @@ paths:
   restores auto memory there and saves it on PostToolUse Write/Edit and Stop
   (`docs/notes/AGENT-MEMORY.md`).
 - `protect-files.sh` blocks generated-file edits and source edits during a live
-  browser run (Write/Edit and Bash writes). `touch .claude/allow-protected` lifts
-  the generated-file rules only (never the live-run, surveyor or reviewer rules).
+  browser run (Write/Edit and Bash writes), and keeps the eight reporter agents
+  (`.claude/agents/README.md`) inside scratch/ and artifacts/. Escape hatches are
+  untracked files a MAIN session creates and removes when the assigned edit is done
+  (a subagent cannot create one; every guarded call announces an active hatch):
+  `.claude/allow-protected` lifts the generated-file rules only (never the live-run,
+  surveyor or reporter rules), `.claude/allow-context-cap` lifts `context-cap.py`'s
+  spawn refusal, `.claude/allow-stop` silences `stop-guard.sh`.
 - `bash-guard.sh` runs `test:guards` when a `git commit` is typed (a pass names
   its guard path); the guards read the working tree, so commit in two calls
   (AGENTS.md rule 12). It also blocks `pkill -f`, PID kills of a test-bg run, a browser run inside a

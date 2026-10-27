@@ -39,7 +39,7 @@ These launch Chromium: parent only (AGENTS.md rule 10).
 ```sh
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/before.json
 # edit applyRaceSettings (js/lighting/atmosphere.js) or a TUNE_DEFS default
-# (no cache bump: AGENTS.md cache busting); then:
+# (no cache bump: .claude/rules/game-code.md cache busting); then:
 node tools/shot/apex-eval.mjs vegas "(a.setTimeOfDay('night'), a.lightState())" --raw > artifacts/tmp/after.json
 diff artifacts/tmp/before.json artifacts/tmp/after.json
 ```
@@ -62,7 +62,7 @@ A timing sleep alone does not prove presented pixels.
 | Symptom | Field | Likely fix |
 |---|---|---|
 | Night looks like day | `ambientSky` too bright, `numLights` = 0 | Inspect shipped `LightPresets["track\|tod\|weather"]` first; then `lightTune({ambientMul})` / night ambient cap. Track may not trigger a dark rebuild |
-| Floodlights not firing | `numLights === 0` on a dark track | No `def.night` guard in `buildTrackLights` (every circuit gets lamps). The gate is `isFloodActiveSession()` (game.js: tod night/dusk/dawn, or `default` + `def.night`) `\|\| LT.floodDay > 0`; `raceTimeOfDay` must be set BEFORE `applyRaceSettings`. |
+| Floodlights not firing | `numLights === 0` on a dark track | No `def.night` guard in `buildTrackLights` (every circuit gets lamps). The gate is `isFloodActiveSession()` (game.js: tod night/dusk/dawn, or `default` + `def.night`) `\|\| LT.floodDay > 0`; `raceTimeOfDay` must be set BEFORE `applyRaceSettings`. On TLX after a night→day race, read `lightState().tlxLampGrid`: the previous track's lamp cells can stay pinned. |
 | Floodlights dim at dusk/dawn | `numLights` > 0 but pools weak | Then dusk/dawn level = `lampLevel` x max(`twilightFloor`, 1-sunY*`twilightRamp`); a shipped `"<track>\|dusk\|<wx>"` row with low `lampLevel` or `twilightFloor` reads as off. Caps: `lampCull`, `lampDensity`, `lampBake`. `slider-effect.mjs --group LAMPS` lists them (no browser) |
 | Floodlight masts invisible | `floodEmit === 0` | Night emissive in `buildProps`; `lightTune({floodEmitMul})` |
 | Dawn sun too high | `sunY` close to 1.0 | `lightTune({sunElev: -N})`; structural default in `applyRaceSettings` |

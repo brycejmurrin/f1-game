@@ -354,7 +354,7 @@ function highlightsRig({ sound = true } = {}) {
     director: { tick: noop, reset: noop }, mirrorPass: { preparing: () => false }, replayBuf, resultsCam, raceT: 3,
     GameAudio: audio.GameAudio, soundOn: sound, player, cars, rivalAudio,
     naturalGear: (v) => (v < 30 ? 2 : 6), rpmFor: (g, v) => Math.min(15000, 5000 + v * 1000 / g), isWetRoad: () => false, vTop: () => 90,
-    _poseAt: null, photoMode: false, setupPreviewOn: false, announceT: 0, hitStop: 0, frozen: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60,
+    _poseAt: null, photoMode: false, setupPreviewOn: false, announceT: 0, hitStop: 0, frozen: false, raceRestarting: false, track: {}, physAcc: 0, PHYS_DT: 1 / 60,
     banner: { tick() {}, clear() {}, announce() {}, get t() { return 0; } }, feel: { shake: 0, camRoll: 0, hitStop: 0 },
     renderAlpha: 0, clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), updateHud: noop, render: noop, update: noop, updatePhotoCam: noop,
   });
@@ -710,7 +710,7 @@ test("resuming after a forced preview judges the actual preceding draw", () => {
   frame(1); assert.equal(ctx.RenderRate.drew(), false);
   ctx.photoMode = true; frame(1);
   const judged = [], noop = () => {};
-  Object.assign(ctx, { paused: false, photoMode: false, frozen: true, track: null, raceT: 0,
+  Object.assign(ctx, { paused: false, photoMode: false, frozen: true, raceRestarting: false, track: null, raceT: 0,
     PerfGov: { tick: (_ms, drew) => judged.push(drew) },
     banner: { tick: noop }, feel: { hitStop: 0 }, physAcc: 0, PHYS_DT: 1 / 60,
     clamp: (n, lo, hi) => Math.max(lo, Math.min(n, hi)), renderAlpha: 0, updateHud: noop });

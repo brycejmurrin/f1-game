@@ -153,10 +153,10 @@ test("the stamp maps every staged lazy file to its content hash; one changed fil
     assert.equal(m && m.length, 1, "exactly one map block");
     return JSON.parse(m[0].replace(/^<script[^>]*>|<\/script>$/g, ""));
   };
-  const lazy = ["js/circuits/monza.js", "js/circuits/scenery/monza.js", "js/render/glx/glx.js", "js/track/build-worker.js"];
+  // the bitmap worker is stamped like every other lazy file since audit4 I3 B6 (its client keys by ScriptLoader.url)
+  const lazy = ["js/circuits/monza.js", "js/circuits/scenery/monza.js", "js/render/glx/glx.js", "js/track/build-worker.js", "js/workers/bitmap-decode-worker.js"];
   try {
     for (const rel of lazy) put(rel, `// ${rel}\n`);
-    put("js/workers/bitmap-decode-worker.js", "// its client still keys by build\n");
     const entry = "js/" + "game" + ".js";
     put(entry, "// shell tag\n");
     put("index.html", `<head>\n<meta name="apex-build" content="7">\n<script src="${entry}?v=dev"></script>\n</head>\n`);

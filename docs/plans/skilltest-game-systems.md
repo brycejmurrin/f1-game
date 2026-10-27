@@ -1,5 +1,7 @@
 # Skill / tool audit — game-systems
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — a 2026-10-01 audit report; its fixes were cut as separate PRs and its findings were not re-run.
+
 Hands-on audit of the **game-systems** skill and tool group (2026-10-01).
 Branch tip at start: `origin/claude/f1-game-project-26h3ng` @ `5fa849bb1` (later
 moved while fixes were cut). Each item was exercised by following its

@@ -1,6 +1,6 @@
 ---
 name: renderer-debug
-description: "Use when TLX/GLX/WGX/WebGPU looks wrong: black/NaN canvas, WGSL validation, shaders, shadows, bloom, HDR, GL_INVALID_OPERATION, GL errors, device lost, silent WebGL2 fallback, WebXR/VR/Quest black frame. Night washout → lighting-tuner; MAT garble → asset-pack; driving shimmer → playwright-probe."
+description: "Use when TLX/GLX/WGX/WebGPU looks wrong: black/NaN canvas, WGSL validation, shaders, shadows, bloom, HDR, GL errors, device lost, silent WebGL2 fallback, iPhone/Safari/Metal, a ghost visor overlay, WebXR/VR/Quest black frame. Night washout → lighting-tuner; MAT garble → asset-pack; driving shimmer → playwright-probe."
 ---
 
 # Debug the renderer — TLX, GLX or WGX
@@ -10,6 +10,15 @@ the DEFAULT), **GLX** (`js/render/glx/`, explicit WebGL2 and the universal
 fallback) and **WGX** (`js/render/webgpu/`, opt-in WebGPU, DEFERRED). Most
 black-canvas reports start with "which one am I on?" — and a unit test of a
 backend is not evidence that it runs (`docs/ARCHITECTURE.md` §Boot evidence).
+
+**Bryce's path first.** He plays TLX on **WebGPU** on an iPhone (Metal) — `THREE PATH: WEBGPU`.
+Probes here pin `apex26.tlxForceGL=1` (TLX's WebGL2 leg) because three's WebGPU path dies under
+SwiftShader, so a container probe is NOT his path and no evidence about his GPU. Measure his path
+on a real GPU: `gpu-census.yml` on `macos-latest` (the Metal leg; read its `path:` row and the Verdict
+step). Agent tokens cannot `workflow_dispatch` it (403): edit `.github/gpu-census-request.json`
+(bump `rev`, set `images`/`track`/`tod`…) on your `cursor/**` branch and PUSH — that runs the
+branch's tree with the file's inputs; a session with a dispatch-capable token may use the GitHub MCP
+`actions_run_trigger` instead.
 
 ## Where things live (rendering stack)
 
@@ -22,6 +31,8 @@ backend is not evidence that it runs (`docs/ARCHITECTURE.md` §Boot evidence).
 | Shared assets | `js/render/shared/assets.js` | PBR pack layers — **asset-pack** |
 | Soft present (CI) | `js/render/gfx.js` + `#game-soft` | Headless blit; probes use `awaitSoftPresent()` |
 | Scene bridge | `js/game.js` | Per-frame `gfx` draw/update; garage uses the same `gfx` in `js/garage/scene.js` |
+| Screen-space FX overlays | `js/fx/visor-optics.js`, `js/fx/droplets.js` | DOM canvases `#fx-visor` / `#fx-droplets` over `#game`: `VisorOptics.clear()`, `VisorOptics.stats()` |
+| Car body meshes | `js/car/car-body-geom.js`, `js/car/car3d.js` | geometry the backends draw; not a shader layer |
 | Diagnose | `js/agent/apex.js` | `__apex.diag().env.backend`, `texCensus()`, `assets()` |
 
 Pick the backend section below from `env.backend`; cross-backend parity → `tests/unit/backend-surface-parity.test.mjs`.
@@ -40,8 +51,13 @@ probe with `tools/shot/apex-eval.mjs <track> <expr> --backend three|webgl2|webgp
 `GLX.*()` / `WGX.*()` expression silently answers for TLX without it).
 Headless/software adapters blit onto `#game-soft` (`awaitSoftPresent()`): a
 black `#game` is that overlay's gap, not yet a shader miss. A software probe
-is no evidence about a player's GPU — `gpu-census.yml` on `macos-latest`, read
-its Verdict step. "Black screen after an HDR format change" is decided here:
+is no evidence about a player's GPU — the census route above.
+**Canvas fine, but a ghost glint or haze over a menu or results screen?** That is a DOM
+overlay, not a shader: check `#fx-visor` / `#fx-droplets` in a DOM snapshot and
+`VisorOptics.stats()` (`shown`) before touching a shader; an overlay nobody cleared on race
+exit (no `VisorOptics.clear()` call on that path) is the usual cause.
+Before editing a car/body function, `lsp_definition` it: a hoisted duplicate declaration in
+the same IIFE silently wins (skill code-nav). "Black screen after an HDR format change" is decided here:
 read the backend first, then go to its section; `hdrMode()` is GLX's.
 
 | `env.backend` | Section | Reference |
@@ -90,10 +106,9 @@ blow-out, the Playwright probe pattern and apex-eval one-liners:
 
 Opt-in (`apex26.gfxBackend="webgpu"`). Every WGX failure must degrade to GLX,
 never a dead canvas. **ALWAYS first, no browser:**
-`node tools/gfx/wgx-validate.mjs --static` — the only command a subagent or
-verify-agent may run; the full Dawn pass (`wgx-validate.mjs [track]`,
-`--lite`, `--no-rg11b10`) and `gfx-probe.mjs --backend webgpu` launch Chromium:
-parent session only. Gate every WGSL/pipeline edit with it plus
+`node tools/gfx/wgx-validate.mjs --static` (no browser, so a subagent may run it); the full
+Dawn pass (`wgx-validate.mjs [track]`, `--lite`, `--no-rg11b10`) and `gfx-probe.mjs --backend
+webgpu` launch Chromium (parent only: AGENTS.md rule 10). Gate every WGSL/pipeline edit with it plus
 `tests/unit/webgpu-lifecycle.test.mjs`. `WGX.gpuErrors()` must be 0;
 `WGX.lastFailure()` explains a refusal. Steps, the fallback trace, SwiftShader
 limits and live pokes: [references/wgx.md](references/wgx.md); late-sky /

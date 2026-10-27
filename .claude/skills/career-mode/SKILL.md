@@ -1,6 +1,6 @@
 ---
 name: career-mode
-description: "Use when DRIVER CAREER, MY TEAM, career saves or slots, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs, career hooks/tests change — including season, sprint and quali behaviour INSIDE a career save (career always races Tracks.SEASON). The standalone Season screen with no career save open is season-mode."
+description: "Use when DRIVER CAREER, MY TEAM, career saves or slots, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs, career hooks/tests change — including season, sprint and quali behaviour INSIDE a career save (it races its stamped calendar, Career.calendar()). The standalone Season screen with no career save open → season-mode."
 ---
 
 ## Overview
@@ -45,7 +45,7 @@ Do **not** use this for:
 | Sponsors | **MY TEAM only** — `sponsorAt()`/`sponsor()` return `null` whenever `career.flavour !== "myteam"`; a DRIVER career never has one, by design (a driver is paid a salary, an owner is paid by sponsors) |
 | Regulation eras | `Regulations.ERAS` legality filter, career-only; `career.owned` never touched — `docs/CAREER.md` §Regulation eras |
 | Season target | `deal.ambition` (signed) vs `career.amb` (pending); absent = rung 1 — `docs/CAREER.md` (`AMBITION`) |
-| Weekend format in a career | NONE: `SeasonCal` gates (`calCustom`, `fmtActive`) keep the defaults and `Tracks.SEASON`; a career sprint bug is a widened gate or stale `career.season` field — [workflow step 9](references/workflow.md), `docs/CAREER.md` §In career |
+| Calendar and weekend format | A career races its STAMPED calendar (`Career.calendar()` → `calendarOf` / `stampCalendar` in `js/career/career.js`; `Tracks.SEASON` only when unstamped); `SeasonCal` never customises it (`calCustom`, `fmtActive`). Sprint bugs: [workflow step 9](references/workflow.md) |
 | Randomness | Use `Career.rnd(...parts)`; never `simRnd` or `Math.random` (pinned: `career-determinism.test.mjs`) |
 | Ratings | `DriverRatings` apply in all modes; career adds deltas on top |
 
@@ -61,12 +61,12 @@ Sponsor "just paid" / double pay, and research or facility credits that do not a
 Commands:
 
 ```sh
-node tools/car/career-economy.mjs            # launches Playwright/Chromium — parent session only, never a subagent
+node tools/car/career-economy.mjs            # launches Chromium: session only (AGENTS.md rule 10)
 node tools/car/career-economy.mjs --years 3
 node tools/ci/test-bg.mjs modes              # career + quali + season + TT — there is no test:career
 npm run test:tooling-fast
 node --test tests/unit/season-cal.test.mjs     # ~1 s, VM: the calendar/format gates (career neutral)
-node --test tests/unit/career-settle.test.mjs  # ~VM: settleRound, mid-weekend `stage`
+node --test tests/unit/career-settle.test.mjs  # VM: settleRound, mid-weekend `stage`
 ```
 
 Node-VM unit tests (no browser; also in `test:tooling-fast`): `season-cal`,

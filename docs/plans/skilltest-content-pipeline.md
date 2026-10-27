@@ -1,5 +1,7 @@
 # Skilltest — content-pipeline
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — a 2026-10-01 audit report; its fixes were cut as separate PRs and its findings were not re-run.
+
 Hands-on audit of skills `asset-pack`, `garage-parts-livery`, `lighting-tuner`,
 `new-track`, `scenery-dress`, `survey-track` and tools under `tools/car/`,
 `tools/track/`, `tools/lighting/`, `tools/gfx/`, `tools/gen/`.

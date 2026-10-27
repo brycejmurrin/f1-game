@@ -1,5 +1,7 @@
 # Bug hunt 2 — register (2026-10-10)
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — tracked by 2026-10-10-fix-all-plan.md; rows not re-verified against code 2026-10-26.
+
 Second pass: 21 read-only Sonnet reviewers, each on a slice the first pass (see
 `2026-10-09-bug-hunt-plan.md`) covered thinly. Line numbers are at tip `562a95071`.
 **V** = the coordinating session re-read the cited lines and the mechanism holds; **U** = reviewer claim,

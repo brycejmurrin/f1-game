@@ -59,3 +59,21 @@ test("a player driven across a wall end face keeps x (|dx| < 1.5 m) and is scrub
   assert.ok(maxDx < 1.5, "max per-step |dx| " + maxDx.toFixed(2) + " m (the old pin snapped " + (face.drop - 0.5).toFixed(1) + " m)");
   assert.ok(vMin < vIn * 0.5, "speed scrubbed at the face: " + vMin.toFixed(1) + " of " + vIn.toFixed(1));
 });
+
+test("the face scrub is per second, not per call, and marks the car on a wall (audit4 F6)", () => {
+  const tr = g.G.track;
+  const face = widestFace(tr);
+  const CG = vm.runInContext("ContactGeometry", g.ctx), WEF = vm.runInContext("WallEndFace", g.ctx);
+  const x0 = face.side * (face.prev - 0.5);
+  const hit = (dt) => {
+    const c = { human: true, _prevS: face.s - 0.5, s: face.s, x: x0, speed: 50, wasOnWall: false };
+    const lim = CG.wallLimits(tr, c.s, c.x, { r: 0, l: 0, laneMin: 0, side: 0 }, { r: 99, l: 99, minOut: 0, side: 0 });
+    assert.equal(WEF.apply(c, tr, lim, dt), true, "the face holds the car (dt " + dt + ")");
+    return c;
+  };
+  const a = hit(1 / 60);
+  assert.equal(a.speed, 10, "60 Hz: FACE_KEEP exactly, bit-identical to the per-tick scrub");
+  assert.equal(a.wasOnWall, true, "a side wall next tick is not a second first strike");
+  const b = hit(1 / 30);
+  assert.ok(Math.abs(b.speed - 50 * 0.2 * 0.2) < 1e-9, "one 1/30 step scrubs what two 1/60 ticks do: " + b.speed);
+});

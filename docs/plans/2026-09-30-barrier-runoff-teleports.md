@@ -1,6 +1,8 @@
 # Barrier run-off lateral teleports — plan (2026-09-30)
 
-Status: **IMPLEMENTED** — Slices 1–3 shipped; Slice 4's fleet-wide, lower-only
+Status: **SHIPPED** (checked against the code 2026-10-26) — slices 1-3 landed and slice 4's lower-only caps landed in #1625 (this plan's own status, kept).
+
+Status when written: **IMPLEMENTED** — Slices 1–3 shipped; Slice 4's fleet-wide, lower-only
 class caps landed in #1625. Owns the ledger item from 2026-09-26
 (`docs/notes/DEFECT-LEDGER.md`). A path written `js/<new>/…`, `tests/<new>/…`,
 or `tools/<new>/…` was a proposed file when this plan was written (drop the

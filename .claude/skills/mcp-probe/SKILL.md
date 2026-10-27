@@ -22,13 +22,19 @@ spawns a fresh Chromium each time, so navigate → evaluate → screenshot break
 
 ## Entry
 
+No browser — run these FIRST (safe beside a Playwright run):
+
 ```sh
-python3 tools/mcp/probe-mcp.py status                # no browser: local bin/Chrome path + daemon UP/DOWN. Run FIRST
-bash tools/mcp/apex-tools-mcp.sh call apex_status '{}' # no browser: follow next.action/reason; prerequisites can pass while occupancy says wait
+python3 tools/mcp/probe-mcp.py status                # local bin/Chrome path + daemon UP/DOWN
+bash tools/mcp/apex-tools-mcp.sh call apex_status '{}' # follow next.action/reason; prerequisites can pass while occupancy says wait
 # "Bin: missing" alone is not a blocker: the wrapper uses its pinned npm fallback.
 # Checkout dependencies and Chromium are required; an uncached npm fallback needs egress.
 # Clone/build is optional server-development work, not routine probe setup.
-# Everything below launches Chromium (browser-only) except help/status/mcp-cli --dry-run:
+```
+
+Browser — each launches Chromium (only `mcp-cli.mjs --dry-run` does not); never beside a live Playwright run:
+
+```sh
 python3 tools/mcp/probe-mcp.py list-tools
 python3 tools/mcp/probe-mcp.py chrome-start          # tmux path; refused while a Playwright run is live
 python3 tools/mcp/probe-mcp.py call chrome_...
@@ -44,6 +50,7 @@ glitch reproduced as a snapshot/`evaluate_script` value (element text/rect), the
 `navigate_page about:blank` + `chrome-stop`. Flags: `node tools/lib/webgpu-chrome-args.cjs [mcp|json]`.
 Heap leak across races, console errors → [chrome.md](references/chrome.md)
 §Heap leak across N races (`take_heapsnapshot` needs `filePath`; `list_console_messages`).
+Heap/CPU while a **js-debugger** session is attached to that page → its `debugger_profile` (one owner per page).
 
 **Census tools** (measured before/after for phone memory, heap growth, CPU-side
 copies, GPU budgets; folded from the perf-memory-census skill):
@@ -54,9 +61,8 @@ track and backend (`__apex.diag().env.backend`) with every number, cite MB
 deltas in the PR, and dispatch `gpu-census.yml` on `macos-latest` for a real
 GPU — SwiftShader here is not player evidence.
 
-Keep **`apex-tools` in root `.mcp.json`** so Cloud/Claude/this agent can load
-it. Cursor CLI also has `.cursor/mcp.json` (lockstep). If this session's host
-catalog is empty, use `./tools/mcp/apex-tools-mcp.sh call` or the daemon above.
+If this session's host catalog is empty, use `./tools/mcp/apex-tools-mcp.sh call` or the
+daemon above (MCP config files: `docs/AGENT-SURFACE.md`).
 
 Wrap map (apex-tools vs this skill vs deploy-research vs playwright-official):
 `docs/AGENT-SURFACE.md`. Never run **playwright-official** (`browser_*`) beside this Chrome;
@@ -94,15 +100,11 @@ beside an active Playwright run. UI matrix → `tools/ui/layout-audit.mjs` (not 
 - Real-device reports → [`references/device-report.md`](references/device-report.md).
 - Offline capability checks → [`references/offline.md`](references/offline.md).
 - The complete recipe index → [`references/recipes.md`](references/recipes.md).
+- Boot evidence (a backend unit test is not proof it runs) → `docs/ARCHITECTURE.md` §Boot evidence.
 - Renderer probe flags (`--backend`, secure context, `gfxBound`) →
   [`references/renderer.md`](references/renderer.md).
 
 Chrome DevTools naming: `chrome_click` (CLI) and `mcp__chrome-devtools__click` (attached) are the same underlying `click` action.
-
-## One-line summary
-
-Playwright asserts the tree in batch; Chrome looks at the working tree live;
-deploy-research looks at the deploy; never let Chrome render while Playwright runs.
 
 ## Private chat attachment
 

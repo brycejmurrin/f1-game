@@ -1,7 +1,16 @@
 # CPU profiling — headless Playwright + CDP (folded from the perf-profile skill)
 
-Captures a V8 `.cpuprofile` of the running game loop. Writes
-`scratch/profiles/<track>-<mode>.cpuprofile`.
+**Start with `tools/perf/profile.mjs`** — one CLI for `--mode spans|cpu|hitch|trace|step`, with `--repeat N`
+(noise floor: a delta inside the spread is noise, under 3 repeats every verdict is "unproven") and
+`--base <git-ref>` (A/B on an ephemeral worktree). Flags: its header or `--help`.
+
+```sh
+node tools/perf/profile.mjs singapore --mode spans --repeat 3              # per-subsystem p50/p95/p99
+node tools/perf/profile.mjs singapore --mode step --repeat 3 --base HEAD   # physics/AI step alone, A/B
+```
+
+The raw V8 `.cpuprofile` below is the `--mode cpu` leg (`profile.mjs` wraps it); use it directly
+when you need the file. Writes `scratch/profiles/<track>-<mode>.cpuprofile`.
 
 ```sh
 node tools/shot/profile-gameloop.mjs [track] [physics|render]
@@ -64,7 +73,7 @@ copies.
 
 ### Legacy inline harness
 
-Prefer `tools/shot/profile-gameloop.mjs`. Hand-roll only for custom staging
+Prefer `tools/perf/profile.mjs` (or `profile-gameloop.mjs` for a raw profile). Hand-roll only for custom staging
 (`setTimeOfDay("night")` before `Profiler.start`, a specific car count). Pattern:
 free port → static server → Chromium + SwiftShader → CDP
 `Profiler.enable/start/stop` → write JSON to `scratch/profiles/`.

@@ -1,7 +1,9 @@
 # Shareable result cards (PNG) — plan (2026-10-04)
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — js/share/share-card.js, share-card-data.js and share-card-layout.js exist (QR fix #3542).
+
 Date: 2026-10-04
-Status: **PLAN** — docs-only; implement as four draft PRs against
+Status when written: **PLAN** — docs-only; implement as four draft PRs against
 `claude/f1-game-project-26h3ng`, one slice each, in the order below. Do not merge.
 Scope: client-only image cards for race result, daily result, lap-vs-ghost,
 season/championship summary and the career season card; one shared renderer,

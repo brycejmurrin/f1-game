@@ -1,6 +1,6 @@
 ---
 name: ai-racecraft
-description: "Use when AI racecraft is wrong: overtakes/dive-bombs too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, wall, kerb or pit lane; rescue teleport), driver ratings craft/awareness/experience, ai-drive.js. Not player physics (tune-physics) or flags, safety car stuck out, pile-ups, debris launches (race-incidents-control)."
+description: "Use when AI cars, rivals or opponents race wrong: overtakes/dive-bombs too aggressive/passive, brake targets, preferred lane, ERS deploy, stuck/unstuck AI cars (wedged in traffic, wall, kerb or pit lane; rescue teleport), driver ratings craft/awareness/experience, ai-drive.js. Not player physics (tune-physics) or flags, safety car stuck out, pile-ups, debris launches (race-incidents-control)."
 ---
 
 # AI racecraft — `AiDrive`, not the bicycle model
@@ -27,7 +27,9 @@ for the economy; this skill for how those axes drive the field).
 
 `AiDrive.traits(c)` reads `craft`/`awareness`/`experience`/`skill`/`consistency`/
 `aggression`/`optimism` (0.75 mid-grid fallbacks; a reused scratch). Every map
-below is in `ai-drive.js`; the game.js caller (grep the name) builds its ctx.
+below is in `ai-drive.js`; the game.js caller builds its ctx. Find the caller with
+apex-lsp `lsp_references` (skill code-nav) before tuning an `AiDrive` export: ~20
+exports have no game.js caller, and tuning one changes nothing.
 
 | Behaviour | Function → game.js caller | Ratings read | Unit pin (`ai-drive.test.mjs`) |
 |---|---|---|---|
@@ -46,6 +48,13 @@ Making low-craft drivers passive is a constant in the map, never a second
 - Steer the **player** from curvature — arc column is AI-only here
 - Touch `PACE` / grip / `ROAD_FOLLOW` → **tune-physics**
 - Change caution / VSC / SC / debris → **race-incidents-control**
+
+## Hot path and update order
+
+Every `AiDrive` function runs per car per tick: no per-call object or array
+allocation (reuse a module scratch, as `traits()` does). `trailStep` and
+`trailYieldStep` read state the same tick's per-car update writes, so keep
+game.js's call order when you touch either (pin: `ai-trail-yield-vm.test.mjs`).
 
 ## Brake target (AI brakes too early / late)
 
@@ -71,12 +80,20 @@ Recipe and the Lap-1 / Turn-1 melee case: `references/tactics.md`. STREETS (`tra
 
 Discriminator: `__apex.caution().level` 0 with `speed < 7` and `stuckT` growing is this skill; level != 0 or `caution().sinceT` growing is **race-incidents-control**. Timers, rescue rules and checks: `references/stuck.md`.
 
+Which check for which edit (node, subagent-safe unless marked):
+
+| Edit | Gate |
+|---|---|
+| OT fire, ERS, lane nudge, brake target | `node --test tests/unit/ai-drive.test.mjs` (~1 s) + `ai-racecraft-vm.test.mjs` (read its header) |
+| pass / defend / tactics | `ai-pass-complete.test.mjs` + `ai-pass-defend-vm.test.mjs` + `ai-trail-yield-vm.test.mjs` |
+| stuck / rescue | `ai-stuck-vm.test.mjs` + `ai-pack-stuck-vm.test.mjs` |
+| pace band | `ai-band.test.mjs` |
+| field effect | `ai-race.mjs tactics` / `stuck` `--runs 5` (VM, below) |
+
+`pick-tests` names the browser groups for an `ai-drive.js` edit (physics-core);
+`collisions` is optional browser evidence, session only, in the background.
+
 ```sh
-node --test tests/unit/ai-drive.test.mjs      # ai-drive unit pins, ~1 s
-node --test tests/unit/ai-band.test.mjs       # scripted vs catch-up factor pins
-node --test tests/unit/ai-racecraft-vm.test.mjs   # VM shape gate (jitter/approach/line); read its header first
-node tools/ci/test-bg.mjs collisions   # BROWSER group, optional behaviour evidence (background, AGENTS rule 4/5)
-# For a `ai-drive.js` edit `pick-tests` wins (it names physics-core); `collisions` is extra, not the gate.
 
 # Field instruments (VM, no browser) — one dispatcher:
 node tools/check/ai-race.mjs pace    [--track monza] [--diff normal]
@@ -87,7 +104,7 @@ node tools/check/ai-race.mjs human   [--track monza] [--runs 3]   # vs a PLAYER,
 node tools/check/ai-race.mjs ratings [--json]                     # Pearson / style zero-mean (no race)
 node tools/check/ai-race.mjs stuck   [--track monza] [--seconds 240] [--runs 3]    # per-car stuckT episodes + rescue teleports (not dwell)
 node tools/check/ai-race.mjs band    [--track monza] [--diff normal] [--seconds 90]  # catch-up rubber-band profile (forces aiPace=catchup)
-# Race subcommands take --wear off|light|real (default off: no pits/deg).
+# Race subcommands take --wear off|light|real (default off: no pits/deg, so the pit-lane rescue never runs).
 # Direct: ai-pace/ai-field/ai-line/ai-human/ai-ratings/ai-band/ai-stuck.mjs;
 # tyre strategy over a race, wear real (default --track bahrain --laps 10):
 node tools/check/ai-strategy-census.mjs --track redbull --laps 10 [--json]

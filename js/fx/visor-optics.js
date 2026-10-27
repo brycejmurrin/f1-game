@@ -626,7 +626,7 @@ const VisorOptics = (function () {
   function tick(dt, on, vs, reduced) {
     const helmet = _helmet();
     if (!helmet) { _show(false); return; }
-    const resized = _size();
+    let resized = _size();
     _port();                                                   // the aperture: CLEAR / TINTED build it, OFF clears it
     const visor = _opt("visor", "off");
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
@@ -638,7 +638,7 @@ const VisorOptics = (function () {
     if (!(level > 0)) { _show(false); return; }
     const t1 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     if (!_lookup()) return;
-    if (resized) _size();                                      // the canvas was created after the first size pass
+    if (_size()) resized = true;                               // idempotent: sizes a canvas _lookup just made (visor first turned on mid-helmet)
     if (t1 && !_stats.msLookup) _stats.msLookup = r2(performance.now() - t1);
     _syncBlend(t1 || Date.now());
     _show(true);

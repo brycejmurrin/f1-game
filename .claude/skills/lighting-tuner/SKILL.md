@@ -1,6 +1,6 @@
 ---
 name: lighting-tuner
-description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing, the day scene is flat, ambient/exposure/fog/lightTune issues, validating via lightState, or baking a pasted LightPresets blob into js/lighting/presets.js. Shader bloom → renderer-debug; floodlight masts → scenery-dress."
+description: "Use when night looks washed out or like day, dawn sun is too high, floodlights/lamps are not firing, the day scene is flat, ambient/exposure/fog/lightTune issues, validating via lightState, or baking a pasted LightPresets blob into js/lighting/presets.js. Shader bloom → renderer-debug; floodlight masts → scenery-dress; real-place accuracy → survey-track."
 
 ---
 
@@ -50,10 +50,16 @@ before/after; don't guess from AGENTS.md.
 - Isolated car paint in the studio → **playwright-probe** `references/car-studio.md` (`--refl` is not a scene
   knob). Renderer compile / GL errors → **renderer-debug**.
 
+Verify a `js/lighting/` or `presets.js` edit in this order (AGENTS.md §Verification):
+
 ```sh
-node tools/ci/test-bg.mjs gfx      # lighting-ab + tuner-grade + probes + tlx
-npm test -- tests/specs/lighting-ab.spec.js   # lighting-ab only
+git diff --name-only origin/claude/f1-game-project-26h3ng > artifacts/tmp/changed.txt
+node tools/ci/geometry-paths.mjs --targeted artifacts/tmp/changed.txt   # names the TARGETED node suites; run each with node --test
+npm test -- tests/specs/lighting-ab.spec.js   # the single spec; session only (a subagent reports it unverified)
 ```
+
+The whole `gfx` browser group (lighting-ab + tuner-grade + probes + tlx) only when
+`applyRaceSettings`' structure changed: `node tools/ci/remote-group.mjs gfx` on the pushed branch.
 
 Related: **renderer-debug**, **playwright-probe** (`references/cameras.md`).
 

@@ -77,7 +77,7 @@ Live `version.json`: subagent **deploy-research**, or
 or `curl`, which reaches github.io from this container. For "is MY commit
 live?" curl is the only option that works, because the answer is a `<meta
 name="apex-sha">` in the shell and the fetch tool drops every meta tag:
-`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. A gated publish is median 23 min, p90 73 (AGENTS.md §Git branch & deploy). A NEWER push to the
+`curl -sS <site>/index.html | grep -oE '<meta name="apex-sha"[^>]*>'`. Publish timings: AGENTS.md §Git branch & deploy and `docs/TESTING.md` §Release train (their one home). A NEWER push to the
 deploy branch CANCELS the pending run (concurrency group) —
 `gh run list --workflow pages.yml` when a build seems missing. A user reporting
 a just-fixed bug is usually on the previous build: check live version FIRST.

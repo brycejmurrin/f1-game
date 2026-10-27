@@ -11,7 +11,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function boot() {
-  const reads = { rect: 0, style: 0 };
+  const reads = { rect: 0, style: 0, qsa: 0 };
   const mk = (id, shown) => ({
     id, hidden: false, children: [], shown, isConnected: true,
     getBoundingClientRect() { reads.rect++; return this.shown ? { width: 800, height: 600 } : { width: 0, height: 0 }; },
@@ -31,7 +31,7 @@ function boot() {
     window: { addEventListener() {} },
     document: {
       documentElement: { id: "html" }, body: { id: "body" },
-      querySelectorAll: () => [],
+      querySelectorAll: (sel) => { reads.qsa++; return sel === ":modal" ? [] : [...els.values()].filter((e) => !e.hidden && e.id === "pausemenu"); },
       getElementById: (id) => els.get(id) || null,
       addEventListener() {},
     },
@@ -86,4 +86,26 @@ test("the memo expires on its own, and the layers are watched", () => {
   t.advance(1000);
   assert.equal(t.U.navOpen(), true);
   for (const id of ["overlay", "rotate-device", "pausemenu"]) assert.ok(t.observed.has(t.els.get(id)), id + " observed");
+});
+
+test("top() is memoised like navOpen(): per-frame pad polls do not re-query (audit4 UB2)", () => {
+  const t = boot();
+  assert.equal(t.U.top(), null);
+  const after = { ...t.reads };
+  for (let i = 0; i < 20; i++) assert.equal(t.U.top(), null);
+  assert.deepEqual(t.reads, after, "20 further top() calls must not querySelectorAll / getComputedStyle");
+  const pause = t.els.get("pausemenu");
+  pause.hidden = false; t.mutate(pause);
+  assert.equal(t.U.top(), pause, "a layer opening is seen on the very next top() call");
+  pause.hidden = true; t.mutate(pause);
+  assert.equal(t.U.top(), null);
+  pause.hidden = false;   // unreported: the time bound is the net
+  assert.equal(t.U.top(), null);
+  t.advance(1000);
+  assert.equal(t.U.top(), pause);
+  pause.isConnected = false;   // a detached answer is never returned from the memo
+  assert.ok(t.reads.qsa > 0);
+  const q = t.reads.qsa;
+  t.U.top();
+  assert.ok(t.reads.qsa > q, "a detached memo re-queries");
 });

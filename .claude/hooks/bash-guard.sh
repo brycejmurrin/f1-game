@@ -72,6 +72,12 @@
 # flow decide.
 
 INPUT=$(cat)
+# pass-4 red-team R14: without python3 every rule below is skipped. The other gates fail closed
+# (settings.json onFailure block); so does this one.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "BLOCKED: bash-guard needs python3 to read the command and run the push/commit/kill rules; none ran. Install python3 (tools/env/cloud-agent-install.sh) before continuing." >&2
+  exit 2
+fi
 CMD=$(printf '%s' "$INPUT" | python3 -c '
 import json,sys
 try:
@@ -110,7 +116,7 @@ fi
 # the former 14 `if: Bash(*word*)` filters, the agent runner, wget/sleep (the
 # API and poll-loop rules), `github` (a run-cancel URL in data) and the browser
 # launchers run as bare scripts.
-GUARD_TRIGGER='\b(git|github|gh|kill|pkill|killall|pgrep|curl|wget|node|nodejs|npm|npx|pnpm|pnpx|yarn|bun|bunx|deno|tsx|playwright|chrome|chromium|google-chrome|python|python3|sh|bash|dash|zsh|eval|exec|source|xargs|sleep|agent-run|test-bg|test-solo|run-playwright|verify-change|probe-mcp|apex-tools-mcp|js-debugger-mcp)\b'
+GUARD_TRIGGER='\b(git|github|gh|push|merge|commit|config|kill|pkill|killall|pgrep|curl|wget|node|nodejs|npm|npx|pnpm|pnpx|yarn|bun|bunx|deno|tsx|playwright|chrome|chromium|google-chrome|python|python3|perl|ruby|sh|bash|dash|zsh|eval|exec|source|xargs|sleep|agent-run|test-bg|test-solo|run-playwright|verify-change|probe-mcp|apex-tools-mcp|js-debugger-mcp)\b'
 if ! printf '%s' "$CMD" | grep -Eq "$GUARD_TRIGGER"; then
   exit 0
 fi
@@ -303,6 +309,10 @@ fi
 # Text the parser cannot tokenise (an unbalanced quote) falls back to the regexes
 # on SCAN below: it would not run as written, so a false positive costs nothing.
 HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
+# pass 4 (H5): an escape hatch that exists is announced on every guarded call, so it cannot stay lifted unnoticed.
+for _h in allow-protected allow-context-cap allow-stop; do
+  [ -e "$ROOT/.claude/$_h" ] && echo "bash-guard: hatch active: .claude/$_h — remove it when the assigned edit is done."
+done
 GUARD_OUT=$(printf '%s' "$INPUT" | python3 "$HOOKDIR/shellparse.py" guard "$ROOT"); GUARD_RC=$?
 [ "$GUARD_RC" = 2 ] && exit 2
 COMMIT_LINE=$(printf '%s\n' "$GUARD_OUT" | sed -n 1p)

@@ -37,10 +37,11 @@ vertex-displaced; FLAT is the no-material id.
    A scale on the wrong index, or `0` where the manifest has a layer, is MAT-id
    drift between `TrackGeom.MAT` and the pack — not a texture problem.
 
-2. **Check the pack offline** (Node only, ~2 s, writes nothing; expect
-   `verify: OK`, ~4.1 MB of 8 MB; `tests/unit/assets-pack.test.mjs` is the
+2. **Check the pack offline** (Node only, writes nothing; expect
+   `verify: OK` under the 8 MB budget; `tests/unit/assets-pack.test.mjs` is the
    guard incl. MAT-id lockstep) — or **regenerate synthetic pack**
-   (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes):
+   (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes;
+   `bake*` is denied to agents in `.claude/settings.json`, so Bryce runs it):
    ```sh
    node tools/gen/assets.mjs bake-synthetic
    node tools/gen/assets.mjs verify
@@ -60,7 +61,7 @@ vertex-displaced; FLAT is the no-material id.
    Blend is **multiplicative** — per-track tarmac tint and racing-line wear
    survive.
 
-4. **Slice a generated 4×4 atlas** onto scenery MAT slots (`bake-atlas`
+4. **Slice a generated 4×4 atlas** onto scenery MAT slots (Bryce runs it: `bake*` is denied to agents; `bake-atlas`
    leaves ASPHALT unmapped and stamps `generated:<file>#col,row`; the committed
    pack is `bake-synthetic` output — `materials.layers` in
    `assets/pack/manifest.json` is the live list):
@@ -78,8 +79,8 @@ vertex-displaced; FLAT is the no-material id.
 
 6. **Validate**:
    ```sh
-   npm run test:tooling-fast
-   node tools/ci/test-bg.mjs hooks   # whole browser group (10-40 min); a lone `npm test -- tests/specs/assets-api.spec.js` is the pack's own spec
+   node --test tests/unit/assets-pack.test.mjs
+   npm test -- tests/specs/assets-api.spec.js   # the pack's own spec; session only (a subagent reports it unverified)
    ```
    Visual: **lighting-tuner** or **renderer-debug** on a track
    with varied surfaces.

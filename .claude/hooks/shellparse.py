@@ -630,7 +630,12 @@ PUSH_REFUSED = {
     "--all": "--all pushes every local branch (the deploy branch included)",
     "--branches": "--branches pushes every local branch (the deploy branch included)",
     "--prune": "--prune deletes remote branches with no local counterpart",
+    "--no-verify": "--no-verify skips the pre-push hook",
 }
+# 2026-10-26 pass-4 red-team R1: a refspec or remote built from a shell variable (`git push origin "$B"`,
+# `git push origin HEAD:${T}`) or a command substitution reaches the guard unresolved, so the deploy-branch
+# check never sees the real destination. Such a push is refused: write the branch literally.
+PUSH_OPAQUE = re.compile(r"[$`]")
 
 
 def _current_branch(cwd):
@@ -731,6 +736,9 @@ def push_issues(text, branch_of=_current_branch, dests=None):
             j += 1
         refspecs = pos[1:]
         cur = None
+        for r in pos:
+            if PUSH_OPAQUE.search(r):
+                why.append(f"`{r}` is a shell expansion the guard cannot resolve: write the remote and branch literally")
         for r in refspecs:
             if r.startswith("+"):
                 why.append(f"force push (+refspec {r})")
@@ -928,7 +936,8 @@ def held_warning(dests, root):
 RATCHET_RAISING = ("--update", "--fragment", "--absolute")
 RATCHET_RUNNERS = ("node", "nodejs", "bun", "deno", "npx", "xargs")
 AUTO_RAISE_MAX = 40   # the commit hook's absorb (AGENTS.md §Critical conventions)
-RATCHET_EVAL_RAISE = re.compile(r"autoRaise|\bupdate\b|--update|--fragment|--absolute|\bfold\b|writeFile|appendFile|writeJson|renameSync|truncate|ratchets\.json")
+# 2026-10-26 pass 4 (G8/H4): `ratchets\.json` dropped — a read of any *ratchets.json is not a raise; only a write verb is.
+RATCHET_EVAL_RAISE = re.compile(r"autoRaise|\bupdate\b|--update|--fragment|--absolute|\bfold\b|writeFile|appendFile|writeJson|renameSync|truncate")
 
 
 def ratchet_issues(text):
@@ -1043,6 +1052,11 @@ def api_classify(method, endpoint, blob):
         return ("deny" if re.search(r"merge_method" + _KV + r"(squash|rebase)", b, re.I) else "ask", P.ASK_MERGE, ep)
     if re.search(r"(^|/)pulls/[^/]+/update-branch$", ep) and m in ("PUT", "POST"):
         return ("ask", P.ASK_UPDATE_BRANCH, ep)
+    # pass-4 red-team G1: the cloud session's own routes for a ready flip and auto-merge were classified "pass".
+    if re.search(r"(^|/)pulls/[^/]+/ccr/ready_for_review$", ep) and m in ("PUT", "POST", "PATCH"):
+        return ("ask", P.ASK_READY, ep)
+    if re.search(r"(^|/)pulls/[^/]+/ccr/(auto_merge|merge)$", ep) and m in ("PUT", "POST", "PATCH"):
+        return ("ask", P.ASK_MERGE, ep)
     if re.search(r"(^|/)(pulls|issues)/[^/]+$", ep) and m in ("PATCH", "POST"):
         if "pulls/" in ep and re.search(r"\bdraft" + _KV + r"(false|0)\b", b, re.I):
             return ("ask", P.ASK_READY, ep)
@@ -1216,6 +1230,11 @@ def poll_loops(text):
         whole = head + " " + body
         if not re.search(r"\bsleep\b", whole):
             continue
+        # pass-4 H12: `for i in 1 2 3; do git fetch origin && break; sleep 5; done` is a bounded retry of a
+        # network call (a literal list of <= 5 items, no seq, a `break` in the body), not a poll.
+        lit = re.match(r"\s*\w+\s+in((?:\s+[\w.-]+){1,5})\s*;?\s*$", head)   # head is the text AFTER the keyword
+        if m.group(2) == "for" and lit and re.search(r"\bbreak\b", body) and not re.search(r"\bseq\b", head):
+            continue
         w = POLL_WATCH.search(whole)
         if w:
             out.append({"why": m.group(2) + " … " + re.sub(r"\s+", " ", w.group(0)) + " … sleep"})
@@ -1245,6 +1264,10 @@ def gh_issues(text, cwd=None):
                 for flag, m in (("--squash", "squash"), ("--rebase", "rebase")):
                     if _gh_truthy(a, flag):
                         method = m
+                # audit4 A1: `--admin` bypasses the required check (branch protection does not bind admins), so
+                # a merge with it lands an ungated head; refused like a squash.
+                if _gh_truthy(a, "--admin"):
+                    method = "admin"
                 if re.match(r"^-[A-Za-z]+$", a):
                     for ch in a[1:]:
                         if ch in GH_MERGE_ARG:
@@ -1338,7 +1361,7 @@ def _browser_script(path, args, cwd):
     b = os.path.basename(path)
     # `--help` / `-h` / `help` print and exit (2026-10-26 audit: `tools/shot/agent.mjs --help` and
     # `verify-change.mjs --help` were blocked in a read-only subagent) — but only for a script that HONOURS the
-    # flag (exitIfHelp, or a literal "--help" in its source); test-bg.mjs and the census producers do not, and an
+    # flag (exitIfHelp, or a literal "--help" in its source); the census producers do not (test-bg.mjs does since audit4 C2), and an
     # ignored flag must never authorize Chromium.
     if (any(a in ("--help", "-h") for a in args) or args[:1] == ["help"]) and _honors_help(res):
         return None
@@ -1484,6 +1507,81 @@ def surveyor_targets(text, cwd):
     return out
 
 
+# ---- pass-4 red-team additions (2026-10-26) ----------------------------------------
+CONFIG_WRITE_KEYS = re.compile(r"^(core\.hookspath|push\.default|remote\.[^.]+\.(push|mirror|pushurl)|include\.path|includeif\..*\.path|alias\.(push|commit|merge))$", re.I)
+
+
+def config_issues(text):
+    """[{cmd, why}] for a `git config` WRITE of a key that switches hooks or push targets (core.hooksPath,
+    push.default, remote.*.push|mirror|pushurl, include.path, an alias shadowing push/commit/merge), or the same
+    key through `-c`/GIT_CONFIG_KEY_n. Reads (--get, --list, -l, --show-origin) pass. Raises ParseError."""
+    found = []
+    for env, argv, cwd, i, _gitdir, cfg in git_commands(text, os.getcwd()):
+        why = []
+        for kv in cfg:
+            k = kv.partition("=")[0]
+            if CONFIG_WRITE_KEYS.match(k):
+                why.append(f"-c {k} widens or disables a guard")
+        for n in range(0, 20):
+            k = (env or {}).get(f"GIT_CONFIG_KEY_{n}")
+            if k and CONFIG_WRITE_KEYS.match(k):
+                why.append(f"GIT_CONFIG_KEY_{n}={k}")
+        if i < len(argv) and argv[i] == "config":
+            args = argv[i + 1:]
+            reading = any(a in ("--get", "--get-all", "--get-regexp", "--list", "-l", "--show-origin", "--show-scope") for a in args)
+            keys = [a for a in args if not a.startswith("-")]
+            if not reading and keys and CONFIG_WRITE_KEYS.match(keys[0]):
+                why.append(f"git config {keys[0]} is a write")
+        if why:
+            found.append({"cmd": " ".join(argv), "why": sorted(set(why))})
+    return found
+
+
+INTERP = ("python", "python3", "node", "nodejs", "perl", "ruby", "php", "lua", "bun", "deno", "tsx")
+# GitHub URLs inside an interpreter body are NOT listed here: http_issues already classifies `node -e fetch(…)` and
+# `python -c` calls to api.github.com with the gh api policy (deny squash, ask merge/ready …).
+WRAPPED_VERB = re.compile(r"\b(git\s+(push|config|merge|rebase|reset|stash)|gh\s+(pr\s+(merge|ready)|api))\b")
+
+
+def wrapped_issues(text):
+    """[cmd] for a git push/config/merge or a GitHub write hidden in an interpreter body (`python3 -c
+    "os.system('git push …')"`, `node -e`, `perl -e`), or behind an obfuscated command word (`g''it`, `${X}t`,
+    `$GIT push`). The parser cannot inspect those; a plain command can be checked (pass-4 red-team X5/R5)."""
+    found = []
+    # quote-split command words (`g''it push`, `gi"t" push`) survive tokenisation as `git`; the raw text is checked
+    # first, and a ParseError (an unbalanced quote) leaves the regex fallbacks in bash-guard.sh to decide.
+    if re.search(r"\bg['\"]+it\b|\bgi['\"]+t\b|\bg['\"]*i['\"]+t\b", text) and re.search(r"\b(push|merge|config)\b", text):
+        return [text.strip()[:120]]
+    try:
+        cmds = list(commands(text, os.getcwd(), strict=True))
+    except ParseError:
+        return found
+    for env, argv, _redir, _cwd in cmds:
+        if not argv:
+            continue
+        head = argv[0]
+        if re.search(r"[$`]", head) and WRAPPED_VERB.search(" ".join(argv[1:])):
+            found.append(" ".join(argv))
+            continue
+        if os.path.basename(head) in INTERP:
+            for k, a in enumerate(argv):
+                if a in ("-c", "-e", "--eval", "-p", "--print", "-E") and k + 1 < len(argv) and WRAPPED_VERB.search(argv[k + 1]):
+                    found.append(" ".join(argv))
+                    break
+    return found
+
+
+KILL_SCAN = re.compile(r"\bxargs\b(\s+-\S+)*\s+(kill|pkill)\b|\bos\.kill\s*\(|\bprocess\.kill\s*\(|\bProcess\.kill\b|\bkill\s+(-\S+\s+)*\$\(\s*(pgrep|ps|lsof|fuser)\b")
+
+
+def kill_issues(text):
+    """[cmd] for a process kill that finds its target by scanning (xargs kill after ps/pgrep/lsof, os.kill,
+    process.kill, `kill $(pgrep …)`): the same orphaned-browser hazard as `pkill -f` (pass-4 H12)."""
+    t = _blank_quotes(strip_heredocs(text))
+    hits = [m.group(0) for m in KILL_SCAN.finditer(t)] + [m.group(0) for m in KILL_SCAN.finditer(text) if "kill" in m.group(0) and ("os." in m.group(0) or "process." in m.group(0))]
+    return sorted(set(hits))
+
+
 def guard(payload, root):
     """bash-guard.sh's one parse (round 2, 2026-10-14). Prints
       line 1: the commit summary `FOUND RUN ALL GITDIR PATHS…`, or NULL (untokenisable)
@@ -1554,6 +1652,23 @@ def guard(payload, root):
                          "only Playwright process. Run the node-only checks (verify-change.mjs --fast, node --test, "
                          "verify-track.cjs) and report the browser groups as NOT RUN; the parent starts them.\n")
         return 2
+    cfgw = config_issues(cmd)
+    if cfgw:
+        sys.stderr.write("BLOCKED: `" + cfgw[0]["cmd"] + "` — " + "; ".join(cfgw[0]["why"]) + " (pass-4 red-team R2: it "
+                         "switches git's hooks or push targets off for every worktree and later session in this container).\n")
+        return 2
+    wrapped = wrapped_issues(cmd)
+    if wrapped:
+        sys.stderr.write("BLOCKED: `" + wrapped[0] + "` runs a git push / merge / config write inside an interpreter body "
+                         "or through an obfuscated command word, which the guard cannot inspect (pass-4 red-team X5). "
+                         "Run it as one plain shell command.\n")
+        return 2
+    kills = kill_issues(cmd)
+    if kills:
+        sys.stderr.write("BLOCKED: `" + kills[0] + "` kills processes by scanning for them (pass-4 H12: `xargs kill`, "
+                         "os.kill, process.kill), which orphans the browsers of a live run exactly like `pkill -f` "
+                         "(AGENTS.md §Verification 7). Kill one listed PID of your own, or `node tools/ci/test-bg.mjs --stop`.\n")
+        return 2
     unsigned = signing_issues(cmd)
     if unsigned:
         sys.stderr.write("BLOCKED: `" + unsigned[0]["cmd"] + "` turns commit signing off (" + "; ".join(unsigned[0]["why"])
@@ -1592,8 +1707,10 @@ def guard(payload, root):
     for x in gated:
         head = None
         if x["kind"] == "merge":
+            # pass-4 red-team G6: without --match-head-commit, gh merges whatever the head is NOW while the check
+            # compared the receipt's head with itself. The pin is required; the gate prints the exact flag.
             m = re.search(r"--match-head-commit[= ]+([0-9a-fA-F]{7,40})", x["cmd"])
-            head = m.group(1) if m else _receipt_head(receipts, x.get("pr"))
+            head = m.group(1) if m else None
         ok, why = P.receipt_check(receipts, x["kind"], x.get("pr"), head, verify_files=True)
         if not ok:
             P.emit("deny", (P.DENY_GATE_MERGE if x["kind"] == "merge" else P.DENY_GATE_READY) + " (" + x["why"] + ": " + why + ")")
