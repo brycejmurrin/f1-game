@@ -255,7 +255,9 @@ test("receiptVerdict (JS) and merge_policy.receipt_check (Python) agree: same PR
     assert.ok(/min old/.test(both("ready", 7, "").why));
     writeReceipt(dir, "ready", { pr: 7, head: HEAD, ok: false, evidence: "plan-open: 1 of 3 Plan item(s) open", at: at(1) });
     assert.ok(/refused \(plan-open/.test(both("ready", 7, "").why));
-    writeReceipt(dir, "merge", { pr: 7, head: HEAD, ok: true, at: at(1) });
+    // writeReceipt refuses "merge" (no tool writes one): the readers' merge case is a hand-written fixture.
+    fs.mkdirSync(path.dirname(receiptPath(dir, "merge", 7)), { recursive: true });
+    fs.writeFileSync(receiptPath(dir, "merge", 7), JSON.stringify({ kind: "merge", pr: 7, head: HEAD, ok: true, at: at(1) }));
     assert.equal(both("merge", 7, HEAD.slice(0, 10)).ok, true, "a prefix pins the same head");
     assert.ok(/pin expectedHeadSha/.test(both("merge", 7, "").why));
     assert.ok(/not the gated head/.test(both("merge", 7, "b".repeat(40)).why));

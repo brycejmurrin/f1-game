@@ -6,7 +6,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  fullTierPassed, DEPLOY, MAX_ARMED, ALARM_HOURS, stalled, alarmLines, SUGGESTIONS, hasMergeHold, laneOf, handoffOwner, ageLabel, ciState, decide, suggest, evaluate, render, measure,
+  fullTierPassed, DEPLOY, ALARM_HOURS, stalled, alarmLines, SUGGESTIONS, hasMergeHold, laneOf, handoffOwner, ageLabel, ciState, decide, suggest, evaluate, render, measure,
 } from "../../tools/ci/pr-board.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -20,11 +20,11 @@ const ctx = () => ({});
 
 test("defaults come from github-api", () => {
   assert.equal(DEPLOY, "claude/f1-game-project-26h3ng");
-  assert.deepEqual([...SUGGESTIONS].sort(), ["ARM", "FIX", "FOREIGN-ARM", "NONE", "READY", "SYNC", "WAIT"]);
+  assert.deepEqual([...SUGGESTIONS].sort(), ["FIX", "FOREIGN-ARM", "LAND", "NONE", "READY", "SYNC", "WAIT"]);
 });
 
-test("suggest: ARM — ready, not armed, gate passed, overall CI succeeded", () => {
-  assert.equal(suggest({ ...base }, ctx()), "ARM");
+test("suggest: LAND — ready, not armed, no land label, gate passed, overall CI succeeded", () => {
+  assert.equal(suggest({ ...base }, ctx()), "LAND");
 });
 
 test("suggest: ready PR waits for overall CI success even after guards pass", () => {
@@ -36,7 +36,7 @@ test("suggest: ready PR waits for overall CI success even after guards pass", ()
   assert.equal(suggest({ ...base, ci: "failure" }, ctx()), "FIX");
 });
 
-test("suggest: ARM needs the gate; a pending or absent gate waits", () => {
+test("suggest: LAND needs the gate; a pending or absent gate waits", () => {
   assert.equal(suggest({ ...base, gate: "pending" }, ctx()), "WAIT");
   assert.equal(suggest({ ...base, gate: "none" }, ctx()), "WAIT");
 });
@@ -59,7 +59,7 @@ test("suggest: a draft waits while ci runs, without the gate, or when the fast t
   assert.equal(suggest({ ...d, ci: "none" }, ctx()), "WAIT");
 });
 
-test("suggest: SYNC — dirty, and it outranks FIX and ARM", () => {
+test("suggest: SYNC — dirty, and it outranks FIX and LAND", () => {
   assert.equal(suggest({ ...base, mergeableState: "dirty" }, ctx()), "SYNC");
   assert.equal(suggest({ ...base, mergeableState: "dirty", ci: "failure" }, ctx()), "SYNC");
   assert.equal(suggest({ ...base, draft: true, mergeableState: "dirty" }, ctx()), "SYNC");
@@ -78,18 +78,21 @@ test("suggest: FOREIGN-ARM — armed with squash or rebase (MERGE-COMMIT-ONLY); 
   assert.equal(suggest({ ...base, armed: true, mergeMethod: "squash", mergeableState: "dirty", ci: "failure" }, ctx()), "FOREIGN-ARM");
 });
 
-test("suggest: NONE — armed with MERGE and healthy; never ARM again", () => {
+test("suggest: NONE — armed with MERGE and healthy; never LAND again", () => {
   const armed = { ...base, armed: true, mergeMethod: "merge" };
   assert.equal(suggest(armed, ctx()), "NONE");
   assert.equal(suggest({ ...armed, ci: "queued", gate: "pending" }, ctx()), "NONE");
   assert.equal(suggest({ ...armed, mergeMethod: "MERGE" }, ctx()), "NONE");
 });
 
-test("suggest: ARM waits on a MERGE-HOLD line and at MAX_ARMED armed repo-wide", () => {
-  assert.equal(MAX_ARMED, 2);
+test("suggest (M6): LAND waits on the hold LABEL; a land-labelled PR is NONE (land.yml arms); no armed-PR cap, sessions never arm", () => {
   assert.equal(suggest({ ...base, hold: true }, ctx()), "WAIT");
-  assert.equal(suggest({ ...base }, { ...ctx(), armed: 1 }), "ARM");
-  assert.equal(suggest({ ...base }, { ...ctx(), armed: 2 }), "WAIT");
+  assert.equal(decide({ ...base, hold: true }).why, "ready and green, but it carries the hold label (the one veto)");
+  assert.equal(suggest({ ...base, land: true }), "NONE");
+  assert.equal(decide({ ...base, land: true }).why, "labelled land: land.yml runs the gate and arms it");
+  assert.equal(suggest({ ...base, land: true, ci: "failure" }), "FIX", "a red under land is still work");
+  assert.equal(suggest({ ...base, mergeHold: true }), "LAND", "a legacy MERGE-HOLD: body line vetoes nothing (merge-gate ignores it)");
+  assert.equal(SUGGESTIONS.includes("ARM"), false);
 });
 
 test("hasMergeHold: a line STARTING with MERGE-HOLD:, outside comments, is the only veto", () => {
@@ -213,7 +216,7 @@ test("measure: failing jobs come from the failed run; --pr reads one PR", () => 
   assert.ok(!calls.includes("pulls/1"));
 });
 
-test("measure --pr counts armed siblings across every PR page, without reading their CI details", () => {
+test("measure --pr: armed siblings on any page never hold a row back (no armed cap), and their CI details are not read", () => {
   for (const methods of [["merge", "merge"], ["squash", "rebase"], ["merge", null]]) {
     const prs = Array.from({ length: 101 }, (_, i) => prObj(i + 1, { draft: true }));
     prs[0] = prObj(1, { auto_merge: { merge_method: methods[0] } });
@@ -225,7 +228,7 @@ test("measure --pr counts armed siblings across every PR page, without reading t
       jobsByRun: { 77: fullJobs() }, checksBySha: { [SHA(3)]: guard() },
     });
     const all = measure({ request });
-    const expected = methods[1] ? "WAIT" : "ARM";
+    const expected = "LAND";
     assert.equal(all.rows.find((r) => r.number === 3).suggest, expected);
     calls.length = 0;
     const one = measure({ request, only: 3 });
@@ -238,14 +241,14 @@ test("measure --pr counts armed siblings across every PR page, without reading t
   }
 });
 
-test("measure --pr refreshes the selected PR's armed state after listing siblings", () => {
+test("measure --pr reads the selected PR's own armed state from its detail", () => {
   const prs = [prObj(1, { auto_merge: { merge_method: "merge" } }), prObj(3, { auto_merge: { merge_method: "merge" } })];
   const { request } = fakeApi({ prs,
     runsBySha: { [SHA(3)]: [{ id: 77, status: "completed", conclusion: "success" }] },
     jobsByRun: { 77: fullJobs() }, checksBySha: { [SHA(3)]: guard() },
   });
   const v = measure({ only: 3, request: (q) => q === "pulls/3" ? { json: prObj(3) } : request(q) });
-  assert.equal(v.rows[0].suggest, "ARM", "the newly disarmed target leaves only one sibling armed");
+  assert.equal(v.rows[0].suggest, "LAND", "the detail says not armed: the row suggests the land label");
 });
 
 test("measure --pr on a PR that is closed or targets another base is a bad-args error", () => {
@@ -304,53 +307,55 @@ test("only GET requests are ever issued: every curl the default transport spawns
 });
 
 
-test("evaluate + render: PLAN is done/items from the body, HOLD is flagged, a sweep never arms past MAX_ARMED", () => {
+test("evaluate + render: PLAN is done/items from the body, the hold LABEL is flagged, the land label shows in STATE, no armed cap", () => {
   const body = "## Plan\n- [x] a — sha\n- [ ] **now:** b\n- [ ] ~~c~~ — dropped\n";
+  const green = (pr) => ({ pr, runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() });
   const items = [
-    { pr: prObj(1, { auto_merge: { merge_method: "merge" } }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
-    { pr: prObj(2, { body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
-    { pr: prObj(3, { body: "MERGE-HOLD: Bryce\n" }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
-    { pr: prObj(4), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
-    { pr: prObj(5), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() },
+    green(prObj(1, { auto_merge: { merge_method: "merge" } })),
+    green(prObj(2, { body })),
+    green(prObj(3, { labels: [{ name: "hold" }] })),
+    green(prObj(4)),
+    green(prObj(5)),
+    green(prObj(6, { body: "MERGE-HOLD: Bryce\n" })),
+    green(prObj(7, { labels: [{ name: "land" }, { name: "lane:claude" }] })),
   ];
   const r = evaluate(items);
-  assert.deepEqual(r.rows.map((x) => x.suggest), ["NONE", "WAIT", "WAIT", "ARM", "WAIT"],
-    "an open Plan and the hold wait; 1 armed + 1 ARM = MAX_ARMED");
+  assert.deepEqual(r.rows.map((x) => x.suggest), ["NONE", "WAIT", "WAIT", "LAND", "LAND", "LAND", "NONE"],
+    "an open Plan and the hold label wait; no cap on LAND; a legacy MERGE-HOLD: line vetoes nothing; land → NONE");
   assert.match(r.rows[1].why, /1 Plan item\(s\) are open/);
-  assert.match(r.rows[4].why, /2 PRs are already armed/);
+  assert.deepEqual([r.rows[2].hold, r.rows[5].hold, r.rows[5].mergeHold, r.rows[6].land], [true, false, true, true]);
   const lines = render(r).split("\n");
   assert.match(lines[2], /\s2\/3\s+WAIT$/, "two of three items closed (one ticked, one struck)");
   assert.match(lines[3], /WAIT \(HOLD\)$/);
+  assert.equal(lines[6].endsWith("LAND (MERGE-HOLD: legacy)"), true);
+  assert.deepEqual([lines[7].includes(" ready+land "), lines[7].endsWith(" NONE")], [true, true]);
 });
 
-
-
 // 2026-10-18 dry runs: the board said ARM for #2737 (ready-gate exit 1, plan-open)
-// and READY for #2789 (a MERGE-HOLD: line). Neither may fire on such a row.
-test("suggest: a MERGE-HOLD: body never yields ARM or READY, at any gate/ci state", () => {
+// and READY for #2789 (a hold). Neither may fire on such a row; the veto is now the `hold` label.
+test("suggest: the hold label never yields LAND or READY, at any gate/ci state", () => {
   for (const draft of [false, true]) {
     for (const ci of ["success", "in_progress", "queued", "none"]) {
       const row = { ...base, draft, ci, hold: true };
       const d = decide(row, ctx());
-      assert.ok(!["ARM", "READY"].includes(d.action), `${draft ? "draft" : "ready"} ci=${ci}: ${d.action}`);
+      assert.ok(!["LAND", "READY"].includes(d.action), `${draft ? "draft" : "ready"} ci=${ci}: ${d.action}`);
     }
     const green = decide({ ...base, draft, hold: true }, ctx());
     assert.equal(green.action, "WAIT");
-    assert.match(green.why, /MERGE-HOLD:/);
+    assert.equal(green.why.includes("hold label"), true);
   }
-  const body = "## Goal\nx\nMERGE-HOLD: waiting on Bryce\n";
-  const item = (draft) => ({ pr: prObj(1, { draft, body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() });
+  const item = (draft) => ({ pr: prObj(1, { draft, labels: [{ name: "hold" }] }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() });
   assert.equal(evaluate([item(true)]).rows[0].suggest, "WAIT", "#2789: no READY under a hold");
   assert.equal(evaluate([item(false)]).rows[0].suggest, "WAIT");
 });
 
-test("suggest: an open Plan item (ready-gate plan-open) never yields ARM", () => {
+test("suggest: an open Plan item (ready-gate plan-open) never yields LAND", () => {
   const open = { state: "open", items: 3, open: ["**now:** b"] };
   const d = decide({ ...base, plan: open }, ctx());
   assert.equal(d.action, "WAIT");
   assert.match(d.why, /Plan item\(s\) are open/);
-  assert.equal(suggest({ ...base, plan: { state: "done", items: 3, open: [] } }, ctx()), "ARM");
-  assert.equal(suggest({ ...base, plan: { state: "none", items: 0, open: [] } }, ctx()), "ARM", "no Plan: ready-gate only warns");
+  assert.equal(suggest({ ...base, plan: { state: "done", items: 3, open: [] } }, ctx()), "LAND");
+  assert.equal(suggest({ ...base, plan: { state: "none", items: 0, open: [] } }, ctx()), "LAND", "no Plan: ready-gate only warns");
   // #2737 end to end: the body is parsed by ready-gate's own planVerdict.
   const body = "## Plan\n- [x] a — sha\n- [ ] **now:** b\n";
   const r = evaluate([{ pr: prObj(2737, { body }), runs: [{ id: 1, status: "completed", conclusion: "success" }], jobs: fullJobs(), jobsRunId: 1, checkRuns: guard() }]);
@@ -367,7 +372,7 @@ test("--alarm: ready + green + no hold + no ci run for 12 h is a stall; drafts, 
   const old = "2026-10-25T20:00:00Z", fresh = "2026-10-26T10:00:00Z";
   const item = (n, over = {}, at = old, conclusion = "success") => ({ pr: prObj(n, over),
     runs: [{ id: n, status: "completed", conclusion, created_at: at }], jobs: fullJobs(), jobsRunId: n, checkRuns: guard() });
-  const r = evaluate([item(1), item(2, { draft: true }), item(3, { body: "MERGE-HOLD: Bryce\n" }), item(4, {}, old, "failure"), item(5, {}, fresh),
+  const r = evaluate([item(1), item(2, { draft: true }), item(3, { labels: [{ name: "hold" }] }), item(4, {}, old, "failure"), item(5, {}, fresh),
     item(6, { auto_merge: { merge_method: "merge" } })]);
   assert.equal(r.rows[0].ciAt, old, "the row carries the head run's created_at");
   assert.deepEqual(stalled(r.rows, { now }).map((x) => x.number), [1, 6]);

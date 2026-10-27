@@ -4,6 +4,7 @@
   "maxLaunchesPerRun": 4,
   "maxLiveWorkers": { "claude": 8, "cursor": 1 },
   "workerCostCapUsd": 10,
+  "workerStopAtK": 150,
   "staleHours": { "default": 2, "codex": 6 },
   "launchClaimHours": 2,
   "archiveAfterMinutes": 60,
