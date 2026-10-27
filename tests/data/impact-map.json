@@ -11351,6 +11351,7 @@
         "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
       "step": [
+        "tests/unit/damage.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
         "tests/unit/speed-coupling.test.mjs",
@@ -11766,6 +11767,23 @@
       "*": [
         "tests/unit/start-race-latch.test.mjs",
         "tests/unit/title-menu-even.test.mjs"
+      ]
+    },
+    "js/race/damage-handling.js": {
+      "factors": [
+        "tests/unit/damage.test.mjs"
+      ],
+      "forCar": [
+        "tests/unit/damage.test.mjs"
+      ],
+      "fromStore": [
+        "tests/unit/damage.test.mjs"
+      ],
+      "isEnabled": [
+        "tests/unit/damage.test.mjs"
+      ],
+      "setEnabled": [
+        "tests/unit/damage.test.mjs"
       ]
     },
     "js/race/damage.js": {
@@ -12472,6 +12490,7 @@
         "tests/unit/race-control.test.mjs"
       ],
       "setEnabled": [
+        "tests/unit/damage.test.mjs",
         "tests/unit/debris-step-skip.test.mjs",
         "tests/unit/race-control.test.mjs",
         "tests/unit/storm-weather.test.mjs"

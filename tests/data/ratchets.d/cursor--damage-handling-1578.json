@@ -1,0 +1,12 @@
+{
+  "files": {
+    "js/agent/apex.js": {
+      "codeLines": 3,
+      "lines": 4
+    }
+  },
+  "tree": {
+    "assertPins": -52,
+    "assertPinsAll": -58
+  }
+}

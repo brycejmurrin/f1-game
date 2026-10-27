@@ -348,6 +348,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `forecast.js` | `Forecast` | tag | WEATHER FORECAST (Forecast): what the pit wall KNOWS about a dynamic-weather race, as a timed, located-in-laps statement with honest uncertainty. |
+| `damage-handling.js` | `DamageHandling` | tag | DAMAGE → HANDLING (#1578): the ONE setting-gated read of the Damage readout (js/race/damage.js) that reaches the driving model. |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
 | `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
 | `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
