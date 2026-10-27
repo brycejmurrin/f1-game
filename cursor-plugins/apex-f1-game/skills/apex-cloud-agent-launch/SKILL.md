@@ -34,4 +34,4 @@ Use when launching a Cursor cloud agent for the Apex (f1-game) repo.
 - Tell the user with agent URL + cursor-agent card.
 - FYI the owning specialty bot (priority false) with bc id + title.
 - Do not launch a twin for the same PR/task; `reply` to the existing agent instead.
-- Stall abort: 0 tools after 5–10 min, or <15 tools and no OWNED-path push past 10 min → cancel, alert owning lane + orchestrator.
+- Stall abort: 0 tools after 5–10 min, or <15 tools and no OWNED-path push past 10 min → cancel, alert the owning lane (`needs-owner` on its PR; docs/WORKERS.md).

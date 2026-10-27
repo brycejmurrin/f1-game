@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "Use when the user says ship it, push this, push to the deploy branch, open the draft PR, mark it ready or send READY. Lands via PR."
+description: "Use when the user says ship it, push this, push to the deploy branch, open the draft PR, mark it ready or land it. Lands via PR."
 user-invocable: true
 ---
 
@@ -20,7 +20,7 @@ docs/WORKERS.md). A direct deploy-branch push is refused by branch protection.
 2. **Verify** with `check-changes`: `node tools/ci/pick-tests.mjs`, then
    `tooling-fast --changed --jobs=3` plus the picked group, or the docs-only fast path;
    `node tools/ci/deploy.mjs --gate-only` before a code push.
-3. **Push** once per green cycle; refresh the Plan and Status (`run-ci` label, or a body line starting `CI: run`, for draft CI).
+3. **Push** once per green cycle; refresh the Plan and Hand-off block (`run-ci` label, or a body line starting `CI: run`, for draft CI).
 4. **Gate**: `node tools/ci/ready-gate.mjs --pr <n>` exit 0 on the head you are about to flip.
 5. **Land**: flip the PR ready, add the `land` label, refresh the body's Hand-off block (docs/WORKERS.md).
    `land.yml` runs the `gate` check and arms auto-merge; the session's work ends here. A red on your head

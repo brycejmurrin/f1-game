@@ -36,7 +36,7 @@ stayed separate in the 2026-09-03 pass.
 | **audio-debug** | Engine sounds flat at high speed, sfx not triggering, gear-shift audio wrong, music cuts out, WebAudio debugging. |
 | **career-mode** | DRIVER CAREER, MY TEAM, career saves, contracts, sponsors, R&D economy, career qualifying, reliability/DNFs. |
 | **check** | `/check` (phone verb): one ≤ 5-line status — `session-status.mjs --pr`, `ci-watch.mjs --once`, a live `test-bg` run, live sha + ancestor-of-live. Read-only. |
-| **ship** | `/ship` ("push", "push to the deploy branch"): check-changes → `deploy.mjs --pr` or push + draft PR with `run-ci` → `ready-gate` → READY to the fleet's orchestrator; "skip the gate" goes in the PR body. Never merges. |
+| **ship** | `/ship` ("push", "push to the deploy branch"): check-changes → `deploy.mjs --pr` or push + draft PR with `run-ci` → `ready-gate` → flip ready + `land` label (GitHub lands it); "skip the gate" goes in the PR body. Never merges. |
 | **handoff** | `/handoff`: a paste-ready cold-start prompt (repo, branch + sha verified on the remote, PR, Plan, skills); never a repo-root HANDOFF file. |
 | **check-changes** | Pre-push validation — `verify-change.mjs --fast` / `--plan` + batched `test-bg`; generated shell/cache policy (`references/bump.md`), a Playwright timeout triage (`references/triage.md`), the deploy gate's mechanics (`references/deploy.md`). Landing on the deploy branch is ship. |
 | **css-play** | Iterating on one menu/HUD stylesheet — host localhost, open a screen, dump DOM, hot-swap `css/`, screenshot (`tools/ui/css-play.mjs` / `playwright-mcp.sh play|dom`); restructuring screens/DOM/the class-token system, and whether a CSS methodology is worth adopting (`references/restructure.md`). |
