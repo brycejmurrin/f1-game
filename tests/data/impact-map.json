@@ -217,6 +217,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
+        "tests/unit/ratchets.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
@@ -892,6 +893,9 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
+      "hasVoiceFor": [
+        "tests/unit/radio-voice.test.mjs"
+      ],
       "inert": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -920,6 +924,12 @@
         "tests/unit/pause-silence.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
+      ],
+      "spoken": [
+        "tests/unit/announcer.test.mjs"
+      ],
+      "spokenLang": [
+        "tests/unit/radio-voice.test.mjs"
       ],
       "squelchPlan": [
         "tests/unit/radio-voice.test.mjs"
@@ -4829,13 +4839,18 @@
     },
     "js/core/i18n.js": {
       "_installCatalog": [
-        "tests/unit/i18n.test.mjs"
+        "tests/unit/i18n.test.mjs",
+        "tests/unit/race-radio.test.mjs"
       ],
       "_resetForTest": [
-        "tests/unit/i18n.test.mjs"
+        "tests/unit/i18n.test.mjs",
+        "tests/unit/race-radio.test.mjs"
       ],
       "boot": [
         "tests/unit/i18n.test.mjs"
+      ],
+      "date": [
+        "tests/unit/race-radio.test.mjs"
       ],
       "pluralCategories": [
         "tests/unit/i18n.test.mjs"
@@ -8869,6 +8884,7 @@
         "tests/specs/steer-migration.spec.js"
       ],
       "lockFromSlider": [
+        "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs"
       ],
       "matchPreset": [
@@ -8891,7 +8907,6 @@
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -10069,7 +10084,8 @@
       ],
       "*": [
         "tests/specs/image-grade-visual.spec.js",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/tooling-fast-runner.test.mjs"
       ]
     },
     "js/perf/gpu-test-run.js": {
@@ -12245,7 +12261,8 @@
       "*": [
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/race/quali-model.js": {
@@ -13169,6 +13186,9 @@
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
+      "dryLine": [
+        "tests/unit/weather-arc-rain.test.mjs"
+      ],
       "endSession": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/storm-weather.test.mjs",
@@ -13215,7 +13235,8 @@
       ],
       "syncWetness": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
-        "tests/unit/rain-cells.test.mjs"
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "tick": [
         "tests/unit/forecast.test.mjs",
@@ -13279,6 +13300,9 @@
       ],
       "vmaxMul": [
         "tests/unit/wind.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/render/gfx.js": {
@@ -16338,7 +16362,8 @@
         "tests/unit/hud-inputs.test.mjs"
       ],
       "*": [
-        "tests/unit/a11y-opts.test.mjs"
+        "tests/unit/a11y-opts.test.mjs",
+        "tests/unit/cvd-palette.test.mjs"
       ]
     },
     "js/ui/hud-layout.js": {
@@ -16433,6 +16458,7 @@
         "tests/unit/hud-minimap-pitmark.test.mjs"
       ],
       "*": [
+        "tests/unit/cvd-palette.test.mjs",
         "tests/unit/hud-metrics-layout.test.mjs"
       ]
     },
@@ -17734,6 +17760,7 @@
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/cvd-palette.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]
