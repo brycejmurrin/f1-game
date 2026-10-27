@@ -34,7 +34,7 @@ surface without hand-wiring:
 | Claude stub | `CLAUDE.md` | Must stay a one-line import; never duplicate rules. |
 | Skills (canonical) | `.claude/skills/*/SKILL.md` | Yes for Claude Code + Cursor (compat). Do **not** copy into `.cursor/skills/`. |
 | Skills (Codex mirror) | `.agents/skills/<name>` → `../../.claude/skills/<name>` | Yes. Codex scans `.agents/skills` (symlinks OK — OpenAI docs). Keep lockstep; never fork bodies. |
-| Personas / subagents | `.claude/agents/*.md` | Claude and Cursor load these directly. Codex hosts may expose collaboration agents; when they do not, use the same persona contracts through launch prompts and `AGENTS.md`. Never create a second Codex persona tree. |
+| Personas / subagents | `.claude/agents/*.md` → `.codex/agents/*.toml` | Claude and Cursor load the `.md` directly. Codex loads project custom agents from `.codex/agents/*.toml` (required `name`, `description`, `developer_instructions`; optional `model_reasoning_effort`); `npm run gen` writes them from the `.md` (`tools/gen/gen-codex-agents.mjs`, lockstep in `agent-config.test.mjs`), so there is still one persona source. Never hand-edit a `.toml`. |
 | MCP catalog | `.mcp.json` + `.cursor/mcp.json` | Lockstep (unit-tested). Desktop Cursor loads them; Cloud often does not. |
 | Codex MCP | `.codex/config.toml` | Project `[mcp_servers.*]` lockstepped to `.mcp.json`. Loads only when the project is **trusted**; user overrides may live in `~/.codex/config.toml`. |
 | Claude MCP approve | `.claude/settings.json` → `enabledMcpjsonServers` | Lists the six catalog servers so Claude Code auto-approves project `.mcp.json` **after** workspace trust. Ignored until the trust dialog is accepted (Claude Code ≥2.1.196). |
@@ -42,12 +42,18 @@ surface without hand-wiring:
 | Cursor entry | `.cursor/rules/apex-shared.mdc` | Always-on pointer at AGENTS / skills / MCP. |
 | Guard hooks | `.claude/settings.json` hooks; `.cursor/hooks.json`; `.codex/hooks.json` | Yes. One rule set, two doors: Claude runs `.claude/hooks/bash-guard.sh` and `protect-files.sh`; Cursor reaches the same scripts through `.cursor/hooks/shell-guard.sh` (`beforeShellExecution`), `edit-guard.sh` (`preToolUse` with no matcher: the script picks the file writes and deletes, since Cursor's edit tool names are undocumented) and `mcp-guard.sh`, each answering in Cursor's `permission` JSON ([hooks](https://cursor.com/docs/agent/hooks), [tool map](https://cursor.com/docs/reference/third-party-hooks)). The shared safety bans (2026-10-22): no hand ratchet raise, no edit to another branch's `tests/data/ratchets.d` fragment, no push over a foreign pusher, no `pkill -f` (`tests/unit/safety-bans-hook.test.mjs`). |
 
-**Codex collaboration adapter.** When the Codex host exposes collaboration
-agents, read the named `.claude/agents/<persona>.md` and its skill, then launch
-the task with an explicit persona label, OWNED paths, forbidden actions,
-allowed tools, and the required hand-back format. Claude frontmatter such as
-`readonly`, `tools`, `background` and `model` is reference metadata in Codex;
-repeat the safety limits in the launch prompt. Keep Merge Desk authority with
+**Codex custom agents.** Codex spawns a repo role by its `name`
+(`.codex/agents/<name>.toml`, the generated twin of `.claude/agents/<name>.md`);
+`[agents] max_concurrent_threads_per_session = 6` in `.codex/config.toml` caps
+one session at the fleet's 3–6 workers
+([subagents](https://learn.chatgpt.com/docs/agent-configuration/subagents),
+read 2026-10-26). The generator maps the Claude `model:` tier to
+`model_reasoning_effort` (haiku low, sonnet medium, opus high, inherit
+omitted) and opens a `readonly: true` role with a read-only line: Codex has no
+per-agent read-only sandbox and subagents inherit the parent's sandbox and
+approvals, so Claude's `tools`, `disallowedTools` and `background` stay
+reference metadata. Launch a role with OWNED paths, forbidden actions and the
+hand-back format in the prompt, and repeat the safety limits there. Keep Merge Desk authority with
 the explicitly designated parent session. Delegate bounded read-only evidence
 work (for example `deploy-research`), never ready/arm/merge authority.
 

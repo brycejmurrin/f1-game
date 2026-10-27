@@ -317,7 +317,8 @@ test("every custom subagent declares name, description, and model", () => {
   assert.deepEqual(files.sort(), [
     "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
     "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md", "worker.md",
-  ], "eleven agents since 2026-10-26 (ci-watcher and merge-desk deleted with the retired Merge Desk; release-auditor → deploy-research; worker 2026-10-15; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+    "ui-auditor.md", "perf-auditor.md", "diff-reviewer.md",
+  ].sort(), "fourteen agents since 2026-10-26 (ui-auditor, perf-auditor, diff-reviewer 2026-10-26 for Codex parity; ci-watcher and merge-desk deleted with the retired Merge Desk; release-auditor → deploy-research; worker 2026-10-15; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
@@ -332,6 +333,9 @@ test("every custom subagent declares name, description, and model", () => {
     // 2026-10-15: the all-tools implementation worker runs on the session's
     // model, like track-surveyor — it writes code, so no cheaper tier.
     "worker.md": "inherit",
+    // 2026-10-26 (Codex parity W4): read-only reporters take the low tier;
+    // diff-reviewer judges claims against code like finding-verifier.
+    "ui-auditor.md": "haiku", "perf-auditor.md": "haiku", "diff-reviewer.md": "sonnet",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
@@ -424,7 +428,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 
 test("readonly review agents stay --fast and never start Playwright", () => {
   for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage",
-    "code-hunter", "finding-verifier", "prior-art-scout"]) {
+    "code-hunter", "finding-verifier", "prior-art-scout", "ui-auditor", "perf-auditor", "diff-reviewer"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");

@@ -11,12 +11,20 @@
 You own one task and its OWNED globs, from plan to merged. The orchestrator is
 your only escalation path besides the user; ask it instead of guessing.
 
+Your brief names **DONE WHEN** (the exact check that proves the task, green on
+the PR head) and **STOP** (when to stop and hand back instead of pushing on: a
+decision only Bryce makes, a path outside OWNED, the size stop). A brief
+without either: ask the orchestrator for it before the first edit.
+
 ## The loop
 
 1. **Claim and plan.** `node tools/ci/who-is-on-it.mjs`, then
    `--claim "<task>" --session <id>` (`--session` is needed when no
    `APEX_SESSION_ID`/`CODEX_THREAD_ID`/Claude session variable is set; reuse
-   the same id for `--release`). New work: branch `cursor/<topic>-<hash>` from
+   the same id for `--release`). Dedupe before the first edit: open PRs and
+   claims for each issue (`who-is-on-it.mjs`, `fleet-owner.mjs <paths>`, PRs
+   that mention the issue number); another fleet's or agent's draft on it →
+   stop and report, never race it. New work: branch `cursor/<topic>-<hash>` from
    the deploy branch. An existing PR: `references/existing-pr.md` instead.
    `node tools/ci/pick-tests.mjs` for the groups the change needs. At the
    FIRST commit push and open the DRAFT PR (GitHub MCP `create_pull_request`,
@@ -31,7 +39,12 @@ your only escalation path besides the user; ask it instead of guessing.
    group (`test-bg.mjs`, or `remote-group.mjs` on the pushed branch for a whole
    group). Never use hand-written `sleep`, `while`/`for` poll loops, or any
    foreground wait over 120 s — use `test-bg.mjs --wait` with `--timeout`
-   (minutes) as a background task only.
+   (minutes) as a background task only. Never pipe `ready-gate.mjs` /
+   `merge-gate.mjs` (`| tail` hides the exit code). While a suite, CI or a
+   browser run waits, keep working inside OWNED: the next item in a linked
+   worktree (`EnterWorktree`), read-only checks handed to ≤ 2 subagents
+   (agents `finding-verifier`, `code-hunter`, `verify-agent`, `diff-reviewer`);
+   never a subagent browser run, one browser group per box.
 4. **Screenshot** UI and visual claims with `playwright-probe` /
    `survey-ui-matrix` / `tools/shot/hud-survey.mjs`, at phone landscape 844x390
    with touch first. Numbers first (overlap px², findings), 2–4 images per PR.

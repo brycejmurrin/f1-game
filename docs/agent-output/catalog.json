@@ -1783,6 +1783,16 @@
       ]
     },
     {
+      "path": "tools/gen/gen-codex-agents.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "targeted-summary",
+      "interpreter": "node",
+      "npmScripts": [
+        "gen",
+        "gen:check"
+      ]
+    },
+    {
       "path": "tools/gen/gen-cursor-rules.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -3938,11 +3948,11 @@
     },
     {
       "name": "gen",
-      "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && node tools/gen/gen-cursor-rules.mjs && npm run gen:docs"
+      "command": "node tools/gen/gen-circuit-meta.mjs && node tools/gen/gen-shell.mjs && node tools/gen/title-art.mjs && node tools/gen/gen-test-groups.mjs && node tools/gen/gen-cursor-rules.mjs && node tools/gen/gen-codex-agents.mjs && npm run gen:docs"
     },
     {
       "name": "gen:check",
-      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check"
+      "command": "node tools/gen/gen-circuit-meta.mjs --check && node tools/gen/gen-shell.mjs --check && node tools/gen/title-art.mjs --check && node tools/gen/gen-test-groups.mjs --check && node tools/gen/gen-cursor-rules.mjs --check && node tools/gen/gen-codex-agents.mjs --check && node tools/gen/gen-tools-readme.mjs --check && node tools/gen/gen-slider-doc.mjs --check && node tools/gen/gen-hooks-table.mjs --check && node tools/gen/gen-flags-table.mjs --check && node tools/gen/gen-arch-table.mjs --check && node tools/docs/gen-coverage-table.mjs --check && node tools/docs/gen-agent-index.mjs --check && node tools/gen/gen-output-surface.mjs --check && node tools/gen/gen-locales.mjs --check && node tools/gen/gen-changelog.mjs --check"
     },
     {
       "name": "gen:docs",

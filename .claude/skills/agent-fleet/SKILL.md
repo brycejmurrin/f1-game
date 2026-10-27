@@ -46,7 +46,15 @@ Read your role's reference before acting:
   cost real sessions.
 - **In-session worker subagent** (the Agent tool inside ONE session, not a
   sibling session) → agent `worker` (`.claude/agents/worker.md`): all tools,
-  its own worktree, `SendMessage` to `main` or a named peer mid-task.
+  its own worktree, `SendMessage` to `main` or a named peer mid-task. "Use N
+  subagents / plugins" on a multi-part task means: (1) split it into disjoint
+  OWNED areas; (2) read-only finders per area (agents `code-hunter`,
+  `ui-auditor`, `perf-auditor`) with a stop round — at most 3 rounds, stop at
+  the first round with nothing new; (3) one numbered fix list, checked by agent
+  `finding-verifier`; (4) in the same turn, `worker`s implement the top items,
+  3–6 concurrent, one per disjoint OWNED set, and agent `diff-reviewer` checks
+  each branch against its claims before it merges. The parent never blocks on
+  a worker (`.claude/agents/README.md`).
 - **Many hosts at once** (Claude on two accounts, Codex, Cursor: fleet letters, computed
   path ownership, RELEASE?, the PR-comment mirror, who merges a PR whose host cannot) →
   [`references/multi-host.md`](references/multi-host.md).

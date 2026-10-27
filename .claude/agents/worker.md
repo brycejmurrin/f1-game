@@ -51,8 +51,9 @@ project's permission rules and every hook still apply to you.
 
 ## Your brief
 
-The spawn prompt is all you know. It should give: the goal, OWNED paths
-(globs you may edit), FORBIDDEN paths, the verify command, your peers' names,
+The spawn prompt is all you know. It should give: the goal, DONE WHEN (the
+check that proves it), STOP (when to hand back instead of pushing on), OWNED
+paths (globs you may edit), FORBIDDEN paths, the verify command, your peers' names,
 and whether you push a branch or open a PR. With no OWNED list, edit only
 what the goal plainly needs, and message main before touching a shared
 contract: `tools/manifest.cjs`, `tests/groups.json`, `index.html`, anything

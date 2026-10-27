@@ -12,6 +12,7 @@ restated. Tools are the `claude-code-remote` MCP: `send_message`,
 
 - Authority (the rule everything else hangs on)
 - Messaging
+- Wake messages
 - Incident broadcast
 - Output budget (2026-10-19)
 - PR subscription
@@ -84,6 +85,23 @@ every HANDOFF/DONE. The child prompt is a full standalone brief (it sees no
 parent context): goal, PR numbers, branch, OWNED/FORBIDDEN paths, what is
 delegated, and "follow `references/role-pr-owner.md` §The steward loop". Point to the
 skill, do not retype its rules.
+
+## Wake messages
+
+A wake message is the text a timer replays into a session later
+(`send_later`, a scheduled task's prompt, Cursor `subscribe_timer`). It lands
+cold, often after compaction, so it points at the durable state instead of
+carrying it:
+
+- ≤ 300 characters: PR number, head sha, then "read the PR body Plan/Status,
+  then `ci-watch --once`". Example:
+  `Wake: PR #<n> head <sha7>. Read the PR body Plan/Status, then node tools/ci/ci-watch.mjs --sha <head> --once and act on the = ci line.`
+- Replace, never append: each re-arm writes a fresh message with the current
+  head (`update_trigger` replaces a recurring prompt); never add "also …" to
+  the last one, which replays stale orders.
+- No grants and no CI verdicts: a grant is typed by Bryce in the acting
+  session (fleet-core), never carried by a timer, and "CI is green" is stale
+  by the time it fires.
 
 ## Incident broadcast
 

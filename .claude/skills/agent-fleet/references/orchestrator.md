@@ -85,6 +85,7 @@ GOAL: <one sentence, the user's terms>
       (existing PR: add "CONTINUE PR #<n> on <branch>", references/existing-pr.md)
 OWNED: <globs>          FORBIDDEN: <globs>
 DONE WHEN: <exact verify command or measured check, green on the PR head>
+STOP: <when to hand back instead of pushing on: a decision only the user makes, a path outside OWNED>
 CAPS: ≤ <n> screenshots/captures (default 25); ≤ 2 nested subagents; abort at
       ~400 messages or ~90 min with no OWNED push and say so.
 ORCHESTRATOR: fleet <X> (resolve: node tools/ci/fleet-bus.mjs who X; the id that launched you is a hint only)
@@ -99,19 +100,10 @@ DELIVERABLES: <the full checklist: every section, weather/frame, doc, merge step
 PUSH: when your own cycle is green, and before any browser run or wait over ~10 min.
 REPORT: to fleet <X>'s orchestrator, only READY <PR> <head sha> | BLOCKED <PR> <question> |
       DONE <PR> (agent-msg.mjs; words: SKILL.md §Glossary); never a HANDOFF for progress.
-WAIT: a suite over ~2 min runs in the background (AGENTS.md rule 4: test-bg.mjs, tooling-fast,
-      deploy --gate-only → artifacts/logs/), never a foreground block; CI is a subscription
-      plus one timer, then end the turn. Never pipe ready-gate/merge-gate (`| tail` hides the exit).
-PARALLEL: while CI or a browser run waits, keep working inside OWNED: start the
-      next item in a linked worktree (EnterWorktree), and hand read-only checks to
-      ≤ 2 subagents (finding-verifier, code-hunter, verify-agent). Never give a
-      subagent a browser run; one browser group per box.
+LOOP: references/worker.md §The loop is the contract for dedupe, waiting, parallel work and
+      verify (do not paste it here).
 NEXT: <the ordered queue of items after the first, all inside OWNED and USER GRANTS>
       (a lane with nothing named idles: hard line 8).
-DEDUPE: before the first edit, list open PRs and claims for each issue
-      (`who-is-on-it.mjs`, `fleet-owner.mjs <paths>`, PRs that mention the issue
-      number). Another fleet or agent's draft on it → stop and report; never
-      race it.
 Never @-mention @cursor on GitHub: it wakes that PR's Cursor agent.
 Load skill agent-fleet and follow references/worker.md.
 Open a DRAFT PR; keep its fleet block current.

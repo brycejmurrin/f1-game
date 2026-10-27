@@ -6,6 +6,23 @@ user-invocable: true
 
 # /handoff — a paste-ready cold-start prompt
 
+Two shapes, both answered in chat in one code block; when you stop, that block
+is your last message (never only a file, a PR comment or a link). Continuing
+the same work: steps 1–4 below. Starting NEW work in a fresh session: the
+fresh-task shape, ≤ 25 lines, with no tool lists (the host knows its tools and
+a list goes stale) and no pasted rules (AGENTS.md loads itself):
+
+```text
+Repo brycejmurrin/f1-game, base <branch or deploy tip>, new branch cursor/<topic>-<hash>.
+GOAL: <one sentence, the outcome in the user's terms>
+WHY: <the ask or evidence, with a link>
+OWNED: <globs>   FORBIDDEN: <globs>
+DONE WHEN: <the exact check that proves it, e.g. a command and its verdict line>
+STOP: <when to hand back instead: a decision only Bryce makes, a path outside OWNED>
+START: load skill <name>; first command <…>
+GRANTS: <the user's words quoted with their time, or none>
+```
+
 A new session starts with no memory and an unfetched branch, so the prompt
 carries everything it needs. Output it in chat in one code block. Never write a
 `HANDOFF` file to the repo root: a cold clone cannot see it.

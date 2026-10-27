@@ -233,6 +233,46 @@ test("Claude rules generate Cursor .mdc twins (gen-cursor-rules owns the mirror)
   assert.doesNotMatch(read("AGENTS.md"), /sampleCount/, "the WGSL rules moved to .claude/rules/render-wgx.md");
 });
 
+test("Claude agents generate Codex .toml twins (gen-codex-agents owns the mirror)", () => {
+  // Codex custom agents: standalone TOML under .codex/agents/ with required
+  // name, description, developer_instructions; optional model_reasoning_effort
+  // (https://learn.chatgpt.com/docs/agent-configuration/subagents, read 2026-10-26).
+  // Source of truth is .claude/agents/<name>.md; a hand-edited or missing twin
+  // fails here and in gen:check.
+  const r = spawnSync(process.execPath, ["tools/gen/gen-codex-agents.mjs", "--check"], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  const agents = fs.readdirSync(path.join(ROOT, ".claude/agents")).filter((f) => f.endsWith(".md") && f !== "README.md")
+    .map((f) => f.replace(/\.md$/, "")).sort();
+  const twins = fs.readdirSync(path.join(ROOT, ".codex/agents")).filter((f) => f.endsWith(".toml"))
+    .map((f) => f.replace(/\.toml$/, "")).sort();
+  assert.deepEqual(twins, agents, ".codex/agents must hold exactly one twin per .claude/agents/*.md");
+  const effort = { haiku: "low", sonnet: "medium", opus: "high" };
+  // A real TOML parse (python3 tomllib) when python3 is present; the schema
+  // assertions below need the parsed values.
+  const py = spawnSync("python3", ["-I", "-c",
+    "import sys,tomllib,json; print(json.dumps({a: tomllib.load(open(a,'rb')) for a in sys.argv[1:]}))",
+    ".codex/config.toml", ...twins.map((n) => `.codex/agents/${n}.toml`)], { cwd: ROOT, encoding: "utf8" });
+  if (py.error) return; // no python3: --check above still pins the bytes
+  assert.equal(py.status, 0, `a generated .toml does not parse as TOML:\n${py.stderr}`);
+  const parsed = JSON.parse(py.stdout);
+  for (const n of twins) {
+    const t = parsed[`.codex/agents/${n}.toml`];
+    const src = read(`.claude/agents/${n}.md`);
+    const head = src.match(/^---\n([\s\S]*?)\n---\n?/);
+    const fm = parseYAML(head[1]);
+    assert.equal(t.name, n, `${n}: name`);
+    assert.ok(t.description && t.developer_instructions, `${n}: description and developer_instructions are required`);
+    assert.equal(t.model_reasoning_effort, effort[fm.model], `${n}: tier ${fm.model} maps to effort ${effort[fm.model]}`);
+    assert.equal(t.model, undefined, `${n}: no Claude model id in a Codex twin`);
+    assert.equal(t.developer_instructions.startsWith("READ-ONLY ROLE:"), fm.readonly === true,
+      `${n}: exactly the readonly agents open with the read-only line`);
+    const body = src.slice(head[0].length).replace(/^\n+/, "").replace(/\s+$/, "") + "\n";
+    assert.equal(t.developer_instructions.endsWith(body), true, `${n}: the whole .md body is the tail of developer_instructions`);
+  }
+  assert.equal(parsed[".codex/config.toml"].agents?.max_concurrent_threads_per_session, 6,
+    "Codex thread cap matches the fleet's 3-6 concurrent workers");
+});
+
 test("settings.json registers the hooks that enforce the rules, and each hook exists", () => {
   const settings = JSON.parse(read(".claude/settings.json"));
   const commands = [];
