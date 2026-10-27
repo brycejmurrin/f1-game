@@ -5522,6 +5522,29 @@
         "tests/unit/load-order.test.mjs"
       ]
     },
+    "js/data/ics.js": {
+      "build": [
+        "tests/unit/data-ics.test.mjs"
+      ],
+      "fileName": [
+        "tests/unit/data-ics.test.mjs"
+      ],
+      "fold": [
+        "tests/unit/data-ics.test.mjs"
+      ],
+      "octets": [
+        "tests/unit/data-ics.test.mjs"
+      ],
+      "place": [
+        "tests/unit/data-ics.test.mjs"
+      ],
+      "text": [
+        "tests/unit/data-ics.test.mjs"
+      ],
+      "trigger": [
+        "tests/unit/data-ics.test.mjs"
+      ]
+    },
     "js/data/legends.js": {
       "liveries": [
         "tests/unit/legends.test.mjs"
@@ -5731,6 +5754,9 @@
       ],
       "weekendSessions": [
         "tests/unit/data-schedule-tz.test.mjs"
+      ],
+      "*": [
+        "tests/unit/data-ics.test.mjs"
       ]
     },
     "js/data/settings-defaults.js": {

@@ -385,6 +385,7 @@
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
+    "js/data/ics.js",
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
@@ -430,6 +431,10 @@
     ],
     [
       "js/data/schedule.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/ics.js",
       "js/data/hub.js"
     ],
     [

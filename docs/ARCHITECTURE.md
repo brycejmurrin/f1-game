@@ -182,6 +182,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `telemetry.js` | `DataTelemetry` | LAZY_DATA | telemetry tab controller: selection, async lap loading and popup lifecycle. |
 | `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |
 | `schedule.js` | `DataSchedule` | LAZY_DATA | — (no header comment) |
+| `ics.js` | `DataIcs` | LAZY_DATA | the Schedule tab's calendar export: an RFC 5545 VCALENDAR string built from the cached Jolpica schedule. |
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
 | `results.js` | `DataResults` | LAZY_DATA | the data hub's RESULTS tab: classification for ANY session of any 2023+ weekend (practice, qualifying, sprint, race), not just the latest Grand Prix. |
 | `live.js` | `DataLive` | LAZY_DATA | the data hub's LIVE tab: polls OpenF1 for the running session's positions/gaps/weather. mergePositionBatch/mergeIntervalBatch fold a delta batch onto… |
