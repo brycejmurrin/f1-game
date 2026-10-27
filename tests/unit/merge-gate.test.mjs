@@ -15,8 +15,9 @@ import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, MAX_BEHIND, ROWS, openVerdict, holdVerdict, planRow, ciVerdict, isGamePath, gameFiles,
   gameMergesBehind, distanceVerdict, baseHistory, distanceFor, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main,
-  untrustedEnv,
+  untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor,
 } from "../../tools/ci/merge-gate.mjs";
+import { parse as parseYAML } from "yaml";
 import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -166,16 +167,19 @@ test("two PRs each at the assert-match ceiling alone are over it on the merge re
 /** A fake GitHub plus fake merge and distance for the evaluator; `pull` and `checks` are mutable per case. */
 function fakes() {
   const pull = { state: "open", draft: false, labels: [], head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
-  const checks = [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success" }];
+  const checks = [{ id: 1, name: "Structural guards", status: "completed", conclusion: "success" }, { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "success", check_suite: { id: 50 } }];
+  const runs = [{ id: 500, check_suite_id: 50, path: ".github/workflows/ci.yml" }];
   const calls = [];
   const request = (p) => {
     if (p === "pulls/7") return { json: pull };
     if (p.startsWith("commits/")) return { json: { check_runs: checks, total_count: checks.length } };
+    if (p.startsWith(`actions/workflows/ci.yml/runs?head_sha=${HEAD}`)) return { json: { workflow_runs: runs, total_count: runs.length } };
     return { error: `unexpected ${p}` };
   };
   const localMerge = (a) => { calls.push(a); return { ok: true, evidence: "merges clean", tip: TIP, ratchets: { ok: true, evidence: "hold" } }; };
   const distance = ({ max }) => ({ row: { ok: max >= 1, evidence: `1 game merge(s) (max ${max})` }, mergeBase: sha(5) });
-  return { pull, checks, calls, deps: { request, root: "/nowhere", localMerge, distance } };
+  const fetchTip = (a) => { calls.push({ fetch: a }); return { tip: TIP }; };
+  return { pull, checks, runs, calls, deps: { request, root: "/nowhere", localMerge, distance, fetchTip } };
 }
 
 test("evaluate: all rows in order; each failing row refuses on its own; the local rows wait for an open PR; API errors are errors, not rows", () => {
@@ -397,4 +401,135 @@ test("ciVerdict: only the GitHub Actions app's `CI` counts; a same-named check f
   const f = fakes();
   f.checks[1].app = { slug: "not-actions" };
   assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"]);
+});
+
+// ---- WP-L3e: the ci row reads ci.yml's own `CI`, not any Actions check-run of that name -------------------------
+
+test("ciVerdict pinned to ci.yml: a `CI` check-run in another workflow's suite is ignored, ci.yml's newest attempt decides", () => {
+  assert.equal(CI_WORKFLOW, "ci.yml");
+  const real = { id: 2, name: "CI", app: GHA, status: "completed", conclusion: "failure", check_suite: { id: 50 } };
+  const rogue = { id: 9, name: "CI", app: GHA, status: "completed", conclusion: "success", check_suite: { id: 77 } };
+  assert.equal(ciVerdict([real, rogue], "CI", CI_APP, new Set([50])).ok, false, "a newer green `CI` from another workflow does not hide ci.yml's red");
+  assert.equal(ciVerdict([rogue], "CI", CI_APP, new Set([50])).pending, true, "no ci.yml `CI` yet is waiting");
+  assert.equal(ciVerdict([real, { ...real, id: 3, conclusion: "success" }], "CI", CI_APP, new Set([50])).ok, true);
+  const f = fakes();
+  f.checks.push(rogue); f.checks[1].conclusion = "failure";
+  assert.deepEqual(ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps }).rows[k].ok), ["ci"], "evaluate pins the row to ci.yml's suites");
+  f.checks[1].conclusion = "success"; f.runs[0].path = ".github/workflows/other.yml";
+  assert.equal(evaluate({ pr: 7, ...f.deps }).rows.ci.pending, true, "a run whose path is not ci.yml contributes no suite");
+});
+
+test("ciSuitesFor: the ci.yml runs on the head (path re-checked, a ref suffix tolerated); an API error is an error", () => {
+  const seen = [];
+  const req = (p) => { seen.push(p); return { json: { workflow_runs: [{ check_suite_id: 1, path: ".github/workflows/ci.yml" }, { check_suite_id: 2, path: ".github/workflows/ci.yml@refs/heads/x" }, { check_suite_id: 3, path: ".github/workflows/land.yml" }] } }; };
+  assert.deepEqual([...ciSuitesFor(HEAD, req).suites].sort(), [1, 2]);
+  assert.equal(seen[0], `actions/workflows/ci.yml/runs?head_sha=${HEAD}&per_page=100`);
+  assert.equal(ciSuitesFor(HEAD, () => ({ error: "HTTP 403" })).error, "HTTP 403");
+});
+
+// ---- WP-L2: --trusted runs no PR code; post takes open/hold/plan/ci/distance from it, never from the artifact -----
+
+test("--trusted: only the rows no PR code decides, no throw-away merge, distance on the fetched tip", () => {
+  assert.deepEqual([...TRUSTED_ROWS], ["open", "hold", "plan", "ci", "distance"]);
+  const f = fakes();
+  const v = evaluate({ pr: 7, ...f.deps, trusted: true });
+  assert.equal(v.ok, true, JSON.stringify(v.rows));
+  assert.deepEqual(Object.keys(v.rows), TRUSTED_ROWS);
+  assert.equal(v.tip, TIP);
+  assert.deepEqual(f.calls, [{ fetch: { pr: 7, head: HEAD, headRef: "cursor/x", cwd: "/nowhere", base: "deploy-x" } }], "a fetch only: localMerge (the PR's scripts) never runs");
+  f.pull.body = "## Plan\n- [ ] still open\n";
+  assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true }).rows[k].ok), ["plan"]);
+  f.pull.body = "";
+  assert.deepEqual(TRUSTED_ROWS.filter((k) => !evaluate({ pr: 7, ...f.deps, trusted: true, maxBehind: 0 }).rows[k].ok), ["distance"]);
+  assert.equal(evaluate({ pr: 7, ...f.deps, trusted: true, fetchTip: () => ({ error: "fetch deploy-x failed: x" }) }).error, "fetch deploy-x failed: x");
+  const logs = [];
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: (l) => logs.push(l) }), 0);
+  assert.equal(logs.at(-1), `= merge-gate passed — open=ok hold=ok plan=ok ci=ok distance=ok pr=#7 sha=${HEAD} tip=${TIP}`);
+  f.checks[1].status = "in_progress";
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--trusted"], { ...f.deps, log: () => {} }), 3, "CI running is waiting");
+});
+
+// ---- WP-L1 / WP-L3: land.yml's trust shape and its logic, read from the parsed workflow and executed ------------
+
+const LAND = parseYAML(fs.readFileSync(path.join(ROOT, ".github/workflows/land.yml"), "utf8"));
+const DEPLOY_BRANCH = "claude/f1-game-project-26h3ng";
+const writes = (j) => j.permissions === "write-all" || Object.values(j.permissions || {}).some((v) => v === "write");
+const usesSecret = (j) => /\bsecrets\./.test(JSON.stringify(j));
+const runsRepoCode = (j) => (j.steps || []).some((st) => /actions\/checkout@/.test(st.uses || "") || /(^|[\s;(|&])(node|npm|npx)\s/m.test(st.run || ""));
+const jobsWhere = (pred) => Object.keys(LAND.jobs).filter((k) => pred(LAND.jobs[k]));
+
+/** A GitHub expression `${{ … }}` evaluated as JS: `==`/`!=`, `&&`/`||` returning operands, missing paths null. */
+function ghExpr(src, github) {
+  const inner = String(src).trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "");
+  const js = inner.replace(/!=/g, "!==").replace(/([^!=])==(?!=)/g, "$1===")
+    .replace(/\bgithub((?:\.[\w-]+|\[\d+\])+)/g, (m, rest) => "ctx" + rest.replace(/\./g, "?.").replace(/\[/g, "?.["));
+  const format = (f, ...a) => f.replace(/\{(\d+)\}/g, (_, i) => String(a[i] ?? ""));
+  return new Function("ctx", "format", `return (${js});`)(github, format);
+}
+
+test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
+  const on = LAND.on;
+  assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
+  assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened"], branches: [DEPLOY_BRANCH] });
+  assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
+  assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
+  assert.deepEqual(LAND.permissions, {}, "the workflow-level token has no permissions; each job states its own");
+});
+
+test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
+  assert.deepEqual(jobsWhere(writes), ["post", "arm"]);
+  assert.deepEqual(jobsWhere(usesSecret), ["post", "arm"]);
+  assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
+  const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
+  assert.deepEqual(LAND.jobs["land-gate"].permissions, readOnly);
+  assert.deepEqual(LAND.jobs["trusted-rows"].permissions, readOnly);
+  for (const name of jobsWhere(runsRepoCode)) {
+    for (const st of LAND.jobs[name].steps) {
+      if (/actions\/checkout@/.test(st.uses || "")) {
+        assert.equal(st.with?.ref, "${{ env.DEPLOY_BRANCH }}", `${name}: checks out the deploy branch by name, never the PR head`);
+        assert.equal(st.with?.["persist-credentials"], false, `${name}: no token left in .git/config`);
+      }
+      if (/actions\/setup-node@/.test(st.uses || "")) assert.equal(st.with?.cache, undefined, `${name}: no dependency cache (deploy-branch cache scope: poisoning)`);
+    }
+  }
+  assert.deepEqual(LAND.jobs.post.needs, ["resolve", "trusted-rows", "land-gate"], "post reads the trusted rows next to the artifact");
+});
+
+test("land.yml concurrency (WP-L3a, c): noise labels run alone, CI re-gates never join the train's group, PR events cancel", () => {
+  const group = (github) => ghExpr(LAND.concurrency.group, github);
+  const prt = (action, label) => ({ event_name: "pull_request_target", run_id: 99, event: { action, label: label && { name: label }, pull_request: { number: 7 } } });
+  assert.equal(group(prt("labeled", "needs-owner")), "land-noise-99", "a label other than land/hold cannot cancel or replace the PR's re-gate");
+  assert.equal(group(prt("unlabeled", "priority")), "land-noise-99");
+  assert.equal(group(prt("labeled", "land")), "land-7");
+  assert.equal(group(prt("unlabeled", "hold")), "land-7");
+  assert.equal(group(prt("synchronize")), "land-7");
+  const wr = (head_branch, prs) => ({ event_name: "workflow_run", run_id: 5, event: { workflow_run: { head_branch, head_sha: "abc123", pull_requests: prs } } });
+  assert.equal(group(wr("cursor/x", [{ number: 7 }])), "land-7", "a PR's CI re-gate queues behind that PR's events");
+  assert.equal(group(wr(DEPLOY_BRANCH, [])), "land-tip");
+  assert.equal(group(wr("fork-branch", [])), "land-sha-abc123", "a CI run naming no PR never shares land-tip");
+  assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], prt("labeled", "land")), true);
+  assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], wr("cursor/x", [{ number: 7 }])), false, "a CI or train re-gate never cancels");
+});
+
+test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older status no longer blocks the write", () => {
+  const resolveRun = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const atLine = resolveRun.split("\n").find((l) => l.trim().startsWith("at=$("));
+  const at = spawnSync("bash", ["-c", `${atLine}; echo "$at"`], { encoding: "utf8" }).stdout.trim();
+  assert.equal(new Date(at).toISOString().replace(".000Z", "Z"), at, "ISO-8601 in whole seconds, like created_at");
+  const postRun = LAND.jobs.post.steps.find((s) => s.id === "post").run;
+  const start = postRun.indexOf("write_gate() {");
+  const fn = postRun.slice(start, postRun.indexOf("\n}\n", start) + 3);
+  const atS = postRun.split("\n").find((l) => l.startsWith("AT_S="));
+  const stub = `gh() { local q="" a; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
+  const runGate = (created) => {
+    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
+    const script = ["set -uo pipefail", "R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null", stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
+    const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake } });
+    assert.equal(r.status, 0, r.stderr);
+    return r.stdout.trim().split("\n").at(-1);
+  };
+  assert.equal(runGate(null), "POSTED", "no gate status yet");
+  assert.equal(runGate("2026-10-27T10:00:04Z"), "POSTED", "an older status is replaced");
+  assert.equal(runGate("2026-10-27T10:00:05Z"), "POSTED", "same second as AT: the old string compare kept it (`Z` > `.`)");
+  assert.notEqual(runGate("2026-10-27T10:00:06Z"), "POSTED", "a status newer than this run's read is kept");
 });

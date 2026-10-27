@@ -1,7 +1,5 @@
 # Leftovers of the old multi-fleet coordination: audit (r2, 2026-10-27)
 
-> Archived 2026-10-27: its deletions landed in #3935 (429399dca3, WP-D2), so the paths below name files that no longer exist.
-
 Tree: deploy tip `5a29eb35` (Merge #3917). Read-only. Seed grep (task regex) hit 595 files outside `.claude/worktrees/`
 and `__pycache__`. Most are false positives: the game's net relays (`js/net`, `tools/net`, `net-*.test`), the track/frame
 "fleet" (`frame-fleet`, `flyby-fleet`, `track-validate-fleet`, ci.yml's "fleet build"), "orchestration" in ARCHITECTURE,
@@ -17,10 +15,10 @@ Retired tools confirmed gone: `tools/ci/{fleet-bus,agent-msg,who-is-on-it,fleet-
 |---|---|---|---|
 | STILL-NEEDED (stale) | tools/environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/SKILL.md:34 | The Codex plugin skill (installed via `install-environment.sh`, `plugin-install.sh`) still tells Codex lanes to "use the existing `claude/fleet-bus` branch" for cross-session coordination | Rewrite step 4 as "GitHub issue/PR comments only (docs/WORKERS.md)". This is the highest-impact leftover because it actively steers live Codex lanes |
 | STALE-DOC | …/f1-agent-coordination/references/transports.md:9-39 | Documents `github-fleet.cjs` writing to `claude/fleet-bus`, and calls `the deleted fleet-bus tool` authoritative (that file is deleted) | Delete the fleet-bus section |
-| DEAD-CODE | tools/environment/plugin-sources/f1-dev-tools/scripts/github-fleet.cjs (whole) | A bus writer to `claude/fleet-bus` (addresses `merge-desk`, `orchestrator`). Its only callers are its own test (`the old top-level agent-setup test:4`) and transports.md | Delete it, its test cases and the `tools/README.md:631` row (regenerate with `npm run gen`) |
+| DEAD-CODE | github-fleet.cjs (deleted, #3935) (whole) | A bus writer to `claude/fleet-bus` (addresses `merge-desk`, `orchestrator`). Its only callers are its own test (`the old top-level agent-setup test:4`) and transports.md | Delete it, its test cases and the `tools/README.md:631` row (regenerate with `npm run gen`) |
 | DEAD-CODE | …/f1-dev-tools/scripts/agent-readiness.mjs:36,46 | The `githubFleetBus` readiness route and its "fleet message" note | Drop the route and fix `agent-setup.test.mjs:35,45` |
-| DEAD-CODE | tools/lib/fleet-block.mjs:37 `fleetBlock()` | No caller. The comment at :7 says "ready-gate (fleetBlock) is the remaining caller", but ready-gate no longer imports it | Delete the export; the file stays only if pr-body keeps `--fleet` (next row) |
-| DEAD-CODE | tools/ci/pr-body.mjs:12,35,153-177 `--fleet` / `setFleet` | Writes a ```` ```fleet ```` block. WORKERS.md:110 retires the fleet block, and `.github/pull_request_template.md` has none | Remove `--fleet`, `setFleet`, the `fleetEntries` re-export and `pr-body.test.mjs:81-94`, then delete `tools/lib/fleet-block.mjs` |
+| DEAD-CODE | fleet-block.mjs (deleted, #3935):37 `fleetBlock()` | No caller. The comment at :7 says "ready-gate (fleetBlock) is the remaining caller", but ready-gate no longer imports it | Delete the export; the file stays only if pr-body keeps `--fleet` (next row) |
+| DEAD-CODE | pr-body.mjs (deleted, #3935):12,35,153-177 `--fleet` / `setFleet` | Writes a ```` ```fleet ```` block. WORKERS.md:110 retires the fleet block, and `.github/pull_request_template.md` has none | Remove `--fleet`, `setFleet`, the `fleetEntries` re-export and `pr-body.test.mjs:81-94`, then delete `fleet-block.mjs (deleted, #3935)` |
 | DEAD-CODE | tools/lib/gate-receipt.mjs:194-220 `readyClaimVerdict`, `READY_CLAIM_MAX_MIN` | Gated READY messages sent through agent-msg (comment :201). The only caller is `tests/unit/merge-gate.test.mjs:356-361`. Comments :6, :25 and :57 also name the bus, MERGE-HOLD and a `fleet-bus` closure entry | Delete the function and its tests, and fix the comments |
 | STALE (code) | tools/ci/pr-board.mjs:29,36-41,64-67,222,343 | Legacy display of the `MERGE-HOLD:` body line and the `fleet-status:` / `@orchestrator` FLEET column. `fleetIdentity` (:41) no longer exists in ready-gate | Keep while pre-10-27 PRs are open. After that, delete `hasMergeHold`, the FLEET column and `pr-board.test.mjs:94-101,319-330` |
 | STALE (comment) | tools/ci/ci-watch.mjs:323 | "fleet-board-snapshot imports this module". That tool is deleted | Fix the comment. The entry-point guard stays |
@@ -63,12 +61,12 @@ Remote branches still exist: `claude/fleet-bus`, `claude/claims-board` (kept on 
 them for Bryce. Old orchestrator, relay and merge-desk sessions are never archived by `archive-sessions.mjs` (role allow-list).
 
 ## Deletion list (with caller proof)
-1. `tools/environment/plugin-sources/f1-dev-tools/scripts/github-fleet.cjs`. Callers: only `…/the old top-level agent-setup test:4`
+1. `github-fleet.cjs (deleted, #3935)`. Callers: only `…/the old top-level agent-setup test:4`
    and `…/f1-agent-coordination/references/transports.md:12` (grep `github-fleet` over tools/tests/.claude/.github/.cursor/.codex).
    Also remove its test cases, the readiness route (`agent-readiness.mjs:36,46`), and the policies.json:2799 / catalog.json:1748 rows, then `npm run gen` (tools/README.md:631).
-2. `tools/lib/fleet-block.mjs` `fleetBlock()`: zero callers (only its own comments). Delete the whole file once (3) lands:
-   the remaining importer is `tools/ci/pr-body.mjs:35` alone.
-3. `pr-body.mjs --fleet` / `setFleet` / `fleetEntries` re-export: the only consumer is `tests/unit/pr-body.test.mjs:6,81-94`.
+2. `fleet-block.mjs (deleted, #3935)` `fleetBlock()`: zero callers (only its own comments). Delete the whole file once (3) lands:
+   the remaining importer is `pr-body.mjs (deleted, #3935):35` alone.
+3. `pr-body.mjs --fleet` / `setFleet` / `fleetEntries` re-export: the only consumer is `pr-body.test.mjs (deleted, #3935):6,81-94`.
    The template has no fleet block (grep `fleet` in .github/pull_request_template.md = 0), and WORKERS.md:110 retires it.
 4. `gate-receipt.mjs` `readyClaimVerdict` + `READY_CLAIM_MAX_MIN`: the only caller is `tests/unit/merge-gate.test.mjs:356-361`.
    The agent-msg sender (`the deleted agent-msg tool`) is deleted.
