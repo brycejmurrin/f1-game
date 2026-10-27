@@ -1,11 +1,12 @@
 ---
 name: tune-physics
-description: "Use when the car understeers/oversteers, runs wide, won't turn in, turn-in is lazy or snappy, front slip/yaw, grip, trail braking, road-follow (ROAD_FOLLOW), GRIP STEER maths or pace feels wrong, or a physics A/B or sweep (skidpad/step-steer/player-dyn VM). Shake/juice → game-feel; camera lag → playwright-probe; steer sliders → input-controls; AI → ai-racecraft."
+description: "Use when the car understeers/oversteers, runs wide, won't turn in, turn-in is lazy or snappy, front slip/yaw, grip, trail braking, road-follow (ROAD_FOLLOW), GRIP STEER maths or pace feels wrong, or a physics A/B or sweep (skidpad/step-steer/player-dyn VM). Shake/juice → game-feel; camera lag → playwright-probe; steer sliders → input-controls (CAR WEIGHT's yaw maths is here); AI → ai-racecraft."
 ---
 
 # Tune the physics
 
-Per-axle bicycle model + combined-slip friction ellipse. Tune the way the
+Per-axle bicycle model + combined-slip friction ellipse. Compare speeds through `vStd()`/`vTop()`
+(`tools/check/vstd-lint.mjs` enforces it in code). Tune the way the
 suite does: **headless, deterministic, relative assertions** — never brittle
 absolute magnitudes.
 
@@ -29,13 +30,20 @@ absolute magnitudes.
 `expo` / `maxSlip` / `speedRef` are also the player's STEER sliders (LINEARITY / STEER LOCK /
 SPEED STEER): the slider UI, defaults and migration are **input-controls**; here they are A/B knobs.
 There is no "steer gain" knob: `updateCar` (js/game.js) steers `sign(s)·|s|^expo · maxSlip · lockTaper`, where
-`lockTaper` is 1.06 up to 15 m/s (vStd; a slight low-speed boost), `1/(1 + vStd/speedRef)` from 30 m/s, and a linear blend between, so slow corners
-sit in the blend. A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
+`lockTaper` is 1.06 up to vStd 15 (a slight low-speed boost), `1/(1 + vStd/speedRef)` from vStd 30, and a linear blend between, so slow corners
+sit in the blend. These are STANDARD-scale speeds (`vStd(v) = v·VMAX/vTop`, js/race/pace-math.js): at a shipped PACE below 1
+a ground 30 m/s is already past the blend, so pick rows by vStd, not ground m/s. A/B `maxSlip` (linear gain), `expo` (near centre) or `speedRef` (speed taper); turn-in understeer also
 moves with `frontGrip` and `yawInertia`.
 
-Numbers are not quoted here (they drift): read the live values with `__apex.tuning()` (js/agent/apex.js). Boot-effective
-defaults come from `js/input/steer-tuning.js` `applySteerTuning()` (slider defaults in `js/ui/settings-export.js`) —
-the game.js literals are dead.
+Numbers are not quoted here (they drift): read the live values with `__apex.tuning()` (js/agent/apex.js). The tunable
+state bag and its literal defaults are `js/physics/drive-tune.js` (`DriveTune.create`); boot-effective values come from
+`js/input/steer-tuning.js` `applySteerTuning()` (slider defaults in `js/ui/settings-export.js`), which overwrites them.
+
+**Which car?** CAR WEIGHT is device-aware: `applySteerTuning()` boots `carWeight` 10 on a `(pointer: coarse)` PHONE and 5 on
+desktop, and sets BOTH `YAW_INERTIA` (`weightFromSlider`) and `YAW_DAMP` (`yawDampFromSlider`) from it — the phone car is
+the heavy, lazier one Bryce drives. The VM stubs `matchMedia` as desktop, so a turn-in complaint from a phone is measured
+with `storage: { carWeight: 10 }` (both cars, labelled). **Rule out assists and input first:** read `tuning()` and the
+reporter's store (`gripSteer`, `drivingHelp`, `carWeight`, touch rows); a touch range / DRAG AT SPEED cause → input-controls.
 `PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
 
 **The arc must not reach the driver** (AGENTS.md §Physics; the table is `docs/PHYSICS.md` §Curvature channels):
@@ -56,7 +64,7 @@ Fixed in `js/physics/consts.js` (`PhysicsConsts`, not `setPhysics`): `LONG_GRIP`
 `FRONT_WEIGHT`, `LAT_MAX`, `VMAX`.
 
 ```sh
-npm test -- tests/specs/understeer-cue.spec.js   # BROWSER verify: ONE spec (or physics-characterization.spec.js), backgrounded (AGENTS.md rule 4); a subagent reports it not run
+node tools/ci/test-bg.mjs --spec tests/specs/understeer-cue.spec.js   # BROWSER verify: ONE spec (or physics-characterization.spec.js), backgrounded (AGENTS.md rule 4); a subagent reports it not run
 node tools/check/check-physics.mjs <grip|bank|roadfollow|steer>  # browser (launchChromium) — stability probe, not an A/B
 ```
 
@@ -69,8 +77,8 @@ node --test tests/unit/player-dynamics-vm.test.mjs               # the locked SH
 ```
 
 `player-dyn.mjs` exports `measure(g, frac)`: to A/B one setting, copy the sweep script in
-[references/understeer-recipe.md](references/understeer-recipe.md) step 2 and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; front
-slip past its peak with rear settled = understeer). `tools/check/physics-tune-sweep.mjs` is BROWSER + long (sharded
+[references/understeer-recipe.md](references/understeer-recipe.md) step 2 and diff the JSON (read `aF`/`aR`, `uF`/`uR`, `yaw`; understeer =
+front slip `aF` past its peak with `uR` settled below ~1). `tools/check/physics-tune-sweep.mjs` is BROWSER + long (sharded
 DOM-slider laps, `APEX_WORKERS`): not for one setting. Verdict: a directional change in the
 same tables; worked "understeers in slow corners" example → [references/understeer-recipe.md](references/understeer-recipe.md).
 

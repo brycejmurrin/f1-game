@@ -1,6 +1,7 @@
 # Traffic tactics recipe
 
-All in `ai-drive.js` / `ai-corridor.js`; state in `updateCar` (PHYSICS.md §Racecraft tactics).
+All in `ai-drive.js` / `ai-corridor.js`; state in game.js's per-car AI update (game.js has several
+`updateCar`s: find the caller with apex-lsp `lsp_references` on the `AiDrive` export; PHYSICS.md §Racecraft tactics).
 
 - **Follow gap** is a TIME (`followGap`: s0 + v·T, T 0.15-0.30 s; tight 0.05 s when a pass is
   latched/armed or towing). Queue window `max(16, follow+6)`.
@@ -9,7 +10,8 @@ All in `ai-drive.js` / `ai-corridor.js`; state in `updateCar` (PHYSICS.md §Race
 - **Attack roll** per zone: `attemptRoll`, never `simRnd`.
 - **Level pair**: the car on the outside of the next corner yields; commit-or-yield after 2 s
   (`sbsCommitT`). Any flip → `repassLock`, and the passer becomes a wide blocker.
-- **Defending** mid-train / adjacent lane / predicted side: `defendPull`. First 20 s calm: `startCalm`.
+- **Defending** mid-train / adjacent lane / predicted side: `defendPull`. Opening calm: `startCalm`
+  (full while launching, then fades to 0 over the last 10 s of `START_CALM` after the launch ends).
 - **Human blocker**: judged by `paceVmax` (`paceSample` profile); a held line arms `humanYieldT`
   at a quarter rate. `kTurn` never reaches a human pair in collide.js.
 - **STREETS** (`track.street`) keep the metre gap and the old pass gates (no look-ahead /
@@ -25,7 +27,7 @@ stretches `runExtra` and lifts `towGain` on the straight, and the same edge lowe
 `paceVmax` (m/s over vTop) and scripted pace (`tierV×skill`, unitless, compared as
 a ratio — the same one `ai-tactics` uses for stuck dpace) via `pairEdgeN`. The defender's **coverConcede** (edge × awareness ×
 experience; AI-AI only — a human chaser must keep the cover so `humanYieldT`
-still sees an intruding lean) scales `defendPull` down and returns 0 past ~0.80
+still sees an intruding lean) scales `defendPull` down and returns 0 at ≥ 0.70 (ai-drive.js `coverConcede`; `sbsConcedes` uses the same cut)
 so `defendOnce` does not spend the one-move-per-straight on a lost cover —
 `CONCEDE_EDGE_FULL` 0.008 so a ≥0.8 % pair zeros cover (Done-when). Hunger
 does not raise `otFireRate`, `otShouldFire` or `latchLate` (a reverted bump raised contact). Instead: towGain
@@ -36,7 +38,14 @@ live speeds are queue-levelled. Streets ignore every knob above. Unit pins:
 
 ## Lap-1 / Turn-1 melee (cars racing each other into contact)
 Merely aggressive dives into contact are here; launches, debris and the `c1Pileup` takeover are
-race-incidents-control. Knobs: `startCalm` (first `START_CALM` s calm, scales attack rate via `ctx.calm`),
-`startGapT`, the tight follow gap (`followGap`), `passSideBonus`, `sbsCommitT`. Instrument:
-`node tools/check/ai-race.mjs tactics --track monza --laps 3 --runs 5` (read `byLap` lap 1 and swap-backs).
-Tactic state lives in `updateCar` (`js/game.js`).
+race-incidents-control. Knobs, in the order a dive is decided:
+1. `attackOK` quality ≥ 0.32 — `startCalm` cuts it via `ctx.calm` toward `START_ATTACK`
+   (it does NOT touch `otFireRate`), plus `passReach` (half alongside by the turn-in?).
+2. game.js's lunge rule abandons a move still not half alongside at `toTurnIn < 6`.
+3. `brakeTarget`'s craft late-brake (×`lerp(1, 1.07, craft)` attacking with room) and
+   optimism (±1.2 %) — how deep the dive goes.
+4. `startGapT` headway, the tight follow gap (`followGap`), `passSideBonus`, `sbsCommitT`.
+Measure BEFORE and after, same seeds:
+`node tools/check/ai-race.mjs tactics --track monza --laps 3 --runs 5` — compare `byLap` lap 1
+against later laps (a lap-1-only excess is calm/startGapT; every lap is attackOK/late-brake)
+and the swap-back count. Confirm on a second circuit; no per-track constant.
