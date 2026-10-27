@@ -1,5 +1,7 @@
 # Plan: fix what slows agent sessions down (from 300 transcripts)
 
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — much of it became the AGENTS.md rulebook, hooks and tools/ci scripts; tracking issue #2379; per-item state not re-audited.
+
 **Date:** 2026-10-16 · **Owner ask (Bryce):** "re read all transcripts and reports so we can draft a plan to fix
 issues, help agents, add new tools or skills or workflows etc". **Evidence:** pass 1
 [`docs/notes/TRANSCRIPT-MINING-2026-10-16.md`](../notes/TRANSCRIPT-MINING-2026-10-16.md) (122 sessions) plus pass 2

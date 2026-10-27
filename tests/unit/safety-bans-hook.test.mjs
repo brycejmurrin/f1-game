@@ -257,16 +257,26 @@ test("Cursor's hooks.json runs the edit guard on every preToolUse, failing close
   }
   // Content shapes the adapter cannot read never read as an empty Write (review of c2589f2a):
   // index.html and package.json edits pass, an outright generated file and a ratchet file do not.
-  const cursorEdit = (ti) => run(EDIT_GUARD, { tool_name: "Write", tool_input: ti }).out.permission;
-  // Linked worktrees retain the shared-contract restriction before content checks.
-  const gitDir = execFileSync("git", ["rev-parse", "--git-dir"], { cwd: ROOT, encoding: "utf8" }).trim();
-  const commonDir = execFileSync("git", ["rev-parse", "--git-common-dir"], { cwd: ROOT, encoding: "utf8" }).trim();
-  const sharedPermission = gitDir !== commonDir && !fs.existsSync(path.join(ROOT, ".claude/allow-protected")) ? "deny" : "allow";
-  assert.equal(cursorEdit({ target_file: "index.html", code_edit: "<p>x</p>" }), sharedPermission);
-  assert.equal(cursorEdit({ target_file: "package.json", code_edit: "{}" }), sharedPermission);
-  assert.equal(cursorEdit({ file_path: "index.html", old_str: "<title>", new_str: "<title>" }), sharedPermission);
-  assert.equal(cursorEdit({ target_file: "version.json", code_edit: "{}" }), "deny");
-  assert.equal(cursorEdit({ target_file: "tests/data/ratchets.json", code_edit: "{}" }), "deny");
+  // Use explicit fixture roots: the caller may itself be a linked worktree,
+  // where shared-contract edits are correctly denied. The adapter changes cwd.
+  const dir = fixture("safety-cursor-shapes-");
+  try {
+    const git = gitAs(dir, "a");
+    git("init", "-q", "-b", "cursor/shapes");
+    fs.writeFileSync(path.join(dir, "index.html"), "<title>Fixture</title>\n");
+    fs.writeFileSync(path.join(dir, "package.json"), JSON.stringify({ scripts: { "test:tiny": "node test.mjs" } }));
+    git("add", "index.html", "package.json"); git("commit", "-qm", "fixture");
+    const linked = path.join(dir, "linked");
+    git("worktree", "add", "--quiet", "--detach", linked, "HEAD");
+    for (const [root, sharedPermission] of [[dir, "allow"], [linked, "deny"]]) {
+      const cursorEdit = (ti) => run(EDIT_GUARD, { tool_name: "Write", tool_input: ti }).out.permission;
+      assert.equal(cursorEdit({ target_file: path.join(root, "index.html"), code_edit: "<p>x</p>" }), sharedPermission);
+      assert.equal(cursorEdit({ target_file: path.join(root, "package.json"), code_edit: "{}" }), sharedPermission);
+      assert.equal(cursorEdit({ file_path: path.join(root, "index.html"), old_str: "<title>", new_str: "<title>" }), sharedPermission);
+      assert.equal(cursorEdit({ target_file: path.join(root, "version.json"), code_edit: "{}" }), "deny");
+      assert.equal(cursorEdit({ target_file: path.join(root, "tests/data/ratchets.json"), code_edit: "{}" }), "deny");
+    }
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("edit-guard judges a path key beyond file_path/path/target_file/filePath, and write shapes with no path", () => {
@@ -351,49 +361,6 @@ test("advisory: a piped ready-gate/merge-gate without pipefail gets a reminder, 
     "echo 'node tools/ci/ready-gate.mjs --pr 12 | tail'", "cat > notes.md <<'EOF'\nrun `ready-gate.mjs | tee`\nEOF"]) {
     assert.equal(claudeBash(cmd).out, null, cmd);
   }
-});
-
-test("advisory: a cursor/* push whose diff touches another open PR's paths names the holder; its own PR does not", () => {
-  const dir = fixture("safety-held-");
-  try {
-    const origin = path.join(dir, "origin.git"), a = path.join(dir, "a");
-    execFileSync("git", ["init", "-q", "--bare", origin]);
-    const ga = gitAs(dir, "alice");
-    ga("clone", "-q", origin, a);
-    const g = gitAs(a, "alice");
-    g("checkout", "-q", "-b", "claude/f1-game-project-26h3ng");
-    fs.writeFileSync(path.join(a, "base.txt"), "0\n"); g("add", "."); g("commit", "-q", "-m", "base");
-    g("push", "-q", "origin", "claude/f1-game-project-26h3ng");
-    g("checkout", "-q", "-b", "cursor/t-1");
-    fs.writeFileSync(path.join(a, "held.js"), "1\n"); fs.writeFileSync(path.join(a, "mine.js"), "1\n");
-    g("add", "."); g("commit", "-q", "-m", "work");
-    const own = g("rev-parse", "HEAD");
-    // A stub fleet-owner: held.js is in #900's diff (someone else's head), mine.js only in this branch's own PR #901.
-    const stub = path.join(dir, "owner.mjs");
-    fs.writeFileSync(stub, `let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const rows=s.split("\\n").filter(Boolean).map(p=>({path:p,state:"held",
-      holders:p==="held.js"?[{pr:900,sha:"${"f".repeat(40)}",owner:"cursor:bc-other"}]:[{pr:901,sha:"${own}",owner:"claude:me"}]}));
-      console.log(JSON.stringify({rows}));});`);
-    const env = { APEX_FLEET_OWNER_CMD: `node ${stub}`, APEX_HELD_CHECK: "" };
-    const r = claudeBash("git push -u origin cursor/t-1", a, env);
-    assert.equal(r.status, 0, r.stderr);
-    const ctx = r.out.hookSpecificOutput.additionalContext;
-    assert.ok(ctx.includes("held.js HELD by #900 (cursor:bc-other)"), ctx);
-    assert.ok(!ctx.includes("mine.js"), "the branch's own PR is not a holder");
-    assert.ok(cursorShell("git push -u origin cursor/t-1", a, env).out.agent_message.includes("HELD by #900"));
-    // A failed lookup says so instead of passing silently.
-    const broken = claudeBash("git push origin cursor/t-1", a, { APEX_FLEET_OWNER_CMD: "false", APEX_HELD_CHECK: "" });
-    assert.ok(broken.out.hookSpecificOutput.additionalContext.includes("held-file check did not finish"));
-    // A lookup past the budget is skipped, and says so (the real budget is 20 s; fleet-owner measured ~14 s).
-    const slow = path.join(dir, "slow.mjs");
-    fs.writeFileSync(slow, "setTimeout(() => console.log('{}'), 5000);");
-    const t0 = Date.now();
-    const late = claudeBash("git push origin cursor/t-1", a, { APEX_FLEET_OWNER_CMD: `node ${slow}`, APEX_HELD_CHECK: "", APEX_HELD_BUDGET_S: "2" });
-    assert.ok(Date.now() - t0 < 4500, "the budget bounds the push");
-    assert.ok(late.out.hookSpecificOutput.additionalContext.includes("held-file check skipped"));
-    // APEX_HELD_CHECK=0 and non-cursor branches skip the lookup.
-    assert.equal(claudeBash("git push origin cursor/t-1", a, { ...env, APEX_HELD_CHECK: "0" }).out, null);
-    assert.equal(claudeBash("git push origin cursor/t-1:claude/fleet-bus", a, env).out, null);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test("a push to a cursor/* branch whose every PR is merged or closed is refused; an open PR or none passes", () => {

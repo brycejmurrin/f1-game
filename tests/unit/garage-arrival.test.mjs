@@ -1112,7 +1112,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     Input: { poll: noop, clearEdges: noop, setTimeScale: noop }, BrakeCue: { tick: noop },
     onboard: { tick: noop }, netPlay: { tick: noop, active: () => false }, director: { tick: noop },
     replayBuf: { isScrubbing: () => false, tickScrub: noop, onTick: noop }, banner: { tick: noop },
-    feel: { hitStop: 0 }, frozen: true, physAcc: 0, PHYS_DT: 1 / 60, renderAlpha: 1,
+    feel: { hitStop: 0 }, frozen: true, raceRestarting: false, physAcc: 0, PHYS_DT: 1 / 60, renderAlpha: 1,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)), photoMode: false,
     GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetRoad: noop, vTop: noop,
     XrBoot: { comfort: () => false }, updateHud: noop,

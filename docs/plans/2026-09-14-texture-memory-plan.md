@@ -1,6 +1,8 @@
 # Texture Memory Plan — where the bytes actually are
 
-> **Status:** written 2026-09-14, after the vertex-format packing landed
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the texture census landed (tests/unit/tex-census.test.mjs); later compression/size steps were not re-audited.
+
+> **Status when written:** written 2026-09-14, after the vertex-format packing landed
 > (`vertex-pack.js`, GLX/WGX/TLX). Steps use checkbox (`- [ ]`) syntax.
 
 **Goal:** the world GEOMETRY is done — packed to 28 B/vertex and, separately,

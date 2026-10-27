@@ -3,10 +3,6 @@
 Load from the garage skill when editing paint,
 fin/spine/cover fields, or the draft lockstep.
 
-The GARAGE (`#carsetup`, `js/garage/setup-sheet.js`) is who you are, what you drive
-(12 categories under the `Parts.BUDGET` cap), and how it looks. Catalog: `js/car/parts.js`. Paint:
-`js/car/liveries.js` + `js/car/liverytex.js`. Geometry: `js/car/car3d.js`.
-
 `Parts.CATALOG` is an **ordered array**, not a keyed map. `Parts.getMods`
 returns four stat multipliers; `getVisualTiers()` feeds `Car3D.build`.
 
@@ -61,7 +57,7 @@ extra rows: `SIZE` × `SIZE_H`); paint them through `eachFlank`/`flankFrame`, ne
 mirrored texture. The car is drawn through an x-reflection, so the mesh's +x quad RENDERS
 as the car's right flank: right canvas-left = REAR, left canvas-left = FRONT, text reading
 on both. Calibrate by painting a labelled grid into both regions and reading it in the REAL
-garage — never by deriving it from car space, which is where the first pass inverted both. UVs divide v by `SIZE_H`. `drawTailGraphic` clips to its region.
+garage — never by deriving it from car space. UVs divide v by `SIZE_H`. `drawTailGraphic` clips to its region.
 
 ## Wings, cover, lower body and details
 
@@ -98,15 +94,13 @@ lights are draw-time, not livery: `CarMesh.ersLightCode` (pure) and
 ## The paint sheet field list
 
 **THE PAINT SHEET HAS ONE FIELD LIST, and adding a field means touching it in
-exactly two places.** The editor's 36 keys (21 colours + 15 pills) live in `LIV_DRAFT_COLORS` +
+exactly two places.** The editor's keys (colours + pills) live in `LIV_DRAFT_COLORS` +
 `LIV_DRAFT_PILLS` (js/garage/setup-sheet.js); `livDraftFrom(liv, name)` builds a
 draft for all three doors (new / edit / "customize a copy") and
 `livDraftTo(d, keepNull)` converts back for BOTH the save and the live preview
 (`keepNull` is the only difference — the preview needs every key present for
 resolveLivery's draft branch, the stored livery stays sparse so a garage file
-does not carry 28 nulls). There were FIVE hand-written copies of this list and
-they had drifted: the copy door silently dropped all eight structural fields, so
-duplicating a team's own paint job returned a shark-finned car. Add a field to
+does not carry a null per key). Add a field to
 the two tables and to `Liveries.forTeam`'s copy list — nothing else — and give
 it a `LIV_ROW_HINT` entry naming the SURFACE it paints and what it inherits when
 unset. `tests/unit/team-livery.test.mjs` holds all of that, mutation-tested.

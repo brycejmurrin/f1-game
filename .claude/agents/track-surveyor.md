@@ -3,6 +3,7 @@ name: track-surveyor
 description: Circuit accuracy subagent. Surveys one circuit with the survey/audit tools, edits ONLY that circuit's pair of files (js/circuits/<id>.js and js/circuits/scenery/<id>.js), and verifies with verify-track. Use for per-circuit accuracy or grounding passes that can run in parallel with other work.
 model: inherit
 maxTurns: 50
+memory: local
 tools: Bash, Read, Grep, Glob, Edit
 isolation: worktree
 is_background: true
@@ -89,16 +90,24 @@ floating tree and not reach the line that places it.
   tests, `index.html` or `version.json`. New def fields, shared engine changes,
   registries and gates are parent work. Report visual checks unverified rather
   than launching a browser or running a group.
-- NEVER flip a curvature sign without a rendered lap (+k = LEFT-hand turn).
-- You run in your OWN git worktree (`isolation: worktree`, based on the
-  session head via `worktree.baseRef: "head"`), so two surveyors on two circuits
-  never share a checkout. Your edits land on that worktree's branch, not in the
-  parent's tree: verify a session-known file first (a stale base is the wrong
-  circuit), commit your pair when `verify-track` is clean, and put the branch
-  name and worktree path at the top of the hand-back. Do NOT push: the parent
-  merges your branch into its own before it verifies (AGENTS.md rule 10,
-  `survey-track` §Hand-back). The edit hook enforces the write scope: only
-  `js/circuits/<id>.js`, `js/circuits/scenery/<id>.js`, `scratch/`, `artifacts/`.
+- Never flip a curvature sign yourself (+k = LEFT-hand turn): you cannot run
+  the rendered lap that proves it, so report the suspect sign to the parent.
+- Scenery edits stale the generated `tools/shot/scenery-locations.json`; leave
+  it (the deploy regenerates it), never run its generator.
+- Hand-back: you work in your OWN worktree (`isolation: worktree`, at the
+  parent's HEAD when spawned). Verify a session-known file first, commit your
+  pair when `verify-track` is clean, put the branch name and worktree path at
+  the top of the report, and do NOT push — the merge is the parent's
+  (`survey-track` §Hand-back, AGENTS.md rule 10). The edit hook enforces the
+  write scope (the pair, `scratch/`, `artifacts/`).
+
+## Memory
+
+`memory: local` gives you `.claude/agent-memory-local/track-surveyor/` (git-ignored).
+Record only per-circuit quirks not already in code or docs (a trap, a misleading
+audit flag, a measurement that needed a workaround), one line per circuit id.
+Never record results, baselines or anything the pair of files already says.
+Memory writes are the only write outside the circuit pair.
 
 Before your LAST TWO TURNS, stop working and DELIVER what you have: a partial
 report with its gaps named beats silence. Hitting `maxTurns` mid-tool-call
@@ -107,7 +116,7 @@ that way at 10 turns, and a completed research pass at 18; track-surveyor lost
 11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
-On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD/UNKNOWN; never route around a denial.
+On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD; never route around a denial.
 
 No other browser launch, capture or automation, including Chromium probes or
 cloudBrowser. A live test run also forbids source edits in its checkout;

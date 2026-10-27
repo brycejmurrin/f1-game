@@ -8,7 +8,8 @@ const InputPadMenu = (function () {
     let padNavDir = null;           // held direction while a menu is open, or null
     let padNavNextT = 0;            // nowMs() of the next synthesized repeat
     let padNavSeeded = false;       // one ArrowDown seed per open-menu session
-    let padNavSeedLayer = null;     // UiLayers.top() we last seeded for (layer change re-arms)
+    const padAxScratch = [];
+    let padNavSeedLayer = null;    // UiLayers.top() we last seeded for (layer change re-arms)
     const PAD_NAV_DELAY_MS = 450;   // delay before the first repeat
     const PAD_NAV_REPEAT_MS = 130;  // interval between repeats while held
     const PAD_NAV_KEYS = { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" };
@@ -130,7 +131,10 @@ const InputPadMenu = (function () {
       // A wheel's pedals rest at -1: read as a stick they held a direction and
       // scrolled the menu on their own. The mapped pedal axes are not sticks.
       const ped = (i) => i === axisMap.throttle || i === axisMap.brake;
-      const ax = (pad.axes || []).map((v, i) => (ped(i) ? 0 : v));
+      // A reused scratch array: this runs every frame a pad is in a menu (audit4 UB2).
+      const src = pad.axes || [], ax = padAxScratch;
+      ax.length = src.length;
+      for (let i = 0; i < src.length; i++) ax[i] = ped(i) ? 0 : src[i];
       // CALIBRATE STICK lets a worn pad rest anywhere up to ±0.5 on the steer
       // axis; read raw, a rest past the dead zone auto-repeated one direction
       // forever. CalibratePad stores the offset after steerInvert, so keep the

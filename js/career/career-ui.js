@@ -153,10 +153,16 @@ function create(G) {
     return out;
   }
 
-  function runImport(pending, otherConfirmed) {
+  // The import awaits its "before-import" restore points; a second tap
+  // while they are saving must not start a second import.
+  let importing = false;
+  async function runImport(pending, otherConfirmed) {
+    if (importing) return null;
     ++backupReadGeneration;
     const { envelope, focusFlavour, rawText, revisions } = pending;
-    const result = CareerBackup.apply(envelope, {
+    importing = true;
+    let result;
+    try { result = await CareerBackup.applyWithUndo(envelope, {
       focusFlavour,
       otherFlavourConfirmed: !!otherConfirmed,
       expectedRevisions: revisions,
@@ -166,7 +172,7 @@ function create(G) {
       rawText,
       recovery: !!pending.recovery,
       expectedSeasonRevision: pending.seasonRevision,
-    });
+    }); } finally { importing = false; }
     if (result.ok) {
       G.refreshCareerButton();
       pending.unconfirmed = pending.unconfirmed || result.durable === false || !!result.failed;
@@ -192,6 +198,7 @@ function create(G) {
     if (partial) G.refreshCareerButton();
     announce(partial ? "RESTORE INCOMPLETE — SOME DATA APPLIED; KEEP YOUR BACKUP"
       : result.reason === "conflict" ? "SAVE CONFLICT — IMPORT REFUSED"
+      : result.reason === "undo-unavailable" ? "IMPORT REFUSED — COULD NOT KEEP A RESTORE POINT OF THE SAVE IT WOULD REPLACE; NOTHING CHANGED"
       : ("IMPORT FAILED — " + String(result.reason || "error").toUpperCase()));
     build();
     return result;

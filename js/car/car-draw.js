@@ -128,7 +128,12 @@ const CarDraw = (function () {
     // so the render loop reads a cached string instead of rebuilding it via
     // partsVisualKey() → getVisualTiers() every frame. Overwritten before the first
     // race render by startRace()'s recomputePlayerMods() call.
-    let playerVisualKey = "111111111111";
+    let playerVisualKey = "111111111111", playerParts = null, playerPartsTeam = "";
+    function playerPartsFor(team, visualKey) {
+      // Menu prep can request another team/key before recomputePlayerMods.
+      return playerParts && playerPartsTeam === team.id && visualKey === playerVisualKey
+        ? playerParts : Parts.getVisualTiers(G.getTeamParts(team.id), team);
+    }
 
     // ── car-model ───────────────────────────────────────────────────
     // Optional imported car model (binary glTF / .glb). When loaded, team meshes are
@@ -318,13 +323,32 @@ const CarDraw = (function () {
     // FAR_BODY_TRIS (CarGeometry.decimate). The clustering costs ~130 ms, so it runs once in an idle
     // callback after the full shared body exists; until it lands a far rival draws the full shared body.
     const FAR_BODY_TRIS = 1500;
-    let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false, _sharedRivalEpoch = 0;
-    function invalidateSharedRivalBody() {
-      _sharedRivalEpoch++; // a queued idle decimation must not publish a retired body
-      if (_sharedRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_sharedRivalBody);
-      if (_farRivalBody && G.gfx.freeMesh) G.gfx.freeMesh(_farRivalBody);
-      _sharedRivalBody = _sharedRivalGeom = _farRivalBody = null;
+    let _sharedRivalBody = null, _sharedRivalGeom = null, _farRivalBody = null, _farRivalKick = false;
+    let _sharedRivalEpoch = 0;
+    function freeSharedRivalBodies() {
+      _sharedRivalEpoch++; // queued idle work belongs to the old cache generation
+      const near = _sharedRivalBody, far = _farRivalBody;
+      _sharedRivalBody = _farRivalBody = _sharedRivalGeom = null;
       _farRivalKick = false;
+      if (G.gfx.freeMesh) {
+        if (near) G.gfx.freeMesh(near);
+        if (far && far !== near) G.gfx.freeMesh(far);
+      }
+    }
+    // Shared by the synchronous race warm and its deferred first-use fallback.
+    function buildFarRivalBody(epoch) {
+      if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody || !_sharedRivalGeom) return;
+      const geom = _sharedRivalGeom;
+      _farRivalKick = true;
+      let mesh = null;
+      try { mesh = G.gfx.createMesh(CarGeometry.decimate(geom, FAR_BODY_TRIS)); }
+      catch (e) { Log.warn("gfx", "far rival body failed", e); }
+      if (epoch !== _sharedRivalEpoch || carModelBuf || _farRivalBody) {
+        if (mesh && G.gfx.freeMesh) G.gfx.freeMesh(mesh); // invalidated during allocation
+        return;
+      }
+      if (mesh) { _farRivalBody = mesh; if (_sharedRivalGeom === geom) _sharedRivalGeom = null; }
+      else _farRivalKick = false; // a failed upload can retry on the next far draw
     }
     function sharedRivalBodyMesh(far) {
       if (carModelBuf) return null;
@@ -342,13 +366,7 @@ const CarDraw = (function () {
       if (far && !_farRivalKick && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
         _farRivalKick = true;
         const epoch = _sharedRivalEpoch;
-        const make = () => {
-          if (epoch !== _sharedRivalEpoch || !_sharedRivalGeom || _farRivalBody) return;
-          try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
-          catch (e) { Log.warn("gfx", "far rival body failed", e); }
-          if (_farRivalBody) _sharedRivalGeom = null;
-          else _farRivalKick = false; // a failed upload can retry on the next far draw
-        };
+        const make = () => buildFarRivalBody(epoch);
         if (typeof requestIdleCallback === "function") requestIdleCallback(make, { timeout: 2000 }); else setTimeout(make, 0);
       }
       return _sharedRivalBody;
@@ -1028,11 +1046,7 @@ const CarDraw = (function () {
         try {
           sharedRivalBodyMesh(false);
           if (!_farRivalBody && _sharedRivalGeom && typeof CarGeometry !== "undefined" && CarGeometry.decimate) {
-            _farRivalKick = true;
-            try { _farRivalBody = G.gfx.createMesh(CarGeometry.decimate(_sharedRivalGeom, FAR_BODY_TRIS)); }
-            catch (e2) { Log.warn("gfx", "far rival body warm failed", e2); }
-            if (_farRivalBody) _sharedRivalGeom = null;
-            else _farRivalKick = false;
+            buildFarRivalBody(_sharedRivalEpoch);
           }
         } catch (e) { Log.warn("gfx", "shared rival body warm failed", e); }
       }
@@ -1325,13 +1339,13 @@ const CarDraw = (function () {
     // The last key's inputs, so the per-frame call (default camera) builds no
     // string and no closure on a hit — the hoisted factory reads _cb*.
     let _cbFinish = -1;
-    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "";
+    let _cbTeam = null, _cbId = null, _cbVk = null, _cbHalo = null, _cbBody = null, _cbNum = null, _cbKey = "", _cbShKey = "", _cbParts = null;
     function buildPendingCockpitBody() {
       const team = _cbTeam, source = deps.resolveLivery(team);
       const view = typeof CockpitFinishes !== "undefined" ? CockpitFinishes.view(source) : null, liv = view ? view.livery : source;
       return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
         { livery: liv, cockpitHalo: view && view.halo, teamId: team.id, noWheels: true, noDriver: true, cockpit: true, cockpitBody: CockpitOpts.body(), halo: _cbHalo, num: _cbNum,
-          parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
+          parts: _cbParts }));
     }
     // The first-person SHADOW caster: the WHOLE exterior car (wheels, engine
     // cover/airbox, fin, rear wing) as a depth silhouette minus only what made
@@ -1343,7 +1357,7 @@ const CarDraw = (function () {
       const team = _cbTeam, liv = deps.resolveLivery(team);
       return G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
         { livery: liv, teamId: team.id, silhouette: true, noDriver: true, ownHalo: true, halo: _cbHalo, num: _cbNum,
-          parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) }));
+          parts: _cbParts }));
     }
     function cockpitKey(team, car, visualKey) {
       // Player-only (drawCockpitRig runs on c.isPlayer), so the cached playerVisualKey
@@ -1363,6 +1377,7 @@ const CarDraw = (function () {
         _cbId = team.id; _cbVk = visualKey; _cbHalo = haloSz; _cbBody = body; _cbNum = num;
       }
       _cbTeam = team;
+      _cbParts = playerPartsFor(team, visualKey);
     }
     function cockpitBodyMesh(team, car, visualKey = playerVisualKey) {
       cockpitKey(team, car, visualKey);
@@ -1616,7 +1631,7 @@ const CarDraw = (function () {
       const liv = deps.resolveLivery(team);
       return putBoundedMesh(playerBodies, playerBodyOrder, key, () => G.gfx.createMesh(Car3D.build(liv.c1, liv.c2,
         { livery: liv, teamId: team.id, noWheels: true, num: carDecalNum(team, car), helmetKey: lid,
-          parts: Parts.getVisualTiers(G.getTeamParts(team.id), team) })), PLAYER_BODY_CACHE_MAX);
+          parts: playerPartsFor(team, visualKey) })), PLAYER_BODY_CACHE_MAX);
     }
     // Player wheel meshes, keyed by the resolved TYRES/BRAKES visual tier (band
     // colour + caliper accent) so a parts change rebuilds the right mesh instead
@@ -2055,7 +2070,7 @@ const CarDraw = (function () {
         for (const k in teamMeshes) { if (G.gfx.freeMesh) G.gfx.freeMesh(teamMeshes[k]); delete teamMeshes[k]; }  // free old GPU buffers, then rebuild from model
         for (const k in teamBodies) { freeBodyPair(teamBodies[k]); delete teamBodies[k]; }
         for (const k in playerBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(playerBodies[k]); delete playerBodies[k]; }
-        invalidateSharedRivalBody();
+        freeSharedRivalBodies();
         playerBodyOrder.length = teamMeshOrder.length = teamBodyOrder.length = 0;
         for (const k in cockpitBodies) { if (G.gfx.freeMesh) G.gfx.freeMesh(cockpitBodies[k]); delete cockpitBodies[k]; }
         cockpitBodyOrder.length = 0;
@@ -2090,6 +2105,11 @@ const CarDraw = (function () {
     // recomputePlayerMods hands over the player's resolved wheel spec + cosmetic key.
     function setPlayerParts(vt, visualKey) {
       const team = G.player ? G.player.team : Teams.LIST[G.teamIdx];   // the same team recomputePlayerMods resolved
+      // Capture the recipe alongside its key: STANDARD Daily resolves factory
+      // parts even when the ordinary garage still has a custom setup saved.
+      // Car3D.build applies the current livery's appearance to these fitted parts.
+      playerParts = vt;
+      playerPartsTeam = team ? team.id : "";
       if (team) vt = Car3D.appearanceParts(vt, deps.resolveLivery(team));
       playerTyreTier = vt.tyres; playerBrakesTier = vt.brakes;
       playerTyreId = vt._ids ? vt._ids.tyres : "medium";
@@ -2125,7 +2145,7 @@ const CarDraw = (function () {
       wheelMeshOrder.length = 0;
       for (const k in fieldWheelCache) { freeWheelPair(fieldWheelCache[k]); delete fieldWheelCache[k]; }
       fieldWheelOrder.length = 0;
-      invalidateSharedRivalBody();
+      freeSharedRivalBodies();
       _teamMeshKeyCache.clear();
     }
 

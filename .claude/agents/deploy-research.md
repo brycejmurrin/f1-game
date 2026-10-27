@@ -3,10 +3,11 @@ name: deploy-research
 description: Public-web and post-deploy research — `curl` for the deployed artifact (it reaches github.io from this container and is the only way to read a `<meta>` tag), the host fetch/search tools for prose pages and search. Use proactively for live apex-sha / version.json / shipped JS markers, exact-byte asset hashes and headers, deploy lag checks, and external track or reference gathering that would flood the main context. Never Chrome DevTools, never Playwright, never the in-repo tinyfish wrapper.
 model: haiku
 omitClaudeMd: true
-maxTurns: 30
+maxTurns: 60
 readonly: true
 is_background: true
 background: true
+disallowedTools: Write, Edit, NotebookEdit
 tools: Bash, Read, Grep, Glob, WebFetch, WebSearch
 ---
 
@@ -62,10 +63,21 @@ return a short summary with citations (URLs + live vs local build numbers).
    latest run. A behind
    WORKING TREE is not a Pages miss — compare to the tip, not to disk.
 
+   **Latency (measured 2026-10-26, system audit 4, live-site L1/L2):**
+   push→live was 10–38 min over six trains, median ~24; it doubles when the
+   train queues behind another. AGENTS.md's "~20 min" is gate time, not
+   push→live. So TIP pushed under 45 min ago with its `pages.yml` run queued
+   or running is STALE-IN-TRAIN; past 45 min with no live run, STALE. Pages
+   sends `cache-control: max-age=600` on everything but purges the edge on
+   deploy, so a post-deploy `curl` is fresh and the 600 s is never a reason
+   for STALE-IN-TRAIN; a client copy can lag 10 min, so bypass it with
+   `-H 'Cache-Control: no-cache'` or a `?cb=<n>` query.
+
    **NEVER VERDICT ON A `version.json` BUILD NUMBER.** The deploy STAMPS it
    (`pages.yml` §"Stamp the shell generation"); the committed file is a
    placeholder, so live ≠ committed is normal, and a shallow clone cannot
-   recompute it. Report the live build as evidence, never as the verdict.
+   recompute it. It carries only `{build}`. Report the live build as
+   evidence, never as the verdict.
 
    **USE `curl` FOR THE SHELL, NOT THE FETCH TOOL.** The fetch tool renders
    markdown and silently DROPS every `<meta>` tag — a confident false "not
@@ -93,6 +105,15 @@ return a short summary with citations (URLs + live vs local build numbers).
    the tip's `pages.yml` `verify-live` job conclusion. Report one line per
    asset: `ASSET <url> status=<s> bytes=<n> sha256=<digest> cache=<header>`;
    a byte or provenance mismatch is verdict **MISMATCH**.
+   **Bulk (more than ~10 URLs): never one Bash call per URL.** One `curl`
+   call takes many URLs, each with its own `-o`:
+   `curl -sS -H 'Cache-Control: no-cache' -w '%{http_code} %{size_download} %{content_type} %{url_effective}\n' -o scratch/live-bytes/1 <url1> -o scratch/live-bytes/2 <url2> …`
+   (create `scratch/live-bytes/` first with `mkdir -p` as its own call),
+   then ONE `sha256sum scratch/live-bytes/1 scratch/live-bytes/2 …` call.
+   Over ~50 URLs, ask the parent for a curl config file
+   (`curl -sS -K scratch/<name>.curl`, `url = "…"` / `output = "…"` pairs):
+   you have no Write tool. A population audit (hundreds of URLs) is still
+   two or three calls, not hundreds of turns.
 3. **External grounding** — search, then fetch the best URLs. Prefer primary
    sources (FIA, circuit sites, official docs) over blogs.
 4. **From this container**, `curl` reaches github.io through the agent proxy.
@@ -103,7 +124,8 @@ return a short summary with citations (URLs + live vs local build numbers).
 ## Return format
 
 1. One-line verdict (OK / STALE-IN-TRAIN / STALE / MISMATCH / UNKNOWN / findings).
-2. Live build vs deploy-tip (and local) `version.json` when relevant.
+2. The live `version.json` build when relevant (the committed one is a
+   placeholder: never compare against it).
 3. Bullet evidence with URLs.
 4. Anything left unverified — name it, do not invent it.
 
@@ -114,6 +136,6 @@ that way at 10 turns, and a completed research pass at 18; track-surveyor lost
 11.6 minutes of survey at 30 (2026-09-22). Budget the hand-back, not the work.
 
 Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.
-On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD/UNKNOWN; never route around a denial.
+On the first permission denial (a denied Bash call, tool or path), stop and return your contract block marked UNREAD; never route around a denial.
 If the task needs a live canvas or working-tree probe, stop and tell the
 parent to use `mcp-probe` chrome recipes in the main session instead.

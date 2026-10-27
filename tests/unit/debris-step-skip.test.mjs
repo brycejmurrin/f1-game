@@ -13,6 +13,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/physics/debris-world.js"), "utf8");
@@ -398,4 +399,22 @@ test("debris draw: a backend without instancing retains the per-body fallback", 
   const h = debrisDrawHarness(false), s = h.slot(1);
   h.draw([s], 1); s.state.x = 3; h.draw([s], 1);
   assert.equal(h.calls.draws, 2); assert.equal(h.calls.last[12], 3);
+});
+
+// ARC RULE (docs/PHYSICS.md §arc, DECISIONS #4, audit4 F1): settled marbles cut the PLAYER's grip
+// (marbleGrip, player-forces), so what makes an AI shed them must be that car's own state — never
+// track curvature. The AI hook used |k|·v²/g until 2026-10-26.
+test("AI marble drops read the AI car's own state, never curvature (arc rule)", () => {
+  const game = gameSource();
+  const end = game.indexOf("DebrisWorld.tyreMarble(c, _marbleArg)");
+  assert.ok(end > 0, "the AI marble hook in game.js was renamed or moved");
+  const start = game.lastIndexOf("const vlOwn = ", end);
+  assert.ok(start > 0 && end - start < 1500, "vlOwn (the AI's own lateral step) feeds the hook");
+  const block = game.slice(start, end).replace(/\/\/[^\n]*/g, "");   // code only: the comments may name what is banned
+  for (const re of [/\bk\b/, /curvature/, /\bkCur\b/, /\bkTurn\b/, /\bkAhead/, /latG/, /\bsmp\b/]) {
+    assert.equal(re.test(block), false, `the AI marble block reads ${re}: a curvature-derived signal would reach the player's grip`);
+  }
+  // Three callers in game.js and its carved modules: the AI hook here, the player's own slip in
+  // player-forces and the apex.js dev hook (constant args, the player's car). A fourth needs an arc-rule review.
+  assert.equal(game.split("DebrisWorld.tyreMarble(").length - 1, 3, "a new tyreMarble caller needs an arc-rule review");
 });

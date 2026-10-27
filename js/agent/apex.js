@@ -582,6 +582,7 @@ const api = {
   },
   physState() {
     if (!G.player || G.player.px == null) return null;
+    if (!G.track) return { error: "no track" };   // a stepped rebuild / menu flyby drop nulls the track while px survives
     const slip = Math.atan2(G.player.vLat || 0, Math.max(1, G.player.speed));
     Tracks.sample(G.track, G.player.s, smp);
     const { axFrac, slipFactor } = AgentView.slipBudget(G.player, LONG_GRIP, gripMult());

@@ -1,6 +1,8 @@
 # Wetness and lighting — workstream plan (2026-09-30)
 
-Status: **PLAN** — docs-only first. Implement (a) continuous track wetness in
+Status: **OPEN** (checked against the code 2026-10-26) — wet-asphalt mirrors shipped; the continuous-wetness contract (slice A1) was not verified, and `grep -c wetness js/lighting/presets.js` is 0 today (the slice-A1 preset pins are not there).
+
+Status when written: **PLAN** — docs-only first. Implement (a) continuous track wetness in
 ordered slices after this PR lands; implement (b) lighting grids as small
 per-shard PRs in parallel with (a) once the wetness contract exists (or with
 explicit `wetness: -0.05` / AUTO so new grids cannot reintroduce the look≠drive

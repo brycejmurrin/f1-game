@@ -30,6 +30,7 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 
 // terser is loaded on first use, not at import: pages.yml's deploy and
 // verify-live jobs and desktop.yml's pack job run stage.mjs WITHOUT a root
@@ -97,9 +98,21 @@ export async function minifySource(src, rel) {
   return { code: r.code, map: typeof r.map === "string" ? r.map : JSON.stringify(r.map) };
 }
 
+/** Conservative CPU/memory envelope; explicit requests cannot exceed the pool cap.
+ * The memory allowance includes more than the worker's 256 MiB old-generation cap.
+ */
+export function minifyJobCount(requested = 2, {
+  parallelism = os.availableParallelism(),
+  memory = typeof process.availableMemory === "function" ? process.availableMemory() : os.freemem(),
+} = {}) {
+  const wanted = Number.isFinite(requested) ? Math.floor(requested) : 2;
+  return Math.max(1, Math.min(2, wanted, parallelism, Math.floor(memory / (512 * 1024 * 1024))));
+}
+
 /**
- * Minify the staged tree in place; writes `<file>.map` beside each file.
- * Deterministic: same input bytes and options → same output bytes.
+ * Minify staged files, joining all transforms before publishing any code/maps.
+ * Temporary results bound memory to one source/output per worker and are removed
+ * after success or failure. The serial path uses the same publication barrier.
  * @param {string} siteRoot
  * @param {{ jobs?: number }} [opts]
  * @returns {Promise<{ files: number, before: number, after: number } | { skipped: string }>}
@@ -111,22 +124,34 @@ export async function minifyStaged(siteRoot, opts = {}) {
     return { skipped };
   }
   const targets = minifyTargets(siteRoot);
-  const jobs = Math.max(1, opts.jobs || 8);
-  let before = 0, after = 0, next = 0;
-  const worker = async () => {
-    while (next < targets.length) {
-      const rel = targets[next++];
-      const abs = path.join(siteRoot, rel);
-      const src = fs.readFileSync(abs, "utf8");
-      let out;
-      try { out = await minifySource(src, rel); }
-      catch (e) { throw new Error(`minify: ${rel}: ${e.message}`); }
-      before += Buffer.byteLength(src);
-      after += Buffer.byteLength(out.code);
-      fs.writeFileSync(abs, out.code);
-      fs.writeFileSync(abs + ".map", out.map);
+  if (!targets.length) return { files: 0, before: 0, after: 0 };
+  const jobs = Math.min(minifyJobCount(opts.jobs), targets.length);
+  const resultRoot = fs.mkdtempSync(path.join(siteRoot, ".minify-"));
+  try {
+    let results;
+    if (jobs > 1) {
+      const { minifyInWorkers } = await import("./minify-worker.mjs");
+      results = await minifyInWorkers({ siteRoot, targets, resultRoot, jobs });
+    } else {
+      results = [];
+      for (const [index, rel] of targets.entries()) {
+        const src = fs.readFileSync(path.join(siteRoot, rel), "utf8");
+        let out;
+        try { out = await minifySource(src, rel); }
+        catch (error) { throw new Error(`minify: ${rel}: ${error.message}`); }
+        fs.writeFileSync(path.join(resultRoot, `${index}.js`), out.code);
+        fs.writeFileSync(path.join(resultRoot, `${index}.map`), out.map);
+        results.push({ before: Buffer.byteLength(src), after: Buffer.byteLength(out.code) });
+      }
     }
-  };
-  await Promise.all(Array.from({ length: jobs }, worker));
-  return { files: targets.length, before, after };
+    // stageSite awaits this barrier before content-hash/SRI stamping.
+    for (const [index, rel] of targets.entries()) {
+      fs.copyFileSync(path.join(resultRoot, `${index}.js`), path.join(siteRoot, rel));
+      fs.copyFileSync(path.join(resultRoot, `${index}.map`), path.join(siteRoot, rel + ".map"));
+    }
+    return { files: targets.length, before: results.reduce((n, r) => n + r.before, 0),
+      after: results.reduce((n, r) => n + r.after, 0) };
+  } finally {
+    fs.rmSync(resultRoot, { recursive: true, force: true });
+  }
 }

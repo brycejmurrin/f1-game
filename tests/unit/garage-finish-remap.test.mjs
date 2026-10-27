@@ -19,11 +19,14 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
+import vm from "node:vm";
+import { fnSource } from "../helpers/fn-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const M = loadParts({ shade: true }), C = M.Car3D;
 const team = M.Teams.LIST[0];
-const parts = M.Parts.getVisualTiers(M.Parts.getFactorySetup(team.id), team);
+const parts = M.Parts.getVisualTiers(M.Parts.getFactorySetup(team), team);
 const build = (liv, extra) => C.build(liv.c1, liv.c2, Object.assign({ livery: liv, teamId: team.id, num: 7, parts }, extra));
 const same = (a, b) => a.length === b.length && a.every((v, i) => Object.is(v, b[i]));
 
@@ -82,4 +85,33 @@ test("a shadeKeep from different geometry is ignored, not trusted", () => {
   assert.notEqual(A.pos.length, fresh.pos.length, "the stripe really adds geometry (else this test proves nothing)");
   assert.notEqual(warm._refinish.keep, A._refinish.keep, "a count mismatch starts a fresh prep");
   for (const k of ["pos", "nrm", "col", "mat", "idx"]) assert.ok(same(fresh[k], warm[k]), `${k} differs from a fresh build`);
+});
+
+test("SPINE TOP WRAP rebuilds smoothing prep for moved flank trim with equal mesh counts", () => {
+  const ctx = vm.createContext({ PhysicsConsts: { X_OPEN_RATE: 1, X_CLOSE_RATE: 1 } });
+  const source = readFileSync(path.join(ROOT, "js/garage/setup-camera.js"), "utf8");
+  vm.runInContext(source, ctx, { filename: absSrc("js/garage/setup-camera.js") });
+  const key = vm.runInContext("SetupCamera.hullKeyOf", ctx);
+  const base = { c1: team.color, c2: team.color2, finShape: "none", coverVents: "none", spineSide: "logo", spineLogo: "logo" };
+  const wrap = { ...base, spineLogo: "wrap" };
+  // Execute getSetupPreviewMesh's real reuse decision, with the actual builder
+  // and smoothing code. The garage cache seam records the data it would upload.
+  let liv = base, pick = 0;
+  const camera = new Function("Car3D", "CarShade", "Parts", "Teams", "G", "resolveLivery", "previewKey", "partsVisualKey", "garageSeat", "seatTag", "hullKeyOf", "GarageScene", "getTeamParts",
+    "let _spMeshKey = '', _spBase = null, _spMesh, _spHull;\n" + fnSource(source, "function getSetupPreviewMesh()") + "\nreturn getSetupPreviewMesh;")(
+    C, M.CarShade, M.Parts, M.Teams, { teamIdx: 0 }, () => liv, () => String(pick), () => "factory|L:default",
+    () => ({ num: 7 }), () => "7", key, { previewMesh: (k, hk, create) => ({ mesh: create(), hull: [] }) }, () => M.Parts.getFactorySetup(team));
+  const before = camera(), keep = before._refinish.keep;
+  liv = wrap; pick++;
+  const actual = camera(), fresh = build(wrap, { refinish: true });
+  assert.equal(before.pos.length, actual.pos.length);
+  assert.equal(before.idx.length, actual.idx.length);
+  assert.equal(same(before.pos, actual.pos), false, "WRAP really moves geometry despite equal counts");
+  assert.notEqual(actual._refinish.keep, keep, "the camera must not carry stale smoothing prep across WRAP");
+  assert.ok(same(actual.pos, fresh.pos) && same(actual.nrm, fresh.nrm), "live edit matches a fresh wrap build");
+  const wrapKeep = actual._refinish.keep;
+  liv = { ...wrap, c1: [0.1, 0.8, 0.3] }; pick++;
+  const painted = camera(), freshPaint = build(liv, { refinish: true });
+  assert.equal(painted._refinish.keep, wrapKeep, "paint-only edits keep smoothing reuse");
+  assert.ok(same(painted.nrm, freshPaint.nrm), "paint reuse still matches fresh normals");
 });

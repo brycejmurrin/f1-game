@@ -74,7 +74,7 @@ const GLTF = (function () {
          + m[2] * (m[4] * m[9] - m[5] * m[8]);
   }
 
-  function normalMatTransform(m, n) {
+  function normalMatrix(m) {
     // upper-left 3x3
     const a = m[0], b = m[1], c = m[2];
     const d = m[4], e = m[5], f = m[6];
@@ -83,7 +83,7 @@ const GLTF = (function () {
     const det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
     if (Math.abs(det) < 1e-12) {
       // singular (e.g. zero scale axis) — fall back to plain rotation*normal
-      return [a * n[0] + d * n[1] + g * n[2], b * n[0] + e * n[1] + h * n[2], c * n[0] + f * n[1] + i * n[2]];
+      return [a, d, g, b, e, h, c, f, i];
     }
     const id = 1 / det;
     const c00 = (e * i - f * h) * id;
@@ -97,11 +97,7 @@ const GLTF = (function () {
     const c22 = (a * e - b * d) * id;
     // The coefficients above are cofactor COLUMNS for our column-major input.
     // Apply their rows: normals need inverse-transpose, not inverse rotation.
-    return [
-      c00 * n[0] + c10 * n[1] + c20 * n[2],
-      c01 * n[0] + c11 * n[1] + c21 * n[2],
-      c02 * n[0] + c12 * n[1] + c22 * n[2],
-    ];
+    return [c00, c10, c20, c01, c11, c21, c02, c12, c22];
   }
 
   // atob in the browser; Buffer in Node (self-test). Returns a Uint8Array.
@@ -304,6 +300,7 @@ const GLTF = (function () {
       const mesh = json.meshes[inst.mesh];
       if (!mesh || !mesh.primitives) continue;
       const world = inst.world;
+      let nm = null;   // computed once if this instance supplies normals
       // A mirrored world transform reverses every triangle's winding, so the
       // front faces arrive clockwise: back-face culling drops the visible side
       // and computeVertexNormals points inward. glTF 2.0 §3.7.4: "the
@@ -361,6 +358,7 @@ const GLTF = (function () {
             throw new Error("GLTF: invalid NORMAL accessor");
           }
           normals = normalA.data;
+          if (!nm) nm = normalMatrix(world);
         }
 
         // material baseColorFactor (default white)
@@ -391,9 +389,12 @@ const GLTF = (function () {
           posOut.push(p[0] * scale, p[1] * scale, p[2] * scale);
 
           if (normals) {
-            const n = normalMatTransform(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
-            const l = (Math.hypot(n[0], n[1], n[2]) || 1) * nSign;
-            nrmOut.push(n[0] / l, n[1] / l, n[2] / l);
+            const nx = normals[i * 3], ny = normals[i * 3 + 1], nz = normals[i * 3 + 2];
+            const x = nm[0] * nx + nm[1] * ny + nm[2] * nz;
+            const y = nm[3] * nx + nm[4] * ny + nm[5] * nz;
+            const z = nm[6] * nx + nm[7] * ny + nm[8] * nz;
+            const l = (Math.hypot(x, y, z) || 1) * nSign;
+            nrmOut.push(x / l, y / l, z / l);
           } else {
             nrmOut.push(0, 0, 0); // filled after, from faces
           }

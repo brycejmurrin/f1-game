@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import vm from "vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -148,4 +149,42 @@ test("startRace retries the race-session load on Retry and quits to menu on Back
   const g = src("js/game.js");
   assert.match(g, /while \(!sessionOk && !stale\(\) && await LoadingScreen\.failed\(\) === "retry"\) sessionOk = await ensureRaceSession\(\)/);
   assert.match(g, /if \(!sessionOk\) \{ loadingScreen\.stop\(\); quitToMenu\(\)/);
+});
+
+// WP-G4 (review 2026-10-27 r2 F4): Career.markWeekendStarted() stamps
+// season.startedRound, escrows planning and saves. It ran right after the first
+// yield, so a failed session load + BACK, a save conflict or a lost GPU context
+// locked the round's brief with no race run. Run the REAL startRaceBody in a VM
+// with every dependency stubbed (game-vm UA: no yields) and read the stamp.
+function runStartRaceBody({ sessionOk = true, conflict = false, ctxLost = false } = {}) {
+  const season = { round: 5 }, log = [];
+  const STOP = new Error("past the mark");
+  const fn = () => {}, obj = new Proxy({}, { get: (t, k) => (k === "then" ? undefined : fn) });
+  const ctx = vm.createContext({
+    navigator: { userAgent: "Mozilla/5.0 apex-game-vm" }, window: { LightPresets: {} },
+    RaceEntryProfile: obj, LoadingScreen: { failed: async () => "back" }, loadingScreen: obj,
+    isCareer: () => true,
+    Career: { conflicted: () => conflict, markWeekendStarted() { if (!conflict) season.startedRound = season.round; } },
+    ensureRaceSession: async () => sessionOk, ensureAudio: async () => true, ensureLightPresets: async () => true,
+    quitToMenu: () => log.push("quitToMenu"), quitToMenuAfterCtxLost: () => log.push("ctxLost"), announce: fn,
+    radioVoice: obj, flow: "race", season, SeasonCal: { conflicted: () => false, canRace: () => true },
+    resultsCam: obj, _roadReflectionTransition: {}, IncidentSim: obj, raceCtl: obj, wxArc: obj, DebrisWorld: obj,
+    banner: obj, raceMessageHistory: null, announcer: {}, hud: {}, _menuGate: {},
+    loadTrack: fn, trackIdx: 0, gfxContextLost: () => ctxLost, releaseFieldScratch: () => { throw STOP; },
+  });
+  vm.runInContext(symbolSource("async function startRaceBody()") + "\nglobalThis.__run = startRaceBody;", ctx, { filename: "vm-slice:startRaceBody" });
+  return ctx.__run().then((v) => ({ v, season, log }), (e) => { if (e !== STOP) throw e; return { v: "built", season, log }; });
+}
+
+test("startRaceBody locks the career brief only once the session loaded, no conflict and the track built", async () => {
+  let r = await runStartRaceBody({ sessionOk: false });
+  assert.equal(r.v, false); assert.deepEqual(r.log, ["quitToMenu"]);
+  assert.notEqual(r.season.startedRound, r.season.round, "session bundle failed + BACK: no race ran, the brief stays open");
+  r = await runStartRaceBody({ conflict: true });
+  assert.equal(r.v, false); assert.notEqual(r.season.startedRound, r.season.round, "save conflict: quit before the stamp");
+  r = await runStartRaceBody({ ctxLost: true });
+  assert.equal(r.v, false); assert.deepEqual(r.log, ["ctxLost"]);
+  assert.notEqual(r.season.startedRound, r.season.round, "GPU context lost during the build: no race ran");
+  r = await runStartRaceBody();
+  assert.equal(r.v, "built"); assert.equal(r.season.startedRound, r.season.round, "a race that reaches makeCars locks the brief");
 });

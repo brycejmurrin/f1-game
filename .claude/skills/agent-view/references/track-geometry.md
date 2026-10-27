@@ -8,7 +8,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 | Hook | Returns (verified shape) |
 |---|---|
 | `tracks()` | `Array` of `{id, name, i}` per `Tracks.LIST` entry |
-| `info()` | `{state, track, n, total, timeTrial, seasonMode}` — `n` nodes, `total` metres |
+| `info()` | `{state, track, n, total, …, sectors, turns}` — `n` nodes, `total` metres, `turns` the curated count |
 | `trackShape(n)` | `Array(n)` normalised centreline pts + curvature `k` |
 | `trackProfile(n)` | `Array(n)` of `{frac, y, k, hw, slope}` — elevation/curvature/width |
 | `trackBounds()` | `{minX,maxX,minZ,maxZ,spanX,spanZ,centerFrac}` |
@@ -28,7 +28,7 @@ audits. `info().track` is null until a circuit is loaded with `race(id)`/`tt(id)
 
 `corners()` finds **every local curvature maximum** along the centreline. A long
 sweeper or a double-apex often registers as multiple peaks, so the count is
-**higher** than the FIA turn list (e.g. Spa ~42 peaks vs ~19–20 official turns).
+**higher** than the FIA turn list (often about twice it; measure, never quote).
 
 | Question | Hook |
 |---|---|

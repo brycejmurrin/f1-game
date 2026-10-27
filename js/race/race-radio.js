@@ -613,7 +613,6 @@ var RaceRadio = (function () {
       if (f.pitting) m.pitLap = f.lap;
       if (f.caution > 0) m.cautionLap = f.lap;
       const tv = tvLive(f);
-      if (o.onEvents && ev.length) o.onEvents(ev, f);
       for (const e of ev) {
         if (!watch) engineerEvent(e, f, p);   // a replay has no engineer
         if (tv) tvEvent(e, f);
@@ -686,6 +685,9 @@ var RaceRadio = (function () {
      *  tiers and cooldowns as a live race's. True when a line was offered. */
     function replayEvent(h, a, b) {
       if (!watch || !live || comm === "off" || !h) return false;
+      // There is no spoken ending pool: retain the replay's recorded caption
+      // while the caution is still active. Actual clearance is a later event.
+      if (h.kind === "ending") return false;
       // The flags: the same "flag" slot the caution edge uses, so a WATCH whose
       // own caution follows the script says it once.
       if (h.kind === "sc") {

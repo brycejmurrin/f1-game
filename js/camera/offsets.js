@@ -125,7 +125,9 @@ let _comfort = {};
 let _tracks = {};
 let _cars = {};
 let _context = { track: null, car: null };
+let _readContext = null;
 let _ctxRev = -1, _ctxList = null;   // refreshStoredContext's memo (store.rev, Teams.LIST)
+let _storedContext = { track: null, car: null };
 
 function sanitizeProf(src, keepDefaults = false) {
   const prof = {};
@@ -198,8 +200,9 @@ function setContext(trackId, carId) {
   };
   return { ..._context };
 }
-function context() { return { ..._context }; }
-function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
+// The live world can advance without changing the saved menu selections (career,
+// championship and WATCH). Resolve it at use time so a closed tuner follows cuts.
+function bindContext(read) { _readContext = typeof read === "function" ? read : null; }
 // Stored trackId/team only move on a Store write, and store.rev bumps on every one (set, clear, import, another
 // tab): re-read them per revision, not per call. Each scopeKey (a dozen a rendered frame from the rig's knob reads)
 // was two Store.get, each building an "apex26." key string (CPU-HUNT-2026-10-24 C6).
@@ -207,15 +210,25 @@ function refreshStoredContext() {
   const rev = store.rev, list = typeof Teams !== "undefined" ? Teams.LIST : null;   // a roster swap re-reads too
   if (typeof rev === "number") { if (rev === _ctxRev && list === _ctxList) return; _ctxRev = rev; _ctxList = list; }
   const trackId = store.get("trackId", null);
-  if (typeof trackId === "string" && trackId) _context.track = trackId;
+  _storedContext.track = typeof trackId === "string" && trackId ? trackId : null;
   const team = store.get("team", 2);
-  if (Number.isInteger(team) && typeof Teams !== "undefined" && Teams.LIST && Teams.LIST[team]) {
-    _context.car = Teams.LIST[team].id;
-  }
+  _storedContext.car = Number.isInteger(team) && list && list[team] ? list[team].id : null;
 }
+function context() {
+  const live = (_readContext ? _readContext() : _context) || {};
+  let track = typeof live.track === "string" && live.track ? live.track : null;
+  let car = typeof live.car === "string" && live.car ? live.car : null;
+  if (!_readContext || !track || !car) {
+    refreshStoredContext();
+    if (!_readContext || !track) track = _storedContext.track || track;
+    if (!_readContext || !car) car = _storedContext.car || car;
+  }
+  return { track, car };
+}
+function scopeMap(scope) { return scope === "track" ? _tracks : scope === "car" ? _cars : null; }
 function scopeKey(scope) {
-  refreshStoredContext();
-  return scope === "track" ? _context.track : scope === "car" ? _context.car : null;
+  const current = context();
+  return scope === "track" ? current.track : scope === "car" ? current.car : null;
 }
 function scopeEntry(scope, create) {
   const map = scopeMap(scope), key = scopeKey(scope);
@@ -697,7 +710,7 @@ return { CAM_TUNE_DEFS, COMFORT_DEFS, PRESETS, FOV_MIN, FOV_MAX, GLOBAL_MODE, SH
          exportEdits, exportGlobal, exportPack,
          set, setGlobal, setScoped, reset, resetGlobal, resetScoped, resetAll,
          count, countGlobal, countScoped, tunedModes, load, loadGlobal, loadComfort, loadTrack, loadCar, persist,
-         setContext, context, comfortGet, comfortGetGlobal, comfortSet, comfortGetScoped, comfortSetScoped, fovBias, speedFov, bob, rollLean,
+         setContext, bindContext, context, comfortGet, comfortGetGlobal, comfortSet, comfortGetScoped, comfortSetScoped, fovBias, speedFov, bob, rollLean,
          shakeOffset, buzzAmp, rollTarget,
          copyFrom, applyToAllModes, applyPreset,
          importModes, importGlobal, importComfort, importTracks, importCars, importPack, importText,

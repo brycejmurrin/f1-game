@@ -1875,7 +1875,7 @@ const AgentView = (function () {
             + "what: 'view'|'map'|'circuit'|'car'. For intuition, not measurement",
           "awaitPresent(timeoutMs)?":
             "WAIT FOR THE PIXELS — resolve once the next real frame has "
-            + "reached the screen; a screenshot tool taken before this "
+            + "reached the screen; a screenshot taken before this "
             + "resolves can read a stale or black canvas under HeadlessChrome",
         },
         detail: {
@@ -1902,7 +1902,7 @@ const AgentView = (function () {
             "GOVERNOR SNAPSHOT — scale/fps/tier/autoTier/autoShed/userTier/strikes "
             + "(alias of renderScale report)",
           "spatialUpscale(0|1)":
-            "GLX + WGX + TLX SGSR1 (flag OFF by default). active only when on "
+            "GLX/WGX/TLX SGSR1 (flag OFF by default). active only when on "
             + "AND renderScale<~1; see UPSCALING-2026-09 §6–7",
         },
         act: {
@@ -1947,7 +1947,7 @@ const AgentView = (function () {
         read: {
           telemetry: "probe() physState() obs() scan() inputState() cars() carAt(i)",
           timing: "timing() sectorState() lapHistory() fieldState()",
-          rendering: "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle({hidden,bfcache,resize,loseContext})",
+          rendering: "camState() viewState() lightState() gpuTimer() inspector(on) lightTune() perf({on,reset,measure}) lifecycle(o)",
           geometry: "corners() wallStats() trackProfile() trackShape() groundY(f,l) pitSigns()",
           catalog: "tracks() teams() info()",
         },
@@ -2123,12 +2123,12 @@ const AgentView = (function () {
       };
     }
 
-    // World XZ of a car. Prefer the mirrored px/pz (player + field); else Frenet.
     function carWorld(c) {
-      if (c.px != null) return [c.px, c.pz];
       Tracks.sample(G.track, c.s, scr);
+      const bank = Tracks.banking ? Tracks.banking(G.track, c.s, c.x || 0) : null, y = scr.p[1] + (bank ? bank.dy : 0);
+      if (c.px != null) return [c.px, c.pz, y];
       const [ex, ez] = unitRight(scr);
-      return [scr.p[0] + ex * c.x, scr.p[2] + ez * c.x];
+      return [scr.p[0] + ex * c.x, scr.p[2] + ez * c.x, y];
     }
 
     function visible(opts) {
@@ -2214,8 +2214,8 @@ const AgentView = (function () {
 
       out.cars = [];
       for (const c of G.cars) {
-        const [wx, wz] = carWorld(c);
-        const p = project(vp, wx, 0.6, wz);           // ~roll-hoop height
+        const [wx, wz, wy] = carWorld(c);
+        const p = project(vp, wx, wy + 0.6, wz);     // ~roll-hoop height
         const bearing = bearingTo(wx, wz);
         out.cars.push({
           id: c.id != null ? c.id : G.cars.indexOf(c),

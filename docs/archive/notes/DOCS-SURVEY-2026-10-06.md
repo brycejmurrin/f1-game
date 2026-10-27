@@ -234,7 +234,7 @@ Severity: **S1** agents will ship the wrong merge/push/ready behaviour;
     - **Fix:** Strike the open-gap bullets; leave §8 as the record.
     - **Owner:** Docs.
 
-20. **`docs/notes/SHARED-BRANCH-COORDINATION.md:66–71`** vs **`:73–86`**
+20. **`docs/archive/notes/SHARED-BRANCH-COORDINATION.md:66–71`** vs **`:73–86`**
     - **Issue:** “Not a lock, not a claim file, not a queue” then the
       claims-board file queue. Historical, but the first block still reads
       as current policy.

@@ -5,10 +5,10 @@ description: "Use when adding or editing track scenery — buildings, trees, gra
 
 # Dress a circuit's scenery
 
-`buildProps` (`js/track/scenery/*.js`, orchestrated by `js/track/tracks.js`;
-the `api` surface is frozen by
-`tests/unit/scenery-api-contract.test.mjs`) calls `def.scenery(api)` then
-merges one mesh. Full reference: `docs/SCENERY-API.md`.
+`buildProps` (`js/track/scenery/*.js`, orchestrated by `js/track/tracks.js`)
+calls `def.scenery(api)` then merges one mesh. Full reference: `docs/SCENERY-API.md`.
+The `api` surface is a FROZEN contract — its home is `js/track/AGENTS.md`; adding a member
+means updating `tests/unit/scenery-api-contract.test.mjs` in the same commit.
 
 ## Placement model
 
@@ -20,16 +20,11 @@ Node-based helpers take `(k, side, dist, …)`:
 
 Destructure `out` from `api` first; `verify-track` catches a `scenery()` throw.
 
-`K(s)` is AUTHORED-frame: pass it straight through, never pre-shift it. On a
-shifted circuit, wrapped helpers and `along()` callbacks both expect authored
-`k` (the double-shift bug is fixed — see [references/rules.md](references/rules.md)
-§Frames). Residual `_sceneryShift` is still frame debt. Print it before touching
-`sceneryStartFrac` (no browser):
-`node -e 'const T=require("./tools/track/verify-track.cjs").buildContext(),d=T.LIST.find(x=>x.id==="spa");T.buildCenterline(d,{line:false});console.log(d.sceneryStartFrac,d._sceneryShift)'`
-(Spa: `0.9875 0.958`). Non-zero means every authored frac literal in
-`js/circuits/scenery/<id>.js` sits that far from racing frac; dropping the field
-re-bases all of them at once, so it needs the `audit-circuit` baseline before and
-after, not a one-line edit.
+`K(s)` is AUTHORED-frame: pass it straight through, never pre-shift it. Frames, `along()`
+and the `_sceneryShift` print command: [references/rules.md](references/rules.md) §Frames (one
+home; the rule itself: `.claude/rules/game-code.md`). A non-zero shift means dropping
+`sceneryStartFrac` re-bases every authored frac literal at once — `audit-circuit` baseline
+before and after, never a one-line edit.
 
 ## Helper families
 
@@ -43,6 +38,8 @@ after, not a one-line edit.
 - **Terrain/raw:** `mountain`, `addBox`/`addCyl`/`addCone`/`addPrism`/
   `addPyramid`/`addFrustum`.
 - **Utilities:** `every`, `hash`, `anchor`, `groundYAt`, `onTrack`.
+- Argument kinds: `grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range
+  helpers take fraction endpoints; raw primitives take world coordinates.
 - **Floodlight masts/lamps:** the generic mast pass owns ordinary lamps; a hand-modelled
   luminaire uses `lampPost(spec)` (`docs/SCENERY-API.md`). Whether lights FIRE
   (dusk/dawn/night gate, lamp cap) → **lighting-tuner**.
@@ -56,10 +53,14 @@ node tools/track/props-tris.cjs <id>          # ~3 s: post-strip props tris; tes
 ```
 
 Grounded = float-audit clean and ground-audit no worse than `tests/data/scenery-audit-baseline.json`;
-added props must also stay inside the clip and props-tris baselines (a denser circuit raises the tris one in a commit that says why). Then `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)). Visual: **playwright-probe** `shot.mjs`. Picture-driven
-accuracy / floating-tree survey → **survey-track** (Montreal already ships
-`flatTerrain`). Instancing migration →
-[references/instancing.md](references/instancing.md).
+added props must also stay inside the clip and props-tris baselines (a denser circuit raises the tris one in a commit that says why). Then `npm run gen:check` ([shell/cache](../check-changes/references/bump.md)).
+
+**Generated:** `tools/shot/scenery-locations.json` goes stale when a prop moves. Regenerate with
+`node tools/shot/gen-scenery-locations.cjs` (`--check` names drift); never hand-edit it
+(`tools/lib/generated-paths.mjs`). It is NOT part of `npm run gen`.
+
+Visual: **playwright-probe** `shot.mjs` (browser: parent only; a subagent reports it not run).
+Picture-driven accuracy / floating-tree survey → **survey-track** (Montreal already ships `flatTerrain`).
 
 ## Load on demand
 
@@ -70,5 +71,3 @@ accuracy / floating-tree survey → **survey-track** (Montreal already ships
 - `TrackGraph.instance` migration, `apex_graph_parity` / `BASE=` parity,
   `batches()` / `bakeOnly`, `__apex.trackGraph()` stats →
   [references/instancing.md](references/instancing.md).
-
-`grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range helpers take fraction endpoints; raw primitives take world coordinates.

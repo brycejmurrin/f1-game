@@ -7,6 +7,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import YAML from "yaml";
@@ -49,4 +51,57 @@ test("ci.yml: behind-ship is a non-blocking PR-only step in the structural guard
   assert.notEqual(s["continue-on-error"], true,
     "do not paper over a real step failure with continue-on-error; the tool itself exits 0");
   assert.doesNotMatch(s.run, /::error/);
+});
+
+const wf = (f) => YAML.parse(fs.readFileSync(path.join(ROOT, ".github/workflows", f), "utf8"));
+
+// Run a workflow's shell with a fake `gh` on PATH that records its argv and
+// refuses `pr create` when told to: the step's BEHAVIOUR, not its text.
+function runWithFakeGh(script, { refusePr, env = {} }) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "fake-gh-"));
+  try {
+    const log = path.join(dir, "gh.log");
+    fs.writeFileSync(path.join(dir, "gh"), `#!/bin/sh
+echo "$*" >> "${log}"
+case "$1 $2" in
+  "pr create") ${refusePr ? 'echo "pull request create failed: GraphQL: GitHub Actions is not permitted to create or approve pull requests (createPullRequest)" >&2; exit 1' : "exit 0"} ;;
+  "issue list") exit 0 ;;
+esac
+exit 0
+`, { mode: 0o755 });
+    const r = spawnSync("bash", ["-c", `set -euo pipefail\n${script}`], { cwd: dir, encoding: "utf8",
+      env: { ...process.env, PATH: `${dir}:${process.env.PATH}`, GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://x", GITHUB_RUN_ID: "1", GIT_DIR: path.join(ROOT, ".git"), ...env } });
+    const calls = fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n") : [];
+    return { code: r.status, calls, out: r.stdout + r.stderr };
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
+
+test("fold workflows FAIL when gh pr create is refused, and open one issue instead of a warning (audit3 #5)", () => {
+  for (const [f, branch] of [["ratchets-fold.yml", "bot/ratchets-fold"], ["changelog-fold.yml", "bot/changelog-fold"]]) {
+    const w = wf(f);
+    assert.equal(w.permissions.issues, "write", `${f}: the refusal issue needs issues: write`);
+    const run = w.jobs.fold.steps.find((st) => st.name === "Fold").run;
+    const at = run.indexOf("PR_TITLE=");
+    assert.ok(at > 0, `${f}: the PR block starts at PR_TITLE=`);
+    const tail = run.slice(at);
+    const refused = runWithFakeGh(`echo folded > fold.log\n${tail}`, { refusePr: true });
+    assert.equal(refused.code, 1, `${f}: a refused PR ends the job red\n${refused.out}`);
+    const verbs = refused.calls.map((c) => c.split(" ").slice(0, 2).join(" "));
+    assert.deepEqual(verbs, ["pr create", "workflow run", "issue list", "issue create"],
+      `${f}: PR attempt, the branch's CI still dispatched, then ONE issue (${refused.calls.join(" | ")})`);
+    assert.ok(refused.calls[3].includes(`fold PR needs a hand (${branch})`), refused.calls[3]);
+    const ok = runWithFakeGh(`echo folded > fold.log\n${tail}`, { refusePr: false });
+    assert.equal(ok.code, 0, `${f}: an opened PR ends green\n${ok.out}`);
+    assert.deepEqual(ok.calls.map((c) => c.split(" ").slice(0, 2).join(" ")), ["pr create", "workflow run"]);
+  }
+});
+
+test("selected-verdict reds a PR on a touched js dir with no coverage; the train only warns (ci-7d C7)", () => {
+  assert.equal(job("select").outputs.coverage_gaps, "${{ steps.gaps.outputs.coverage_gaps }}");
+  const gate = step("selected-verdict", "Every touched js dir has coverage");
+  assert.equal(gate.env.GAPS, "${{ needs.select.outputs.coverage_gaps }}");
+  const at = (GAPS, CALLED) => spawnSync("bash", ["-c", gate.run], { encoding: "utf8", env: { ...process.env, GAPS, CALLED } }).status;
+  assert.equal(at("", "false"), 0, "no gap, no red");
+  assert.equal(at("js/lonely", "false"), 1, "a PR with an uncovered js dir is red");
+  assert.equal(at("js/lonely", "true"), 0, "the train warns only");
 });

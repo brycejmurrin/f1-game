@@ -618,8 +618,9 @@ const WGX = (function () {
     // Same-page GLX fallback must not inherit a soft GPU canvas or a live
     // device: tear them down before every post-soft _fail so #game is free
     // for webgl2 and the orphaned offscreen node is gone.
-    let _cssSizeCache = null;
+    let _cssSizeCache = null, _pageListenersOff = null;
     function _bootFail(reason) {
+      try { if (_pageListenersOff) _pageListenersOff(); } catch (_) { /* no document events */ }   // TLX _createUndo parity
       try { if (_cssSizeCache) _cssSizeCache.dispose(); } catch (_) { /* observer already gone */ }
       try {
         if (_gpuCanvas && _gpuCanvas.parentNode) _gpuCanvas.parentNode.removeChild(_gpuCanvas);
@@ -737,6 +738,9 @@ const WGX = (function () {
             for (let r = 0; r < 4; r++) {
               const base = r * STRIDE;
               for (let i = 0; i < LANES && base + i < px.length; i++) {
+                // Alpha carries SSR surface tags (.35/.75/1), not light.
+                // Counting it makes an opaque black patch look healthy.
+                if ((i & 3) === 3) continue;
                 const f = _f16to32(px[base + i]);
                 if (f > max) max = f;
               }
@@ -787,8 +791,10 @@ const WGX = (function () {
     const _nowMs = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
     let _shownAt = -1e9;
     try {
-      document.addEventListener("visibilitychange", function () { if (!document.hidden) _shownAt = _nowMs(); });
-      window.addEventListener("pageshow", function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+      let onShown = null, onPageShow = null;
+      document.addEventListener("visibilitychange", onShown = function () { if (!document.hidden) _shownAt = _nowMs(); });
+      window.addEventListener("pageshow", onPageShow = function (e) { if (e && e.persisted) _shownAt = _nowMs(); });   // bfcache return only: the FIRST load fires pageshow too
+      _pageListenersOff = function () { document.removeEventListener("visibilitychange", onShown); window.removeEventListener("pageshow", onPageShow); };
     } catch (_) { /* no document events (harness) */ }
     device.lost.then(function (info) {
       if (info && info.reason === "destroyed") return;
@@ -2648,15 +2654,22 @@ const WGX = (function () {
     function _mkBuffer(data, usage) {
       const size = (data.byteLength + 3) & ~3;   // writeBuffer: size multiple of 4
       const buf = device.createBuffer({ size, usage: usage | GPUBufferUsage.COPY_DST });
-      if (data.byteLength === size) {
-        device.queue.writeBuffer(buf, 0, data);
-      } else {
-        // Odd tail (an index count that leaves a 2-byte remainder): writeBuffer
-        // wants a 4-multiple, so pad through a scratch view rather than round
-        // the count and read past the array.
-        const pad = new Uint8Array(size);
-        pad.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
-        device.queue.writeBuffer(buf, 0, pad);
+      try {
+        if (data.byteLength === size) {
+          device.queue.writeBuffer(buf, 0, data);
+        } else {
+          // Odd tail (an index count that leaves a 2-byte remainder): writeBuffer
+          // wants a 4-multiple, so pad through a scratch view rather than round
+          // the count and read past the array.
+          const pad = new Uint8Array(size);
+          pad.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+          device.queue.writeBuffer(buf, 0, pad);
+        }
+      } catch (e) {
+        // The caller cannot own this buffer until the helper returns, including
+        // failures while allocating/copying the CPU pad rather than uploading it.
+        try { buf.destroy(); } catch (_) { /* already invalid */ }
+        throw e;
       }
       return buf;
     }

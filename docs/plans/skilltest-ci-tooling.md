@@ -1,5 +1,7 @@
 # Skilltest — ci-tooling
 
+Status: **SHIPPED** (checked against the code 2026-10-26) — a 2026-10-01 audit report; its fixes were cut as separate PRs and its findings were not re-run.
+
 Hands-on audit of the **ci-tooling** group (2026-10-01). Ship tip at start:
 `cd4ec4c6f` (`claude/f1-game-project-26h3ng`). Later ship tip while finishing:
 `5fa849bb1`.

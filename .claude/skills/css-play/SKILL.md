@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: "Use when iterating one menu/HUD stylesheet with screenshots, or restructuring screens/DOM/token system (BEM/CUBE/ITCSS). Cramped screen → ui-menu-a11y; full matrix → survey-ui-matrix; dead CSS → slim-bloat."
+description: "Use when tweaking one menu/HUD element (padding, font-size, safe area, tap target, chip) with screenshots, or restructuring screens/DOM/tokens (BEM/CUBE/ITCSS). Cramped screen → ui-menu-a11y; full matrix → survey-ui-matrix; dead CSS → slim-bloat."
 ---
 
 # Playing with menu / HUD CSS
@@ -17,8 +17,10 @@ only stamps the deploy's staged copy).
   families, a screen layer, splitting `index.html`, class counts) →
   [references/restructure.md](references/restructure.md) first.
 
-**Not this skill:** a cramped / clipped screen, a short landscape phone, UI scale
-(**ui-menu-a11y** owns the fit; this skill keeps the edit loop once you are in it); whole matrix → **survey-ui-matrix**.
+Routing rule (the same in both descriptions): a visual tweak on a NAMED element (more padding on
+the pause chips, a bigger font) stays here; a screen that does not FIT or clips (short landscape
+phone, UI scale) → **ui-menu-a11y**, which owns the diagnosis and hands back this edit loop.
+Whole matrix → **survey-ui-matrix**.
 One Escape/a11y bug → **ui-menu-a11y**.
 Canvas / 3D → **playwright-probe**.
 
@@ -42,27 +44,32 @@ id) does it REPLACE the path, so give the whole route: settings DISPLAY panel =
 `--click "#mb-settings,#pm-open-display" --root "#pm-panel-display" --sel ".tune-row"`.
 Door and screen ids drift: read them from `--list` (catalog ids are a subset of
 `SCREENS` in `tools/ui/menu-screens.mjs`), not from this file.
-Every step here needs a browser (Chromium via harness.mjs); `--help`/`--list` do not.
+Every step here is a browser run (Chromium via harness.mjs): session only, never a
+subagent (AGENTS.md rule 10; bash-guard refuses it), never beside a Playwright group.
+`--help`/`--list` need none. The default viewport is the phone touch shape (852×393);
+Bryce's own is `--viewport 844x390` — shoot that first. `--desktop` is the exception.
 
-Who owns a row (tune-row, set-row, the pause sheet): [references/loop.md §Who owns a row](references/loop.md#who-owns-a-row).
+Who owns a row (tune-row, set-row, the pause sheet and its chips): [references/loop.md §Who owns a row](references/loop.md#who-owns-a-row).
+An edit that changes nothing on screen: a LATER `@layer` or a more specific rule wins (loop.md §3).
 
 ## Hard don'ts
 
 1. **Hide `#game`.** A live canvas starves the compositor (survey-ui-matrix).
 2. **Open through the app's buttons**, never `hidden = false` on a dialog.
 3. **One browser at a time** — [mcp-probe traps](../mcp-probe/references/traps-chrome.md).
-4. **Do not run `layout-audit` for one screen.** That is the matrix.
+4. **Do not run `layout-audit` per edit or for one screen.** That is the matrix: once, as a restructure's before-count only.
 5. **A change to TYPE METRICS invalidates a pixel golden — re-bless in the SAME
    commit.** `tests/specs/menu-baseline.spec.js` holds six blessed PNGs; the
    title, select and garage screens are pixel-compared at a 1% tolerance. A
    font-size, tracking, weight or gap change relays text and blows that budget.
    Which sheets select it is code, not prose: `node tools/ci/pick-tests.mjs`
    (group `baseline`) and `select-specs.mjs` (the spec) — when neither names it
-   for your sheet, run the spec yourself. Regenerate on this box and REVIEW the
+   for your sheet, run the spec yourself (background, session only). Regenerate on
+   the platform CI uses (SwiftShader parity; the spec header says why) and REVIEW the
    diff, never accept it blind:
 
    ```sh
-   npm test -- tests/specs/menu-baseline.spec.js            # does it still match?
+   node tools/ci/test-bg.mjs --spec tests/specs/menu-baseline.spec.js   # does it still match?
    npm run test:baseline -- --update-snapshots              # re-bless all six; only the moved one changes
    ```
 

@@ -7,6 +7,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { strictFlags } from "../lib/cli-args.mjs";
 
 const timeoutMs = 15_000;
 /** GitHub Pages / Fastly occasionally answers 502/503 for one lazy path while
@@ -160,8 +161,12 @@ export async function verifyLive({
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const USAGE = "usage: node tools/ci/verify-live.mjs <base-url> [runtime-root]\n"
+    + "  fetches every published runtime file under <base-url> and compares bytes + SHA-256 with [runtime-root] (default .);\n"
+    + "  exit 0 all match / 1 a mismatch / 2 usage (an unknown flag included).";
+  strictFlags(process.argv.slice(2), [], USAGE);
   const [baseUrl, root = "."] = process.argv.slice(2);
-  if (!baseUrl) { console.error("usage: node tools/ci/verify-live.mjs <base-url> [runtime-root]"); process.exit(2); }
+  if (!baseUrl) { console.error(USAGE); process.exit(2); }
   const result = await verifyLive({ baseUrl, root: path.resolve(root) });
   console.log(JSON.stringify(result, null, 2));
   if (!result.ok) process.exit(1);

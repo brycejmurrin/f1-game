@@ -251,7 +251,7 @@ test("race-entry ticks pump input and network while holding physics and governor
   const calls = [];
   let preparing = true, warming = false;
   const ctx = {
-    lastFrame: 100, paused: false, state: "count", _poseAt: null,
+    lastFrame: 100, paused: false, raceRestarting: false, state: "count", _poseAt: null,
     mirrorPass: { preparing: () => preparing }, gfx: { warming: () => warming },
     PerfGov: { tick: dt => calls.push(["governor", dt]) }, RenderRate: { drew: () => true },
     performance: { now: () => 260 }, PerfSpans: { begin() {}, end() {} },

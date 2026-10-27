@@ -56,17 +56,21 @@ var AudioPanel = (() => {
       els.soundbtn.setAttribute("aria-pressed", b ? "true" : "false");
       if (!b) { GameAudio.stopMusic(); GameAudio.stopEngine(); GameAudio.stopRain(); }
       else if (G.state === "menu") GameAudio.startMusic(-1);
-      // Not under the pause menu: resume starts the engine, and in a friend race
-      // the loop keeps driving an engine started here, audibly.
-      else if ((G.state === "race" || G.state === "count") && !G.paused) {   // the countdown is the race's first seconds
-        GameAudio.startMusic(G.trackIdx);
-        // A race that began with SOUND OFF skipped game.js's setVoice/setVenue, so
-        // lifting the master mid-race would otherwise run the default voice and venue.
+      // Mid-race SOUND ON (countdown is the race's first seconds). A race that
+      // began with SOUND OFF skipped game.js's setVoice/setVenue (BUGS M31).
+      // Apply them even under the pause card — resume starts the engine without
+      // setVenue (game.js setPaused), so venue/voice must land here.
+      else if (G.state === "race" || G.state === "count") {
         if (G.player && G.player.team && GameAudio.setVoice) GameAudio.setVoice(G.player.team.engine);
         if (G.track && G.track.def && GameAudio.setVenue) GameAudio.setVenue(G.track.def);
-        GameAudio.startEngine();
-        // The cloud can clear while the road remains wet.
-        if (G.viewRainfall() > 0.01) GameAudio.startRain();
+        // Not under the pause menu: resume starts the engine, and in a friend
+        // race the loop keeps driving an engine started here, audibly.
+        if (!G.paused) {
+          GameAudio.startMusic(G.trackIdx);
+          GameAudio.startEngine();
+          // The cloud can clear while the road remains wet.
+          if (G.viewRainfall() > 0.01) GameAudio.startRain();
+        }
       }
       // SOUND is the master, so the panel's music controls follow it.
       syncAudioPanel();
@@ -123,21 +127,29 @@ var AudioPanel = (() => {
       if (rr() && rr().stopBattleEarcon) rr().stopBattleEarcon();
     }
     function battleNote(text) { const n = $("as-battle-status"); if (n) n.textContent = text; }
+    let voicePreview = null;
+    function stopPanelPreviews() {
+      stopBattlePreview();
+      if (voicePreview) {
+        const owned = voicePreview; voicePreview = null;
+        owned.radio.stopPreviewIfGeneration(owned.generation);
+      }
+    }
     // BACK changes a page; closing the dialog hides its ancestor. Cover both
     // independently, including browsers without a speech-synthesis instance.
     if (typeof SettingsNav !== "undefined" && SettingsNav.onLeave) SettingsNav.onLeave((id) => {
-      if (id === "audio") stopBattlePreview();
+      if (id === "audio") stopPanelPreviews();
     });
     const battlePanel = $("audioset"), battleSettings = $("pmsettings");
     if (typeof MutationObserver === "function") {
       for (const el of [battlePanel, battleSettings]) if (el) {
-        new MutationObserver(() => { if (el.hidden) stopBattlePreview(); })
+        new MutationObserver(() => { if (el.hidden) stopPanelPreviews(); })
           .observe(el, { attributes: true, attributeFilter: ["hidden"] });
       }
     }
     if (battleSettings && battleSettings.addEventListener) {
-      battleSettings.addEventListener("close", stopBattlePreview);
-      battleSettings.addEventListener("cancel", stopBattlePreview);
+      battleSettings.addEventListener("close", stopPanelPreviews);
+      battleSettings.addEventListener("cancel", stopPanelPreviews);
     }
     function setRadio(b) {
       if (b && !G.soundOn) setSound(true, true);
@@ -705,7 +717,9 @@ var AudioPanel = (() => {
     // TEST is an explicit audition, independent of the automatic speech switch.
     const preview = (ch) => {
       if (ch === "announcer" && !recordedFor(ch)) { if (G.announcer && G.announcer.sample) G.announcer.sample(); return; }
-      if (G.radio && G.radio.preview) G.radio.preview(ch);
+      const radio = G.radio;
+      if (radio && radio.preview && radio.preview(ch) && radio.previewGeneration && radio.stopPreviewIfGeneration)
+        voicePreview = { radio, generation: radio.previewGeneration() };
     };
 
     function rememberVoiceFocus(host) {

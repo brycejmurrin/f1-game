@@ -243,7 +243,7 @@ export class Lsp {
   constructor({ root = ROOT, src = SRC, anchor = ANCHOR, cmd = path.join(ROOT, "node_modules/.bin/tsc"), timeout = 30000,
     idleMs = +(process.env.APEX_LSP_IDLE_MS || 10 * 60000) } = {}) {
     this.root = root; this.src = src; this.anchor = anchor; this.cmd = cmd; this.timeout = timeout; this.idleMs = idleMs; this.idle = null; this.proc = null; this.ready = null;
-    this.open = new Map(); this.mtimes = new Map(); this.lines = new Map(); this.syms = new Map(); this.configs = null;
+    this.open = new Map(); this.mtimes = new Map(); this.lines = new Map(); this.syms = new Map(); this.configs = null; this.generation = 0;
   }
   start() {
     if (this.ready) return this.ready;
@@ -279,7 +279,7 @@ export class Lsp {
     })().catch(e => { if (this.proc === proc) { this.kill(); this.reset(); } throw Error(died.message !== "tsc --lsp exited" ? died.message : e.message); });
   }
   // Forget the server process (it exited, failed to start, or was stopped): the next call starts a fresh one.
-  reset() { this.proc = null; this.ready = null; this.open.clear(); }
+  reset() { this.proc = null; this.ready = null; this.open.clear(); this.syms.clear(); this.generation++; }
   kill() { const p = this.proc; if (p && p.exitCode === null && !p.killed) { try { this.notify("exit", null); } catch { /* closed */ } p.kill(); } }
   rel(uri) { return path.relative(this.root, fileURLToPath(uri)); }
   // A repo-relative path for a caller's `file`, refused outside the workspace root.
@@ -412,12 +412,18 @@ export class Lsp {
 
   // ── Structure: documentSymbol trees, cached until the file changes on disk ──
   async outlineOf(file) {
-    const m = this.mtimes.get(file) ?? fs.statSync(path.join(this.root, file)).mtimeMs, hit = this.syms.get(file);
-    if (hit && hit.m === m) return hit.tree;
+    const m = this.mtimes.get(file) ?? fs.statSync(path.join(this.root, file)).mtimeMs, generation = this.generation, hit = this.syms.get(file);
+    if (hit && hit.m === m && hit.generation === generation) return hit.promise;
     this.ensureOpen(file);
-    const tree = (await this.request("textDocument/documentSymbol", { textDocument: { uri: this.uriOf(file) } })) || [];
-    this.syms.set(file, { m, tree });
-    return tree;
+    const entry = { m, generation };
+    // Publish before dispatch so every row in a cold page shares this request.
+    entry.promise = Promise.resolve().then(() => this.request("textDocument/documentSymbol", { textDocument: { uri: this.uriOf(file) } }))
+      .then(tree => tree || []).catch(error => {
+        if (this.syms.get(file) === entry) this.syms.delete(file);
+        throw error;
+      });
+    this.syms.set(file, entry);
+    return entry.promise;
   }
   // The symbols whose range holds a line, outermost first.
   chain(tree, line0) {
@@ -623,6 +629,8 @@ export class Lsp {
     await this.prepare();
     const f = this.inRoot(file);
     if (!/\.(c|m)?js$/.test(f)) throw Error(`lsp_diagnostics checks JavaScript (.js/.mjs/.cjs); ${f} is not one`);
+    const diagnosticProc = this.proc, generation = this.generation;
+    let failed = false;
     const ambient = fs.existsSync(path.join(this.root, "types")) ? fs.readdirSync(path.join(this.root, "types")).filter(x => x.endsWith(".d.ts")).map(x => fs.readFileSync(path.join(this.root, "types", x), "utf8")).join("\n") : "";
     const check = async text => {
       const v = this.ensureOpen(f) + 1, lines = text.split("\n");
@@ -670,9 +678,14 @@ export class Lsp {
       for (const d of before) pool.set(key(d), (pool.get(key(d)) || 0) + 1);
       const fresh = now.filter(d => { const n = pool.get(key(d)) || 0; if (n) { pool.set(key(d), n - 1); return false; } return true; });
       return `${fresh.length} new since HEAD in ${f} (${now.length - fresh.length} pre-existing hidden; all: true lists them; per-file @ts-check, codes ${[...DIAG_CODES].join("/")} + syntax)\n${fresh.map(fmt).join("\n")}`.trim();
-    } finally {
-      // Back to the disk text with no pragma: close it so the next query reopens it.
-      this.notify("textDocument/didClose", { textDocument: { uri: this.uriOf(f) } }); this.open.delete(f); this.syms.delete(f);
+    } catch (error) { failed = true; throw error; }
+    finally {
+      // Never close an old overlay in a replacement server or mask its failure.
+      if (this.proc === diagnosticProc && this.generation === generation) {
+        try { this.notify("textDocument/didClose", { textDocument: { uri: this.uriOf(f) } }); }
+        catch (error) { if (!failed) throw error; }
+        finally { this.open.delete(f); this.syms.delete(f); }
+      }
     }
   }
   // Counted from the END of a call, so a slow first query (project load) is never cut off.
@@ -920,7 +933,7 @@ export class Lsp {
       const m = row.exec(lines[i]);
       if (m) { p = { file, line0: i, col0: m.index + m[0].indexOf(member) }; break; }
     }
-    if (!p) throw Error(`${iface} (the ${h} façade, ${file}) has no member ${member}`);
+    if (!p) throw Error(`${iface} (the ${h} façade, ${file}) has no member ${member}; a local (e.g. a js/game.js IIFE function) answers to the bare name: try lsp_symbols ${member} or lsp_definition ${member}`);
     const def = { uri: this.uriOf(file), range: { start: { line: p.line0, character: p.col0 } } }, note = `${h} is the ${iface} façade; contract row in ${file}`;
     if (method === "textDocument/references") return { p, result: await this.textRefs([h, member], def, extra.context?.includeDeclaration !== false), note: `${note}; uses are text matches of ${h}.${member}` };
     if (method === "textDocument/definition") return { p, result: [def], note };

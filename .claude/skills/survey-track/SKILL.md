@@ -1,7 +1,7 @@
 ---
 name: survey-track
 argument-hint: "<circuit ids…> [target year]"
-description: "Use when a circuit needs an end-to-end accuracy or grounding pass (gaps, terrain-over-road, channels/steps, sunk water), or a multi-circuit realism campaign (/survey-track spa monza: one surveyor per circuit). Props → scenery-dress; geometry hooks only → agent-view."
+description: "Use when a circuit is unlike the real place: a realism or accuracy pass vs satellite imagery, photos, onboard footage or OSM; layout/elevation survey; terrain-over-road, gaps, channels, sunk water; a multi-circuit campaign (/survey-track spa monza). New circuit → new-track; props → scenery-dress; geometry hooks → agent-view."
 ---
 
 # Survey & update a track
@@ -24,9 +24,17 @@ Several circuits (`$ARGUMENTS` = circuit ids, optional target year; every id in
 ## Hand-back
 
 The surveyor's edits are on its worktree branch, not in this checkout. Its report
-names the branch and path; merge it before verifying here
-(`git merge --no-ff <surveyor-branch>`, then `verify-track` on the merged tree), and
-remove the worktree once merged (`git worktree remove <path>`).
+names the branch and path. Per surveyor, in turn:
+
+1. Scope check BEFORE merging: `git diff --name-only <base>..<surveyor-branch>` lists only its
+   assigned pair (`js/circuits/<id>.js`, `js/circuits/scenery/<id>.js`) plus `scratch/`/`artifacts/`.
+   Anything else = reject that file and say so (the hook cannot bind the circuit id).
+2. `git merge --no-ff <surveyor-branch>`, then `verify-track <id>` on the merged tree.
+3. `git worktree remove <path>`.
+
+A campaign merges the branches one at a time in that loop (disjoint pairs do not conflict), then
+regenerates shared generated files once (`node tools/shot/gen-scenery-locations.cjs`) and runs the
+fleet gate.
 
 ## Baseline audits (parent, before and after)
 
@@ -44,7 +52,8 @@ For centreline measurements, load `buildContext()` from
 `Tracks.buildCenterline(def, { line: false })`. For retained road/terrain/prop
 geometry use `tools/lib/track-build-vm.cjs`; read its API before use. No browser
 launch/capture/automation in the surveyor, including `survey-track.mjs`,
-`ground-profile.mjs`, `tools/shot/` commands and cloudBrowser. A numerical-only
+`ground-profile.mjs` (in this skill's folder: a PARENT-run browser script), `tools/shot/` commands
+and cloudBrowser. A numerical-only
 output does not make a Chromium-backed tool browser-free.
 
 Subagent: **track-surveyor** (writes only that circuit's pair). A LAYOUT defect
@@ -52,18 +61,11 @@ hands over to **new-track**, not dressing; routing is in the description.
 
 ## Where the truth lives
 
-1. **`docs/tracks/<id>.md`** — per-circuit brief (all 52): theme, elevation,
+1. **`docs/tracks/<id>.md`** — per-circuit brief (one per circuit): theme, elevation,
    landmarks-by-lap-position. Start here.
-2. No-browser layout check: compare the BUILT centreline's `total`, apexes,
-   widths, sectors and elevation against dated evidence. `path.len` is source
-   metadata, not built length; the existing OSM comparison normalizes scale,
-   rotation and lap origin, so it cannot certify those quantities. Surveyed
-   elevation conditionally overrides authored bumps via `TrackDef.fromRaw`
-   (`js/track/core/def.js`); absent profiles do not prove flatness. `startFrac`
-   and width zones use control-index fractions, built `s/total` arc fractions,
-   and turns/sectors racing-space fractions. Respect `_sceneryShift` through
-   wrapped helpers; never pre-shift `K(s)`. A wrong LAYOUT → **new-track**.
-   Probe flags are NOT findings until confirmed off lat 0
+2. No-browser layout check (built `total`, apexes, widths, sectors, elevation vs dated
+   evidence; which fraction space each field uses) → [loop.md](references/loop.md) §Layout check.
+   A wrong LAYOUT → **new-track**. Probe flags are NOT findings until confirmed off lat 0
    ([loop.md](references/loop.md), "Artefacts" paragraph).
 3. Parent-supplied real-place photos/maps and numerical sources: retain URLs,
    document year and uncertainty. Distinguish source claims from measurements;
@@ -73,7 +75,8 @@ hands over to **new-track**, not dressing; routing is in the description.
 
 Parent (this session):
 1. Read the brief and source pair; run the `audit-circuit` baseline and take the
-   captures (aerial/orbit/EYE, obliques) the surveyor will measure against.
+   captures (aerial/orbit/EYE, obliques) the surveyor will measure against; any HUD or
+   driver-view capture at 844×390 landscape first (AGENTS.md §Coordination).
 2. Spawn one `track-surveyor` with [delegation.md](references/delegation.md).
 3. Merge its branch into yours (AGENTS.md rule 10), capture the same framings
    after integration, then browser checks and shipping via **check-changes**.
@@ -90,11 +93,8 @@ Surveyor (`.claude/agents/track-surveyor.md` steps 1-5; it never captures):
 4. Return changes, before/after numbers, source/year evidence, baseline deltas
    and uncertainties.
 
-**apex-tools MCP down?** Every `apex_*` route has a CLI under `tools/`: audits
-`tools/track/{audit-circuit,ground-audit,clip-audit,coplanar-audit,float-audit}.cjs`,
-`centreline-kinks.cjs`, `graph-parity.cjs`, `verify-track.cjs`; `apex_frame_report` =
-`tools/shot/frame-report.mjs --track <id>`; multi-shot surveys
-`tools/shot/shot-survey.mjs` or `tools/shot/track-session.mjs` (parent only: browser).
+**apex-tools MCP down?** Every `apex_*` route has a CLI under `tools/` (map: `docs/AGENT-SURFACE.md`);
+the surveys `tools/shot/shot-survey.mjs` / `track-session.mjs` are browser (parent only).
 
 ## Parent brief and evidence publication
 

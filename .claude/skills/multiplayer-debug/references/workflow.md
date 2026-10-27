@@ -18,7 +18,9 @@ Load from the SKILL.md index when the task needs this detail.
    - ICE/TURN: candidates crossed, relay availability, nominated pair.
    - Game wire: snapshot ids, authority, interpolation, countdown/start.
 
-2. **Prefer loopback before a browser/network run.**
+2. **Prefer loopback for the game-wire and countdown layers.** Loopback removes ICE,
+   so it cannot reproduce a pairing that never connects: signalling/ICE goes straight to
+   the real-RTC evidence (SKILL.md §First evidence, step 6).
    - Use `NetTransport.loopback()` via `__apex.netLoopback()` to remove real ICE
      and wall-clock timing.
    - Pass `nowMs`, then drive `__apex.netTick(nowMs)` explicitly.
@@ -38,8 +40,10 @@ Load from the SKILL.md index when the task needs this detail.
 4. **Debug signalling as data crossing, not local gathering.**
    - `lobby().wire.candidates` and `turnProbe()` describe local gather.
    - `lobbySdp().remoteTypes` answers what the peer actually received.
-   - If remote SDP has no `relay`, inspect SDP packing/truncation and make sure
-     ICE prefetch completed before `RTCPeerConnection` construction.
+   - No `relay` anywhere is NORMAL on the shipped STUN-only default (step 6): configure
+     TURN first. Only when a relay was gathered locally but is missing from the peer's
+     `remoteTypes`, inspect SDP packing/truncation and make sure ICE prefetch completed
+     before `RTCPeerConnection` construction.
    - **Relay candidates arrive last** — historically the invite/answer cap dropped
      them (`sdp.js` now round-robins by kind, so >=1 relay survives; still check
      `remoteTypes` before blaming ICE). Symptom: desktop host gathers fine,
@@ -53,11 +57,11 @@ Load from the SKILL.md index when the task needs this detail.
      - Each frame reads `netStart` (`{ at, hold, now() }`) and derives `countT`
        (grep `countT = (COUNTDOWN_S`).
      - `countT` drives `lightsLit` (grep `lightsLit === COUNTDOWN_S`).
-     - `netStart` clears only once `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + startHold`
+     - `netStart` clears only once `lightsLit === COUNTDOWN_S && countT > COUNTDOWN_S + feel.startHold`
        (the "consumed; never carry it into the next race" comment).
      - Lights lit but no start = that exit condition never held. Read the guest's own
        `G.countT` / `G.lightsLit` (test-only accessors) or step `netStartArm` / `netHostStart`.
-   - `__apex.net().startPending` is boolean-only (`!!G.netStart`, `netHostStart()` in `js/agent/apex.js`); it cannot say why a guest is stuck, so read `countT`/`lightsLit` as above.
+   - `__apex.net().startPending` is boolean-only (`!!G.netStart`, `netHostStart()` in `js/agent/apex-net.js`); it cannot say why a guest is stuck, so read `countT`/`lightsLit` as above.
 
 5. **Mobile QR flow: two ways in, one code.**
    - VS FRIEND: the usual phone guest points the **Camera app** at the host's QR and
@@ -72,7 +76,9 @@ Load from the SKILL.md index when the task needs this detail.
 
 6. **Debug ICE with candidate pairs.**
    - Run `await __apex.turnProbe()` first: no relay and dead relay are different
-     fixes.
+     fixes. 0 relays → is any TURN configured? The default is none (`TURN_API = ""`):
+     set `apex26.turnApi` (credentials URL) or `apex26.turn` (own server); the lobby
+     already prints this hint. Relays configured but all dead → the TURN host/credentials.
    - If relays exist but no connection forms, use `await __apex.lobbyPairs()`.
    - `recv: 0` across pairs means checks leave but no answer returns; a
      succeeded-but-not-nominated pair means something else ended first.
@@ -84,7 +90,8 @@ Load from the SKILL.md index when the task needs this detail.
      (an unknown/duplicate label is logged "ignoring data channel" and closed);
      `__apex.logs({ns:"net"})` for "rtc open" vs "connection closed (failed)"
      (DTLS/SCTP never completed — usually a middlebox; try relay-only
-     `npm run rtc:e2e-3p-relay`); a channel `onclose` routes to `shutdown("peer")`.
+     `node tools/net/rtc-e2e-3p.mjs --relay --turn=turn:host:port,user,pass` — without a TURN
+     server a relay-only run fails on the STUN-only default and proves nothing); a channel `onclose` routes to `shutdown("peer")`.
      Once open, a later silence is the session heartbeat (`js/net/session.js`),
      not the channel. Offline pin: `node --test tests/unit/net-transport.test.mjs`.
 
@@ -96,7 +103,8 @@ Load from the SKILL.md index when the task needs this detail.
 8. **Verify in order.**
    - Run `npm run test:net-unit` before any browser group; it covers transport,
      SDP, rendezvous, QR, snapshot, and session contracts.
-   - Run `test:net` in the background through `tools/ci/test-bg.mjs`.
+   - Then ONE spec for the symptom, backgrounded (AGENTS.md rule 4): `node tools/ci/test-bg.mjs --spec tests/specs/multiplayer-<lobby|room|scan|seats|session|roles|npeer|scan-cancel>.spec.js`.
+     The whole `net` group (`tests/groups.json`) is `node tools/ci/remote-group.mjs net` on the pushed branch; a subagent reports browser runs as not run.
    - Use real RTC scripts only for browser/ICE behavior that loopback cannot
      exercise.
 
@@ -119,15 +127,15 @@ Connected is not seated: the link can be up while `NetPlay.start()` never bound 
 2. `active: true` but `remotes: []`: no seat. `slotFallback` is `"team"` (right team, other seat), `"any"` (profile-less join, loopback) or `"profile-miss"` (named profile matched nobody; `docs/DEBUG-HOOKS.md` lists only the first two). A profile-less join happens when HELLO had not arrived: check the lobby's peers/profile.
 3. `remotes` has an entry but `wire` is `-1`: `G.wireId(c)` found no team index; every packet for it is dropped.
 4. Seated but not drawn where expected: `separateGrid()` lays the humans by `wireId` from the local P12 (skipped when `G.gridPreOrdered`); a grid that differs per peer stacks the rival inside you (`net-grid-separation.test.mjs`).
-5. Posed then gone: `net().stale` lists wire ids silent past `STALE_MS` (2 s); `owns()` is false for them and the local AI drives the car until a packet returns. `stale` plus `buffered: 0` = packets not arriving, so go to the "never moves" trace.
+5. Posed then gone: `net().stale` lists wire ids silent past `STALE_MS` (`netplay.js`); `owns()` is false for them and the local AI drives the car until a packet returns. `stale` plus `buffered: 0` = packets not arriving, so go to the "never moves" trace.
 Offline: `node --test tests/unit/net-authority.test.mjs` (slot pick, `stale` status), `net-grid-separation.test.mjs`, `net-roster.test.mjs` (hand-back to AI). Real-network behaviour is browser-only.
 
 ## Rival never moves (connected, remote car frozen)
 
 Trace the path in order, stop at the first broken link:
 1. `__apex.net()` — `active`, `role`, `remotes[]` (one per rival, keyed `wire`/`driverId`), `buffered` = first remote's interpolation buffer (`remotes[i].buffered` per rival), `net` = session stats (clock sync). `remotes: []` = no grid slot bound (`slotFallback`), see `netplay.js` `status()`.
-2. `buffered` 0 while the session is alive = packets held before clock sync (session `synced()` false; see the `autoPong` comment in `apex.js` `netLoopback`) or dropped by wire id mismatch; >0 but car still = interpolation/pose (`snapshot.js`, `netplay.js`), not transport.
-3. Game side: `netPlay.owns(c)` must be true for the rival so `updateCar` early-outs (`js/game.js`, grep `netPlay.owns(c)`); it is false for a car in `net().stale` (silent past 2 s, the local AI drives it).
+2. `buffered` 0 while the session is alive = packets held before clock sync (session `synced()` false; see the `autoPong` comment in `js/agent/apex-net.js` `netLoopback`) or dropped by wire id mismatch; >0 but car still = interpolation/pose (`snapshot.js`, `netplay.js`), not transport.
+3. Game side: `netPlay.owns(c)` must be true for the rival so `updateCar` early-outs (`js/game.js`, grep `netPlay.owns(c)`); it is false for a car in `net().stale` (silent past `STALE_MS`, the local AI drives it).
 Offline (no browser), single files:
    `node --test tests/unit/net-session.test.mjs` (sync/routing), `net-snapshot.test.mjs` (interp), `net-authority.test.mjs` (who owns which car). 
    Green rules out the exercised contracts, not every game-loop/wire combination; inspect the first failed live link next, using step 6 for ICE evidence. The whole `npm run test:net-unit` is the pre-browser gate (step 8), not needed to localise this.
@@ -155,7 +163,8 @@ scripts above rather than three background tabs.
   length/order.
 - Treating local candidate counts as proof that the peer received relay
   candidates; inspect `lobbySdp().remoteTypes`. Relay arrives last — truncation
-  drops it first (host OK, guest stuck).
+  drops it first (host OK, guest stuck). But first confirm a TURN server is configured
+  at all: the default is STUN-only, so no relay is the normal case.
 - Blaming the scan route: Camera→Safari, in-page `NetScan` and paste deliver the same code (step 5).
 - Building `RTCPeerConnection` before awaiting ICE server prefetch; servers are
   fixed at construction.

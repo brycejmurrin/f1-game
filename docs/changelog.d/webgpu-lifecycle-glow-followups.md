@@ -1,0 +1,1 @@
+Improved: Pack glow data once per light; release stale distant-rival body meshes and prevent queued work from restoring invalidated geometry; refresh fixed-target post sampling when textures change and retire disposed post-chain viewport readers.

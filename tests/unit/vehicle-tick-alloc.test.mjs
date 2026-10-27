@@ -23,14 +23,14 @@ const PF = "js/physics/player-forces.js";
 const GRIP_SCRATCH = [
   "    const og = Vehicle.grip;",
   "    og.muF = muF; og.csFront = CS_FRONT; og.af = af; og.ar = ar;",
-  "    og.braking = braking; og.shaped = steer; og.dt = dt;",
+  "    og.braking = braking; og.shaped = Math.sign(steer) * Math.pow(Math.abs(steer), G.STEER_EXPO); og.dt = dt;   // the SHAPED lock (game.js shaped), GripSteer's contract",
   "    const gripped = (typeof GripSteer !== \"undefined\" && GripSteer.forPlayer)",
   "      ? GripSteer.forPlayer(driverDelta, c, og)",
   "      : driverDelta;",
 ].join("\n");
 const GRIP_LITERAL = [
   "    const gripped = (typeof GripSteer !== \"undefined\" && GripSteer.forPlayer)",
-  "      ? GripSteer.forPlayer(driverDelta, c, { muF, csFront: CS_FRONT, af, ar, braking, shaped: steer, dt })",
+  "      ? GripSteer.forPlayer(driverDelta, c, { muF, csFront: CS_FRONT, af, ar, braking, shaped: Math.sign(steer) * Math.pow(Math.abs(steer), G.STEER_EXPO), dt })",
   "      : driverDelta;",
 ].join("\n");
 const WHEEL_SCRATCH = [
@@ -144,7 +144,7 @@ function snap(c) {
 
 const G = {
   PLAYER_GRIP: 1.15, FRONT_GRIP: 0.94, DRIFT: 0,
-  YAW_INERTIA: 0.58, YAW_DAMP: 1.0,
+  YAW_INERTIA: 0.58, YAW_DAMP: 1.0, STEER_EXPO: 2.389,
 };
 
 function tyresOf(ctx) {
@@ -154,54 +154,20 @@ function tyresOf(ctx) {
   });
 }
 
-test("grip and wheel bags are stable scratch objects", () => {
+test("Vehicle exports only the two scratch bags (forPlayer/stepWheel had no caller; audit4 P3)", () => {
   const ctx = baseCtx();
   run(ctx, "js/physics/vehicle.js");
   const V = grab(ctx, "Vehicle");
+  assert.deepEqual(Object.keys(V).sort(), ["grip", "wheel"]);
   assert.equal(V.grip, V.grip);
-  assert.equal(V.wheel, V.wheel);
   assert.notEqual(V.grip, V.wheel);
-  const seen = [];
-  ctx.GripSteer = {
-    forPlayer(delta, c, opts) {
-      seen.push(opts);
-      return delta - 0.01;
-    },
-  };
-  const c = { gripSteerCapSm: 0 };
-  V.grip.muF = 18;
-  V.grip.csFront = 130;
-  V.grip.dt = DT;
-  assert.equal(V.forPlayer(0.3, c), 0.29);
-  V.grip.muF = 19;
-  assert.equal(V.forPlayer(0.3, c), 0.29);
-  assert.equal(seen.length, 2);
-  assert.equal(seen[0], V.grip);
-  assert.equal(seen[1], V.grip);
-  assert.equal(seen[0].muF, 19, "the second fill is what the callee reads");
 });
 
-test("stepWheel forwards the same wheel bag", () => {
-  const seen = [];
-  const ctx = baseCtx();
-  ctx.WheelState = {
-    stepPlayer(c, opts) {
-      seen.push(opts);
-      return { latScaleF: 0.9, latScaleR: 0.8, shortfall: 0.1 };
-    },
-  };
-  run(ctx, "js/physics/vehicle.js");
-  const V = grab(ctx, "Vehicle");
-  V.wheel.dt = DT;
-  V.wheel.aReqF = -3;
-  const a = V.stepWheel({ speed: 10 });
-  V.wheel.aReqF = -4;
-  const b = V.stepWheel({ speed: 11 });
-  assert.equal(a.latScaleF, 0.9);
-  assert.equal(b.shortfall, 0.1);
-  assert.equal(seen[0], V.wheel);
-  assert.equal(seen[1], V.wheel);
-  assert.equal(seen[1].aReqF, -4);
+test("WheelState.stepPlayer builds no object literal per tick (pooled axleStep bags; audit4 P2)", () => {
+  const src = read("js/physics/wheel-state.js");
+  const body = src.slice(src.indexOf("function stepPlayer("), src.indexOf("return Object.freeze"));
+  assert.equal(/axleStep\(\s*\{/.test(body), false, "no fresh {vw, kappa} state literal");
+  assert.equal(/\{\s*dt\s*,/.test(body), false, "no fresh {dt, vx, ...} params literal");
 });
 
 test("player step with the scratch matches the fresh-literal path (grip steer on)", () => {
@@ -226,7 +192,7 @@ test("player step with the scratch matches the fresh-literal path (grip steer on
   assert.deepEqual(snap(cOn), snap(cOff));
   const grip = grab(on, "Vehicle").grip;
   assert.equal(grip.dt, DT);
-  assert.equal(grip.shaped, 0.35);
+  assert.equal(grip.shaped, Math.pow(0.35, G.STEER_EXPO), "GripSteer gets the shaped lock, not the raw stick (audit4 P1)");
   assert.ok(grip.muF > 0);
 });
 

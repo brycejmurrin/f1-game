@@ -21,18 +21,10 @@ Offset and roll are `max * shake * noise(t)`. Sample summed sines (or value nois
 time — never a fresh `Math.random()` per frame: that buzzes instead of shaking, and an RNG
 draw in the frame loop is how cosmetic code breaks headless determinism.
 
-```js
-const axis = (seed, t) => 0.6 * Math.sin(t * 11 + seed) + 0.4 * Math.sin(t * 23 + seed * 2);
-// per render frame, camera only:
-trauma = Math.max(0, trauma - decay * dt);
-const s = trauma * trauma;
-camOffsetX = maxOffset * s * axis(1.7, t);
-camRoll    = maxRoll   * s * axis(4.2, t);
-```
-
-Starting points: `maxRoll` 0.03–0.08 rad, `decay` 1.0–1.5 /s, per-event trauma 0.15 (light)
-→ 0.8 (heavy). In Apex `feel.shake` (js/game.js) is the existing accumulator; feed it rather
-than adding a second one.
+Apex already implements this: `feel.shake` (js/game.js) is the accumulator and its decay,
+`CamTune.shakeOffset` (js/camera/offsets.js) the curve, `CamFeel.shakeNoise`/`shake`
+(js/camera/feel.js) the summed-sine noise. Feed `feel.shake`; never add a second accumulator.
+Per-event trauma: light ≈ 0.15, heavy ≈ 0.8, as ratios of the existing kerb/wall/car-car adds.
 
 ## 2. Easing cheat sheet
 
@@ -67,7 +59,7 @@ Assign every event to one tier so the game is neither dead nor exhausting.
 
 | Tier | Trauma | Freeze | Particles | Extra | Apex examples |
 |------|:------:|:------:|:---------:|-------|---------------|
-| small | 0.10–0.20 | none | 0–4 | tick sfx | kerb entry, gear shift |
+| small | ≈ kerb floor (`KERB_SHAKE`) | none | 0–4 | tick sfx | kerb entry, gear shift |
 | medium | 0.30–0.50 | none | 6–12 | flash | light car contact, gravel entry |
 | large | 0.70–1.00 | 0.10–0.15 s render hold | 20–40 | flash + zoom | heavy wall hit, big car-car crash |
 
@@ -77,5 +69,9 @@ Assign every event to one tier so the game is neither dead nor exhausting.
 - **Reduce flashing** (photosensitivity): replace white flashes with a static tint.
 - **Reduce camera motion:** cut roll and zoom punches.
 
-Expose these through the existing settings UI (**ui-menu-a11y** owns the menu), and honour
-`prefers-reduced-motion` for DOM effects.
+Read the existing gates instead of adding settings: `motionReduced()` (OS
+reduce-motion) and `camComfort()` (XR / reduce-motion / touch auto-comfort) in
+`js/game.js`; new settings UI is **ui-menu-a11y**'s. Honour
+`prefers-reduced-motion` for DOM effects. Haptics on the phone: iOS Safari has no
+`navigator.vibrate`, so a kerb buzz never reaches Bryce's iPhone — check
+`js/input/haptics.js` before promising one.

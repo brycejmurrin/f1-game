@@ -6,5 +6,6 @@
 {"query":"index.html owns all the static DOM and it's huge. Could we split it per screen, and make the menus respond to viewport height instead of only width in css/responsive.css? Sketch the approach and do the first screen.","expect":"css-play"},
 {"query":"The track detail screen is cramped on a short phone in landscape: the start button is clipped below the fold and the list needs scroll. Fix just that one screen so everything fits and is reachable.","expect":"ui-menu-a11y"},
 {"query":"Check every menu screen at every orientation, UI scale and pointer type, measuring clipping, truncated text and tap-target size, so I know whether my css/components.css change regressed any other layout.","expect":"survey-ui-matrix"},
-{"query":"Find dead selectors and unused classes in css/menus.css and css/overlays.css and delete the ones nothing in index.html or js/ references, since the stylesheets keep growing.","expect":"slim-bloat"}
+{"query":"Find dead selectors and unused classes in css/menus.css and css/overlays.css and delete the ones nothing in index.html or js/ references, since the stylesheets keep growing.","expect":"slim-bloat"},
+{"query": "Which CSS classes are dead? Prove none of them are used and delete them", "expect": "slim-bloat"}
 ]

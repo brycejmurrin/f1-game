@@ -27,6 +27,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { CliArgError, makeFlags, runCli } from "../lib/cli-args.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const MUTANTS = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/data/mutants.json"), "utf8")).mutants;
@@ -82,35 +83,55 @@ export function verdictFor(m, results) {
   return rows;
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const args = process.argv.slice(2);
+/** Resolve the entire request before reading needles or changing any source. */
+export function planFidelity(args) {
   if (args.includes("--help") || args.includes("-h")) {
+    return { mode: "help", run: [] };
+  }
+  const known = ["--list", "--dry", "--help"];
+  const flags = makeFlags(args, known);
+  const invalid = args.find((a) => a.startsWith("-") && !known.includes(a));
+  if (invalid) throw new CliArgError(`unknown flag ${invalid}`);
+  if (flags.has("--list") && flags.has("--dry")) throw new CliArgError("--list and --dry cannot be combined");
+  const only = args.filter((a) => !a.startsWith("-"));
+  const unknown = only.filter((id) => !MUTANTS.some((m) => m.id === id));
+  if (unknown.length) throw new CliArgError(`unknown mutant id: ${unknown.map((id) => JSON.stringify(id)).join(", ")}\n  valid ids: ${MUTANTS.map((m) => m.id).join(" ")}`);
+  return { mode: flags.has("--list") ? "list" : flags.has("--dry") ? "dry" : "run",
+    run: only.length ? MUTANTS.filter((m) => only.includes(m.id)) : MUTANTS };
+}
+
+export function runFidelity(args, { needles = needleReport, mutate = withMutant, spec = runSpec } = {}) {
+  const plan = planFidelity(args);
+  if (plan.mode === "help") {
     console.log("usage: node tools/check/twin-fidelity.mjs [--list|--dry|--help] [mutant-id…]");
     console.log("  (no args)   run every mutant against its VM twin");
     console.log("  --list      print id / file / spec");
     console.log("  --dry       verify needles only (no patch, no specs)");
-    process.exit(0);
+    return 0;
   }
-  if (args.includes("--list")) {
+  if (plan.mode === "list") {
     for (const m of MUTANTS) console.log(`${m.id}\t${m.file}\t${m.spec}`);
-    process.exit(0);
+    return 0;
   }
-  const bad = needleReport().filter((r) => !r.ok);
+  const bad = needles().filter((r) => !r.ok);
   if (bad.length) {
     for (const b of bad) console.error(`NEEDLE ${b.id}: ${b.why}`);
-    process.exit(2);
+    return 2;
   }
-  if (args.includes("--dry")) { console.log(`needles ok for ${MUTANTS.length} mutants`); process.exit(0); }
-  const only = args.filter((a) => !a.startsWith("-"));
-  const run = only.length ? MUTANTS.filter((m) => only.includes(m.id)) : MUTANTS;
+  if (plan.mode === "dry") { console.log(`needles ok for ${MUTANTS.length} mutants`); return 0; }
+  const { run } = plan;
   let failed = 0;
   for (const m of run) {
-    const rows = withMutant(m, () => verdictFor(m, runSpec(m.spec)));
+    const rows = mutate(m, () => verdictFor(m, spec(m.spec)));
     const ok = rows.every((r) => r.ok);
     console.log(`${ok ? "PASS" : "FAIL"} ${m.id}`);
     for (const r of rows) console.log(`   ${r.ok ? "ok  " : "FAIL"} ${r.why.padEnd(34)} ${r.name}`);
     if (!ok) failed++;
   }
   console.log(`twin-fidelity: ${run.length - failed}/${run.length} mutants caught as declared`);
-  process.exit(failed ? 1 : 0);
+  return failed ? 1 : 0;
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  runCli(async () => { process.exitCode = runFidelity(process.argv.slice(2)); });
 }

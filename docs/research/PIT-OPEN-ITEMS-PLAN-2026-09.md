@@ -1,5 +1,7 @@
 # Pit lane — the open items after the walls batch (plan, 2026-09-16)
 
+Status: open, checked 2026-10-26 - not audited item by item (js/track/core/pit.js now has boardM [45, 110], so item 1 moved). The 'nothing implemented' line is the state when written.
+
 > Plan only; nothing implemented. Every claim was checked against the tree at
 > `892f2cd` and carries a `file:line`. Companion to
 > `PIT-GUIDANCE-STRATEGY-PLAN-2026-09.md` (the driver-facing work); this one is

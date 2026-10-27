@@ -1,5 +1,7 @@
 # Fleet redesign: authority by rule, roles by name, one coordinator per fleet
 
+Status: **SUPERSEDED** by [the 2026-10-27 orchestration redesign](2026-10-27-orchestration-redesign.md) (shipped in #3895): the authority-by-rule model, the `fleet-core` rule file, the orchestrator and merge receipts below are retired; `land.yml` and the dispatcher replace them (docs/WORKERS.md). History only.
+
 Proposal, 2026-10-19 ~19:45Z, from a read-only study of the live fleet (this account's 50 sessions, the bus, 28 open PRs,
 the ORCH12→ORCH13 transcripts, every fleet note since 2026-10-05) and the current platform docs
 (code.claude.com/docs/en/{auto-mode-config,permission-modes,routines,claude-projects,claude-code-on-the-web}, read 2026-10-19).

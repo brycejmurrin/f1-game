@@ -21,7 +21,18 @@ tool = d.get("tool_name") or ""
 # https://code.claude.com/docs/en/hooks). track-surveyor and agent-surface-reviewer
 # are the agents with write tools; rules 4 and 5 below scope them (2026-10-14).
 agent = str(d.get("agent_type") or "")
+IN_SUBAGENT = bool(d.get("agent_id")) or "/subagents/" in str(d.get("transcript_path") or "")
 SURVEYOR = agent == "track-surveyor" or agent.endswith(":track-surveyor")
+# pass 4 (H1): the reporter cards declare `readonly: true`, which Claude Code ignores; the hook is the enforcement.
+# A reporter writes only under scratch/ and artifacts/ (and the session scratchpad outside the repo) and never
+# commits, pushes or rewrites the tree. No escape hatch.
+READONLY_AGENTS = ("code-hunter", "finding-verifier", "prior-art-scout", "bloat-auditor", "verify-agent",
+                   "deploy-research", "physics-contract-auditor", "ci-red-triage")
+READONLY = any(agent == a or agent.endswith(":" + a) for a in READONLY_AGENTS)
+READONLY_OK = re.compile(r"^(scratch|artifacts)(/|$)")
+READONLY_GIT = re.compile(r"\bgit\s+(-C\s+\S+\s+)?(commit|push|stash|reset|checkout|switch|rebase|merge|cherry-pick|am|apply|rm|mv|clean|worktree)\b")
+HATCHES = ("allow-protected", "allow-context-cap", "allow-stop")
+RECEIPT_DIR = re.compile(r"^artifacts/((merge|ready|launch)-gate|launch)(/|$)")
 SURVEYOR_OK = re.compile(r"^(js/circuits/(scenery/)?[a-z0-9_-]+\.js|scratch/.+|artifacts/.+)$")
 # agent-surface-reviewer has Write for its own report only: Write/Edit to
 # scratch/**.md, and no Bash writes at all (rule 5 below, 2026-10-14).
@@ -164,7 +175,12 @@ def ratchet_removals(cmd, cwd):
         if verb in ("mv", "git mv"):
             paths = [a for a in args if not a.startswith("-")][:-1]   # sources; the last is the destination
         elif verb == "find":
-            if not any(a in ("-delete", "-exec", "-execdir", "-ok") for a in args):
+            # pass-4 R12: `find … -exec grep|cat|wc {} ;` reads; only -delete or an -exec that removes/moves counts.
+            removing = "-delete" in args
+            for k, a in enumerate(args):
+                if a in ("-exec", "-execdir", "-ok", "-okdir") and k + 1 < len(args) and os.path.basename(args[k + 1]) in ("rm", "unlink", "shred", "mv", "git"):
+                    removing = True
+            if not removing:
                 continue
             paths = [a for a in args[:next((i for i, a in enumerate(args) if a.startswith("-")), len(args))]]
         else:
@@ -277,8 +293,30 @@ def check(file, tool, ti, proposed=None, how=""):
         if tool == "Bash" or rel_.startswith("..") or not REPORTER_OK.match(rel_):
             block(f"{rel_ if root else file}{f' (via Bash: {how})' if tool == 'Bash' else ''}: " + REPORTER_MSG,
                   root or os.getcwd(), hatch=False)
+    if READONLY:
+        rel_ = os.path.relpath(file, root).replace(os.sep, "/") if root else ".."
+        outside = rel_.startswith("..")
+        if outside and "/scratchpad" in file.replace(os.sep, "/"):
+            pass   # the session scratchpad outside the repo is the reporter's own
+        elif not root or outside or not READONLY_OK.match(rel_):
+            block(f"{rel_ if root else file}{f' (via Bash: {how})' if tool in ('Bash', 'Remove') else ''}: {agent} is a "
+                  "read-only reporter (.claude/agents/README.md): it writes only scratch/** and artifacts/**; put the "
+                  "finding in its report instead.", root or os.getcwd(), hatch=False)
     if not root:
         return
+    # 6. Gate receipts (WP-L4, 2026-10-27; Bryce's grant on the receipt doors): only the gate scripts write
+    # artifacts/{merge,ready,launch}-gate/ and only launch-page.py writes artifacts/launch/ (the quota page the
+    # launch receipt is bound to). A hand-written receipt was the whole bypass; no escape hatch, any agent.
+    rel_g = os.path.relpath(file, root).replace(os.sep, "/")
+    if RECEIPT_DIR.match(rel_g):
+        block(f"{rel_g}{f' (via Bash: {how})' if tool in ('Bash', 'Remove') else ''}: gate receipts are written only by "
+              "their gate (`node tools/ci/ready-gate.mjs --pr <n>`, `node tools/ci/launch-gate.mjs "
+              "artifacts/launch/self.json`) and the quota page only by the launch-page.py hook. Run the gate instead.",
+              root, hatch=False)
+    # pass 4 (H5): a subagent never creates an escape hatch (an active hatch is announced by bash-guard.sh, whose
+    # stdout is context; this hook's stdout is its decision, so nothing is printed here).
+    if IN_SUBAGENT and os.path.basename(file) in HATCHES and os.path.dirname(file).endswith(".claude"):
+        block(f".claude/{os.path.basename(file)}: a subagent cannot lift a guard (AGENTS.md rule 10); ask the parent.", root, hatch=False)
     # The escape hatch covers rules 1 and 3 (an ASSIGNED edit to a generated or
     # shared-contract file). It never covers rule 2: a source edit under a live
     # Playwright run corrupts the run whoever assigned it, so that check runs
@@ -404,6 +442,9 @@ if tool == "Bash":
     cmd = ti.get("command") or ""
     if not cmd:
         sys.exit(0)
+    if READONLY and READONLY_GIT.search(cmd):
+        block(f"`{cmd[:80]}`: {agent} is a read-only reporter and never commits, pushes or rewrites the tree "
+              "(.claude/agents/README.md); report the change for the parent instead.", d.get("cwd") or os.getcwd(), hatch=False)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     try:
         import shellparse

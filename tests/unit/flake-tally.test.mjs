@@ -228,7 +228,7 @@ test("#2188: GitHub callers default to the proxy-aware fetch; curl carries heade
   assert.deepEqual(await res.json(), { ok: 1 });
   assert.match(stdin, /Authorization: Bearer T/);
   // The three callers import it instead of a bare fetch.
-  for (const f of ["tools/ci/flake-tally.mjs", "tools/ci/verify-change.mjs", "tools/shot/garage-before.mjs"]) {
+  for (const f of ["tools/ci/flake-tally.mjs", "tools/ci/live-run-check.mjs", "tools/shot/garage-before.mjs"]) {   // live-run-check: verify-change imports liveCiRuns from it (audit4 C2)
     const src = fs.readFileSync(fileURLToPath(new URL(`../../${f}`, import.meta.url)), "utf8");
     assert.match(src, /import \{ proxyFetch \} from "\.\.\/lib\/proxy-fetch\.mjs"/, f);
     assert.doesNotMatch(src.replace(/\/\/.*$/gm, ""), /(^|[^.\w])fetch\(|globalThis\.fetch/m, `${f} has no bare fetch left`);
@@ -323,7 +323,7 @@ test("listAllRuns pages FAILED ci.yml / pages.yml runs since the window; green, 
         ? [{ id: 1, path: ".github/workflows/ci.yml", conclusion: "success" },
           { id: 2, path: ".github/workflows/pages.yml", conclusion: "failure" },
           { id: 3, path: ".github/workflows/ci.yml", conclusion: "cancelled" },
-          { id: 4, path: ".github/workflows/fleet.yml", conclusion: "failure" },
+          { id: 4, path: ".github/workflows/gpu-census.yml", conclusion: "failure" },
           { id: 5, path: ".github/workflows/ci.yml", conclusion: "failure" }]
         : [];
       return { status: 200, arrayBuffer: async () => Buffer.from(JSON.stringify({ workflow_runs: runs })) };
@@ -426,7 +426,7 @@ test("flake-tally.yml: a 2-hourly base-red mode beside the daily tally, same lea
   assert.match(wf, /^permissions:\n  contents: read\n  actions: read\n  issues: write$/m, "no new permission");
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
   const l = labels.find((x) => x.name === "base-red");
-  assert.ok(l && l.description.length <= 100, "fleet.yml syncs labels.json; GitHub caps a description at 100 chars");
+  assert.ok(l && l.description.length <= 100, "labels.json is the label source; GitHub caps a description at 100 chars");
 });
 
 test("flake-tally.yml runs the daily tally with least privilege, and the flaky label exists", () => {
@@ -438,7 +438,7 @@ test("flake-tally.yml runs the daily tally with least privilege, and the flaky l
   assert.match(wf, /persist-credentials: false/);
   assert.match(wf, /node tools\/ci\/flake-tally\.mjs --events all --days "\$DAYS" --propose --issue/);
   const labels = JSON.parse(fs.readFileSync(path.join(ROOT, ".github/labels.json"), "utf8"));
-  assert.ok(labels.some((l) => l.name === "flaky"), "fleet.yml syncs labels.json; the issue needs the label");
+  assert.ok(labels.some((l) => l.name === "flaky"), "labels.json is the label source; the issue needs the label");
 });
 
 test("#2233: listRunJobs pages 30 at a time (per_page=100 is a 502 on large runs) and keeps what it read when a later page fails", async () => {
@@ -503,4 +503,28 @@ test("curlFetch retains child error handling during cancellation and removes abo
   assert.equal(killed, true);
   assert.doesNotThrow(() => child.emit("error", new Error("spawn failed during abort")));
   assert.equal(getEventListeners(controller.signal, "abort").length, 0);
+});
+
+test("node jobs count: tooling-fast FAIL blocks become first-try fails on the unit file (audit4 D1)", async () => {
+  const { parseNodeLogFails, NODE_JOB, BROWSER_JOB, quarantineRows } = await import("../../tools/ci/flake-tally.mjs");
+  const log = [
+    "2026-10-26T16:28:01.0Z [tooling-fast] FAIL  135/225 tests/unit/census-verdict.test.mjs duration=3.1s exit=1 loadavg=6.60",
+    "2026-10-26T16:28:01.1Z [tooling-fast]   | not ok 11 - census gate repo cleans up",
+    "2026-10-26T16:28:01.2Z [tooling-fast]   | ok 12 - something else",
+    "2026-10-26T16:28:02.0Z [tooling-fast] FAIL  5/225 tests/unit/safety-bans-hook.test.mjs duration=84s exit=1",
+    "2026-10-26T16:28:02.1Z [tooling-fast]   | not ok 5 - deny beats allow",
+    "2026-10-26T16:28:03.0Z [tooling-fast] bail: 135 of 225 file(s) not started",
+    "2026-10-26T16:28:03.1Z   | not ok 9 - an unattributed TAP line is ignored",
+  ].join("\n");
+  assert.deepEqual(parseNodeLogFails(log, 7), [
+    { spec: "tests/unit/census-verdict.test.mjs", title: "census gate repo cleans up", kind: "fail", runId: 7 },
+    { spec: "tests/unit/safety-bans-hook.test.mjs", title: "deny beats allow", kind: "fail", runId: 7 },
+  ]);
+  // NODE_JOB / BROWSER_JOB are the subject here: every job name is classified exactly once.
+  const names = ["Structural guards (tooling B)", "Pure-node unit suites (vm-a1)", "ci / Parts option-resolution census", "Smoke (page boots, __apex responds)", "Selected specs (change-aware gate) (selected-2)"];
+  assert.deepEqual([...names.map((n) => NODE_JOB.test(n)), BROWSER_JOB.test(names[4])], [true, true, true, false, false, true]);
+  // A unit file's repeat failure is printed, never proposed as a Playwright quarantine row.
+  const rows = quarantineRows([{ spec: ["tests", "unit", "x.test.mjs"].join("/"), test: "t", reason: "r", fails: 3, flakyPasses: 0, runsSeen: 3, lastSeenRunId: 1 },
+    { spec: ["tests", "specs", "y.spec.js"].join("/"), test: "t", reason: "r", fails: 0, flakyPasses: 2, runsSeen: 2, lastSeenRunId: 2 }], { schemaKeys: ["spec", "title"] });
+  assert.deepEqual(rows.map((r) => r.spec), [["tests", "specs", "y.spec.js"].join("/")]);
 });

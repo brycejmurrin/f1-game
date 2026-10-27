@@ -24,8 +24,8 @@ Moved out of `SKILL.md` on 2026-10-26 to keep the skill body an index.
   globals (`PhysicsConsts`, `CssZoom`) and for files ending in
   `module.exports = X` (`ghost.js`, `ghost-share.js`, `input-ghost.js`,
   `forecast.js`, `share-code.js`), which the checker scopes to their own file.
-- An error such as "has no member" or "not found" is the answer. Fall back to
-  `lsp_symbols`; don't guess a neighbour.
+- An error such as "has no member" or "not found" is the answer; the next step is
+  SKILL.md §Which call (on a miss).
 - Long output pages: the footer names the next `offset`, and `format: "concise"`
   on `lsp_references` drops the source text. Start with counts (`files: true`)
   when file scope is enough; otherwise use a bounded page. Follow the footer's
@@ -35,9 +35,9 @@ Moved out of `SKILL.md` on 2026-10-26 to keep the skill body an index.
   is needed; do not infer a complete body from a capped excerpt. Keep tool errors
   and diagnostics visible rather than summarizing them into a success.
 
-## Limits (measured)
+## Limits (measured 2026-10-18, `docs/notes/LSP-MCP-2026-10-18.md`)
 
-- The first call takes ~1 s (project load). After that it's 7–70 ms, and up to
+- The first call takes ~1–2 s (project load). After that it's 7–70 ms, and up to
   ~155 ms for text answers over `G`. `tsc` holds ~400 MB, starts on the first
   call and exits after 10 idle minutes (`APEX_LSP_IDLE_MS`).
 - JS parameters are optional to the checker: TS2554 catches too many

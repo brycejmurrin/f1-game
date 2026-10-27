@@ -130,8 +130,8 @@ test("deploy never arms auto-merge: no CCR route, no gh --auto --merge", () => {
   assert.doesNotMatch(src, /ccr\/auto_merge/, "REST path must not call CCR auto_merge");
   assert.doesNotMatch(src, /merge_method/, "no merge_method payload");
   const openPr = src.slice(src.indexOf("function openPr(branch)"));
-  const body = openPr.slice(0, openPr.indexOf("\nexport function gateOnly") >= 0
-    ? openPr.indexOf("\nexport function gateOnly")
+  const body = openPr.slice(0, openPr.indexOf("\nexport async function gateOnly") >= 0
+    ? openPr.indexOf("\nexport async function gateOnly")
     : openPr.indexOf("\n/* THE GATE"));
   // Fallback: take until next top-level export/comment after openPr's closing brace
   const fn = openPr.match(/^function openPr\(branch\) \{[\s\S]*?\n\}/m)?.[0] || body;

@@ -214,7 +214,6 @@
     "js/race/engineer.js",
     "js/race/radio-lines.js",
     "js/race/race-facts.js",
-    "js/race/event-journal.js",
     "js/race/spotter.js",
     "js/race/race-radio.js",
     "js/race/start-lights.js",
@@ -912,7 +911,10 @@
     "js/track/tracks.js"
   ],
     TRACK_WORKER_EXTRA: [
-    "js/render/shared/assets.js"
+    "js/render/shared/assets.js",
+    "js/render/shared/frustum.js",
+    "js/render/shared/chunk-bins.js",
+    "js/render/three/tlx-chunked.js"
   ],
   });
 })();

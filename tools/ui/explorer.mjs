@@ -18,6 +18,7 @@ import { openSession } from "./explorer/browser.mjs";
 import { resolveUIProfile, measureUIProfile } from "../lib/ui-device-profile.mjs";
 import { inspectSettled, inspectResponsive, installInspector } from "./explorer/inspector.mjs";
 
+import { summarizeReplay, formatReplaySummary, groupUnmapped } from "./explorer/summary.mjs";
 import { captureAuditSource } from "./explorer/audit-evidence.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -32,16 +33,18 @@ const HELP = `UI explorer — one Chromium, bounded captures, offline HTML evide
   node tools/ui/explorer.mjs inspect --screen settingsappearance [--selector '#pmsettings'] [--styles '#as-uiScale']
     [--viewports 390x844,844x390,1280x800] [--roundtrip] [--audit FILE]   # 1..8 bounded sizes; restores the original viewport
     [--touch] [--boot 932x430] [--safe 0,59,21,59] [--summary]   # touch context, boot size, env(safe-area-inset-*) T,R,B,L; coverage + issues per size
+  node tools/ui/explorer.mjs summarize <replay.json|inspection.json> [--group-unmapped]   # offline: counts the FINAL history once; no Chromium
   node tools/ui/explorer.mjs --list|--help
 Flags: --device "iPhone 13" --settings FILE  # descriptor + baseline; no inferred phone zoom
        --url URL --out DIR --modes a,b --scenario FILE --max-shots 0..25
        --max-attempts 1..30 --track ID --frac 0..1 --repro FILE --reference IMAGE
        --scene-views original,45,225 --scene-backend webgl2|three
-Browser-free commands: --help, --list, brief, report. Native motion; isolated saves.
+--group-unmapped (summarize, or inspect --summary): list unmapped controls by stable group id (status stays unknown).
+Browser-free commands: --help, --list, brief, report, summarize. Native motion; isolated saves.
 Reports distinguish guided missions from exported blind Browser Use briefs.
 Exit 0: probes completed (inspect advisories); 1: failed probe; 2: invalid invocation; 75: deferred (load >= 3 or browser lock held), retry later.
 `;
-const FLAGS = ["--device", "--settings", "--out", "--url", "--modes", "--scenario", "--max-shots", "--max-attempts", "--track", "--frac", "--repro", "--reference", "--mission", "--scene-views", "--scene-backend", "--screen", "--selector", "--styles", "--viewports", "--roundtrip", "--audit", "--touch", "--boot", "--safe", "--summary", "--list", "--help"];
+const FLAGS = ["--device", "--settings", "--out", "--url", "--modes", "--scenario", "--max-shots", "--max-attempts", "--track", "--frac", "--repro", "--reference", "--mission", "--scene-views", "--scene-backend", "--screen", "--selector", "--styles", "--viewports", "--roundtrip", "--audit", "--touch", "--boot", "--safe", "--summary", "--group-unmapped", "--list", "--help"];
 
 export function parseOptions(argv) {
   const f = makeFlags(argv, FLAGS);
@@ -56,15 +59,15 @@ export function parseOptions(argv) {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith("--")) {
-      if (!a.includes("=") && !["--help", "--list", "--roundtrip", "--touch", "--summary"].includes(a)) {
+      if (!a.includes("=") && !["--help", "--list", "--roundtrip", "--touch", "--summary", "--group-unmapped"].includes(a)) {
         if (!argv[i + 1] || argv[i + 1].startsWith("--")) throw new Error(`${a} requires a value`);
         i++;
       }
     } else positional.push(a);
   }
   const command = positional[0] || "all";
-  if (!["all", "replay", "brief", "report", "inspect", ...Object.keys(MODE_TITLES)].includes(command)) throw new Error(`Unknown command ${command}`);
-  if (positional.length > (["replay", "minimize", "report"].includes(command) ? 2 : 1)) throw new Error("Unexpected positional argument");
+  if (!["all", "replay", "brief", "report", "summarize", "inspect", ...Object.keys(MODE_TITLES)].includes(command)) throw new Error(`Unknown command ${command}`);
+  if (positional.length > (["replay", "minimize", "report", "summarize"].includes(command) ? 2 : 1)) throw new Error("Unexpected positional argument");
   if (f.has("--scenario") && !["all", "missions", "replay", "minimize"].includes(command)) throw new Error("--scenario is supported by missions, replay, minimize or all");
   const numeric = (name, fallback, min, max, integer = false) => {
     const raw = flag(name, String(fallback)), n = Number(raw);
@@ -72,7 +75,7 @@ export function parseOptions(argv) {
     return n;
   };
   const modes = String(flag("--modes", command === "all" ? Object.keys(MODE_TITLES).join(",") : command === "replay" ? "missions" : command)).split(",").map((v) => v.trim()).filter(Boolean);
-  if (!f.has("--help") && !f.has("--list") && !["brief", "report", "inspect"].includes(command) && (!modes.length || modes.some((m) => !MODE_TITLES[m]))) throw new Error("Unknown or empty --modes");
+  if (!f.has("--help") && !f.has("--list") && !["brief", "report", "summarize", "inspect"].includes(command) && (!modes.length || modes.some((m) => !MODE_TITLES[m]))) throw new Error("Unknown or empty --modes");
   const device = flag("--device", null), settingsFile = flag("--settings", null);
   if (device !== null && !device.trim()) throw new Error("--device requires a device name");
   if (settingsFile !== null && !settingsFile.trim()) throw new Error("--settings requires a file");
@@ -80,6 +83,7 @@ export function parseOptions(argv) {
   const screen = flag("--screen", "title"), selector = flag("--selector", null), styles = flag("--styles", null);
   if (!SCREENS.some(s => s.id === screen)) throw new Error("Unknown --screen; use --list");
   const inspectOnly = ["--screen", "--selector", "--styles", "--viewports", "--roundtrip", "--audit", "--touch", "--boot", "--safe", "--summary"];
+  if (f.has("--group-unmapped") && !["inspect", "summarize"].includes(command)) throw new Error("--group-unmapped requires inspect or summarize");
   if (command !== "inspect" && inspectOnly.some(k => f.has(k))) throw new Error(`${inspectOnly.join("/")} require inspect`);
   const size = (text, name) => {
     if (!/^\d+x\d+$/.test(text)) throw new Error(`${name} requires sizes such as 390x844,844x390`);
@@ -89,7 +93,7 @@ export function parseOptions(argv) {
   };
   const viewportText = flag("--viewports", null);
   const viewports = viewportText === null ? null : viewportText.split(",").map(v => size(v, "--viewports"));
-  for (const b of ["--touch", "--summary"]) if (argv.some(a => a.startsWith(b + "="))) throw new Error(`${b} is a boolean flag without a value`);
+  for (const b of ["--touch", "--summary", "--group-unmapped"]) if (argv.some(a => a.startsWith(b + "="))) throw new Error(`${b} is a boolean flag without a value`);
   const bootText = flag("--boot", null), boot = bootText === null ? null : size(bootText, "--boot");
   const safeText = flag("--safe", null);
   let safe = null;
@@ -116,7 +120,7 @@ export function parseOptions(argv) {
   const outside = relative === ".." || relative.startsWith(".." + path.sep) || path.isAbsolute(relative);
   if (!outside && !/^(artifacts|scratch)([\\/]|$)/.test(relative)) throw new Error("Inside the repository, --out must be under artifacts/ or scratch/");
   return { command, file: positional[1] || flag("--scenario", null), help: f.has("--help"), list: f.has("--list"), modes: [...new Set(modes)], url, screen, selector, styles, viewports, roundTrip: f.has("--roundtrip"), audit,
-    device, settingsFile, touch: f.has("--touch"), boot, safe, summary: f.has("--summary"),
+    device, settingsFile, touch: f.has("--touch"), boot, safe, summary: f.has("--summary"), groupUnmapped: f.has("--group-unmapped"),
     outDir, maxShots: numeric("--max-shots", 25, 0, 25, true), maxAttempts: numeric("--max-attempts", 8, 1, 30, true),
     track, sceneViews, sceneBackend, frac: numeric("--frac", 0.4, 0, 1), repro: flag("--repro", null), reference: flag("--reference", null), mission: flag("--mission", "first-race") };
 }
@@ -158,6 +162,13 @@ export async function main(argv = process.argv.slice(2)) {
     if (!opts.url) throw new Error("brief requires --url reachable from the hosted browser; localhost is not shared automatically");
     const mission = MISSIONS.find((m) => m.id === opts.mission); if (!mission) throw new Error("Unknown --mission");
     console.log(JSON.stringify(missionBrief(mission, opts.url), null, 2)); return 0;
+  }
+  if (opts.command === "summarize") {
+    if (!opts.file) throw new Error("summarize requires a replay or inspection JSON file");
+    const data = readJSON(opts.file);
+    const inspection = data.controls || data.records?.some(r => r.inspection);
+    console.log(opts.groupUnmapped && inspection ? groupUnmapped(data) : inspection ? summarizeInspection(data, data.provenance?.screen || "inspection") : formatReplaySummary(summarizeReplay(data)));
+    return 0;
   }
   if (opts.command === "report") {
     if (!opts.file) throw new Error("report requires report.json");
@@ -208,7 +219,7 @@ export async function main(argv = process.argv.slice(2)) {
         report.errors = s.logs.errors; report.requests = s.logs.requests;
         fs.mkdirSync(opts.outDir, { recursive: true });
         fs.writeFileSync(path.join(opts.outDir, "inspection.json"), JSON.stringify(report, null, 2));
-        console.log(opts.summary ? summarizeInspection(report, opts.screen) : JSON.stringify(report, null, 2));
+        console.log(opts.summary ? summarizeInspection(report, opts.screen) + (opts.groupUnmapped ? "\n" + groupUnmapped(report) : "") : JSON.stringify(report, null, 2));
         return s.logs.errors.some(e => e.kind === "pageerror") ? 1 : 0;
       } finally { await s.context.close(); }
     }

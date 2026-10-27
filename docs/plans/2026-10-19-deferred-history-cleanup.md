@@ -1,6 +1,8 @@
 # Deferred repository history cleanup — development continues
 
-Date: 2026-10-19. Status: DEFERRED; no execution or maintenance window scheduled.
+Status: **OPEN** (checked against the code 2026-10-26) — explicitly DEFERRED; nothing authorises a history rewrite (backlog #2945).
+
+Date: 2026-10-19. Status when written: DEFERRED; no execution or maintenance window scheduled.
 Backlog: [#2945](https://github.com/brycejmurrin/f1-game/issues/2945).
 
 The user asked to save the remaining cleanup plan and said, “we are not ready to

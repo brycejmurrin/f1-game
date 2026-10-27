@@ -255,6 +255,15 @@ const Gfx = (function () {
     return { canvas: canvasLease, get active() { return active; }, get claimed() { return claimed; },
       abort() { active = false; }, check() { if (!active) throw new Error("Renderer initialization cancelled"); } };
   }
+  // A backend that resolved after its init owner was revoked (boot timeout) is never handed back:
+  // free what it holds (best effort: a backend that exposes dispose/destroy) and let the check throw.
+  function _ownedOrDiscard(owner, backend) {
+    if (!owner) return;
+    try { owner.check(); } catch (e) {
+      try { const f = backend && (backend.dispose || backend.destroy); if (typeof f === "function") f.call(backend); } catch (_) { /* best effort */ }
+      throw e;
+    }
+  }
   async function create(canvas, opts) {
     try {
       const owner = opts && opts.initOwner;
@@ -273,7 +282,7 @@ const Gfx = (function () {
           return null;
         }
         const backend = await TLX.create(canvas, opts || {});
-        if (owner) owner.check();
+        _ownedOrDiscard(owner, backend);
         if (backend) { Log.info("gfx", "Gfx.bind backend=three"); return backend; }
         Log.info("gfx", "Gfx.bind fallback webgl2");
         return null;   // TLX.create returns null on any failure
@@ -292,12 +301,12 @@ const Gfx = (function () {
       if (typeof WGX === "undefined" || !WGX || typeof WGX.create !== "function") return null;
 
       const backend = await WGX.create(canvas, opts || {});
-      if (owner) owner.check();
+      _ownedOrDiscard(owner, backend);
       if (backend) { Log.info("gfx", "Gfx.bind backend=webgpu"); return backend; }
       Log.info("gfx", "Gfx.bind fallback webgl2");
       return null;   // WGX.create returns null on any failure
-    } catch (_) {
-      Log.info("gfx", "Gfx.bind fallback webgl2");
+    } catch (e) {
+      Log.info("gfx", "Gfx.bind fallback webgl2 (" + ((e && e.message) || e) + ")");   // the reason, for triage
       return null;              // any surprise -> WebGL2 fallback
     }
   }

@@ -318,7 +318,7 @@ test("no skill declares paths: — it replaces description triggering instead of
   // chat-only symptom ("night looks washed out", "the GLX canvas is black")
   // never has a matching file in play, so the field hides exactly the requests
   // the description targets. PR #172 (2026-09-22) had re-added it as
-  // "additive"; docs/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md §Withdrawn.
+  // "additive"; docs/archive/notes/AGENT-TOOLING-RESEARCH-2026-09-22.md §Withdrawn.
   for (const d of fs.readdirSync(SKILLS, { withFileTypes: true }).filter((e) => e.isDirectory())) {
     const file = path.join(SKILLS, d.name, "SKILL.md");
     if (!fs.existsSync(file)) continue;

@@ -128,3 +128,23 @@ test('owned wheel-map commit rejects disconnected owner and selects the captured
   assert.equal(I.controllerProfile().id, 'Captured wheel');
   assert.equal(I.getPadAxisMap().steer, 3);
 });
+
+test('pedal initialization belongs to each connected controller and axis map', () => {
+  const { Input: I, storage, state, clock } = boot();
+  const a = pad('wheel A', ''), b = pad('wheel B', ''); b.index = 1;
+  storage.set('padProfiles', { v: 1, legacyClaimed: true, devices: [a, b].map(p => ({
+    id: p.id, axes: { steer: 0, throttle: 2, brake: 3 }, buttons: {},
+  })) });
+  state.pads = [a, b]; I.poll();
+  a.axes[2] = a.axes[3] = -1; clock.t += 17; I.poll();
+  b.buttons[8] = { pressed: true, value: 1 }; clock.t += 17; I.poll();
+  assert.equal(I.controllerProfile().id, b.id);
+  assert.equal(I.throttleLevel(), 0, 'another wheel cannot initialize untouched gas');
+  assert.equal(I.brakeLevel(), 0, 'another wheel cannot initialize untouched brake');
+  b.axes[2] = b.axes[3] = -1; clock.t += 17; I.poll();
+  b.axes[2] = b.axes[3] = 0; clock.t += 17; I.poll();
+  assert.ok(I.throttleLevel() > .4, 'zero is real half travel after this pedal initialized');
+  assert.ok(I.brakeLevel() > .4);
+  I.setPadAxisMap({ steer: 0, throttle: 1, brake: 3 }); I.poll();
+  assert.equal(I.throttleLevel(), 0, 'a newly mapped axis starts uninitialized');
+});

@@ -94,15 +94,15 @@ function loadCockpitOpts(disk) {
   return ctx.exported;
 }
 
-function loadCamTune(disk = new Map()) {
+function loadCamTune(disk = new Map(), hooks = null) {
+  const store = {
+    rev: 0,
+    get(k, d) { return disk.has(k) ? disk.get(k) : d; },
+    set(k, v) { disk.set(k, v); this.rev++; return true; },
+  };
+  if (hooks) hooks.store = store;
   const ctx = {
-    GameStore: {
-      store: {
-        rev: 0,
-        get(k, d) { return disk.has(k) ? disk.get(k) : d; },
-        set(k, v) { disk.set(k, v); this.rev++; return true; },
-      },
-    },
+    GameStore: { store },
     Teams: { LIST: [{ id: "mclaren" }, { id: "ferrari" }] },
     M4: { clamp: (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v) },
     Log: { info() {}, debug() {}, enabled() { return false; } },
@@ -604,6 +604,58 @@ test("camera overrides resolve track over car over the existing global baseline"
   assert.equal(CamTune.comfortGet("bob"), 0.8);
 });
 
+test("live camera scopes override saved menu choices and follow world transitions", () => {
+  const disk = new Map([["trackId", "monza"], ["team", 1]]);
+  const hooks = {};
+  const C = loadCamTune(disk, hooks);
+  let live = { track: "spa", car: "mclaren" };
+  C.bindContext(() => live);
+  C.setContext("spa", "mclaren");
+  C.setScoped("track", "chase", "height", 2);
+  C.setScoped("car", "chase", "dist", 3);
+  C.comfortSetScoped("track", "bob", 0.2);
+  assert.deepEqual(plain(C.context()), { track: "spa", car: "mclaren" });
+  assert.deepEqual(Object.keys(C.exportPack().tracks), ["spa"]);
+  assert.deepEqual(Object.keys(C.exportPack().cars), ["mclaren"]);
+
+  assert.equal(C.get("chase", "height"), 2);
+  assert.equal(C.get("chase", "dist"), 3);
+  assert.equal(C.bob(), 0.2);
+  live = { track: "suzuka", car: "ferrari" }; // next round/car, without reopening the panel
+  assert.equal(C.get("chase", "height"), 0);
+  assert.equal(C.get("chase", "dist"), 0);
+  assert.equal(C.bob(), 1);
+  C.setScoped("track", "chase", "height", 4);
+  assert.equal(C.exportPack().tracks.suzuka.modes.chase.height, 4);
+  assert.equal(C.exportPack().tracks.spa.modes.chase.height, 2);
+
+  live = { track: null, car: null };
+  assert.deepEqual(plain(C.context()), { track: "monza", car: "ferrari" });
+  hooks.store.set("trackId", "imola"); hooks.store.set("team", 0);
+  assert.deepEqual(plain(C.context()), { track: "imola", car: "mclaren" }, "fallback follows saved changes");
+  C.bindContext(null);
+  C.setContext(null, null);
+  hooks.store.set("trackId", null);
+  assert.deepEqual(plain(C.context()), { track: null, car: "mclaren" }, "absent track never retains the prior fallback");
+});
+
+test("game camera context follows WATCH cuts and returns to the menu selection", () => {
+  const source = gameSource();
+  const statement = source.match(/CamTune\.bindContext\(\(\) => \(\{[\s\S]*?\}\)\);/);
+  assert.ok(statement, "game binds the live camera context");
+  let readContext;
+  const G = { state: "race", track: { def: { id: "spa" } }, teamIdx: 0,
+    player: { team: { id: "mclaren" } } };
+  const ctx = { G, Teams: { LIST: [{ id: "mclaren" }, { id: "ferrari" }] },
+    CamTune: { bindContext(read) { readContext = read; } } };
+  vm.runInNewContext(statement[0], ctx, { filename: absSrc("js/game.js") });
+  assert.equal(readContext().car, "mclaren");
+  G.player = { team: { id: "ferrari" } }; // G.followCar does not change teamIdx
+  assert.equal(readContext().car, "ferrari");
+  G.state = "menu";
+  assert.equal(readContext().car, "mclaren");
+});
+
 test("JSON and APXC1 camera packs round-trip track and car overrides", () => {
   const source = loadCamTune();
   source.importPack({
@@ -710,4 +762,58 @@ test("inverse projection stays current at measured tier 4, through and after the
   run.runInContext(ctx);
   assert.equal(calls, 4, "restoring normal post work refreshes the camera inverse");
   assertCancels("restored tier 0");
+});
+
+test("pending CAM hold is retired on pause/hide/quit, hidden page and blur without pointer cancellation", () => {
+  for (const ending of ["hide", "pause", "quit", "hidden", "blur", "pagehide"]) {
+    const dom = makeDom(), timers = new Map(), listeners = new Map(); let serial = 0;
+    const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
+      addEventListener(type, fn) { listeners.set(type, fn); },
+      setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
+    ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+    const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", paused: false };
+    const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
+    const fire = type => dom.dispatch(button, { type, pointerType: "touch", pointerId: 1 });
+    fire("pointerdown");
+    const late = [...timers.values()][0];
+    assert.equal(typeof late, "function");
+    // Pause/quit production paths invoke this exported hide while the first
+    // thumb remains held. No pointerup/cancel is manufactured by this fixture.
+    if (ending === "pause") { G.paused = true; cams.hideCamPicker(); }
+    else if (ending === "quit") { G.state = "menu"; cams.hideCamPicker(); }
+    else if (ending === "hide") cams.hideCamPicker();
+    else if (ending === "hidden") { dom.document.hidden = true; dom.dispatch(dom.document, { type: "visibilitychange" }); }
+    else listeners.get(ending)();
+    assert.equal(timers.size, 0, ending + " cancels its pending timer");
+    late(); // Even an already-queued stale callback cannot regain ownership.
+    assert.equal(button.getAttribute("aria-expanded"), "false", ending);
+    assert.equal(G.camMode, 0);
+    dom.document.hidden = false; G.state = "race"; G.paused = false;
+    fire("pointerup"); fire("lostpointercapture");
+    fire("pointerdown"); fire("pointerup"); fire("lostpointercapture"); button.onclick();
+    assert.equal(G.camMode, 1, ending + " does not consume the next genuine short tap");
+  }
+});
+
+test("CAM context-menu and late hold cannot open on a paused, hidden or non-race screen", () => {
+  for (const state of ["pause", "hidden", "menu"]) {
+    const dom = makeDom(); let callback;
+    const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
+      setTimeout(fn) { callback = fn; return 1; }, clearTimeout() {} };
+    ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+    const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", paused: false };
+    ctx.CamModes.create(G);
+    const button = dom.byId("btn-cam");
+    dom.dispatch(button, { type: "pointerdown" });
+    if (state === "pause") G.paused = true;
+    else if (state === "hidden") dom.document.hidden = true;
+    else G.state = "menu";
+    callback(); dom.dispatch(button, { type: "contextmenu" });
+    assert.equal(button.getAttribute("aria-expanded"), "false", state);
+    G.paused = false; G.state = "count"; dom.document.hidden = false;
+    dom.dispatch(button, { type: "contextmenu" });
+    assert.equal(button.getAttribute("aria-expanded"), "true", "countdown remains a valid CAM owner");
+  }
 });

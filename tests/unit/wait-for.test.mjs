@@ -48,10 +48,10 @@ test("waitFor: held once the load drops; 124 on timeout with the blocker named",
   assert.match(to.text, /pid 1 alive/);
 });
 
-test("CLI: exit 1 on usage, 0 on a pid that is gone, 124 on a live pid", () => {
+test("CLI: exit 2 on usage, 0 on a pid that is gone, 124 on a live pid", () => {
   const cli = path.resolve("tools/ci/wait-for.mjs");
-  assert.equal(spawnSync("node", [cli, "--bogus"]).status, 1);
-  assert.equal(spawnSync("node", [cli, "--pid-gone", "1.5"]).status, 1);
+  assert.equal(spawnSync("node", [cli, "--bogus"]).status, 2);
+  assert.equal(spawnSync("node", [cli, "--pid-gone", "1.5"]).status, 2);
   assert.equal(spawnSync("node", [cli, "--pid-gone", "2147483646", "--timeout", "1"]).status, 0);
   assert.equal(spawnSync("node", [cli, "--pid-gone", String(process.pid), "--timeout", "0.01", "--poll", "0.01"]).status, 124);
 });

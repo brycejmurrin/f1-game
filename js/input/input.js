@@ -96,6 +96,7 @@ const Input = (function () {
   const padPrevByIndex = new Map();
   let padPrevKey = null;       // padKey of the pad padPrevButtons belongs to
   let padSnapshotLost = false; // recovery must observe held buttons before accepting new edges
+  let padDpadTarget = 0;
   let padDpadVal = 0;          // ramped d-pad steer, -1..1 (see padDpadSteer)
   let padDpadT = 0;            // last d-pad ramp timestamp, ms
   let padDpadSeq = 0, padDpadLeftSeq = 0, padDpadRightSeq = 0;
@@ -729,6 +730,7 @@ const Input = (function () {
       // One axis cannot be both pedals: a combined axis reads brake AND throttle at rest.
       if (padAxisMap.brake != null && padAxisMap.brake === padAxisMap.throttle) padAxisMap.brake = padAxisMap.brakeRest = padAxisMap.brakeFar = null;
     }
+    padPedalSignature = JSON.stringify(padAxisMap);
     if (owner) invalidateAxisRest(padIdOf(owner), previous);
     profileChanged();
     return getPadAxisMap();
@@ -850,6 +852,7 @@ const Input = (function () {
   const PAD_AXIS_DEF = { steer: 0, steerInvert: 1, throttle: null, brake: null, pedalInvert: 1,
     throttleRest: null, throttleFar: null, brakeRest: null, brakeFar: null };   // pedal travel ends, measured by the wizard
   let padAxisMap = Object.assign({}, PAD_AXIS_DEF);
+  let padPedalSignature = JSON.stringify(padAxisMap);
   let axisCaptureCb = null;      // armed while the wizard waits for a moved axis
   let axisCaptureOwner = null;   // after first wheel answer, ignore other physical devices
   let axisCaptureSkip = new Set(); // axes the wizard already assigned; capture ignores them
@@ -893,7 +896,18 @@ const Input = (function () {
   // Chromium reports an axis as exactly 0 until it has once been seen near
   // rest, so a pedal resting at -1 read 0 -> half throttle AND half brake on a
   // fresh page. Until a pedal reports anything but exactly 0, it is at rest.
-  const padPedalSeen = { throttle: false, brake: false };
+  let padPedalSeen = { throttle: false, brake: false };
+  // Initial axis zero is unknown per physical device AND mapping, never a shared reading.
+  const padPedalSeenByDevice = new Map();
+  function selectPedalState(key) {
+    const signature = padPedalSignature;
+    let row = padPedalSeenByDevice.get(key);
+    if (!row || row.signature !== signature) {
+      row = { signature, seen: { throttle: false, brake: false } };
+      padPedalSeenByDevice.set(key, row);
+    }
+    padPedalSeen = row.seen;
+  }
   function padPedalAxis(axes, which, seen = padPedalSeen) {
     const i = padAxisMap[which];
     if (i == null) return 0;
@@ -916,28 +930,30 @@ const Input = (function () {
   const PAD_PEDAL_DZ = 0.12;
   function padPedalLevel(v) { return v > PAD_PEDAL_DZ ? clamp((v - PAD_PEDAL_DZ) / (1 - PAD_PEDAL_DZ), 0, 1) : 0; }
   function padDpadSteer(pad) {
-    const t = nowMs();
     // LAST PRESS WINS — same contract as keyboardSteer / buttonSteering.
     // Worn pads and some maps briefly report both left+right; right−left
     // cancelled to centre and the ramp unwound mid-corner.
     // 14/15 are the d-pad only on the standard layout; a wheel's are its own buttons.
     const dp = padStd(pad);
     const left = dp && btnDown(pad, 14), right = dp && btnDown(pad, 15);
-    // Centred and untouched: the shaped-space ramp is Math.pow twice and still 0.
-    if (!left && !right && padDpadVal === 0) {
-      padDpadLeftHeld = false; padDpadRightHeld = false;
-      padDpadT = t;
-      return 0;
-    }
-    const dt = (padDpadT ? Math.min(0.1, (t - padDpadT) / 1000) : 0) * timeScale;
-    padDpadT = t;
     if (left && !padDpadLeftHeld) padDpadLeftSeq = ++padDpadSeq;
     if (right && !padDpadRightHeld) padDpadRightSeq = ++padDpadSeq;
     padDpadLeftHeld = left; padDpadRightHeld = right;
-    const target = left && right ? (padDpadRightSeq > padDpadLeftSeq ? 1 : -1)
+    padDpadTarget = left && right ? (padDpadRightSeq > padDpadLeftSeq ? 1 : -1)
       : (right ? 1 : 0) - (left ? 1 : 0);
-    padDpadVal = digitalStep(padDpadVal, target, dt);
     return padDpadVal;
+  }
+  // Poll samples directions; only steering reads spend simulation time on the ramp.
+  function advanceDpad() {
+    const t = nowMs();
+    // Centred and untouched: the shaped-space ramp is Math.pow twice and still 0.
+    if (padDpadTarget === 0 && padDpadVal === 0) { padDpadT = t; }
+    else {
+      const dt = rampDtSince(padDpadT, t);
+      padDpadT = t;
+      padDpadVal = digitalStep(padDpadVal, padDpadTarget, dt);
+    }
+    if (!padSteerAnalog) padSteer = padDpadVal;
   }
   // The largest value across an action's bound buttons (a trigger is analog,
   // a face button reads 0/1) and any rising edge across them.
@@ -1452,6 +1468,7 @@ const Input = (function () {
       if (used) rec.usedAt = t > 0 ? t : 1;
     }
     for (const k of padUse.keys()) if (!padUseLive.has(k)) padUse.delete(k);
+    for (const k of padPedalSeenByDevice.keys()) if (!padUseLive.has(k)) padPedalSeenByDevice.delete(k);
   }
   // `lastUse(pad, slot)` -> ms of its last use, 0 = never. Defaults to the
   // module's own record; the unit test passes its own. `pickPad(pads, true)`
@@ -1570,7 +1587,7 @@ const Input = (function () {
       padThrottleVal = 0; padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
       lookStickX = 0; lookStickY = 0;
-      padDpadVal = 0; padDpadT = 0;
+      padDpadTarget = 0; padDpadVal = 0; padDpadT = 0;
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       padIsWheel = false;
@@ -1600,6 +1617,7 @@ const Input = (function () {
     padPrevKey = key;
     const profiles = ensureDeviceProfiles();
     if (profiles) profiles.activate(pad);
+    selectPedalState(key);
     padRestOffset = restFor(pad);
     padIsWheel = !padStd(pad) && !padAxesAreDefault();
     if (axisExt && key === axisExt.key && nowMs() <= axisExt.until) {
@@ -1669,14 +1687,14 @@ const Input = (function () {
       // The wheel wizard owns the frame: turning the wheel to answer "which
       // axis steers?" must not also steer the car sitting behind the sheet.
       padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
-      padSteerAnalog = false; padLookBack = false; padMenu.releaseDirection();
+      padSteerAnalog = false; padLookBack = false; padDpadTarget = padDpadVal = 0; padMenu.releaseDirection();
       pollAxisCapture(pads);
     } else if (padCaptureCb) {
       // A CONTROLS slot is waiting for a button: the first rising edge is its
       // answer and the frame ends here — the press must not also walk the
       // menu, pause, or drive. Pedals and steer were latched above; unlatch.
       padThrottle = padBrake = false; padThrottleVal = padBrakeVal = 0; padSteer = 0;
-      padSteerAnalog = false; padLookBack = false;
+      padSteerAnalog = false; padLookBack = false; padDpadTarget = padDpadVal = 0;
       padMenu.releaseDirection();
       const nb = pad.buttons ? pad.buttons.length : 0;
       for (let i = 0; i < nb; i++) if (btnEdge(pad, i)) { padCaptureCb(i); break; }
@@ -1701,7 +1719,7 @@ const Input = (function () {
         padLookBack = false;
         // …and the STEERING: a friend race keeps simulating under the pause menu, and the stick or d-pad
         // that moves through it was also steering the car at up to full lock.
-        padSteer = 0; padSteerAnalog = false; padDpadVal = 0;
+        padSteer = 0; padSteerAnalog = false; padDpadTarget = 0; padDpadVal = 0;
         padMenu.poll(pad);
       } else {
         padMenu.reset();   // fresh hold-timer the next time a menu opens
@@ -1797,6 +1815,7 @@ const Input = (function () {
     try { return steerNow(); } finally { rampDt = null; }
   }
   function steerNow() {
+    if (padConnected) advanceDpad();
     const k = keyboardSteer();
     if (keyLeft || keyRight || Math.abs(k) > 0.001) return k;
     // The d-pad half of padSteer is digital and already ramped — it must not
@@ -2325,7 +2344,8 @@ const Input = (function () {
       padConnected = true;
       _padLostAt = 0;
       _padNextProbeMs = 0;
-      padPedalSeen.throttle = padPedalSeen.brake = false;   // a new connection re-reads its pedals from rest
+      if (e.gamepad) padPedalSeenByDevice.delete(padKey(e.gamepad, e.gamepad.index));
+      // A new connection re-reads its own pedals from rest.
       try { Log.info("input", `gamepad connected ${padLogId(e)}`); }
       catch (_) { /* Log absent */ }
     });
@@ -2339,7 +2359,7 @@ const Input = (function () {
       padThrottleVal = padBrakeVal = 0;
       padSteerAnalog = false; padLookBack = false;
       lookStickX = 0; lookStickY = 0;
-      padDpadVal = 0; padDpadT = 0;
+      padDpadTarget = 0; padDpadVal = 0; padDpadT = 0;
       padDpadLeftHeld = padDpadRightHeld = false;
       padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;
       if (!still) padIsWheel = false;
@@ -2399,7 +2419,7 @@ const Input = (function () {
     padThrottleVal = 0;
     padBrakeVal = 0;
     padLookBack = false;
-    padDpadVal = 0;
+    padDpadTarget = 0; padDpadVal = 0;
     padDpadT = 0;
     padDpadLeftHeld = padDpadRightHeld = false;
     padDpadSeq = padDpadLeftSeq = padDpadRightSeq = 0;

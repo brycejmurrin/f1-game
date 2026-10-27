@@ -114,7 +114,7 @@ test("a correction of numerical dust does not count as contact", async () => {
   // Every arm of contactT in the resolver sits behind that comparison. The
   // rear-end arm flags both cars; the side arm flags both ONLY with a human in
   // the pair (the human's flag gates their rescue, the AI's makes it compliant)
-  // and otherwise exactly the yielder (AiDrive.sideYieldsA, with the next corner — kTurn — owning a level pair), which is also the
+  // and otherwise exactly the yielder (AiDrive.sideYieldsA, with the next corner — ONE kTurn for the pair, AiDrive.cornerK of both, so bucket order cannot pick the yielder, audit4 F10 — owning a level pair), which is also the
   // only car scrubbed — so an AI pair never mirrors each other into a standoff.
   const body = src.slice(src.indexOf("function _colResolvePair"), src.indexOf("function _colSepPair"));
   const both = body.match(/contactT = b\.contactT = 0\.22/g) || [];
@@ -123,7 +123,7 @@ test("a correction of numerical dust does not count as contact", async () => {
   assert.ok(body.includes("if (corr > CORR_EPS) { if (!netPlay.owns(a)) a.contactT = 0.22; if (!netPlay.owns(b)) b.contactT = 0.22; }"),
     "the rear-end arm lost its CORR_EPS gate or its net-ownership guard");
   assert.ok(body.includes("if (a.human || b.human) a.contactT = b.contactT = 0.22;"), "the side branch lost its human-pair arm");
-  assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : a.kTurn ?? b.kTurn)) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }"),
+  assert.ok(body.includes("if (AiDrive.sideYieldsA(dProg, a.x, b.x, a.human || b.human ? 0 : AiDrive.cornerK(a.kTurn, b.kTurn))) { if (last) a.speed = scrub(a.speed, rubScrub); a.contactT = 0.22; }"),
     "the side branch no longer scrubs (once a frame) and flags exactly the yielder");
   // scrub() takes MAGNITUDE (a human reversing keeps its sign); for a car rolling forwards it is the old floor.
   assert.ok(src.includes("function scrub(v, d) { return v > 0 ? Math.max(0, v - d) : Math.min(0, v + d); }"), "scrub() lost its magnitude form");

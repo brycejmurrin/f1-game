@@ -15,13 +15,17 @@
 #ps-panel[aria-busy="true"] .sheet-foot .bigbtn { opacity: 0.55; }
 #ps-panel .sheet-head { flex-wrap: nowrap; }
 #ps-body { display: flex; flex-direction: column; gap: var(--gap); overscroll-behavior: contain; }
+/* Scroll-thumb lane (components.css .sheet-body.sf-scroll::before) at -6px, not 6px - var(--pad): the thumb sits in the padding without pushing scrollWidth 10px past the clipped x-axis (#3338). */
+#ps-body.sf-scroll::before { margin-right: calc(var(--gap) / -2); }
 #ps-body > section { display: flex; flex-direction: column; gap: calc(var(--gap) * .6); min-width: 0; }
 #ps-body .adv-sec { margin: 0; }
 #ps-panel .balanced-row { gap: calc(var(--gap) * .5); --balance-basis: 6rem; }
 #ps-shots { --balance-basis: 4rem; }
-#ps-panel button:not(.bigbtn):not([data-step]) { min-height: var(--tap-min); padding: calc(var(--gap) * .5) var(--gap); font-size: var(--fs-micro); }
+#ps-panel button:not(.bigbtn):not([data-step]) { min-height: var(--tap); padding: calc(var(--gap) * .5) var(--gap); font-size: var(--fs-micro); }
 /* Base file-button rule BEFORE the pointer:coarse floor below: same specificity, so it must come first or it resets --tap-paint to --tap-min. */
 #ps-panel input[type="file"]::file-selector-button { min-height: var(--tap-min); margin-inline-end: calc(var(--gap) * .5); font-family: inherit; color: var(--text); background: var(--plate); border: 1px solid var(--plate-line); border-radius: var(--r-sm); }
+/* Fine pointer: setting-row ‹ › steppers and selects meet the comfortable --tap floor too (#3337); coarse stays on --tap-paint below. */
+#ps-panel button[data-step] { min-height: var(--tap); min-width: var(--tap); }
 @media (pointer: coarse) {
   #ps-panel button:not(.bigbtn):not([data-step]),
   #ps-panel input[type="file"]::file-selector-button { min-height: var(--tap-paint); }
@@ -43,7 +47,7 @@ body[data-density="compact"] #ps-panel button[data-step] {
    --tap-paint (52 painted on touch; --tap-min with a mouse) like #1530/#1740.
    min-height only: landscape already met --tap and must not shrink. */
 #ps-panel :is(#ps-subject, #ps-aspect, #ps-grid-select, #ps-postcard, #ps-tod, #ps-weather, #ps-look-room, #ps-look-crew, #ps-look-mood) {
-  min-height: var(--tap-paint);
+  min-height: max(var(--tap), var(--tap-paint));
 }
 #ps-panel .tune-row { display: flex; flex-direction: column; gap: calc(var(--gap) * .5); }
 /* PHOTO LIGHTING: match the lighting-tuner tab / slider touch floors (tuner.css). */

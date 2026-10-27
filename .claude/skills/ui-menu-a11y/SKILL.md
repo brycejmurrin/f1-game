@@ -1,6 +1,6 @@
 ---
 name: ui-menu-a11y
-description: "Use when menus, settings, dialogs, Escape/back, keyboard navigation, screen-reader output, scroll affordances, UI scale, touch layout or a cramped/clipped screen (short landscape phone) misbehave or change. DOM restructure or tokens → css-play; full matrix → survey-ui-matrix; driving input → input-controls."
+description: "Use when menus, settings, dialogs, Escape/back (incl. pause behind a sheet), keyboard navigation, screen readers, scroll affordances, UI scale, touch layout or a cramped screen (short landscape phone) misbehave. Named-element tweak, restructure or tokens → css-play; full matrix → survey-ui-matrix; driving input → input-controls."
 ---
 
 # Menu / HUD accessibility
@@ -8,8 +8,9 @@ description: "Use when menus, settings, dialogs, Escape/back, keyboard navigatio
 One shared layer question plus declared screen exits: ask `UiLayers` what is
 on top, and route Escape/back through the same button path a player would use.
 
-A cramped / clipped single screen (short landscape phone, UI scale) is diagnosed
-and fixed here; **css-play** only supplies the edit loop.
+A screen that does not FIT or clips (short landscape phone, UI scale) is diagnosed
+and fixed here; **css-play** supplies the edit loop. A visual tweak on a NAMED element
+(padding, font-size on one control) starts in **css-play** (same rule in both descriptions).
 
 ## Where things live (HUD / menus / a11y)
 
@@ -27,7 +28,9 @@ Menu-only work rarely needs `game.js`; race HUD numbers come from `G.player` / `
 
 ## Default-first visual verification
 
-Shipped settings and the touch profile first, stress cases labelled separately: the procedure is
+Bryce's profile first — 844×390 landscape, touch (AGENTS.md §Coordination): one cell is
+`node tools/ui/layout-audit.mjs --viewports=ios-iphone-landscape-844 --screens=<id>` (parent only; the default
+`ios-iphone-landscape` is 852×393, not his phone). Then shipped settings, stress cases labelled separately:
 **survey-ui-matrix** §Default-first visual verification (one copy).
 
 ## Quick Reference
@@ -39,20 +42,20 @@ and `ScrollFade` (all `js/ui/<kebab>.js`): contracts in workflow steps 1-6 below
 
 ```sh
 node tools/ci/pick-tests.mjs js/ui/layers.js js/ui/modal.js css/components.css
-node --test tests/unit/menu-a11y-audit.test.mjs   # Escape/door/layer pins, no browser
-npm test -- tests/specs/menu-keyboard.spec.js   # BROWSER, background (AGENTS.md rules 4-5); also ui-button-touch, ui-scale
+node --test tests/unit/menu-a11y-audit.test.mjs   # STATIC Escape/door/layer pins, no browser; behaviour needs the specs
+node tools/ci/test-bg.mjs --spec tests/specs/menu-keyboard.spec.js   # BROWSER, one spec, background; also ui-button-touch, ui-scale
 node tools/ci/remote-group.mjs ui          # the whole `ui` group, on the PUSHED branch
-node tools/ci/test-bg.mjs gallery          # BROWSER: ui-audit captures — read the PNGs
-npm run test:tooling-fast
+node tools/ci/test-bg.mjs --spec tests/specs/ui-audit.spec.js   # BROWSER: captures — read the PNGs (a subagent reports browser runs not run)
+node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
 ```
 
 `tests/specs/ui-audit.spec.js` asserts nothing — it is a capture harness.
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
-`docs/notes/ARCHITECTURE-REVIEW.md` (repo root).
+`docs/notes/ARCHITECTURE-REVIEW.md`. First tap silent on iPhone (audio unlock on a user gesture) → **audio-debug**.
 
 ## Load on demand
 
-- Layer/Escape/zoom implementation, pause-settings overlay, mistakes →
+- Layer/Escape/zoom implementation, "Escape does nothing", pause-settings overlay, mistakes →
   [references/workflow.md](references/workflow.md).
 
 ## Local automated evidence

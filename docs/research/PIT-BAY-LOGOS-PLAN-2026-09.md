@@ -1,5 +1,7 @@
 # Pit bay logos — plan (2026-09-15)
 
+Status: shipped in js/garage/pit-signs.js (checked 2026-10-26); the 'Nothing below is implemented' line is the state when written.
+
 > A PLAN, not a record of work. Nothing below is implemented. Every fact is
 > cited to the working tree at the session SHA; line numbers drift, names do not.
 > Companion: `docs/research/PIT-LANE-REDESIGN-2026-09.md` (the complex this

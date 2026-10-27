@@ -47,13 +47,13 @@ window.SpotifyMusic = (function () {
   const responseControllers = new WeakMap();
 
   // Fetch resolves when headers arrive; a server can then leave the response
-  // body pending forever. Every JSON consumer needs the same bound as the
+  // body pending forever. Every body consumer needs the same bound as the
   // request itself, and the explicit race also settles deterministic test
-  // doubles whose json() does not reject when AbortController fires.
-  function readJson(r, ac) {
+  // doubles whose reader does not reject when AbortController fires.
+  function readBody(r, method, ac) {
     ac = ac || (r && responseControllers.get(r)) || null;
     let timer = null;
-    const body = Promise.resolve().then(() => r.json()).catch(() => null);
+    const body = Promise.resolve().then(() => r[method]()).catch(() => null);
     const timeout = new Promise((resolve) => {
       timer = setTimeout(() => {
         if (ac) { try { ac.abort(); } catch (e) { /* abort may already be settled */ } }
@@ -65,6 +65,7 @@ window.SpotifyMusic = (function () {
       return value;
     });
   }
+  function readJson(r, ac) { return readBody(r, "json", ac); }
 
   // playlist-read-private / user-library-read are what let the panel OFFER
   // something to play. Without a chosen context, "play" on a freshly
@@ -662,7 +663,7 @@ window.SpotifyMusic = (function () {
         installBackend();                 // it works — Spotify may own the music
         return;
       }
-      return r.text().then((txt) => {
+      return readBody(r, "text").then((txt) => {
         if (gen !== sessionGen) return;
         let reason = "";
         try { const j = JSON.parse(txt); reason = (j.error && (j.error.reason || j.error.message)) || ""; }
@@ -688,8 +689,7 @@ window.SpotifyMusic = (function () {
           : r.status === 401 ? " Press CONNECT to sign in again."
           : "";
         releaseToBuiltIn("Spotify refused playback (" + r.status + (reason ? ": " + reason : "") + ")." + hint);
-      }, () => { if (gen !== sessionGen) return; lastPlayError = { status: r.status, reason: "" };
-        setStatus("connected", "Spotify refused playback (" + r.status + ")."); });
+      });
     });
   }
 

@@ -74,7 +74,12 @@ const ApexGpuCapture = (function () {
       s.async = true;
       s.dataset.apexGpuCapture = src;
       s.onload = function () { s.dataset.loaded = "1"; resolve(); };
-      s.onerror = function () { reject(new Error("failed to load " + src)); };
+      s.onerror = function () {
+        // A failed element never fires load/error again. Leave retry free to
+        // create a fresh request instead of waiting on that spent element.
+        s.remove();
+        reject(new Error("failed to load " + src));
+      };
       (document.head || document.documentElement).appendChild(s);
     });
   }

@@ -54,6 +54,37 @@ test('diagnostic track retains the full graph and exact geometry',()=>{
   assert.ok(Array.isArray(tr.terrainGeo.col));
 });
 
+test('LOW build retains exact ribbon attributes for a later graphics increase',()=>{
+  const T=buildContext(null,{quiet:true});
+  let tier=3;
+  T._vmContext.PerfGov={tier:()=>tier};
+  const uploaded={};
+  const channels=['nrm','col','mat','trk'];
+  const snapshot=g=>Object.fromEntries(channels.map(k=>[k,g[k]&&Array.from(g[k])]));
+  const gfx={createMesh(g){return {attributes:snapshot(g)};},createChunkedMesh(g){
+    const attributes=snapshot(g);
+    assert.ok(attributes.nrm?.length,'late upload has normals');
+    assert.ok(attributes.col?.length,'late upload has colors');
+    assert.ok(attributes.mat?.length,'late upload has materials');
+    return {chunks:[{}],attributes};
+  }};
+  const tr=T.build(T.LIST.find(d=>d.id==='monza'),{gfx,retainGraph:false,chunkRibbons:false});
+  assert.ok(!tr._ribbonCpuDropped,'LOW fused uploads still need source attributes');
+  for(const name of ['road','terrain']) uploaded[name]=tr.meshes[name].attributes;
+  tier=0;
+  // drawWorldMeshes lazily uploads each ribbon when graphics quality rises.
+  for(const name of ['terrain','road']){
+    assert.equal(tr.meshes[name+'Chunked'],undefined);
+    tr.meshes[name+'Chunked']=gfx.createChunkedMesh(tr[name+'Geo']);
+    assert.deepEqual(tr.meshes[name+'Chunked'].attributes,uploaded[name],name+' late upload matches initial GPU attributes');
+    T.dropRibbonCpuIfReady(tr);
+  }
+  assert.equal(tr._ribbonCpuDropped,true,'attributes are released after both chunk uploads');
+  for(const name of ['road','terrain']){
+    for(const k of channels) if(uploaded[name][k]) assert.equal(tr[name+'Geo'][k],null,name+'.'+k+' released');
+  }
+});
+
 test('a player build frees the prop/glass/water CPU geometry; the dev surface keeps it (M-3a)',()=>{
   const T=buildContext(null,{quiet:true});
   const def=T.LIST.find(d=>d.id==='monza');
