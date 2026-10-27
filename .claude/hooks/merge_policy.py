@@ -33,16 +33,16 @@ import subprocess
 import time
 
 GATE = "run `node tools/ci/ready-gate.mjs --pr <n>` (must exit 0 on the tip) first"
-DENY_METHOD = ("MERGE-COMMIT-ONLY (AGENTS.md §Concurrent PRs): every PR lands as a merge commit; "
+DENY_METHOD = ("MERGE-COMMIT-ONLY (AGENTS.md §Coordination): every PR lands as a merge commit; "
                "use the merge method, never squash or rebase.")
-DENY_GATE_MERGE = ("A merge needs a fresh merge-gate receipt (AGENTS.md §Concurrent PRs, standing authority): "
-                   "`node tools/ci/merge-gate.mjs --pr <n>` must exit 0 (open, ready-gate 0, CI green on the head, no MERGE-HOLD, "
-                   "gen:check on a local merge onto the current tip, game pacing from the bus), then merge with merge_method "
-                   "merge and expectedHeadSha pinned to the gated head.")
+DENY_GATE_MERGE = ("No session merges or arms (AGENTS.md §Coordination, docs/WORKERS.md §The contract): flip the PR "
+                   "ready and add the `land` label; land.yml runs `merge-gate.mjs --check` as the `gate` check (no `hold` "
+                   "label, Plan closed, CI green on the head, gen:check and ratchets on the merge result, base distance) "
+                   "and arms auto-merge with the merge method. The gate writes no receipt, so this door stays shut.")
 DENY_GATE_READY = ("A draft→ready flip needs a fresh ready-gate receipt: `node tools/ci/ready-gate.mjs --pr <n>` must exit 0 "
                    "on the tip (Structural guards green, Plan closed, memory marker) — it starts the full CI tier.")
 ASK_MERGE = ("This gh call merges or arms outside the receipt check (a GraphQL or REST merge by id). Before confirming, " + GATE +
-             "; never a draft, DIRTY/CONFLICTING or MERGE-HOLD PR.")
+             "; never a draft, DIRTY/CONFLICTING or `hold`-labelled PR.")
 ASK_READY = "Marking a draft ready starts the full CI tier. Before the flip, " + GATE + "."
 ASK_DESK_METHOD = ("Arm auto-merge with the MERGE method named explicitly: an omitted method uses "
                    "the repository default, which may be squash. Pass mergeMethod: MERGE.")

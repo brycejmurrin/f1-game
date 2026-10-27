@@ -820,12 +820,9 @@ def signing_issues(text):
 
 
 # ---- advisories (additionalContext, never a block) ---------------------------------
-# Transcript Auditor batch 9 (2026-10-24). (b) a worker pushed files another fleet's
-# open PR still held: a cursor/* push runs tools/ci/fleet-owner.mjs on the branch's
-# diff against the deploy branch and names every path another open PR holds (a warning:
-# the lookup costs ~14 s of API calls (capped at HELD_BUDGET_S), and shared generated files would make a refusal
-# noisy). (d) `ready-gate.mjs | tail` reported a refusal as a pass: a gate piped without
-# `set -o pipefail` gets a reminder that the pipe's status is the last command's.
+# Transcript Auditor batch 9 (2026-10-24): `ready-gate.mjs | tail` reported a refusal as a pass: a gate piped
+# without `set -o pipefail` gets a reminder that the pipe's status is the last command's. (The held-file push
+# advisory over fleet-owner.mjs was retired on 2026-10-27, docs/WORKERS.md.)
 GATE_PIPED = re.compile(r"(ready|merge)-gate\.mjs(?:[^;&|\n]|>&|&>)*\|(?!\|)")
 
 
@@ -868,62 +865,6 @@ def closed_pr_refusal(dests, root):
                 "new branch from the deploy tip and open a new PR; APEX_CLOSED_PR_PUSH_OK=1 as the push's own prefix "
                 "only when Bryce reopened the PR.\n" % (branch, done))
     return ""
-
-
-HELD_BUDGET_S = 20   # fleet-owner.mjs --no-fetch: 12-37 s before 2026-10-26 (timed out on every push), 1.7-2.7 s since (one parallel curl + head-sha cache)
-
-
-def held_warning(dests, root):
-    """Paths in this push's diff that ANOTHER open PR holds (fleet-owner.mjs), as one warning, or ""."""
-    import subprocess
-    import time
-    budget = float(os.environ.get("APEX_HELD_BUDGET_S") or HELD_BUDGET_S)   # env: tests only
-    rows, seen, deadline = [], set(), time.time() + budget
-    for where, _remote, branch, _env in dests:
-        if not str(branch).startswith("cursor/") or os.environ.get("APEX_HELD_CHECK") == "0":
-            continue
-        ref = "HEAD" if _current_branch(where) == branch else branch
-        if (where, ref) in seen:   # one lookup per (checkout, ref) per push
-            continue
-        seen.add((where, ref))
-        left = deadline - time.time()
-        if left < 1:
-            rows.append(f"(held-file check skipped for {branch}: the {budget:g} s budget ran out)")
-            continue
-        try:
-            d = subprocess.run(["git", "-C", where, "diff", "--name-only", "--no-renames",
-                                "origin/" + DEPLOY_BRANCH + "..." + ref], capture_output=True, text=True, timeout=10)
-            paths = [x for x in d.stdout.splitlines() if x.strip()]
-            if d.returncode != 0 or not paths:
-                continue
-            cmd = shlex.split(os.environ.get("APEX_FLEET_OWNER_CMD") or "node tools/ci/fleet-owner.mjs")
-            r = subprocess.run(cmd + ["--json", "--no-fetch"], input="\n".join(paths), cwd=root,
-                               capture_output=True, text=True, timeout=left)
-            data = json.loads(r.stdout) if r.returncode == 0 else None
-        except subprocess.TimeoutExpired:
-            rows.append(f"(held-file check skipped for {branch}: fleet-owner.mjs ran past the {budget:g} s budget)")
-            continue
-        except Exception:
-            data = None
-        if not data:
-            rows.append(f"(held-file check did not finish for {branch}: run `git diff --name-only origin/{DEPLOY_BRANCH}...HEAD"
-                        " | node tools/ci/fleet-owner.mjs` before the next push)")
-            continue
-        for row in data.get("rows") or []:
-            for h in row.get("holders") or []:
-                sha = str(h.get("sha") or "")
-                try:
-                    mine = sha and subprocess.run(["git", "-C", where, "merge-base", "--is-ancestor", sha, ref],
-                                                  capture_output=True, timeout=5).returncode == 0
-                except Exception:
-                    mine = False
-                if not mine:
-                    rows.append(f"{row.get('path')} HELD by #{h.get('pr')} ({h.get('owner')})")
-    if not rows:
-        return ""
-    return ("bash-guard: this push touches paths another open PR holds (fleet-core: one owner per path; Transcript Auditor "
-            "batch 9) — " + "; ".join(rows[:12]) + ("; …" if len(rows) > 12 else "") + ". Unless the holder released them "
-            "(`fleet-owner.mjs --release-answer`), message its fleet before merging, or drop the paths from your diff.")
 
 
 # ---- hand ratchet raises ----------------------------------------------------------
@@ -1685,7 +1626,7 @@ def guard(payload, root):
         return 2
     if polls and os.environ.get("APEX_POLL_OK") != "1" and not re.search(r"(^|[;&|(]\s*)APEX_POLL_OK=1\s", cmd):
         sys.stderr.write("BLOCKED: a shell poll loop (" + "; ".join(sorted({p["why"] for p in polls})) + ") — AGENTS.md "
-                         "rules 4 and 13 and fleet-core: subscribe, then at most one `ci-watch.mjs --once`, or ONE Monitor on "
+                         "rules 4 and 13: subscribe, then at most one `ci-watch.mjs --once`, or ONE Monitor on "
                          "`node tools/ci/ci-watch.mjs --sha <sha> --failures-only` / `node tools/ci/wait-for.mjs`; never "
                          "a for/while … sleep loop (2026-10 week: three 120-iteration loops in one orchestrator). "
                          "APEX_POLL_OK=1 <command> for a bounded retry of a network call.\n")
@@ -1694,7 +1635,7 @@ def guard(payload, root):
     if closed:
         sys.stderr.write(closed)
         return 2
-    ctx = "\n".join(w for w in (gate_pipe_warning(cmd), held_warning(dests, root) if dests else "") if w)
+    ctx = gate_pipe_warning(cmd)
     deny = [x for x in gh if x["decision"] == "deny"]
     if deny:
         P.emit("deny", P.DENY_METHOD + " (" + deny[0]["why"] + ")")

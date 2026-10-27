@@ -120,7 +120,7 @@ export function verdict(session, { override = "" } = {}) {
   if (status === "allowed") return { ok: true, status, why: "rate_limit_info.status allowed" };
   if (quote) return { ok: true, status, override: quote, why: `status ${status}; launch on Bryce's typed ask: "${quote}"` };
   const reset = rl && rl.resetsAt ? ` (resets ${new Date(rl.resetsAt * 1000).toISOString()})` : "";
-  return { ok: false, status, why: `rate_limit_info.status ${status}${reset}: launch nothing (orchestrator.md §Pre-launch quota check); a launch Bryce typed goes through --override "<his words>"` };
+  return { ok: false, status, why: `rate_limit_info.status ${status}${reset}: launch nothing (docs/WORKERS.md §The dispatcher); a launch Bryce typed goes through --override "<his words>"` };
 }
 
 /** Write the receipt under `root`; returns its path. */

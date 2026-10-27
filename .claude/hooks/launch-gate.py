@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # PreToolUse guard on mcp__claude-code-remote__create_session: the quota gate.
 #
-# orchestrator.md §Pre-launch quota check says "at `allowed_warning` or worse,
+# the retired orchestrator.md §Pre-launch quota check said "at `allowed_warning` or worse,
 # launch nothing", and OrchA 33 launched 7 sessions into a 75 % weekly quota
 # anyway (docs/notes/FLEET-A-TRANSCRIPT-AUDIT-2026-10-26.md #5, D7). Bryce,
 # 2026-10-25 ~21:00 PT, "Do all": the gate is a hook with a typed-override path.
@@ -22,7 +22,7 @@ import calendar, json, os, re, sys, time
 
 MAX_AGE_S = 120  # tools/ci/launch-gate.mjs MAX_AGE_S
 FIX = ('run `node tools/ci/launch-gate.mjs <saved get_session result>` (exit 0) first; a launch Bryce typed while '
-       'the quota warns: add `--override "<his words, quoted>"` (audit 2026-10-26 #5, orchestrator.md §Pre-launch quota check)')
+       'the quota warns: add `--override "<his words, quoted>"` (audit 2026-10-26 #5; docs/WORKERS.md §The dispatcher: launch only when quota allows)')
 
 
 def deny(why):
