@@ -16,7 +16,7 @@ import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, schedule
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
   isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
-  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS }
+  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope }
   from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -363,6 +363,27 @@ test("CLI: --bail is a first-class flag and defaults off", () => {
   assert.equal(parseToolingFastArgv([]).bail, false);
   assert.equal(parseToolingFastArgv(["--bail", "--shard=1/2"]).bail, true);
   assert.match(TOOLING_FAST_USAGE, /--bail/);
+});
+
+// #3951: ci.yml's guards shards ask --print-scope whether to run the whole floor.
+test("guards scope: only a pull request that touches no tooling narrows to --changed", () => {
+  const js = ["js/perf/governor.js", "css/hud.css"];
+  assert.equal(guardsScope(js, "pull_request").mode, "changed");
+  assert.equal(guardsScope(["docs/TESTING.md", "AGENTS.md"], "pull_request").mode, "changed", "docs-only narrows too");
+  for (const f of ["tools/ci/tooling-fast.mjs", "tests/unit/tooling-fast-runner.test.mjs", ".github/workflows/ci.yml", "package.json", "package-lock.json"]) {
+    const r = guardsScope([...js, f], "pull_request");
+    assert.equal(r.mode, "full", `${f} keeps the whole floor`);
+    assert.match(r.reason, new RegExp(f.replace(/[.]/g, "\\.")));
+  }
+  for (const ev of ["push", "schedule", "workflow_dispatch", undefined]) {
+    assert.equal(guardsScope(js, ev).mode, "full", `${ev}: only a pull request narrows (the deploy push and the train stay full)`);
+  }
+  assert.equal(guardsScope([], "pull_request").mode, "full", "an empty diff stays full (--changed exits 3 on one)");
+  // Joined, not literal: these two paths do not exist, and docs-integrity checks every path a comment or string names.
+  assert.equal(guardsScope([["toolsy", "x.js"].join("/"), ["js", "tests", "x.js"].join("/")], "pull_request").mode, "changed",
+    "prefixes are anchored directories");
+  assert.equal(parseToolingFastArgv(["--print-scope"]).printScope, true);
+  assert.match(TOOLING_FAST_USAGE, /--print-scope/);
 });
 
 test("CLI: --help and unknown flags never start the suite", () => {
