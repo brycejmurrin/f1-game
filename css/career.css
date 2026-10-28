@@ -490,9 +490,8 @@
   white-space: normal;
   line-height: 1.15;
 }
+/* width / margin-left already set on the earlier compact #cr-meters rule. */
 #cr-inner[data-density="compact"] #cr-meters {
-  margin-left: 0;
-  width: 100%;
   justify-content: space-around;
 }
 
