@@ -1901,6 +1901,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/perf/first-race-census.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "The `= first-race-census` summary line, one `  +<s>` line per post-lights pipeline group, `  miss` lines and the --json artifact."
+    },
     "tools/perf/garage-census.mjs": {
       "action": "keep-native",
       "presentation": "native",

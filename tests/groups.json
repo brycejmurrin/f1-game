@@ -360,6 +360,7 @@
     "// Rival-car distance LOD (js/car/field-lod.js): the table, the shadow-caster",
     "// gate, the mirror cap and the launch warm. Real shadow/mirror passes in VMs, ~0.1 s.",
     "tests/unit/field-lod.test.mjs",
+    "tests/unit/first-race-census.test.mjs",
     "// Car part fit (tools/car/car-fit-audit.mjs): GAP / PENETRATION / ZFIGHT / OPEN on box",
     "// fixtures, the --base comparison, and the Fenced Halo brow fixture. VM, ~2 s.",
     "tests/unit/fit-audit-car.test.mjs",
