@@ -69,6 +69,7 @@
   width: var(--chip-h);
   min-width: var(--tap-min);
   height: var(--chip-h);
+  min-height: var(--chip-h);
   padding: 0;
   margin: 0;
   /* 1.3x the top rung and bold: single-quote chevrons read as specks in a
@@ -86,6 +87,7 @@
   width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   min-width: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
 }
 .set-row > div > select {
   /* A FIXED 8rem, not a flex basis: with `width: auto` the select sized to
@@ -96,6 +98,7 @@
   width: 8rem;
   min-width: 4rem;
   height: var(--chip-h);
+  min-height: var(--chip-h);
   box-sizing: border-box;
   margin: 0;
   padding: 0 calc(var(--gap) * 0.5);
@@ -232,6 +235,7 @@
   width: var(--chip-h);
   min-width: var(--tap-min);
   height: var(--chip-h);
+  min-height: var(--chip-h);
   padding: 0;
   margin: 0;
   justify-content: center;
