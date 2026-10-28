@@ -739,6 +739,7 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, finishPending, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  // HOLD_M stays module-local: holdCap owns the metres threshold; no external caller.
+  return { create, finishDelay, finishPending, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
 })();
 Object.freeze(RaceControl);

@@ -254,7 +254,8 @@ test("LOW GRIP (B7.2.2(d)): treaded-tyre conditions switch Overtake off and say 
 
 test("NO PASSING UNDER A CAUTION, AI TOO: the car ahead in the running order is a speed ceiling once close", () => {
   const { RC } = load();
-  const H = RC.HOLD_M;
+  // HOLD_M is module-local on RaceControl; pin the documented metres threshold here.
+  const H = 12;
   const lead = { prog: 1000, speed: 40 }, mid = { prog: 1000 - H * 0.75, speed: 50 }, tail = { prog: 1000 - H * 0.75 - H * 1.5, speed: 60 };
   const ranked = [lead, mid, tail];
   assert.equal(RC.holdCap(lead, ranked), Infinity, "the leader holds behind nobody");

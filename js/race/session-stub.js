@@ -121,7 +121,6 @@ var RaceRadio = {
 
 var SessionRecords = {
   _stub: true,
-  PHYS: "",
   create: () => ({
     _stub: true,
     begin: function () {}, current: () => null, config: () => ({}), sample: function () {}, sampleInput: function () {},

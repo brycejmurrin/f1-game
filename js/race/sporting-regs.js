@@ -294,12 +294,12 @@ const SportingRegs = (function () {
     return { tick, reset, info };
   }
 
+  // Compound / caution / blue-flag scalars stay module-local: the pure helpers
+  // and watches above own them; no external caller reads the constants.
   return Object.freeze({
     compoundsRun, compoundShort, compoundVerdict, applyCompoundRule,
     passPenaltyS, exempt, createPassWatch, champOrder,
     blueFlagCar, createBlueFlagWatch,
-    DRY, WET, SUSPENDED_PEN_S, DSQ_WHY, GIVE_BACK_S, CAUTION_MIN,
-    BLUE_GAP_S, BLUE_VFLOOR, BLUE_WARN_S, BLUE_HOLD_S, BLUE_PEN_S,
     jumpStartEarlyThrottle, jumpStartFastLaunch,
     JUMP_START_THROTTLE, JUMP_START_REACT_S, JUMP_START_SPEED_VREF,
     JUMP_START_PEN_S, JUMP_START_WHY,

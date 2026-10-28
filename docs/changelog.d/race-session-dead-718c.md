@@ -1,0 +1,1 @@
+Removed: Unused public race-session exports — `RaceControl.HOLD_M`, `SessionRecords.PHYS`, SportingRegs compound/caution/blue-flag scalars, and `StartLights.create().countdownCamera` stay module-local (no behaviour change).
