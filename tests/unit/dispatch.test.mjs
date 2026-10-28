@@ -2,7 +2,8 @@
 // ready-issue launches, priority order, caps, quota, claims, stale PRs → needs-owner + CONTINUE, codex 6 h, hold,
 // double-launch guard, deploy red, the archive rule, pause flags, the Board markdown, the launch line formats, and the
 // 2026-10-27 review fixes: live = working role:worker sessions (H1), archive guards + closed-issue claims (H2), pagination
-// (H3), RECORD_LAUNCH after the launch (M4), land/bot PRs never stale (M5), STOP AT (M8), #12 ≠ #123, completed trains. No network.
+// (H3), RECORD_LAUNCH after the launch (M4), land/bot PRs never stale (M5), STOP AT (M8), #12 ≠ #123, completed trains,
+// and the land-queue backpressure on rule 1 (landQueueMax). No network.
 // Every check is an exact equality on the produced string (no regex pins: the assertPins ratchet counts those).
 import fs from "node:fs";
 import test from "node:test";
@@ -11,6 +12,7 @@ import {
   planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, extractSessions, sessionRefs, activityAt, applyPlan, loadConfig,
   issuePrompt, continuePrompt, deployRedPrompt, waitingWhy, PROMPT_MAX_LINES, BOARD_MARKER, LAUNCH_RE,
   titleNames, readSessionPages, childSessionIds, sessionsPage, readState, getAll, landProblem, recordToken, recordComment, main, claimedSessionIds,
+  renderPlan,
 } from "../../tools/ci/dispatch.mjs";
 
 const NOW = Date.parse("2026-10-27T12:00:00Z");
@@ -225,7 +227,7 @@ test("board: the markdown carries the marker, one row per open PR (owner from th
   const body = "```handoff\nowner: claude:session_01ABCDEFGHIJKLMNOP\n```";
   const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [pr(70, { labels: ["run-ci", "lane:claude"], body, draft: false }), pr(71)] }), cfg(), NOW);
   assert.deepEqual(p.board.split("\n").slice(0, 13), [BOARD_MARKER, `## Board — ${ISO}`, "",
-    "quota: **allowed** · pause: false · merge-pause: false · deploy: green", "caps: launches/run 4; live workers claude 1/8, cursor 0/4; cost cap $10", "",
+    "quota: **allowed** · pause: false · merge-pause: false · deploy: green", "caps: launches/run 4; live workers claude 1/8, cursor 0/4; cost cap $10 · land queue 0/15", "",
     "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
     "| #70 | PR 70 | ready | 30h | claude:session_01ABCDEFGHIJKLMNOP | 30m ago | run-ci, lane:claude |", "| #71 | PR 71 | draft | 30h | - | 30m ago | - |", "",
     "### Launches this run (1)", "- claude: [Worker] #10 Task 10"]);
@@ -389,6 +391,17 @@ test("WP-L7 F6: a stale PR a live role:worker session names is not re-owned; an 
   assert.equal(notWorker.launches.length, 1, "only a role:worker session protects a PR");
 });
 
+test("a stale PR is owned by a live worker its hand-off `owner:` names, or one tagged with the issue it closes", () => {
+  const sid = "session_01BatchBatchBatch";
+  const sess = (tags) => ({ id: sid, title: "[Worker] batch", status: "SESSION_STATUS_RUNNING", bucket: "", tags: ["role:worker", ...tags] });
+  const plan = (body, tags) => planDispatch(state({ prs: [pr(96, { updated_at: ago(3), body })], sessions: [sess(tags)] }), cfg(), NOW);
+  const byHandoff = plan(`\`\`\`handoff\nowner: claude:${sid}\n\`\`\``, []);
+  assert.deepEqual([byHandoff.launches.length, byHandoff.labels.length], [0, 0]);
+  assert.equal(plan("Closes #3104", ["issue:3104"]).launches.length, 0);
+  assert.equal(plan("Closes #3105", ["issue:3104"]).launches.length, 1, "another issue's worker does not own it");
+  assert.equal(plan("no hand-off", []).launches.length, 1);
+});
+
 test("WP-L7 F6: --apply with no --sessions while GitHub names children launches nothing; with no children it may launch", () => {
   const sid = "session_01ChildChildChild";
   const api = (named) => (p, o) => {
@@ -490,4 +503,32 @@ test("dispatcher report (2026-10-27): RECORD_LAUNCH prints a {SESSION_ID} placeh
     const pg = sessionsPage(text);
     assert.deepEqual([pg.hasMore, pg.sessions.map((x) => [x.id, x.bucket])], [false, [["session_01EntryEntryEn", "SESSION_STATUS_BUCKET_BLOCKED"]]], text.slice(0, 40));
   }
+});
+
+test("land-queue backpressure (2026-10-27): at landQueueMax open non-draft `land` PRs rule 1 launches no issue worker and says so once; below it launches as before", () => {
+  const landing = (n, on = {}) => Array.from({ length: n }, (_, k) => pr(200 + k, { labels: ["land"], draft: false, ...on }));
+  const issues = [board(), issue(10, ["ready"]), issue(11, ["ready"])];
+  const PAUSED = (n) => `issue launches paused: ${n} PRs waiting to land (max 15) — land before starting more`;
+  const full = planDispatch(state({ issues, prs: landing(15) }), cfg(), NOW);
+  assert.deepEqual([full.launches.length, full.landQueue, skips(full)], [0, 15, [PAUSED(15)]]);
+  assert.equal(renderPlan(full).includes(`SKIP ${PAUSED(15)}`), true);
+  const over = planDispatch(state({ issues, prs: landing(42) }), cfg(), NOW);
+  assert.deepEqual([over.launches.length, skips(over)], [0, [PAUSED(42)]]);
+  const below = planDispatch(state({ issues, prs: landing(14) }), cfg(), NOW);
+  assert.deepEqual([below.launches.map((l) => [l.kind, l.number]), below.landQueue, skips(below)], [[["issue", 10], ["issue", 11]], 14, []]);
+  const drafts = planDispatch(state({ issues, prs: [...landing(15, { draft: true }), ...landing(15, { labels: ["run-ci"] })] }), cfg(), NOW);
+  assert.deepEqual([drafts.launches.length, drafts.landQueue], [2, 0], "a draft `land` PR or a ready PR without `land` is not in the queue");
+  assert.equal(planDispatch(state({ issues, prs: landing(42) }), cfg({ landQueueMax: null }), NOW).launches.length, 2, "landQueueMax null switches it off");
+  assert.deepEqual([DEFAULT_CONFIG.landQueueMax, loadConfig().landQueueMax], [15, 15]);
+});
+
+test("land-queue backpressure (2026-10-27): rule 2 takeovers and the rule 3 deploy:red fixer still launch while issue launches pause; the Board caps line shows the queue", () => {
+  const landing = Array.from({ length: 15 }, (_, k) => pr(200 + k, { labels: ["land"], draft: false }));
+  const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [...landing, pr(20, { updated_at: ago(3) })], deployRed: true }), cfg(), NOW);
+  assert.deepEqual(p.launches.map((l) => [l.kind, l.number]), [["continue", 20], ["deploy-red", 0]]);
+  assert.deepEqual(p.labels, [{ number: 20, add: ["needs-owner"], remove: [] }, { number: 1, add: ["deploy:red"], remove: [] }]);
+  assert.deepEqual(skips(p), ["issue launches paused: 15 PRs waiting to land (max 15) — land before starting more"]);
+  const b = p.board.split("\n");
+  assert.equal(b[4], "caps: launches/run 4; live workers claude 2/8, cursor 0/4; cost cap $10 · land queue 15/15");
+  assert.equal(b.at(-1), "- issue launches paused: 15 PRs waiting to land (max 15) — land before starting more");
 });
