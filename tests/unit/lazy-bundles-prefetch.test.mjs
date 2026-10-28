@@ -102,6 +102,7 @@ test("ensureRaceSession: a partial failure is repaired by the next call, and the
     deps: { onRaceSessionReady() { hooks++; } },
   });
   vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/race/session-phys.js"), w.ctx, { filename: absSrc("js/race/session-phys.js") });
   vm.runInContext(read("js/race/session-stub.js"), w.ctx, { filename: absSrc("js/race/session-stub.js") });
   const stub = (g) => vm.runInContext(`${g}._stub`, w.ctx);
   assert.equal(await w.lb.ensureRaceSession(), false, "engineer.js failed once");
@@ -304,6 +305,47 @@ test("ensureScenery: the scenery closure is requested beside the circuit payload
   held.get("js/circuits/scenery/monza.js")(true);
   assert.equal(await p, true);
   assert.equal(asked.length, 2, "one fetch each");
+});
+
+// The closure's model ids are known as soon as it is resident. Waiting for the
+// track-build toolkit to finish evaluating first left the model fetch idle
+// through that download and eval.
+test("ensureScenery asks for baked models while the track-build toolkit is still loading", async () => {
+  let releaseBuild;
+  const buildHeld = new Promise((res) => { releaseBuild = res; });
+  const calls = [];
+  const w = world({
+    roster: { LAZY_TRACK_BUILD: ["js/track/scenery/build-props.js"], LAZY_TRACK_BUILD_EDGES: [] },
+    globals: {
+      TrackBuildProps: undefined, TrackModels: undefined, TrackHiddenFaces: undefined,
+      Tracks: { LIST: [{ id: "monza" }], circuitPayloadResident: () => true, hydrate: () => true },
+      TrackScenery: { monza() {} },
+      Assets: { modelsReady: () => { calls.push("models"); return Promise.resolve(1); } },
+    },
+    deps: {
+      loadBackendScripts: (files) => {
+        const name = [...files][0];
+        calls.push("load:" + name);
+        if (name.indexOf("build-props") >= 0) return buildHeld.then(() => {
+          w.ctx.TrackBuildProps = { build() {} };
+          w.ctx.TrackModels = {};
+          w.ctx.TrackHiddenFaces = {};
+          return true;
+        });
+        return Promise.resolve(true);
+      },
+    },
+  });
+  const p = w.lb.ensureScenery(0);
+  await tick();
+  // findIndex/some (not includes/indexOf): assertPinsAll counts ok/equal+includes|indexOf.
+  assert.ok(calls.some((c) => c === "models"), "models start before the toolkit resolves: " + calls.join(","));
+  assert.ok(
+    calls.findIndex((c) => c === "models") >
+      calls.findIndex((c) => c === "load:js/track/scenery/build-props.js"),
+  );
+  releaseBuild();
+  assert.equal(await p, true);
 });
 
 // ---- R3-ASYNC-2 / R3-PHONE-8 (hunt3 train) --------------------------------
