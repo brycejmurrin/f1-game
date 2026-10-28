@@ -326,7 +326,7 @@ to other sessions on 2026-10-09 (the last line had no owner). Today's owner of a
 - M39 WGX — `backendState()` returns `lost`, not `ctxLost`, so game.js never sees a WGX device loss. `js/render/webgpu/wgx.js:5722` · low · **fixed in #1281**
 - M40 input — stored `steerMode` unvalidated at boot (Input fell back to "tilt", game.js to "buttons"); a `connected===false` pad counted as present. · low · **fixed** — game.js STEER_MODES (#1289) + `boot-input-shape`; disconnect `.connected` (#1313) + `key-binds-hunt` I-08; Input.setSteerMode unknown→buttons (aligned with game.js)
 - M42 player physics — `frontUtil` still normalised by pi/2 after the front peak moved (#1266); toggled BOOST drains while braking; manual RECOVER has no pit-lane guard. `js/physics/player-forces.js:260,273`, `js/game.js` · low · **frontUtil + BOOST fixed in #3972**; **RECOVER pit-lane/box guard fixed in game.js** (pinned in `race-flow-fixes-vm` + `game-m33-m35-m42`); module extract is #3978
-- M37 (presets part) lighting — shared `*|day|*` stamps exist only for dry/wet, so rain/overcast/fog fall through to knob defaults (monaco tunnel lampLevel 0.26 vs 0.13; dawn/rain lampLevel on 47+ circuits). `js/lighting/presets.js:205,223` · low · **unassigned**
+- M37 (presets part) lighting — shared `*|day|*` stamps exist only for dry/wet, so rain/overcast/fog fall through to knob defaults (monaco tunnel lampLevel 0.26 vs 0.13; dawn/rain lampLevel on 47+ circuits). `js/lighting/presets.js:205,223` · low · **fixed in #3964** (`*|day|{rain,overcast,fog}` + `*|dawn|{rain,overcast,fog}` lamp stamps; issue #3960)
 
 ## 2026-10-10 round-2 backlog (tooling / CI / hooks; not fixed by `ci-page-sources-guard`)
 
