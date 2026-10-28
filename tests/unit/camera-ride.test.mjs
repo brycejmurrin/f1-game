@@ -323,6 +323,7 @@ test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same ca
 test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
   // Check the fitted geometry, so a curved bulkhead can replace a square slab.
   const ctx=vm.createContext({ GaragePrims:{ block() {} } }); seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT,"js/car/cockpit-rig.js"),"utf8"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(readFileSync(join(ROOT,"js/car/car-mesh.js"),"utf8")+"\n;this.mesh=CarMesh;",ctx);
   ctx.mesh.init({ createMesh:d=>d });
   const dash=ctx.mesh.getCockpitDash(), x=[], y=[];

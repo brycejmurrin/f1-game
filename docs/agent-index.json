@@ -744,6 +744,7 @@
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -846,6 +847,7 @@
         "tests/unit/drift-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -924,6 +926,7 @@
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -2309,6 +2312,11 @@
     {
       "path": "js/car/car3d.js",
       "global": "Car3D",
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/cockpit-rig.js",
+      "global": "CockpitRig",
       "roster": "tag"
     },
     {
