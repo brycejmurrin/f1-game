@@ -2300,6 +2300,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/car/cockpit-rig.js",
+      "global": "CockpitRig",
+      "roster": "tag"
+    },
+    {
       "path": "js/car/crest-draw.js",
       "global": "LiveryCrests",
       "roster": "tag"
