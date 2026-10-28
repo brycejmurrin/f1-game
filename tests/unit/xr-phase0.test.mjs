@@ -370,6 +370,7 @@ test("CamModes.setCamMode({persist:false}) skips store.write", () => {
   ctx.window = ctx;
   ctx.CamTunerPanel = { refresh() {} };
   ctx.GameAudio = undefined;
+  vm.runInContext(read("js/camera/cam-picker.js"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInContext(read("js/camera/mode-switch.js").replace(/^window\.CamModes/, "var CamModes").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   // mode-switch assigns window.CamModes — pull it off the sandbox.
   const CamModes = ctx.CamModes || ctx.window.CamModes;
@@ -1154,6 +1155,7 @@ test('immersive cockpit blocks keyboard and latched look-back while flat cockpit
     sample(_, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; return out; },
     banking: (_, __, ___, out) => { out.dy = 0; out.roll = 0; return out; },
   };
+  vm.runInContext(read('js/camera/vantage-ride.js'), ctx, { filename: absSrc("js/camera/vantage-ride.js") });
   vm.runInContext(read('js/camera/vantage.js').replace(/^const\b/gm, 'var'), ctx, { filename: absSrc("js/camera/vantage.js") });
   const track = { total: 100, n: 4, py: [0, 0, 0, 0], def: {} };
   const direction = () => { const v = ctx.GameCams.vantage(track, 'cockpit', 10, 0, 0, 0, { att: {}, carPos: [0, 10], carHead: 0 }); return v.tgt[2] - v.eye[2]; };
