@@ -677,8 +677,6 @@ const VisorOptics = (function () {
              port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
   }
   function clear() { _show(false); }
-  /** Tests: forget the cached canvas and keys (a new stub DOM). */
-  function _reset() { _looked = false; _cv = _ctx = _paths = _svg = null; _w = _h = 0; _shown = false; _acc = 1; _portKey = _bendKey = _bendLevelBuilt = _blend = ""; _blendParam = undefined; _blendT = -Infinity; for (const k of Object.keys(_stats)) _stats[k] = 0; }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
@@ -689,6 +687,6 @@ const VisorOptics = (function () {
     };
   }
 
-  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG, _reset };
+  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);

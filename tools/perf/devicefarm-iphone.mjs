@@ -931,7 +931,8 @@ async function run() {
           for (const sc of scenario.split(",")) {
             // --visor-pins / --soak-pins: the visor delta shows only where frames are not pinned at 60 Hz (iPhone 14
             // WebGL2, ledger rows 1-4); #3479's before-numbers are WebGPU.
-            try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
+            try { if (sc === "tracks") { await exec(ctx.base, ctx.sid, PIN(pins[0])); await tracksScenario(ctx, opt("tracks", "monza:day").split(","), report, out); }
+              else if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
               else if (sc === "lsab") await lsabScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "opus") await opusScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "coldrace") await coldraceScenario(ctx, opt("url", SITE), report, out);

@@ -61,6 +61,7 @@ function boot() {
   sb.window = sb;
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   const $ = (id) => dom.byId(id);
   const minimap = $("minimap");
@@ -147,10 +148,10 @@ test("BROADCAST lights the same #1504 radio home as STANDARD (regression: !bcast
 
 test("css/hud.css: one radio home per profile — no leftover broadcast 14svh, fallbacks stand down for both slots", () => {
   const css = read("css/hud.css");
-  const hud = read("js/ui/hud.js");
+  const hud = read("js/ui/hud-radio-lane.js");   // radioTopSlot's home since #3261
   assert.doesNotMatch(css, /body\.hud-prof-broadcast #announce \{[^}]*14svh/,
     "the leftover cinematic 14svh #announce home is gone — BROADCAST uses the #1504 slot");
-  assert.doesNotMatch(hud, /const t = !bcast && _hudTop/,
+  assert.doesNotMatch(hud, /const t = !bcast && (_hudTop|top\(\))/,
     "radioTopSlot no longer skips the tower measurement under BROADCAST");
   assert.match(css, /body\.hud-radio-top #announce:not\(\[hidden\]\)/,
     "top-row slot is the first home");

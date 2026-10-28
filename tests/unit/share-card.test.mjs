@@ -244,3 +244,57 @@ test("the painted share-card QR decodes without inversion on every spec", async 
     assert.equal(read && read.data, link, spec + ": a scanner that never inverts reads the card's QR");
   }
 });
+
+function loadChips(card) {
+  const warned = [];
+  const ctx = vm.createContext({ Object, Array, String, Promise,
+    document: { createElement: (tag) => ({ tag, appended: [] }) },
+    ShareCardData: {}, ShareCard: card, Log: { warn: (...a) => warned.push(a) } });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/share/share-card-chips.js"), "utf8"), ctx, { filename: absSrc("js/share/share-card-chips.js") });
+  return { chips: vm.runInContext("ShareCardChips", ctx), warned };
+}
+
+test("ShareCardChips: a tap renders at tap time, names the file safely and reports the outcome", async () => {
+  const seen = [];
+  const { chips } = loadChips({
+    render: async (model, spec) => { seen.push(["render", model.title, spec]); return { type: "image/png" }; },
+    deliver: async (blob, name, share) => { seen.push(["deliver", name, share.title]); return "downloaded"; },
+  });
+  const parent = { children: [], appendChild(n) { this.children.push(n); } };
+  let built = 0;
+  const btn = chips.append(parent, "res-race-card", () => ({ title: "RACE RESULT " + ++built, link: null }), "Race / Spa-Francorchamps!");
+  assert.equal(parent.children[0], btn);
+  assert.equal(btn.className, "sel-chip");
+  assert.equal(btn.textContent, "SHARE CARD");
+  assert.equal(built, 0, "the model is built on tap, not when the screen draws");
+  await btn.onclick();
+  assert.deepEqual(seen, [["render", "RACE RESULT 1", "portrait"], ["deliver", "apex26-race-spa-francorchamps.png", "APEX 26"]]);
+  assert.equal(btn.textContent, "DOWNLOADED");
+  assert.equal(btn.disabled, false);
+  assert.equal(chips.slug(""), "card");
+});
+
+test("ShareCardChips: a failed draw says UNAVAILABLE and logs; a cancel restores the label", async () => {
+  const { chips, warned } = loadChips({});
+  const failing = chips.chip("x", async () => { throw new Error("no canvas"); });
+  await failing.onclick();
+  assert.equal(failing.textContent, "UNAVAILABLE");
+  assert.equal(failing.disabled, false);
+  assert.equal(warned.length, 1);
+  const cancelled = chips.chip("y", async () => "cancelled");
+  await cancelled.onclick();
+  assert.equal(cancelled.textContent, "SHARE CARD");
+  const missing = vm.createContext({ Object, Array, String, Promise });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/share/share-card-chips.js"), "utf8"), missing, { filename: absSrc("js/share/share-card-chips.js") });
+  assert.equal(vm.runInContext("ShareCardChips.append({ appendChild() { throw new Error('drawn'); } }, 'z', () => ({}), 'n')", missing), null,
+    "no chip when the card modules are absent");
+});
+
+test("paint strokes a path op as one polyline", () => {
+  const card = load(), ctx = recordingContext();
+  ctx.lineJoin = "";
+  card.paint(ctx, [{ op: "path", points: [0, 0, 5, 5, 10, 0], color: "#e10600", lineWidth: 3 }]);
+  const names = ctx.calls.map((c) => c[0]);
+  assert.deepEqual(names.filter((n) => n === "moveTo" || n === "lineTo"), ["moveTo", "lineTo", "lineTo"]);
+  assert.ok(names.includes("stroke"));
+});

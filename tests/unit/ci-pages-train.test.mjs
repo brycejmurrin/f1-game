@@ -180,6 +180,15 @@ test("a Pages run reuses a gate that already passed on the SAME tree, and only t
   assert.match(preflight, /!cancelled\(\)/, "a skipped `needs` job skips its dependents unless the condition opts in");
 });
 
+test("pages-reuse-verdict.sh header: merge-commit landings, not squash-only", () => {
+  // Round-2 BUGS residual: the backlog claimed reuse was dead because merges
+  // were "SQUASH-only". Policy is merge commits only; the script must say so
+  // so the next reader does not re-open a false closed path.
+  const src = fs.readFileSync(new URL("../../tools/ci/pages-reuse-verdict.sh", import.meta.url), "utf8");
+  assert.match(src, /MERGE COMMITS \(never squash\/rebase/);
+  assert.match(src, /merge tree == parent 2/);
+});
+
 test("pages-reuse-verdict.sh: same tree + a successful gate run, nothing else", () => {
   // A throwaway repo: A -> C on the deploy line; B branches from A; D is B with
   // C merged in. M1 = merge(C, B) has a tree neither parent has (both sides

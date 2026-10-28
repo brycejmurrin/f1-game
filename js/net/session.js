@@ -111,9 +111,18 @@ const NetSession = (function () {
       if (best && Math.abs(offset - best.offset) > rtt + best.rtt + 50) {
         if (stepRun.length && Math.abs(offset - stepRun[0].offset) > rtt + stepRun[0].rtt + 50) stepRun = [];
         stepRun.push(sample);
-        if (stepRun.length >= cfg.clockStepRun) { samples = []; stepRun.forEach((x) => samples.push(x)); stepRun = []; }
-      } else stepRun = [];
-      if (!samples.includes(sample)) samples.push(sample);
+        if (stepRun.length >= cfg.clockStepRun) {
+          samples = [];
+          stepRun.forEach((x) => samples.push(x));
+          stepRun = [];
+        }
+        // Hold the outlier OUT of `samples` until the run confirms a step.
+        // Otherwise a single lower-RTT disagreeing PONG becomes `best` at once
+        // (lowest-RTT wins) and the step-run gate never mattered.
+      } else {
+        stepRun = [];
+        if (!samples.includes(sample)) samples.push(sample);
+      }
       if (samples.length > cfg.clockSamples) samples.shift();
       if (Number.isFinite(now)) samples = samples.filter((x) => !(now - x.at > cfg.clockMaxAgeMs));
       // Lowest RTT wins: it is the exchange least distorted by queuing.

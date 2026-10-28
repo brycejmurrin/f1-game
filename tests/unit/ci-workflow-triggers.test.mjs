@@ -288,13 +288,39 @@ test("every inline `node -e '…'` script in the workflows is syntactically comp
 test("the CI guard shards stop starting files after their first failure (--bail)", () => {
   const parsed = parseYAML(ciWorkflow).jobs;
   for (const [id, shard] of [["guards-a", "1/4"], ["guards-b", "2/4"], ["guards-c", "3/4"], ["guards-d", "4/4"]]) {
-    const step = parsed[id].steps.find((st) => /tooling-fast\.mjs/.test(st.run || ""));
+    const step = parsed[id].steps.find((st) => /tooling-fast\.mjs.*--shard=/.test(st.run || ""));
     assert.ok(step, `${id} runs tooling-fast`);
     assert.match(step.run, new RegExp(`--shard=${shard.replace("/", "\\/")} --bail$`),
       `${id} must pass --bail (2026-10-16 CI jobs review: red shards ran a mean 5.9 min past the first failure)`);
   }
   // The local edit loop keeps every failure visible.
   assert.doesNotMatch(JSON.parse(fs.readFileSync(new URL("../../package.json", import.meta.url), "utf8")).scripts["test:tooling-fast"], /--bail/);
+});
+
+/* GUARDS SCOPE (#3951): the shards narrow to `--changed` on a pull request
+ * that touches no tooling, but the JOBS must always run — a path filter would
+ * leave the required check "Pending" — and the scope must key the verdict
+ * cache, or a narrowed green replays as a full one on the deploy push. */
+test("the CI guard shards always run; only their file list narrows, and the mode keys the verdict cache", () => {
+  const wf = parseYAML(ciWorkflow);
+  const pr = wf.on.pull_request;
+  assert.ok(pr, "CI runs on pull_request");
+  assert.equal(pr.paths, undefined, "no paths filter on the required CI workflow");
+  assert.equal(pr["paths-ignore"], undefined, "no paths-ignore on the required CI workflow");
+  for (const [id, shard] of [["guards-a", "1/4"], ["guards-b", "2/4"], ["guards-c", "3/4"], ["guards-d", "4/4"]]) {
+    const steps = wf.jobs[id].steps;
+    const scope = steps.findIndex((st) => st.id === "scope");
+    assert.ok(scope >= 0, `${id} has the Guards scope step`);
+    assert.match(steps[scope].run, /tooling-fast\.mjs --print-scope/);
+    const hash = steps.find((st) => st.id === "h");
+    assert.ok(steps.indexOf(hash) > scope, `${id}: the scope is known before the cache key`);
+    // Through env, not inline: zizmor's template-injection audit fails the lints job on an inline step output.
+    assert.equal(hash.env.GUARDS_MODE, "${{ steps.scope.outputs.mode }}");
+    assert.match(hash.run, /-\$\{GUARDS_MODE\}-/, `${id}: the mode is part of the verdict-cache key`);
+    const run = steps.find((st) => /tooling-fast\.mjs.*--shard=/.test(st.run || ""));
+    assert.match(run.run, new RegExp(`\\$\\{GUARDS_CHANGED:\\+--changed\\} --jobs=4 --shard=${shard.replace("/", "\\/")} --bail$`));
+    assert.equal(run.env.GUARDS_CHANGED, "${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}");
+  }
 });
 
 test("selected-verdict: one fixed-name check that always judges the change-aware gate", () => {

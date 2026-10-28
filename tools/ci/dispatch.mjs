@@ -57,9 +57,11 @@
 // label launches nothing (as does `pause` in tools/ci/dispatch.json); `dispatch:merge-pause` arms nothing — land.yml
 // reads that label, this tool only reports it (the base-behind limit lives in merge-gate.mjs, not here).
 // Rules, in order (plan §4.4): (1) `ready` issues without `claimed` → one worker each, `priority` first, newest next,
-// within maxLaunchesPerRun and maxLiveWorkers, none when the quota is not `allowed`; (2) an open PR with no push and no
-// comment for staleHours (6 for lane:codex), or one already labelled `needs-owner` (its worker stopped at the cap and
-// asked for a takeover: no 2 h wait), no `hold`/`needs-decision` → `needs-owner` + ONE `CONTINUE PR #n` worker
+// within maxLaunchesPerRun and maxLiveWorkers, none when the quota is not `allowed`, and none at all while landQueueMax
+// or more open non-draft PRs carry `land` (LANDING BACKPRESSURE, 2026-10-27: 42 of 70 open PRs waited to land, merges
+// ran ~3.5/h against ~7/h opened; one skip line says so; rules 2 and 3 drain the queue and are never paused);
+// (2) an open PR with no push and no comment for staleHours (6 for lane:codex), or one already labelled `needs-owner`
+// (its worker stopped at the cap and asked for a takeover: no 2 h wait), no `hold`/`needs-decision` → `needs-owner` + ONE `CONTINUE PR #n` worker
 // carrying the body's ```handoff block; (3) deploy red and no open PR labelled `deploy:red` → label the Board, launch one
 // fixer; (4) a child whose every PR merged/closed > archiveAfterMinutes (10) ago → archive (stops the post-land wakes), only a `role:worker` session
 // named in a claim/adoption comment, never one tagged `no-archive` or `role:dispatcher`, never RUNNING/WORKING/BLOCKED;
@@ -96,7 +98,7 @@ export const SESSION_PLACEHOLDER = "{SESSION_ID}";
 /** Rows per list page; a page shorter than this is the last one (GitHub REST pagination). */
 export const PAGE_SIZE = 100;
 export const DEFAULT_CONFIG = {
-  pause: false, maxLaunchesPerRun: 4, maxLiveWorkers: { claude: 8, cursor: 4 }, workerCostCapUsd: 10, workerStopAtK: 300,
+  pause: false, maxLaunchesPerRun: 4, maxLiveWorkers: { claude: 8, cursor: 4 }, landQueueMax: 15, workerCostCapUsd: 10, workerStopAtK: 300,
   staleHours: { default: 2, codex: 6 }, launchClaimHours: 2, archiveAfterMinutes: 60, nudgeIdleMinutes: 20, nudgeEveryMinutes: 60,
   model: "claude-sonnet-5-5", deployBranch: "claude/f1-game-project-26h3ng", repo: "brycejmurrin/f1-game",
   boardIssueTitle: "Board", dispatchIssueTitle: "Dispatch", hosts: { cursor: { enabled: false, model: "composer-2.5" } },
@@ -237,6 +239,16 @@ export function sessionRefs(s) {
   const issues = [...new Set([...tag(/^issue:(\d+)$/), ...[...title.matchAll(/#(\d{1,6})\b/g)].map((m) => Number(m[1])).filter((n) => !prs.includes(n))])];
   return { prs, issues };
 }
+/** Does session `s` name PR `p`: by its pr field, a `pr:<n>` tag or a `PR #n` title, by the PR's ```handoff `owner:`
+ *  line, or by an issue the PR body closes (`Closes #n`; batch workers tag `issue:<n>` and name the PR only in the
+ *  hand-off — dispatcher report 2026-10-27, #4016–#4021 planned as orphans). Pure. */
+export function ownsPr(s, p) {
+  const refs = sessionRefs(s);
+  if (refs.prs.includes(Number(p.number))) return true;
+  if (String(parseHandoff(p.body)?.owner || "").includes(s.id)) return true;
+  const closes = [...String(p.body || "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d{1,6})\b/gi)].map((m) => Number(m[1]));
+  return closes.some((n) => refs.issues.includes(n));
+}
 /** A PR's last activity: its updated_at (push, comment, edit, label) or its newest comment, the dispatcher's own launch
  *  comments excluded (header: why not the head commit's committer date). Pure. */
 export const activityAt = (p) => Math.max(t(p.updated_at), t(p.last_comment_at),
@@ -341,10 +353,13 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     live[host]++;
     launches.push({ kind, host, number, title, spec, comment: { on, body: `dispatch: launched ${host}:${title} for ${number ? `#${number}` : "deploy:red"} at ${new Date(now).toISOString()}` } });
   };
-  // (1) ready issues without a claim.
+  // (1) ready issues without a claim; none at all while the landing queue is full (backpressure: rules 2 and 3 still run).
+  const landQueue = prs.filter((p) => !p.draft && has(p, "land")).length;
+  const queueFull = Number.isFinite(config.landQueueMax) && landQueue >= config.landQueueMax;
+  if (queueFull) skip("issue launches paused", `${landQueue} PRs waiting to land (max ${config.landQueueMax}) — land before starting more`);
   const ready = issues.filter((i) => !i.pull_request && has(i, "ready") && !has(i, "claimed") && !has(i, "blocked") && !has(i, "needs-decision"))
     .sort((a, b) => (has(b, "priority") - has(a, "priority")) || (t(b.updated_at) - t(a.updated_at)));
-  for (const i of ready) {
+  for (const i of queueFull ? [] : ready) {
     const l = liveLaunch(i.comments, now, claimH, sessions);
     if (l) { skip(`issue #${i.number}`, `launched ${l.host} ${ageLabel(l.at, now)} ago (live claim)`); continue; }
     const cursor = has(i, "lane:cursor");
@@ -362,7 +377,7 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     if (isBotPr(p)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but a fold bot's PR (never re-owned)`); continue; }
     if (has(p, "land") && !landProblem(p, now, limit, flags.mergePause)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but labelled land and waiting on CI/gate/train`); continue; }
     if (has(p, "hold") || has(p, "needs-decision")) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but ${has(p, "hold") ? "hold" : "needs-decision"}`); continue; }
-    const owner = sessions.find((s) => isLiveWorker(s) && sessionRefs(s).prs.includes(Number(p.number)));
+    const owner = sessions.find((s) => isLiveWorker(s) && ownsPr(s, p));
     if (owner) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but live worker ${owner.id} names it`); continue; }
     const l = liveLaunch(p.comments, now, claimH, sessions);
     if (l) { skip(`PR #${p.number}`, `takeover launched ${ageLabel(l.at, now)} ago (live claim)`); continue; }
@@ -423,12 +438,12 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     nudges.push({ id: s.id, target, message: `Continue ${target}: subscribe to the PR, finish the Plan; questions go to @parent or \`needs-decision\`, never the user.` });
   }
   const recentNudges = [...lastNudge].filter(([id]) => !nudges.some((n) => n.id === id)).map(([id, at]) => ({ id, at }));
-  const plan = { launches, labels, archives, nudges, waiting, recentNudges, skipped, flags, boardIssue: board?.number || null, dispatchIssue: dispatch?.number || null, live };
+  const plan = { launches, labels, archives, nudges, waiting, recentNudges, skipped, flags, boardIssue: board?.number || null, dispatchIssue: dispatch?.number || null, live, landQueue };
   plan.board = renderBoard(state, plan, config, now);
   return plan;
 }
 
-/** (5) The Board comment: open PRs, this run's launches and archives, quota, caps, pause flags. Pure. */
+/** (5) The Board comment: open PRs, this run's launches and archives, quota, caps and the land queue, pause flags. Pure. */
 export function renderBoard(state, plan, config, now) {
   const rows = (state.prs || []).map((p) => {
     const h = parseHandoff(p.body) || {};
@@ -437,7 +452,7 @@ export function renderBoard(state, plan, config, now) {
   const caps = `launches/run ${config.maxLaunchesPerRun}; live workers claude ${plan.live.claude}/${config.maxLiveWorkers.claude}, cursor ${plan.live.cursor}/${config.maxLiveWorkers.cursor}; cost cap $${config.workerCostCapUsd}`;
   return [BOARD_MARKER, `## Board — ${new Date(now).toISOString()}`, "",
     `quota: **${plan.flags.quota}** · pause: ${plan.flags.pause} · merge-pause: ${plan.flags.mergePause} · deploy: ${state.deployRed ? "**RED**" : "green"}`,
-    `caps: ${caps}`, "", "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
+    `caps: ${caps} · land queue ${plan.landQueue ?? 0}/${config.landQueueMax}`, "", "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
     ...(rows.length ? rows : ["| - | no open PRs | | | | | |"]), "",
     `### Launches this run (${plan.launches.length})`, ...(plan.launches.map((l) => `- ${l.host}: ${l.title}`) || []),
     ...(plan.launches.length ? [] : ["- none"]),
