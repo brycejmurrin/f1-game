@@ -36,15 +36,35 @@ const CvdPalette = (function () {
     cmpH:  { off: "#f0f0f0", deutan: "#ffffff", protan: "#ffffff", tritan: "#ffffff" },
     cmpI:  { off: "#3fb950", deutan: "#7dffc0", protan: "#7dffc0", tritan: "#00e0c0" },
     cmpW:  { off: "#1e90ff", deutan: "#4aa3ff", protan: "#4aa3ff", tritan: "#ff5c96" },
+    // The broadcast tower's compound letters (css/hud.css → --tyre-*): their
+    // own off shades, the hub's CVD shades.
+    tyreS: { off: "#ff3b3b", deutan: "#ee7733", protan: "#ee7733", tritan: "#ff9eb0" },
+    tyreM: { off: "#ffd12e", deutan: "#ddcc77", protan: "#ddcc77", tritan: "#ffe56a" },
+    tyreH: { off: "#f2f2f2", deutan: "#ffffff", protan: "#ffffff", tritan: "#ffffff" },
+    tyreI: { off: "#3ccf4e", deutan: "#7dffc0", protan: "#7dffc0", tritan: "#00e0c0" },
+    tyreW: { off: "#3a8dff", deutan: "#4aa3ff", protan: "#4aa3ff", tritan: "#ff5c96" },
+    // INPUTS trace (js/ui/hud-inputs.js): throttle green against brake red is
+    // the red-green pair itself. Steering stays white in every mode.
+    thr:   { off: "#2ecc71", deutan: "#4aa3ff", protan: "#4aa3ff", tritan: "#00e0c0" },
+    brk:   { off: "#ff3b3b", deutan: "#ee7733", protan: "#ee7733", tritan: "#ff9eb0" },
+    // Corner classes on the circuit maps (js/ui/track-maps.js CLASS_COLORS):
+    // a red → green speed ramp, so a CVD mode turns it into a lightness ramp.
+    cnrHairpin: { off: "#f87171", deutan: "#ee7733", protan: "#ee7733", tritan: "#ff5c96" },
+    cnrSlow:    { off: "#fb923c", deutan: "#ff9ec8", protan: "#ff9ec8", tritan: "#ff9eb0" },
+    cnrMedium:  { off: "#facc15", deutan: "#ffffff", protan: "#ffffff", tritan: "#ffffff" },
+    cnrFast:    { off: "#4ade80", deutan: "#4aa3ff", protan: "#4aa3ff", tritan: "#00e0c0" },
   };
   // States that can sit in one view. The test requires dE00 >= 10 under the
   // mode's own simulation and >= 6 under the other two.
-  const COVISIBLE = {
-    deutan: [["good", "warn", "bad", "best", "you"], ["sec1", "sec2", "sec3"], ["cmpS", "cmpM", "cmpH", "cmpI", "cmpW"], ["zone", "ghost", "you"]],
-    protan: [["good", "warn", "bad", "best", "you"], ["sec1", "sec2", "sec3"], ["cmpS", "cmpM", "cmpH", "cmpI", "cmpW"], ["zone", "ghost", "you"]],
-    tritan: [["good", "warn", "bad", "best", "you"], ["sec1", "sec2", "sec3"], ["cmpS", "cmpM", "cmpH", "cmpI", "cmpW"], ["zone", "ghost", "you"]],
-  };
+  const GROUPS = [["good", "warn", "bad", "best", "you"], ["sec1", "sec2", "sec3"], ["cmpS", "cmpM", "cmpH", "cmpI", "cmpW"], ["zone", "ghost", "you"],
+    ["tyreS", "tyreM", "tyreH", "tyreI", "tyreW"], ["thr", "brk"], ["cnrHairpin", "cnrSlow", "cnrMedium", "cnrFast", "sec2"]];
+  const COVISIBLE = { deutan: GROUPS, protan: GROUPS, tritan: GROUPS };
+  // The CSS tokens each mode overrides; css/tokens.css :root holds the off value
+  // and a :root[data-cvd] block the same CVD values (the test pins both).
   const CSS_OF = { good: "--faster", warn: "--sec-slow", bad: "--slower", best: "--sec-best", you: "--you", zone: "--zone", ghost: "--ghost" };
+  // Race-only tokens (css/hud.css :root holds the off value): painted inline
+  // only — the HUD never shows before this script has run.
+  const HUD_CSS_OF = { tyreS: "--tyre-s", tyreM: "--tyre-m", tyreH: "--tyre-h", tyreI: "--tyre-i", tyreW: "--tyre-w" };
 
   function normalize(v) {
     const s = String(v == null ? "" : v);
@@ -71,18 +91,10 @@ const CvdPalette = (function () {
   function paint() {
     const el = typeof document !== "undefined" ? document.documentElement : null;
     if (!el || !el.style || !el.style.setProperty) return;
-    const names = ["--faster", "--slower", "--sec-slow", "--sec-best", "--you", "--zone", "--ghost"];
-    if (mode === "off") {
-      for (let i = 0; i < names.length; i++) el.style.removeProperty(names[i]);
-      return;
+    for (const map of [CSS_OF, HUD_CSS_OF]) for (const key in map) {
+      if (mode === "off") el.style.removeProperty(map[key]);
+      else el.style.setProperty(map[key], hex(key));
     }
-    el.style.setProperty("--faster", hex("good"));
-    el.style.setProperty("--slower", hex("bad"));
-    el.style.setProperty("--sec-slow", hex("warn"));
-    el.style.setProperty("--sec-best", hex("best"));
-    el.style.setProperty("--you", hex("you"));
-    el.style.setProperty("--zone", hex("zone"));
-    el.style.setProperty("--ghost", hex("ghost"));
   }
   function set(next) {
     mode = normalize(next);
@@ -164,7 +176,7 @@ const CvdPalette = (function () {
   paint();
 
   return {
-    MODES: MODES, STATE: STATE, COVISIBLE: COVISIBLE, CSS_OF: CSS_OF, MACHADO: MACHADO,
+    MODES: MODES, STATE: STATE, COVISIBLE: COVISIBLE, CSS_OF: CSS_OF, HUD_CSS_OF: HUD_CSS_OF, MACHADO: MACHADO,
     mode: function () { return mode; },
     set: set, hex: hex, rgb01: rgb01, css: css, onChange: onChange,
     simulate: simulate, simulateLinear: simulateLinear, labFromLinear: labFromLinear, dE2000: dE2000,
