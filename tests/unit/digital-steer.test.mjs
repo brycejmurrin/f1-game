@@ -407,6 +407,20 @@ test("re-entering TILT zeroes on a fresh reading, not the lean the player left t
   });
 });
 
+test("Input.setSteerMode maps unknown values to BUTTONS (M40; matches game.js STEER_MODES)", () => {
+  const { Input } = boot();
+  Input.setSteerMode("tilt");
+  assert.equal(Input.debugState().steerMode, "tilt");
+  Input.setSteerMode("touch");
+  assert.equal(Input.debugState().steerMode, "touch");
+  for (const bad of ["foo", "", null, undefined, "Tilt", 0]) {
+    Input.setSteerMode(bad);
+    assert.equal(Input.debugState().steerMode, "buttons", "unknown → buttons, not tilt: " + String(bad));
+  }
+  Input.setSteerMode("buttons");
+  assert.equal(Input.debugState().steerMode, "buttons");
+});
+
 test("one non-finite orientation reading does not poison the TILT filter for the session", () => {
   const { Input, fire, clock } = boot();
   const lean = (beta, gamma) => { clock.t += 16; fire("deviceorientation", { beta, gamma }); };
