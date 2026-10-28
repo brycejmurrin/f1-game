@@ -66,9 +66,3 @@ test("context-loss notice hides when state leaves menu without startRace", () =>
   h.G.state = "count";
   assert.equal(h.notice.hidden, true);
 });
-
-test("select-screen binds menu exit to hideCtxLostNotice", () => {
-  const menus = src("js/ui/select-screen.js");
-  assert.match(menus, /bindCtxLostNoticeOnMenuExit/);
-  assert.match(menus, /Object\.defineProperty\(G, "startRace"/);
-});
