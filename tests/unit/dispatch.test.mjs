@@ -147,20 +147,25 @@ test("rule 1: a cursor prompt is at most 25 lines, ends with the cursor tail, an
   assert.deepEqual(lines.slice(-CURSOR_TAIL.length), CURSOR_TAIL);
   assert.equal(lines.filter((l) => l === "STOP AT: 300k").length, 1);
   for (const banned of ["call subscribe_pr_activity on your PR", "gh api", "End at `land`", "Claim first", "issue_write", "needs-owner"]) {
-    assert.equal(text.includes(banned), false, banned);
+    const hit = text.includes(banned);
+    assert.equal(hit, false, banned);
   }
   const cont = continuePrompt(pr(20, { body: hand }), c, "cursor");
   const contLines = cont.split("\n");
   assert.ok(contLines.length <= PROMPT_MAX_LINES, `${contLines.length} continue lines`);
   assert.deepEqual(contLines.slice(-CURSOR_TAIL.length), CURSOR_TAIL);
-  assert.equal(cont.includes("adopts PR"), false);
-  assert.equal(cont.includes("`land` when ready-gate"), false);
+  const contAdopt = cont.includes("adopts PR");
+  const contLand = cont.includes("`land` when ready-gate");
+  assert.equal(contAdopt, false);
+  assert.equal(contLand, false);
   const red = deployRedPrompt(c, "cursor");
   const redLines = red.split("\n");
   assert.ok(redLines.length <= PROMPT_MAX_LINES, `${redLines.length} deploy-red lines`);
   assert.deepEqual(redLines.slice(-CURSOR_TAIL.length), CURSOR_TAIL);
-  assert.equal(red.includes("Claim first"), false);
-  assert.equal(red.includes("labelled"), false);
+  const redClaim = red.includes("Claim first");
+  const redLabel = red.includes("labelled");
+  assert.equal(redClaim, false);
+  assert.equal(redLabel, false);
 });
 
 test("rule 2: a PR silent 2 h gets needs-owner and ONE CONTINUE takeover carrying the handoff block", () => {
