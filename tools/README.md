@@ -643,6 +643,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **env/apex-memory.mjs** | List, show, and retire `.claude/memory` topic files from any host; no assume-unchanged. | agent-config |
 | **env/chat-mcp-service.mjs** | Idempotent private tunnel startup, bounded restart supervision and environment readiness diagnostics. | mcp-probe |
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
+| **env/codex-cloud-history.py** | Export archived or selected Codex Cloud transcripts and native subagents through read-only history APIs. | — |
 | **env/configure-chat-mcp.mjs** | Derive a full-gateway private runtime profile from an existing tunnel profile without changing identities. | mcp-probe |
 | **env/ensure-mcp-ready.sh** | MCP bootstrap: Playwright chrome symlink, chrome-devtools clone, browser cache env, mcp-smoke (no Chromium). | check-changes |
 | **env/install-browsers.sh** | Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs. | — |

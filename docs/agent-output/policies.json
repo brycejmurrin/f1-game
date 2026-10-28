@@ -911,6 +911,11 @@
       "presentation": "shared-levels",
       "preserve": "@c9"
     },
+    "tools/env/codex-cloud-history.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exit codes, fixed safe errors, output paths, counts and pagination/reference completeness limits; credentials and private records must never be logged."
+    },
     "tools/env/ensure-mcp-ready.sh": {
       "action": "keep-native",
       "presentation": "native",
