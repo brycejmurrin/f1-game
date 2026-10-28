@@ -585,6 +585,9 @@ async function runProbeAttempt(attemptNum) {
       return {
         backend: env.backend,
         backendState: env.backendState || null,
+        // TLX post attachments (#2649 format flags) and the mirror's: a flag arm must show its format here.
+        postFormats: (() => { try { const s = GLX.__tlx.postState(); return s && s.formats ? Object.assign({ tagOn: s.attachments > 1 }, s.formats) : null; } catch { return null; } })(),
+        mirror: (() => { try { const m = GLX.mirrorState && GLX.mirrorState(); return m ? { ready: m.ready, hdr: m.hdr, w: m.w, h: m.h } : null; } catch { return null; } })(),
         pick: (() => { try { return localStorage.getItem("apex26.gfxBackend"); } catch { return null; } })(),
         bound: (() => { try { return sessionStorage.getItem("apex26.gfxBound"); } catch { return null; } })(),
         fail: (() => { try { return localStorage.getItem("apex26.gfxWgxFail"); } catch { return null; } })(),

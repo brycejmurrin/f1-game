@@ -5,7 +5,13 @@
   "note": "A test is listed under a function when it names that js path and spells name(. The `narrow` key is hand-pinned in tests/data/impact-map.d/ for select-specs.",
   "map": {
     "js/agent/agentview-corners.js": {
+      "corners": [
+        "tests/unit/agentview-api-contract.test.mjs"
+      ],
       "create": [
+        "tests/unit/agentview-api-contract.test.mjs"
+      ],
+      "nextCorner": [
         "tests/unit/agentview-api-contract.test.mjs"
       ]
     },
@@ -217,6 +223,7 @@
         "tests/unit/perf-governor.test.mjs",
         "tests/unit/props-over-road.test.mjs",
         "tests/unit/ratchet-merge-hotspot.test.mjs",
+        "tests/unit/ratchets.test.mjs",
         "tests/unit/safety-bans-hook.test.mjs",
         "tests/unit/setup-preview-hull.test.mjs",
         "tests/unit/speed-cap-vm.test.mjs",
@@ -892,6 +899,9 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
       ],
+      "hasVoiceFor": [
+        "tests/unit/radio-voice.test.mjs"
+      ],
       "inert": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/loading-card.test.mjs",
@@ -920,6 +930,12 @@
         "tests/unit/pause-silence.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/voice-pack.test.mjs"
+      ],
+      "spoken": [
+        "tests/unit/announcer.test.mjs"
+      ],
+      "spokenLang": [
+        "tests/unit/radio-voice.test.mjs"
       ],
       "squelchPlan": [
         "tests/unit/radio-voice.test.mjs"
@@ -1535,17 +1551,78 @@
       ]
     },
     "js/camera/feel.js": {
+      "applyFreeLook": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "consumeAimSnap": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "drive": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
       "follow": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs"
       ],
       "freeLookState": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
+      "isBuzzMode": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "isFreeLookMode": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "lookBackLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "lookingBackNow": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "modeFov": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetFollow": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetFreeLook": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "resetLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "scoped": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "setLookBackLatch": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "setSpeedVignette": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shake": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shakeNoise": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "shouldLookBack": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "speedFov": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
+      "speedVignette": [
+        "tests/unit/camera-feel.test.mjs"
+      ],
       "tick": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/director.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "tickRace": [
+        "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ]
     },
@@ -3741,6 +3818,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "deleteSlot": [
@@ -3767,6 +3845,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "eraSeasonsLeft": [
@@ -3852,6 +3931,7 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "makeOffers": [
@@ -3923,7 +4003,8 @@
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
-        "tests/unit/career-settle.test.mjs"
+        "tests/unit/career-settle.test.mjs",
+        "tests/unit/share-card-data.test.mjs"
       ],
       "rolloverMarket": [
         "tests/unit/career-settle.test.mjs"
@@ -4017,6 +4098,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "state": [
@@ -4241,6 +4323,7 @@
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -4279,6 +4362,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -4768,13 +4852,18 @@
     },
     "js/core/i18n.js": {
       "_installCatalog": [
-        "tests/unit/i18n.test.mjs"
+        "tests/unit/i18n.test.mjs",
+        "tests/unit/race-radio.test.mjs"
       ],
       "_resetForTest": [
-        "tests/unit/i18n.test.mjs"
+        "tests/unit/i18n.test.mjs",
+        "tests/unit/race-radio.test.mjs"
       ],
       "boot": [
         "tests/unit/i18n.test.mjs"
+      ],
+      "date": [
+        "tests/unit/race-radio.test.mjs"
       ],
       "pluralCategories": [
         "tests/unit/i18n.test.mjs"
@@ -5078,6 +5167,7 @@
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/setup-tune.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
@@ -8808,6 +8898,7 @@
         "tests/specs/steer-migration.spec.js"
       ],
       "lockFromSlider": [
+        "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/steer-tuning-lock.test.mjs"
       ],
       "matchPreset": [
@@ -8830,7 +8921,6 @@
         "tests/unit/driving-line-opts.test.mjs",
         "tests/unit/grip-steer.test.mjs",
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/low-speed-lock.test.mjs",
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/pick-tests.test.mjs",
         "tests/unit/save-schema-registry.test.mjs",
@@ -9573,7 +9663,8 @@
       "encode": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-qr.test.mjs",
-        "tests/unit/share-card.test.mjs"
+        "tests/unit/share-card.test.mjs",
+        "tests/unit/share-code.test.mjs"
       ],
       "*": [
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -10008,11 +10099,15 @@
       ],
       "*": [
         "tests/specs/image-grade-visual.spec.js",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/tooling-fast-runner.test.mjs"
       ]
     },
     "js/perf/gpu-test-run.js": {
       "fillSlope": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
+      "hookCounts": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
       "phaseStats": [
@@ -10112,6 +10207,9 @@
         "tests/unit/metrics.test.mjs"
       ],
       "snapshot": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "stallRow": [
         "tests/unit/metrics.test.mjs"
       ],
       "toggle": [
@@ -12184,7 +12282,8 @@
       "*": [
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/pick-unit-slices.test.mjs"
+        "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/race/quali-model.js": {
@@ -13108,6 +13207,9 @@
         "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
+      "dryLine": [
+        "tests/unit/weather-arc-rain.test.mjs"
+      ],
       "endSession": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
         "tests/unit/storm-weather.test.mjs",
@@ -13154,7 +13256,8 @@
       ],
       "syncWetness": [
         "tests/unit/lighting-tuner-reset-weather.test.mjs",
-        "tests/unit/rain-cells.test.mjs"
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ],
       "tick": [
         "tests/unit/forecast.test.mjs",
@@ -13218,6 +13321,9 @@
       ],
       "vmaxMul": [
         "tests/unit/wind.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ratchets.test.mjs"
       ]
     },
     "js/render/gfx.js": {
@@ -15324,8 +15430,37 @@
         "tests/unit/three-inspector.test.mjs"
       ]
     },
+    "js/share/share-card-chips.js": {
+      "append": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "chip": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "slug": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "*": [
+        "tests/specs/race-cycle-memory.spec.js"
+      ]
+    },
     "js/share/share-card-data.js": {
+      "fromCareerYear": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
       "fromDaily": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "fromGhost": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "fromRace": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "fromSeason": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "lapTime": [
         "tests/unit/share-card-data.test.mjs"
       ],
       "text": [
@@ -16277,7 +16412,8 @@
         "tests/unit/hud-inputs.test.mjs"
       ],
       "*": [
-        "tests/unit/a11y-opts.test.mjs"
+        "tests/unit/a11y-opts.test.mjs",
+        "tests/unit/cvd-palette.test.mjs"
       ]
     },
     "js/ui/hud-layout.js": {
@@ -16372,6 +16508,27 @@
         "tests/unit/hud-minimap-pitmark.test.mjs"
       ],
       "*": [
+        "tests/unit/cvd-palette.test.mjs",
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ]
+    },
+    "js/ui/hud-radio-lane.js": {
+      "announceLaneTick": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
+      "create": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/hud-fit-idempotent.test.mjs",
+        "tests/unit/hud-pins.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs"
+      ],
+      "radioPaintedCollapse": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
+      "radioTopSlot": [
         "tests/unit/hud-metrics-layout.test.mjs"
       ]
     },
@@ -16544,9 +16701,6 @@
       ]
     },
     "js/ui/hud.js": {
-      "announceLaneTick": [
-        "tests/unit/hud-feel.test.mjs"
-      ],
       "create": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/ghost-share.test.mjs",
@@ -16608,12 +16762,6 @@
       ],
       "pickDocks": [
         "tests/unit/hud-fit-idempotent.test.mjs"
-      ],
-      "radioPaintedCollapse": [
-        "tests/unit/hud-metrics-layout.test.mjs"
-      ],
-      "radioTopSlot": [
-        "tests/unit/hud-metrics-layout.test.mjs"
       ],
       "resetRace": [
         "tests/unit/hud-feel.test.mjs",
@@ -17101,6 +17249,7 @@
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "*": [
+        "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"
       ]
@@ -17460,6 +17609,9 @@
       "lastSession": [
         "tests/unit/share-code.test.mjs"
       ],
+      "messageFor": [
+        "tests/unit/share-code.test.mjs"
+      ],
       "recordSession": [
         "tests/unit/share-code.test.mjs"
       ],
@@ -17673,6 +17825,7 @@
       "*": [
         "tests/unit/aero-zone-tables.test.mjs",
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/cvd-palette.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
       ]

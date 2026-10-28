@@ -11,7 +11,7 @@
  * Restrict a run with CIRCUITS (comma-separated) or a Playwright --grep:
  *
  *   npm test -- tests/manual/blank-scan.spec.js --grep monza
- *   CIRCUITS=monza,spa npm test -- tests/manual/inspect.spec.js
+ *   CIRCUITS=monza,spa WRITE_SHEETS=1 npm test -- tests/manual/blank-scan.spec.js
  */
 import fs from "fs";
 import path from "path";

@@ -265,11 +265,11 @@ test("L9: a circuit an ADAPTED spec builds keeps test:vm-page in the plan (2026-
   const runner = circuitsOf(ADAPTED_RUNNER);
   for (const id of ["cota", "imola", "albert_park", "bahrain", "monza"]) assert.ok(runner.has(id), `${id} missing from the runner's circuits`);
   for (const spec of Object.keys(ADAPTED)) for (const id of circuitsOf(spec) || []) assert.ok(runner.has(id), `${spec} -> ${id}`);
-  assert.equal(scriptBuilds("test:vm-page-b", ["cota"]), true);
-  assert.equal(scriptBuilds("test:vm-page-a", ["cota"]), false);
+  assert.equal(scriptBuilds("test:vm-page-a", ["cota"]), true);
+  assert.equal(scriptBuilds("test:vm-page-b", ["cota"]), false);
   assert.equal(scriptBuilds("test:vm-page-b", ["dijon"]), false, "a circuit no ADAPTED spec builds still skips");
   const cota = plan(["js/circuits/cota.js"]);
-  assert.ok(cota.run.includes("test:vm-page-b"), JSON.stringify(cota.skip));
-  assert.ok(!cota.run.includes("test:vm-page-a"));
+  assert.ok(cota.run.includes("test:vm-page-a"), JSON.stringify(cota.skip));
+  assert.ok(!cota.run.includes("test:vm-page-b"));
   assert.ok(!plan(["js/circuits/dijon.js"]).run.some((s) => s.startsWith("test:vm-page")));
 });

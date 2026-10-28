@@ -11,8 +11,8 @@ master:
 
 | Bus | API | Carries |
 |---|---|---|
-| **Master** | `GameAudio.setEnabled(b)` / `soundOn` | Both — `#soundbtn` on the **title screen only** |
-| **SFX** | `GameAudio.setSfxEnabled(b)` / `sfxOn` | Engine, skids, rain, UI ticks, gear pops |
+| **Master** | `GameAudio.setEnabled(b)` / game.js `G.soundOn` | Both — `#soundbtn` on the **title screen only** |
+| **SFX** | `GameAudio.setSfxEnabled(b)` / store key `"sfx"` (a `panel.js` local mirrors it) | Engine, skids, rain, UI ticks, gear pops |
 | **Music** | `GameAudio.setMusicEnabled(b)` / `musicEnabled` | Soundtrack |
 
 Muting music does **not** silence the engine — it sits on the sfx bus.
@@ -20,6 +20,8 @@ Muting music does **not** silence the engine — it sits on the sfx bus.
 ## Quick inspection
 
 ```js
+GameAudio._stub                     // true = LAZY_AUDIO not landed yet: every call below is a stub (enabled() is absent)
+GameAudio.context()?.state          // "running" | "suspended" — the live AudioContext (null before init)
 GameAudio.enabled()
 GameAudio.setEnabled(true)          // master gain → 0.8
 GameAudio.setSfxEnabled(false)      // engine/SFX off; music can stay
@@ -30,8 +32,8 @@ GameAudio.centroidHz()              // spectral centroid of live engine
 ```
 
 ```sh
-node tools/ci/test-solo.mjs tests/specs/audio-smoke.spec.js  # focused browser check; session only (subagents report unverified)
-node tools/ci/test-solo.mjs tests/specs/engine-audio-offline.spec.js  # after an engine.js context/rebuild or lifecycle edit
+node tools/ci/test-bg.mjs --spec tests/specs/audio-smoke.spec.js  # focused browser check, backgrounded (AGENTS.md rule 4; rule 10 for subagents)
+node tools/ci/test-bg.mjs --spec tests/specs/engine-audio-offline.spec.js  # after an engine.js context/rebuild or lifecycle edit
 # Add music-library.spec.js for library behavior; ui is a broader group.
 node tools/check/audio-test.cjs     # LAUNCHES CHROMIUM, objective pitch probe; starts its own static server (a <baseURL> arg reuses one)
 ```
@@ -62,5 +64,7 @@ context; a sound that dies after a device switch is this path. Verify with
 
 ## Load on demand
 
+- **Silent on iPhone / first tap**: the unlock is `audioGestureUnlock` + `AUDIO_GESTURES` in
+  `js/core/lazy-bundles.js`, not engine.js's listeners → [references/diagnose.md](references/diagnose.md) §Diagnosing step 3.
 - Layer table, in-race `#audioset`, pitch curve, silence diagnosis, music cutting out on pause/hide →
   [references/diagnose.md](references/diagnose.md) (incl. gear-shift cue silent).
