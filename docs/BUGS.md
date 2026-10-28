@@ -313,7 +313,7 @@ to other sessions on 2026-10-09 (the last line had no owner). Today's owner of a
 
 - M19 replay — `clear()` zeroes `prevStatus`, so every retired/finished car re-tags as a fresh event after a timeline discard. `js/camera/replay-buf.js:81` · low · **fixed in #2222**
 - M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low · **fixed in #1289**
-- M21 net — `EVENT_CRITICAL` omits `quali`/`settings`; a lost QUALI on a backed-up reliable channel wrecks the grid. `js/net/transport.js:454,622` · low
+- M21 net — `EVENT_CRITICAL` omits `quali`/`settings`; a lost QUALI on a backed-up reliable channel wrecks the grid. `js/net/transport.js:454,622` · low · **already fixed on tip** (`quali`/`settings`/`lap`/`hello`/`ready` in `EVENT_CRITICAL`; pinned by `tests/unit/net-transport.test.mjs`)
 - M24 data hub — switching tabs does not abort the previous tab's OpenF1 requests. `js/data/hub.js:300`, `js/data/telemetry.js:357` · low-med · **fixed in #1284**
 - M27 car — daily "standard" class builds the player mesh from SAVED parts under the FACTORY cache key; `visualSetup` is stamped once. `js/game.js:1611,1635`, `js/car/car-draw.js:24-31,915` · low
 - M28 car — a custom-emblem image that decodes after CLEAR / a newer upload reinstalls the stale emblem. `js/car/liverytex.js:1148-1160` · low · **fixed in #1284**
@@ -324,7 +324,7 @@ to other sessions on 2026-10-09 (the last line had no owner). Today's owner of a
 - M35 race flow — `gridUp` hashes on `raceIndex` before `raceIndex++`, `armReliability` and the AI-mistake hash after it; one-off draws disagree with B6 above. `js/game.js` · low · **fixed** (arm on gridUp's `raceIndex` then bump; `raceDrawRound` freezes the mistake hash; pinned in `game-m33-m35-m42` + `game-m35-race-index-vm`)
 - M38 director — after the player retires solo the director forces TV every tick; CAM/C do nothing; `setAutoSpectate` has no caller. `js/camera/director.js:144-172,215` · low · **force-back fixed earlier** (manual CAM leaves TV); **solo-retire empty-field shot fixed** (player fallback included retired cars); `setAutoSpectate` still has no game.js caller → needs-decision
 - M39 WGX — `backendState()` returns `lost`, not `ctxLost`, so game.js never sees a WGX device loss. `js/render/webgpu/wgx.js:5722` · low · **fixed in #1281**
-- M40 input — stored `steerMode` unvalidated at boot (Input falls back to "tilt", game.js to "buttons"); a `connected===false` pad counts as present. `js/game.js:239`, `js/input/input.js:1598,1913` · low
+- M40 input — stored `steerMode` unvalidated at boot (Input fell back to "tilt", game.js to "buttons"); a `connected===false` pad counted as present. · low · **fixed** — game.js STEER_MODES (#1289) + `boot-input-shape`; disconnect `.connected` (#1313) + `key-binds-hunt` I-08; Input.setSteerMode unknown→buttons (aligned with game.js)
 - M42 player physics — `frontUtil` still normalised by pi/2 after the front peak moved (#1266); toggled BOOST drains while braking; manual RECOVER has no pit-lane guard. `js/physics/player-forces.js:260,273`, `js/game.js` · low · **frontUtil + BOOST fixed in #3972**; **RECOVER pit-lane/box guard fixed in game.js** (pinned in `race-flow-fixes-vm` + `game-m33-m35-m42`); module extract is #3978
 - M37 (presets part) lighting — shared `*|day|*` stamps exist only for dry/wet, so rain/overcast/fog fall through to knob defaults (monaco tunnel lampLevel 0.26 vs 0.13; dawn/rain lampLevel on 47+ circuits). `js/lighting/presets.js:205,223` · low · **unassigned**
 

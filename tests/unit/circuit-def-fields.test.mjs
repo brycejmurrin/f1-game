@@ -428,3 +428,36 @@ test("Spa and Monaco elevation extremes sit on their named corners", () => {
   assert.ok(crest.y > 35 && crest.y < 50, `Casino ~+40 m over the line (got ${crest.y.toFixed(1)})`);
   assert.ok(mc.grade < 0.18, `Monaco grade ${(mc.grade * 100).toFixed(1)} %`);
 });
+
+// tyreSeverity trailers that say "below Japan/Monza/…" must actually sit below
+// the named anchor (interlagos and hockenheim shipped inverted comparisons).
+test("tyreSeverity comparison comments agree with the named anchors", () => {
+  const dir = path.join(ROOT, "js", "circuits");
+  const sev = new Map();
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js"))) {
+    const src = fs.readFileSync(path.join(dir, f), "utf8");
+    const m = src.match(/tyreSeverity:\s*([0-9.]+)\s*,?\s*\/\/\s*(.*)/);
+    if (!m) continue;
+    sev.set(f.replace(/\.js$/, ""), { v: Number(m[1]), note: m[2], file: f });
+  }
+  const japan = sev.get("suzuka")?.v;
+  const monza = sev.get("monza")?.v;
+  assert.ok(Number.isFinite(japan) && Number.isFinite(monza), "Japan/Monza anchors present");
+  const bad = [];
+  for (const [id, row] of sev) {
+    const n = row.note;
+    if (/\bbelow\b.*\b(Japan|Suzuka)\b/i.test(n) && !(row.v < japan)) {
+      bad.push(`${id}: ${row.v} claimed below Japan ${japan}`);
+    }
+    if (/\babove\b.*\b(Japan|Suzuka)\b/i.test(n) && !(row.v > japan)) {
+      bad.push(`${id}: ${row.v} claimed above Japan ${japan}`);
+    }
+    if (/\bbelow\b.*\bMonza\b/i.test(n) && !(row.v < monza)) {
+      bad.push(`${id}: ${row.v} claimed below Monza ${monza}`);
+    }
+    if (/\babove\b.*\bMonza\b/i.test(n) && !(row.v > monza)) {
+      bad.push(`${id}: ${row.v} claimed above Monza ${monza}`);
+    }
+  }
+  assert.deepEqual(bad, []);
+});
