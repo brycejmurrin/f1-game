@@ -14225,6 +14225,7 @@
         "tests/unit/lamp-chunks.test.mjs"
       ],
       "aabbInFrustum": [
+        "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/xr-cull-union.test.mjs"
       ],
       "bucketInstances": [
