@@ -21,9 +21,9 @@ const ROOT = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
-// 322: union of PedalTravel (js/input/pedal-travel.js) and GarageCrewDraw
-// (js/garage/crew-draw.js); each landed as +1 on a tip already at 320.
-const MAX_EAGER_SCRIPTS = 322;
+// 323: tip sat at 320; PedalTravel + GarageCrewDraw (#4042) + AiStrategy (#4040)
+// each add one eager tag.
+const MAX_EAGER_SCRIPTS = 323;
 const MAX_EAGER_BYTES = 8_200_000;
 
 function eagerScripts() {

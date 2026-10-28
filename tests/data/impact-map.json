@@ -7601,7 +7601,6 @@
     },
     "js/garage/crew-draw.js": {
       "place": [
-        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
@@ -8911,7 +8910,6 @@
       ],
       "*": [
         "tests/unit/a11y-pwa-pass.test.mjs",
-        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/free-cam.test.mjs",
@@ -11215,6 +11213,41 @@
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs"
+      ]
+    },
+    "js/physics/ai-strategy.js": {
+      "compoundFor": [
+        "tests/unit/ai-strategy.test.mjs"
+      ],
+      "degCost": [
+        "tests/unit/ai-strategy.test.mjs"
+      ],
+      "pitNow": [
+        "tests/unit/ai-strategy.test.mjs"
+      ],
+      "splitStints": [
+        "tests/unit/ai-strategy.test.mjs"
+      ],
+      "stintPlan": [
+        "tests/unit/ai-strategy.test.mjs"
+      ],
+      "strategyTemper": [
+        "tests/unit/ai-strategy.test.mjs"
+      ],
+      "tasteRoll": [
+        "tests/unit/ai-strategy.test.mjs"
+      ],
+      "tyreClass": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "tyrePace": [
+        "tests/unit/ai-drive.test.mjs"
+      ],
+      "wornPays": [
+        "tests/unit/ai-strategy.test.mjs"
+      ],
+      "*": [
+        "tests/unit/pit-lane.test.mjs"
       ]
     },
     "js/physics/body-attitude.js": {

@@ -3796,6 +3796,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/physics/ai-strategy.js",
+      "global": "AiStrategy",
+      "roster": "tag"
+    },
+    {
       "path": "js/physics/body-attitude.js",
       "global": "BodyAttitude",
       "roster": "tag"
