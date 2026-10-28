@@ -7649,6 +7649,7 @@
     },
     "js/garage/crew-draw.js": {
       "place": [
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/garage-crew-choreo.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
