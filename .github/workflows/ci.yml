@@ -414,6 +414,18 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+      # GUARDS SCOPE (#3951): a pull request whose diff touches none of tools/,
+      # tests/, .github/ or package.json runs `tooling-fast --changed` (still
+      # sharded here); every other PR and every other event runs the whole
+      # floor (guardsScope in tools/ci/tooling-fast.mjs). The JOB always runs:
+      # a path-filtered required workflow stays "Pending" and blocks the merge
+      # (https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks).
+      # The mode is part of the verdict-cache key, so a narrowed green never
+      # replays as a full one on the same tree (the deploy-branch push).
+      - name: Guards scope
+        id: scope
+        if: steps.reuse.outputs.reuse != 'true'
+        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       # #1712: per-job inputs-hash verdict cache (lookup-only). A prior green
       # run on the same declared inputs (any branch; deploy tip is the default
       # branch so its verdicts are visible) skips the shard. Nightly NO_MEMO=1
@@ -422,7 +434,9 @@ jobs:
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
-        run: echo "key=guards-a-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        env:
+          GUARDS_MODE: ${{ steps.scope.outputs.mode }}
+        run: echo "key=guards-a-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -434,12 +448,13 @@ jobs:
       - name: Tooling-fast shard 1/4
         if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
+          GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
         # --bail (2026-10-16 CI jobs review): stop STARTING files after the first
         # failure. A red shard ran a mean 5.9 min after its first failure; files
         # already in flight finish and the log names each. The local
         # `npm run test:tooling-fast` stays without it so an author sees every red.
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=1/4 --bail
+        run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=1/4 --bail
       - name: Record green verdict
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
         run: date -u > .verdict-guards-a
@@ -486,10 +501,17 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+      # GUARDS SCOPE (#3951): see guards-a.
+      - name: Guards scope
+        id: scope
+        if: steps.reuse.outputs.reuse != 'true'
+        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
-        run: echo "key=guards-b-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        env:
+          GUARDS_MODE: ${{ steps.scope.outputs.mode }}
+        run: echo "key=guards-b-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -501,8 +523,9 @@ jobs:
       - name: Tooling-fast shard 2/4
         if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
+          GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=2/4 --bail
+        run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=2/4 --bail
       # RATCHETS, AUDIT, COVERAGE AND BEHIND-SHIP (moved from the `Structural
       # guards` aggregator 2026-10-15): the same tree and node_modules, no
       # second checkout + npm ci, and the aggregator needs no runner time.
@@ -606,6 +629,11 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+      # GUARDS SCOPE (#3951): see guards-a.
+      - name: Guards scope
+        id: scope
+        if: steps.reuse.outputs.reuse != 'true'
+        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       # #1712: per-job inputs-hash verdict cache (lookup-only). A prior green
       # run on the same declared inputs (any branch; deploy tip is the default
       # branch so its verdicts are visible) skips the shard. Nightly NO_MEMO=1
@@ -614,7 +642,9 @@ jobs:
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
-        run: echo "key=guards-c-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        env:
+          GUARDS_MODE: ${{ steps.scope.outputs.mode }}
+        run: echo "key=guards-c-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -626,12 +656,13 @@ jobs:
       - name: Tooling-fast shard 3/4
         if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
+          GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
         # --bail (2026-10-16 CI jobs review): stop STARTING files after the first
         # failure. A red shard ran a mean 5.9 min after its first failure; files
         # already in flight finish and the log names each. The local
         # `npm run test:tooling-fast` stays without it so an author sees every red.
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=3/4 --bail
+        run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=3/4 --bail
       - name: Record green verdict
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
         run: date -u > .verdict-guards-c
@@ -678,10 +709,17 @@ jobs:
         run: bash tools/ci/reuse-draft-fast.sh >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-apex
         if: steps.reuse.outputs.reuse != 'true'
+      # GUARDS SCOPE (#3951): see guards-a.
+      - name: Guards scope
+        id: scope
+        if: steps.reuse.outputs.reuse != 'true'
+        run: node tools/ci/tooling-fast.mjs --print-scope | tee -a "$GITHUB_OUTPUT"
       - name: Inputs hash (guards)
         id: h
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
-        run: echo "key=guards-d-${{ runner.os }}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
+        env:
+          GUARDS_MODE: ${{ steps.scope.outputs.mode }}
+        run: echo "key=guards-d-${{ runner.os }}-${GUARDS_MODE}-$(node tools/ci/inputs-hash.mjs guards)" >> "$GITHUB_OUTPUT"
       - name: Verdict cache lookup
         id: memo
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1'
@@ -693,8 +731,9 @@ jobs:
       - name: Tooling-fast shard 4/4
         if: steps.reuse.outputs.reuse != 'true' && (env.NO_MEMO == '1' || steps.memo.outputs.cache-hit != 'true')
         env:
+          GUARDS_CHANGED: ${{ steps.scope.outputs.mode == 'changed' && '1' || '' }}
           APEX_DOCS_FIGURES_ADVISORY: ${{ github.event_name != 'pull_request' && '1' || '' }}
-        run: node tools/ci/tooling-fast.mjs --jobs=4 --shard=4/4 --bail
+        run: node tools/ci/tooling-fast.mjs ${GUARDS_CHANGED:+--changed} --jobs=4 --shard=4/4 --bail
       - name: Record green verdict
         if: steps.reuse.outputs.reuse != 'true' && env.NO_MEMO != '1' && steps.memo.outputs.cache-hit != 'true' && success()
         run: date -u > .verdict-guards-d
