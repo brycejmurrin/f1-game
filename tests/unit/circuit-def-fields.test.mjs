@@ -117,6 +117,75 @@ test("the five once-dropped fields carry their authored values", () => {
     "undulate must exist on the built def for the opt-out to be takeable");
 });
 
+// Catalog hygiene: sceneryTheme is only for NON-DEFAULT themes. build-props
+// resolves `def.sceneryTheme || (street ? "street" : theme === "desert" ?
+// "desert" : "permanent")`, so authoring the fallback value is dead metadata
+// with no runtime effect. Parked rows below ship today. Dropping one edits
+// js/circuits/<id>.js and forces a shot-catalog sourceDigest stamp (every
+// circuit def is in that hash) — coordinate with the digest owner; do not
+// widen this allow-list.
+const REDUNDANT_SCENERY_THEME = {
+  bahrain: "desert matches theme→desert fallback",
+  silverstone: "permanent matches non-street/non-desert fallback",
+  singapore: "street matches street:true fallback (overrides still needed)",
+};
+
+test("sceneryTheme is authored only when it differs from the engine fallback", () => {
+  const Tracks = buildContext();
+  const redundant = [];
+  const parkedGone = [];
+  for (const d of Tracks._vmContext.TrackDefs) {
+    if (d.sceneryTheme == null) {
+      if (Object.prototype.hasOwnProperty.call(REDUNDANT_SCENERY_THEME, d.id))
+        parkedGone.push(d.id);
+      continue;
+    }
+    const fallback = d.street ? "street" : d.theme === "desert" ? "desert" : "permanent";
+    if (d.sceneryTheme !== fallback) continue;
+    if (REDUNDANT_SCENERY_THEME[d.id]) continue;
+    redundant.push(`${d.id}: sceneryTheme "${d.sceneryTheme}"`);
+  }
+  assert.deepEqual(redundant, [],
+    "omit sceneryTheme when it matches the street/desert/permanent fallback (or park it in REDUNDANT_SCENERY_THEME with a reason)");
+  assert.deepEqual(parkedGone, [],
+    "a parked redundant sceneryTheme was removed — drop it from REDUNDANT_SCENERY_THEME");
+});
+
+// Catalog hygiene: one TrackDefs id per authored file; no silent double-push.
+test("each circuit file pushes exactly one TrackDefs row and ids are unique", () => {
+  const Tracks = buildContext();
+  const raw = Tracks._vmContext.TrackDefs;
+  const byId = new Map();
+  for (const d of raw) {
+    assert.ok(d && typeof d.id === "string" && d.id, "every TrackDefs row needs an id");
+    if (byId.has(d.id)) byId.get(d.id).push(d);
+    else byId.set(d.id, [d]);
+  }
+  const dups = [...byId].filter(([, rows]) => rows.length > 1).map(([id, rows]) => `${id}×${rows.length}`);
+  assert.deepEqual(dups, [], "duplicate TrackDefs ids");
+  const shipped = require(path.join(ROOT, "tools/manifest.cjs")).CIRCUITS;
+  assert.equal(byId.size, shipped.length, "TrackDefs id count must match CIRCUITS");
+  for (const id of shipped) assert.ok(byId.has(id), `missing TrackDefs id ${id}`);
+});
+
+// Catalog hygiene: modelGroup ids must be unique inside a scenery file.
+// Comments that quote modelGroup("…") are ignored (they are not calls).
+test("no scenery file registers the same modelGroup id twice", () => {
+  const dir = path.join(ROOT, "js", "circuits", "scenery");
+  const bad = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js"))) {
+    let src = fs.readFileSync(path.join(dir, f), "utf8");
+    src = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    const ids = [...src.matchAll(/modelGroup\(\s*["']([^"']+)["']/g)].map((m) => m[1]);
+    const seen = new Set();
+    for (const id of ids) {
+      if (seen.has(id)) bad.push(`${f}: modelGroup "${id}"`);
+      else seen.add(id);
+    }
+  }
+  assert.deepEqual(bad, [], "rename one of the duplicate modelGroup calls");
+});
+
 // gpLaps — a REAL grand prix distance per circuit, derived from lengthKm by the
 // actual regulation rather than the flat 57 the lap picker offered on all forty.
 // Derived, so there is no authored table to fall out of step with lengthKm; the

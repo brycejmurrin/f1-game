@@ -79,10 +79,10 @@ test("gameMergesBehind counts game merges between the tip and the merge-base; no
   assert.equal(gameMergesBehind(HISTORY, "none").count, 4);
 });
 
-test("distanceVerdict: at most N game merges behind (default 6); an off-line merge-base counts everything walked", () => {
-  assert.equal(MAX_BEHIND, 6);
+test("distanceVerdict: at most N game merges behind (default 12); an off-line merge-base counts everything walked", () => {
+  assert.equal(MAX_BEHIND, 12);
   assert.equal(distanceVerdict(HISTORY, sha(6)).ok, true, "3 behind passes the default");
-  assert.ok(distanceVerdict(HISTORY, sha(6)).evidence.includes("(max 6)"));
+  assert.ok(distanceVerdict(HISTORY, sha(6)).evidence.includes("(max 12)"));
   assert.equal(distanceVerdict(HISTORY, sha(3), 2).ok, true);
   assert.equal(distanceVerdict(HISTORY, sha(5), 2).ok, true, "exactly N passes");
   const over = distanceVerdict(HISTORY, sha(6), 2);
@@ -146,7 +146,7 @@ test("distanceFor: 20 game merges behind refuses a game PR and passes a PR whose
   const calls = [];
   const game = distanceFor({ head: HEAD, tip: TIP20, run: fakeGit(["docs/a.md", "js/a.js"], calls) });
   assert.equal(game.row.ok, false);
-  assert.ok(game.row.evidence.startsWith("base is 20 game merge(s) ahead of the merge-base (max 6)"), game.row.evidence);
+  assert.ok(game.row.evidence.startsWith("base is 20 game merge(s) ahead of the merge-base (max 12)"), game.row.evidence);
   assert.ok(calls.includes("rev-list"));
   calls.length = 0;
   const docs = distanceFor({ head: HEAD, tip: TIP20, run: fakeGit(["docs/WORKERS.md", "tools/ci/merge-gate.mjs", "tests/unit/merge-gate.test.mjs", ".github/workflows/land.yml"], calls) });

@@ -148,5 +148,5 @@ test("every backend's chunk loop culls through radialCulled, and game.js feeds i
   assert.match(read("js/render/glx/glx.js"), /get cullFog\(\) \{ return frameCullFog; \}/);
   assert.match(read("js/render/webgpu/wgx.js"), /frameCullFog = f\.cullFog \|\| null;/);
   assert.match(read("js/render/webgpu/wgx.js"), /get frameCullFog\(\) \{ return frameCullFog; \}/);
-  assert.match(read("js/render/three/tlx.js"), /chunkedSys\.cull\(rec\.chunked, _frameVP, frameEye, frameCullDist, frameCullFog\)/);
+  assert.match(read("js/render/three/tlx.js"), /chunkedSys\.cull\(rec\.chunked, vp, eye, cd, fog\)/);
 });
