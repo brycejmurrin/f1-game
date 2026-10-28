@@ -165,8 +165,8 @@ on:
 env:
   DEPLOY_BRANCH: claude/f1-game-project-26h3ng
   RETRY_MAX: 3
-  # AUTO-SYNC: the most `land` PRs that may wait on a ci.yml run at once after a sync (THROTTLE in the header).
-  SYNC_MAX: 3
+  # AUTO-SYNC: at most 6 `land` PRs may wait on a ci.yml run at once after a sync (THROTTLE in the header).
+  SYNC_MAX: 6
 
 # ONE group per PR (a CI run on a PR head carries the PR number); the deploy branch's train runs share `land-tip`; a
 # CI run that names no PR (a fork) gets `land-sha-<head>`, never the train's group (GitHub keeps one pending run per
