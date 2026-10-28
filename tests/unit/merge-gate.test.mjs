@@ -616,8 +616,8 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   const fn = postRun.slice(start, postRun.indexOf("\n}\n", start) + 3);
   const atS = postRun.split("\n").find((l) => l.startsWith("AT_S="));
   const stub = `gh() { local q="" a; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
-  const runGate = (created) => {
-    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
+  const runGate = (created, url) => {
+    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created, target_url: url }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
     const script = ["set -uo pipefail", "R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null", stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
     const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake } });
     assert.equal(r.status, 0, r.stderr);
@@ -627,6 +627,9 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   assert.equal(runGate("2026-10-27T10:00:04Z"), "POSTED", "an older status is replaced");
   assert.equal(runGate("2026-10-27T10:00:05Z"), "POSTED", "same second as AT: the old string compare kept it (`Z` > `.`)");
   assert.notEqual(runGate("2026-10-27T10:00:06Z"), "POSTED", "a status newer than this run's read is kept");
+  assert.notEqual(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2"), "POSTED", "another run's newer status is kept");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/1"), "POSTED",
+    "this run's own earlier attempt is replaced (a re-run reuses AT: run 40740152111, #4110)");
 });
 
 // ---- the immediate re-gate: a gate passed on a tip that moved is re-dispatched at once, bounded per head ---------
@@ -725,7 +728,9 @@ test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs de
     "the trusted-rows/land-gate tip split asks for a re-gate");
   assert.match(run, /elif \[ "\$now" != "\$tip" \]; then\n[^\n]*deploy tip moved since the gate measured[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "a verdict whose tip is no longer the deploy tip asks for a re-gate");
-  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 2, "no other branch asks for a re-gate");
+  assert.match(run, /if \[ "\$tline" = "no trusted rows for this head" \]; then\n\s*want_retry "\$n" "\$head"/,
+    "no trusted row for this head (\"error, will retry\") asks for a re-gate");
+  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 3, "no other branch asks for a re-gate");
   assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "one append, inside want_retry");
   assert.match(run, /echo "retry=\$retry"/);
 });
