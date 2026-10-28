@@ -55,6 +55,15 @@ const shellMean = (m) => {
   return [r / n, g / n, b / n];
 };
 
+test("GaragePrims keeps BOX_F / WALL_KEYED / sideOnly module-local", () => {
+  const { GaragePrims } = harness();
+  assert.equal(GaragePrims.BOX_F, undefined);
+  assert.equal(GaragePrims.WALL_KEYED, undefined);
+  assert.equal(GaragePrims.sideOnly, undefined);
+  assert.equal(typeof GaragePrims.block, "function");
+  assert.equal(typeof GaragePrims.panelGrid, "function");
+});
+
 test("every look builds valid bay meshes", () => {
   const { GaragePrims } = harness();
   assert.ok(GaragePrims.LOOK_IDS.length >= 5, "stock plus at least four looks");
