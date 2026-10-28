@@ -1,0 +1,1 @@
+Fixed: agent-view overtake/X-mode copy matched the live detection-line and zone rules; `describe("car:N")` shared rivals' road-gap wrap; wrap-corner gradient/kerbs and nextCorner status no longer broke across the start line; view raster used vantage FOV; gpuCapture lint no longer bound WebGL2 on `#game`.

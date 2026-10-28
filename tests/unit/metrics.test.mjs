@@ -574,5 +574,25 @@ test("GOV reports explicit stopped loop and frame progress without inferring pau
   stopped = true; frames = 13;
   assert.equal(M.snapshot().loopStopped, true);
   assert.equal(M.snapshot().loopFrames, 13);
+  assert.equal(M.snapshot().stallSlow, null, "a stub without stall does not invent a slow run");
   assert.equal(load({}).M.snapshot().loopStopped, null);
+});
+
+test("GOV surfaces a WebGPU stall that never threw", () => {
+  const { M } = load({
+    LoopHealth: { state: () => ({ stopped: false, frames: 9, stall: { slowRun: 4, worstMs: 1800, act: "shed" } }) },
+    PerfGov: { fpsEMA: () => 16.7 },
+  });
+  M.setPage("gov");
+  const s = M.snapshot();
+  assert.equal(s.stallSlow, 4);
+  assert.equal(s.stallWorst, 1800);
+  assert.equal(s.stallAct, "shed");
+  const src = readFileSync(join(ROOT, "js/perf/metrics-overlay.js"), "utf8");
+  const paint = src.slice(src.indexOf("function paintOverlay()"));
+  assert.ok(paint.includes("stallRow(s, true)") && paint.includes("stallRow(s, false)"));
+  const narrow = "stall 10  60000 reload";
+  const wide = "stall:   slow 10  worst 60000  reload";
+  assert.ok(narrow.length <= 25, narrow.length + " ch");
+  assert.ok(wide.length <= 52, wide.length + " ch");
 });

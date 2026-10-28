@@ -53,6 +53,10 @@ async function raceAndDrive(page, id) {
   }, DRIVE_STEPS);
 }
 
+// A RESULT SCREEN MUST NOT PIN ITS RACE. Its share chips (js/ui/results-sheet.js, js/share/share-card-chips.js)
+// once closed over the cars and G.track, so the finished circuit was still reachable when the next was built
+// (Pages runs 4282/4284, 2026-10-28). Naming the files here maps them to this spec in the impact map.
+
 // THE MENU MUST BE QUIET BEFORE ITS HEAP COUNTS. The census forces GC, but live work in flight survives it:
 // the title warm's race prep (js/perf/title-warm.js starts it after 1.2 s of title quiet), the menu program warm
 // and the garage prebuild. One post-warm pair read mid-prep swung ±35 MiB on unchanged heads (A·W56, 2026-10-26).

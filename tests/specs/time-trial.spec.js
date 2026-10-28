@@ -4,9 +4,25 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, test as journeyTest } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { saveSharedCard } from "../helpers/share-card.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
+
+// #3892: the armed label must fit its own cell — one box, nothing clipped, and
+// no overlap with any other pause button (the old "RESTART — TAP AGAIN" wrapped
+// and its second line hid under the next row at 844x390).
+const armedFit = (page, id) => page.evaluate((id) => {
+  const b = document.getElementById(id);
+  const r = b.getBoundingClientRect();
+  // Every visible pause button: STRATEGY sits in a nested row, not the stack.
+  const hit = [...document.querySelectorAll("#pausemenu button")]
+    .filter((o) => o !== b && !o.contains(b) && !b.contains(o) && o.checkVisibility())
+    .map((o) => ({ id: o.id, r: o.getBoundingClientRect() }))
+    .filter(({ r: o }) => o.left < r.right - 0.5 && r.left < o.right - 0.5 && o.top < r.bottom - 0.5 && r.top < o.bottom - 0.5)
+    .map((o) => o.id);
+  return { clipped: b.scrollHeight > b.clientHeight || b.scrollWidth > b.clientWidth, hit };
+}, id);
 
 journeyTest.describe("Practice return journeys — phone landscape", () => {
   // Keep literal test(...) calls visible to the static CI budget counter.
@@ -77,7 +93,8 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
       // It distinguishes a real restart from merely dismissing the pause card.
       await page.evaluate(() => window.__apex.setLap(2));
       await page.locator("#pm-restart").tap();
-      await expect(page.locator("#pm-restart")).toHaveText("RESTART — TAP AGAIN");
+      await expect(page.locator("#pm-restart")).toHaveText("TAP AGAIN");
+      expect(await armedFit(page, "pm-restart")).toEqual({ clipped: false, hit: [] });
       expect(await page.evaluate(() => window.__apex.timing().lap)).toBe(2);
       await expect(page.locator("#pausemenu")).toBeVisible();
       await page.locator("#pm-restart").tap();
@@ -95,7 +112,8 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
 
       await page.locator("#pausebtn").tap();
       await page.locator("#pm-quit").tap();
-      await expect(page.locator("#pm-quit")).toHaveText("QUIT TO MENU — TAP AGAIN");
+      await expect(page.locator("#pm-quit")).toHaveText("TAP AGAIN");
+      expect(await armedFit(page, "pm-quit")).toEqual({ clipped: false, hit: [] });
       await expect(page.locator("#pausemenu")).toBeVisible();
       await expect(page.locator("#overlay")).toBeHidden();
       await page.locator("#pm-quit").tap();
@@ -387,6 +405,20 @@ test.describe("Time Trial — results panel", () => {
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
     const title = await page.locator("#results-title").innerText();
     expect(title).toContain("TIME TRIAL");
+  });
+
+  test("a personal-best ghost puts a SHARE CARD chip on TT results (#1547)", async ({ page }) => {
+    await enterTT(page);
+    await page.evaluate(() => window.__apex.park(0));
+    // A synthetic 80 s lap at 20 Hz becomes the stored best (Ghost is a page global).
+    await page.evaluate(() => {
+      Ghost.startLap();
+      for (let i = 0; i <= 1600; i++) Ghost.record(i / 20, i * 2.5, 0);
+      Ghost.finishLap(80, null);
+    });
+    await page.evaluate(() => window.__apex.finishRace());
+    await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
+    await saveSharedCard(page, "#res-ghost-card", /^apex26-lap-[a-z0-9-]+\.png$/);
   });
 
   test("TRY AGAIN button shown in TT results", async ({ page }) => {

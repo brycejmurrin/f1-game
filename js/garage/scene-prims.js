@@ -165,9 +165,9 @@ function hose(out, pts, rad, col, seg, mid) {
 }
 
 // The shared material ids, so the bay names the same surfaces the track does
-// rather than keeping a second copy that can drift. Read lazily: every use is
-// inside a build function, so TrackGeom (manifest position 77, this file 121)
-// is always up by then and this needs no HARD_EDGES pair.
+// rather than keeping a second copy that can drift. Read at eval (HARD_EDGES
+// pairs this file after TrackGeom in tools/manifest.cjs); the fallback object
+// is only for a harness that loads the module alone.
 const MAT = (typeof TrackGeom !== "undefined" && TrackGeom.MAT)
   ? TrackGeom.MAT : { FLAT: 0, CONCRETE: 1, METAL: 4, ASPHALT: 16 };
 
@@ -308,7 +308,8 @@ const look = () => LOOKS[_look] || null;
 // Resolve a look colour slot: a fixed [r,g,b] or a function of the livery.
 const lookCol = (v, c1, c2) => (typeof v === "function" ? v(c1, c2) : v);
 
-  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, BOX_F, WALL_KEYED, sideOnly, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
+  // BOX_F / WALL_KEYED / sideOnly stay module-local: only block/cyl/tube use them.
+  return { tile, pushMat, HALF_W, Z_BACK, Z_DOOR, CEIL_Y, PANEL, STEEL, DARK, panelGrid, block, cyl, tube, hose, MAT, smooth, scale, rgb, css,
     mix, LOOKS, LOOK_IDS, setLook, lookId, look, lookCol };
 })();
 if (typeof window !== "undefined") window.GaragePrims = GaragePrims;

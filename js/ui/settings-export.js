@@ -76,6 +76,7 @@ const SPEC = [
   { k: "radioFocusDb", lane: "json", group: "audio", def: 0, src: "js/audio/panel.js", oneOf: [0, 4, 8, 12] },
   { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
   { k: "radioPreset", lane: "json", group: "audio", def: "modern", oneOf: ["modern", "clean", "vintage"], src: "js/audio/panel.js" },
+  { k: "spokenLang", lane: "json", group: "audio", def: "auto", src: "js/audio/radio-voice.js", oneOf: ["auto", "en", "es", "pt", "it", "de", "fr", "ja", "nl"] },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
@@ -211,7 +212,7 @@ const SPEC = [
       const clean = ControllerProfiles.clean(raw);
       return clean.devices.length === raw.devices.length ? clean : undefined;
     } },
-  { k: "conditionCues", lane: "json", group: "driving", def: false, src: "js/ui/condition-cue-controls.js" },
+  { k: "conditionCues", lane: "json", group: "driving", def: true, src: "js/ui/condition-cue-controls.js" },
   { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)",
     // A legacy scalar OR the per-pad map (Input.setPadRest's rule); typeOk(map, 0) skipped every calibrated
     // pad on LOAD SETTINGS, so the stick drifted on the new device (B·H11 hunt). `freeShape`: normalize owns it.

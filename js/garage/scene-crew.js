@@ -62,10 +62,11 @@ const GarageCrew = (function () {
     helmet(out, [0, 1.62, 0], c1, c2);
   }
   /* Crew LOOKS (B·G2, 2026-10-19): alternative crews, picked on the setup
-   * sheet's CREW row (GarageCrew.setLook(id), saved as apex26.crewLook). "classic" is the shipped crew above and
-   * stays the default; every other look is an articulated figure (tubes between
-   * joints, so a kneel or a lean is a joint table, not new geometry) baked with
-   * the props it holds into ONE static mesh in bay metres, plus the lollipop. */
+   * sheet's CREW row (GarageCrew.setLook(id), saved as apex26.crewLook).
+   * "classic" is the shipped block-figure crew and stays the default.
+   * "sculpted" draws GarageCrewMotion articulated guides (no baked look mesh);
+   * pitstop / workshop / welcome bake posed figures + props into ONE static
+   * mesh in bay metres, plus the lollipop. */
   const LOOKS = ["classic", "sculpted", "pitstop", "workshop", "welcome"];
   const GLOVE = [0.07, 0.07, 0.08], RUBBER = [0.035, 0.035, 0.04], ALLOY = [0.62, 0.63, 0.66];
   const GUN = [0.10, 0.10, 0.11], HOSE = [0.08, 0.08, 0.09], JACK = [0.72, 0.12, 0.08], BLANKET = [0.16, 0.16, 0.18];

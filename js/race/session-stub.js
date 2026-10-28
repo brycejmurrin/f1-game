@@ -32,7 +32,7 @@ var Duel = {
 
 var RadioLines = {
   _stub: true,
-  POOLS: {}, WHY: {},
+  POOLS: {}, WHY: {}, why: () => "",
   create: () => ({ pick: () => "", reset: function () {} }),
   fill: function () {}, gapText: () => "", timeText: () => "",
   surname: (c) => (c && (c.code || c.name)) || "",

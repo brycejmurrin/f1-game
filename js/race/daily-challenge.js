@@ -154,10 +154,10 @@ const DailyChallenge = (function () {
       return parts.join(" · ");
     }
 
-    async function shareCard(medal) {
-      if (typeof ShareCardData === "undefined" || typeof ShareCard === "undefined") {
-        throw new Error("Share cards are unavailable");
-      }
+    // The card model for today's result, its file name and share text (the preview
+    // sheet draws it at tap time); shareCard() renders and delivers it directly.
+    function card(medal) {
+      if (typeof ShareCardData === "undefined") throw new Error("Share cards are unavailable");
       const p = active || plan(), day = data().days[p.day];
       const context = G.records && G.records.key();
       const entry = context ? day && day.classes && day.classes[context] : day;
@@ -168,10 +168,12 @@ const DailyChallenge = (function () {
         const encoded = ShareCode.encode("daily", { ...result, medal });
         if (encoded.ok) link = encoded.url;
       }
-      const model = ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link });
-      const blob = await ShareCard.render(model, "portrait");
-      return ShareCard.deliver(blob, "apex26-daily-" + p.day + ".png",
-        { title: "APEX 26 DAILY", text: shareText(medal), url: link });
+      return { model: ShareCardData.fromDaily(p, entry, medal, liveStreak(), { link }), name: "daily-" + p.day, text: shareText(medal) };
+    }
+    async function shareCard(medal) {
+      if (typeof ShareCard === "undefined") throw new Error("Share cards are unavailable");
+      const c = card(medal), blob = await ShareCard.render(c.model, "portrait");
+      return ShareCard.deliver(blob, "apex26-" + c.name + ".png", { title: "APEX 26 DAILY", text: c.text, url: c.model.link });
     }
 
     function stop() {
@@ -191,7 +193,7 @@ const DailyChallenge = (function () {
       return st.count > 0 && (st.last === day || st.last === prevDay(day)) ? st.count : 0;
     }
 
-    return { plan, dayKey, select, open, record, shareResult, shareText, shareCard, stop, isActive, current, data, today, liveStreak };
+    return { plan, dayKey, select, open, record, shareResult, shareText, card, shareCard, stop, isActive, current, data, today, liveStreak };
   }
 
   return { create, plan, dayKey, prevDay };

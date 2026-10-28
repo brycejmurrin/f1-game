@@ -313,20 +313,20 @@ to other sessions on 2026-10-09 (the last line had no owner). Today's owner of a
 
 - M19 replay — `clear()` zeroes `prevStatus`, so every retired/finished car re-tags as a fresh event after a timeline discard. `js/camera/replay-buf.js:81` · low · **fixed in #2222**
 - M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low · **fixed in #1289**
-- M21 net — `EVENT_CRITICAL` omits `quali`/`settings`; a lost QUALI on a backed-up reliable channel wrecks the grid. `js/net/transport.js:454,622` · low
+- M21 net — `EVENT_CRITICAL` omits `quali`/`settings`; a lost QUALI on a backed-up reliable channel wrecks the grid. `js/net/transport.js:454,622` · low · **already fixed on tip** (`quali`/`settings`/`lap`/`hello`/`ready` in `EVENT_CRITICAL`; pinned by `tests/unit/net-transport.test.mjs`)
 - M24 data hub — switching tabs does not abort the previous tab's OpenF1 requests. `js/data/hub.js:300`, `js/data/telemetry.js:357` · low-med · **fixed in #1284**
 - M27 car — daily "standard" class builds the player mesh from SAVED parts under the FACTORY cache key; `visualSetup` is stamped once. `js/game.js:1611,1635`, `js/car/car-draw.js:24-31,915` · low · **fixed in `cursor/car-m27-visualsetup-f958`** (`playerPartsFor` / `setPlayerParts` capture + restamp; `teamDecalState` prefers the captured recipe)
 - M28 car — a custom-emblem image that decodes after CLEAR / a newer upload reinstalls the stale emblem. `js/car/liverytex.js:1148-1160` · low · **fixed in #1284**
 - M31 audio — race started with SOUND OFF then on never calls `setVenue`; the panel mid-race path skips `setVoice`. `js/game.js:8875,2809`, `js/audio/panel.js:49` · low
 - M32 audio — RivalAudio binds 4 voice slots, the mobile engine has 2; rivals in slots 2-3 swap voices on rank changes. `js/audio/rivals.js:20`, `js/audio/engine.js:106,2125` · low
-- M33 AI — mistake/attack zone key `Math.round(c.s + toTurnIn)` is unwrapped; a corner just past S/F rolls the mistake twice. `js/game.js:5397-5399,5479` · low
+- M33 AI — mistake/attack zone key `Math.round(c.s + toTurnIn)` is unwrapped; a corner just past S/F rolls the mistake twice. `js/game.js` · low · **fixed** (`wrapS` on the zone key + attemptRoll; pinned in `race-flow-fixes-vm` 7.6)
 - M34 AI — `defendPull` compares `chaserSpeed <= speed - 3` with an unscaled 3 m/s (siblings scale by PACE/vTop). `js/physics/ai-drive.js:1399` · low · **fixed in `cursor/r3-ai-pace-margins`** (with its round-3 siblings: `wantBoost` catching/defending and `brakeTarget` attacking now ride vTop()/VMAX too)
-- M35 race flow — `gridUp` hashes on `raceIndex` before `raceIndex++`, `armReliability` and the AI-mistake hash after it; one-off draws disagree with B6 above. `js/game.js:1979` vs `:2757` · low
-- M38 director — after the player retires solo the director forces TV every tick; CAM/C do nothing; `setAutoSpectate` has no caller. `js/camera/director.js:144-172,215` · low
+- M35 race flow — `gridUp` hashes on `raceIndex` before `raceIndex++`, `armReliability` and the AI-mistake hash after it; one-off draws disagree with B6 above. `js/game.js` · low · **fixed** (arm on gridUp's `raceIndex` then bump; `raceDrawRound` freezes the mistake hash; pinned in `game-m35-race-index-vm`)
+- M38 director — after the player retires solo the director forces TV every tick; CAM/C do nothing; `setAutoSpectate` has no caller. `js/camera/director.js:144-172,215` · low · **force-back fixed earlier** (manual CAM leaves TV); **solo-retire empty-field shot fixed** (player fallback included retired cars); `setAutoSpectate` still has no game.js caller → needs-decision
 - M39 WGX — `backendState()` returns `lost`, not `ctxLost`, so game.js never sees a WGX device loss. `js/render/webgpu/wgx.js:5722` · low · **fixed in #1281**
-- M40 input — stored `steerMode` unvalidated at boot (Input falls back to "tilt", game.js to "buttons"); a `connected===false` pad counts as present. `js/game.js:239`, `js/input/input.js:1598,1913` · low
-- M42 player physics — `frontUtil` still normalised by pi/2 after the front peak moved (#1266); toggled BOOST drains while braking; manual RECOVER has no pit-lane guard. `js/physics/player-forces.js:260,273`, `js/game.js:4839-4848,4349` · low
-- M37 (presets part) lighting — shared `*|day|*` stamps exist only for dry/wet, so rain/overcast/fog fall through to knob defaults (monaco tunnel lampLevel 0.26 vs 0.13; dawn/rain lampLevel on 47+ circuits). `js/lighting/presets.js:205,223` · low · **unassigned**
+- M40 input — stored `steerMode` unvalidated at boot (Input fell back to "tilt", game.js to "buttons"); a `connected===false` pad counted as present. · low · **fixed** — game.js STEER_MODES (#1289) + `boot-input-shape`; disconnect `.connected` (#1313) + `key-binds-hunt` I-08; Input.setSteerMode unknown→buttons (aligned with game.js)
+- M42 player physics — `frontUtil` still normalised by pi/2 after the front peak moved (#1266); toggled BOOST drains while braking; manual RECOVER has no pit-lane guard. `js/physics/player-forces.js:260,273`, `js/game.js` · low · **frontUtil + BOOST fixed in #3972**; **RECOVER pit-lane/box guard fixed in game.js** (pinned in `race-flow-fixes-vm`); module extract is #3978
+- M37 (presets part) lighting — shared `*|day|*` stamps exist only for dry/wet, so rain/overcast/fog fall through to knob defaults (monaco tunnel lampLevel 0.26 vs 0.13; dawn/rain lampLevel on 47+ circuits). `js/lighting/presets.js:205,223` · low · **fixed in #3964** (`*|day|{rain,overcast,fog}` + `*|dawn|{rain,overcast,fog}` lamp stamps; issue #3960)
 
 ## 2026-10-10 round-2 backlog (tooling / CI / hooks; not fixed by `ci-page-sources-guard`)
 
@@ -337,31 +337,36 @@ From the round-2 tooling hunt (`15-tooling-ci`, tip `0f8c88843`). F1-F11 are fix
   plus the two race files). The ADAPTED specs boot the WHOLE manifest in the VM, so a derived "files this spec reads" set would
   be the transitive closure of the manifest; a list is the honest cheap answer. A new ADAPTED spec must add its source to the list
   (`tests/unit/pick-unit-slices.test.mjs` pins the current set). `tools/ci/twinned-specs.mjs` still says the Pages gate runs
-  vm-page "UNCONDITIONALLY"; it runs it when the `page` slice is picked. Fix the sentence or the gate. · low
+  vm-page "UNCONDITIONALLY"; it runs it when the `page` slice is picked. Fix the sentence or the gate. · low — deferred: file
+  owned by open PR #3932 (vm-page balance); do not collide.
 - 15-F2 (narrowed) a selected shard now reds when it reached its run step and left no junit with testcases. A shard killed by its
   job cap AFTER `= run passed` but during the junit upload (the run 37493213168 shape) now reads red too instead of infra-retry;
   that is a rerun, by design, but if it recurs the shard should upload its junit from a step that cannot be cancelled by the cap.
-  The `selected-started-*` marker adds one tiny artifact per shard. · low
+  The `selected-started-*` marker adds one tiny artifact per shard. · low — workflow shape; not this tools/ci residual pass.
 - 15-F6 (residual) `cd X` inside a `( … )` subshell leaks its cwd to later commands in `shellparse.commands`; a worktree path
   containing a space breaks the `read -r C_RUN C_ALL C_GITDIR C_PATHS` split in `bash-guard.sh`. Both fail toward guarding the
-  wrong tree, not toward skipping the guard. · low
+  wrong tree, not toward skipping the guard. · low — hooks (`.claude/`), not tools/ci.
 - 15-F8 (residual) `Bash(curl http://127.0.0.1:*)` still matches `http://127.0.0.1:80@evil.example/` (userinfo form), because the
   permission glob is a prefix match. The push deny-list still only matches a command that STARTS with `git push`
   (`git -C . push origin HEAD:refs/heads/claude/f1-game-project-26h3ng` and a bare `git push` from a checkout whose upstream is the
   ship branch are not denied; only server-side protection, which is `non_admins`, stands in the way). Proposed: deny
   `Bash(git * push *claude/f1-game-project-26h3ng*)` and `Bash(git push)`. · medium, needs Bryce
 - 15-F10 (narrowed) `ratchets --base` now blocks a loosened explicit slack and a deleted entry whose file still exists. A NEW entry
-  with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low
+  with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low —
+  `tools/check/ratchets.mjs`, not tools/ci.
 - 15-F11 closed: the ready cap it described was retired 2026-10-16 and its tool deleted in #3013.
 - Observation, fixed 2026-10-21: `tools/ci/spec-timings.mjs` `parseJunit` fed the time of FAILED testcases into the rolling
   record, so a test that timed out at 180 s was billed at 180 s until the samples rolled off (a self-reinforcing drop from the
   selected gate). A failed or errored FINAL attempt (junit `<failure>`/`<error>`, live-log `x FAIL`) now records nothing;
   `tests/unit/spec-timings.test.mjs` pins it.
-- Observation: `pages-reuse-verdict.sh` can only reuse a PR run when a merge COMMIT's parent tree equals its tree; merges are
-  SQUASH-only, so the reuse path is effectively dead for PR merges (perf only, fails safe). · low
-- Observation: `git diff --name-only` is still used by `pick-tests.mjs:420-435`, `verify-change.mjs:83-87`, `change-kind.mjs:25`
-  and the sweeps/parts/ship/xr shell filters in ci.yml, so a `git mv` of a circuit file still hides the source side
-  from `pick-tests` and the fleet-sweep filter (#1288 converted only the three PR-gate selectors). · low
+- Observation, corrected 2026-10-27: `pages-reuse-verdict.sh` reuses a PR/Pages run when a merge COMMIT's parent tree equals
+  its tree. Landings are merge commits (not squash); reuse fires when the PR head was up to date (merge tree == parent 2) and
+  fails safe otherwise. Header note + `tests/unit/ci-pages-train.test.mjs` pin the up-to-date shape. · low, closed.
+- Observation, narrowed 2026-10-27: `pick-tests.mjs` and `verify-change.mjs` already use `tools/lib/changed-files.mjs`
+  (`--name-status -M`). `change-kind.mjs --since` now lists both rename ends the same way (local parse twin — importing
+  `changed-files.mjs` would rewrite `tests/data/impact-map.json`, owned by open CI PRs); `tests/unit/change-kind.test.mjs`
+  pins a `js/ui/hud.js` → `docs/` `git mv`. Still on `--name-only`: `tools/check/ratchets.mjs` and the sweeps/parts/ship/xr
+  shell filters in ci.yml (open CI PRs own workflow edits). · low
 - Observation: `conflict-cure.mjs` `resolveGenBlocks` understands only HTML `@gen-shell` spans, so an `sw.js`
   `// @gen-shell:sw-optional` conflict still stops the deploy (fail-safe friction); `deploy.mjs` `ratchetOverruns` skips a
   metric missing from one of its three stages, so a metric newly added on one side is not bounded by the "sum of deliberate
