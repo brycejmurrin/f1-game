@@ -5494,9 +5494,11 @@
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "constructorStandings": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-standings.test.mjs"
       ],
       "driverStandings": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-standings.test.mjs"
       ],
       "fastestLap": [
@@ -14237,6 +14239,7 @@
         "tests/unit/lamp-chunks.test.mjs"
       ],
       "aabbInFrustum": [
+        "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/xr-cull-union.test.mjs"
       ],
       "bucketInstances": [
@@ -17244,15 +17247,7 @@
         "tests/unit/hud-radio-slot.test.mjs"
       ]
     },
-    "js/ui/loading-screen.js": {
-      "building": [
-        "tests/unit/garage-personality.test.mjs",
-        "tests/unit/loading-card.test.mjs",
-        "tests/unit/loading-wipe.test.mjs"
-      ],
-      "busy": [
-        "tests/unit/loading-card.test.mjs"
-      ],
+    "js/ui/loading-card.js": {
       "cardPristine": [
         "tests/unit/loading-card.test.mjs"
       ],
@@ -17262,29 +17257,8 @@
       "clampCard": [
         "tests/unit/loading-card.test.mjs"
       ],
-      "create": [
-        "tests/unit/announcer.test.mjs",
-        "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/flyby-shots.test.mjs",
-        "tests/unit/garage-personality.test.mjs",
-        "tests/unit/loading-card.test.mjs",
-        "tests/unit/loading-screen-pack-gate.test.mjs",
-        "tests/unit/loading-wipe.test.mjs",
-        "tests/unit/race-session-lazy.test.mjs"
-      ],
-      "drawMap": [
-        "tests/unit/loading-wipe.test.mjs"
-      ],
-      "failed": [
-        "tests/unit/race-session-lazy.test.mjs"
-      ],
       "flyMsFor": [
         "tests/unit/loading-card.test.mjs"
-      ],
-      "garage": [
-        "tests/unit/garage-personality.test.mjs",
-        "tests/unit/loading-card.test.mjs",
-        "tests/unit/loading-wipe.test.mjs"
       ],
       "gridColour": [
         "tests/unit/loading-card.test.mjs"
@@ -17298,14 +17272,8 @@
       "gridLayout": [
         "tests/unit/loading-card.test.mjs"
       ],
-      "handoff": [
-        "tests/unit/loading-card.test.mjs"
-      ],
       "isAutomation": [
         "tests/unit/global-registry.test.mjs"
-      ],
-      "lowerWaitPlate": [
-        "tests/unit/loading-card.test.mjs"
       ],
       "metaRows": [
         "tests/unit/loading-card.test.mjs"
@@ -17313,11 +17281,56 @@
       "nextSkips": [
         "tests/unit/loading-card.test.mjs"
       ],
-      "noteFlyby": [
-        "tests/unit/loading-card.test.mjs"
-      ],
       "packSettled": [
         "tests/unit/loading-screen-pack-gate.test.mjs"
+      ],
+      "warmPresentReady": [
+        "tests/unit/loading-screen-pack-gate.test.mjs"
+      ],
+      "*": [
+        "tests/unit/flyby-shots.test.mjs",
+        "tests/unit/garage-personality.test.mjs",
+        "tests/unit/loading-wipe.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs"
+      ]
+    },
+    "js/ui/loading-screen.js": {
+      "building": [
+        "tests/unit/garage-personality.test.mjs",
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/loading-wipe.test.mjs"
+      ],
+      "busy": [
+        "tests/unit/loading-card.test.mjs"
+      ],
+      "create": [
+        "tests/unit/announcer.test.mjs",
+        "tests/unit/audio-recovery.test.mjs",
+        "tests/unit/garage-personality.test.mjs",
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/loading-screen-pack-gate.test.mjs",
+        "tests/unit/loading-wipe.test.mjs",
+        "tests/unit/race-session-lazy.test.mjs"
+      ],
+      "drawMap": [
+        "tests/unit/loading-wipe.test.mjs"
+      ],
+      "failed": [
+        "tests/unit/race-session-lazy.test.mjs"
+      ],
+      "garage": [
+        "tests/unit/garage-personality.test.mjs",
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/loading-wipe.test.mjs"
+      ],
+      "handoff": [
+        "tests/unit/loading-card.test.mjs"
+      ],
+      "lowerWaitPlate": [
+        "tests/unit/loading-card.test.mjs"
+      ],
+      "noteFlyby": [
+        "tests/unit/loading-card.test.mjs"
       ],
       "paint": [
         "tests/unit/garage-personality.test.mjs",
@@ -17332,9 +17345,6 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs"
-      ],
-      "warmPresentReady": [
-        "tests/unit/loading-screen-pack-gate.test.mjs"
       ]
     },
     "js/ui/menu-nav.js": {

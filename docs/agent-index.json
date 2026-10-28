@@ -4660,6 +4660,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/ui/loading-card.js",
+      "global": "LoadingCard",
+      "roster": "tag"
+    },
+    {
       "path": "js/ui/loading-screen.js",
       "global": "LoadingScreen",
       "roster": "tag"

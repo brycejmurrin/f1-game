@@ -126,6 +126,7 @@ function loadingHarness({ chat = "normal", speaking = false } = {}) {
     navigator: { getGamepads: () => [] }, matchMedia: () => ({ matches: false }), Log: { info() {}, warn() {} },
     GameAudio: { radioLeadS: () => 0.2, radioSting: (k, s) => stings.push([k, s]) } };
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb, { filename: absSrc("js/ui/loading-screen.js") });
   const radio = { sayPreRace: (text, life, lead) => { said.push({ text, life, lead }); return 1.4; } };
   const screen = sb.LoadingScreen.create({ $, store: { get: (k, d) => (k === "radioChat" ? chat : d), set() {} },
