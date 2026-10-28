@@ -8,6 +8,12 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const P = (await import("node:module")).createRequire(import.meta.url)("../../tools/manifest.cjs").PATHS;
+const PRELOAD = {
+  "js/track/scenery/nature.js": ["js/track/scenery/landforms.js"],
+  "js/track/scenery/structures.js": ["js/track/scenery/stands.js"],
+  "js/track/scenery/city.js": ["js/track/scenery/facade.js"],
+  "js/track/scenery/circuit-kit.js": ["js/track/scenery/landmark-kit.js"],
+};
 function load(file, name, globals = {}) {
   const sandbox = { console, Math, Array, Object, Number, Map, Set, ...globals };
   sandbox.window = sandbox;
@@ -16,6 +22,12 @@ function load(file, name, globals = {}) {
     fs.readFileSync(path.join(ROOT, "js/core/log.js"), "utf8").replace(/^const\b/gm, "var"),
     ctx, { filename: absSrc("js/core/log.js") },
   );
+  for (const pre of PRELOAD[file] || []) {
+    vm.runInContext(
+      fs.readFileSync(path.join(ROOT, pre), "utf8").replace(/^const\b/gm, "var"),
+      ctx, { filename: absSrc(pre) },
+    );
+  }
   const source = fs.readFileSync(path.join(ROOT, file), "utf8").replace(/^const\b/gm, "var");
   vm.runInContext(source, ctx, { filename: absSrc(file) });
   return sandbox[name];
@@ -53,7 +65,8 @@ test("SceneryThemes exposes only the immutable public operations", () => {
 });
 
 test("SceneryThemes variant selection is stable and bounded", () => {
-  const Themes = load(P.SCENERY_THEMES, "SceneryThemes");
+  const Hash32 = load("js/core/hash32.js", "Hash32");
+  const Themes = load(P.SCENERY_THEMES, "SceneryThemes", { Hash32 });
   const choices = ["flat", "sawtooth", "cantilever"];
   const first = Themes.variant("spa", "pit-roof", 3, choices);
   assert.equal(first, Themes.variant("spa", "pit-roof", 3, choices));

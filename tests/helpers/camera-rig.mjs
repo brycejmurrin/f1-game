@@ -9,8 +9,8 @@ import vm from "node:vm";
 import { absSrc } from "./abs-src.mjs";
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
-export const CAM_FILES = ["js/camera/drive-chase.js", "js/camera/drive-broadcast.js", "js/camera/drive-onboard.js",
-  "js/camera/feel.js", "js/camera/extra-rigs.js", "js/camera/vantage.js"];
+export const CAM_FILES = ["js/camera/fov-mode.js", "js/camera/drive-lens.js",
+  "js/camera/feel.js", "js/camera/extra-rigs.js", "js/camera/vantage-ride.js", "js/camera/vantage.js"];
 
 export function runFiles(ctx, files) {
   for (const f of files) vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
