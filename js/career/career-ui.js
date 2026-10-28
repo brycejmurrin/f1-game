@@ -217,7 +217,7 @@ function create(G) {
         el("span", "cr-slot-who", String(who).toUpperCase()),   // a team:null slot has no name
         el("span", "cr-slot-meta",
           `${s.year} · round ${Math.min(s.round + 1, s.rounds)} of ${s.rounds}`
-          + ` · ${s.money.toLocaleString()} cr`),
+          + ` · ${I18n.n(s.money)} cr`),
         el("span", "cr-slot-meta",
           `${s.seasons}${s.seasons === 1 ? " season" : " seasons"}`
           + ` · ${s.wins}${s.wins === 1 ? " win" : " wins"}`
@@ -402,7 +402,7 @@ function create(G) {
   function buildSlotPanes() {
     const left = $("cr-left"), right = $("cr-right");
     left.textContent = ""; right.textContent = "";
-    $("cr-title").textContent = "CAREER MODES";
+    $("cr-title").textContent = I18n.t("career.modes.title", null, "CAREER MODES");
     const used = Career.slots().filter((x) => x.used).length;
     $("cr-sub").textContent = used
       ? used + (used === 1 ? " career saved" : " careers saved")
@@ -451,7 +451,7 @@ function create(G) {
     return frag;
   }
 
-  const cr = (n) => `${n.toLocaleString()} cr`;
+  const cr = (n) => `${I18n.n(n)} cr`;
 
   function sharedSections(my) {
     const out = [];
@@ -724,7 +724,7 @@ function create(G) {
     const body = $("cg-body");
     body.textContent = "";
     const my = flavour === "myteam";
-    $("cg-title").textContent = my ? "HOW MY TEAM WORKS" : "HOW CAREER WORKS";
+    $("cg-title").textContent = my ? I18n.t("career.guide.myTeam", null, "HOW MY TEAM WORKS") : I18n.t("career.guide.career", null, "HOW CAREER WORKS");
     for (const part of (my ? myTeamGuide() : driverGuide())) body.appendChild(part);
     // The two shared rules, said once at the foot of both.
     body.appendChild(guideSection("GOOD TO KNOW", [
@@ -941,10 +941,10 @@ function create(G) {
     right.appendChild(learn);
 
     const myTeam = draft.flavour === "myteam";
-    $("cr-title").textContent = myTeam ? "NEW MY TEAM" : "NEW CAREER";
+    $("cr-title").textContent = myTeam ? I18n.t("career.new.myTeam", null, "NEW MY TEAM") : I18n.t("career.new.career", null, "NEW CAREER");
     $("cr-sub").textContent = "";
     $("cr-meters").textContent = "";
-    $("cr-go").textContent = myTeam ? "START MY TEAM" : "START CAREER";
+    $("cr-go").textContent = myTeam ? I18n.t("career.start.myTeam", null, "START MY TEAM") : I18n.t("career.start.career", null, "START CAREER");
     $("cr-go").hidden = false;
     $("cr-go").disabled = false;
     $("cr-garage").hidden = true;
@@ -979,7 +979,7 @@ function create(G) {
     const meters = $("cr-meters");
     meters.textContent = "";
     meters.append(
-      meter("BALANCE", Career.freeMoney() ? "UNLIMITED" : `${st.money.toLocaleString()} cr`),
+      meter("BALANCE", Career.freeMoney() ? "UNLIMITED" : `${I18n.n(st.money)} cr`),
       meter("REPUTATION", `${Math.round(st.rep)} / 100`),
       meter("ROUND", `${Math.min(st.round + 1, st.rounds)} / ${st.rounds}`));
 
@@ -1064,7 +1064,7 @@ function create(G) {
       card.appendChild(el("div", "cr-obj-line", sp.label));
       card.appendChild(row("Progress", `${sp.done} / ${sp.need}${sp.met ? "  ·  MET" : ""}`));
       card.appendChild(row("Rounds left", sp.roundsLeft === 0 ? "this one" : String(sp.roundsLeft)));
-      card.appendChild(row("Pays", `${sp.pay.toLocaleString()} cr`));
+      card.appendChild(row("Pays", `${I18n.n(sp.pay)} cr`));
       left.appendChild(card);
     }
 
@@ -1089,7 +1089,7 @@ function create(G) {
     const fittedCost = Parts.getCost(c.fitted, team);
     carCard.append(
       row("Parts owned", `${c.owned.length} of ${totalOptions()}`),
-      row("Fitted", `${fittedCost.toLocaleString()} / ${Career.budget().toLocaleString()} cr`),
+      row("Fitted", `${I18n.n(fittedCost)} / ${I18n.n(Career.budget())} cr`),
       row("Development", devLabel(c.tdev[c.team] || 0)),
       // The facility is the one upgrade that never runs out, so it belongs with
       // the car rather than in the economy: it is what late money buys.
@@ -1144,16 +1144,16 @@ function create(G) {
     // shows on touch — so the shortfall rides on the affordance line
     // (.cr-record-cta wraps; it carries no nowrap, so it cannot truncate).
     const shortBy = (cost) => (Career.freeMoney() ? 0 : Math.max(0, cost - st.money));
-    const shortNote = (n) => (n > 0 ? "  ·  SHORT " + n.toLocaleString() + " cr" : "");
+    const shortNote = (n) => (n > 0 ? "  ·  SHORT " + I18n.n(n) + " cr" : "");
     if (st.facilityCost != null) {
       const fac = el("button", "cr-card cr-record");
       fac.id = "cr-facility";
       planningFactory = fac;
       const fShort = shortBy(st.facilityCost);
       fac.disabled = fShort > 0;
-      if (fShort > 0) fac.title = "Needs " + fShort.toLocaleString() + " cr more than you have";
+      if (fShort > 0) fac.title = "Needs " + I18n.n(fShort) + " cr more than you have";
       fac.append(
-        el("span", "cr-record-line", "Upgrade the factory · " + st.facilityCost.toLocaleString() + " cr"),
+        el("span", "cr-record-line", "Upgrade the factory · " + I18n.n(st.facilityCost) + " cr"),
         el("span", "cr-record-cta", "LEVEL " + st.facility + " → " + (st.facility + 1)
           + "  ·  −" + Math.round((st.facilityDiscount + 0.05) * 100) + "% RESEARCH" + shortNote(fShort)));
       fac.onclick = () => {
@@ -1169,11 +1169,11 @@ function create(G) {
       cap.id = "cr-budget";
       const bShort = shortBy(st.budgetCost);
       cap.disabled = bShort > 0;
-      if (bShort > 0) cap.title = "Needs " + bShort.toLocaleString() + " cr more than you have";
+      if (bShort > 0) cap.title = "Needs " + I18n.n(bShort) + " cr more than you have";
       cap.append(
-        el("span", "cr-record-line", "Raise the fitted cap · " + st.budgetCost.toLocaleString() + " cr"),
+        el("span", "cr-record-line", "Raise the fitted cap · " + I18n.n(st.budgetCost) + " cr"),
         el("span", "cr-record-cta", "LEVEL " + st.budgetLvl + " → " + (st.budgetLvl + 1)
-          + "  ·  CAP " + st.budget.toLocaleString() + " cr" + shortNote(bShort)));
+          + "  ·  CAP " + I18n.n(st.budget) + " cr" + shortNote(bShort)));
       cap.onclick = () => {
         if (!Career.upgradeBudget()) return;
         if (G.soundOn) GameAudio.uiSelect();
@@ -1194,7 +1194,7 @@ function create(G) {
       "Off by default. Money stops being the constraint; the cap on what you may "
       + "fit at once does not move, so the car is still a choice."));
     const cheatRow = el("div", "cr-cheats");
-    const grantBtn = el("button", "sel-chip", "+" + Career.GRANT.toLocaleString() + " CR");
+    const grantBtn = el("button", "sel-chip", "+" + I18n.n(Career.GRANT) + " CR");
     grantBtn.id = "cr-grant";
     grantBtn.onclick = () => {
       Career.grant(Career.GRANT);
@@ -1230,16 +1230,16 @@ function create(G) {
       right.appendChild(el("div", "cr-note", h.kind === "left"
         ? h.name + " had a season good enough that somebody else came for them. "
           + "The seat is empty — the market is below."
-        : h.name + " will re-sign for " + h.ask.toLocaleString() + " cr a round"
-          + (h.ask > h.salary ? ", up from " + h.salary.toLocaleString()
-            : h.ask < h.salary ? ", down from " + h.salary.toLocaleString() : "")
+        : h.name + " will re-sign for " + I18n.n(h.ask) + " cr a round"
+          + (h.ask > h.salary ? ", up from " + I18n.n(h.salary)
+            : h.ask < h.salary ? ", down from " + I18n.n(h.salary) : "")
           + ". Take it, or let them go and sign somebody else."));
 
       if (h.kind === "renew") {
         const keep = el("button", "cr-card cr-record");
         keep.id = "cr-rehire";
         keep.append(
-          el("span", "cr-record-line", "Keep " + h.name + " · " + h.ask.toLocaleString() + " cr / round"),
+          el("span", "cr-record-line", "Keep " + h.name + " · " + I18n.n(h.ask) + " cr / round"),
           el("span", "cr-record-cta", "RE-SIGN"));
         if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.cashNote(keep, 0, h.ask);
         keep.onclick = () => {
@@ -1256,7 +1256,7 @@ function create(G) {
         if (a2.code === h.code) continue;   // renew through the offer; a poached driver has left
         const b2 = el("button", "cr-seat");
         b2.append(el("span", "cr-seat-role", a2.name),
-          el("span", "cr-seat-who", a2.ask.toLocaleString() + " cr / round"));
+          el("span", "cr-seat-who", I18n.n(a2.ask) + " cr / round"));
         if (typeof CareerPlanningUI !== "undefined") CareerPlanningUI.cashNote(b2, 0, a2.ask);
         b2.onclick = () => {
           Career.hireDriver(a2.code, 1);
@@ -1339,9 +1339,9 @@ function create(G) {
       right.appendChild(ladder);
     }
 
-    $("cr-go").textContent = st.hire ? "SIGN A DRIVER"
-      : st.offers ? "SIGN A CONTRACT"
-      : Career.seasonDone() ? "END OF SEASON" : "GO RACING";
+    $("cr-go").textContent = st.hire ? I18n.t("career.go.hire", null, "SIGN A DRIVER")
+      : st.offers ? I18n.t("career.go.offers", null, "SIGN A CONTRACT")
+      : Career.seasonDone() ? I18n.t("career.go.endSeason", null, "END OF SEASON") : I18n.t("career.go.race", null, "GO RACING");
     $("cr-go").hidden = false;
     // An empty second seat blocks the weekend outright — there is nothing for GO
     // RACING to do until the car has a driver in it.
@@ -1366,7 +1366,7 @@ function create(G) {
       row("Goal", Career.goalLabel(preview.deal.goal)), row("Fitted budget cap", preview.currentCap + " → " + preview.cap + " cr"),
       row("Retained credits / facility", preview.retained.money + " cr / level " + preview.retained.facility));
     card.appendChild(el("p", "cg-p", "Your personal driver development is retained. " + (preview.moving ? "The destination works build replaces your researched and fitted parts." : "Your researched and fitted parts are retained.")));
-    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id); if (opt) return opt.label; } return id; };
+    const label = (id) => { for (const cat of Parts.CATALOG) { const opt = cat.options.find((o) => o.id === id); if (opt) return Parts.optLabel(cat.id, opt); } return id; };
     for (const [cat, id] of Object.entries(preview.resolvedFitted)) {
       card.appendChild(row(cat, label(preview.currentFitted[cat]) + " → " + label(id)));
       if (preview.fitted[cat] !== id) card.appendChild(el("p", "cg-p", "Works research retained: " + label(preview.fitted[cat]) + "; current regulations substitute " + label(id) + " on the car."));
@@ -1375,7 +1375,7 @@ function create(G) {
     const sign = el("button", "sel-edit", "SIGN CONTRACT"); sign.type = "button";
     const cancel = el("button", "sel-edit", "CANCEL"); cancel.type = "button";
     const status = el("p", "cg-p"); status.setAttribute("role", "status");
-    sign.onclick = () => { if (!Career.acceptOffer(index, preview)) { status.textContent = "The offer changed. Cancel and compare it again."; sign.disabled = true; return; } closeOffers(); G.openCareer(); };
+    sign.onclick = () => { if (!Career.acceptOffer(index, preview)) { status.textContent = I18n.t("career.offer.changed", null, "The offer changed. Cancel and compare it again."); sign.disabled = true; return; } closeOffers(); G.openCareer(); };
     cancel.onclick = () => buildOffers();
     body.append(card, sign, cancel, status); cancel.focus();
   }
@@ -1385,7 +1385,7 @@ function create(G) {
     const body = $("co-body");
     body.textContent = "";
     const past = c.history[c.history.length - 1];
-    $("co-title").textContent = past ? "SEASON " + past.year : "END OF SEASON";
+    $("co-title").textContent = past ? I18n.t("career.season.year", {year: past.year}, "SEASON {year}") : I18n.t("career.go.endSeason", null, "END OF SEASON");
 
     // THE DECISION FIRST, the season recap under it. This screen exists to pick
     // a seat. Recap first, on a landscape phone (852x393 with the notch insets;
@@ -1458,6 +1458,9 @@ function create(G) {
         row("You finished", "P" + past.pos + " · " + past.pts + " pts"),
         row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
         row("Wins / podiums", past.wins + " / " + past.podiums));
+      const pastTeam = teamById(past.team);
+      if (typeof ShareCardChips !== "undefined") ShareCardChips.append(card, "co-year-card", () => ShareCardData.fromCareerYear(past,
+        { teamName: pastTeam && pastTeam.name, teamColor: pastTeam && G.cssCol(pastTeam.color) }), "career-" + past.year);
       body.appendChild(card);
     }
 
@@ -1628,7 +1631,7 @@ function create(G) {
     // it returns to the HUB; from the title it is MAIN MENU. Labelling MAIN MENU
     // then opening CAREER 2026 was the lying label Esc also followed (data-esc-close).
     const back = $("cr-back");
-    if (back) back.textContent = (picking && slotsOrigin === "hub" && Career.active()) ? "BACK" : "MAIN MENU";
+    if (back) back.textContent = (picking && slotsOrigin === "hub" && Career.active()) ? I18n.t("career.back", null, "BACK") : I18n.t("career.mainMenu", null, "MAIN MENU");
     ScrollFade.refresh();
   }
 
