@@ -55,6 +55,45 @@ test("a rotated instance's every vertex lies inside its cell box", () => {
   assert.equal(checked, n * 8);
 });
 
+test("a tall mesh sheds the sphere's empty margin and a cube does not grow", () => {
+  // Pole: 0.4 m across, 10 m tall. The origin sphere is ~10 m; the real box
+  // plus the 2 m motion pad is a few metres. One instance stands at x = 8.
+  const pole = [];
+  for (const y of [0, 10]) for (const x of [-0.2, 0.2]) for (const z of [-0.2, 0.2]) pole.push(x, y, z);
+  const mats = new Float32Array(16);
+  mats[0] = mats[5] = mats[10] = mats[15] = 1;
+  mats[12] = 8;
+  const [cell] = Frustum.bucketInstances(mats, 1, new Float32Array(pole), 72);
+  let reach = 0;
+  for (let i = 0; i < pole.length; i += 3) reach = Math.max(reach, Math.hypot(pole[i], pole[i + 1], pole[i + 2]));
+  assert.ok(8 - reach < 0, "the sphere around this pole crosses the origin");
+  assert.ok(cell.mn[0] > 4, `min x ${cell.mn[0]} still carries the empty sphere`);
+  assert.ok(cell.mx[0] < 12, `max x ${cell.mx[0]} still carries the empty sphere`);
+  // A slab that keeps a box only when some of it is on the origin's side of x = 0.
+  // The sphere crosses; the tight box does not, so the instance is not drawn.
+  const slab = [[1, 0, 0, 1e5], [-1, 0, 0, 0], [0, 1, 0, 1e5], [0, -1, 0, 1e5], [0, 0, 1, 1e5], [0, 0, -1, 1e5]]
+    .map((p) => Float32Array.from(p));
+  assert.equal(Frustum.aabbInFrustum(slab, cell.mn, cell.mx), false);
+  assert.equal(Frustum.aabbInFrustum(slab, [8 - reach, -reach, -reach], [8 + reach, reach, reach]), true);
+  for (let v = 0; v < pole.length; v += 3) {
+    const [x, y, z] = [pole[v], pole[v + 1], pole[v + 2]];
+    const w = [x + 8, y, z];
+    for (let a = 0; a < 3; a++) assert.ok(w[a] >= cell.mn[a] - 1e-4 && w[a] <= cell.mx[a] + 1e-4);
+    // 1.2 m is inside the wind-3 sway the pad exists for, on the thin axis.
+    assert.ok(w[0] + 1.2 <= cell.mx[0] + 1e-4 && w[0] - 1.2 >= cell.mn[0] - 1e-4);
+  }
+
+  // A cube's sphere already matches its transformed box within the pad, so the
+  // clamp must not grow the cell. Same matrix the containment test uses.
+  const cubeM = new Float32Array(matrix(0.4, 0.25, 1.7, [3, 1, -4]));
+  const [cube] = Frustum.bucketInstances(cubeM, 1, new Float32Array(CUBE), 72);
+  const cr = Math.hypot(0.5, 0.5, 0.5) * 1.7;
+  const o = [cubeM[12], cubeM[13], cubeM[14]];
+  assert.ok(Math.abs(cube.mn[0] - (o[0] - cr)) < 1e-5 && Math.abs(cube.mx[0] - (o[0] + cr)) < 1e-5);
+  assert.ok(Math.abs(cube.mn[1] - (o[1] - cr)) < 1e-5 && Math.abs(cube.mx[1] - (o[1] + cr)) < 1e-5);
+  assert.ok(Math.abs(cube.mn[2] - (o[2] - cr)) < 1e-5 && Math.abs(cube.mx[2] - (o[2] + cr)) < 1e-5);
+});
+
 test("an explicit radius still wins over the derived reach", () => {
   const mats = new Float32Array(matrix(0, 0, 1, [0, 0, 0]));
   const [c] = Frustum.bucketInstances(mats, 1, new Float32Array(CUBE), 72, 10);
@@ -148,5 +187,5 @@ test("every backend's chunk loop culls through radialCulled, and game.js feeds i
   assert.match(read("js/render/glx/glx.js"), /get cullFog\(\) \{ return frameCullFog; \}/);
   assert.match(read("js/render/webgpu/wgx.js"), /frameCullFog = f\.cullFog \|\| null;/);
   assert.match(read("js/render/webgpu/wgx.js"), /get frameCullFog\(\) \{ return frameCullFog; \}/);
-  assert.match(read("js/render/three/tlx.js"), /chunkedSys\.cull\(rec\.chunked, _frameVP, frameEye, frameCullDist, frameCullFog\)/);
+  assert.match(read("js/render/three/tlx.js"), /chunkedSys\.cull\(rec\.chunked, vp, eye, cd, fog\)/);
 });
