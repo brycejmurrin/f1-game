@@ -6,7 +6,6 @@
  * repo-root version.json. Sets APEX_APP_VERSION for extraMetadata.
  *
  *   node scripts/set-version.mjs
- *   node scripts/set-version.mjs --json
  */
 import fs from "node:fs";
 import path from "node:path";
