@@ -51,10 +51,5 @@ function apply() {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  const out = apply();
-  if (process.argv.includes("--json") || !process.stdout.isTTY) {
-    console.log(JSON.stringify(out));
-  } else {
-    console.log(JSON.stringify(out));
-  }
+  console.log(JSON.stringify(apply()));
 }
