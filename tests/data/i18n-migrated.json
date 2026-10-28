@@ -15,7 +15,11 @@
     "js/ui/hud-relative.js",
     "js/ui/hud-strategy.js",
     "js/ui/hud-tyres.js",
-    "js/ui/quali-sheet.js"
+    "js/ui/quali-sheet.js",
+    "js/car/parts.js",
+    "js/career/career-ui.js",
+    "js/data/schedule.js",
+    "js/data/hub.js"
   ],
   "html": [
     "#dlg-settings",
@@ -31,5 +35,12 @@
     "#pm-buildworker-label",
     "#pm-feel-label"
   ],
-  "allow": {}
+  "allow": {
+    "js/career/career-ui.js::setAttribute(aria-label)::`${modeName} slot ${s.i + 1}, ${s.used ? \"saved\" : \"empty\"}${li…": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
+    "js/career/career-ui.js::setAttribute(aria-label)::`Export all career saves (backup from ${modeName} slot ${s.i + …": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
+    "js/career/career-ui.js::setAttribute(aria-label)::otherArmed ? `Confirm: import the other career mode too` : (arm…": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
+    "js/career/career-ui.js::setAttribute(aria-label)::armed ? `Confirm: delete ${what}. Press again to delete` : `Del…": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
+    "js/career/career-ui.js::textContent::used ? used + (used === 1 ? \" career saved\" : \" careers saved\")…": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
+    "js/career/career-ui.js::textContent::`CAREER ${c.year}`": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)"
+  }
 }

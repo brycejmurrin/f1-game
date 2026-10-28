@@ -21,6 +21,7 @@
  *      (npm run test:tooling-fast / test:state-unit)
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -65,7 +66,7 @@ function loadHarness(options = {}) {
     id: "haas", name: "Haas", tier: 4, stats: {},
     drivers: [{ name: "A", code: "AAA", num: 1 }, { name: "B", code: "BBB", num: 2 }],
   };
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Math, JSON, Object, Array, String, Number, Date, Set, Map, Promise, Blob,
     isNaN, isFinite, parseInt, console, setTimeout, clearTimeout, queueMicrotask,
     URL: { createObjectURL: () => "blob:test", revokeObjectURL() {} },
@@ -977,7 +978,7 @@ function bootBackupUi(options = {}) {
     refreshCareerButton() {}, qualiClear() {}, announce: (text) => notices.push(text),
     armConfirm: (btn, txt, act) => { act(); return true; },
   };
-  const sb = {
+  const sb = { I18n: i18nStub(),
     Math, console, Object, Array, Number, String, JSON, Map, Set, Date,
     parseFloat, parseInt, isFinite,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },

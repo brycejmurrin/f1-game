@@ -2019,7 +2019,10 @@ const Input = (function () {
   }
 
   function setSteerMode(m) {
-    steerMode = (m === "buttons" || m === "touch") ? m : "tilt";
+    // Unknown / foreign values → BUTTONS (not tilt): matches game.js STEER_MODES
+    // and WCAG 2.2 SC 2.5.4. M40: Input used to default unknown to "tilt" with no
+    // motion permission, so a bad store/API call left a phone unable to steer.
+    steerMode = (m === "tilt" || m === "touch") ? m : "buttons";
     try { Log.info("input", `steerMode ${steerMode}`); } catch (_) { /* Log absent in isolated VM */ }
     if (steerMode !== "buttons") {
       btnSteerLeft = btnSteerRight = false;   // drop held buttons
@@ -2162,7 +2165,13 @@ const Input = (function () {
   function onScreenRotate() {
     oeInit = false; tiltSteerVal = 0;
     // A drag's anchor is in the old screen space; the next move would read W - 2x as a steer.
-    touches.clear(); touchSteer = 0; touchActive = false; dragFilterClear(); hideDragAnchor();
+    // Zero the ramp state too (setSteerMode / reset already do): leaving touchSteerVal
+    // at full lock made steer() unwind via KEY_RAMP_OUT after the fingers were cleared.
+    touches.clear(); touchSteer = 0; touchActive = false;
+    touchSteerVal = 0; touchSteerT = 0;
+    dragFilterClear(); hideDragAnchor();
+    // viewLong() caches the long edge "on resize / rotation" — resize clears it; so must we.
+    _viewLong = 0;
   }
 
   // Specs must wait for ready() — NOT for Input.steer / Input.simTilt existing.
