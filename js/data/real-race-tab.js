@@ -3,8 +3,8 @@ const DataRealRace = (function () {
   "use strict";
 
   const {
-    build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor,
-    incidentFor, incidentsFor, gridFor, lapBoard, timingConfidence, raceBook,
+    build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor,
+    gridFor, lapBoard, raceBook,
     fmtLap, fmtGap, pitDuel, traceDetails, SCRIPT_V
   } = DataRealRaceScript;
   const {
@@ -487,7 +487,7 @@ const DataRealRace = (function () {
              setWatchCamera: (camera) => { watchCamera = camera; return watchCamera; } };
   }
 
-  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, timingConfidence, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
+  return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
            pitDuel, traceDetails, fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, TRACE_MAX, DISTANCES, CACHE_KEY, CACHE_MAX };
 })();
 Object.freeze(DataRealRace);
