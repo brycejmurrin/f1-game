@@ -177,6 +177,32 @@ test("centre crops preserve composition across aspect ratios and filenames stay 
   assert.equal(PS.crop(1600, 900, "scene").width, 1600);
   assert.equal(PS.filename("../../My <Monza> Photo!"), "apex26-my-monza-photo.png");
 });
+test("PhotoStudio freeze omits unused ASPECTS and LIMIT exports", () => {
+  const { PS } = boot();
+  assert.equal("ASPECTS" in PS, false);
+  assert.equal("LIMIT" in PS, false);
+  assert.equal(typeof PS.crop, "function");
+  assert.equal(typeof PS.filename, "function");
+  assert.equal(typeof PS.create, "function");
+});
+test("import keeps small personal photos at native size (no resizeWidth upscale)", async () => {
+  const calls = [];
+  const b = boot({ bitmap: async (_file, opts) => {
+    calls.push(opts);
+    return { width: 400, height: 300, close: () => {} };
+  } });
+  b.api.open({ source: "garage" });
+  const file = b.dom.byId("ps-import");
+  file.files = [{ type: "image/jpeg", size: 1000 }];
+  file.dispatchEvent({ type: "change" });
+  await turn();
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0], undefined, "createImageBitmap must not force resizeWidth on import");
+  assert.equal(b.api.state().captured, true);
+  // Default aspect is wide: compose centre-crops 400×300 → 400×225 (no upscale).
+  assert.equal(b.api.state().width, 400);
+  assert.equal(b.api.state().height, 225);
+});
 test("capture draws before reading a live backbuffer, omits DOM overlays and downloads actual image", async () => {
   const b = boot(); assert.equal(b.api.open({ source: "race" }), true);
   assert.equal(await b.api.capture(), true);
