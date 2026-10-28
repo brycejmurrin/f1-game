@@ -455,7 +455,9 @@ const Quali = (function () {
       return classification ? classification.map(({ car, ...row }) => row) : null;
     }
 
-    return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor, carLap, referencePole };
+    // forgetOrder / lapTime / capFor stay create()-local — begin() and the
+    // pace helpers call them; no quali.forgetOrder / .lapTime / .capFor reader.
+    return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole };
   }
 
   // STEP / QUALI_TRIM / EXEC_SPREAD stay module-local — only create() and the
