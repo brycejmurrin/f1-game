@@ -1308,13 +1308,17 @@ const LAZY_NET = [
   "js/net/sdp.js",
   "js/net/qr.js",
   "js/net/scan.js",
+  "js/net/ice.js",        // NetIce: STUN/TURN list; create() per transport evaluation
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/lobby-codes.js",  // LobbyCodes: paste/copy/share/scan/QR for invite+answer (before lobby)
   "js/net/lobby-roster.js", // LobbyRoster: the room roster's stateless DOM leaves (before lobby)
   "js/net/lobby-settings.js", // LobbySettings: SETTINGS normalise + custom-circuit wire (#1587/#1655)
+  "js/net/interp.js",       // NetInterp: rival smoothing; NetSnapshot.createInterp forwards
   "js/net/snapshot.js",
   "js/net/session.js",
+  "js/net/quali-wire.js",   // QualiWire: QUALI/QLIVE validation; NetPlay calls create(EV) at eval
+  "js/net/strategy-wire.js", // StrategyWire: tyre/pit codec; NetPlay calls create() at eval
   "js/net/spectate.js",
   "js/net/netplay.js",
   "js/net/lobby.js",
@@ -1359,6 +1363,7 @@ const CONTROLLER = [
   "js/net/nostr.js",
   "js/net/rendezvous.js",
   "js/net/sdp.js",
+  "js/net/ice.js",          // before transport: rtc() calls NetIce.create() at eval
   "js/net/transport.js",
   "js/net/handshake.js",
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
@@ -1370,7 +1375,11 @@ const CONTROLLER = [
 // sdp, session needs snapshot, the lobby needs qr/scan/rendezvous/lobby-codes),
 // not one module gathering the rest.
 const LAZY_NET_EDGES = [
+  ["js/net/ice.js", "js/net/transport.js"], // transport calls NetIce.create() while evaluating
+  ["js/net/interp.js", "js/net/snapshot.js"], // createInterp forwards at call time; keep the codec's dependency ordered
   ["js/net/snapshot.js", "js/net/session.js"],
+  ["js/net/quali-wire.js", "js/net/netplay.js"], // NetPlay calls QualiWire.create(EV) while evaluating
+  ["js/net/strategy-wire.js", "js/net/netplay.js"], // NetPlay calls StrategyWire.create() while evaluating
   ["js/net/spectate.js", "js/net/netplay.js"],
   ["js/net/sdp.js", "js/net/handshake.js"],
   ["js/net/qr.js", "js/net/lobby-codes.js"],

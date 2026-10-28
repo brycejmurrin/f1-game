@@ -527,13 +527,17 @@
     "js/net/sdp.js",
     "js/net/qr.js",
     "js/net/scan.js",
+    "js/net/ice.js",
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
     "js/net/lobby-roster.js",
     "js/net/lobby-settings.js",
+    "js/net/interp.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/quali-wire.js",
+    "js/net/strategy-wire.js",
     "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
@@ -541,8 +545,24 @@
   ],
     LAZY_NET_EDGES: [
     [
+      "js/net/ice.js",
+      "js/net/transport.js"
+    ],
+    [
+      "js/net/interp.js",
+      "js/net/snapshot.js"
+    ],
+    [
       "js/net/snapshot.js",
       "js/net/session.js"
+    ],
+    [
+      "js/net/quali-wire.js",
+      "js/net/netplay.js"
+    ],
+    [
+      "js/net/strategy-wire.js",
+      "js/net/netplay.js"
     ],
     [
       "js/net/spectate.js",

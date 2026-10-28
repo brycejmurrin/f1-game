@@ -9432,6 +9432,72 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/net/ice.js": {
+      "create": [
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/net-transport.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "hasRelay": [
+        "tests/unit/net-transport.test.mjs"
+      ],
+      "iceServers": [
+        "tests/unit/net-transport.test.mjs"
+      ],
+      "prefetchIce": [
+        "tests/unit/net-transport.test.mjs"
+      ],
+      "*": [
+        "tests/unit/phone-input-improvements.test.mjs"
+      ]
+    },
+    "js/net/interp.js": {
+      "advance": [
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-snapshot.test.mjs"
+      ],
+      "create": [
+        "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
+      ],
+      "createInterp": [
+        "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-snapshot.test.mjs",
+        "tests/unit/net-start-arming.test.mjs"
+      ],
+      "push": [
+        "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-snapshot.test.mjs",
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
+      ],
+      "sample": [
+        "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-snapshot.test.mjs",
+        "tests/unit/net-start-arming.test.mjs"
+      ]
+    },
     "js/net/lobby-codes.js": {
       "codeFrom": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
@@ -9664,14 +9730,7 @@
       ]
     },
     "js/net/netplay.js": {
-      "applyStrategy": [
-        "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/net-authority.test.mjs"
-      ],
       "awaitingResult": [
-        "tests/unit/net-authority.test.mjs"
-      ],
-      "bindQuali": [
         "tests/unit/net-authority.test.mjs"
       ],
       "clampWire": [
@@ -9728,9 +9787,6 @@
         "tests/unit/net-authority.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
       ],
-      "qualiReporters": [
-        "tests/unit/net-authority.test.mjs"
-      ],
       "reportCaution": [
         "tests/unit/net-authority.test.mjs"
       ],
@@ -9761,10 +9817,6 @@
         "tests/unit/net-session.test.mjs",
         "tests/unit/net-start-arming.test.mjs"
       ],
-      "strategyState": [
-        "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/net-authority.test.mjs"
-      ],
       "tick": [
         "tests/unit/net-authority.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs",
@@ -9773,9 +9825,6 @@
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
-      ],
-      "validQuali": [
-        "tests/unit/net-authority.test.mjs"
       ]
     },
     "js/net/nostr.js": {
@@ -9805,6 +9854,29 @@
       "*": [
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/script-loader-retry-eval.test.mjs"
+      ]
+    },
+    "js/net/quali-wire.js": {
+      "bindQuali": [
+        "tests/unit/net-authority.test.mjs"
+      ],
+      "create": [
+        "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
+      ],
+      "qualiReporters": [
+        "tests/unit/net-authority.test.mjs"
+      ],
+      "validQuali": [
+        "tests/unit/net-authority.test.mjs"
       ]
     },
     "js/net/rendezvous.js": {
@@ -9940,12 +10012,6 @@
       ]
     },
     "js/net/snapshot.js": {
-      "advance": [
-        "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-roster.test.mjs",
-        "tests/unit/net-session.test.mjs",
-        "tests/unit/net-snapshot.test.mjs"
-      ],
       "createInterp": [
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-snapshot.test.mjs",
@@ -9970,31 +10036,15 @@
         "tests/unit/net-snapshot.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
       ],
-      "push": [
-        "tests/unit/fuzz-untrusted-inputs.test.mjs",
-        "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-grid-separation.test.mjs",
-        "tests/unit/net-lobby-friend-quali.test.mjs",
-        "tests/unit/net-roster.test.mjs",
-        "tests/unit/net-session.test.mjs",
-        "tests/unit/net-snapshot.test.mjs",
-        "tests/unit/net-start-arming.test.mjs",
-        "tests/unit/netplay-resilience.test.mjs"
-      ],
-      "sample": [
-        "tests/unit/mechanics-coherence.test.mjs",
-        "tests/unit/net-authority.test.mjs",
-        "tests/unit/net-roster.test.mjs",
-        "tests/unit/net-session.test.mjs",
-        "tests/unit/net-snapshot.test.mjs",
-        "tests/unit/net-start-arming.test.mjs"
-      ],
       "toView": [
         "tests/unit/net-session.test.mjs"
       ],
       "wireId": [
         "tests/unit/net-authority.test.mjs"
+      ],
+      "*": [
+        "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs"
       ]
     },
     "js/net/spectate.js": {
@@ -10002,15 +10052,31 @@
         "tests/unit/netplay-resilience.test.mjs"
       ]
     },
+    "js/net/strategy-wire.js": {
+      "applyStrategy": [
+        "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-authority.test.mjs"
+      ],
+      "create": [
+        "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-authority.test.mjs",
+        "tests/unit/net-grid-separation.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs",
+        "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/net-roster.test.mjs",
+        "tests/unit/net-seed-sync-vm.test.mjs",
+        "tests/unit/net-session.test.mjs",
+        "tests/unit/net-start-arming.test.mjs",
+        "tests/unit/netplay-resilience.test.mjs"
+      ],
+      "strategyState": [
+        "tests/unit/mechanics-coherence.test.mjs",
+        "tests/unit/net-authority.test.mjs"
+      ]
+    },
     "js/net/transport.js": {
       "done": [
         "tests/unit/net-lobby-friend-quali.test.mjs",
-        "tests/unit/net-transport.test.mjs"
-      ],
-      "hasRelay": [
-        "tests/unit/net-transport.test.mjs"
-      ],
-      "iceServers": [
         "tests/unit/net-transport.test.mjs"
       ],
       "loopback": [
@@ -10022,9 +10088,6 @@
         "tests/unit/netplay-resilience.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
-      ],
-      "prefetchIce": [
-        "tests/unit/net-transport.test.mjs"
       ],
       "seededRnd": [
         "tests/unit/net-session.test.mjs",

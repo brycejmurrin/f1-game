@@ -3540,6 +3540,16 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/net/ice.js",
+      "global": "NetIce",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/interp.js",
+      "global": "NetInterp",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/net/lobby-codes.js",
       "global": "LobbyCodes",
       "roster": "LAZY_NET"
@@ -3575,6 +3585,11 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/net/quali-wire.js",
+      "global": "QualiWire",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/net/rendezvous.js",
       "global": "NetRendezvous",
       "roster": "LAZY_NET"
@@ -3602,6 +3617,11 @@
     {
       "path": "js/net/spectate.js",
       "global": "NetSpectate",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/strategy-wire.js",
+      "global": "StrategyWire",
       "roster": "LAZY_NET"
     },
     {

@@ -703,13 +703,17 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `sdp.js` | `NetSdp` | LAZY_NET | NetSdp — the invite code's payload, as bytes instead of prose. |
 | `qr.js` | `NetQr` | LAZY_NET | NetQr — an invite you point a camera at. |
 | `scan.js` | `NetScan` | LAZY_NET | NetScan — reading a QR code with the device camera, in the page. |
+| `ice.js` | `NetIce` | LAZY_NET | NetIce — the STUN/TURN list NetTransport.rtc() gathers with. |
 | `transport.js` | `NetTransport` | LAZY_NET | NetTransport — the wire under multiplayer, and the seam that keeps the netcode testable. |
 | `handshake.js` | `NetHandshake` | LAZY_NET | NetHandshake — getting two browsers connected with NO server of ours. |
 | `lobby-codes.js` | `LobbyCodes` | LAZY_NET | lobby invite/answer paste, copy, share, scan, and QR helpers. |
 | `lobby-roster.js` | `LobbyRoster` | LAZY_NET | LobbyRoster: the stateless leaves of the VS FRIEND room's roster DOM (team lookup, css colour, span/replace/summaryRow helpers, driver/team labels, the seat… |
 | `lobby-settings.js` | `LobbySettings` | LAZY_NET | LobbySettings: VS FRIEND race-settings normalise + custom-circuit wire payload. |
+| `interp.js` | `NetInterp` | LAZY_NET | NetInterp — draw a rival smoothly from late, reordered or missing poses. |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
+| `quali-wire.js` | `QualiWire` | LAZY_NET | QualiWire — one validation site for a peer's qualifying time. |
+| `strategy-wire.js` | `StrategyWire` | LAZY_NET | StrategyWire — the versioned tyre and pit payload on the reliable channel. |
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |
