@@ -23,6 +23,7 @@ import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedClipboard } from "../helpers/seed-clipboard.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -503,7 +504,7 @@ test("TrackCodec.decode and CustomTracks.sanitize never throw or leak NaN (N=200
 function bootRealRace() {
   const ctx = vm.createContext({ console, Log: { debug() {}, info() {}, warn() {}, error() {} },
     localStorage: { getItem() { return null; }, setItem() {}, removeItem() {}, key() { return null; }, length: 0 } });
-  vm.runInContext(read("js/data/real-race-tab.js") + "\nthis.R = DataRealRace;", ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(ctx, "\nthis.R = DataRealRace;");
   return ctx.R;
 }
 function assertSaneLaps(label, script) {
