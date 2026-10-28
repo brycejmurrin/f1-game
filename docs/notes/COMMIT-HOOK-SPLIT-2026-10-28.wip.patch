@@ -1,0 +1,1301 @@
+diff --git a/.claude/hooks/bash-guard.sh b/.claude/hooks/bash-guard.sh
+index 162bbda5a4..95b763063a 100755
+--- a/.claude/hooks/bash-guard.sh
++++ b/.claude/hooks/bash-guard.sh
+@@ -1,19 +1,20 @@
+ #!/bin/bash
+-# PreToolUse guard for Bash. AGENTS.md rules made deterministic (§Verification
+-# 3, 6/7 and 10 below):
++# PreToolUse guard for Bash: FAST, FAIL-CLOSED refusals only. AGENTS.md rules
++# made deterministic (rule 12 and §Verification 6/7 and 10 below):
+ #
+-#  §Verification 3 — `git commit` runs `npm run test:guards` first (measured
+-#    ~110 s for a code commit at loadavg 4–6 on 2026-10-26, 439 tests; the old
+-#    "~5 s" dated from 2026-09-16) and a red result blocks the commit. Prefix the command with
+-#    APEX_SKIP_GUARDS=1 only when the guards themselves are what you are fixing.
+-#    Before the guards, `ratchets.mjs --auto-raise` absorbs ≤ 40 lines of growth
+-#    in a ratcheted file into the commit (the raise is staged and printed).
+-#    Every shape of commit is seen (shellparse.py: `git -c k=v`, `--no-pager`,
+-#    `bash -c`, `env`/VAR= prefixes, an absolute git path), a pathspec counts as
+-#    committed content, and a commit whose tracked files differ between the
+-#    index and the working tree is refused — the guards read the working tree,
+-#    so they must agree with what is committed. APEX_GUARD_PROBE=1 (hook env,
+-#    tests only) stops after the classification.
++#  Rule 12 — the COMMIT GATE IS NOT HERE (2026-10-28, Bryce: "Yes, split it";
++#    docs/plans/2026-10-27-landing-and-agent-ops.md §4). `.githooks/pre-commit`
++#    is the one owner of `test:guards`, the docs-only path and the ratchet
++#    auto-raise for every host; this hook ran the same 50–110 s suite before
++#    `git commit` under a 360 s timeout and now answers in milliseconds
++#    (settings.json timeout 30 s). What stays here is what git cannot enforce on
++#    itself — keeping that hook reachable: `git commit --no-verify` / `-n` and
++#    any core.hooksPath write (`git config`, `-c`, GIT_CONFIG_KEY_n) are refused
++#    in every shell shape (shellparse.py guard), and a commit in this project's
++#    tree is refused when no executable pre-commit hook would run (fix:
++#    `npm run prepare`). Every shape of commit is seen (shellparse.py: `git -c
++#    k=v`, `--no-pager`, `bash -c`, `env`/VAR= prefixes, an absolute git path,
++#    compound syntax; unparseable text falls back to a broad regex).
+ #  §Verification 6/7 — a test-bg run is stopped with `test-bg.mjs --stop`,
+ #    never by PID; `pkill -f` / `killall` against chrome, node or playwright
+ #    matches your own shell and orphans browsers. Kill orphan Chrome by a
+@@ -36,7 +37,7 @@
+ #  Shared safety bans (Fleet A + D, Bryce 2026-10-22; Cursor reaches this file
+ #    through .cursor/hooks/shell-guard.sh): a `ratchets.mjs` run that can RAISE
+ #    a ceiling (--update / --fragment / --absolute without --lower-only or
+-#    --preview; the commit hook's own --auto-raise below is not a tool call and
++#    --preview; .githooks/pre-commit's own --auto-raise is not a tool call and
+ #    stays; APEX_RATCHET_RAISE_OK=1 when Bryce typed the raise), and a push over
+ #    a FOREIGN pusher: the branch gained another author's commits on the remote
+ #    since this checkout last pushed it (foreign_push.py; APEX_FOREIGN_PUSH_OK=1
+@@ -62,13 +63,59 @@
+ #    watching CI, git, the API or the bus, or a `seq` loop that sleeps, is
+ #    refused — subscribe and arm ONE Monitor instead (APEX_POLL_OK=1 for a
+ #    bounded network retry).
+-#  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
+-#    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
+-#    and artifacts/track-survey; never a generated doc) runs only
+-#    docs-integrity — no ratchet raise, no test:guards.
++#
++# FAIL CLOSED ON ITS OWN ERRORS (2026-10-28). Claude Code lets a PreToolUse
++# call through when a hook exits with anything but 0 or 2 unless the handler
++# sets onFailure "block" (https://code.claude.com/docs/en/hooks §Block the action
++# when a hook fails, read 2026-10-28), and Cursor/Codex reach this script through
++# adapters with their own rules. So the script maps its own failures to exit 2:
++# an unreadable or malformed payload, a crashed helper (python3, shellparse.py),
++# any failing command outside a condition (ERR trap) and any other exit status
++# (EXIT trap). Not `pipefail`: `printf … | grep -q` would read a SIGPIPE'd
++# printf as a non-match and silently skip a rule.
+ #
+ # Exit 2 blocks with the reason on stderr; exit 0 lets the normal permission
+-# flow decide.
++# flow decide (with any ask/deny JSON on stdout).
++
++set -uE
++GH_DECISION=""
++COMMIT_CTX=""
++# ONE JSON object on the way out (stdout is parsed as JSON only when it is a
++# single object): the gh ask/deny, and COMMIT_CTX — an advisory about the commit
++# gate. stderr is hidden on exit 0. Per https://code.claude.com/docs/en/hooks,
++# hookSpecificOutput.additionalContext reaches the model and systemMessage is
++# shown to the user; neither changes the allow. Printed only on exit 0, so an
++# exit-2 rule still wins over a gh ask.
++finish() {
++  rc=$?
++  trap - ERR
++  if [ "$rc" != 0 ] && [ "$rc" != 2 ]; then
++    echo "BLOCKED: bash-guard stopped with exit $rc before its rules finished, so this command is refused (fail closed). Report the hook error; do not work around it." >&2
++    exit 2
++  fi
++  [ "$rc" = 0 ] || exit 2
++  [ -n "$GH_DECISION$COMMIT_CTX" ] || exit 0
++  if ! GH_DECISION="$GH_DECISION" COMMIT_CTX="$COMMIT_CTX" python3 -c '
++import json, os
++d = {}
++try:
++    d = json.loads(os.environ.get("GH_DECISION") or "{}")
++except Exception:
++    d = {}
++ctx = os.environ.get("COMMIT_CTX") or ""
++if ctx:
++    h = d.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})
++    h["additionalContext"] = "\n".join(x for x in (h.get("additionalContext"), ctx) if x)
++    d["systemMessage"] = ctx
++print(json.dumps(d))
++'; then
++    echo "BLOCKED: bash-guard could not write its decision JSON, so this command is refused (fail closed)." >&2
++    exit 2
++  fi
++  exit 0
++}
++trap finish EXIT
++trap 'echo "BLOCKED: bash-guard failed at line $LINENO (exit $?), so this command is refused (fail closed). Report the hook error; do not work around it." >&2; exit 2' ERR
+ 
+ INPUT=$(cat)
+ # pass-4 red-team R14: without python3 every rule below is skipped. The other gates fail closed
+@@ -77,34 +124,32 @@ if ! command -v python3 >/dev/null 2>&1; then
+   echo "BLOCKED: bash-guard needs python3 to read the command and run the push/commit/kill rules; none ran. Install python3 (tools/env/cloud-agent-install.sh) before continuing." >&2
+   exit 2
+ fi
++# A MALFORMED PAYLOAD IS A REFUSAL (2026-10-28; before that it was a loud pass,
++# 2026-09-22): not JSON, not an object, a non-object tool_input or a non-string
++# command means the rules below cannot read what will run. A missing or empty
++# command is an empty command.
++CMD_RC=0
+ CMD=$(printf '%s' "$INPUT" | python3 -c '
+-import json,sys
++import json, sys
+ try:
+-    print((json.load(sys.stdin).get("tool_input") or {}).get("command") or "")
++    d = json.load(sys.stdin)
++    ti = d.get("tool_input") if isinstance(d, dict) else None
++    ti = {} if ti is None else ti
++    c = ti.get("command") if isinstance(ti, dict) else None
++    if not isinstance(d, dict) or not isinstance(ti, dict) or not isinstance(c, (str, type(None))):
++        raise ValueError("unexpected payload shape")
+ except Exception:
+-    print("")
+-' 2>/dev/null)
+-# EXTRACTION FAILURE IS NOT AN EMPTY COMMAND (2026-09-22). Every rule in this
+-# file sits below this line, so a missing python3, a renamed hook-input key or
+-# an undecodable payload used to exit 0 SILENTLY: a git commit landed with no
+-# guards run and a subagent could start a browser group, with nothing anywhere
+-# saying the guard had not run. A hook that fails open must at least fail
+-# LOUDLY, and where the raw payload still shows a rule's signature we block on
+-# that rather than shrug.
+-if [ -z "$CMD" ]; then
+-  # A genuinely empty command is normal; a payload that plainly carries one is not.
+-  if printf '%s' "$INPUT" | grep -q '"command"[[:space:]]*:[[:space:]]*"..'; then
+-    echo "bash-guard: COULD NOT READ the command out of the hook payload (python3 missing, or the input shape changed)." >&2
+-    echo "bash-guard: the kill/commit/subagent rules did NOT run. Fix the hook before trusting this session's guards." >&2
+-    # Last-resort scan of the raw payload for the two rules that protect other
+-    # processes; a false positive here is cheaper than an orphaned browser fleet.
+-    if printf '%s' "$INPUT" | grep -qE '(pkill|killall)[[:space:]]+(-[A-Za-z]+[[:space:]]+)*(chrome|chromium|node|playwright)'; then
+-      echo "bash-guard: BLOCKED — the raw payload matches the pkill/killall rule (AGENTS.md §Verification 7)." >&2
+-      exit 2
+-    fi
+-  fi
+-  exit 0
++    sys.exit(3)
++sys.stdout.write(c or "")
++' 2>/dev/null) || CMD_RC=$?
++if [ "$CMD_RC" = 3 ]; then
++  echo "BLOCKED: bash-guard could not read the command out of the hook payload (not JSON, or an unexpected shape), so none of its rules ran and the command is refused (fail closed)." >&2
++  exit 2
++elif [ "$CMD_RC" != 0 ]; then
++  echo "BLOCKED: bash-guard's payload reader (python3) failed with exit $CMD_RC, so none of its rules ran and the command is refused (fail closed)." >&2
++  exit 2
+ fi
++[ -n "$CMD" ] || exit 0
+ # settings.json deliberately invokes this one guard for every Bash call. Skip
+ # SCAN and shellparse work for ordinary commands without relying on Claude
+ # Code's non-portable per-hook `if` field (Cursor imports the file but does not
+@@ -123,8 +168,7 @@ fi
+ # the trusted shell:false output runner too. The parser emits only executable
+ # wrapper leaves, quoted with shlex.join: literal ';' arguments stay prose.
+ # Retain the original command so explicit exception assignments remain visible.
+-AGENT_LEAVES=$(printf '%s' "$CMD" | python3 "$(dirname "$0")/shellparse.py" agent-run "$PWD"); AGENT_LEAVES_RC=$?
+-if [ "$AGENT_LEAVES_RC" != 0 ]; then
++if ! AGENT_LEAVES=$(printf '%s' "$CMD" | python3 "$(dirname "$0")/shellparse.py" agent-run "$PWD"); then
+   echo "bash-guard: BLOCKED — trusted wrapper normalization failed." >&2
+   exit 2
+ fi
+@@ -265,7 +309,7 @@ fi
+ if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}kill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+[0-9]"; then
+   for pid in $(printf '%s' "$SCAN" | grep -Eo '(^|[[:space:]])[0-9]+' | tr -d ' '); do
+     [ -r "/proc/$pid/cmdline" ] || continue
+-    line=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
++    line=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)   # the pid may exit meanwhile
+     case "$line" in
+       # The supervisor test-bg records is `sh -c "…; npm run --silent test:<g> …;
+       # echo '[test-bg] END …'"` — `npm run test:` alone never matched it (the
+@@ -312,18 +356,35 @@ HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
+ for _h in allow-protected allow-context-cap allow-stop; do
+   [ -e "$ROOT/.claude/$_h" ] && echo "bash-guard: hatch active: .claude/$_h — remove it when the assigned edit is done."
+ done
+-GUARD_OUT=$(printf '%s' "$INPUT" | python3 "$HOOKDIR/shellparse.py" guard "$ROOT"); GUARD_RC=$?
+-[ "$GUARD_RC" = 2 ] && exit 2
++GUARD_RC=0
++GUARD_OUT=$(printf '%s' "$INPUT" | python3 "$HOOKDIR/shellparse.py" guard "$ROOT") || GUARD_RC=$?
++[ "$GUARD_RC" != 2 ] || exit 2
++# 2026-10-28: a parser that CRASHED (any exit but 0 or 2) is a refusal, not a
++# fall-through to the regexes below (those are for text it cannot tokenise).
++if [ "$GUARD_RC" != 0 ]; then
++  echo "BLOCKED: bash-guard's parser (shellparse.py guard) crashed with exit $GUARD_RC, so the push/commit/gh rules did not run and this command is refused (fail closed). Report the hook error; do not work around it." >&2
++  exit 2
++fi
+ COMMIT_LINE=$(printf '%s\n' "$GUARD_OUT" | sed -n 1p)
+ PARSE=$(printf '%s\n' "$GUARD_OUT" | sed -n 2p)
+ GH_DECISION=$(printf '%s\n' "$GUARD_OUT" | sed -n '3,$p')
+-if [ "$GUARD_RC" != 0 ] || [ "$PARSE" != "PARSE ok" ]; then
+-  # Unparseable (or the parser crashed): the regex fallbacks, all fail-closed.
++# A `git … commit` at command position, reserved words allowed before the verb
++# (the broad reading the unparseable-text fallbacks use).
++COMMIT_RX="(^|[;&|({\`][[:space:]]*)((if|then|else|elif|while|until|do|time|!)[[:space:]]+)*${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|\$)"
++if [ "$PARSE" != "PARSE ok" ]; then
++  # Unparseable text (an unbalanced quote): the regex fallbacks, all fail-closed.
+   if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"; then
+     echo "BLOCKED: this command contains a git push the guard cannot parse (an unbalanced quote?). Write the push as one plain command." >&2
+     exit 2
+   fi
+-  SUBAGENT=$(printf '%s' "$INPUT" | grep -Eq '"(agent_id|agent_type)"[[:space:]]*:[[:space:]]*"[^"]|/subagents/' && echo 1)
++  # The two ways around .githooks/pre-commit (2026-10-28), read from text the parser could not tokenise.
++  if { printf '%s' "$SCAN" | grep -Eq "$COMMIT_RX" \
++       && printf '%s' "$SCAN" | grep -Eq -- "[[:space:]](--no-ver[a-z]*|-[A-Za-z]*n[A-Za-z]*)([[:space:]=;&|)]|\$)"; } \
++     || printf '%s' "$SCAN" | grep -Eiq 'core\.hookspath'; then
++    echo "BLOCKED: this command could not be parsed and looks like it skips the git pre-commit hook (\`git commit --no-verify\`/\`-n\`) or changes core.hooksPath. Write the commit as one plain command, without --no-verify." >&2
++    exit 2
++  fi
++  SUBAGENT=$(printf '%s' "$INPUT" | grep -Eq '"(agent_id|agent_type)"[[:space:]]*:[[:space:]]*"[^"]|/subagents/' && echo 1 || true)
+   if [ "$SUBAGENT" = "1" ]; then
+     P='(node[[:space:]]+)?([^[:space:];&|()]*/)?'
+     BROWSER="${P}(test-bg\.mjs([[:space:]]+(?!--status|--tail)[^[:space:]]+)|test-solo\.mjs|run-playwright\.mjs|verify-change\.mjs(?![^;&|]*--(fast|plan)))|(python3?[[:space:]]+)?([^[:space:];&|()]*/)?probe-mcp\.py[[:space:]]+chrome-start|npx[[:space:]]+playwright[[:space:]]+test|playwright[[:space:]]+test([[:space:]]|$)|npm[[:space:]]+test([[:space:]]|$)"
+@@ -357,35 +418,7 @@ except Exception:
+     GH_DECISION='{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "bash-guard could not parse this GitHub API write (curl/wget/node/python); confirm it by hand."}}'
+   fi
+ fi
+-# ONE JSON object on the way out (stdout is parsed as JSON only when it is a
+-# single object): the gh ask/deny, and COMMIT_CTX — which path a PASSING commit
+-# took and how long it ran. stderr is hidden on exit 0, so a successful commit
+-# used to leave the model unable to tell docs-integrity-only from test:guards.
+-# Per https://code.claude.com/docs/en/hooks, hookSpecificOutput.additionalContext
+-# reaches the model (a system reminder next to the tool result) and systemMessage
+-# is shown to the user; neither changes the allow. Printed only on exit 0, so a
+-# later exit-2 rule (the commit guards) still wins over a gh ask.
+-COMMIT_CTX=""
+-emit_on_exit() {
+-  rc=$?
+-  [ "$rc" = 0 ] || return
+-  [ -n "$GH_DECISION$COMMIT_CTX" ] || return
+-  GH_DECISION="$GH_DECISION" COMMIT_CTX="$COMMIT_CTX" python3 -c '
+-import json, os
+-d = {}
+-try:
+-    d = json.loads(os.environ.get("GH_DECISION") or "{}")
+-except Exception:
+-    d = {}
+-ctx = os.environ.get("COMMIT_CTX") or ""
+-if ctx:
+-    h = d.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})
+-    h["additionalContext"] = "\n".join(x for x in (h.get("additionalContext"), ctx) if x)
+-    d["systemMessage"] = ctx
+-print(json.dumps(d))
+-'
+-}
+-trap emit_on_exit EXIT
++# The decision JSON (GH_DECISION + COMMIT_CTX) is printed by finish() on exit 0.
+ if [ -n "$GH_DECISION" ] && printf '%s' "$GH_DECISION" | grep -q '"deny"'; then exit 0; fi
+ 
+ # --- cancelling an Actions run ---------------------------------------------------
+@@ -451,274 +484,57 @@ fi
+ if printf '%s' "$SCAN" | grep -Eq "$PUSH_RX"; then
+   LRC="${APEX_LIVE_RUN_CHECK:-$HOOKDIR/../../tools/ci/live-run-check.mjs}"
+   if [ -f "$LRC" ] && command -v node >/dev/null 2>&1; then
+-    LRC_OUT=$(cd "$ROOT" 2>/dev/null && timeout 5 node "$LRC" </dev/null 2>/dev/null | head -2 || true)
++    LRC_OUT=$(cd "$ROOT" 2>/dev/null && timeout 4 node "$LRC" </dev/null 2>/dev/null | head -2 || true)
+     [ -z "$LRC_OUT" ] || echo "$LRC_OUT" >&2
+   fi
+ fi
+ 
+-# --- guards before git commit ---------------------------------------------------
+-# WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
+-# `git( -C dir)? commit` on the raw text, so `git -c k=v commit`, `git
+-# --no-pager commit`, `bash -c "git commit"`, `env X=1 git commit`,
+-# `GIT_AUTHOR_NAME=x git commit` and `/usr/bin/git commit` all committed with
+-# no guard run. shellparse.py tokenises the command as the shell will
+-# (quotes, heredoc bodies, wrappers, `sh -c` bodies, VAR=value prefixes) and
+-# returns every `git … commit` with its -a / pathspec / --dry-run reading.
+-# FAIL CLOSED (2026-10-09, L12): shellparse walks compound commands (if/then/
+-# else/fi, while/for/do/done, { … }, subshells, lists) and prints `null` on text
+-# it cannot tokenise; this block ran the regex fallback only for an empty or
+-# `null` answer, but the parser answered `[]` for `if …; then git commit; fi`,
+-# `{ git commit; }`, a line holding `$((1 << n))` and an unbalanced quote — all
+-# real commits. Now the fallback also runs for `[]`: a broad regex on SCAN
+-# (reserved words allowed before the verb) that, if it sees a commit the parser
+-# did not, treats it as a real `-a` commit. A guard run on a false positive
+-# costs one test:guards run (~110 s at load 4–6, 2026-10-26); a commit that
+-# skips the guards is the failure being closed.
+-# FOUND is how many `git … commit` the parser read (dry runs included); 0 or NULL
+-# is where the broad fallback regex decides.
++# --- git commit: keep .githooks/pre-commit reachable ---------------------------
++# THE GATE MOVED (2026-10-28, Bryce: "Yes, split it"). Until then this block ran
++# `ratchets.mjs --auto-raise` and `npm run test:guards` (50–110 s) inside the
++# hook, under its own 160/300 s cap and settings.json's 360 s hook timeout, and
++# .githooks/pre-commit stood aside for Claude Code. git's own hook now does all
++# of it for every host (docs-only path, unstaged-tree refusal, ratchet raise,
++# verdict cache, linked-worktree node_modules); this hook only refuses the ways
++# around it: --no-verify / -n and core.hooksPath writes (shellparse.py guard,
++# above), and — here — a commit in this project's tree with no executable
++# pre-commit hook to run (core.hooksPath unset, or pointing elsewhere).
++# WHICH COMMANDS ARE COMMITS: shellparse.py reads every shape (2026-10-04); text
++# it cannot tokenise falls back to the broad COMMIT_RX (L12, 2026-10-09).
+ case "$COMMIT_LINE" in "0 "*|NULL|"") C_FOUND=0 ;; *) C_FOUND=1 ;; esac
+ if [ "$C_FOUND" = 0 ]; then
+-  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)((if|then|else|elif|while|until|do|time|!)[[:space:]]+)*${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|\$)"; then
++  if printf '%s' "$SCAN" | grep -Eq "$COMMIT_RX" && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUARDS=1'; then
+     COMMIT_LINE="1 1 1 -"
+   else
+     COMMIT_LINE="0 0 0 -"
+   fi
+ fi
+ # One line: FOUND RUN ALL GITDIR PATHS… — RUN=1 when any commit is real (not
+-# --dry-run, not APEX_SKIP_GUARDS=1), ALL=1 when any is -a/--all, PATHS the
+-# union of pathspecs (shellparse.py guard prints it).
+-read -r _C_N C_RUN C_ALL C_GITDIR C_PATHS <<EOF
++# --dry-run, not APEX_SKIP_GUARDS=1); GITDIR the tree a `-C`/`cd` names.
++read -r _C_N C_RUN _C_ALL C_GITDIR _C_PATHS <<EOF || true
+ $COMMIT_LINE
+ EOF
+-# `git add X && git commit` IN ONE COMMAND (2026-10-15 blocker census: 7 blocks
+-# in 7 sessions). This hook runs before the whole command, so X is still
+-# unstaged when the unstaged rule below reads the tree. A `git add` in the same
+-# command counts as staged: its paths join the unstaged cover and the docs-only
+-# set (never C_PATHS, the commit's own pathspec, which the ratchet rule reads);
+-# -A/--all/-u/--update/./:/ stage everything, so they read like `commit -a`.
+-ADD_PATHS=""; ADD_ALL=0
+-set -f   # a glob pathspec stays a word, not this cwd's matches
+-for w in $(printf '%s\n' "$SCAN" | grep -oE "(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:];&|()]+)?[[:space:]]+add([[:space:]]+[^;&|()[:space:]]+)*" \
+-           | sed -E 's/^[;&|([:space:]]*git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+add//'); do
+-  case "$w" in
+-    -A|--all|-u|--update|.|:/) ADD_ALL=1 ;;
+-    -*) ;;
+-    *) ADD_PATHS="$ADD_PATHS $w" ;;
+-  esac
+-done
+-set +f
+-[ "$ADD_ALL" = 1 ] && C_ALL=1
+-# Another host's adapter (.cursor/hooks/shell-guard.sh, used by Cursor and
+-# Codex) sets APEX_COMMIT_GATE=githook when core.hooksPath is .githooks: the
+-# git pre-commit hook runs this same gate there, so it is not run twice.
+-[ "${APEX_COMMIT_GATE:-}" = githook ] && C_RUN=0
+-if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUARDS=1'; then
+-  # `git -C <dir> commit` commits in <dir>'s tree, not the hook's cwd.
+-  if [ -n "$C_GITDIR" ] && [ "$C_GITDIR" != "-" ]; then
++if [ "${C_RUN:-0}" = "1" ]; then
++  CTREE="$ROOT"
++  if [ -n "${C_GITDIR:-}" ] && [ "$C_GITDIR" != "-" ]; then
+     R2="$(git -C "$C_GITDIR" rev-parse --show-toplevel 2>/dev/null || true)"
+-    [ -n "$R2" ] && ROOT="$R2"
+-  fi
+-  # A LINKED WORKTREE BORROWS THE MAIN CHECKOUT'S node_modules (2026-10-15).
+-  # EnterWorktree, `isolation: worktree` subagents and `git worktree add` make
+-  # a tree with no node_modules, so every worker commit used to block here
+-  # (census session_01CgCjzTvy729SeWsHzuv8eh). The dependencies are the same
+-  # package.json, the link is git-ignored (`node_modules` in .gitignore), and
+-  # the main checkout's install is what SessionStart already verified.
+-  if [ ! -e "$ROOT/node_modules" ]; then
+-    WT_COMMON="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+-    WT_MAIN="$([ -n "$WT_COMMON" ] && dirname "$WT_COMMON")"
+-    if [ -n "$WT_MAIN" ] && [ "$WT_MAIN" != "$ROOT" ] && [ -d "$WT_MAIN/node_modules" ]; then
+-      ln -s "$WT_MAIN/node_modules" "$ROOT/node_modules" 2>/dev/null || true
+-    fi
++    [ -z "$R2" ] || CTREE="$R2"
+   fi
+-  if [ -z "${APEX_GUARD_PROBE:-}" ] && [ ! -d "$ROOT/node_modules" ]; then
+-    echo "BLOCKED: node_modules is missing, so 'npm run test:guards' cannot run before this commit. Run the SessionStart install (bash tools/env/cloud-agent-install.sh) first." >&2
+-    exit 2
+-  fi
+-  mkdir -p "$ROOT/artifacts"
+-  LOG="$ROOT/artifacts/pre-commit-guards.log"
+-  # A GUARD RUN THAT OUTLIVES THE HOOK MUST BLOCK, NOT PASS (2026-10-14). The
+-  # hook's own timeout is 360 s (settings.json); a hook killed there used to let
+-  # the commit through unguarded on a loaded box. The inner runs are capped
+-  # below it and rc 124 blocks with a reason; settings.json also sets
+-  # onFailure "block". APEX_GUARD_TIMEOUT (seconds) exists for the tests.
+-  # Budget order matches .githooks/pre-commit (#2889): git config apex.guardTimeout,
+-  # then APEX_GUARD_TIMEOUT, then the 160 s default (load bump only when neither is set).
+-  GUARD_T="${APEX_GUARD_TIMEOUT:-}"
+-  EXPLICIT_GUARD_BUDGET=0
+-  [ -n "${GUARD_T:-}" ] && EXPLICIT_GUARD_BUDGET=1
+-  if [ -z "${GUARD_T:-}" ]; then
+-    GUARD_T=$(cd "$ROOT" && git config --get apex.guardTimeout 2>/dev/null || true)
+-    [ -n "${GUARD_T:-}" ] && EXPLICIT_GUARD_BUDGET=1
+-  fi
+-  if [ -z "${GUARD_T:-}" ]; then GUARD_T=160; fi
+-  # H5 (retro 2026-10-17): at loadavg >= 3 the 160 s cap blocked a commit that was fine alone
+-  # (gfx-backend-canary, #2647). A loaded box gets the longer cap; settings.json's hook
+-  # timeout (360 s) sits above it. An explicit apex.guardTimeout / APEX_GUARD_TIMEOUT wins.
+-  if [ "$EXPLICIT_GUARD_BUDGET" = "0" ] && awk '{exit !($1 >= 3)}' /proc/loadavg 2>/dev/null; then GUARD_T=300; fi
+-  guard_timed_out() {
+-    if [ "$1" = 124 ] || [ "$1" = 137 ]; then
+-      echo "BLOCKED: $2 did not finish within ${GUARD_T} s (apex.guardTimeout / APEX_GUARD_TIMEOUT; the box may be loaded: check /proc/loadavg and any live playwright run), so this commit was NOT guarded. Retry when the box is idle, raise the budget with \`git config apex.guardTimeout <sec>\`, or APEX_SKIP_GUARDS=1 only when the guards themselves are the change." >&2
++  # Only this project's tree (it ships .githooks/pre-commit); a scratch repo is not gated here.
++  if [ -f "$CTREE/.githooks/pre-commit" ]; then
++    # `--git-path hooks` honours core.hooksPath; a relative value is relative to the worktree root.
++    HOOKS_DIR="$(cd "$CTREE" && git rev-parse --git-path hooks 2>/dev/null || true)"
++    case "$HOOKS_DIR" in /*|"") ;; *) HOOKS_DIR="$CTREE/$HOOKS_DIR" ;; esac
++    if [ -z "$HOOKS_DIR" ] || [ ! -x "$HOOKS_DIR/pre-commit" ]; then
++      HP="$(git -C "$CTREE" config --get core.hooksPath 2>/dev/null || true)"
++      echo "BLOCKED: no pre-commit hook would run for this commit (core.hooksPath=${HP:-unset}; git would look in ${HOOKS_DIR:-?}). .githooks/pre-commit is the one commit gate (test:guards, docs-integrity, the ratchet auto-raise; AGENTS.md rule 12). Run \`npm run prepare\` (it sets core.hooksPath=.githooks, as every npm install does), then commit again." >&2
+       exit 2
+     fi
+-  }
+-  # DOCS-ONLY COMMITS SKIP TO docs-integrity. The deploy branch takes a lot of
+-  # note-only commits (one 2026-09-16 session made four), and the guards and
+-  # the ratchets have nothing to say about prose — worse, --auto-raise can stage
+-  # tests/data/ratchets.json into a commit that changed no code at all. The path
+-  # set is deliberately narrow: docs/, any .md, skills and agents. A GENERATED
+-  # doc is excluded — it is prose whose SOURCE is code, so generated-docs must
+-  # still run — and so is an empty staged list (`git commit -a`, or a pathspec
+-  # on the command line, stages at commit time, and nothing staged must never
+-  # read as "nothing to check").
+-  STAGED=$(cd "$ROOT" && git diff --cached --name-only --no-renames 2>/dev/null)   # --no-renames: a moved-out source file must show (M36)
+-  # A PATHSPEC COMMITS WHAT IT NAMES (2026-10-04): `git commit docs/a.md
+-  # js/game.js` with only docs/a.md staged used to take the docs-only path
+-  # and commit js/game.js unguarded. The named paths join the set judged.
+-  COMMITTED="$STAGED"
+-  for p in $C_PATHS $ADD_PATHS; do COMMITTED="$COMMITTED
+-$p"; done
+-  GENERATED_DOCS=$(cd "$ROOT" && node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ')
+-  [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md docs/notes/PREPUSH-GATE-LADDER.md"
+-  DOCS_ONLY=0
+-  # `--all` / -a stage at commit time: the index is not what will be committed.
+-  if [ -n "$STAGED$C_PATHS$ADD_PATHS" ] && [ "$C_ALL" != "1" ]; then
+-    DOCS_ONLY=1
+-    while IFS= read -r f; do
+-      [ -z "$f" ] && continue
+-      # The generated-doc list comes from the generators themselves
+-      # (tools/gen/targets.mjs prints each gen-*.mjs TARGET); the literal
+-      # list is the fallback for a box where node cannot run.
+-      case " $GENERATED_DOCS " in
+-        *" $f "*) DOCS_ONLY=0; break ;;
+-      esac
+-      # Survey assets count as prose (2026-10-15): image/report output in the
+-      # track-survey-assets dirs only (docs/notes/SURVEY-ASSETS-BRANCH.md). That
+-      # branch dropped ci.yml (#2234), so test:guards is red there by
+-      # construction and every image commit needed APEX_SKIP_GUARDS=1.
+-      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
+-    done <<EOF
+-$COMMITTED
+-EOF
+-  fi
+-  if [ -n "${APEX_GUARD_PROBE:-}" ] && [ "$DOCS_ONLY" = 1 ]; then
+-    echo "bash-guard probe: commit docs-only" >&2; exit 0
+-  fi
+-  # A TREE WITH NO tools/ (the track-survey-assets image branches) CANNOT RUN
+-  # THE GUARDS: skip with a note instead of leaving the model to find
+-  # APEX_SKIP_GUARDS=1 (#2428). Only when every committed path sits outside
+-  # js/ css/ tools/ tests/ and the generated shell files; `commit -a` stages at
+-  # commit time, so it never skips.
+-  if [ ! -d "$ROOT/tools/ci" ] && [ ! -d "$ROOT/tools/check" ] && [ "$C_ALL" != "1" ] && [ -n "$(printf '%s' "$COMMITTED" | tr -d '[:space:]')" ] \
+-     && ! printf '%s\n' "$COMMITTED" | grep -Eq '^(js/|css/|tools/|tests/)|^(index\.html|sw\.js|version\.json|package\.json|CHANGELOG\.md)$'; then
+-    echo "guards skipped: no tools/ in this tree" >&2
+-    exit 0
+-  fi
+-  if [ "$DOCS_ONLY" = 1 ]; then
+-    T0=$(date +%s)
+-    (cd "$ROOT" && timeout -k 5 "$GUARD_T" node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1); RC=$?
+-    guard_timed_out "$RC" "docs-integrity"
+-    if [ "$RC" != 0 ]; then
+-      echo "BLOCKED: tests/unit/docs-integrity.test.mjs is red (links, index rows). Last lines of $LOG:" >&2
+-      grep -E 'not ok|Error|expected|actual|✖' "$LOG" | tail -20 >&2
+-      exit 2
+-    fi
+-    echo "docs-only commit: ran docs-integrity only (no ratchet raise, no test:guards)." >&2
+-    COMMIT_CTX="bash-guard: docs-only commit — ran tests/unit/docs-integrity.test.mjs only (green, $(( $(date +%s) - T0 )) s); no ratchet raise, no test:guards."
+-    exit 0
+-  fi
+-  # THE GUARDS MEASURE THE WORKING TREE; THE COMMIT IS THE INDEX (2026-10-04).
+-  # A tracked file whose working copy differs from what is staged makes the
+-  # verdict about content this commit does not carry — green on an unstaged
+-  # fix while the staged half is red, or the reverse. Stash-free: the
+-  # `git diff` (worktree vs index) names are compared with what is committed,
+-  # and the commit is refused until they agree. `-a` stages everything, and a
+-  # pathspec commits its paths from the working tree, so neither counts; the
+-  # synced auto-memory under .claude/memory/ never reaches a guard.
+-  if [ "$C_ALL" != "1" ]; then
+-    UNSTAGED=$(cd "$ROOT" && git diff --name-only 2>/dev/null | while IFS= read -r f; do
+-      [ -z "$f" ] && continue
+-      case "$f" in .claude/memory/*) continue ;; esac
+-      covered=0
+-      for p in $C_PATHS $ADD_PATHS; do
+-        p="${p%/}"; case "$f" in "$p"|"$p"/*) covered=1 ;; esac
+-        [ "$p" = "." ] && covered=1
+-      done
+-      [ "$covered" = 1 ] || printf '%s\n' "$f"
+-    done)
+-    if [ -n "$UNSTAGED" ]; then
+-      N=$(printf '%s\n' "$UNSTAGED" | grep -c .)
+-      echo "BLOCKED: the guards measure the working tree, but $N tracked file(s) differ from what this commit holds (unstaged changes):" >&2
+-      printf '%s\n' "$UNSTAGED" | head -10 | sed 's/^/  /' >&2
+-      echo "Stage them (git add), commit with -a, or set them aside (git stash push -- <paths>), then commit again — so the guard verdict is about this commit. APEX_SKIP_GUARDS=1 bypasses when that is deliberate." >&2
+-      exit 2
+-    fi
+-  fi
+-  if [ -n "${APEX_GUARD_PROBE:-}" ]; then
+-    echo "bash-guard probe: commit code paths=${C_PATHS:-}" >&2; exit 0
+-  fi
+-  # Size ratchets first (tools/check/ratchets.mjs --auto-raise): growth of up
+-  # to 40 lines in a ratcheted file raises its ceiling and STAGES it — on a
+-  # topic branch as a delta in tests/data/ratchets.d/<branch>.json (only this
+-  # branch touches it, so two PRs growing one module never conflict, #2291),
+-  # else tests/data/ratchets.json — so the raise is in this commit's diff
+-  # instead of a hand edit plus a second guard run. Bigger growth still blocks.
+-  # ONE GUARD RUN PER COMMIT, NOT ONE PER MATCHING FILTER (2026-10-17).
+-  # settings.json once registered this hook under 14 `if:` filters (one entry
+-  # since; GUARD_TRIGGER above is the filter now), so a commit command that also
+-  # said node/sh/npm/... started two or more copies at once: each ran the full suite, doubling the load and sharing $LOG, so one timed
+-  # out (160/300 s) while its twin went green in 202 s — seven blocked
+-  # commits in a row. Copies now queue on a lock, and a later copy reuses a
+-  # GREEN verdict via tools/ci/guards-verdict.mjs check (same cache as
+-  # .githooks/pre-commit and npm run test:guards). Red and timed-out runs are
+-  # never reused.
+-  if command -v flock >/dev/null 2>&1; then
+-    exec 9>"$ROOT/artifacts/pre-commit-guards.lock"
+-    flock -w $(( GUARD_T + 60 )) 9 || true
+-  fi
+-  RLOG="$ROOT/artifacts/pre-commit-ratchets.log"
+-  if (cd "$ROOT" && node tools/check/ratchets.mjs --auto-raise >"$RLOG" 2>&1); then
+-    if grep -q '^RAISED\|^LOWERED' "$RLOG"; then
+-      (cd "$ROOT" && git add -A -- tests/data/ratchets.json tests/data/ratchets.d) || true
+-      grep '^RAISED\|^LOWERED' "$RLOG" >&2
+-      # A pathspec commit (--only, git's default with paths) commits ONLY the
+-      # named paths, so the staged raise would be left behind.
+-      if [ -n "$C_PATHS" ] && ! printf ' %s ' "$C_PATHS" | grep -q ' tests/data/ratchets.json \| tests/data/ratchets.d\(/[^ ]*\)\? \| tests/data/ \| tests/ \| \. '; then
+-        echo "BLOCKED: the ratchet raise above is staged, but this pathspec commit carries only the paths it names. Add tests/data/ratchets.d (and tests/data/ratchets.json) to the command (or commit without a pathspec)." >&2
+-        exit 2
+-      fi
++    # The hook that WILL run predates the split and still stands aside for Claude Code (a branch that has not merged
++    # the 2026-10-28 deploy tip, or an absolute core.hooksPath into an older checkout): say so instead of passing silently.
++    if [ -n "${CLAUDECODE:-}" ] && grep -Fq '[ -n "${CLAUDECODE:-}" ] && exit 0' "$HOOKS_DIR/pre-commit" 2>/dev/null; then
++      COMMIT_CTX="bash-guard: the pre-commit hook this commit runs ($HOOKS_DIR/pre-commit) predates the 2026-10-28 split and skips itself under Claude Code, so this commit runs NO guards. Run \`npm run test:guards\` and read its verdict before trusting the commit, or merge the deploy tip so the tree carries the current hook."
+     fi
+-  else
+-    echo "BLOCKED: a size ratchet is over its ceiling in a way the auto-raise may not absorb (only a per-file line count, by <= 40, is absorbed) ($RLOG):" >&2
+-    grep '^OVER' "$RLOG" >&2
+-    exit 2
+-  fi
+-  T0=$(date +%s)
+-  RAISED=$(grep -c '^RAISED\|^LOWERED' "$RLOG" 2>/dev/null)
+-  # The cache is keyed on the INDEX tree as it is now. A `git add`/`commit -a` in the same
+-  # command commits a different tree, so a green cached verdict says nothing about it
+-  # (2026-10-26 second pass, finding 3): run the guards instead.
+-  if [ "$C_ALL" = 1 ] || [ -n "$ADD_PATHS" ]; then
+-    CACHE_HIT=""
+-  else
+-    CACHE_HIT=$(cd "$ROOT" && node tools/ci/guards-verdict.mjs check 2>/dev/null) || true
+-  fi
+-  if [ -n "$CACHE_HIT" ]; then
+-    printf '%s\n' "$CACHE_HIT" >&2
+-    COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered); $CACHE_HIT (a concurrent copy of this hook or a foreground test:guards already certified this tree; log $LOG)."
+-    exit 0
+-  fi
+-  # test:guards builds throwaway fixture repos; unset this hook's GIT_* selectors
+-  # for the suite only (#1807, same idiom as .githooks/pre-commit).
+-  ( cd "$ROOT" && unset $(git rev-parse --local-env-vars 2>/dev/null) && timeout -k 5 "$GUARD_T" npm run --silent test:guards ) >"$LOG" 2>&1
+-  RC=$?
+-  guard_timed_out "$RC" "npm run test:guards"
+-  if [ "$RC" != 0 ]; then
+-    echo "BLOCKED: npm run test:guards is red — AGENTS.md §Verification 3 forbids committing on a red guard. Last lines of $LOG:" >&2
+-    grep -E 'not ok|Error|expected|actual|✖' "$LOG" | tail -20 >&2
+-    echo "Fix the guard (or prefix with APEX_SKIP_GUARDS=1 when the guards themselves are the change under test)." >&2
+-    exit 2
+   fi
+-  COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered) then npm run test:guards (green, $(( $(date +%s) - T0 )) s; log $LOG)."
+ fi
+ exit 0
+diff --git a/.claude/hooks/context-cap.py b/.claude/hooks/context-cap.py
+index a0f5ea9c43..76a801ffc0 100755
+--- a/.claude/hooks/context-cap.py
++++ b/.claude/hooks/context-cap.py
+@@ -17,8 +17,12 @@ launch policy was retired 2026-10-27; a dispatcher brief states its own STOP AT,
+   PreToolUse (Agent, create_session) — over the HARD cap, deny a new spawn (permissionDecision "deny",
+                                    https://code.claude.com/docs/en/hooks §PreToolUse decision control). A
+                                    create_session whose prompt is a hand-off to a successor stays allowed: that
+-                                   is the size stop's own way out. Any error → allow (exit 0, no output).
+-APEX_CTX_CAP=off silences every mode.
++                                   is the size stop's own way out. settings.json runs this mode as
++                                   `context-cap.py --guard`, which FAILS CLOSED (2026-10-28, the commit-hook
++                                   split's hook pass): an unreadable payload or an internal error on a spawn is a
++                                   block (exit 2, the reason and both overrides on stderr). Without --guard (the
++                                   advisory events, where exit 2 would erase a user's prompt) any error → no output.
++APEX_CTX_CAP=off silences every mode; so does the `.claude/allow-context-cap` hatch.
+ """
+ import json
+ import os
+@@ -141,6 +145,8 @@ def decide(data, root, env):
+ 
+ def main():
+     data = json.load(sys.stdin)
++    if not isinstance(data, dict):
++        raise ValueError("payload is not an object")
+     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+     out = decide(data, root, os.environ)
+     if out:
+@@ -148,8 +154,17 @@ def main():
+ 
+ 
+ if __name__ == "__main__":
++    guard = "--guard" in sys.argv[1:]
+     try:
+         main()
+-    except Exception:  # fail open: advisory modes print nothing, the spawn guard allows
+-        pass
++    except Exception as e:
++        # Advisory modes print nothing. The spawn guard (--guard) refuses: a crash must not let a spawn past the cap.
++        root = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
++        hatch = os.path.isfile(os.path.join(root, ".claude", "allow-context-cap"))
++        if guard and os.environ.get("APEX_CTX_CAP") != "off" and not hatch:
++            sys.stderr.write("BLOCKED: context-cap could not judge this spawn (%s: %s), so it is refused (fail closed). "
++                             "Report the hook error; a session the user told to continue past its cap can `touch "
++                             ".claude/allow-context-cap` (or set APEX_CTX_CAP=off).\n" % (type(e).__name__, str(e)[:160]))
++            sys.stderr.flush()
++            os._exit(2)
+     sys.exit(0)
+diff --git a/.claude/hooks/foreign_push.py b/.claude/hooks/foreign_push.py
+index f61dded2ec..c375550a76 100644
+--- a/.claude/hooks/foreign_push.py
++++ b/.claude/hooks/foreign_push.py
+@@ -26,6 +26,9 @@ import subprocess
+ import sys
+ 
+ 
++# Network budget (2026-10-28): bash-guard.sh runs under a 30 s hook timeout (it no longer runs test:guards), and
++# this check, closed_pr_refusal (5 s) and live-run-check (4 s) run in sequence on a push: ls-remote 6 s + fetch
++# 10 s keep the worst case under it. A timeout fails open, loudly (check() below), as before.
+ def _git(where, *args, timeout=15):
+     r = subprocess.run(["git", "-C", where, *args], capture_output=True, text=True, timeout=timeout)
+     return r.returncode, r.stdout.strip()
+@@ -78,7 +81,7 @@ def foreign_commits(where, remote, branch):
+     if not base:
+         return []                                   # never fetched or pushed: a first push
+     try:
+-        rc, out = _git(where, "ls-remote", "--heads", remote, f"refs/heads/{branch}", timeout=20)
++        rc, out = _git(where, "ls-remote", "--heads", remote, f"refs/heads/{branch}", timeout=6)
+     except subprocess.TimeoutExpired:
+         raise RuntimeError(f"ls-remote {remote} timed out")
+     if rc != 0:
+@@ -91,7 +94,7 @@ def foreign_commits(where, remote, branch):
+     if _git(where, "cat-file", "-e", tip + "^{commit}")[0] != 0:
+         try:
+             rc, _ = _git(where, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", remote,
+-                         f"+refs/heads/{branch}:{private}", timeout=45)
++                         f"+refs/heads/{branch}:{private}", timeout=10)
+         except subprocess.TimeoutExpired:
+             raise RuntimeError(f"fetch {remote} {branch} timed out")
+         if rc != 0:
+diff --git a/.claude/hooks/github-mcp-guard.sh b/.claude/hooks/github-mcp-guard.sh
+index 93f1c246a4..2cecaef880 100755
+--- a/.claude/hooks/github-mcp-guard.sh
++++ b/.claude/hooks/github-mcp-guard.sh
+@@ -43,28 +43,55 @@
+ # went with the merge desk, WP-D1 2026-10-27). The reason texts and the receipt check
+ # live in merge_policy.py, shared with bash-guard.sh's `gh` rule. Output is
+ # the documented PreToolUse JSON (hookSpecificOutput.permissionDecision,
+-# https://code.claude.com/docs/en/hooks). Exit 0 always; settings.json sets
+-# onFailure "block" so a crash refuses the call instead of letting it through.
+-exec python3 -c '
++# https://code.claude.com/docs/en/hooks), exit 0.
++#
++# FAIL CLOSED (2026-10-28): an unreadable payload or tool_input is a deny (it
++# was an ask), and the hook turns its own failures — no python3, a
++# merge_policy.py that will not load, any exception (sys.excepthook), any exit
++# but 0/2 — into exit 2, whatever the host does with a failed hook (Claude
++# Code's onFailure "block" in settings.json is the second layer).
++if ! command -v python3 >/dev/null 2>&1; then
++  echo "BLOCKED: github-mcp-guard needs python3 to judge this GitHub call; it is refused (fail closed)." >&2
++  exit 2
++fi
++python3 -c '
+ import json, os, re, sys
++def _crash(kind, err, tb):
++    sys.stderr.write("BLOCKED: github-mcp-guard failed (" + kind.__name__ + ": " + str(err)[:160] + "), so this GitHub "
++                     "call is refused (fail closed). Report the hook error; do not work around it.\n")
++    sys.stderr.flush()
++    os._exit(2)
++sys.excepthook = _crash
+ sys.path.insert(0, sys.argv[1])
+ import merge_policy as P
+ try:
+     d = json.load(sys.stdin)
++    if not isinstance(d, dict):
++        raise ValueError("payload is not an object")
+ except Exception:
+-    sys.stderr.write("github-mcp-guard: could not read the hook payload; asking instead of passing.\n")
+-    d = {"tool_name": "unknown", "tool_input": {}}
++    sys.stderr.write("BLOCKED: github-mcp-guard could not read the hook payload, so this GitHub call is refused (fail closed).\n")
++    sys.exit(2)
+ name = d.get("tool_name") or ""
+ # Cursor beforeMCPExecution (.cursor/hooks/mcp-guard.sh) names the bare tool and
+ # sends tool_input as a JSON string: https://cursor.com/docs/agent/hooks
+-if name and "__" not in name and name != "unknown":
++if name and "__" not in name:
+     name = "mcp__github__" + name
++# A tool_input that is not an object (or a JSON string of one) cannot be judged: a guarded operation, or a call with
++# no tool name, is refused; any other tool passes (Cursor sends EVERY MCP call through this script).
++bad_input = False
+ if isinstance(d.get("tool_input"), str):
+     try:
+         d["tool_input"] = json.loads(d["tool_input"] or "{}")
+     except Exception:
+-        name = "unknown"
+-ti = d.get("tool_input") or {}
++        bad_input = True
++ti = d.get("tool_input")
++if ti is None:
++    ti = {}
++if not isinstance(ti, dict):
++    bad_input, ti = True, {}
++GUARDED = re.compile(r"__(merge_pull_request|enable_pr_auto_merge|update_pull_request|issue_write|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$")
++if not name or (bad_input and GUARDED.search(name)):
++    name = "unknown"
+ root = d.get("cwd") if not os.environ.get("CLAUDE_PROJECT_DIR") and d.get("cwd") else P.project_root()
+ def first(*keys):
+     for k in keys:
+@@ -76,7 +103,7 @@ pr = first("pullNumber", "pull_number", "number", "pr")
+ decision, reason = None, None
+ merging = name.endswith("__merge_pull_request") or name.endswith("__enable_pr_auto_merge")
+ if name == "unknown":
+-    decision, reason = "ask", "github-mcp-guard could not parse this call; confirm it by hand."
++    decision, reason = "deny", "github-mcp-guard could not read this call (no tool name, or a tool_input that is not an object), so it is refused (fail closed)."
+ elif merging:
+     raw = ti.get("merge_method") if ti.get("merge_method") is not None else ti.get("mergeMethod")
+     method = str(raw or "").strip().lower()
+@@ -123,3 +150,9 @@ if decision:
+     P.emit(decision, reason)
+ sys.exit(0)
+ ' "$(dirname "$0")"
++rc=$?
++case "$rc" in
++  0|2) exit "$rc" ;;
++  *) echo "BLOCKED: github-mcp-guard failed with exit $rc, so this GitHub call is refused (fail closed)." >&2
++     exit 2 ;;
++esac
+diff --git a/.claude/hooks/launch-gate.py b/.claude/hooks/launch-gate.py
+index a65277fff7..1185019bea 100755
+--- a/.claude/hooks/launch-gate.py
++++ b/.claude/hooks/launch-gate.py
+@@ -14,12 +14,15 @@
+ #
+ # The receipt is written by tools/ci/launch-gate.mjs (Q1): ok when
+ # rate_limit_info.status is "allowed", or when the launch is Bryce's typed ask
+-# (the receipt keeps his quote). FAILS OPEN on its OWN errors: an unreadable
+-# payload or an internal exception prints one stderr line and exits 0 with no
+-# decision (settings.json gives this hook no onFailure "block"), so a broken
+-# hook never stalls a fleet. Output is the documented PreToolUse JSON
++# (the receipt keeps his quote). FAILS CLOSED on its OWN errors (2026-10-28,
++# the commit-hook split's hook pass; Bryce: "Yes, split it"): it used to fail
++# open, so a crash or an unreadable payload let a create_session through with no
++# quota receipt — the one thing the hook exists to stop. Now an unreadable or
++# malformed payload, or any internal exception, is a block (the reason on
++# stderr, exit 2), and settings.json sets onFailure "block" for a
++# timeout or a missing interpreter. Output is the documented PreToolUse JSON
+ # (hookSpecificOutput.permissionDecision, https://code.claude.com/docs/en/hooks,
+-# read 2026-10-26). Tests: tests/unit/launch-gate.test.mjs.
++# read 2026-10-28). Tests: tests/unit/launch-gate.test.mjs.
+ import calendar, hashlib, json, os, re, sys, time
+ 
+ MAX_AGE_S = 120  # tools/ci/launch-gate.mjs MAX_AGE_S
+@@ -32,13 +35,22 @@ def deny(why):
+                                              "permissionDecisionReason": "LAUNCH GATE: " + why + " — " + FIX}}))
+ 
+ 
++def refuse(why):
++    """The fail-closed exit: stderr for every host, exit 2 (a block in Claude Code, Cursor and Codex)."""
++    sys.stderr.write("BLOCKED: LAUNCH GATE " + why + ", so this create_session is refused (fail closed). "
++                     "Report the hook error; do not work around it.\n")
++    sys.stderr.flush()
++    os._exit(2)
++
++
+ def main():
+     try:
+         d = json.load(sys.stdin)
+     except Exception:
+-        sys.stderr.write("launch-gate: unreadable hook payload; allowing (fail open).\n")
+-        return
+-    if not isinstance(d, dict) or not str(d.get("tool_name") or "").endswith("create_session"):
++        return refuse("could not read the hook payload")
++    if not isinstance(d, dict) or not isinstance(d.get("tool_input", {}), (dict, type(None))):
++        return refuse("got a malformed hook payload (not an object, or a tool_input that is not one)")
++    if not str(d.get("tool_name") or "").endswith("create_session"):
+         return
+     root = os.environ.get("CLAUDE_PROJECT_DIR") or d.get("cwd") or os.getcwd()
+     ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+@@ -98,6 +110,6 @@ def main():
+ if __name__ == "__main__":
+     try:
+         main()
+-    except Exception as e:  # fail open on the hook's own bug
+-        sys.stderr.write("launch-gate: internal error %s; allowing (fail open).\n" % type(e).__name__)
++    except Exception as e:  # fail CLOSED on the hook's own bug (2026-10-28)
++        refuse("failed with an internal error (%s: %s)" % (type(e).__name__, str(e)[:160]))
+     sys.exit(0)
+diff --git a/.claude/hooks/mcp-browser-guard.sh b/.claude/hooks/mcp-browser-guard.sh
+index 109b5b1ea2..b2c4e2778b 100755
+--- a/.claude/hooks/mcp-browser-guard.sh
++++ b/.claude/hooks/mcp-browser-guard.sh
+@@ -37,7 +37,14 @@
+ # are matched too.
+ #
+ # Exit 2 blocks with the reason on stderr; exit 0 lets the call through.
+-exec python3 -c '
++# FAIL CLOSED on its own errors too (2026-10-28): a missing python3, an
++# exception after the payload was read, or any exit but 0/2 is a refusal,
++# whatever the host's hook runner does with a failed hook.
++if ! command -v python3 >/dev/null 2>&1; then
++  echo "BLOCKED: mcp-browser-guard needs python3 to tell a subagent from the main session; a browser tool is refused rather than risk a second Chromium (fail closed)." >&2
++  exit 2
++fi
++python3 -c '
+ import json, re, sys
+ try:
+     d = json.load(sys.stdin)
+@@ -48,13 +55,20 @@ except Exception:
+                      "main session; a browser tool is refused rather than risk a second Chromium (AGENTS.md "
+                      "§Verification 10). Retry the call.\n")
+     sys.exit(2)
+-name = d.get("tool_name") or ""
+-BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|js-debugger__.+|browserstack__(run\w*Session|run\w*Tests\w*|take\w*Screenshot|startAccessibilityScan|runPercyScan)|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start))$")
+-ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+-debug_start = name == "mcp__apex-tools__apex_debug_chrome" and str(ti.get("action") or "start").strip().lower() not in ("status", "stop", "list", "help")
+-if not (BROWSER.match(name) or debug_start or name.startswith("mcp__plugin_browser-use")):
+-    sys.exit(0)
+-sub = d.get("agent_id") or d.get("agent_type") or "/subagents/" in str(d.get("transcript_path") or "")
++try:
++    name = d.get("tool_name") or ""
++    BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|js-debugger__.+|browserstack__(run\w*Session|run\w*Tests\w*|take\w*Screenshot|startAccessibilityScan|runPercyScan)|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start))$")
++    ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
++    debug_start = name == "mcp__apex-tools__apex_debug_chrome" and str(ti.get("action") or "start").strip().lower() not in ("status", "stop", "list", "help")
++    if not (BROWSER.match(name) or debug_start or name.startswith("mcp__plugin_browser-use")):
++        sys.exit(0)
++    sub = d.get("agent_id") or d.get("agent_type") or "/subagents/" in str(d.get("transcript_path") or "")
++except SystemExit:
++    raise
++except Exception as e:
++    sys.stderr.write("BLOCKED: mcp-browser-guard failed (" + type(e).__name__ + "), so this browser tool is refused "
++                     "(fail closed). Report the hook error.\n")
++    sys.exit(2)
+ if not sub:
+     sys.exit(0)
+ sys.stderr.write("BLOCKED: " + name + " drives a browser, and a subagent never starts one (AGENTS.md "
+@@ -63,3 +77,9 @@ sys.stderr.write("BLOCKED: " + name + " drives a browser, and a subagent never s
+   "needs a browser as NOT RUN.\n")
+ sys.exit(2)
+ '
++rc=$?
++case "$rc" in
++  0|2) exit "$rc" ;;
++  *) echo "BLOCKED: mcp-browser-guard failed with exit $rc, so this browser tool is refused (fail closed)." >&2
++     exit 2 ;;
++esac
+diff --git a/.claude/hooks/protect-files.py b/.claude/hooks/protect-files.py
+index 8e9416f328..37cf4fe7ac 100644
+--- a/.claude/hooks/protect-files.py
++++ b/.claude/hooks/protect-files.py
+@@ -10,11 +10,16 @@
+ # shellparse.py's docstring lists the gap.
+ import json, os, re, subprocess, sys
+ 
++# FAIL CLOSED (2026-10-28, the commit-hook split's hook pass): an unreadable or malformed payload is a refusal,
++# and protect-files.sh turns any crash below (exit 1) into exit 2 too. Before this it warned and passed.
+ try:
+     d = json.load(sys.stdin)
++    if not isinstance(d, dict) or not isinstance(d.get("tool_input") or {}, dict):
++        raise ValueError("unexpected payload shape")
+ except Exception:
+-    sys.stderr.write("protect-files: WARNING could not read the hook payload; the edit guard did NOT run.\n")
+-    sys.exit(0)
++    sys.stderr.write("BLOCKED: protect-files could not read the hook payload (not JSON, or an unexpected shape), so "
++                     "the edit guard did not run and this call is refused (fail closed).\n")
++    sys.exit(2)
+ ti = d.get("tool_input") or {}
+ tool = d.get("tool_name") or ""
+ # Hook input names the subagent a call comes from (`agent_type`, documented at
+@@ -450,11 +455,11 @@ if tool == "Bash":
+         import shellparse
+         targets = shellparse.write_targets(cmd, d.get("cwd") or os.getcwd())
+     except Exception as e:
+-        # Fail open, but LOUDLY (2026-10-14): a parser bug must not silently
+-        # leave every Bash write unguarded.
+-        sys.stderr.write(f"protect-files: WARNING shellparse failed ({type(e).__name__}: {e}); "
+-                         "this command's file writes were NOT checked.\n")
+-        sys.exit(0)
++        # FAIL CLOSED (2026-10-28; it failed open, loudly, since 2026-10-14): a parser bug must not leave a Bash
++        # write unguarded. write_targets reads unparseable text best-effort, so this is a real crash.
++        sys.stderr.write(f"BLOCKED: protect-files could not read this command's file writes (shellparse "
++                         f"{type(e).__name__}: {e}), so it is refused (fail closed). Report the hook error.\n")
++        sys.exit(2)
+     removed = {p_ for p_, _h in ratchet_removals(cmd, d.get("cwd") or os.getcwd())}
+     for t in targets:
+         if t["kind"] in ("rm", "unlink") and os.path.realpath(t["path"]) in removed:
+diff --git a/.claude/hooks/protect-files.sh b/.claude/hooks/protect-files.sh
+index bc7e3ac0c2..bd704980d5 100755
+--- a/.claude/hooks/protect-files.sh
++++ b/.claude/hooks/protect-files.sh
+@@ -38,6 +38,21 @@
+ # at the repo root and retry (remove it when done). It lifts rules 1 and 3
+ # only — rule 2 (a live Playwright run) holds regardless. Exit 2 blocks; the
+ # reason on stderr reaches the model.
++#
++# FAIL CLOSED (2026-10-28): a missing python3, a crash (exit 1, a traceback) or
++# any exit but 0/2 is a refusal here, whatever the host's hook runner does with
++# it (Claude Code passes such a call unless onFailure is "block":
++# https://code.claude.com/docs/en/hooks §Block the action when a hook fails).
+ 
++if ! command -v python3 >/dev/null 2>&1; then
++  echo "BLOCKED: protect-files needs python3 to read the call; none of its rules ran, so it is refused (fail closed)." >&2
++  exit 2
++fi
+ # Keep payloads on stdin; exporting full files hits the OS per-variable limit.
+-exec python3 "$(dirname "$0")/protect-files.py"
++python3 "$(dirname "$0")/protect-files.py"
++rc=$?
++case "$rc" in
++  0|2) exit "$rc" ;;
++  *) echo "BLOCKED: protect-files.py failed with exit $rc, so its rules did not finish and this call is refused (fail closed). Report the hook error; do not work around it." >&2
++     exit 2 ;;
++esac
+diff --git a/.claude/hooks/session-start.sh b/.claude/hooks/session-start.sh
+index 0b293bcd97..8f28def73f 100755
+--- a/.claude/hooks/session-start.sh
++++ b/.claude/hooks/session-start.sh
+@@ -28,6 +28,23 @@ else
+   status+=("node_modules: fresh")
+ fi
+ 
++# THE COMMIT GATE IS GIT'S HOOK (2026-10-28, Bryce: "Yes, split it"):
++# .githooks/pre-commit runs test:guards for every host, so it must be armed even
++# when node_modules was fresh and npm's "prepare" did not run. RELATIVE, so each
++# linked worktree runs its own tree's copy (an absolute path into the main
++# checkout ran ITS hook for every worktree; red-team R15). bash-guard.sh refuses
++# an agent's own core.hooksPath write; this hook is the sanctioned setter.
++if [ -f .githooks/pre-commit ]; then
++  hp=$(git config --get core.hooksPath 2>/dev/null || true)
++  if [ "$hp" != ".githooks" ]; then
++    if git config core.hooksPath .githooks 2>/dev/null; then
++      status+=("hooksPath: .githooks (was ${hp:-unset})")
++    else
++      status+=("hooksPath: FAILED to set .githooks (${hp:-unset}) — commits will be refused; run npm run prepare")
++    fi
++  fi
++fi
++
+ # Reuse the same executable as the harness and MCP wrapper, including system
+ # Chromium on PATH. The installer chooses a writable cache if none is present.
+ CHROMIUM="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
+diff --git a/.claude/hooks/shellparse.py b/.claude/hooks/shellparse.py
+index 182008a7b1..6a01a2e5e0 100755
+--- a/.claude/hooks/shellparse.py
++++ b/.claude/hooks/shellparse.py
+@@ -560,7 +560,8 @@ COMMIT_SHORT_ARG = set("mFcCt")
+ 
+ def commit_info(text):
+     """Every `git … commit …` in the command: [{all, paths, include, dry,
+-    skip, gitdir}]. `skip` is APEX_SKIP_GUARDS=1 on that command. Raises ParseError when the
++    noverify, skip, gitdir}]. `skip` is APEX_SKIP_GUARDS=1 on that command, `noverify`
++    a --no-verify / -n that skips .githooks/pre-commit. Raises ParseError when the
+     text cannot be tokenised (main() prints `null`, the shell then falls back
+     to its regex: fail closed)."""
+     found = []
+@@ -574,7 +575,7 @@ def commit_info(text):
+             gitdir = _abs(gitdir, cwd)
+         elif cwd and os.path.normpath(cwd) != os.path.normpath(start):
+             gitdir = cwd
+-        info = {"all": False, "paths": [], "include": False, "dry": False,
++        info = {"all": False, "paths": [], "include": False, "dry": False, "noverify": False,
+                 "skip": env.get("APEX_SKIP_GUARDS") == "1", "gitdir": gitdir}
+         j = i + 1
+         dashdash = False
+@@ -594,19 +595,27 @@ def commit_info(text):
+             elif a == "--dry-run":
+                 info["dry"] = True
+             elif a.startswith("--"):
++                # git takes any unambiguous prefix: `--no-veri` is --no-verify (`--no-ve` is ambiguous with
++                # --no-verbose and git refuses it). 2026-10-28 split: the git hook is the gate, so skipping it is refused.
++                if len(a) >= 8 and "--no-verify".startswith(a.split("=", 1)[0]):
++                    info["noverify"] = True
+                 if a in COMMIT_WITH_ARG:
+                     j += 1
+             else:
+-                # a short cluster: -am, -qm "msg", -mfoo
++                # a short cluster: -am, -qm "msg", -mfoo, -nm (no-verify); -S/-u take the rest of the cluster
+                 for k, ch in enumerate(a[1:]):
+                     if ch == "a":
+                         info["all"] = True
+                     if ch in ("i", "o"):
+                         info["include"] = True
++                    if ch == "n":
++                        info["noverify"] = True
+                     if ch in COMMIT_SHORT_ARG:
+                         if k == len(a) - 2:
+                             j += 1
+                         break
++                    if ch in ("S", "u"):
++                        break
+             j += 1
+         found.append(info)
+     return found
+@@ -853,7 +862,7 @@ def closed_pr_refusal(dests, root):
+         try:
+             cmd = shlex.split(os.environ["APEX_PR_STATE_CMD"]) if os.environ.get("APEX_PR_STATE_CMD") else \
+                 ["node", "--input-type=module", "-e", PR_STATE_JS]
+-            r = subprocess.run(cmd + ["brycejmurrin:" + branch], cwd=root, capture_output=True, text=True, timeout=30)
++            r = subprocess.run(cmd + ["brycejmurrin:" + branch], cwd=root, capture_output=True, text=True, timeout=5)
+             prs = json.loads(r.stdout) if r.returncode == 0 else None
+         except Exception:
+             prs = None
+@@ -1485,6 +1494,7 @@ def surveyor_targets(text, cwd):
+ 
+ # ---- pass-4 red-team additions (2026-10-26) ----------------------------------------
+ CONFIG_WRITE_KEYS = re.compile(r"^(core\.hookspath|push\.default|remote\.[^.]+\.(push|mirror|pushurl)|include\.path|includeif\..*\.path|alias\.(push|commit|merge))$", re.I)
++CONFIG_OPT_ARG = {"-f", "--file", "--blob", "--type", "--default", "--comment", "--value", "--url"}
+ 
+ 
+ def config_issues(text):
+@@ -1505,8 +1515,27 @@ def config_issues(text):
+         if i < len(argv) and argv[i] == "config":
+             args = argv[i + 1:]
+             reading = any(a in ("--get", "--get-all", "--get-regexp", "--list", "-l", "--show-origin", "--show-scope") for a in args)
+-            keys = [a for a in args if not a.startswith("-")]
+-            if not reading and keys and CONFIG_WRITE_KEYS.match(keys[0]):
++            # 2026-10-28 (commit-hook split: core.hooksPath now carries the whole commit gate): skip option VALUES
++            # (`--file .git/config core.hooksPath x` read `.git/config` as the key) and read git 2.46's subcommand
++            # form (`git config set|unset|replace-all <key>`); removing or renaming the `core` section drops it too.
++            keys, k = [], 0
++            while k < len(args):
++                a = args[k]
++                if a in CONFIG_OPT_ARG:
++                    k += 2
++                    continue
++                if not a.startswith("-"):
++                    keys.append(a)
++                k += 1
++            if keys and keys[0] in ("get", "list"):
++                reading = True
++            elif keys and keys[0] in ("set", "unset", "replace-all", "add"):
++                keys = keys[1:]
++            section = keys[1:2] if keys and keys[0] in ("remove-section", "rename-section") else (
++                keys[:1] if any(a in ("--remove-section", "--rename-section") for a in args) else [])
++            if not reading and section and section[0].lower() == "core":
++                why.append("git config removes or renames the core section (core.hooksPath)")
++            elif not reading and keys and CONFIG_WRITE_KEYS.match(keys[0]):
+                 why.append(f"git config {keys[0]} is a write")
+         if why:
+             found.append({"cmd": " ".join(argv), "why": sorted(set(why))})
+@@ -1587,6 +1616,7 @@ def guard(payload, root):
+         gd = next((x["gitdir"] for x in c if x.get("gitdir")), "") or "-"
+         print(len(allc), "1" if c else "0", "1" if any(x.get("all") for x in c) else "0", gd, " ".join(paths))
+     except ParseError:
++        allc = []
+         print("NULL")
+     dests = []
+     try:
+@@ -1633,6 +1663,15 @@ def guard(payload, root):
+         sys.stderr.write("BLOCKED: `" + cfgw[0]["cmd"] + "` — " + "; ".join(cfgw[0]["why"]) + " (pass-4 red-team R2: it "
+                          "switches git's hooks or push targets off for every worktree and later session in this container).\n")
+         return 2
++    # 2026-10-28 commit-hook split (Bryce: "Yes, split it"): .githooks/pre-commit is the one owner of test:guards,
++    # so `git commit --no-verify` / `-n` is the commit made with no gate at all. APEX_SKIP_GUARDS=1 stays the
++    # sanctioned bypass (the hook honours it) for a change to the guards themselves.
++    unverified = [x for x in allc if x.get("noverify") and not x.get("dry")]
++    if unverified:
++        sys.stderr.write("BLOCKED: `git commit --no-verify` / `-n` skips .githooks/pre-commit, the one commit gate for "
++                         "every host (test:guards, docs-integrity, the ratchet auto-raise; AGENTS.md rule 12). Commit "
++                         "without it; if the guards themselves are the change, prefix APEX_SKIP_GUARDS=1 instead.\n")
++        return 2
+     wrapped = wrapped_issues(cmd)
+     if wrapped:
+         sys.stderr.write("BLOCKED: `" + wrapped[0] + "` runs a git push / merge / config write inside an interpreter body "
+diff --git a/.claude/settings.json b/.claude/settings.json
+index 3dd002cbf1..67b279a015 100644
+--- a/.claude/settings.json
++++ b/.claude/settings.json
+@@ -256,7 +256,7 @@
+           {
+             "type": "command",
+             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
+-            "timeout": 360,
++            "timeout": 30,
+             "onFailure": "block"
+           },
+           {
+@@ -305,7 +305,7 @@
+         "hooks": [
+           {
+             "type": "command",
+-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
++            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\" --guard",
+             "timeout": 5,
+             "onFailure": "block"
+           }
+@@ -317,7 +317,8 @@
+           {
+             "type": "command",
+             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-gate.py\"",
+-            "timeout": 5
++            "timeout": 5,
++            "onFailure": "block"
+           }
+         ]
+       }
+diff --git a/.codex/hooks.json b/.codex/hooks.json
+index ac2190a573..820c4ce6e7 100644
+--- a/.codex/hooks.json
++++ b/.codex/hooks.json
+@@ -7,7 +7,7 @@
+           {
+             "type": "command",
+             "command": "bash .codex/hooks/shell-guard.sh",
+-            "timeout": 200
++            "timeout": 30
+           }
+         ]
+       },
+diff --git a/.cursor/hooks.json b/.cursor/hooks.json
+index 50892f4e7a..f0c4610f6a 100644
+--- a/.cursor/hooks.json
++++ b/.cursor/hooks.json
+@@ -2,7 +2,7 @@
+   "version": 1,
+   "hooks": {
+     "beforeShellExecution": [
+-      { "command": "bash .cursor/hooks/shell-guard.sh", "timeout": 200, "failClosed": true }
++      { "command": "bash .cursor/hooks/shell-guard.sh", "timeout": 30, "failClosed": true }
+     ],
+     "preToolUse": [
+       { "command": "bash .cursor/hooks/edit-guard.sh", "timeout": 30, "failClosed": true }
+diff --git a/.cursor/hooks/shell-guard.sh b/.cursor/hooks/shell-guard.sh
+index da2e638995..6b9a35db2e 100755
+--- a/.cursor/hooks/shell-guard.sh
++++ b/.cursor/hooks/shell-guard.sh
+@@ -8,11 +8,13 @@
+ # Claude's hookSpecificOutput (https://cursor.com/docs/agent/hooks). Exit 2
+ # blocks in every host. For Cursor the guard's answer is mapped onto Cursor's
+ # flat JSON, so the agent reads WHY (stderr alone reaches only the hook log)
+-# and a gh ask stays an ask. The commit gate is left to .githooks/pre-commit
+-# when core.hooksPath points there (no double 25 s run).
++# and a gh ask stays an ask. The commit gate is .githooks/pre-commit for every
++# host (2026-10-28 split): bash-guard.sh runs no test:guards, so this adapter
++# no longer needs APEX_COMMIT_GATE, and its timeout in .cursor/hooks.json and
++# .codex/hooks.json is 30 s like Claude's. bash-guard refuses a commit when no
++# pre-commit hook would run (fix: npm run prepare).
+ set -u
+ DIR=$(cd "$(dirname "$0")/../.." && pwd)
+-[ "$(git -C "$DIR" config core.hooksPath 2>/dev/null)" = ".githooks" ] && export APEX_COMMIT_GATE=githook
+ RAW=$(cat)
+ NORM=$(printf '%s' "$RAW" | python3 -c '
+ import json,sys
+diff --git a/.githooks/pre-commit b/.githooks/pre-commit
+index 846a03fa70..bbc246aa1e 100755
+--- a/.githooks/pre-commit
++++ b/.githooks/pre-commit
+@@ -1,27 +1,49 @@
+ #!/usr/bin/env bash
+-# .githooks/pre-commit — the commit gate for EVERY agent host, not just Claude.
+-# Activated by `core.hooksPath=.githooks` (package.json "prepare", run by every
+-# host's `npm install`). AGENTS.md §Verification 3: a commit runs test:guards;
+-# a docs-only commit runs docs-integrity alone; ratchet growth <= 40 lines is
+-# auto-raised into the commit. Until 2026-10-14 this lived only in Claude
+-# Code's PreToolUse hook (.claude/hooks/bash-guard.sh), so Cursor, Codex and
+-# Grok Build committed unguarded (docs/notes/AGENT-GUARDS-2026-10-14.md).
++# .githooks/pre-commit — THE commit gate, the one owner of `test:guards` for
++# every agent host (Claude Code, Cursor, Codex, Grok Build) and for a person at
++# a terminal. Bryce, 2026-10-28 ("Yes, split it";
++# docs/plans/2026-10-27-landing-and-agent-ops.md §4): until then Claude Code ran
++# the same suite inside its PreToolUse Bash hook (.claude/hooks/bash-guard.sh,
++# 50–110 s under a 360 s hook timeout) and this file stood aside for it
++# (CLAUDECODE=1). bash-guard.sh now keeps only fast refusals, among them the two
++# ways around this file: `git commit --no-verify`/`-n` and a core.hooksPath change.
+ #
+-# Claude Code sessions (CLAUDECODE=1) already ran the same gate in bash-guard.sh
+-# before git started, so it is not run twice. APEX_SKIP_GUARDS=1 bypasses, as
+-# there.
++# Activated by `core.hooksPath=.githooks`, RELATIVE, so each linked worktree runs
++# its own tree's copy (git runs a hook from the worktree root and resolves a
++# relative hooksPath there: https://git-scm.com/docs/githooks#_description,
++# https://git-scm.com/docs/git-config#Documentation/git-config.txt-corehooksPath).
++# Set by package.json "prepare" (every `npm install`/`npm ci`) and re-asserted by
++# .claude/hooks/session-start.sh; bash-guard.sh refuses a commit when no
++# pre-commit hook would run.
+ #
+-# #2889 slice 1: reuse a green test:guards verdict for the same staged tree
+-# (artifacts/pre-commit-guards.ok, 10 min — same file/format as bash-guard.sh)
+-# via tools/ci/guards-verdict.mjs; optional apex.guardTimeout / APEX_GUARD_TIMEOUT
+-# wraps the suite in `timeout -k 5` (no new default when unset).
++# AGENTS.md rule 12: a commit runs test:guards; a docs-only commit runs
++# docs-integrity alone; ratchet growth <= 40 lines is auto-raised into the
++# commit. APEX_SKIP_GUARDS=1 bypasses, only when the guards themselves are the
++# change. Inside an agent's Bash tool the suite runs under THAT call's timeout
++# (Claude Code: 2 min by default), so give the commit call a longer one, or run
++# `npm run test:guards` first: a green run for the same staged tree, < 10 min
++# old, is reused here (#2889, tools/ci/guards-verdict.mjs,
++# artifacts/pre-commit-guards.ok). Optional apex.guardTimeout /
++# APEX_GUARD_TIMEOUT wraps the suite in `timeout -k 5` (no default when unset).
+ set -u
+ [ "${APEX_SKIP_GUARDS:-}" = 1 ] && exit 0
+-[ -n "${CLAUDECODE:-}" ] && exit 0
+ ROOT=$(git rev-parse --show-toplevel) || exit 1
+ cd "$ROOT" || exit 1
+ mkdir -p artifacts
+ LOG=artifacts/pre-commit-guards.log
++T0=$(date +%s)
++# A LINKED WORKTREE BORROWS THE MAIN CHECKOUT'S node_modules (moved here from
++# bash-guard.sh; 2026-10-15 census session_01CgCjzTvy729SeWsHzuv8eh): EnterWorktree,
++# `isolation: worktree` subagents and `git worktree add` make a tree with none.
++# Same package.json; the link is git-ignored (`node_modules` in .gitignore).
++if [ ! -e node_modules ]; then
++  WT_COMMON=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
++  WT_MAIN=""
++  [ -n "$WT_COMMON" ] && WT_MAIN=$(dirname "$WT_COMMON")
++  if [ -n "$WT_MAIN" ] && [ "$WT_MAIN" != "$ROOT" ] && [ -d "$WT_MAIN/node_modules" ]; then
++    ln -s "$WT_MAIN/node_modules" node_modules 2>/dev/null || true
++  fi
++fi
+ # Tests create their own Git repositories. Keep the hook's staged-index context
+ # for ratchets/git add, but do not let fixture subprocesses inherit its selectors.
+ without_local_git_context() (
+@@ -35,12 +57,23 @@ if [ ! -d node_modules ]; then
+ fi
+ STAGED=$(git diff --cached --name-only --no-renames)
+ [ -z "$STAGED" ] && exit 0
++# A TREE WITH NO tools/ (a track-survey-assets image branch) cannot run the
++# guards (#2428, moved from bash-guard.sh): skip with a note when nothing staged
++# is code or a generated shell file.
++if [ ! -d tools/ci ] && [ ! -d tools/check ] \
++   && ! printf '%s\n' "$STAGED" | grep -Eq '^(js/|css/|tools/|tests/)|^(index\.html|sw\.js|version\.json|package\.json|CHANGELOG\.md)$'; then
++  echo "pre-commit: guards skipped — no tools/ in this tree." >&2
++  exit 0
++fi
+ GENERATED=" $(node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ') "
+ DOCS_ONLY=1
+ while IFS= read -r f; do
+   [ -z "$f" ] && continue
+   case "$GENERATED" in *" $f "*) DOCS_ONLY=0; break ;; esac
+-  printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$' || { DOCS_ONLY=0; break; }
++  # Prose: docs/, any .md, skills and agents; survey images and reports under
++  # artifacts/{shots/tracks,shots/gallery,track-survey} (2026-10-15,
++  # docs/notes/SURVEY-ASSETS-BRANCH.md). Never a generated doc (above).
++  printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
+ done <<LIST
+ $STAGED
+ LIST
+@@ -58,6 +91,7 @@ require_index_worktree_match() {
+ # A matching earlier verdict already certifies this index even if the worktree
+ # subsequently changed. Never scrub GIT_INDEX_FILE for a commit cache lookup.
+ if [ "$DOCS_ONLY" != 1 ] && node tools/ci/guards-verdict.mjs check; then
++  echo "pre-commit: code commit — reused the green test:guards verdict for this staged tree (no suite run)." >&2
+   exit 0
+ fi
+ require_index_worktree_match || exit 1
+@@ -70,6 +104,7 @@ if [ "$DOCS_ONLY" = 1 ]; then
+   fi
+   require_index_worktree_match || exit 1
+   [ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while docs-integrity ran." >&2; exit 1; }
++  echo "pre-commit: docs-only commit — docs-integrity green ($(( $(date +%s) - T0 )) s); no ratchet raise, no test:guards." >&2
+   exit 0
+ fi
+ # Capture the generator's actual outputs, including new topic fragments and
+@@ -129,6 +164,7 @@ fi
+ # Verdict cache (#2889): a fresh green write-tree match skips the suite.
+ # Printed on stdout so agents see the hit line; the suite log stays for misses.
+ if node tools/ci/guards-verdict.mjs check; then
++  echo "pre-commit: code commit — ratchets --auto-raise, then reused the green test:guards verdict for this staged tree." >&2
+   exit 0
+ fi
+ require_index_worktree_match || exit 1
+@@ -166,4 +202,5 @@ else
+ fi
+ require_index_worktree_match || exit 1
+ [ "$(git write-tree)" = "$GUARD_TREE" ] || { echo "pre-commit: BLOCKED — commit index changed while guards ran." >&2; exit 1; }
++echo "pre-commit: code commit — ratchets --auto-raise, then npm run test:guards green ($(( $(date +%s) - T0 )) s; log $LOG)." >&2
+ exit 0
+diff --git a/tools/env/cloud-agent-install.sh b/tools/env/cloud-agent-install.sh
+index a5ae52b29c..ec278e938d 100755
+--- a/tools/env/cloud-agent-install.sh
++++ b/tools/env/cloud-agent-install.sh
+@@ -124,6 +124,16 @@ fi
+ # Always cure before any npm use (install-browsers.sh, MCP clones).
+ ensure_npm_prefix
+ 
++# Arm the commit gate (2026-10-28 split: .githooks/pre-commit is the one owner of
++# test:guards for every host). install-browsers.sh installs with --ignore-scripts,
++# so package.json "prepare" never ran on a Cloud VM and core.hooksPath stayed
++# unset (docs/notes/AGENT-GUARDS-2026-10-14.md). Relative, so each worktree runs
++# its own copy; bash-guard.sh refuses a commit while no pre-commit hook would run.
++if [[ -f "$ROOT/.githooks/pre-commit" && "$(git -C "$ROOT" config --get core.hooksPath 2>/dev/null || true)" != ".githooks" ]]; then
++  git -C "$ROOT" config core.hooksPath .githooks && echo "core.hooksPath set to .githooks (the commit gate)" \
++    || echo "WARN: could not set core.hooksPath=.githooks — commits will be refused until npm run prepare" >&2
++fi
++
+ need_pkg() {
+   dpkg -s "$1" >/dev/null 2>&1
+ }
