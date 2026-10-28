@@ -158,9 +158,15 @@ arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and bin
 - **Claude cloud session** (the default, `lane:claude`): the whole contract above. `subscribe_pr_activity` on your
   PR while CI runs on your head; no `send_later`, no bus. The parent is the dispatcher session: send_message
   session_id `@parent` to coordinate.
-- **Cursor cloud agent** (`lane:cursor`, self-contained issues only; `hosts.cursor.enabled` is false today): one
-  run that ends at ready, with the Hand-off block current. NOT BUILT: the dispatcher sets neither `run-ci` nor
-  `land` for a Cursor PR and sends no follow-up turn, so until it does Bryce adds them by hand. No bus, no timers.
+- **Cursor cloud agent** (`lane:cursor`, self-contained issues only; `hosts.cursor.enabled` is false today, so
+  Bryce or the Grok launcher starts it): one run that stops when the draft PR is pushed and the Hand-off block is
+  current. The Cursor token does not add labels, claim, post issue comments, or open issues. Put `run-ci`,
+  `lane:cursor`, and `land` in the block's `next:` line; Bryce or a later Claude lane applies them. Do not call
+  `subscribe_pr_activity` or `subscribe_github_*`. A CI notification is not a new task. Symbols go through apex-lsp
+  (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics` once after the edit); grep is for
+  comments, docs, and CSS. Do not spawn task_v2 scouts. Gate order: edit, `npm run gen`, the one spec `pick-tests`
+  names, `tooling-fast --changed` once, commit, push. One more gate only when GitHub says CONFLICTING. NOT BUILT:
+  the dispatcher sets neither `run-ci` nor `land` and sends no follow-up turn. No bus, no timers.
 - **Codex thread** (`lane:codex`, Bryce's own tool, pull-only): write the Hand-off block at the first push and add
   `lane:codex`; the same `land` label lands you. A draft silent for 6 h is re-owned without asking. AGENTS.md stays
   under 32 KiB because it is all a Codex thread loads; where it names a Claude-only tool (`Monitor`,
