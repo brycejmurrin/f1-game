@@ -21,14 +21,15 @@ MCP wrap: `./tools/mcp/apex-tools-mcp.sh call apex_agent
 driving policy → [references/surface.md](references/surface.md). Design notes:
 `docs/DEBUG-HOOKS.md`.
 
-**TL;DR** — Drive Apex 26 as text, not screenshots. Shell:
-`node tools/shot/agent.mjs <track> <tool> [flags]` (stages for you). In-page:
-`window.__apex.<tool>(...)`. Start with `agentHelp()` + `objective()` once,
-then `world({detail:"drive"})` → decide → `act`/`rollout` → `terminal()`. Pin
-`seed(n)` in-page before any A/B (the VM CLI ignores `--seed`; seed a VM batch with
-`createGame({search:"?seed=42"})`, surface.md §Three ways in). Failures are `{ok:false, error, message, fix}` (two
-quiet exceptions: empty `scene()` while props build; stale `render({what:"view"})`
-under headless — stage first).
+## First loop
+
+1. Choose the staged shell `node tools/shot/agent.mjs <track> <tool> [flags]` or
+   in-page `window.__apex.<tool>(...)`; read `agentHelp()` + `objective()` once.
+2. Read `world({detail:"drive"})`, decide, then `act`/`rollout` and check `terminal()`.
+3. Pin `seed(n)` before an in-page A/B. The VM CLI ignores `--seed`; seed a VM batch
+   with `createGame({search:"?seed=42"})` (surface.md §Three ways in).
+4. Handle `{ok:false, error, message, fix}`. Empty `scene()` while props build and
+   stale `render({what:"view"})` under headless are quiet exceptions: stage first.
 
 **Entry routes** (cost differs — details in surface.md): CLI VM or browser boot,
 `apex-eval.mjs` multi-call one boot, or live `page.evaluate` after staging

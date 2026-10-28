@@ -6,8 +6,8 @@ description: "Use when tweaking one menu or HUD element (padding, font size, saf
 # Playing with menu / HUD CSS
 
 Host the working tree, open **one** screen, dump structured DOM, edit `css/`,
-hot-swap the stylesheet, screenshot. No cache bump in the loop (`bump-cache`
-only stamps the deploy's staged copy).
+hot-swap the stylesheet, screenshot. For cache behavior, read
+[check-changes bump-cache and shell/cache](../check-changes/references/bump.md).
 
 ## When to Use
 

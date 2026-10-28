@@ -7,10 +7,10 @@ description: "Use when a Data Hub tab is empty, stale or the wrong year, the F1 
 
 `js/data/hub.js` is the overlay (`#datahub`). Tab loaders live in the
 split `js/data/*` modules. Styles in `css/data.css` (`dh-` prefix).
-In-race slip/grip/timing is **agent-view** (`references/state.md`), not this overlay.
+In-race slip/grip/timing is [agent-view state hooks](../agent-view/references/state.md), not this overlay.
 WATCH/HIGHLIGHTS loading the wrong driver/race after a picker change is here; a camera
 that snaps or keeps an old anchor after a SEEK, follow change or exit/re-entry is
-follow-owner state → **f1-animation-cameras** (`references/replay.md`).
+follow-owner state → [f1-animation-cameras replay workflow](../f1-animation-cameras/references/replay.md).
 
 ## Tabs
 

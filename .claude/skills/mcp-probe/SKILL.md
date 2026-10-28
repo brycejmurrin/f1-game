@@ -57,7 +57,7 @@ initialised, not broken.
 Heap/CPU while a **js-debugger** session is attached to that page → its `debugger_profile` (one owner per page).
 
 **Census tools** (measured before/after for phone memory, heap growth, CPU-side
-copies, GPU budgets; folded from the perf-memory-census skill):
+copies and GPU budgets):
 `node tools/perf/runtime-memory.mjs`, `tools/perf/vm-leak-census.mjs`,
 `tools/gfx/mem-census.mjs` (scripted track-switch heap-snapshot compare),
 `tools/perf/mesh-census.mjs` and `tools/perf/garage-census.mjs` (flags in

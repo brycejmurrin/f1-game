@@ -13,10 +13,8 @@ of everything about that circuit**: its real centreline (`path`), curated markin
 pair, `js/circuits/scenery/<id>.js`. The engine (`js/track/tracks.js`) reads
 `TrackDefs`, builds a Catmull-Rom spline from `path` (a def without one is a build
 error naming the circuit — there is no hand-authored fallback), and extrudes the
-road, terrain, and prop meshes. **Circuit files have no `<script>` tag:** the shell
-carries only the generated picker meta (`js/track/circuit-meta.js` — `npm run gen` rewrites it,
-never hand-edit; AGENTS.md rule 11), and a full def hydrates per pick through `LAZY_CIRCUIT`
-(`tools/manifest.cjs`; `ensureCircuit` in `js/core/lazy-bundles.js`).
+road, terrain, and prop meshes. Circuit loading, generated picker meta, and the
+manifest contract live in [AGENTS.md §Layout](../../../AGENTS.md#layout).
 
 ## Track-definition schema
 

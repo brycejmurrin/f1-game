@@ -44,11 +44,9 @@ desktop, and sets BOTH `YAW_INERTIA` (`weightFromSlider`) and `YAW_DAMP` (`yawDa
 the heavy, lazier one Bryce drives. The VM stubs `matchMedia` as desktop, so a turn-in complaint from a phone is measured
 with `storage: { carWeight: 10 }` (both cars, labelled). **Rule out assists and input first:** read `tuning()` and the
 reporter's store (`gripSteer`, `drivingHelp`, `carWeight`, touch rows); a touch range / DRAG AT SPEED cause → input-controls.
-`PACE` is a scale, not a cap; compare speeds via `vTop()`/`vStd()`/`aStd()`.
-
-**The arc must not reach the driver** (AGENTS.md §Physics; the table is `docs/PHYSICS.md` §Curvature channels):
-never "help" the player by feeding path curvature into steer/throttle with assists off. After any player-path
-change run `node --test tests/unit/curvature-channels.test.mjs` and spawn agent `physics-contract-auditor`.
+Speed scaling and the no-curvature-assist contract live in
+[AGENTS.md §Physics](../../../AGENTS.md#physics) and `docs/PHYSICS.md` §Curvature channels.
+After any player-path change run `node --test tests/unit/curvature-channels.test.mjs` and spawn agent `physics-contract-auditor`.
 
 **Touching steering or GRIP STEER:** `GripSteer.forPlayer` (called from `js/physics/player-forces.js`) must
 receive the SHAPED lock (`og.shaped` — the `expo`/`maxSlip`/taper output), as `grip-steer.js`'s `apply()`

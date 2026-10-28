@@ -18,6 +18,8 @@ Codex run the command by hand — it is `pick-tests`, 0.1 s, read-only):
 
 !`node tools/ci/pick-tests.mjs 2>&1 | head -24`
 
+PR status only → **check**; diagnosing or fixing a failed PR → **steward**.
+
 ## Prerequisites
 
 For prose-only edits, take the [canonical docs/skill fast path](../../../docs/VERIFICATION.md#docs-and-skill-changes)

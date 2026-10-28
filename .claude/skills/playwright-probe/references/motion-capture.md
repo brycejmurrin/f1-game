@@ -1,4 +1,4 @@
-# Motion capture — temporal-artifact verification (folded from the motion-capture skill)
+# Motion capture — temporal-artifact verification
 
 Static screenshots miss flicker — the artifact is frame-to-frame under motion.
 This skill captures a real driven clip headless and scores per-frame flicker.

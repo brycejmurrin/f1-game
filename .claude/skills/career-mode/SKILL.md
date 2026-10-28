@@ -24,6 +24,7 @@ Do **not** use this for:
 
 - One-off Grand Prix, standalone Season, or Time Trial unless career state leaks
   into them (standalone Season → **season-mode**).
+- Qualifying/results sheets outside a career save → **race-weekend**.
 - Generic parts physics; use this only for the economy/cap that buys and fits
   parts in career.
 - Race-control/debris incidents and the reliability retirement plan (`Reliability.plan`) → **race-incidents-control**.

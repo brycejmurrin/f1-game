@@ -25,7 +25,7 @@ player at `cost`/`desc` ("cheapest recovery-biased option") instead of a name.
 
 `Parts.ersProfile` only sets the 0..1 axes. Battery dynamics
 (`drainFor`/`regenFor`/`otTimeFor` in `js/game.js`) consume them.
-Verify in-race via **agent-view** `references/state.md` / `__apex.physState()` (`ersDeploy`,
+Verify in-race via [agent-view state hooks](../../agent-view/references/state.md) / `__apex.physState()` (`ersDeploy`,
 `ersRegen`, `drain`, `regen`, `otTime`). Measured deltas:
 `../../../../docs/CAREER.md` (`harvest` vs `standard` vs `overcharge`).
 
@@ -52,7 +52,7 @@ resolution.
    `getTeamParts` / `saveTeamParts`; research through `Career.research(opt)`.
 5. **Livery/finish.** Schemes in `js/car/liveries.js`; `fin`/`finArt` for the
    shark fin. Test chrome with `finish: "chrome"`, not `--refl=1` in the viewer
-   (studio-only — see **playwright-probe** `references/car-studio.md`).
+   (studio-only — see [playwright-probe car studio](../../playwright-probe/references/car-studio.md)).
 6. **Visual verify** (server on 3456):
    ```sh
    node tools/car/render-car.mjs --team=ferrari --preset=livery

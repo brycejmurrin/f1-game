@@ -25,11 +25,10 @@ server or change global host configuration to perform a lookup.
 
 ## Which call
 
-Configured MCP calls default to compact presentation. Add `outputLevel: "full"`
-when the next decision requires the complete bounded definition/reference page;
-native `limit`, `offset`, `maxLines` and `format` still determine what is fetched.
-`output_read` retrieves a saved result without repeating a call. Shell examples
-below also support the common terminal entrypoint, for example
+For output levels and saved-result retrieval, follow the
+[common output contract](../../../docs/agent-output/README.md). Native `limit`,
+`offset`, `maxLines` and `format` determine the fetched page. Shell examples
+also support the common terminal entrypoint, for example
 `node tools/agent-run.mjs -- node tools/mcp/lsp-mcp.mjs refs Tracks.curvature --concise --limit=40`.
 
 | You want | MCP call | Shell (same tools, one process per call) |

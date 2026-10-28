@@ -5,6 +5,9 @@ description: "Use when files or docs are too big: a full size ratchet blocks a c
 
 # Cut bloat — shrink, split, dedupe, prove dead
 
+A session near its context cap needs **handoff**; trimming a skill or instruction budget
+needs **agent-config**. This workflow removes code/docs bloat with evidence.
+
 Scan first. Dispatch **bloat-auditor**. Parent applies **one carve**.
 Preserve behaviour. Lower ratchets. Do not "simplify" a load-bearing
 quirk — the measured list is [references/do-not.md](references/do-not.md).

@@ -51,6 +51,7 @@ must be AUDIO or VISUAL (body attitude, particles, HUD); shake and haptics alone
 
 ## When NOT to use
 
+- Silent or broken audio, rather than punchier feedback → **audio-debug**.
 - The car's measured behaviour is wrong (understeer, grip, pace) → **tune-physics**.
 - Camera lag: measure → **playwright-probe**, fix → **f1-animation-cameras** (also replay/broadcast cuts).
 - Rumble/haptics *mapping* on a gamepad → **input-controls**.

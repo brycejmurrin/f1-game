@@ -87,3 +87,49 @@ desc = description chars (cap 1,536); body = SKILL.md body lines (target < 500);
 2. Per-skill PRs for content changes: mcp-probe description scope, asset-pack scope, steward §12 → ship,
    survey-ui-matrix tool swap, lighting-tuner constant.
 3. The description budget: the research found 10,835 of 11,000 chars in use; the sweep must not grow it.
+
+
+## Continuation: remaining 27 bodies reviewed
+
+The original table remains a dated proposal inventory. This pass reviewed the 27 skills outside the nine already
+slimmed. Descriptions remain unchanged; no routing score is inferred from body review. Measurements remain in
+place with their context; only migration-origin phrases are removed.
+
+| skills | disposition and evidence |
+|---|---|
+| agent-config | Routing form already fixed; retain tool-restriction guidance. No hook/agent schema change from an unverified reviewer side finding. |
+| agent-view | Numbered first loop; removed folded-skill provenance from state reference. |
+| asset-pack | Retain local glTF/procedural adapter scope: current body explicitly links DESIGN-TOOLS.md. Removing that supported workflow would undo newer integration work. |
+| audio-debug | KEEP; optional first-check reorder adds no correction to its existing diagnostic workflow. |
+| career-mode | Route non-career qualifying/results to race-weekend. |
+| check | Already states CI success AND gate success; retain read-only contract. |
+| check-changes | Status route to check; removed migration-origin clauses in bump/deploy/triage. Keep measurements and operational triage detail. |
+| code-nav | Replace repeated output-gateway explanation with the common-contract link; rename and grep triggers already present. |
+| css-play | Canonical bump-cache link replaces duplicate explanation. Keep literal trigger required by skill-progressive. |
+| data-hub | Resolve state/replay cross-skill links; existing export/year reference cues identify concrete symptoms. |
+| f1-animation-cameras | Resolve cross-skill cameras link; keep diagnostic seek-snap distinction and evidence-owner references. |
+| game-feel | Route silent/broken sound to audio-debug. Keep determinism checks specific to FX work. |
+| garage-parts-livery | Resolve car-studio/state paths in body and workflow; remove design-loop migration provenance. |
+| handoff | Keep cold-start checklist: it is this skill's requested output format. Contract references already identify WORKERS.md; no second Hand-off schema introduced. |
+| js-debugger | Already uses artifacts/ for evidence; keep page ownership and attach-specific restrictions. |
+| mcp-probe | Four concrete read-when cues; remove census-origin phrase. Private attachment section already supplies the promised design-tooling route. |
+| multiplayer-debug | Keep the opt-in TURN warning at entry and the detailed phone-NAT recipe: they serve different entry points; neither asserts a newly measured outage. |
+| new-track | Replace repeated generated-picker/loading policy with AGENTS.md Layout link; retain circuit schema and coordinate specifics. |
+| phone-browser | KEEP; existing numbered AGENTS references and deploy-research route resolve. |
+| pwa-cache-service-worker | Existing description includes service worker; add a four-step first workflow and retain cache-specific diagnostics. |
+| race-incidents-control | Routing form already corrected. Do not apply refuted missing-net claim. |
+| race-weekend | Route career quali/DNF money to career-mode and link verification selection canon. |
+| scenery-dress | Existing floodlight-mast distinction already avoids lighting-tuner overlap. Keep per-placement ground/frame rules and measurements. |
+| ship | Existing routing already names steward/check-changes/handoff. Keep one canonical landing procedure. |
+| slim-bloat | Add explicit context-cap route to handoff; skill budget route stays agent-config. Keep extraction-boundary examples and ratchet discipline. |
+| tune-physics | Link Physics canon instead of repeating curvature/speed policy; keep targeted curvature audit command and shaped-lock contract. |
+| ui-menu-a11y | Routing already explicit; pick-tests criticism was refuted. Keep accessibility and default-profile workflow. |
+
+Proposal disposition: retain current policy for P2 (manual sync only when current policy requires), P3 (no broad
+AGENTS.md deletion in this skill-body audit), and P4 (no new blanket timeout ceiling). P1 is implemented by PR #4094.
+Script candidates and broader research recommendations remain recorded proposals, not implied implementation
+requirements. These choices keep the factual-audit scope and avoid inventing new global policy.
+
+Routing capability blocker: this executor has no `claude` executable. The 36 query files contain 341 queries;
+no baseline/head result JSON was recovered here. A capable host must run the real evaluator and compare the
+results before readiness; the historical 299/341 baseline alone is not a current verification result.
