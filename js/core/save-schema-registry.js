@@ -39,6 +39,9 @@ const SaveSchemaRegistry = (function () {
     { re: /^parts\./, owner: "js/garage/setup-sheet.js", lane: "json", v: 1, validate: validators.json },
     { re: /^livery\./, owner: "js/car/custom-liveries.js", lane: "json", v: 1, validate: validators.json },
     { re: /^setup\./, owner: "js/garage/setup-tune.js", lane: "json", v: 1, validate: validators.json },
+    // Named garage sheets (js/garage/setup-presets.js). Must precede any looser
+    // setup.* consumer; the write-site scan used to skip *presets.js entirely.
+    { re: /^setupPresets\./, owner: "js/garage/setup-presets.js", lane: "json", v: 1, validate: validators.json },
     { re: /^ttlb\./, owner: "js/core/store.js", lane: "json", v: 2, validate: validators.ttlb },
     { re: /^career\.(driver|myteam)\.[0-2]$/, owner: "js/career/career.js", lane: "json", v: 1, validate: validators.career },
     { re: /^api\./, owner: "js/data/api-transport.js", lane: "json", v: 1, validate: validators.disposable },
