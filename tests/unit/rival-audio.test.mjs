@@ -442,6 +442,7 @@ function loadGameCams() {
   globals.CamTune = { get: () => 0, cornerLead: () => 0, apply: (_, __, ___, fov) => fov };
   const ctx = vm.createContext(globals);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/vantage-ride.js"), "utf8"), ctx, { filename: absSrc("js/camera/vantage-ride.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/camera/vantage.js"), "utf8"), ctx, { filename: absSrc("js/camera/vantage.js") });
   return vm.runInContext("GameCams", ctx);
 }

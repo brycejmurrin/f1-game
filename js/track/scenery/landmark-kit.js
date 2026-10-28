@@ -198,6 +198,6 @@ const LandmarkKit = (function () {
     return { roof, facade, tower, stadiumSection, arch, canopy };
   }
 
-  return { create };
+  return { create, finiteVector, boundedCount };
 })();
 Object.freeze(LandmarkKit);

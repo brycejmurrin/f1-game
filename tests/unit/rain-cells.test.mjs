@@ -30,7 +30,7 @@ function boot() {
   ctx.Career = { inCareer: () => false, hash: () => 0.5 };
   ctx.Particles = { rainShow() {}, rainSeed() {}, rainIntensity() {} };
   ctx.GameAudio = { startRain() {}, stopRain() {} };
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/race/wx-hash.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   let wa = null;
   const G = {
