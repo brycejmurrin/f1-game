@@ -2997,7 +2997,6 @@ var GameAudio = (function () {
     radioFxLevel: radio.radioFxLevel,
     radioLeadS: radio.radioLeadS,
     radioFxMax: radio.radioFxMax,
-    radioChannels: radio.radioChannels,
     // The live context and SFX bus, for leaf modules that schedule their own
     // nodes (radio-voice squelch, #2189). null before init / after teardown.
     context: () => ctx,
@@ -3115,7 +3114,6 @@ var GameAudio = (function () {
     setMusicBackend,
     musicBackend,
     setSessionType,
-    sessionType() { return sessionType; },
     setMusicSource,
     musicSource,
     sourceCounts,
@@ -3188,8 +3186,6 @@ var GameAudio = (function () {
     subHz() { return subOctOsc ? +subOctOsc.frequency.value : 0; },
     // The DETUNE trim as it lands on the sample source, in cents.
     detuneCents() { return engSrcIdle && engSrcIdle.detune ? +engSrcIdle.detune.value.toFixed(4) : 0; },
-    // The rev-compensating shelf, in dB. Rises as the engine pitches down.
-    tiltDb() { return tiltEq ? +tiltEq.gain.value.toFixed(2) : 0; },
     rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value : 0; },   // exact: tools/check/audio-test.cjs and the tune tests take ratios of it
     // Last scheduled engine fundamental (Hz): sample-core from rate/period,
     // synth-core from engA's aim target. OfflineAudioContext pitch tests use

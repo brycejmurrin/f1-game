@@ -264,8 +264,9 @@ const HudElements = (function () {
     else initUI();
   }
 
+  // Store key `K` stays module-local (settings-export / store use the string).
   return {
-    K, ELEMENTS, isOn, set, setMany, apply, hiddenList, initUI, shippedOf, profileOf,
+    ELEMENTS, isOn, set, setMany, apply, hiddenList, initUI, shippedOf, profileOf,
     effective, configure, refreshVisibility: syncChecks,
     state: () => Object.assign({}, state),
   };
