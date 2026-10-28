@@ -1265,7 +1265,7 @@ test("race mix audition stops only the preview generation it started", () => {
 // hide-time suspend). Every other squelch test injects window.RadioSquelchCtx
 // and so never took that path; these load the REAL engine.js beside it.
 const ENGINE_FILES = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js",
-  "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"];
+  "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"];
 async function loadWithEngine({ mobile = false } = {}) {
   const { createRequire } = await import("node:module");
   const fakeAudio = createRequire(import.meta.url)("./fake-audio-vm.cjs");
@@ -1327,4 +1327,42 @@ test("the title stub exposes context() → null, and the squelch stays silent on
   vm.runInContext(read("js/audio/stub.js"), sc, { filename: absSrc("js/audio/stub.js") });
   assert.equal(vm.runInContext("GameAudio.context()", sc), null);
   assert.equal(vm.runInContext("GameAudio.sfxBus()", sc), null);
+});
+
+// ── 6. Spoken language (#1606): voices follow the setting, captions stay when none exists ──
+
+test("spokenLang: AUTO follows the UI language, an explicit pick wins, both reduce to the base tag", () => {
+  const { RV: R } = load();
+  assert.equal(R.spokenLang("auto", "de-DE"), "de");
+  assert.equal(R.spokenLang(undefined, "en-XA"), "en");
+  assert.equal(R.spokenLang("ja", "en"), "ja");
+  assert.equal(R.spokenLang("auto", ""), "en");
+});
+
+test("hasVoiceFor: an empty list is Safari (unknown, speak); a populated list without the language is not", () => {
+  const { RV: R } = load();
+  assert.equal(R.hasVoiceFor([], "de"), true);
+  assert.equal(R.hasVoiceFor([{ lang: "en-GB" }], "de"), false);
+  assert.equal(R.hasVoiceFor([{ lang: "en-GB" }, { lang: "de-DE" }], "de"), true);
+  assert.equal(P({ noVoice: true }).reason, "no-voice");
+});
+
+test("a spoken language with no system voice is CAPTION-ONLY: say() refuses, nothing reaches speechSynthesis.speak", async () => {
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true, spokenLang: "de" }, voices: [{ name: "A", lang: "en-GB", localService: true }] });
+  const v = R.create(G);
+  assert.equal(v.say("REIFEN LASSEN NACH", 3, "info"), false);
+  await flush();
+  assert.equal(synth.calls.filter((c) => c.m === "speak").length, 0, "the card must stay written");
+  assert.equal(v.debug().last.reason, "no-voice");
+});
+
+test("a spoken language WITH a system voice speaks through it", async () => {
+  const de = { name: "Anna", lang: "de-DE", localService: true };
+  const { RV: R, G, synth } = load({ stored: { radioVoice: true, spokenLang: "de" }, voices: [{ name: "A", lang: "en-GB", localService: true }, de] });
+  const v = R.create(G);
+  assert.equal(v.say("REIFEN LASSEN NACH", 3, "info"), true);
+  await flush();
+  const spoke = synth.calls.filter((c) => c.m === "speak");
+  assert.equal(spoke.length, 1);
+  assert.equal(spoke[0].voice, de);
 });

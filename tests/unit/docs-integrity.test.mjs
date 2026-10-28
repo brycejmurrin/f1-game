@@ -459,7 +459,7 @@ test("ci.yml makes the derived figures advisory off pull requests, and only ther
   // but pull_request — the merged tip cannot regenerate itself — and must not
   // leak onto pull requests, where the PR is the one that regenerates.
   const ci = read(".github/workflows/ci.yml");
-  const shards = [...ci.matchAll(/name: Tooling-fast shard [1234]\/4[\s\S]*?run: node tools\/ci\/tooling-fast\.mjs --jobs=4 --shard=[1234]\/4/g)];
+  const shards = [...ci.matchAll(/name: Tooling-fast shard [1234]\/4[\s\S]*?run: node tools\/ci\/tooling-fast\.mjs \$\{GUARDS_CHANGED:\+--changed\} --jobs=4 --shard=[1234]\/4/g)];
   assert.equal(shards.length, 4, "all four tooling-fast shards must exist so Structural guards can split");
   for (const m of shards) {
     assert.match(m[0], /APEX_DOCS_FIGURES_ADVISORY: \$\{\{ github\.event_name != 'pull_request' && '1' \|\| '' \}\}/,
