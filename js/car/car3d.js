@@ -2864,7 +2864,13 @@ const Car3D = (function () {
                boundsZ: [r2(z0), r2(z1)] };
     });
     // Half the vertices are exact repeats; measure/refinish read vertex ranges (CarGeometry.weld).
-    else if (!(opts && (opts.refinish || opts.noWeld))) CarGeometry.weld(out);
+    else if (!(opts && (opts.refinish || opts.noWeld))) {
+      CarGeometry.weld(out);
+      // The instanced far-field body only. Near rivals (field, no silhouette)
+      // and shadow casters (silhouette, no field) stay on the full mesh.
+      if (opts && opts.field && opts.silhouette && opts.noDriver && !opts.noSharedLod)
+        CarGeometry.presentShared(out);
+    }
     return out;
   }
 

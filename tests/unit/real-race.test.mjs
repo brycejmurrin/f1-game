@@ -49,6 +49,7 @@ function load({ realTyres = false } = {}) {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-drive.js") });
   evalRealRace(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   if (realTyres) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/tyre-model.js"), "utf8"), ctx, { filename: absSrc("js/physics/tyre-model.js") });
   const Teams = vm.runInContext("Teams", ctx);

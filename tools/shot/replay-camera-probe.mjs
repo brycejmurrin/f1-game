@@ -11,7 +11,7 @@ import { withCapturePage, recordCapture, waitNextGameRender } from './capture-ru
 export function preflightReplayFixture(data, track) {
   if (!CIRCUITS.includes(track)) throw new Error('fixture requires a catalog track');
   const context = vm.createContext({ window: {}, console: { info() {}, warn() {}, error() {} } });
-  for (const path of ['js/core/log.js', 'js/core/mat4.js', 'js/data/teams.js', ...CIRCUITS.map((id) => `js/circuits/${id}.js`), 'js/data/real-race-script.js', 'js/data/real-race-fetch.js', 'js/data/real-race-tab.js', 'js/race/real-race.js']) {
+  for (const path of ['js/core/log.js', 'js/core/mat4.js', 'js/data/teams.js', ...CIRCUITS.map((id) => `js/circuits/${id}.js`), 'js/data/real-race-script.js', 'js/data/real-race-fetch.js', 'js/data/real-race-tab.js', 'js/race/real-race-pace.js', 'js/race/real-race.js']) {
     vm.runInContext(readFileSync(resolve(ROOT, path), 'utf8'), context, { filename: path, timeout: 1000 });
   }
   const Data = vm.runInContext('DataRealRace', context), Teams = vm.runInContext('Teams.LIST', context);

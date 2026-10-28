@@ -261,6 +261,7 @@ test("NetSnapshot.decodeSnapshot never throws on hostile packets (N=2000)", asyn
   seedLog(logCtx);
   globalThis.Log = vm.runInContext("Log", logCtx);
   globalThis.M4 = eval(read("js/core/mat4.js") + ";M4");
+  globalThis.NetInterp = eval(read("js/net/interp.js") + ";NetInterp");
   const NetSnapshot = eval(read("js/net/snapshot.js") + ";NetSnapshot");
   const good = NetSnapshot.encodeSnapshot(1, [{
     id: 0,

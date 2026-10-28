@@ -132,17 +132,18 @@ test("an added chain step cannot raise specificity: every step between body and 
   assert.deepEqual(bad, []);
 });
 
-test("scoped :has(> .screen…) holds: every .screen is a <body> child and none is built in JS", () => {
+test("scoped :has(> .screen…) holds: every .screen is a <body> child; the one built in JS (share-card preview) is too", () => {
   const screens = ELS.filter((e) => e.classes.includes("screen"));
   assert.ok(screens.length >= 10, "screens found");
   assert.deepEqual(screens.filter((e) => e.parent !== "body").map((e) => e.id || e.tag), []);
   const js = [];
   const walk = (dir) => { for (const f of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const rel = dir + "/" + f.name;
-    if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /["'\s]screen["'\s]/.test(read(rel)) && /classList\.add\(\s*["']screen["']|className\s*=\s*["'][^"']*\bscreen\b/.test(read(rel))) js.push(rel);
+    if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /["'\s]screen["'\s]/.test(read(rel)) && /classList\.add\(\s*["']screen["']|className\s*=\s*["'][^"']*\bscreen\b|\bel\(\s*["']dialog["']\s*,\s*["'][^"']*\bscreen\b/.test(read(rel))) js.push(rel);
   } };
   walk("js");
-  assert.deepEqual(js, [], "a .screen built at runtime may not be a body child");
+  assert.deepEqual(js, ["js/share/share-card-chips.js"], "a .screen built at runtime must be a body child (and named here)");
+  assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true);
 });
 
 test("a <body> or #hud child is never searched for unscoped (write `:has(> #id…)` / `:has(> :where(#hud) > #id…)`)", () => {
@@ -157,8 +158,9 @@ test("a <body> or #hud child is never searched for unscoped (write `:has(> #id�
 // `body:has(dialog[open])` / `body:has(dialog:modal)` were the last whole-document searches
 // (selector stats, phone race: a third of all selector time; docs/notes/PERF-P2-2026-10-18.md).
 // Scoped to `> dialog` plus `> :where(#datahub) > dialog`, which holds only while every shell
-// <dialog> is a body child and the one built at runtime (the telemetry popup) is #datahub's child.
-test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; the runtime one hangs off #datahub", () => {
+// <dialog> is a body child and the ones built at runtime are #datahub's (the telemetry popup) or
+// <body>'s (the share-card preview, js/share/share-card-chips.js).
+test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; runtime ones hang off #datahub or <body>", () => {
   const dialogs = ELS.filter((e) => e.tag === "dialog");
   assert.ok(dialogs.length >= 15, "dialogs found");
   assert.deepEqual(dialogs.filter((e) => e.parent !== "body").map((e) => e.id || e.tag), []);
@@ -168,7 +170,8 @@ test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; th
     if (f.isDirectory()) { if (f.name !== "vendor") walk(rel); } else if (f.name.endsWith(".js") && /(?:createElement|\bel)\(\s*["']dialog["']/.test(read(rel))) built.push(rel);
   } };
   walk("js");
-  assert.deepEqual(built, ["js/data/telemetry.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
+  assert.deepEqual(built, ["js/data/telemetry.js", "js/share/share-card-chips.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
+  assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true, "the share-card preview is a <body> child");
   assert.match(read("js/data/telemetry.js"), /const host = document\.getElementById\("datahub"\) \|\| document\.body;\s*host\.appendChild\(overlay\);/);
   const bad = [];
   for (const [file, src] of CSS) for (const m of hasArgs(src)) if (/^dialog\b/.test(m[2])) bad.push(`${file}: ${m[0]}`);

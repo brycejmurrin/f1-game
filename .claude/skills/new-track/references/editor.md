@@ -25,6 +25,7 @@ The player guide is `docs/TRACK-DESIGNER.md`; the HOW TO tab text is
 | `profile.js` | `DesignerProfile` | the elevation strip under the canvas (per-node height grips) |
 | `selection-panel.js` | `DesignerSelection` | shared point/range selection controls |
 | `shape.js` | `TrackShape` | pure 2D geometry: headings, signed area (< 0 = LEFT loop), arcs, Dubins, resample, crossing/clearance scans |
+| `zones.js` | `TrackZones` | arc-fraction zone lists and per-node heights follow an edit of the control polygon |
 | `stamps.js` | `TrackStamps` | STRAIGHT / CORNER / HAIRPIN / CHICANE / S-BEND stamps + the Dubins rejoin, pre-compensated for the engine's two Laplacian passes |
 | `randomise.js` | `TrackRandom` | RANDOMISE: seeded hull + displacement + `fixAngles` (Maciel's method) |
 | `validate.js` | `TrackValidate` | WYSIWYG checks on the road the ENGINE builds (`Tracks.buildCenterline`): RED blocks SAVE / RACE / SHARE, AMBER is advice (length, crossing, clearance, grade, hairpin floor, pit straights from `TrackPit`) |
@@ -52,7 +53,7 @@ node tools/track/designer-code.mjs '<APXT1.…|APXT2.…>'   # decode + validate
 node --test tests/unit/custom-tracks.test.mjs tests/unit/track-codec.test.mjs tests/unit/track-editor-geometry.test.mjs \
   tests/unit/track-randomise.test.mjs tests/unit/track-fixes.test.mjs tests/unit/track-insight.test.mjs \
   tests/unit/designer-canvas.test.mjs tests/unit/designer-profile.test.mjs tests/unit/designer-props.test.mjs \
-  tests/unit/elev-presets.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-designer-dom.test.mjs \
+  tests/unit/elev-presets.test.mjs tests/unit/track-zones.test.mjs tests/unit/track-themes-build.test.mjs tests/unit/track-designer-dom.test.mjs \
   tests/unit/designer-code-cli.test.mjs
 node --test tests/unit/track-validate-fleet.test.mjs     # the validator's ORACLE: no shipped circuit reads RED
 npm test -- tests/specs/track-designer.spec.js           # BROWSER (group modes): door → randomise → SAVE → RACE → reload; background it

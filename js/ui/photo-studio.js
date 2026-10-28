@@ -720,10 +720,12 @@ function create(G, deps) {
     if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 12 * 1024 * 1024) { say("Choose a PNG, JPEG or WebP photo under 12 MB."); return; }
     const gen = st.generation, opts = options(); busy(true);
     try {
-      const image = await createImageBitmap(file, { resizeWidth: 1024, resizeQuality: "high" });
+      // Decode at native size; keepSource already downscales (never upscales). A forced
+      // resizeWidth:1024 used to enlarge small personal photos (hunt F4).
+      const image = await createImageBitmap(file);
       try {
         if (gen !== st.generation) return;
-        if (image.height > 4096) throw new Error("Choose a photo with a less extreme aspect ratio");
+        if (image.width > 8192 || image.height > 8192) throw new Error("Choose a photo with a less extreme aspect ratio");
         keepSource(image, opts); last = compose(raw, opts); E["ps-preview"].src = thumbnail(last); E["ps-preview"].hidden = false; say("Personal photo imported. Save it or use it as your menu background.");
       }
       finally { image.close(); }
@@ -757,5 +759,6 @@ function create(G, deps) {
   const api = { open, close, capture, state, contactSheet, album, background, setBackground, exportPhoto, savePhoto, hasCar };
   live = api; busy(false); return api;
 }
-return Object.freeze({ create, background, setBackground, crop, filename, ASPECTS, LIMIT, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
+// ASPECTS / LIMIT stay module-private (crop + library only); no external callers.
+return Object.freeze({ create, background, setBackground, crop, filename, album: () => live ? live.album() : Promise.reject(new Error("Photo library unavailable")), contactSheet: (times, seek, cancelled) => live ? live.contactSheet(times, seek, cancelled) : Promise.reject(new Error("Photo capture unavailable")), state: () => live ? live.state() : { open: false } });
 })();
