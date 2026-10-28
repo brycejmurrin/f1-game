@@ -2055,6 +2055,11 @@
       "roster": "LAZY_AUDIO"
     },
     {
+      "path": "js/audio/mix-duck.js",
+      "global": "GameAudioMix",
+      "roster": "LAZY_AUDIO"
+    },
+    {
       "path": "js/audio/music-lib.js",
       "global": "MusicLib",
       "roster": "LAZY_AUDIO"
@@ -3097,6 +3102,11 @@
     {
       "path": "js/data/hub.js",
       "global": "DataHub",
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/ics.js",
+      "global": "DataIcs",
       "roster": "LAZY_DATA"
     },
     {
