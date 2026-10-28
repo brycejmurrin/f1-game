@@ -4385,6 +4385,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/track/scenery/api-wrap.js",
+      "global": "SceneryApiWrap",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
       "path": "js/track/scenery/build-props.js",
       "global": "TrackBuildProps",
       "roster": "LAZY_TRACK_BUILD"
@@ -4405,6 +4410,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/track/scenery/facade.js",
+      "global": "SceneryFacade",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
       "path": "js/track/scenery/graph.js",
       "global": "TrackGraph",
       "roster": "tag"
@@ -4417,6 +4427,11 @@
     {
       "path": "js/track/scenery/identity.js",
       "global": "SceneryIdentity",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/landforms.js",
+      "global": "SceneryLandforms",
       "roster": "LAZY_TRACK_BUILD"
     },
     {
@@ -4437,6 +4452,11 @@
     {
       "path": "js/track/scenery/pits.js",
       "global": "SceneryPits",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/stands.js",
+      "global": "SceneryStands",
       "roster": "LAZY_TRACK_BUILD"
     },
     {

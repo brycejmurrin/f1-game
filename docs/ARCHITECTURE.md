@@ -306,13 +306,17 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `themes.js` | `SceneryThemes` | LAZY_TRACK_BUILD | deterministic scenery theme registry. |
 | `landmark-kit.js` | `LandmarkKit` | LAZY_TRACK_BUILD | bounded architectural forms for staged scenery geometry. |
 | `circuit-kit.js` | `CircuitKit` | LAZY_TRACK_BUILD | reusable, atomically staged circuit infrastructure. |
+| `landforms.js` | `SceneryLandforms` | LAZY_TRACK_BUILD | SceneryLandforms: distant peak, mountain and ridge backdrops for the nature band. |
 | `nature.js` | `SceneryNature` | LAZY_TRACK_BUILD | SceneryNature: the nature/landscape band of the buildProps composite-model toolkit — the shared trackside anchor() plus vegetation (pine/tree/palm/con… |
+| `stands.js` | `SceneryStands` | LAZY_TRACK_BUILD | SceneryStands: bleacher, scaffold, terrace and tiered-bowl spans plus their shared crowd band. |
 | `structures.js` | `SceneryStructures` | LAZY_TRACK_BUILD | SceneryStructures: the linear track furniture + race-infrastructure band of the buildProps composite-model toolkit — the along() node walker, the barr… |
+| `facade.js` | `SceneryFacade` | LAZY_TRACK_BUILD | SceneryFacade: the neon curtain-wall used by city building() and neonTower(). detail() stays in SceneryCity (it also dresses the day grid) and is passed in. |
 | `city.js` | `SceneryCity` | LAZY_TRACK_BUILD | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
 | `identity.js` | `SceneryIdentity` | LAZY_TRACK_BUILD | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | LAZY_TRACK_BUILD | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
 | `venue.js` | `SceneryVenue` | LAZY_TRACK_BUILD | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
 | `guards.js` | `SceneryGuards` | LAZY_TRACK_BUILD | SceneryGuards: the road / pit-complex guards of TrackBuildProps (onRoadHit, rejBox, rejRad, onTrack). |
+| `api-wrap.js` | `SceneryApiWrap` | LAZY_TRACK_BUILD | SceneryApiWrap: the scenery(api) coordinate wrap (origin shift, reverse side, authored-frame along/every). |
 | `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**

@@ -4940,6 +4940,7 @@
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
+        "tests/unit/scenery-kits.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/wind.test.mjs"
@@ -15979,23 +15980,27 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/track/scenery/api-wrap.js": {
+      "transformSceneryApi": [
+        "tests/unit/scenery-guards.test.mjs"
+      ],
+      "*": [
+        "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/load-order.test.mjs"
+      ]
+    },
     "js/track/scenery/build-props.js": {
       "bakedModel": [
-        "tests/unit/baked-model-instancing.test.mjs",
-        "tests/unit/scenery-guards.test.mjs"
+        "tests/unit/baked-model-instancing.test.mjs"
       ],
       "build": [
         "tests/unit/baked-model-instancing.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs",
-        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/scenery-kits.test.mjs",
         "tests/unit/track-build-vm-release.test.mjs",
         "tests/unit/track-foundation.test.mjs"
-      ],
-      "transformSceneryApi": [
-        "tests/unit/scenery-guards.test.mjs"
       ],
       "*": [
         "tests/specs/scenery-kits.spec.js",
@@ -16012,7 +16017,29 @@
       "create": [
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/load-order.test.mjs",
-        "tests/unit/lobed-trees.test.mjs"
+        "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "hospitality": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "marshalShelter": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "pedestrianBridge": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "pitBuilding": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "placement": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "raceControl": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "serviceCompound": [
+        "tests/unit/scenery-kits.test.mjs"
       ]
     },
     "js/track/scenery/city.js": {
@@ -16023,7 +16050,6 @@
       ],
       "*": [
         "tests/unit/scenery-ground-audit.test.mjs",
-        "tests/unit/scenery-guards.test.mjs",
         "tests/unit/source-integrity.test.mjs"
       ]
     },
@@ -16032,6 +16058,16 @@
         "tests/unit/circuit-vocab.test.mjs",
         "tests/unit/marshal-panels.test.mjs",
         "tests/unit/marshal-post-grounding.test.mjs"
+      ]
+    },
+    "js/track/scenery/facade.js": {
+      "create": [
+        "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "*": [
+        "tests/unit/scenery-guards.test.mjs"
       ]
     },
     "js/track/scenery/graph.js": {
@@ -16086,10 +16122,40 @@
         "tests/unit/source-integrity.test.mjs"
       ]
     },
-    "js/track/scenery/landmark-kit.js": {
+    "js/track/scenery/landforms.js": {
       "create": [
         "tests/unit/lazy-track-build.test.mjs",
-        "tests/unit/load-order.test.mjs"
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/lobed-trees.test.mjs",
+        "tests/unit/scenery-kits.test.mjs"
+      ]
+    },
+    "js/track/scenery/landmark-kit.js": {
+      "arch": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "canopy": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "create": [
+        "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "emit": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "facade": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "roof": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "stadiumSection": [
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "tower": [
+        "tests/unit/scenery-kits.test.mjs"
       ]
     },
     "js/track/scenery/models.js": {
@@ -16143,6 +16209,19 @@
         "tests/specs/montreal-foundation.spec.js",
         "tests/unit/curvature-channels.test.mjs",
         "tests/unit/load-order.test.mjs"
+      ]
+    },
+    "js/track/scenery/stands.js": {
+      "create": [
+        "tests/unit/lazy-track-build.test.mjs",
+        "tests/unit/load-order.test.mjs",
+        "tests/unit/marshal-panels.test.mjs",
+        "tests/unit/marshal-post-grounding.test.mjs",
+        "tests/unit/rendergeom-graph.test.mjs",
+        "tests/unit/scenery-kits.test.mjs"
+      ],
+      "*": [
+        "tests/unit/scenery-guards.test.mjs"
       ]
     },
     "js/track/scenery/structures.js": {

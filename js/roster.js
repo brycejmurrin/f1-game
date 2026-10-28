@@ -789,19 +789,39 @@
     "js/track/scenery/landmark-kit.js",
     "js/track/scenery/circuit-kit.js",
     "js/track/core/hidden-faces.js",
+    "js/track/scenery/landforms.js",
     "js/track/scenery/nature.js",
+    "js/track/scenery/stands.js",
     "js/track/scenery/structures.js",
+    "js/track/scenery/facade.js",
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/api-wrap.js",
     "js/track/scenery/build-props.js"
   ],
     LAZY_TRACK_BUILD_EDGES: [
     [
       "js/track/scenery/models.js",
       "js/track/scenery/circuit-kit.js"
+    ],
+    [
+      "js/track/scenery/landforms.js",
+      "js/track/scenery/nature.js"
+    ],
+    [
+      "js/track/scenery/stands.js",
+      "js/track/scenery/structures.js"
+    ],
+    [
+      "js/track/scenery/facade.js",
+      "js/track/scenery/city.js"
+    ],
+    [
+      "js/track/scenery/api-wrap.js",
+      "js/track/scenery/build-props.js"
     ],
     [
       "js/track/scenery/nature.js",
@@ -871,13 +891,17 @@
     "js/track/core/mesh.js",
     "js/track/core/hidden-faces.js",
     "js/track/core/def.js",
+    "js/track/scenery/landforms.js",
     "js/track/scenery/nature.js",
+    "js/track/scenery/stands.js",
     "js/track/scenery/structures.js",
+    "js/track/scenery/facade.js",
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/api-wrap.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
     "js/garage/experience.js",
