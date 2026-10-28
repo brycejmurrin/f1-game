@@ -18,16 +18,16 @@ window, capture it, and add a **Chroma Key** filter (Key Color Type **Green**).
 Window capture has no alpha, which is why the page is keyed. Keep the window
 unminimised — browsers throttle hidden pages.
 
-## Same-browser live feed (#1551)
+## Same-browser live feed
 
-Slice 2 of the plan (#1551) publishes live race frames from the game tab to
+The same-browser publisher (#1551, PR #4056) sends live race frames from the game tab to
 `overlay.html` over `BroadcastChannel`. That channel only reaches pages of the
 same origin **and** the same browser profile, so the overlay must be open in the
 browser you play in. An OBS Browser Source runs its own embedded Chromium with
 its own profile and does not receive that feed (the spectator link below is what
 will fix that).
 
-Once #1551 has shipped:
+To use the live feed:
 
 1. Open the game and start a race.
 2. In a second window of the same browser, open
@@ -47,7 +47,7 @@ Slice 3 of the plan (#1552) adds a SETTINGS row, STREAM OVERLAY, that mints a ro
 and gives you an overlay link to paste into an OBS **Browser Source** (width 1920,
 height 1080, 30 FPS, Local file unticked, default Custom CSS). That path keeps real
 transparency, needs no chroma key, and works when the game runs on a phone. Until it
-ships, use `?demo=1` for layout and the same-browser window above once #1551 lands.
+ships, use `?demo=1` for layout and the same-browser window above for live timing.
 
 ## Page options
 
@@ -77,7 +77,7 @@ ships, use `?demo=1` for layout and the same-browser window above once #1551 lan
 ```
 [ ] overlay.html?demo=1&chroma=green lays out cleanly in OBS
 [ ] chroma key leaves no green fringe at 1080p
-[ ] (after #1551) live overlay window shows the tower within a second of the race starting
+[ ] live overlay window shows the tower within a second of the race starting
 [ ] a radio message appears as a caption and clears
 [ ] a new sector time flashes (or outlines, with reduce motion on)
 [ ] the game's frame rate is the same with the overlay window open and closed
