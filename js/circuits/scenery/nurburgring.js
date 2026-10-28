@@ -11,7 +11,7 @@
         spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         bowlSeatWall, cameraTower, sponsorHoarding, seat, forestEdge,
-        addBox, addCyl, addCone, addPrism, addFrustum, indexSolid, groundUnder } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, indexSolid, groundUnder, bakedModel } = api;
 
       function scaffoldStand(s0, s1, side, gap, rows) {
         const TUBE = [0.62, 0.63, 0.66], DECK = [0.44, 0.45, 0.48];
@@ -505,4 +505,10 @@
           addBox(stage, vadd(vadd(flag, a.u, 6.8), a.t, 1.4), [0.16, 1.8, 4.0], [0.85, 0.16, 0.14], b);
         });
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.1075, 0.264, 0.5665, 0.786]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };
