@@ -400,6 +400,6 @@ var RaceFacts = (function () {
     };
   }
 
-  return Object.freeze({ create, K, HOLD_S, BATTLE_GAP });
+  return Object.freeze({ create });
 })();
 Object.freeze(RaceFacts);

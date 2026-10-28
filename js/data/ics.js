@@ -123,6 +123,6 @@ const DataIcs = (function () {
     return whole || !first ? "apex26-f1-" + year + ".ics" : "apex26-f1-" + year + "-" + raceKey(first) + ".ics";
   }
 
-  return { build, fileName, fold, text, trigger, ALARMS };
+  return { build, fileName, fold, text, trigger };
 })();
 Object.freeze(DataIcs);

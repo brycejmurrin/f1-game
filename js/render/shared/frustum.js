@@ -152,6 +152,8 @@ const Frustum = (function () {
     return [...buckets.values()];
   }
 
-  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, FOG_CULL_FD, bucketInstances };
+  // FOG_CULL_FD stays local — radialCulled is the shared API; the constant is
+  // an implementation detail of the fog-wall radius (dens > 0 → r = 3 / dens).
+  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, bucketInstances };
 })();
 Object.freeze(Frustum);
