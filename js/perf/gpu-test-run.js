@@ -14,7 +14,9 @@
    Each phase settles SETTLE_MS, then measures MEASURE_MS: rAF interval p50/p95/p99, the GPU timer when the
    device has one (EXT_disjoint_timer_query_webgl2 / WebGPU timestamp-query, via the bound backend's
    gpuTimer — most phones report it unsupported, which is itself the answer), and the program links and
-   render pipelines the page created (a non-zero count mid-race is a first-draw hitch). Every setting it
+   render pipelines the page created. three's compileAsync and WGX's warm path call
+   createRenderPipelineAsync, not the sync method, so both are counted (a non-zero count mid-race is a
+   first-draw hitch). Every setting it
    touches (render scale, auto-res, mirror mode) is restored when the run ends, however it ends. */
 const GpuTestRun = (function () {
   "use strict";
@@ -54,6 +56,9 @@ const GpuTestRun = (function () {
   function log(msg) { try { Log.info("game", "GpuTestRun " + msg); } catch (_) { /* Log not loaded */ } }
 
   // Counts program links and render pipelines while the run is up (prototype wraps, removed at the end).
+  // The sync and async WebGPU creates share `pipes`: three r186's compileAsync passes a flag into
+  // getForRender and then calls createRenderPipelineAsync, and WGX's warm path does the same. Wrapping
+  // only the sync method left that hitch at 0 in the share file.
   function hookCounts(c) {
     const undo = [];
     const wrap = (proto, name, key) => {
@@ -63,7 +68,11 @@ const GpuTestRun = (function () {
       undo.push(() => { proto[name] = o; });
     };
     try { wrap(typeof WebGL2RenderingContext !== "undefined" ? WebGL2RenderingContext.prototype : null, "linkProgram", "links"); } catch (_) { /* no WebGL2 */ }
-    try { wrap(typeof GPUDevice !== "undefined" ? GPUDevice.prototype : null, "createRenderPipeline", "pipes"); } catch (_) { /* no WebGPU */ }
+    try {
+      const gd = typeof GPUDevice !== "undefined" ? GPUDevice.prototype : null;
+      wrap(gd, "createRenderPipeline", "pipes");
+      wrap(gd, "createRenderPipelineAsync", "pipes");
+    } catch (_) { /* no WebGPU */ }
     return () => undo.forEach((f) => { try { f(); } catch (_) { /* already gone */ } });
   }
 

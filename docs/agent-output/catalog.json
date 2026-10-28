@@ -414,6 +414,15 @@
       ]
     },
     {
+      "path": "tools/check/brake-cue-calibrate.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/check/check-gctx.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
@@ -1468,6 +1477,12 @@
       "interpreter": "bash"
     },
     {
+      "path": "tools/env/codex-cloud-history.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3"
+    },
+    {
       "path": "tools/env/configure-chat-mcp.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2072,6 +2087,11 @@
       "path": "tools/gen/trees/caps.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/gen/trees/install-trees.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "keep-native"
     },
     {
       "path": "tools/gen/vendor-three.mjs",
