@@ -3450,6 +3450,9 @@
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
+      "catLabel": [
+        "tests/unit/i18n-parts-career.test.mjs"
+      ],
       "displayStat": [
         "tests/unit/garage-sheet-round2.test.mjs"
       ],
@@ -3513,6 +3516,9 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
+      ],
+      "optLabel": [
+        "tests/unit/i18n-parts-career.test.mjs"
       ],
       "resolveSetup": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -3783,6 +3789,7 @@
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "*": [
+        "tests/unit/i18n-parts-career.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]
@@ -4576,6 +4583,11 @@
         "tests/unit/verify-live.test.mjs"
       ]
     },
+    "js/circuits/hungaroring.js": {
+      "*": [
+        "tests/unit/circuit-corner-anchors.test.mjs"
+      ]
+    },
     "js/circuits/imola.js": {
       "*": [
         "tests/specs/imola-foundation.spec.js",
@@ -4907,6 +4919,11 @@
       ],
       "pluralCategories": [
         "tests/unit/i18n.test.mjs"
+      ],
+      "*": [
+        "tests/specs/browser-ui-hunt.spec.js",
+        "tests/specs/data-lifecycle.spec.js",
+        "tests/specs/telemetry-compare.spec.js"
       ]
     },
     "js/core/lazy-bundles.js": {
@@ -5588,6 +5605,7 @@
       "*": [
         "tests/unit/data-standings.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/i18n-parts-career.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
     },
@@ -5825,7 +5843,8 @@
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "*": [
-        "tests/unit/data-ics.test.mjs"
+        "tests/unit/data-ics.test.mjs",
+        "tests/unit/i18n-parts-career.test.mjs"
       ]
     },
     "js/data/settings-defaults.js": {
@@ -6937,7 +6956,6 @@
       ],
       "enableTilt": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/boot-input-shape.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
@@ -17995,6 +18013,12 @@
       "bootPick": [
         "tests/unit/xr-opts.test.mjs"
       ],
+      "caps": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
+      "detect": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
       "fallbacks": [
         "tests/unit/xr-opts.test.mjs"
       ],
@@ -18005,6 +18029,9 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "plan": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
+      "rendererMatchesPlan": [
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
@@ -18135,6 +18162,9 @@
       ],
       "stickToSteer": [
         "tests/unit/xr-phase0.test.mjs"
+      ],
+      "unionViewProjTo": [
+        "tests/unit/xr-cull-union.test.mjs"
       ],
       "worldFromAnchorTo": [
         "tests/unit/xr-phase0.test.mjs"
