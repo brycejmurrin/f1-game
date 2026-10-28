@@ -693,6 +693,8 @@ const VisorOptics = (function () {
     };
   }
 
-  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, camBasis, projectDir, tintRGB, LEVEL, BEAMS, FRINGE, MAX_GLINTS, sceneFromG };
+  // camBasis / projectDir / LEVEL / FRINGE stay module-private: lightMap + tick
+  // close over them; no js/ or test reader used the public VisorOptics.* forms.
+  return { tick, clear, stats, blendMode, lightMap, sunFacing, lampAdapt, portPath, portBox, portImage, tintRGB, BEAMS, MAX_GLINTS, sceneFromG };
 })();
 Object.freeze(VisorOptics);
