@@ -820,6 +820,6 @@ const DataHub = (function () {
   });
   // Implementation: js/data/export.js.
   const { loadExport } = DataExport.create({ el, clear, isOpen });
-  return { init, open, close, isOpen, compoundChipLabel, COMPOUND };
+  return { init, open, close, isOpen, compoundChipLabel };
 })();
 Object.freeze(DataHub);

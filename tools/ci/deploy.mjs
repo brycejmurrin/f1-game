@@ -102,7 +102,7 @@ const must = gitMust;
 // ceiling killed it with no verdict line. Every child now stops at this ceiling, with SIGTERM so
 // tooling-fast can reap the process groups it leads, and run() turns that into a named failure.
 export const CHILD_TIMEOUT_MS = Math.max(1, Number(process.env.APEX_DEPLOY_CHILD_TIMEOUT_MIN) || 25) * 60e3;
-export async function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
+async function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
   const stop = { timeoutMs };
   if (!json) return superviseDeployChild(cmd, args, { cwd, env, stdio: "inherit", ...stop });
   const artifact = saveOutputArtifact("", { root, tool: "deploy-child", kind: "log" });

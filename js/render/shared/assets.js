@@ -43,10 +43,16 @@ const Assets = (function () {
     })();
     // Racing also settles a mock/transport that ignores AbortSignal. A late
     // body has no state writes here and cannot re-enter its former consumer.
-    return Promise.race([work, deadline]).finally(() => {
+    let settled = false;
+    const raced = Promise.race([work, deadline]).finally(() => {
+      settled = true;
       if (timer !== null) clearTimeout(timer);
       _requests.delete(cancel);
     });
+    // Callers that guessed a URL from the last pack can drop it when the fresh
+    // manifest names a different file. A settled request is left alone.
+    raced.cancel = () => { if (!settled) cancel(); };
+    return raced;
   }
 
   function init(gfx) { _gfx = gfx || null; }
@@ -88,6 +94,7 @@ const Assets = (function () {
       if (generation !== _loadGeneration) return false;
       if (!j || typeof j !== "object") { _err = "bad-manifest"; return false; }
       _manifest = j;
+      rememberPack(j);
       return j;
     } catch (e) {
       if (generation === _loadGeneration) _err = "no-pack";
@@ -649,7 +656,8 @@ const Assets = (function () {
 
     let albedo = null, normal = null, albedoTex = null, normalTex = null;
     try {
-      // Start both downloads together; decode and upload remain sequential.
+      // Start both downloads together. Albedo decodes first; the normal strip
+      // then inflates while the albedo array uploads.
       // The NORMAL strip is optional: its fetch and decode fail on their own
       // (normal = null, albedo still ships) — sharing the albedo's Promise.all
       // let a missing normal strip discard the whole pack (_tier "off").
@@ -663,11 +671,24 @@ const Assets = (function () {
         _discardLoad(albedo, normal, albedoTex, normalTex);
         return false;
       }
-      albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
-      if (!albedoTex) throw new Error("albedo-upload");
+      // The normal strip's inflate runs off this thread (DecompressionStream).
+      // Start it before the albedo GPU upload so the two overlap; a bad normal
+      // still leaves albedo live.
+      let normalP = null;
       if (normalBlob) {
-        try { normal = await _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration); }
-        catch (_) { normal = null; }   // undecodable normal strip: albedo alone
+        normalP = _decodeStrip(normalBlob, size, present, () => generation === _loadGeneration)
+          .then((v) => v, (error) => { if (error === DECODE_CANCELED) throw error; return null; });
+      }
+      const quietNormal = () => { if (normalP) normalP.then(() => {}, () => {}); };
+      albedoTex = _gfx.createTextureArray(size, albedo, MAT_LAYERS);
+      if (!albedoTex) { quietNormal(); throw new Error("albedo-upload"); }
+      // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
+      // path) hands back a token with `ready`; the pack is live — and load()
+      // resolves — only once every array is filled. A failed fill reads as the
+      // sync path's upload failure (no partial pack; a lost normal stays survivable).
+      if (albedoTex.ready && !(await albedoTex.ready)) { quietNormal(); throw new Error("albedo-upload"); }
+      if (normalP) {
+        normal = await normalP;
         if (generation !== _loadGeneration) {
           _discardLoad(albedo, normal, albedoTex, normalTex);
           return false;
@@ -675,11 +696,6 @@ const Assets = (function () {
         if (normal) normalTex = _gfx.createTextureArray(size, normal, MAT_LAYERS);
         // A missing normal array is survivable — albedo alone still helps.
       }
-      // P4: a backend that fills its arrays asynchronously (WGX's readLayerBytesAsync
-      // path) hands back a token with `ready`; the pack is live — and load()
-      // resolves — only once every array is filled. A failed fill reads as the
-      // sync path's upload failure (no partial pack; a lost normal stays survivable).
-      if (albedoTex.ready && !(await albedoTex.ready)) throw new Error("albedo-upload");
       if (normalTex && normalTex.ready && !(await normalTex.ready)) { _freeTexture(normalTex); normalTex = null; }
       if (generation !== _loadGeneration) {
         _discardLoad(albedo, normal, albedoTex, normalTex);
@@ -853,17 +869,55 @@ const Assets = (function () {
     return job;
   }
 
+  // The manifest is network-first, so a return visit waited out that revalidation
+  // before any model byte started. The last pack's file+md5 is content-addressed:
+  // sw.js answers `?h=` cache-first, and a rebake changes the md5. Remember it
+  // and start those fetches beside the manifest; a mismatch aborts the guess.
+  let _packIndex;
+  function packIndex() {
+    if (_packIndex !== undefined) return _packIndex;
+    _packIndex = null;
+    try {
+      const j = JSON.parse(localStorage.getItem("apex26.packIndex") || "null");
+      if (j && j.models && typeof j.models === "object") _packIndex = j;
+    } catch (e) { /* no stored index: models wait for the manifest */ }
+    return _packIndex;
+  }
+  function rememberPack(m) {
+    if (!m || !m.models) return;
+    const models = {};
+    for (const id in m.models) {
+      const rec = m.models[id];
+      if (!rec || typeof rec.file !== "string" || !/^[0-9a-f]{32}$/.test(rec.md5 || "")) continue;
+      models[id] = { file: rec.file, md5: rec.md5 };
+    }
+    _packIndex = { models };
+    try { localStorage.setItem("apex26.packIndex", JSON.stringify(_packIndex)); }
+    catch (e) { /* quota or private mode: this visit still has the manifest */ }
+  }
   function model(id) {
     if (id in _models) return Promise.resolve(_models[id]);
     if (_modelPromises[id]) return _modelPromises[id];
     const generation = _loadGeneration;
+    const hinted = packIndex();
+    const guess = hinted && hinted.models && hinted.models[id];
+    let early = null;
+    if (guess && guess.file) {
+      early = _request(_packUrl(guess.file, guess.md5), "arrayBuffer");
+      early.catch(() => {}); // a later cancel or a lost race must not reject unhandled
+      early.file = guess.file; early.md5 = guess.md5;
+    }
     const promise = (async () => {
       try {
         const m = await manifest();
-        if (generation !== _loadGeneration) return null;
+        if (generation !== _loadGeneration) { if (early) early.cancel(); return null; }
         const rec = m && m.models && m.models[id];
-        if (!rec || !rec.file) { if (m) _models[id] = null; return null; }
-        const body = await _request(_packUrl(rec.file, rec.md5), "arrayBuffer");
+        if (!rec || !rec.file) { if (early) early.cancel(); if (m) _models[id] = null; return null; }
+        let body = null;
+        if (early && early.file === rec.file && early.md5 === rec.md5) {
+          try { body = await early; } catch (e) { body = null; }
+        } else if (early) early.cancel();
+        if (!body) body = await _request(_packUrl(rec.file, rec.md5), "arrayBuffer");
         if (generation !== _loadGeneration) return null;
         const parsed = await _decodeModel(body, generation);
         if (parsed && generation === _loadGeneration) _models[id] = parsed;
@@ -915,9 +969,14 @@ const Assets = (function () {
   async function loadModelsFor(src) {
     if (!src) return 0;
     const generation = _loadGeneration;
+    const text = String(src);
+    // Start the remembered models now. manifest() is still in flight on a
+    // return visit; model() reconciles each id when the fresh manifest lands.
+    const hinted = _idsNamedIn(packIndex(), text);
+    for (let i = 0; i < hinted.length; i++) model(hinted[i]);
     const m = await manifest();
     if (generation !== _loadGeneration) return 0;
-    const ids = _idsNamedIn(m, String(src));
+    const ids = _idsNamedIn(m, text);
     if (!ids.length) return 0;
     // Fetch in parallel (shared model() memos). The shared decode lane in
     // model() supplies task boundaries before synchronous model parses.

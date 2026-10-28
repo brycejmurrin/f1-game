@@ -4,10 +4,11 @@
 const GradeTint = (function () {
   "use strict";
 
-  const PAINT_WET_NIGHT = { emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
-  const PAINT_WET_DAY   = { roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 };
-  const PAINT_DRY_NIGHT = { emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 };
-  const PAINT_DRY_DAY   = { roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 0.9, carPaint: 1.0 };
+  // Frozen presets: carPaint copies into a scratch; a caller must not mutate the shared bases.
+  const PAINT_WET_NIGHT = Object.freeze({ emissive: 0.20, roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 });
+  const PAINT_WET_DAY   = Object.freeze({ roughness: 0.16, metalness: 0.12, specular: 0.85, clearcoat: 0.8, carPaint: 1.0 });
+  const PAINT_DRY_NIGHT = Object.freeze({ emissive: 0.20, roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 1.0, carPaint: 1.0 });
+  const PAINT_DRY_DAY   = Object.freeze({ roughness: 0.22, metalness: 0.12, specular: 0.85, clearcoat: 0.9, carPaint: 1.0 });
   const _carPaintScratch = {};
 
   function carPaint(base, LT) {

@@ -209,6 +209,9 @@ const RENDERER_LS_KEYS = [
   "apex26.gfxProbeStrikes",
   // The last boot's bound backend (renderer-boot.js): only steers the next boot's early preload.
   "apex26.gfxBootBound",
+  // assets.js remembers the last pack's model file+md5 so the next visit can
+  // start those fetches before the manifest returns. RESET drops the hint.
+  "apex26.packIndex",
   "apex26.envProbeOff", "apex26.perChunkOff",
   "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
   // tlx.js's per-device WebKit kill switch: AUTO on WebKit stays on three WebGL2 until RESET.
