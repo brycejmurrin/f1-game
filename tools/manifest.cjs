@@ -377,6 +377,7 @@ const FULL = [
   "js/camera/photo-cam.js",
   "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
   "js/camera/results-cam.js",   // ResultsCam.create(G): chequered cut, results orbit, highlights reel
+  "js/race/cooldown-lap.js",    // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
   "js/lighting/tuner-panel.js",
   "js/camera/cam-tuner-boot.js", // CamTunerPanel stub; panel body is LAZY_CAM_EDITOR
   "js/physics/brake-cue.js",
