@@ -71,6 +71,11 @@ function hUnstyle(el, prop) { if (!el) return; const m = _hudSty.get(el); if (m)
 function hClass(el, v) { if (!el) return; if (_hudCls.get(el) !== v) { _hudCls.set(el, v); el.className = v; } }
 function hToggle(el, cls, on) { if (!el) return; let m = _hudTog.get(el); if (!m) { m = {}; _hudTog.set(el, m); } if (m[cls] !== on) { m[cls] = on; el.classList.toggle(cls, on); } }
 function hAttr(el, name, value) { if (!el) return; const v = String(value); if (el.getAttribute(name) !== v) el.setAttribute(name, v); }
+/** Aria/prose through I18n when present; without it, fill {name} holes in the English default. */
+function hT(key, vars, def) {
+  if (typeof I18n !== "undefined") return I18n.t(key, vars, def);
+  return String(def).replace(/\{(\w+)\}/g, (m, n) => (vars && vars[n] != null ? String(vars[n]) : m));
+}
 // Compare the actual DOM so an external edit is repaired on the next tick.
 // Avoid repeated attribute mutations; hidden writes feed the visibility observer.
 function hHidden(el, on) { if (el && el.hidden !== !!on) el.hidden = !!on; }
@@ -1825,7 +1830,7 @@ function updateHud(force, dtMs) {
     if (_rx.bb) {
       const bb = _ro.bbText(player.brakeBias, typeof SetupTune !== "undefined" ? SetupTune.BB_REF : 0.56);
       hText(_rx.bb, bb);
-      hAttr(_rx.bb, "aria-label", "Brake bias " + bb.slice(3) + " front");
+      hAttr(_rx.bb, "aria-label", hT("hud.brakeBias", { pct: bb.slice(3) }, "Brake bias {pct} front"));
     }
   }
   const spokenFlag = speakHud(player, cars, timeTrial);
@@ -1959,15 +1964,15 @@ function updateHud(force, dtMs) {
                 : otReady ? "OT READY " + mjTxt
                 : player.otEarned ? "OT · NEXT LAP" : "OT · CLOSE IN";
   hText(els.ot, otText);
-  hAttr(els.ot, "aria-label", player.otT > 0 ? "Overtake active, " + mjTxt + " left"
-    : otOff ? (otReason === "caution" ? "Overtake unavailable under caution"
-      : otReason === "low-grip" ? "Overtake off in low grip conditions"
-      : otReason === "opening-lap" ? "Overtake unavailable on lap 1"
-      : otReason === "waiting-for-leader" ? "Overtake waiting for the leader"
-      : "Overtake unavailable")
-    : otReady ? "Overtake ready, " + mjTxt + " — press to deploy"
-    : player.otEarned ? "Overtake earned — available from the start line"
-    : "Overtake unavailable — be within one second at the detection line");
+  hAttr(els.ot, "aria-label", player.otT > 0 ? hT("hud.overtake.active", { time: mjTxt }, "Overtake active, {time} left")
+    : otOff ? (otReason === "caution" ? hT("hud.overtake.caution", null, "Overtake unavailable under caution")
+      : otReason === "low-grip" ? hT("hud.overtake.lowGrip", null, "Overtake off in low grip conditions")
+      : otReason === "opening-lap" ? hT("hud.overtake.openingLap", null, "Overtake unavailable on lap 1")
+      : otReason === "waiting-for-leader" ? hT("hud.overtake.waitingLeader", null, "Overtake waiting for the leader")
+      : hT("hud.overtake.unavailable", null, "Overtake unavailable"))
+    : otReady ? hT("hud.overtake.ready", { time: mjTxt }, "Overtake ready, {time} — press to deploy")
+    : player.otEarned ? hT("hud.overtake.earned", null, "Overtake earned — available from the start line")
+    : hT("hud.overtake.pending", null, "Overtake unavailable — be within one second at the detection line"));
   hAttr(els.btnOT, "aria-disabled", otUnavailable ? "true" : "false");
   hAttr(els.btnOT, "data-state", otOff ? otReason : player.otT > 0 ? "active"
     : otReady ? "ready" : player.otEarned ? "earned" : "pending");
@@ -1996,8 +2001,8 @@ function updateHud(force, dtMs) {
     : dz < 900 ? "AERO " + Math.round(dz) + "m"
     : "CORNER MODE";
   hText(els.aero, aeroText);
-  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? "Automatic Straight Mode active" : "Active aero automatic")
-    : noZones ? "No aero zone" : xOpen ? "Straight Mode active" : "Active aero manual");
+  hAttr(els.aero, "aria-label", autoAero ? (xOpen ? hT("hud.aero.autoStraight", null, "Automatic Straight Mode active") : hT("hud.aero.auto", null, "Active aero automatic"))
+    : noZones ? hT("hud.aero.none", null, "No aero zone") : xOpen ? hT("hud.aero.straight", null, "Straight Mode active") : hT("hud.aero.manual", null, "Active aero manual"));
   if (timeTrial) {
     // The DROP rule (gapForm) runs here too. The attribute it maintains lives
     // on <html> and outlives the session, so a race on a narrow phone left the
