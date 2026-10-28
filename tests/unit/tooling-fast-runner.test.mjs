@@ -133,6 +133,26 @@ test("waits forever", (t) => new Promise(() => {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+// #3885: node 22's `--test` parent re-orders a deferred 0xFF byte when a pipe
+// read ends inside a result frame's header, then spins forever draining the
+// frame (100 % CPU, SIGTERM ignored). A file whose LAST stdout bytes are an
+// unfinished frame header is the deterministic form of that read; under the
+// default per-file subprocess it ran to the file wall. See TEST_ISOLATION_FLAG.
+test("stdout ending in a partial v8 frame header does not hang the runner (#3885)", async () => {
+  const dir = tmp();
+  try {
+    const f = path.join(dir, "partial-header.test.mjs");
+    fs.writeFileSync(f, `import test from "node:test";
+test("writes FF 0F 00 last", () => { process.stdout.write(Buffer.from([0xff, 0x0f, 0x00])); });
+`);
+    const logPath = path.join(dir, "suite.log");
+    const r = await runToolingFast([f], { jobs: 1, logPath, localTimingsPath: null, fileTimeoutMs: 15000 });
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.doesNotMatch(log, /reason=timeout/, "the runner must exit, not spin until the file wall");
+    assert.equal(r.ok, true, log);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 // The runner parses TAP failure blocks, independently of the host Node's
 // default reporter and this suite's inherited NODE_TEST_CONTEXT.
 test("a failed child preserves named TAP subtests and assertion diagnostics", async () => {

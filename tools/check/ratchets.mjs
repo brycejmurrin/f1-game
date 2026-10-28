@@ -435,17 +435,28 @@ export function scopeToBranch(rows, touched = changedFiles()) {
   return rows.filter((r) => (r.tree ? r.value >= r.ceiling : r.value >= r.ceiling || touched.has(r.file)));
 }
 
-/** Add `rows`' (value - ceiling) to this branch's fragment; delete it when
- *  every delta nets to zero. */
-async function writeFragment(name, rows) {
-  const file = path.join(FRAG_DIR, name);
-  const frag = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+/** Add `rows`' (value - ceiling) to fragment `frag` in place. A tree delta that
+ *  nets below zero is dropped, not kept: a topic fragment never lowers a
+ *  tree-wide ceiling (scopeToBranch). Before #3996 the commit hook wrote stale
+ *  lowerings (assertPins −50) into open fragments; re-snapping one kept it
+ *  negative at zero slack, so each pin the tip gained turned the PR red again
+ *  (2026-10-27, #3970/#3981/#3985). Dropping it leaves the deploy's ceiling.
+ *  Returns `frag`. PURE. */
+export function mergeFragment(frag, rows) {
   for (const r of rows) {
     const scope = r.tree ? (frag.tree ||= {}) : ((frag.files ||= {})[r.file] ||= {});
     const d = (scope[r.metric] || 0) + (r.value - r.ceiling);
-    if (d) scope[r.metric] = d; else delete scope[r.metric];
+    if (d > 0 || (d && !r.tree)) scope[r.metric] = d; else delete scope[r.metric];
     if (!r.tree && !Object.keys(scope).length) delete frag.files[r.file];
   }
+  return frag;
+}
+
+/** Merge `rows` into this branch's fragment; delete it when every delta nets
+ *  to zero. */
+async function writeFragment(name, rows) {
+  const file = path.join(FRAG_DIR, name);
+  const frag = mergeFragment(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {}, rows);
   const { stableStringify } = await import("./merge-hygiene.mjs");
   const empty = !Object.keys(frag.files || {}).length && !Object.keys(frag.tree || {}).length;
   if (empty) { fs.rmSync(file, { force: true }); return; }
