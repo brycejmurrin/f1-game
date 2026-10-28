@@ -1,9 +1,11 @@
 /* Apex 26 — XRPlan: pure boot-time VR renderer path selection.
  *
- * Decides { path, backendPref, … } from capability + preference bags only —
- * no DOM / navigator reads. WebGL2 (GLX) is the default shippable VR path;
- * WebGPU (TLX + three XRManager) is experimental and opt-in. The override
- * never writes apex26.gfxBackend — disarming restores the 2D pick exactly.
+ * Decides { path, backendPref, forceGL, … } from capability + preference bags
+ * only — no DOM / navigator reads. The shippable VR path is TLX + forceWebGL
+ * (`backendPref:"three"`, `forceGL:true`): GLX has no attachXrSession, so a
+ * "webgl2" boot override left ENTER VR unable to attach (BUG-HUNT-ROUND-2;
+ * renderer-boot.js). Experimental WebGPU XR stays opt-in (TLX, forceGL false).
+ * The override never writes apex26.gfxBackend — disarming restores the 2D pick.
  *
  * Spec: task 20 / master plan D1. Consumed by ApexXR (js/xr/apex-xr.js) and
  * the thin backendPreference() hook in js/game.js.
@@ -39,11 +41,23 @@ const XRPlan = (function () {
     }, extra || {});
   }
 
+  /** Shippable immersive path: TLX owning a WebGL2 context (XRWebGLLayer). */
+  function webgl2Armed(reasons, fallbacks) {
+    return {
+      xrMode: "armed",
+      path: PATH_WEBGL2,
+      backendPref: "three",
+      forceGL: true,
+      reasons,
+      fallbacks,
+    };
+  }
+
   /**
    * @param {{ caps?: object, prefs?: object, boot?: object }} input
    * caps: { xr, vr, gpu, xrgpu, layers?, mobileQuest? }
    * prefs: { xr: "0"|"1", xrBackend: "webgl2"|"webgpu", gfxBackend? }
-   * boot: { strikeLatch?, claimFail?, xrFallback? } — xrFallback forces webgl2
+   * boot: { xrFallback? } — xrFallback "webgl2" forces the shippable TLX+forceGL path
    */
   function resolve(input) {
     const caps = (input && input.caps) || {};
@@ -77,40 +91,19 @@ const XRPlan = (function () {
     if (latch) {
       reasons.push("session latch apex26.xrFallback=webgl2");
       fallbacks.push({ from: "webgpu", to: "webgl2", reason: "xrFallback latch" });
-      return {
-        xrMode: "armed",
-        path: PATH_WEBGL2,
-        backendPref: "webgl2",
-        forceGL: false,
-        reasons,
-        fallbacks,
-      };
+      return webgl2Armed(reasons, fallbacks);
     }
 
     if (wantBackend === "webgpu") {
       if (!hasGpu) {
         reasons.push("navigator.gpu missing");
         fallbacks.push({ from: "webgpu", to: "webgl2", reason: "no navigator.gpu" });
-        return {
-          xrMode: "armed",
-          path: PATH_WEBGL2,
-          backendPref: "webgl2",
-          forceGL: false,
-          reasons,
-          fallbacks,
-        };
+        return webgl2Armed(reasons, fallbacks);
       }
       if (!hasXrgpu) {
         reasons.push("XRGPUBinding missing");
         fallbacks.push({ from: "webgpu", to: "webgl2", reason: "no XRGPUBinding" });
-        return {
-          xrMode: "armed",
-          path: PATH_WEBGL2,
-          backendPref: "webgl2",
-          forceGL: false,
-          reasons,
-          fallbacks,
-        };
+        return webgl2Armed(reasons, fallbacks);
       }
       reasons.push("WebGPU XR experimental path selected");
       if (caps.mobileQuest) reasons.push("Quest UA — WebGPU-in-XR unverified on device");
@@ -124,15 +117,8 @@ const XRPlan = (function () {
       };
     }
 
-    reasons.push("WebGL2 VR path (default)");
-    return {
-      xrMode: "armed",
-      path: PATH_WEBGL2,
-      backendPref: "webgl2",
-      forceGL: false,
-      reasons,
-      fallbacks,
-    };
+    reasons.push("TLX+forceGL VR path (default shippable)");
+    return webgl2Armed(reasons, fallbacks);
   }
 
   return { resolve, normXr, normBackend, PATH_WEBGL2, PATH_WEBGPU };
