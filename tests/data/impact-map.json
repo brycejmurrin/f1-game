@@ -17997,6 +17997,12 @@
       "bootPick": [
         "tests/unit/xr-opts.test.mjs"
       ],
+      "caps": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
+      "detect": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
       "fallbacks": [
         "tests/unit/xr-opts.test.mjs"
       ],
@@ -18007,6 +18013,9 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "plan": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
+      "rendererMatchesPlan": [
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
@@ -18137,6 +18146,9 @@
       ],
       "stickToSteer": [
         "tests/unit/xr-phase0.test.mjs"
+      ],
+      "unionViewProjTo": [
+        "tests/unit/xr-cull-union.test.mjs"
       ],
       "worldFromAnchorTo": [
         "tests/unit/xr-phase0.test.mjs"
