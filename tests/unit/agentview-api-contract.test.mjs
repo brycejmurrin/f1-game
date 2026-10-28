@@ -227,6 +227,62 @@ test("neither raster loop paints an object the camera is INSIDE", () => {
     + "not report the car it is sitting inside.");
 });
 
+test("roadShapeAt uses the short wrapped arc across the start line", () => {
+  // A corner with entryS > exitS (wrapS of a negative entry) used to take
+  // abs(exit-entry) ≈ a full lap for gradient (shrinking a real climb to
+  // "level") and skip the kerb walk entirely (for d = a; d <= b never runs).
+  const TOTAL = 1000;
+  const TracksStub = {
+    sample(t, s, out) {
+      const ss = ((s % TOTAL) + TOTAL) % TOTAL;
+      // Rise just after the line: short wrap arc sees ~8 m; abs(b-a) dilutes it
+      // under the 1.5% "level" cut.
+      out.p[0] = 0; out.p[1] = ss < 80 ? 8 : 0; out.p[2] = ss;
+      out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.hw = 6;
+    },
+    banking: () => null, bankAngle: () => 0,
+  };
+  const get = evalGlobals(["js/agent/agentview-corners.js"], { Tracks: TracksStub });
+  const kerbL = new Array(100).fill(0); const kerbR = new Array(100).fill(0);
+  for (let i = 0; i < 100; i++) {
+    const s = i / 100 * TOTAL;
+    if (s < 80 || s > 920) kerbL[i] = 1;
+  }
+  const G = { track: { total: TOTAL, n: 100, def: { id: "wrap", turns: [0] },
+                      kerbL, kerbR } };
+  const corners = get("AgentCorners").create({
+    G, r1: (v) => Math.round(v * 10) / 10, wrapS: (s) => ((s % TOTAL) + TOTAL) % TOTAL,
+    // Curvature only within ±40 m of s=0 so entry/exit straddle the line.
+    smoothK: (s) => {
+      const ss = ((s % TOTAL) + TOTAL) % TOTAL;
+      const d = ss < 500 ? ss : ss - TOTAL;
+      return Math.abs(d) < 40 ? 0.05 * (1 - Math.abs(d) / 40) : 0;
+    },
+    sweep: () => 0.5, severityOf: () => "medium",
+    LAT_GRIP: 20, BRAKE_DECEL: 30, STRAIGHT_R: 500, STRAIGHT_EXIT_M: 80,
+  });
+  const list = corners.corners();
+  assert.ok(list.length >= 1, "expected a curated wrap corner");
+  const c = list[0];
+  assert.ok(c.entryS > c.exitS, "fixture must wrap the start line (entryS > exitS)");
+  assert.equal(c.elevation, "uphill",
+    "short wrap arc must keep the climb; abs(exit-entry) would report level");
+  assert.ok(c.kerbs && c.kerbs.includes("left"),
+    "kerb walk must sample the wrapped arc, not skip when entryS > exitS");
+  // 15 m past entry (entryS=970 → s=985): old fold missed wrap-behind-car
+  // cases near the line; entryDist must report in-corner, not ~lap ahead.
+  const nc = corners.nextCorner(985, 40);
+  assert.ok(nc && String(nc.status).startsWith("in "),
+    "nextCorner must treat a wrap entry behind the car as in-corner, not ~lap ahead; got "
+    + (nc && nc.status));
+});
+
+test("view raster horizon prefers cam.fovDeg over the live G.camFov", () => {
+  const src = readFileSync(join(ROOT, "js/agent/agentview-raster.js"), "utf8");
+  assert.match(src, /cam\.fovDeg\s*\|\|\s*G\.camFov/,
+               "sky/ground fill must use the vantage fov (cam.fovDeg), not only G.camFov");
+});
+
 test("episode metadata makes prior-episode delta requests return full worlds", () => {
   const Tracks = { sample(t, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s;
     out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.hw = 6; },
