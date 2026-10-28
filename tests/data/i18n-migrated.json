@@ -8,7 +8,20 @@
     "Empty on purpose until Slice 4+ migrates a screen (plan 2026-10-04-localisation)."
   ],
   "files": ["js/car/parts.js", "js/career/career-ui.js", "js/data/schedule.js", "js/data/hub.js", "js/race/radio-lines.js", "js/audio/radio-voice.js"],
-  "html": [],
+  "html": [
+    "#dlg-settings",
+    "#pm-pit-choice-label",
+    "#pm-drill-label",
+    "#pm-res-label",
+    "#pm-fullscreen-label",
+    "#pm-upscale-label",
+    "#pm-occlusion-label",
+    "#pm-debris-label",
+    "#pm-ssao-label",
+    "#pm-godrays-label",
+    "#pm-buildworker-label",
+    "#pm-feel-label"
+  ],
   "allow": {
     "js/career/career-ui.js::setAttribute(aria-label)::`${modeName} slot ${s.i + 1}, ${s.used ? \"saved\" : \"empty\"}${li…": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",
     "js/career/career-ui.js::setAttribute(aria-label)::`Export all career saves (backup from ${modeName} slot ${s.i + …": "composed status/aria string with several runtime parts; needs ICU plural keys, follow-up under #1599 (Slice 7 plurals)",

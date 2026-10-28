@@ -26,15 +26,17 @@ Several circuits (`$ARGUMENTS` = circuit ids, optional target year; every id in
 The surveyor's edits are on its worktree branch, not in this checkout. Its report
 names the branch and path. Per surveyor, in turn:
 
-1. Scope check BEFORE merging: `git diff --name-only <base>..<surveyor-branch>` lists only its
+1. Scope check BEFORE merging: `git diff --name-only <base>..<surveyor-branch>` (`<base>` = the
+   delegation prompt's `Start SHA`) lists only its
    assigned pair (`js/circuits/<id>.js`, `js/circuits/scenery/<id>.js`) plus `scratch/`/`artifacts/`.
    Anything else = reject that file and say so (the hook cannot bind the circuit id).
 2. `git merge --no-ff <surveyor-branch>`, then `verify-track <id>` on the merged tree.
 3. `git worktree remove <path>`.
 
-A campaign merges the branches one at a time in that loop (disjoint pairs do not conflict), then
-regenerates shared generated files once (`node tools/shot/gen-scenery-locations.cjs`) and runs the
-fleet gate.
+A campaign merges the branches one at a time in that loop (disjoint pairs do not conflict). After the
+last merge (one circuit or a campaign) the PARENT regenerates `tools/shot/scenery-locations.json` once
+(`node tools/shot/gen-scenery-locations.cjs`; not part of `npm run gen`) — the one home for that step —
+then runs the gate.
 
 ## Baseline audits (parent, before and after)
 
@@ -75,11 +77,20 @@ hands over to **new-track**, not dressing; routing is in the description.
 
 Parent (this session):
 1. Read the brief and source pair; run the `audit-circuit` baseline and take the
-   captures (aerial/orbit/EYE, obliques) the surveyor will measure against; any HUD or
-   driver-view capture at 844×390 landscape first (AGENTS.md §Coordination).
-2. Spawn one `track-surveyor` with [delegation.md](references/delegation.md).
-3. Merge its branch into yours (AGENTS.md rule 10), capture the same framings
-   after integration, then browser checks and shipping via **check-changes**.
+   captures the surveyor will measure against: `node tools/track/survey-track.mjs <id> before`
+   (aerial/orbit/EYE; add `--oblique` for a satellite comparison — [loop.md](references/loop.md) §2);
+   any HUD or driver-view capture at 844×390 landscape first (AGENTS.md §Coordination).
+2. **Build the evidence packet** — the delegation prompt cites it, so it must exist first:
+   research dated satellite/OSM/official-map/onboard sources (WebSearch/WebFetch; cite URLs, year,
+   uncertainty) and fill [evidence-template.json](references/evidence-template.json) into
+   `scratch/survey-track/<id>/evidence.json` (same packet as [campaign.md](references/campaign.md) step 2).
+3. Commit (do not push) any prerequisite edits — the surveyor's worktree starts at your HEAD
+   (AGENTS.md rule 10) and sees no uncommitted change; that sha is the prompt's `Start SHA`.
+4. Spawn one `track-surveyor` with [delegation.md](references/delegation.md). `scratch/` and
+   `artifacts/` are gitignored and NOT in its worktree: pass the evidence packet and the
+   `scratch/captures/survey-track/<id>/` shots as ABSOLUTE main-checkout paths (Read works across checkouts).
+5. Merge its branch into yours (§Hand-back), capture the same framings after integration
+   (`survey-track.mjs <id> after`), then browser checks and shipping via **check-changes**.
 
 Surveyor (`.claude/agents/track-surveyor.md` steps 1-5; it never captures):
 1. Pick 3-5 fixes, each backed by a measured defect or dated source; request
@@ -108,14 +119,14 @@ the surveys `tools/shot/shot-survey.mjs` / `track-session.mjs` are browser (pare
 - Existing survey PRs keep their `track-survey-assets` base and pinned links.
   Code/scenery fixes use a separate image-free deploy-branch PR.
 - Shots: more than 3 go through `apex_shot_survey` / `apex_track op survey`, not
-  a loop of `apex_shot` (a 52-shot serial survey took 56 min).
+  a loop of `apex_shot` (a serial loop costs a browser boot per shot).
 - **Image budget** → [playwright-probe recipes §Galleries and image budget](../playwright-probe/references/recipes.md#galleries-and-image-budget).
 
 ## Load on demand
 
 - Probe flags, Montreal worked example, gotchas, and the PARENT-only steps
   (browser survey, re-survey, ship) → [references/loop.md](references/loop.md);
-  the surveyor reads only its "Surveyor steps".
+  the surveyor reads only its steps 1, 3 and 4 (loop.md's header line).
 
 Per-circuit research briefs describe the reference place; verify implementation
 claims against source. The baked PBR asset pack ships ON and degrades to the

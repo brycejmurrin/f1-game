@@ -1458,6 +1458,9 @@ function create(G) {
         row("You finished", "P" + past.pos + " · " + past.pts + " pts"),
         row("Constructors", "P" + past.cPos + " · " + past.cPts + " pts"),
         row("Wins / podiums", past.wins + " / " + past.podiums));
+      const pastTeam = teamById(past.team);
+      if (typeof ShareCardChips !== "undefined") ShareCardChips.append(card, "co-year-card", () => ShareCardData.fromCareerYear(past,
+        { teamName: pastTeam && pastTeam.name, teamColor: pastTeam && G.cssCol(pastTeam.color) }), "career-" + past.year);
       body.appendChild(card);
     }
 
