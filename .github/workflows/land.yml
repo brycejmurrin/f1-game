@@ -50,13 +50,16 @@ name: Land
 # newer than this run's resolve read (AT, whole seconds, compared as epoch seconds) exists, so a slow stale run never
 # replaces a newer verdict. The full
 # merge-gate output is the run's step summary; the status links to the run.
-#   merge-gate exit 0 → success (pending "paused" while `dispatch:merge-pause` is set on Dispatch)
+#   merge-gate exit 0 → success (pending "paused" while `dispatch:merge-pause` is set on Dispatch; pending
+#   "re-gating" when the deploy tip is no longer the verdict's `tip=`, STALE TIP below)
 #   exit 3 (CI still running) → pending    exit 2 → failure    exit 1 or no verdict → pending
 #   "error, will retry" (an API or git hiccup is not a refusal)    `hold`, `land` removed, back to draft →
-#   failure "not asked", and an armed auto-merge is disabled.
+#   failure "not asked", and an armed auto-merge is disabled. post disarms too whenever it writes anything but
+#   success on a PR whose auto-merge is armed.
 #
 # IMMEDIATE RE-GATE (`retry` job). A gated, green PR whose arm found the deploy tip moved (another PR merged in
-# between), or whose post read "the deploy tip moved between trusted-rows and land-gate", used to wait for the next
+# between), or whose post read "the deploy tip moved between trusted-rows and land-gate" (or, since STALE TIP below,
+# found the tip moved since the gate measured it), used to wait for the next
 # train or its own next CI run: 60–90 min on a busy day (#3957, #3942, #3940, 2026-10-27). `retry` (actions: write
 # only, no checkout, no repo code, GITHUB_TOKEN) now dispatches this workflow again for that ONE PR. "events
 # triggered by the GITHUB_TOKEN will not create a new workflow run, with the following exceptions: workflow_dispatch
@@ -74,6 +77,15 @@ name: Land
 # next train re-gates"), so a tip that keeps moving cannot loop. Nothing is counted in repo files. Still ONE arm per
 # run; a train arming one PR and the next train arming the next is unchanged. Anyone with write access may dispatch
 # it by hand too (`gh workflow run land.yml --ref claude/f1-game-project-26h3ng -f pr=<n>`): a re-gate now.
+#
+# STALE TIP. A `gate` success is only as good as the tip it measured. post writes success only after re-reading the
+# deploy tip (GET …/branches/<deploy>) and finding the verdict's `tip=` still there; a moved tip writes pending
+# "re-gating" instead and hands the PR to `retry` (same RETRY_MAX budget per head). arm's own tip check is not
+# enough: an auto-merge armed earlier fires on the next success GitHub sees, with no arm run in between. #3982
+# (armed 23:04Z) got a success at 23:12:37Z measured on bfd8f509 although #4020 had moved the tip to 834754fa at
+# 23:10:07Z; GitHub merged it at 23:13:38Z and the two left docs/agent-index.json stale on the tip (gen:check red,
+# 2026-10-27). So any non-success `gate` this run writes also disarms an armed PR, and the next pass re-arms it
+# through arm's checks. A tip that moves between post's read and GitHub's merge is still a seconds-wide window.
 #
 # MERGE-PAUSE. `dispatch:merge-pause` on the open issue titled `Dispatch` arms nothing and disarms what this event
 # touches. Removing the label re-gates nothing by itself: the next push, label flip, CI or train run does.
@@ -362,7 +374,7 @@ jobs:
           if-no-files-found: ignore
 
   # POST: the only job that writes `gate`. No checkout and no repo code. Also turns `gate` red for a PR that no longer
-  # asks to land, disarms, and picks the ONE PR `arm` may merge.
+  # asks to land, disarms, and picks the ONE PR `arm` may merge. A success is written only onto the tip it measured.
   post:
     name: post
     needs: [resolve, trusted-rows, land-gate]
@@ -408,8 +420,10 @@ jobs:
           # time, in epoch seconds (`created_at` has whole seconds; AT is whole seconds too).
           # Not a check run: an API-made check run on a PR head joins an arbitrary Actions suite, and a newer run of that
           # suite's workflow then hides it from the ruleset ("Expected", #3914 2026-10-27).
+          # WROTE is the state write_gate posted ("" when it posted nothing).
           write_gate() {
             local head=$1 st=$2 c=$3 title=$4 summary=$5 seen state body
+            WROTE=""
             seen=$(gh api "repos/$R/commits/$head/statuses?per_page=100" --jq \
               '[.[] | select(.context == "gate")] | first | if . == null then "" else (.created_at | fromdateiso8601 | floor | tostring) end') || return 1
             if [ -n "$seen" ] && [ "$seen" -gt "$AT_S" ]; then
@@ -420,8 +434,21 @@ jobs:
               '{state: $st, context: "gate", description: ($t | .[0:140]), target_url: $u}')
             # shellcheck disable=SC2016 # the backticks are Markdown for the step summary, not a command substitution
             printf '### gate %s → %s\n\n%s\n\n```\n%s\n```\n' "${head:0:12}" "$state" "$title" "$summary" >> "$GITHUB_STEP_SUMMARY"
-            gh api --method POST "repos/$R/statuses/$head" --input - --jq '.url' <<<"$body"
+            gh api --method POST "repos/$R/statuses/$head" --input - --jq '.url' <<<"$body" || return 1
+            WROTE=$state
           }
+          # An auto-merge armed earlier merges on the NEXT success GitHub sees, and arm's tip re-check never runs for
+          # it: so a `gate` this run wrote as anything but success disarms the PR (STALE TIP in the header).
+          disarm_if_armed() {
+            [ "$(gh api "repos/$R/pulls/$1" --jq '.auto_merge != null')" = true ] || return 0
+            if GH_TOKEN="$DISARM_TOKEN" gh pr merge "$1" --repo "$R" --disable-auto; then
+              echo "disarmed #$1: $2" | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning::PR #$1: --disable-auto failed"
+            fi
+          }
+          # want_retry <n> <head>: hand the PR to the `retry` job (an immediate re-gate, RETRY_MAX per head).
+          want_retry() { retry=$(jq -c --argjson n "$1" --arg h "$2" '. + [{number: $n, head: $h}]' <<<"$retry"); }
           # A PR that no longer asks to land: an existing `gate` status turns red ("not asked" is not a pass).
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row"); why=$(jq -r .why <<<"$row")
@@ -462,7 +489,7 @@ jobs:
             elif [ "$code" = 0 ] && [ "$ttip" != "$tip" ]; then
               code=1; line="the deploy tip moved between trusted-rows (${ttip:0:12}) and land-gate (${tip:0:12})"
               # Both halves passed on different tips: re-gate this PR at once (the `retry` job), not on the next train.
-              retry=$(jq -c --argjson n "$n" --arg h "$head" '. + [{number: $n, head: $h}]' <<<"$retry")
+              want_retry "$n" "$head"
             elif [ "$code" = 0 ]; then
               line="$tline (gen, ratchets: land-gate)"
             fi
@@ -481,12 +508,21 @@ jobs:
               fi
             fi
             ok=true
+            WROTE=""
             case "$code" in
-              0) if [ "$PAUSED" = true ]; then
+              0) # The verdict measured the merge onto `tip`; success is written only while `tip` is still the deploy
+                 # tip (STALE TIP in the header: #3982 merged on a success measured before #4020 moved the tip).
+                 now=$(gh api "repos/$R/branches/$DEPLOY_BRANCH" --jq .commit.sha) || now=""
+                 if [ "$PAUSED" = true ]; then
                    write_gate "$head" in_progress "" "= merge-gate paused — dispatch:merge-pause is set on the Dispatch issue" "$line"$'\n\n'"$out" || ok=false
+                 elif [ -z "$now" ]; then
+                   write_gate "$head" in_progress "" "= merge-gate error, will retry — could not read the deploy tip" "$line"$'\n\n'"$out" || ok=false
+                 elif [ "$now" != "$tip" ]; then
+                   write_gate "$head" in_progress "" "= merge-gate waiting — the deploy tip moved since the gate measured ${tip:0:12} (now ${now:0:12}): re-gating" "$line"$'\n\n'"$out" || ok=false
+                   want_retry "$n" "$head"
                  elif write_gate "$head" completed success "$line" "$out"; then
                    # ONE arm per run, in resolve's order: the first pass wins; the merge it makes moves the tip.
-                   [ -n "$arm" ] || arm=$(jq -c -n --argjson n "$n" --arg h "$head" --arg t "$tip" '{number: $n, head: $h, tip: $t}')
+                   [ -n "$arm" ] || [ "$WROTE" != success ] || arm=$(jq -c -n --argjson n "$n" --arg h "$head" --arg t "$tip" '{number: $n, head: $h, tip: $t}')
                  else ok=false
                  fi ;;
               3) write_gate "$head" in_progress "" "$line" "$out" || ok=false ;;
@@ -495,6 +531,7 @@ jobs:
                  write_gate "$head" in_progress "" "= merge-gate error, will retry — ${line:-exit $code}" "$out" || ok=false ;;
             esac
             [ "$ok" = true ] || echo "::warning::PR #$n: could not write gate"
+            if [ -n "$WROTE" ] && [ "$WROTE" != success ]; then disarm_if_armed "$n" "gate is now $WROTE on ${head:0:12}"; fi
           done 3< <(jq -c '.[]' <<<"$PRS")
           { echo "arm=$arm"; echo "retry=$retry"; } >> "$GITHUB_OUTPUT"
           echo "arm=${arm:-none} retry=$retry"
