@@ -14244,7 +14244,8 @@
     "js/render/shared/shadow-pass.js": {
       "beginFrame": [
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-shadow-pick.test.mjs"
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -14262,7 +14263,8 @@
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "pushCaster": [
-        "tests/unit/field-lod.test.mjs"
+        "tests/unit/field-lod.test.mjs",
+        "tests/unit/lamp-shadow-pick.test.mjs"
       ],
       "reset": [
         "tests/unit/car-presentation-vm.test.mjs",
