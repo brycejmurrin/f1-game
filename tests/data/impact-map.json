@@ -4916,7 +4916,7 @@
       ]
     },
     "js/core/dom-apply.js": {
-      "*": [
+      "apply": [
         "tests/unit/i18n.test.mjs"
       ]
     },
@@ -5313,7 +5313,8 @@
         "tests/unit/settings-open-perf.test.mjs"
       ],
       "mark": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "open": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -5330,6 +5331,9 @@
       ],
       "slice": [
         "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/settings-open-perf.test.mjs"
+      ],
+      "watch": [
         "tests/unit/settings-open-perf.test.mjs"
       ]
     },
@@ -8159,10 +8163,12 @@
         "tests/unit/player-tools-ui.test.mjs"
       ],
       "write": [
-        "tests/unit/player-tools-ui.test.mjs"
+        "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/store-registry.test.mjs"
       ],
       "*": [
-        "tests/unit/player-tools-backup.test.mjs"
+        "tests/unit/player-tools-backup.test.mjs",
+        "tests/unit/save-schema-registry.test.mjs"
       ]
     },
     "js/garage/setup-sheet.js": {
@@ -17698,6 +17704,9 @@
       "settle": [
         "tests/unit/ui-fit-tap-scroll-round3.test.mjs"
       ],
+      "watch": [
+        "tests/unit/settings-open-perf.test.mjs"
+      ],
       "*": [
         "tests/unit/css-tokens.test.mjs",
         "tests/unit/garage-interior-gate.test.mjs",
@@ -17924,6 +17933,9 @@
         "tests/unit/settings-search.test.mjs",
         "tests/unit/settings-tabs.test.mjs",
         "tests/unit/ui-improve-pass.test.mjs"
+      ],
+      "mark": [
+        "tests/unit/settings-open-perf.test.mjs"
       ],
       "panel": [
         "tests/unit/settings-tabs.test.mjs",
