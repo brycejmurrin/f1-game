@@ -58,7 +58,7 @@
       { s0: 0.9504, s1: 0.9946, hw: 6.5, ease: 0.012 },  // final chicane complex (index; arc 0.905-0.955)
     ],
     bankZones: [
-      { turn: 2, angleDeg: 3.5, widthM: 120 },   // Elf (T1); re-seated frac 0.1976 (was 72 m off any apex)
+      { turn: 2, angleDeg: 3.5, widthM: 120 },   // Elf (FIA T1 = turns[1]); re-seated frac 0.1976 (was 72 m off any apex)
       { frac: 0.3726, angleDeg: 4.0, widthM: 130 },   // Repsol
       { turn: 8, angleDeg: 4.5, widthM: 150 },   // Campsa; re-seated frac 0.6376 (was 133 m off any apex)
       { turn: 14, angleDeg: 3.0, widthM: 120 },   // Europcar; re-seated frac 0.9376 (was 70 m off any apex)
