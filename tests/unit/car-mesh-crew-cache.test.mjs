@@ -14,6 +14,7 @@ import { loadParts } from "../../tools/car/parts-sweep.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const RIG = fs.readFileSync(path.join(ROOT, "js/car/cockpit-rig.js"), "utf8");
 const SRC = fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8");
 
 function load() {
@@ -23,6 +24,7 @@ function load() {
     GaragePrims: { block(out) { out.pos.push(0, 0, 0); out.idx.push(out.idx.length); } },
   };
   vm.createContext(ctx);
+  vm.runInContext(RIG, ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(SRC + "\n;this.CarMesh = CarMesh;", ctx, { filename: absSrc("js/car/car-mesh.js") });
   const gfx = {
     createMesh(d) { const m = { id: made.length, verts: d.pos.length / 3, d }; made.push(m); return m; },
@@ -67,6 +69,7 @@ test("the cache is capped and frees the OLDEST colour's mesh", () => {
 test("no GaragePrims: nothing is built or cached", () => {
   const ctx = { Log: { info() {} } };
   vm.createContext(ctx);
+  vm.runInContext(RIG, ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(SRC + "\n;this.CarMesh = CarMesh;", ctx);
   let n = 0;
   ctx.CarMesh.init({ createMesh() { n++; return {}; }, freeMesh() {} });

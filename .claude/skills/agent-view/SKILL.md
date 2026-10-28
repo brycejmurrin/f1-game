@@ -9,6 +9,13 @@ Use `node tools/shot/agent.mjs help <hook>` for static hook help, or
 `node tools/shot/agent.mjs <track> help --vm` for the VM manifest without Chromium.
 Numeric one-offs can use `node tools/shot/agent.mjs monza world --vm --detail brief`;
 the VM has no last-drawn frame, so raster/camera evidence still needs a browser.
+**Geometry, no browser (one command):** the corner list is `trackInfo({what:'corners'})`
+(curated FIA apexes, `source` says so); `corners()` is curvature PEAKS, often about twice the
+official count, never "the corner list". Grade is `trackProfile(n).slope` (formula:
+track-geometry.md §Whole-lap recipe); `trackInfo({what:'profile'})` / CLI `track --what profile`
+is 60 points of `y`/`widthM`/`radiusM` with NO slope.
+`node tools/shot/apex-eval.mjs spa "({c:a.trackInfo({what:'corners'}), p:a.trackProfile(200)})" --raw --vm`
+(`--vm`: one Node VM boot, no Chromium, `race()` staged; `--raw` for full arrays).
 MCP wrap: `./tools/mcp/apex-tools-mcp.sh call apex_agent
 '{"track":"monza","command":"world"}'`. Full surface catalog, staging, and
 driving policy → [references/surface.md](references/surface.md). Design notes:
@@ -26,7 +33,8 @@ under headless — stage first).
 **Entry routes** (cost differs — details in surface.md): CLI VM or browser boot,
 `apex-eval.mjs` multi-call one boot, or live `page.evaluate` after staging
 (`race` → `go` → `jump` + frames). Browser boots are serialized by AGENTS.md rules 5 and 10; use the Node VM for numeric batches.
-A subagent may run the Node VM route (`game-vm.cjs` / `createGame`); `agent.mjs` boots Chromium, so bash-guard refuses it there.
+In a subagent bash-guard refuses every `tools/shot/*.mjs` call, `--vm` included, and `apex_agent`:
+use a `scratch/` `createGame` script (track-geometry.md §Whole-lap recipe) or report the probe unverified.
 
 **Vocab:** `frac` = lap 0→1; `s` = metres along centreline; `lateralM` = +right.
 

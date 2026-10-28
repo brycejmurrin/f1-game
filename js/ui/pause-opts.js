@@ -26,7 +26,7 @@
    transparency still wins on the backdrop (its rule is later in the cascade).
 
    CONFIRM QUIT: ON (shipped) / OFF. With it ON the first press on QUIT TO MENU
-   or RESTART RACE only ARMS the button ("… — TAP AGAIN", .armed fill, an
+   or RESTART RACE only ARMS the button ("TAP AGAIN", .armed fill, an
    aria-label that says so); a second press within ARM_MS runs the game's own
    onclick. A capture-phase click listener on #pausemenu does the gating, so
    the handlers in js/game.js stay untouched. The arm clears on its timer and
@@ -54,8 +54,13 @@ const PauseOpts = (function () {
   // Same window as the other two-press guards (settings-export LOAD, the
   // renderer picker's raceGuard), a second longer: this one is read mid-race.
   const ARM_MS = 5000;
-  // The guarded buttons and the words the armed label and aria-label use.
-  const GUARDED = { "pm-quit": "QUIT TO MENU", "pm-restart": "RESTART" };
+  // The guarded buttons and their aria-label once armed. The armed LABEL is
+  // one short line for both (#3892): "RESTART — TAP AGAIN" wrapped in a
+  // half-width 844x390 cell and its second line hid under the next row. Keep
+  // it no longer than the unarmed labels so it fits every cell they fit; the
+  // .armed fill and the aria-label name the action.
+  const GUARDED = { "pm-quit": 1, "pm-restart": 1 };
+  const ARMED_LABEL = "TAP AGAIN";
   const ARIA = { "pm-quit": "Confirm: quit to menu", "pm-restart": "Confirm: restart race" };
 
   const store = GameStore.store;
@@ -135,7 +140,7 @@ const PauseOpts = (function () {
       at: Date.now(),
       t: setTimeout(disarm, ARM_MS),
     };
-    btn.textContent = GUARDED[btn.id] + " — TAP AGAIN";
+    btn.textContent = ARMED_LABEL;
     btn.setAttribute("aria-label", ARIA[btn.id]);
     if (btn.classList) btn.classList.add("armed");
   }

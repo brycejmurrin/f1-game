@@ -217,6 +217,12 @@ function detailRows(path3, g, { tlxLeg }) {
       (_p.wideCostRatio != null ? `  cost ${_p.wideCostRatio}x normal (${_p.wideMeanMs} vs ${_p.normalMeanMs}ms) spikeEnrich ${_p.spikeEnrichmentOnWide}x` : ""));
   }
   if (_pk && _pk.verdict) rows.push(`${IND}kinds: ${_pk.verdict}`);
+  // THE STORE INVENTORY (#2649): submits and stored/discarded attachments a frame, then the passes.
+  const _po = g.passOps;
+  if (_po && _po.rows) {
+    rows.push(`${IND}store: submits=${_po.medianSubmits} stored=${_po.storedPerFrame}/f discarded=${_po.discardedPerFrame}/f`);
+    for (const r of _po.rows.slice(0, 16)) rows.push(`${IND}  ${String(r.perFrame).padStart(5)}x ${r.pass}`);
+  }
   // PIPELINE COMPILES: only a compile count separates "allocate faster" from
   // "warm the programs" (run 197).
   const _w = g.gpuWork;

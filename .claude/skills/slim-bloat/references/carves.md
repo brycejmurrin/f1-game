@@ -5,8 +5,8 @@ before/after counts (`bloat-scan.mjs --json`).
 
 ## 1. Extract from `game.js` / a ratchet file
 
-1. Name the block (start/end lines). Reject if it is `updateCar` / `render`
-   or needs ~15 new `G` members (`do-not.md`).
+1. Name the block: its start/end lines from apex-lsp `lsp_outline` (whole functions; skill code-nav), not
+   `grep -n`. Reject if it is `updateCar` / `render` or needs many new `G` members (`do-not.md`).
 2. Analyse only (no write):
 
    ```sh
@@ -22,18 +22,21 @@ before/after counts (`bloat-scan.mjs --json`).
    destructure), then `npm run gen` (writes the `index.html` `<script>` tag — generated, never
    hand-edited) + lower
    the ceilings: `node tools/check/ratchets.mjs --update --lower-only` (a delta in tests/data/ratchets.d on a topic branch).
-5. `grep` every removed symbol. Then `npm run test:tooling-fast`. Near
-   `game.js`: `physics-characterization` is the master gate — parent names
-   leftover browser groups as not-run.
-6. No bump — `bump-cache` is deploy-only (`.claude/rules/game-code.md`); `npm run gen` only if the manifest changed.
+5. `lsp_references` every removed symbol (grep for text and comments). Then
+   `node tools/ci/tooling-fast.mjs --changed --jobs=3` (the full tier in the background only, AGENTS.md rule 4).
+   Near `game.js`: `tests/specs/physics-characterization.spec.js` is the master gate (`test-bg.mjs --spec`) —
+   parent names leftover browser groups as not-run.
+6. Commit in two calls (AGENTS.md rule 12); the hook must pass with the lowered ceiling.
+7. No bump — `bump-cache` is deploy-only (`.claude/rules/game-code.md`); `npm run gen` only if the manifest changed.
 
 `extract-module.mjs` does **not** write the module, manifest, or tags.
 
 ## 2. Split an always-on doc
 
-- A fat skill is **agent-config** (DECISIONS #8); this section covers docs.
+- A fat skill is **agent-config** (`docs/notes/DECISIONS-2026-10-26.md` #8); this section covers docs.
 - Do not paste `AGENTS.md` into a doc. Point at it.
-- The `total-audit` workflow (`docs-ref` / `docs-idx` lenses) first if the prose may be stale.
+- The `total-audit` workflow (`.claude/workflows/total-audit.js`, `docs-ref` / `docs-idx` lenses) first if the
+  prose may be stale.
 
 ## 3. Split the tree (new directory / file family)
 
@@ -72,7 +75,7 @@ mirrors that cite a **symbol**.
 
 ```sh
 node tools/check/bloat-scan.mjs --json
-npm run test:tooling-fast
+node tools/ci/tooling-fast.mjs --changed --jobs=3
 node tools/ci/verify-change.mjs --plan --json
 ```
 

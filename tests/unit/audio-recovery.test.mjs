@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const param = (v) => ({ value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, cancelScheduledValues() {} });
 function boot(opts = {}) {
@@ -535,9 +535,10 @@ test("init does not throw when navigator.mediaDevices is absent", async () => {
 
 test("the SOUND toggle restarts rain from the live weather, not the grid's raceWeather", () => {
   const panel = fs.readFileSync(path.join(ROOT, "js/audio/panel.js"), "utf8");
-  const on = panel.slice(panel.indexOf('else if ((G.state === "race" || G.state === "count") && !G.paused) {'));
+  const on = panel.slice(panel.indexOf('else if (G.state === "race" || G.state === "count") {'));
   const block = on.slice(0, on.indexOf("syncAudioPanel();"));
   assert.match(block, /GameAudio\.startEngine\(\);/, "precondition: found the mid-race SOUND ON block");
+  assert.match(block, /if \(!G\.paused\)/, "engine/music/rain stay deferred under the pause card");
   assert.doesNotMatch(block, /raceWeather/, "the grid's weather does not describe a race the arc has turned");
   assert.match(block, /if \(G\.viewRainfall\(\) > 0\.01\) GameAudio\.startRain\(\);/);
   const game = fs.readFileSync(path.join(ROOT, "js/game.js"), "utf8");
@@ -570,6 +571,56 @@ test("a WATCH clip whose media element errors AND rejects play() falls back once
   h.stop();
   for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 150));
   assert.equal(A.radioVoicesLive(), 0, "and stop() cuts that one voice");
+});
+
+test("WATCH clip stop aborts the CORS fallback fetch and rejects a late decode (no plainFallback)", async () => {
+  // IMPROVEMENT-CANDIDATES §6: stop() used to leave the fetch running; a late
+  // response decoded and could resurrect audio via plainFallback.
+  const els = [];
+  const pending = [];
+  function Audio() {
+    const el = {
+      preload: "", crossOrigin: "", volume: 1, paused: false, ended: false,
+      onerror: null, onended: null, _src: "",
+      pause() { this.paused = true; },
+      load() {},
+      removeAttribute(name) { if (name === "src") this._src = ""; },
+      play() { return Promise.reject(new Error("NotSupportedError")); },
+    };
+    Object.defineProperty(el, "src", {
+      get: () => el._src,
+      set(v) { el._src = v; Promise.resolve().then(() => { if (el.onerror) el.onerror(); }); },
+    });
+    els.push(el);
+    return el;
+  }
+  const { A, sandbox, decoded } = boot({ Audio, mediaSource: true });
+  sandbox.AbortController = AbortController;
+  // Uncooperative transport: records the signal but still delivers if asked —
+  // production must refuse decode via dead + aborted checks.
+  sandbox.fetch = (url, options) => new Promise((resolve) => {
+    pending.push({ url, signal: options && options.signal, resolve });
+  });
+  A.init(); await flush();
+  const URL_ = "https://example.test/watch-abort.mp3";
+  const beforePending = pending.length;   // soundtrack init may already have fetched
+  const h = sandbox.GameAudioRadioFx.playWatchMedia(URL_, { volume: 0.9 });
+  assert.ok(h, "precondition: clip accepted");
+  await flush();
+  const watchReqs = pending.filter((p) => p.url === URL_);
+  assert.equal(watchReqs.length, 1, "one WATCH fallback fetch is pending (got " + (pending.length - beforePending) + " new)");
+  assert.ok(watchReqs[0].signal, "fetch carries an AbortSignal");
+  const beforeDecodes = decoded.length;
+  const beforeVoices = A.radioVoicesLive();
+  h.stop();
+  assert.equal(watchReqs[0].signal.aborted, true, "stop() aborts the owned fetch");
+  // Deliver a late response anyway (uncooperative transport).
+  watchReqs[0].resolve({ ok: true, status: 200, arrayBuffer: () => Promise.resolve(Object.assign(new ArrayBuffer(8), { _url: URL_ })) });
+  await flush();
+  for (let i = 0; i < 3; i++) await new Promise((r) => setTimeout(r, 20));
+  assert.equal(decoded.length, beforeDecodes, "late bytes never reach decodeAudioData");
+  assert.equal(A.radioVoicesLive(), beforeVoices, "no resurrected radioVoice after stop");
+  assert.ok(els.every((el) => !el._src || el._src.indexOf("watch-abort") < 0), "teardown retires the WATCH media src");
 });
 
 test("music duck is held per source: a WATCH clip, the engineer and the replay fallback do not release each other", async () => {

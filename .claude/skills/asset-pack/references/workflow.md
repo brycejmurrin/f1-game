@@ -15,8 +15,10 @@ mismatch.
 (`js/track/core/geom.js`) and `MAT_LAYERS` in both `tools/gen/assets.mjs` and
 `js/render/shared/assets.js`. The count `17` is also hardcoded in every backend's
 shader/uniform sizing; `tests/unit/assets-pack.test.mjs` ("the shader's layer count
-matches the MAT table size") names each site — change the count there first and let
-it list what else to edit. Miss one and the extra layer's scale silently reads
+matches the MAT table size") pins only GLSL `uMatTexScale[17]`, GLX/WGX `MAT_TEX_LAYERS` and the TLX
+uniform array/loop. NOT pinned (edit by hand, grep the literal `16`/`17`): `matTexLayer`'s
+`clamp(mid, 0, 16)` in `tsl-lit.js`, WGSL `mid > 16` and the `MatScaleU` array size in `wgsl-chunks.js`,
+and `MAT_LAYERS` in `js/render/shared/assets.js`. Miss one and the extra layer's scale silently reads
 `0.0` (GLX) or is dropped (TLX/WGX).
 
 **Never bake:** `GLASS`, `FLAG`, `FLAT` — glass needs mirror read; flags are
@@ -40,8 +42,7 @@ vertex-displaced; FLAT is the no-material id.
 2. **Check the pack offline** (Node only, writes nothing; expect
    `verify: OK` under the 8 MB budget; `tests/unit/assets-pack.test.mjs` is the
    guard incl. MAT-id lockstep) — or **regenerate synthetic pack**
-   (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes;
-   `bake*` is denied to agents in `.claude/settings.json`, so Bryce runs it):
+   (no network; rewrites `assets/pack/`, `git checkout -- assets/pack` undoes; Bryce runs it):
    ```sh
    node tools/gen/assets.mjs bake-synthetic
    node tools/gen/assets.mjs verify
@@ -61,7 +62,7 @@ vertex-displaced; FLAT is the no-material id.
    Blend is **multiplicative** — per-track tarmac tint and racing-line wear
    survive.
 
-4. **Slice a generated 4×4 atlas** onto scenery MAT slots (Bryce runs it: `bake*` is denied to agents; `bake-atlas`
+4. **Slice a generated 4×4 atlas** onto scenery MAT slots (Bryce runs it; `bake-atlas`
    leaves ASPHALT unmapped and stamps `generated:<file>#col,row`; the committed
    pack is `bake-synthetic` output — `materials.layers` in
    `assets/pack/manifest.json` is the live list):
@@ -99,8 +100,9 @@ mid 1..16 with scale > 0 — the same numbers in `glsl-lit.js` `matTexUV`,
 `wgsl-chunks.js` `matTexUV`/`matUvLit`, `tsl-lit.js` `matTexUV`/`matTexLayer`.
 Whole road/surface wrong colour (single id, e.g. tarmac = MAT 16, not a seam)? First A/B
 `matTex(0)` vs `matTex(1)` per backend (Workflow step 3), then check the per-track tarmac
-tint, `colorSpace = NoColorSpace` on the array (no sRGB decode), and the TLX road draw
-(`opts.surfaceId === 16` in `tlx.js`, `lgRoad` in `tsl-lit.js`). Mixed-id seams:
+tint, `colorSpace = NoColorSpace` on the array (no sRGB decode), and the TLX road texture
+sample: `matTexLayer` (`clamp(mid, 0, 16)`) and `matAlbedoNode.sample(uv).depth(int(matTexLayer(mid)))` in
+`tsl-lit.js` (`lgRoad` there, and `opts.surfaceId === 16` in `tlx.js`, are the road-LAMP gate, not the texture). Mixed-id seams:
 Diff these seams, in order:
 1. **Layer index**: TLX `surfaceId = floor(matA + 0.5)` where `matA` is a SMOOTH
    `attribute("mat")` (GLX/WGX: `flat vMat`), so a triangle spanning two
@@ -110,17 +112,18 @@ Diff these seams, in order:
    `grey()`): repeat wrap, LinearMipmapLinear, aniso 4 must match or WGSL
    compiles a `textureLoad` edge-texel read (flat grass/asphalt on WebGPU).
    Pinned by `gfx-backend-canary.test.mjs` "TLX placeholder material arrays…".
-3. **Pixel bytes**: TLX reads the PNGs back through a scratch WebGL2 context
-   (`readbackTextureLayers`; 2d-canvas readback is colour-managed and neutralises
-   the pack). A wrong-but-not-flat pack = check the readback and the layer order. The array is a
+3. **Pixel bytes**: TLX fills the layer bytes through `Assets.readLayerBytesAsync` (the DEFAULT:
+   PIXEL_PACK_BUFFER + fence); a layer it refuses drops to `fill2dLayer` (2d canvas, colour-managed, so
+   that layer flattens toward grey). `localStorage apex26.tlxPackAsync = "0"` forces the old sync
+   `readbackTextureLayers` path — that is the A/B. A wrong-but-not-flat pack = check those bytes and the layer order. The array is a
    `DataArrayTexture` (no `flipY`; GLX resets `UNPACK_FLIP_Y` to false for `texSubImage3D`). The `flipY = true`
    in `createTexture` is the decal-atlas path, not the pack.
 4. **Bake side**: the layer itself (`tools/gen/assets.mjs` GRASS row of
    `ATLAS_PRESETS.generated`, `SCALES`). If GLX/WGX look right it is not this.
 
 Parity gates (all static): `tests/unit/assets-pack.test.mjs` (MAT_LAYERS /
-`uMatTexScale[17]` / manifest ids; backend layer allocation/upload invariants are pinned in the updated
-asset/renderer contracts; inspect GLX/TLX/WGX together when changing MAT count), the canary tests
+`uMatTexScale[17]` / manifest ids; the unpinned literals are listed in §MAT layers — inspect GLX/TLX/WGX
+together when changing the MAT count), the canary tests
 above and `webgpu-lifecycle.test.mjs` (WGX `textureSample` uniform-CF).
 Per-backend pixel truth is BROWSER-ONLY: `matTex(0)` vs `matTex(1)` per
 backend, `__apex.assets()` `uploaded:true`. Record which of 1-4 was ruled out.

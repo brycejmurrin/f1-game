@@ -28,12 +28,13 @@ name: GPU census
 # Three ways in, never an ordinary push:
 #   dispatch  — `gh workflow run gpu-census.yml --ref <branch> -f images=…`, or
 #               the GitHub MCP `actions_run_trigger`.
-#   request   — agent push-request (2026-09-09). Agents' GH App tokens cannot
-#               workflow_dispatch (403); they CAN push an edit of
-#               .github/gpu-census-request.json on a cursor/** or claude/**
-#               branch, which runs THAT branch's tree with the file's inputs.
-#               Still in daily use (runs 38603534048, 38610120171, 38611116514
-#               on 2026-10-14).
+#   request   — push an edit of .github/gpu-census-request.json on a
+#               cursor/** or claude/** branch, which runs THAT branch's tree
+#               with the file's inputs. Built 2026-09-09 when agent tokens got
+#               403 on dispatch; that premise is stale (213 agent dispatches in
+#               the 14 d to 2026-10-27), so DISPATCH is the default route. The
+#               relay stays only for the request-only legs (`leg`, `lf_*`,
+#               `lrm_*`): the dispatch form is at GitHub's 25-input cap.
 #   nightly   — staggered from ci.yml's boot group (ci.yml 04:17 UTC, this
 #               05:47; PROCESS-SPEEDUP-2026-09 §4.5), and SKIPPED when nothing
 #               under the renderer paths changed since the last green nightly

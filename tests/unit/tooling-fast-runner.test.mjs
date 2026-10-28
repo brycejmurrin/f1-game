@@ -12,11 +12,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
+import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, scheduleLongestFirst, loadTimings, TIMINGS_FILE, TOOLING_FAST_FILES,
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
   isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
-  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS }
+  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope }
   from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -130,6 +130,26 @@ test("waits forever", (t) => new Promise(() => {
     assert.match(log, /not ok \d+ - \S*(stuck\.test\.mjs|waits forever)/, "the stuck file or test is named");
     assert.match(log, /test timed out after 500ms/);
     assert.doesNotMatch(log, /reason=timeout/, "the per-test bound fired, not the file wall");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+// #3885: node 22's `--test` parent re-orders a deferred 0xFF byte when a pipe
+// read ends inside a result frame's header, then spins forever draining the
+// frame (100 % CPU, SIGTERM ignored). A file whose LAST stdout bytes are an
+// unfinished frame header is the deterministic form of that read; under the
+// default per-file subprocess it ran to the file wall. See TEST_ISOLATION_FLAG.
+test("stdout ending in a partial v8 frame header does not hang the runner (#3885)", async () => {
+  const dir = tmp();
+  try {
+    const f = path.join(dir, "partial-header.test.mjs");
+    fs.writeFileSync(f, `import test from "node:test";
+test("writes FF 0F 00 last", () => { process.stdout.write(Buffer.from([0xff, 0x0f, 0x00])); });
+`);
+    const logPath = path.join(dir, "suite.log");
+    const r = await runToolingFast([f], { jobs: 1, logPath, localTimingsPath: null, fileTimeoutMs: 15000 });
+    const log = fs.readFileSync(logPath, "utf8");
+    assert.doesNotMatch(log, /reason=timeout/, "the runner must exit, not spin until the file wall");
+    assert.equal(r.ok, true, log);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -260,7 +280,7 @@ test("--changed selects pinned unit tests for a tool edit, not the full suite", 
   const r = selectToolingFastChanged(["tools/ci/test-bg.mjs"], { allFiles: all, pinIndex,
     scripts: { "test:tooling-fast": "node tools/ci/tooling-fast.mjs" } });
   assert.equal(r.reason, "matched");
-  assert.deepEqual(r.files.sort(), ["tests/unit/agent-config.test.mjs", "tests/unit/test-bg-outcome.test.mjs"].sort());
+  assert.deepEqual(r.files, ["tests/unit/agent-config.test.mjs"]);
   assert.ok(r.files.length < all.length);
   // Which CI halves run those files follows the CI split (time-balanced since 2026-10-21), not a stride.
   const covering = ["1/4", "2/4", "3/4", "4/4"].filter((sp) => ciShardFiles(all, sp).some((f) => r.files.includes(f)));
@@ -363,6 +383,27 @@ test("CLI: --bail is a first-class flag and defaults off", () => {
   assert.equal(parseToolingFastArgv([]).bail, false);
   assert.equal(parseToolingFastArgv(["--bail", "--shard=1/2"]).bail, true);
   assert.match(TOOLING_FAST_USAGE, /--bail/);
+});
+
+// #3951: ci.yml's guards shards ask --print-scope whether to run the whole floor.
+test("guards scope: only a pull request that touches no tooling narrows to --changed", () => {
+  const js = ["js/perf/governor.js", "css/hud.css"];
+  assert.equal(guardsScope(js, "pull_request").mode, "changed");
+  assert.equal(guardsScope(["docs/TESTING.md", "AGENTS.md"], "pull_request").mode, "changed", "docs-only narrows too");
+  for (const f of ["tools/ci/tooling-fast.mjs", "tests/unit/tooling-fast-runner.test.mjs", ".github/workflows/ci.yml", "package.json", "package-lock.json"]) {
+    const r = guardsScope([...js, f], "pull_request");
+    assert.equal(r.mode, "full", `${f} keeps the whole floor`);
+    assert.match(r.reason, new RegExp(f.replace(/[.]/g, "\\.")));
+  }
+  for (const ev of ["push", "schedule", "workflow_dispatch", undefined]) {
+    assert.equal(guardsScope(js, ev).mode, "full", `${ev}: only a pull request narrows (the deploy push and the train stay full)`);
+  }
+  assert.equal(guardsScope([], "pull_request").mode, "full", "an empty diff stays full (--changed exits 3 on one)");
+  // Joined, not literal: these two paths do not exist, and docs-integrity checks every path a comment or string names.
+  assert.equal(guardsScope([["toolsy", "x.js"].join("/"), ["js", "tests", "x.js"].join("/")], "pull_request").mode, "changed",
+    "prefixes are anchored directories");
+  assert.equal(parseToolingFastArgv(["--print-scope"]).printScope, true);
+  assert.match(TOOLING_FAST_USAGE, /--print-scope/);
 });
 
 test("CLI: --help and unknown flags never start the suite", () => {
@@ -657,4 +698,20 @@ test("ciShardFiles: the two CI halves partition the list, balanced by the commit
   assert.deepEqual(ciShardFiles(all, "1/2"), a);
   assert.deepEqual(shardsCoveringFiles([a[0]], all, 2), ["1/2"]);
   assert.deepEqual(shardsCoveringFiles([b[0]], all, 2), ["2/2"]);
+});
+
+test("buildToolingFastPinIndex resolves relative import specifiers against the importing test (#3907)", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pin-rel-"));
+  fs.mkdirSync(path.join(root, "tests/unit"), { recursive: true });
+  fs.writeFileSync(path.join(root, "tests/unit/verify-live.test.mjs"),
+    'import { a } from "../../tools/ci/verify-live.mjs";\nimport h from "./helper.mjs";\n');
+  const index = buildToolingFastPinIndex(["tests/unit/verify-live.test.mjs"], root);
+  assert.ok(index.get("tools/ci/verify-live.mjs").has("tests/unit/verify-live.test.mjs"));
+  assert.ok(!index.has("tools/ci"), "relative pins are exact, not directory-wide");
+  assert.ok(!index.has("tests/unit"), "a sibling import must not pin the whole test directory");
+});
+
+test("--changed selects a test that imports its subject by relative path (#3907)", () => {
+  const r = selectToolingFastChanged(["tools/ci/verify-live.mjs"]);
+  assert.deepEqual(r.files.filter((f) => f === "tests/unit/verify-live.test.mjs"), ["tests/unit/verify-live.test.mjs"]);
 });

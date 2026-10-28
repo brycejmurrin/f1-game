@@ -76,6 +76,7 @@ const SPEC = [
   { k: "radioFocusDb", lane: "json", group: "audio", def: 0, src: "js/audio/panel.js", oneOf: [0, 4, 8, 12] },
   { k: "radioFx", lane: "json", group: "audio", def: 1, src: "js/audio/panel.js" },
   { k: "radioPreset", lane: "json", group: "audio", def: "modern", oneOf: ["modern", "clean", "vintage"], src: "js/audio/panel.js" },
+  { k: "spokenLang", lane: "json", group: "audio", def: "auto", src: "js/audio/radio-voice.js", oneOf: ["auto", "en", "es", "pt", "it", "de", "fr", "ja", "nl"] },
   { k: "voiceTune", lane: "json", group: "audio", def: {}, src: "js/audio/radio-voice.js" },
   { k: "radioChat", lane: "json", group: "audio", def: "normal", src: "js/race/race-radio.js", oneOf: ["off", "key", "normal", "chatty"] },
   { k: "radioPack", lane: "json", group: "audio", def: true, src: "js/audio/radio-voice.js" },
@@ -211,7 +212,7 @@ const SPEC = [
       const clean = ControllerProfiles.clean(raw);
       return clean.devices.length === raw.devices.length ? clean : undefined;
     } },
-  { k: "conditionCues", lane: "json", group: "driving", def: false, src: "js/ui/condition-cue-controls.js" },
+  { k: "conditionCues", lane: "json", group: "driving", def: true, src: "js/ui/condition-cue-controls.js" },
   { k: "padRest", lane: "json", group: "driving", def: 0, src: "js/ui/key-binds.js CALIBRATE STICK (steer-axis rest offset per pad: {[padId]: v}, |v| <= 0.5; a legacy scalar is adopted by the first pad that drives; 0 = uncalibrated)",
     // A legacy scalar OR the per-pad map (Input.setPadRest's rule); typeOk(map, 0) skipped every calibrated
     // pad on LOAD SETTINGS, so the stick drifted on the new device (B·H11 hunt). `freeShape`: normalize owns it.
@@ -898,7 +899,7 @@ function careerRevisions() {
   const s = typeof GameStore !== "undefined" ? GameStore.store : null;
   return { expectedRevisions, expectedSelectionRevision: s && s.keyRevision ? s.keyRevision("careerSlot") : null };
 }
-function applyCareer(file, revisions) {
+async function applyCareer(file, revisions) {
   const refused = (reason) => ({ ok: false, reason, applied: 0, skipped: 0, failed: 0 });
   if (!file || file.format !== CAREER_FORMAT) return refused(`not an ${CAREER_FORMAT} file`);
   const bag = file.careers;
@@ -924,7 +925,8 @@ function applyCareer(file, revisions) {
   if (!slots.length && liveSlot == null) return { ok: true, applied: 0, skipped, failed: 0, reason: null };
   // Both file formats share the same live-conflict gate and preflight of ALL
   // destination revisions. No slot is written if any destination changed.
-  const r = CareerBackup.apply({ format: CareerBackup.FORMAT, slots },
+  // applyWithUndo keeps each replaced slot as a restore point first, or refuses.
+  const r = await CareerBackup.applyWithUndo({ format: CareerBackup.FORMAT, slots },
     Object.assign({}, revisions || careerRevisions(), { liveSlot, includeExtras: false }));
   if (!r.ok) return refused(r.reason);
   const failed = r.failed || 0;
@@ -1050,11 +1052,7 @@ function create(G) {
       }
       const revisions = armed.snapshot;
       disarm();
-      pick((obj) => {
-        if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
-        let r;
-        // A throw here would surface as an unhandled rejection over the game (#2191).
-        try { r = apply(obj, revisions); } catch (e) { Log.warn("ui", "file load threw", e && e.message); r = null; }
+      const loaded = (r) => {
         if (!r || !r.ok) { flash(b, label, String((r && r.reason) || "REFUSED").toUpperCase(), 2600); return; }
         Log.info("ui", "file loaded", { id, applied: r.applied, skipped: r.skipped, failed: r.failed });
         // Storage refused some writes: a reload would drop them, so say so and stay.
@@ -1067,6 +1065,16 @@ function create(G) {
         b.textContent = `${label} — ${r.applied} APPLIED${r.droppedLiveries ? `, ${r.droppedLiveries} LIVERIES SKIPPED` : ""}, RELOADING…`;
         reloading = true; b.disabled = true;
         setTimeout(() => { try { location.reload(); } catch (_) { /* file:// */ } }, 600);
+      };
+      pick((obj) => {
+        if (!obj) { flash(b, label, "NOT A JSON FILE", 2200); return; }
+        let r;
+        // A throw here would surface as an unhandled rejection over the game (#2191).
+        const threw = (e) => { Log.warn("ui", "file load threw", e && e.message); return null; };
+        try { r = apply(obj, revisions); } catch (e) { r = threw(e); }
+        // The career loader is async: it awaits its restore points before writing.
+        if (r && typeof r.then === "function") r.then(loaded, (e) => loaded(threw(e)));
+        else loaded(r);
       }, maxBytes);
       tick();
     };

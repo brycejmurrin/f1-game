@@ -14,10 +14,10 @@ broken; medium = wrong outcome on a reachable path; low = cosmetic or rare.
 
 ---
 
-## Fixed in this PR
+## Fixed by the 2026-09-24 hunt
 
 ### B1 — Wheel-wizard axis capture survived settings close / resume
-**Severity:** high · **Status:** FIXED here
+**Severity:** high · **Status:** FIXED (2026-09-24 hunt)
 
 **Where:** `js/ui/key-binds.js` (`disarmAll`), `js/game.js` (`setPaused`)
 
@@ -32,7 +32,7 @@ calls `closeSettings()` so every resume path disarms.
 **Test:** `tests/unit/key-binds.test.mjs` — disarm clears axis capture.
 
 ### B2 — Time trial still ran the +5 s track-limits ladder
-**Severity:** low · **Status:** FIXED here
+**Severity:** low · **Status:** FIXED (2026-09-24 hunt)
 
 **Where:** `js/game.js`
 
@@ -44,7 +44,7 @@ still did `penalty += 5` and announced `+5s TRACK LIMITS PENALTY`.
 **Test:** `tests/unit/tt-lap-validity-vm.test.mjs` — fourth cut leaves `penalty` at 0.
 
 ### B3 — Lobby READY is not host-relayed (3–4 player guest UI lies)
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/net/lobby.js` READY handler
 
@@ -57,7 +57,7 @@ a guest that is always the host peer, other guests' READY never arrived.
 **Test:** `tests/unit/net-lobby-lifecycle.test.mjs` — READY relay + `from` keying.
 
 ### B4 — Championship points / FL / countback for cars that never finished
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/career/season-cal.js` `award()`; `js/game.js` `endRace` FL from
 `fin` only
@@ -83,7 +83,7 @@ unclassified one does not), and the fastest-lap point no longer requires
 flag may take it. The tests assert that instead (`tests/unit/season-cal.test.mjs`).
 
 ### B5 — Cross-tab + quota can overwrite a newer mirror-only save
-**Severity:** high · **Status:** FIXED here · **Confidence:** medium-high
+**Severity:** high · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** medium-high
 
 **Where:** `js/core/store.js` IDB flush
 
@@ -97,7 +97,7 @@ upgrade (boot healed disk) still lands.
 **Test:** `tests/unit/store-cross-tab.test.mjs` — older `lsOk:true` refused.
 
 ### B6 — Launch / tyre / phase / mistake hashes ignored career season seed
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/game.js` grid arm; `js/race/weather-arc.js`; mistake path
 
@@ -108,7 +108,7 @@ phaseRoll/mistake hashes used bare `simSeed()` / `raceIndex`.
 (same contract as `armReliability`).
 
 ### B7 — Settings export lacked oneOf for steer / HUD / driving line
-**Severity:** low · **Status:** FIXED here · **Confidence:** high
+**Severity:** low · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/ui/settings-export.js`; `js/game.js` `setSteerMode`
 
@@ -121,7 +121,7 @@ phaseRoll/mistake hashes used bare `simSeed()` / `raceIndex`.
 **Test:** `tests/unit/settings-export.test.mjs` — oneOf allowlists.
 
 ### B8 — Garage `customLogo` import accepts any string
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/ui/settings-export.js` `garageValue`
 
@@ -141,7 +141,7 @@ catalogue: [SCENERY-API.md](SCENERY-API.md). `scenery(api)` surface frozen at
 **114 members** by `tests/unit/scenery-api-contract.test.mjs`.
 
 ### S1 — `along()` + wrapped helpers double-apply `_sceneryShift`
-**Severity:** high · **Status:** FIXED here · **Confidence:** high
+**Severity:** high · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/build-props.js` `transformSceneryApi`; `js/track/core/space.js`
 `sceneryNodeToAuthored`
@@ -158,7 +158,7 @@ Engine-internal `ctx.along` (walls/fences) unchanged.
 within tens of metres (not kilometres).
 
 ### S2 — `furniture.tree: "pine"` silently became broadleaf
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/nature.js` `canopyR`; five circuit defs;
 `tests/unit/circuit-vocab.test.mjs`
@@ -210,7 +210,7 @@ unsafe (estoril lesson). Prefer frame audits over blanket zeroing. S1 no longer
 double-shifts on these; residual shift remains authoring debt.
 
 ### S4 — `pits.js` `sweep()` invisible to primitive audits
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/pits.js` `sweep`
 
@@ -235,7 +235,7 @@ seated 2 cm deeper and `waterOccupied` skips stacked bands (S7). Did **not**
 explode `FIGHT_MAX` (no baseline campaign).
 
 ### S6 — Props-over-road blind to band-spanning solids
-**Severity:** medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `tools/track/measure-props-over-road.mjs`;
 `tests/specs/props-over-road.spec.js`
@@ -247,7 +247,7 @@ whose y-span covers the whole band had no qualifying face.
 `[road+TOL, road+CEIL]`.
 
 ### S7 — Overlapping `waterBand` slabs
-**Severity:** low–medium · **Status:** FIXED here · **Confidence:** high
+**Severity:** low–medium · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/build-props.js` `waterEmit`
 
@@ -257,7 +257,7 @@ whose y-span covers the whole band had no qualifying face.
 deeper (pairs with S5).
 
 ### S8 — `SceneryThemes.variants` tables unused
-**Severity:** low · **Status:** FIXED here · **Confidence:** high
+**Severity:** low · **Status:** FIXED (2026-09-24 hunt) · **Confidence:** high
 
 **Where:** `js/track/scenery/themes.js`
 
@@ -296,7 +296,7 @@ consumer read them.
 
 `docs/notes/DEFECT-LEDGER.md` is the long chronological register. This file is
 the **current credible shortlist** from the 2026-09-24 architecture/bug-hunt
-pass: B1–B8 and S1–S2 / S4–S10 FIXED here; S3 remains OPEN as measured frame
+pass: B1–B8 and S1–S2 / S4–S10 FIXED (2026-09-24 hunt); S3 remains OPEN as measured frame
 debt. Prefer linking here from PRs; promote lasting open items into the ledger
 when a campaign owns them.
 
@@ -308,8 +308,8 @@ From the 2026-10-09 read-only hunt (15 hunters on tip `88f2b21a6`; every row bel
 session before listing). The full ledger, with the Tier-1 rows and the open-PR verdicts, is the note
 `BUG-HUNT-LEDGER-2026-10-09` on branch `cursor/bug-hunt-ledger-88f2` (not on the deploy branch yet). Severity is the
 hunt's; line numbers are as of that tip. L9/L12/L13/M36 (tooling) are fixed by the `ci-adapted-guard` PR; M2 and M9, M13-M16
-are held by the session that owns them. Rows marked fixed-in-#NNNN are in this session's open PRs; everything else below is **assigned to sibling sessions
-2026-10-09**, except the last line, which has no owner yet.
+were held by an owning session on that date. Rows marked fixed-in-#NNNN were fixed by that PR; the rest were handed
+to other sessions on 2026-10-09 (the last line had no owner). Today's owner of a row is its GitHub issue, if any.
 
 - M19 replay — `clear()` zeroes `prevStatus`, so every retired/finished car re-tags as a fresh event after a timeline discard. `js/camera/replay-buf.js:81` · low · **fixed in #2222**
 - M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low · **fixed in #1289**
@@ -319,13 +319,13 @@ are held by the session that owns them. Rows marked fixed-in-#NNNN are in this s
 - M28 car — a custom-emblem image that decodes after CLEAR / a newer upload reinstalls the stale emblem. `js/car/liverytex.js:1148-1160` · low · **fixed in #1284**
 - M31 audio — race started with SOUND OFF then on never calls `setVenue`; the panel mid-race path skips `setVoice`. `js/game.js:8875,2809`, `js/audio/panel.js:49` · low
 - M32 audio — RivalAudio binds 4 voice slots, the mobile engine has 2; rivals in slots 2-3 swap voices on rank changes. `js/audio/rivals.js:20`, `js/audio/engine.js:106,2125` · low
-- M33 AI — mistake/attack zone key `Math.round(c.s + toTurnIn)` is unwrapped; a corner just past S/F rolls the mistake twice. `js/game.js:5397-5399,5479` · low
+- M33 AI — mistake/attack zone key `Math.round(c.s + toTurnIn)` is unwrapped; a corner just past S/F rolls the mistake twice. `js/game.js` · low · **fixed** (`wrapS` on the zone key + attemptRoll; pinned in `race-flow-fixes-vm` 7.6 and `game-m33-m35-m42`)
 - M34 AI — `defendPull` compares `chaserSpeed <= speed - 3` with an unscaled 3 m/s (siblings scale by PACE/vTop). `js/physics/ai-drive.js:1399` · low · **fixed in `cursor/r3-ai-pace-margins`** (with its round-3 siblings: `wantBoost` catching/defending and `brakeTarget` attacking now ride vTop()/VMAX too)
-- M35 race flow — `gridUp` hashes on `raceIndex` before `raceIndex++`, `armReliability` and the AI-mistake hash after it; one-off draws disagree with B6 above. `js/game.js:1979` vs `:2757` · low
-- M38 director — after the player retires solo the director forces TV every tick; CAM/C do nothing; `setAutoSpectate` has no caller. `js/camera/director.js:144-172,215` · low
+- M35 race flow — `gridUp` hashes on `raceIndex` before `raceIndex++`, `armReliability` and the AI-mistake hash after it; one-off draws disagree with B6 above. `js/game.js` · low · **fixed** (arm on gridUp's `raceIndex` then bump; `raceDrawRound` freezes the mistake hash; pinned in `game-m33-m35-m42` + `game-m35-race-index-vm`)
+- M38 director — after the player retires solo the director forces TV every tick; CAM/C do nothing; `setAutoSpectate` has no caller. `js/camera/director.js:144-172,215` · low · **force-back fixed earlier** (manual CAM leaves TV); **solo-retire empty-field shot fixed** (player fallback included retired cars); `setAutoSpectate` still has no game.js caller → needs-decision
 - M39 WGX — `backendState()` returns `lost`, not `ctxLost`, so game.js never sees a WGX device loss. `js/render/webgpu/wgx.js:5722` · low · **fixed in #1281**
 - M40 input — stored `steerMode` unvalidated at boot (Input falls back to "tilt", game.js to "buttons"); a `connected===false` pad counts as present. `js/game.js:239`, `js/input/input.js:1598,1913` · low
-- M42 player physics — `frontUtil` still normalised by pi/2 after the front peak moved (#1266); toggled BOOST drains while braking; manual RECOVER has no pit-lane guard. `js/physics/player-forces.js:260,273`, `js/game.js:4839-4848,4349` · low
+- M42 player physics — `frontUtil` still normalised by pi/2 after the front peak moved (#1266); toggled BOOST drains while braking; manual RECOVER has no pit-lane guard. `js/physics/player-forces.js:260,273`, `js/game.js` · low · **frontUtil + BOOST fixed in #3972**; **RECOVER pit-lane/box guard fixed in game.js** (pinned in `race-flow-fixes-vm` + `game-m33-m35-m42`); module extract is #3978
 - M37 (presets part) lighting — shared `*|day|*` stamps exist only for dry/wet, so rain/overcast/fog fall through to knob defaults (monaco tunnel lampLevel 0.26 vs 0.13; dawn/rain lampLevel on 47+ circuits). `js/lighting/presets.js:205,223` · low · **unassigned**
 
 ## 2026-10-10 round-2 backlog (tooling / CI / hooks; not fixed by `ci-page-sources-guard`)
@@ -337,31 +337,36 @@ From the round-2 tooling hunt (`15-tooling-ci`, tip `0f8c88843`). F1-F11 are fix
   plus the two race files). The ADAPTED specs boot the WHOLE manifest in the VM, so a derived "files this spec reads" set would
   be the transitive closure of the manifest; a list is the honest cheap answer. A new ADAPTED spec must add its source to the list
   (`tests/unit/pick-unit-slices.test.mjs` pins the current set). `tools/ci/twinned-specs.mjs` still says the Pages gate runs
-  vm-page "UNCONDITIONALLY"; it runs it when the `page` slice is picked. Fix the sentence or the gate. · low
+  vm-page "UNCONDITIONALLY"; it runs it when the `page` slice is picked. Fix the sentence or the gate. · low — deferred: file
+  owned by open PR #3932 (vm-page balance); do not collide.
 - 15-F2 (narrowed) a selected shard now reds when it reached its run step and left no junit with testcases. A shard killed by its
   job cap AFTER `= run passed` but during the junit upload (the run 37493213168 shape) now reads red too instead of infra-retry;
   that is a rerun, by design, but if it recurs the shard should upload its junit from a step that cannot be cancelled by the cap.
-  The `selected-started-*` marker adds one tiny artifact per shard. · low
+  The `selected-started-*` marker adds one tiny artifact per shard. · low — workflow shape; not this tools/ci residual pass.
 - 15-F6 (residual) `cd X` inside a `( … )` subshell leaks its cwd to later commands in `shellparse.commands`; a worktree path
   containing a space breaks the `read -r C_RUN C_ALL C_GITDIR C_PATHS` split in `bash-guard.sh`. Both fail toward guarding the
-  wrong tree, not toward skipping the guard. · low
+  wrong tree, not toward skipping the guard. · low — hooks (`.claude/`), not tools/ci.
 - 15-F8 (residual) `Bash(curl http://127.0.0.1:*)` still matches `http://127.0.0.1:80@evil.example/` (userinfo form), because the
   permission glob is a prefix match. The push deny-list still only matches a command that STARTS with `git push`
   (`git -C . push origin HEAD:refs/heads/claude/f1-game-project-26h3ng` and a bare `git push` from a checkout whose upstream is the
   ship branch are not denied; only server-side protection, which is `non_admins`, stands in the way). Proposed: deny
   `Bash(git * push *claude/f1-game-project-26h3ng*)` and `Bash(git push)`. · medium, needs Bryce
 - 15-F10 (narrowed) `ratchets --base` now blocks a loosened explicit slack and a deleted entry whose file still exists. A NEW entry
-  with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low
+  with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low —
+  `tools/check/ratchets.mjs`, not tools/ci.
 - 15-F11 closed: the ready cap it described was retired 2026-10-16 and its tool deleted in #3013.
 - Observation, fixed 2026-10-21: `tools/ci/spec-timings.mjs` `parseJunit` fed the time of FAILED testcases into the rolling
   record, so a test that timed out at 180 s was billed at 180 s until the samples rolled off (a self-reinforcing drop from the
   selected gate). A failed or errored FINAL attempt (junit `<failure>`/`<error>`, live-log `x FAIL`) now records nothing;
   `tests/unit/spec-timings.test.mjs` pins it.
-- Observation: `pages-reuse-verdict.sh` can only reuse a PR run when a merge COMMIT's parent tree equals its tree; merges are
-  SQUASH-only, so the reuse path is effectively dead for PR merges (perf only, fails safe). · low
-- Observation: `git diff --name-only` is still used by `pick-tests.mjs:420-435`, `verify-change.mjs:83-87`, `change-kind.mjs:25`
-  and the sweeps/parts/ship/xr shell filters in ci.yml, so a `git mv` of a circuit file still hides the source side
-  from `pick-tests` and the fleet-sweep filter (#1288 converted only the three PR-gate selectors). · low
+- Observation, corrected 2026-10-27: `pages-reuse-verdict.sh` reuses a PR/Pages run when a merge COMMIT's parent tree equals
+  its tree. Landings are merge commits (not squash); reuse fires when the PR head was up to date (merge tree == parent 2) and
+  fails safe otherwise. Header note + `tests/unit/ci-pages-train.test.mjs` pin the up-to-date shape. · low, closed.
+- Observation, narrowed 2026-10-27: `pick-tests.mjs` and `verify-change.mjs` already use `tools/lib/changed-files.mjs`
+  (`--name-status -M`). `change-kind.mjs --since` now lists both rename ends the same way (local parse twin — importing
+  `changed-files.mjs` would rewrite `tests/data/impact-map.json`, owned by open CI PRs); `tests/unit/change-kind.test.mjs`
+  pins a `js/ui/hud.js` → `docs/` `git mv`. Still on `--name-only`: `tools/check/ratchets.mjs` and the sweeps/parts/ship/xr
+  shell filters in ci.yml (open CI PRs own workflow edits). · low
 - Observation: `conflict-cure.mjs` `resolveGenBlocks` understands only HTML `@gen-shell` spans, so an `sw.js`
   `// @gen-shell:sw-optional` conflict still stops the deploy (fail-safe friction); `deploy.mjs` `ratchetOverruns` skips a
   metric missing from one of its three stages, so a metric newly added on one side is not bounded by the "sum of deliberate

@@ -27,6 +27,13 @@ const hook = (root, payload) => spawnSync("python3", [HOOK], {
 });
 const call = { hook_event_name: "PreToolUse", tool_name: "mcp__claude-code-remote__create_session", tool_input: { prompt: "x" } };
 const decision = (r) => (r.stdout.trim() ? JSON.parse(r.stdout).hookSpecificOutput.permissionDecision : "pass");
+/** Write artifacts/launch/self.json as launch-page.py does; returns the receipt fields bound to it. */
+const selfPage = (root, extra = {}) => {
+  const text = JSON.stringify({ written_by: "launch-page.py", at: new Date().toISOString(), content_sha256: "0".repeat(64), response: { id: "session_X" }, ...extra }, null, 1);
+  fs.mkdirSync(path.join(root, "artifacts/launch"), { recursive: true });
+  fs.writeFileSync(path.join(root, "artifacts/launch/self.json"), text);
+  return { page: { sha256: crypto.createHash("sha256").update(text).digest("hex"), timestamp: new Date().toISOString(), writtenBy: "launch-page.py" }, lane: null, pr: null };
+};
 
 test("verdict: allowed passes, a warning refuses, a typed override passes and keeps the quote", () => {
   assert.equal(verdict(extractSession(page("allowed"))).ok, true);
@@ -65,8 +72,9 @@ test("hook: denies with no receipt, a refused receipt or a stale one; passes a f
   assert.equal(decision(hook(root, call)), "deny");
   writeReceipt(root, { ok: false, status: "allowed_warning", why: "warn" });
   assert.equal(decision(hook(root, call)), "deny");
-  // The receipt shape launch-gate.mjs writes (audit 4 G13): kind launch, the page's sha256 and timestamp, lane, pr.
-  const PG = { page: { sha256: "0".repeat(64), timestamp: new Date().toISOString(), writtenBy: "launch-page.py" }, lane: null, pr: null };
+  // The receipt shape launch-gate.mjs writes (audit 4 G13): kind launch, the page's sha256 and timestamp, lane, pr —
+  // and since WP-L4 that sha256 is the sha256 of artifacts/launch/self.json, the page launch-page.py recorded.
+  const PG = selfPage(root);
   writeReceipt(root, { ok: true, status: "allowed", ...PG });
   assert.equal(decision(hook(root, call)), "pass");
   writeReceipt(root, { ok: true, status: "allowed_warning", override: "Do all", ...PG });
@@ -80,6 +88,35 @@ test("hook: denies with no receipt, a refused receipt or a stale one; passes a f
   assert.equal(decision(hook(root, call)), "deny");
   fs.writeFileSync(path.join(root, "artifacts/launch-gate/receipt.json"), "{not json");
   assert.equal(decision(hook(root, call)), "deny", "a corrupt receipt is unproven quota, re-run the gate");
+});
+
+test("WP-L4: the receipt is bound to artifacts/launch/self.json and spent on one create_session", () => {
+  const root = tmp();
+  const rp = path.join(root, "artifacts/launch-gate/receipt.json");
+  // the hook's reason for each refusal (one pattern per case; a behaviour check, not a source pin)
+  const deny = (re, why) => {
+    const r = hook(root, call);
+    assert.equal(decision(r), "deny", why);
+    assert.match(JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason, re, why);
+  };
+  // a hand-made sha that only looks like one (the r2 probe) no longer passes
+  writeReceipt(root, { ok: true, status: "allowed", page: { sha256: "0".repeat(64) } });
+  deny(/no quota page artifacts\/launch\/self\.json/, "no self.json");
+  selfPage(root);
+  writeReceipt(root, { ok: true, status: "allowed", page: { sha256: "0".repeat(64) } });
+  deny(/a page other than artifacts\/launch\/self\.json/, "sha of another page");
+  const forged = selfPage(root, { written_by: "echo" });
+  writeReceipt(root, { ok: true, status: "allowed", ...forged });
+  deny(/not written by launch-page\.py/, "a page not written by the hook");
+  writeReceipt(root, { ok: true, status: "allowed", ...selfPage(root) });
+  const nonce = JSON.parse(fs.readFileSync(rp, "utf8")).nonce;
+  assert.equal(String(nonce).length, 36, "the receipt carries a uuid nonce");
+  assert.equal(decision(hook(root, call)), "pass", "first launch");
+  assert.equal(fs.existsSync(rp), false, "spent: renamed");
+  assert.equal(JSON.parse(fs.readFileSync(rp + ".used", "utf8")).nonce, nonce);
+  deny(/no launch-gate receipt/, "second launch on the same receipt");
+  fs.copyFileSync(rp + ".used", rp);
+  deny(/already spent/, "a spent receipt copied back");
 });
 
 test("hook fails open on its own errors and ignores other tools", () => {

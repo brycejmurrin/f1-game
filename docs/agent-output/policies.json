@@ -261,6 +261,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/check/brake-cue-calibrate.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c1"
+    },
     "tools/check/check-gctx.mjs": {
       "action": "targeted-summary",
       "presentation": "shared-levels",
@@ -636,11 +641,6 @@
       "presentation": "native",
       "preserve": "Empty list is real empty; consumers depend on paths only"
     },
-    "tools/ci/lane-preamble.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "the TOOLING block text and its exact commands; ERROR line with the nearest valid name and exit 2 for a bad screen, viewport or scale"
-    },
     "tools/ci/launch-gate.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -650,11 +650,6 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Advisory WARN line when a push would cancel a live ci.yml run; exit 0 always, never blocks"
-    },
-    "tools/ci/measure-pr-ci-after-close.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Observation window/max-runs and API errors; no cancellation mutation"
     },
     "tools/ci/merge-gate.mjs": {
       "action": "keep-native",
@@ -716,11 +711,6 @@
       "presentation": "shared-levels",
       "preserve": "ARM/READY/SYNC blockers; CI unknown; open Plan and repository-wide cap; fleet letter and slot per row"
     },
-    "tools/ci/pr-body.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Partial label error after body success; exact PR; do not replace dry-run review text"
-    },
     "tools/ci/process-dashboard.mjs": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -730,11 +720,6 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "Dry-run versus apply; protected/open refs; partial failures and unarchived kept refs"
-    },
-    "tools/ci/publish-shots.mjs": {
-      "action": "targeted-summary",
-      "presentation": "shared-levels",
-      "preserve": "Dry-run does not commit/push; full published URL mapping retrievable"
     },
     "tools/ci/queue-depth.mjs": {
       "action": "keep-native",
@@ -886,11 +871,6 @@
       "presentation": "native",
       "preserve": "Timeout versus success and condition identity; no polling spam"
     },
-    "tools/ci/webkit-leg-summary.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Markdown job-summary text for webkit-leg.yml; the no-report.json message and exit 0 when the boot step wrote nothing"
-    },
     "tools/desktop/minify-worker.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -935,6 +915,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "@c9"
+    },
+    "tools/env/codex-cloud-history.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Exit codes, fixed safe errors, output paths, counts and pagination/reference completeness limits; credentials and private records must never be logged."
     },
     "tools/env/ensure-mcp-ready.sh": {
       "action": "keep-native",
@@ -1102,6 +1087,11 @@
       "preserve": "@c4"
     },
     "tools/gen/trees/bake-trees.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
+    "tools/gen/trees/install-trees.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
@@ -1337,11 +1327,6 @@
       "preserve": "@c3"
     },
     "tools/lib/deploy-status.mjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
-    },
-    "tools/lib/fleet-block.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c3"
@@ -1770,11 +1755,6 @@
       "action": "protocol-only",
       "presentation": "native",
       "preserve": "@c10"
-    },
-    "tools/mcp/lsp-navigation-bench.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status, JSON metric rows (first vs warm ms/chars/bytes), methodology note; no OS-cache or billed-model claim."
     },
     "tools/mcp/mcp-cli.mjs": {
       "action": "artifact-first",
@@ -2506,6 +2486,11 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/ui/explorer/summary.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/ui/explorer/transitions.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -2796,11 +2781,6 @@
       "presentation": "native",
       "preserve": "Exact MCP JSON-RPC stdio and lifecycle ordering; preserve protocol errors, initialization and duplicate-notification behavior. Never summarize or wrap protocol stdout."
     },
-    "tools/environment/plugin-sources/f1-dev-tools/scripts/github-fleet.cjs": {
-      "action": "no-direct-output",
-      "presentation": "native",
-      "preserve": "@c3"
-    },
     "tools/environment/plugin-sources/f1-dev-tools/scripts/readiness.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -2902,11 +2882,6 @@
       "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
     },
     "tools/mcp/check-chat-browser.mjs": {
-      "action": "keep-native",
-      "presentation": "native",
-      "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."
-    },
-    "tools/mcp/check-doctor-catalog.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Native exit status and stdout/stderr, structured results, readiness failures, test coverage and skipped checks, source/cache paths, app identity and artifact integrity. Local success does not certify hosted execution."

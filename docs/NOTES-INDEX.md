@@ -20,11 +20,15 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 
 | Note | What it records |
 |---|---|
+| [notes/PROJECT-MAP-SALVAGE-2026-10-27.md](notes/PROJECT-MAP-SALVAGE-2026-10-27.md) | 2026-10-27: what the closed project-map PR #3922 held (a read-attestation ledger, no generator), 24 claims spot-checked, and its one durable product: ~125 comment-vs-code drifts plus the non-`js/` top-level directories |
+| [notes/RACE-ENTRY-ATTRIBUTION-2026-10-27.md](notes/RACE-ENTRY-ATTRIBUTION-2026-10-27.md) | Where the iPhone 14's 29.8 s TLX WebGPU race entry goes: api vs player path, stage split, race-path heap (#3110, #1650). |
+| [notes/review-2026-10-27/](notes/review-2026-10-27/README.md) | 2026-10-27: 36 Opus skill passes (all FIX), 8 Opus code hunts and the rulebook review behind the [review fix plan](plans/2026-10-27-review-fix-plan.md) |
 | [notes/orchestration-redesign-2026-10-27/](notes/orchestration-redesign-2026-10-27/README.md) | 2026-10-27: the eight read-only reviews (bus history, tooling, rulebook, measured outcomes, platform docs, Claude / Cursor / Codex transcripts) behind the [orchestration redesign plan](plans/2026-10-27-orchestration-redesign.md) |
 | [System audit, fourth pass](notes/SYSTEM-AUDIT-4-2026-10-26.md) | 2026-10-26: ~75 reviewers; re-verifies pass 3 (13 corrections), whole-population bus/PR/CI/session/Cursor/skill/card/docs/economics review; evidence in `notes/system-audit-4/` |
 | [System audit, third pass](notes/SYSTEM-AUDIT-3-2026-10-26.md) | 2026-10-26: 12 reviewers, 137 findings ranked into 39 items; what #3785/#3811 fixed; slice evidence in `notes/system-audit-3/` |
 | [System audit, second pass](notes/SYSTEM-AUDIT-2-2026-10-26.md) | 2026-10-26: 16 ranked setup-and-coordination findings after #3785; fixed in #3811 |
 | [archive/notes/AGENT-WORK-TRACKING-2026-10-14.md](archive/notes/AGENT-WORK-TRACKING-2026-10-14.md) | Where the fleet's backlog lives and why: GitHub Issues + sub-issues vs Linear, Jira, Plane, Notion, Beads, Backlog.md, Taskmaster, Claude Tasks, Obsidian and the agent orchestrators, scored on free / headless / phone / PR tie-in / atomic claim; the four-layer setup behind AGENTS.md §Backlog. |
+| [notes/CODEX-ARCHIVE-MINING-2026-10-26.md](notes/CODEX-ARCHIVE-MINING-2026-10-26.md) | Codex Cloud transcripts, 2026-10-01 → 17 (410 threads, 73.6k commands, 421 tool-h): the gate runs 211 node files twice, dead gates restart from zero, 468 MB of connector CI polling, nudges and needless questions; 12 ranked findings with OPEN/STALE status |
 | [archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md](archive/notes/FLEET-B-TRANSCRIPT-AUDIT-2026-10-26.md) | Fleet B Claude transcripts, 2026-10-25/26 (30 sessions, $91.61): orchestrator boot uses ~65 % of its 200k cap (7 orchestrators in 4.5 h), base context ~100k, cross-fleet env-name drift, a lost staged tool change, lent-PR re-conflicts; 17 ranked findings and the `.claude/**` proposals that need Bryce |
 | [notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md](notes/MCP-ALLOW-RULES-MEASURED-2026-10-15.md) | Which `permissions.allow` shapes pre-approve which MCP servers in cloud sessions, read off `permission_decision` in `list_events` (a repo cannot pre-approve its own `.mcp.json` servers, so auto mode's classifier does; auto siblings need an auto parent; MDN/BrowserStack are a claude.ai connector setting); spawning siblings needs `source_url` and a quoted user grant. |
 | [notes/APEX-STEWARD-CARD-2026-10-05.md](notes/APEX-STEWARD-CARD-2026-10-05.md) | Always-on steward card + hashes (skip re-read of steward / check-changes / PR template when they match); lane mutex; `cursor/<topic>-<hash>` → ship; resolve-swarm cap; tooling/docs merge-train exclusion — superseded by [RULEBOOK-REWRITE-2026-10-26.md](notes/RULEBOOK-REWRITE-2026-10-26.md) |
@@ -205,6 +209,7 @@ ledger lists.
 
 ## Orchestration
 
+- [Review fix plan, 2026-10-27](plans/2026-10-27-review-fix-plan.md): OPEN — every finding from the whole-surface Opus review as PR-sized work packages (landing safety first, then game bugs, skills, rulebook); evidence in [notes/review-2026-10-27/](notes/review-2026-10-27/README.md).
 - [Orchestration redesign: GitHub is the orchestrator](plans/2026-10-27-orchestration-redesign.md): shipped in #3895 on 2026-10-27 — labels, `land.yml` and the dispatcher replace the bus, claims board and orchestrators (the contract: [WORKERS.md](WORKERS.md)); evidence in [notes/orchestration-redesign-2026-10-27/](notes/orchestration-redesign-2026-10-27/README.md).
 - [Fleet redesign, 2026-10-19](plans/2026-10-19-fleet-redesign.md): superseded by the 2026-10-27 redesign; history only.
 

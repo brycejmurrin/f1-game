@@ -2,7 +2,7 @@
 {"query":"im on my phone, no laptop. can you open the game in a browser for me through the grok connector so i can see it","expect":"phone-browser"},
 {"query":"The custom connector address I pasted into grok.com yesterday stopped answering. Bring the phone browser back up and tell me if the URL changed.","expect":"phone-browser"},
 {"query":"From my phone: load Monza in landscape in your Chromium and send me a screenshot of the start grid.","expect":"phone-browser"},
-{"query":"open the live game on the phone browser connector in portrait and show me the main menu","expect":"phone-browser"},
+{"query":"open the working-tree game on the phone browser connector in portrait and show me the main menu","expect":"phone-browser"},
 {"query":"I only have my iPhone. Start whatever public browser server the repo has so my Grok connector can drive the game.","expect":"phone-browser"},
 {"query":"On my iPhone the link you gave me is a localhost address and it won't open. Get me a tunnel URL I can paste into the Grok custom connector.","expect":"phone-browser"},
 {"query":"The HUD tyre widget is clipped at phone landscape 844x390; fix the one cramped screen.","expect":"ui-menu-a11y"},
