@@ -29,7 +29,8 @@ test("decideSync: clean-behind green / running / unknown / none = no", () => {
 });
 test("decideSync: a distance-only gate refusal on a clean-behind branch = distance (the gate will not arm it)", () => {
   const v = decideSync({ behind: true, conflict: false, ci: "success", runStartedAt: T0, tipNewestAt: T1, distance: true });
-  assert.equal(v.verdict, "distance"); assert.match(v.why, /distance row/);
+  assert.equal(v.verdict, "distance");
+  assert.equal(verdictLine(v), "= sync needed: distance");
 });
 test("decideSync: conflict and stale-red still win over distance; up to date is no even with a stale refusal", () => {
   assert.equal(decideSync({ behind: true, conflict: true, ci: "success", distance: true }).verdict, "conflict");
