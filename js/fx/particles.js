@@ -168,9 +168,10 @@ const Particles = (function () {
 
   function sparks(x, y, z, dirx, dirz, speed, count) {
     const m = mul(); if (m <= 0) return;
-    let n = Math.round(count * Math.min(m, 2) / shedDiv());
+    // nOf (not Math.round): same hitch ceiling as scrape/smoke — at particleMul 2 a
+    // hard collision's count≈20 used to dump 40 embers in one call and starve the pool.
     const baseA = Math.atan2(dirx, dirz);
-    for (; n > 0; n--) {
+    for (let n = nOf(count * Math.min(m, 2) / shedDiv()); n > 0; n--) {
       const a = baseA + rnd(1.15);
       const v = speed * (0.25 + Math.random() * 0.6);
       spawn(x + rnd(0.3), y + rnd(0.12), z + rnd(0.3),

@@ -414,5 +414,6 @@ var VoicePack = (() => {
     };
   }
 
-  return Object.freeze({ create, codecs, norm, compose, keyOf, lineKey, choices, packFor, isAnnouncerPack, VOICES, PAUSE, MAX_WORDS, SLACK_S });
+  // keyOf stays public: tools/gen/voicepack.mjs builds clip keys from it.
+  return Object.freeze({ create, codecs, norm, compose, keyOf, lineKey, choices, packFor, VOICES });
 })();
