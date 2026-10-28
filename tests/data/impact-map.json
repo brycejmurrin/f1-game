@@ -15016,8 +15016,14 @@
       "fxMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "mirrorGlassMaterial": [
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "releaseTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
+      ],
+      "setSsrMrt": [
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "updateFrame": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -15051,6 +15057,7 @@
       ],
       "setSsrMrt": [
         "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs"
       ],
       "updateFrame": [
