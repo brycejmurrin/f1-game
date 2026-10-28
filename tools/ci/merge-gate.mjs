@@ -55,8 +55,11 @@ export const HOLD_LABEL = "hold";
 export const GAME_PATH = /^(js\/|css\/|assets\/|index\.html$|sw\.js$)/;
 export const isGamePath = (p) => GAME_PATH.test(String(p || "").replace(/^\.\//, ""));
 export const gameFiles = (files) => (files || []).filter(isGamePath);
-/** Default for --max-behind (plan §4.3: N = 2 to start). */
-export const MAX_BEHIND = 2;
+/** Default for --max-behind. Plan §4.3 started at an unmeasured N = 2; on 2026-10-27 the deploy branch took ~15 game
+ *  merges per ~40 min full CI tier, so game PRs went green and were refused on distance again and again (#3964, #3932,
+ *  #3886: 3 syncs each). 6 is safe because land-gate still runs gen:check and the ratchets on the real merge result
+ *  against the current tip, and the Pages train gates every deploy tip before it publishes. */
+export const MAX_BEHIND = 6;
 /** Row order, which is also print order. */
 export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "gen", "ratchets", "distance"]);
 /** The rows `--trusted` evaluates: none of them runs code from the PR. */

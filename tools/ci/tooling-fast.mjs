@@ -27,6 +27,7 @@
  *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
+ *   node tools/ci/tooling-fast.mjs --print-scope    # CI guards shards: mode=full|changed (see guardsScope)
  *   node tools/ci/tooling-fast.mjs --bail           # stop STARTING files after the first failure (CI guard shards)
  *   node tools/ci/tooling-fast.mjs --changed --quiet  # console: FAIL lines, their detail and the verdict only (the log keeps START/PASS)
  *   node tools/ci/tooling-fast.mjs tests/unit/x…    # subset (same logging)
@@ -230,10 +231,9 @@ export function tapFailureDetail(text) {
  * the job reports `cancelled` with every START line but no verdict — the shape
  * AGENTS.md rule 8 teaches everyone to read as a busy runner. Two layers:
  *   --test-timeout   node's own bound (ms, default Infinity:
- *                    https://nodejs.org/api/cli.html#--test-timeout). MEASURED:
- *                    under `node --test <file>` the FILE is itself a test of
- *                    the runner and inherits it, so this bounds each test AND
- *                    the file's tests as a whole — a stuck one fails as
+ *                    https://nodejs.org/api/cli.html#--test-timeout). It bounds
+ *                    each test (isolation "none", below: the file is no longer
+ *                    a test of its own) — a stuck one fails as
  *                    `not ok … test timed out after Nms` with its name;
  *   the file timer   a hard wall per FILE, a minute later, because the
  *                    timeout cannot see work outside a test (a handle that
@@ -244,6 +244,28 @@ export function tapFailureDetail(text) {
  * 540 s; the 600 s wall still lands inside ci.yml's 15-minute guards job for a
  * file that starts first, which longest-first makes the slow ones do.
  * APEX_TOOLING_TEST_TIMEOUT_S / APEX_TOOLING_FILE_TIMEOUT_S override both. */
+/* NO SECOND PROCESS PER FILE (#3885). This runner already gives each file its
+ * own process, so node's default `--test-isolation=process` only adds a
+ * grandchild whose results reach `node --test` as a v8-serialized stream on
+ * stdout. Node 22's parser of that stream (lib/internal/test_runner/runner.js,
+ * FileTest.parseMessage) defers a chunk's trailing 0xFF as a possible header
+ * byte, then re-appends it AFTER the next chunk whenever the buffer head is
+ * shorter than a frame header — a pipe read that ends 5 bytes into a frame
+ * whose next byte is 0xFF scrambles the frame, and #drainRawBuffer then loops
+ * forever on a message that can never complete: 100 % of one core, SIGTERM
+ * unhandled (the handler is JS), no --test-timeout (the tests already ended).
+ * Read sizes follow load, so it struck at random: perf-governor.test.mjs,
+ * loadavg 7, ok 64 then silence until the 600 s wall (run 40411198783).
+ * Repro: a test whose last stdout bytes are FF 0F 00 hangs `node --test`;
+ * tooling-fast-runner.test.mjs pins it. Fixed upstream on main
+ * (#pendingPartialV8Header), in no release as of v26.0.0. Isolation "none"
+ * runs the file inside the runner, so no stream exists to misparse; the
+ * per-test timeout still names a stuck test. Spelled --experimental-test-isolation
+ * before v23.6 (https://nodejs.org/api/cli.html#--test-isolationmode). */
+const [NODE_MAJOR, NODE_MINOR] = process.versions.node.split(".").map(Number);
+export const TEST_ISOLATION_FLAG = NODE_MAJOR > 23 || (NODE_MAJOR === 23 && NODE_MINOR >= 6)
+  ? "--test-isolation=none" : "--experimental-test-isolation=none";
+
 const PER_TEST_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_TEST_TIMEOUT_S) || 540) * 1000;
 const PER_FILE_TIMEOUT_MS = (Number(process.env.APEX_TOOLING_FILE_TIMEOUT_S) || 600) * 1000;
 
@@ -335,12 +357,12 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
     }
 
     // detached: the child leads its own process group, so the file timer can
-    // kill `node --test` AND the per-file subprocess it spawns in one signal.
+    // kill `node --test` and anything the file spawned in one signal.
     // The failure parser below consumes TAP. Node 23+ defaults to spec even
     // when stdout is piped, so the wire format must be explicit.
     // https://nodejs.org/api/test.html#test-reporters
     const child = spawn(process.execPath,
-                        ["--test", "--test-reporter=tap", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
+                        ["--test", TEST_ISOLATION_FLAG, "--test-reporter=tap", "--test-concurrency=1", `--test-timeout=${testTimeoutMs}`, abs],
                         { cwd: ROOT, env: childEnv, detached: true });
     live.add(child);
     let out = "", err = "", timedOut = false;
@@ -878,6 +900,30 @@ export function selectToolingFastChanged(changed, opts = {}) {
     ...(narrowSeeds.size ? { narrow: [...narrowSeeds].filter((t) => tfSet.has(t)) } : {}) };
 }
 
+/* CI GUARDS SCOPE (#3951, #3117 F3). ci.yml's four Structural guards shards
+ * run the WHOLE floor only when a pull request's diff reaches what the floor
+ * mostly tests — tools/, tests/, .github/, package.json/-lock — and `--changed`
+ * (still sharded 1/4..4/4) otherwise. Every other event (a deploy-branch push,
+ * the pages.yml train via workflow_call, the nightly, a dispatch) stays full,
+ * so a file a narrowed PR left out runs on the merged tip before it ships.
+ * The JOBS always run and report: a path-filtered workflow leaves its required
+ * checks "Pending" and blocks the merge for good
+ * (https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks
+ * §Handling skipped but required checks), and a job skipped by `if:` reads
+ * `skipped`, which the `Structural guards` join rejects. Only the file list
+ * narrows. An empty diff stays full: `--changed` exits 3 on one. */
+export const GUARDS_FULL_PATHS = Object.freeze([/^tools\//, /^tests\//, /^\.github\//, /^package(-lock)?\.json$/]);
+
+/** @returns {{ mode: "full" | "changed", reason: string }} */
+export function guardsScope(changed, eventName) {
+  if (eventName !== "pull_request") return { mode: "full", reason: `event ${eventName || "local"}` };
+  const paths = changed.map((c) => String(c.path || c).replace(/\\/g, "/"));
+  if (!paths.length) return { mode: "full", reason: "empty diff" };
+  const hit = paths.find((f) => GUARDS_FULL_PATHS.some((re) => re.test(f)));
+  if (hit) return { mode: "full", reason: `${hit} is tooling` };
+  return { mode: "changed", reason: `${paths.length} path(s), none under tools/ tests/ .github/ package.json` };
+}
+
 /** First output line when --changed falls back to the full suite (#2890). */
 export function widenedLine(meta, fileCount) {
   if (!meta || !meta.widened) return null;
@@ -895,10 +941,11 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--print-scope", "--help", "-h",
 ]);
 
 export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+       node tools/ci/tooling-fast.mjs --print-scope   # CI guards: mode=full|changed for this event and diff
        node tools/ci/tooling-fast.mjs --help`;
 
 /** Split a file list across CI jobs (`--shard=1/2`).
@@ -963,6 +1010,7 @@ export function parseToolingFastArgv(argv) {
     bail: argv.includes("--bail"),
     quiet: argv.includes("--quiet"),
     stop: argv.includes("--stop"),
+    printScope: argv.includes("--print-scope"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
     jobsExplicit: val("jobs") !== undefined,
     order: val("order"),
@@ -984,6 +1032,12 @@ if (isMain) {
   }
   if (parsed.help) {
     console.log(TOOLING_FAST_USAGE);
+    process.exit(0);
+  }
+  if (parsed.printScope) {
+    // ci.yml's guards shards: `mode=` and `reason=` lines for $GITHUB_OUTPUT (see guardsScope).
+    const r = guardsScope(changedVsDeploy(), process.env.GITHUB_EVENT_NAME);
+    console.log(`mode=${r.mode}\nreason=${r.reason}`);
     process.exit(0);
   }
   if (parsed.stop) {
