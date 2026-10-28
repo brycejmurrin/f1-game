@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, MAX_BEHIND, ROWS, openVerdict, holdVerdict, planRow, ciVerdict, isGamePath, gameFiles,
   gameMergesBehind, distanceVerdict, baseHistory, distanceFor, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main,
-  untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor,
+  untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, touchesGame,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
@@ -62,6 +62,9 @@ test("game paths: js/ css/ assets/ index.html sw.js", () => {
   for (const p of ["js/game.js", "css/career.css", "assets/pack/manifest.json", "index.html", "sw.js", "./js/x.js"]) assert.equal(isGamePath(p), true, p);
   for (const p of ["tests/unit/ready-gate.test.mjs", "tools/ci/merge-gate.mjs", "docs/TESTING.md", "index.html.bak", "jsx/x"]) assert.equal(isGamePath(p), false, p);
   assert.deepEqual(gameFiles(["tools/ci/ready-gate.mjs", "js/core/log.js"]), ["js/core/log.js"]);
+  assert.equal(touchesGame(["docs/WORKERS.md", "tools/ci/merge-gate.mjs", ".github/workflows/land.yml", "index.html.bak"]), false);
+  assert.equal(touchesGame(["docs/a.md", "sw.js"]), true);
+  assert.equal(touchesGame([]), false, "an empty diff touches nothing");
 });
 
 // A base's first-parent history, newest first: merges are counted only when their diff touches a game path.
@@ -76,11 +79,13 @@ test("gameMergesBehind counts game merges between the tip and the merge-base; no
   assert.equal(gameMergesBehind(HISTORY, "none").count, 4);
 });
 
-test("distanceVerdict: at most N game merges behind (default 2); an off-line merge-base counts everything walked", () => {
-  assert.equal(MAX_BEHIND, 2);
-  assert.equal(distanceVerdict(HISTORY, sha(3)).ok, true);
-  assert.equal(distanceVerdict(HISTORY, sha(5)).ok, true, "exactly N passes");
-  const over = distanceVerdict(HISTORY, sha(6));
+test("distanceVerdict: at most N game merges behind (default 6); an off-line merge-base counts everything walked", () => {
+  assert.equal(MAX_BEHIND, 6);
+  assert.equal(distanceVerdict(HISTORY, sha(6)).ok, true, "3 behind passes the default");
+  assert.ok(distanceVerdict(HISTORY, sha(6)).evidence.includes("(max 6)"));
+  assert.equal(distanceVerdict(HISTORY, sha(3), 2).ok, true);
+  assert.equal(distanceVerdict(HISTORY, sha(5), 2).ok, true, "exactly N passes");
+  const over = distanceVerdict(HISTORY, sha(6), 2);
   assert.equal(over.ok, false);
   assert.ok(over.evidence.includes("3 game merge(s)") && over.evidence.includes("sync-pr"), over.evidence);
   assert.equal(distanceVerdict(HISTORY, sha(6), 3).ok, true, "--max-behind 3");
@@ -95,10 +100,15 @@ test("baseHistory / distanceFor over a real repo: first-parent merges with their
   const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(T, rel)), { recursive: true }); fs.writeFileSync(path.join(T, rel), text); };
   const land = (name, rel) => { g(T, "checkout", "-q", "-b", name, "base"); write(rel, name + "\n"); g(T, "add", "-A"); g(T, "commit", "-qm", name); g(T, "checkout", "-q", "base"); g(T, "merge", "-q", "--no-ff", "-m", `merge ${name}`, name); };
   try {
-    g(T, "init", "-q", "-b", "base"); write("README", "0\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "root");
+    // Fixture paths reuse the names docs-integrity's SOURCE_EXEMPT already allows for this file.
+    g(T, "init", "-q", "-b", "base"); write("README", "0\n"); write("js/b.js", "old\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "root");
     const fork = g(T, "rev-parse", "HEAD");
-    g(T, "checkout", "-q", "-b", "pr", "base"); write("tools/x.mjs", "pr\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "the PR");
+    g(T, "checkout", "-q", "-b", "pr", "base"); write("tools/x.mjs", "pr\n"); write("js/b.js", "pr\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "the PR");
     const head = g(T, "rev-parse", "HEAD");
+    g(T, "checkout", "-q", "-b", "docs-pr", "base"); write("docs/a.md", "pr\n"); write("tools/x.mjs", "pr\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "a docs and tools PR");
+    const docsHead = g(T, "rev-parse", "HEAD");
+    g(T, "checkout", "-q", "-b", "mover", "base"); write("tools/y.mjs", "old\n"); g(T, "rm", "-q", "js/b.js"); g(T, "add", "-A"); g(T, "commit", "-qm", "move a game file out of js/");
+    const moverHead = g(T, "rev-parse", "HEAD");
     land("game-1", "js/a.js"); land("docs-1", "docs/a.md"); land("game-2", "css/a.css");
     write("tools/y.mjs", "direct\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "direct commit");   // not a merge: never counts
     const tip = g(T, "rev-parse", "base");
@@ -112,8 +122,38 @@ test("baseHistory / distanceFor over a real repo: first-parent merges with their
     assert.equal(d.row.ok, true, d.row.evidence);
     assert.ok(d.row.evidence.startsWith("2 game merge(s)"), d.row.evidence);
     assert.equal(distanceFor({ head, tip, cwd: T, max: 1 }).row.ok, false);
+    const docs = distanceFor({ head: docsHead, tip, cwd: T, max: 0 });
+    assert.equal(docs.mergeBase, fork);
+    assert.deepEqual(docs.row, { ok: true, evidence: "no game files in this PR's diff (2 file(s)): distance not applied" }, "a PR touching no game path is not held to the distance");
+    assert.equal(g(T, "-c", "diff.renames=true", "diff", "--name-only", fork, moverHead), "tools/y.mjs", "with rename detection git names only the destination");
+    assert.equal(distanceFor({ head: moverHead, tip, cwd: T, max: 1 }).row.ok, false, "a rename out of js/ still touches js/ (--no-renames)");
     assert.ok(/failed/.test(distanceFor({ head: "0".repeat(40), tip, cwd: T }).error), "an unknown head is an error, not a row");
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("distanceFor: 20 game merges behind refuses a game PR and passes a PR whose own diff touches no game path (fake git)", () => {
+  const id = (i) => "f" + i.toString(16).padStart(39, "0");   // distinct fake shas
+  const MB = id(999), TIP20 = id(0);
+  const fakeGit = (prFiles, calls) => (args) => {
+    calls.push(args[0]);
+    const ok = (lines) => ({ status: 0, stdout: lines.join("\n") + "\n", stderr: "" });
+    if (args[0] === "merge-base") return ok([MB]);
+    if (args[0] === "diff") { assert.deepEqual(args, ["diff", "--no-renames", "--name-only", MB, HEAD], "the PR's own diff: merge-base..head, renames split"); return ok(prFiles); }
+    if (args[0] === "rev-list") return ok([...Array.from({ length: 20 }, (_, i) => `${id(i)} ${i === 19 ? MB : id(i + 1)} ${id(500 + i)}`), `${MB} ${id(1000)}`]);
+    if (args[0] === "diff-tree") return ok(["css/a.css"]);
+    return { status: 1, stdout: "", stderr: `unexpected git ${args[0]}` };
+  };
+  const calls = [];
+  const game = distanceFor({ head: HEAD, tip: TIP20, run: fakeGit(["docs/a.md", "js/a.js"], calls) });
+  assert.equal(game.row.ok, false);
+  assert.ok(game.row.evidence.startsWith("base is 20 game merge(s) ahead of the merge-base (max 6)"), game.row.evidence);
+  assert.ok(calls.includes("rev-list"));
+  calls.length = 0;
+  const docs = distanceFor({ head: HEAD, tip: TIP20, run: fakeGit(["docs/WORKERS.md", "tools/ci/merge-gate.mjs", "tests/unit/merge-gate.test.mjs", ".github/workflows/land.yml"], calls) });
+  assert.deepEqual(docs, { row: { ok: true, evidence: "no game files in this PR's diff (4 file(s)): distance not applied" }, mergeBase: MB });
+  assert.deepEqual(calls, ["merge-base", "diff"], "no base walk for a PR that touches no game path");
+  const broken = distanceFor({ head: HEAD, tip: TIP20, run: (a) => (a[0] === "merge-base" ? { status: 0, stdout: MB + "\n" } : { status: 128, stdout: "", stderr: "fatal: bad object" }) });
+  assert.equal(broken.error, `diff ${MB.slice(0, 8)}..${HEAD.slice(0, 8)} failed: fatal: bad object`, "a failed diff is an error, never a pass");
 });
 
 // The assert-match ratchet counts the literal text of the pin, so the fixtures spell it from parts.
@@ -164,6 +204,31 @@ test("two PRs each at the assert-match ceiling alone are over it on the merge re
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
+test("localMergeGenCheck: a gen:check failure and a conflict each return the fetched tip with the refusal (2026-10-27 23:20Z)", () => {
+  const T = scratch("merge-gate-tip-");
+  const git = (cwd, ...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (root, rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  try {
+    const remote = path.join(T, "remote.git"), W = path.join(T, "w");
+    git(T, "init", "-q", "--bare", remote); git(T, "clone", "-q", remote, W); git(W, "checkout", "-q", "-b", "deploy-x");
+    write(W, "docs/a.md", "base\n"); git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base"); git(W, "push", "-q", "origin", "deploy-x");
+    git(W, "checkout", "-q", "-b", "pr", "deploy-x"); write(W, "docs/a.md", "pr\n"); git(W, "add", "-A"); git(W, "commit", "-q", "-m", "the PR"); git(W, "push", "-q", "origin", "pr");
+    const head = git(W, "rev-parse", "pr"), tip = git(W, "rev-parse", "deploy-x");
+    const gate = (run) => localMergeGenCheck({ pr: 3, head, headRef: "pr", cwd: W, base: "deploy-x", run, ratchets: () => assert.fail("no ratchets after a refusal") });
+    const gen = gate((cmd) => (cmd === "npm" ? { status: 1, stdout: "docs/agent-index.json is stale: run npm run gen", stderr: "" } : assert.fail(`unexpected ${cmd}`)));
+    assert.equal(gen.ok, false);
+    assert.equal(gen.error, undefined, "a refusal, not a git error");
+    assert.equal(gen.tip, tip, "the tip is known once fetched: distance still evaluates on it");
+    assert.ok(gen.evidence.startsWith(`gen:check fails on the merge onto ${tip.slice(0, 8)}: docs/agent-index.json is stale`), gen.evidence);
+    git(W, "checkout", "-q", "deploy-x"); write(W, "docs/a.md", "tip\n"); git(W, "add", "docs/a.md"); git(W, "commit", "-q", "-m", "tip edits the same line"); git(W, "push", "-q", "origin", "deploy-x");
+    const moved = git(W, "rev-parse", "deploy-x");
+    const conflict = gate(() => assert.fail("gen:check never runs on a conflict"));
+    assert.equal(conflict.ok, false);
+    assert.equal(conflict.tip, moved);
+    assert.ok(conflict.evidence.startsWith(`conflicts with the current tip ${moved.slice(0, 8)}: docs/a.md`), conflict.evidence);
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
 /** A fake GitHub plus fake merge and distance for the evaluator; `pull` and `checks` are mutable per case. */
 function fakes() {
   const pull = { state: "open", draft: false, labels: [], head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
@@ -208,6 +273,30 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.equal(evaluate({ pr: 7, sha: HEAD.slice(0, 12), ...f.deps }).ok, true, "a prefix of the head is the head");
   assert.ok(/HTTP 500/.test(evaluate({ pr: 7, ...f.deps, request: () => ({ error: "HTTP 500" }) }).error));
   assert.ok(/fetch failed/.test(evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "fetch failed", error: true }) }).error));
+});
+
+test("evaluate: a gen:check or conflict refusal refuses on its own row, never masked as an error; no tip is a distance FAIL row (#3964, 2026-10-27)", () => {
+  const f = fakes();
+  // distanceFor's real shape: an empty tip fails its merge-base, which evaluate used to return as { error }.
+  const strict = ({ tip, max }) => (tip ? { row: { ok: true, evidence: `0 game merge(s) (max ${max})` }, mergeBase: sha(5) } : { error: `merge-base of ${HEAD.slice(0, 8)} and  failed (shallow clone? fetch-depth: 0)` });
+  const GEN_TIP = "abc" + "0".repeat(37);
+  const genFail = () => ({ ok: false, evidence: `gen:check fails on the merge onto ${GEN_TIP.slice(0, 8)}: docs/agent-index.json drift`, tip: GEN_TIP });
+  const v = evaluate({ pr: 7, ...f.deps, distance: strict, localMerge: genFail });
+  assert.equal(v.error, undefined, v.error);
+  assert.deepEqual([v.ok, v.waiting, v.tip], [false, false, GEN_TIP]);
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["gen", "ratchets"], "distance still evaluates on the refusal's tip");
+  assert.ok(v.rows.gen.evidence.startsWith("gen:check fails"), v.rows.gen.evidence);
+  const logs = [];
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, distance: strict, localMerge: genFail, log: (l) => logs.push(l) }), 2, "a refusal (exit 2), not an error (exit 1)");
+  assert.ok(logs.some((l) => l.startsWith("= gate gen: FAIL gen:check fails")), logs.join("\n"));
+  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok gen=FAIL ratchets=FAIL distance=ok pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
+  const noTip = evaluate({ pr: 7, ...f.deps, distance: strict, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: "" }) });
+  assert.equal(noTip.error, undefined, noTip.error);
+  assert.deepEqual(ROWS.filter((k) => !noTip.rows[k].ok), ["gen", "ratchets", "distance"]);
+  assert.equal(noTip.rows.distance.evidence, "not evaluated: no tip");
+  const trustedNoTip = evaluate({ pr: 7, ...f.deps, distance: strict, trusted: true, fetchTip: () => ({ tip: "" }) });
+  assert.equal(trustedNoTip.error, undefined, trustedNoTip.error);
+  assert.deepEqual(TRUSTED_ROWS.filter((k) => !trustedNoTip.rows[k].ok), ["distance"]);
 });
 
 test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a row failed, 1 usage/API error; --json writes the summary", () => {
@@ -462,9 +551,13 @@ const jobsWhere = (pred) => Object.keys(LAND.jobs).filter((k) => pred(LAND.jobs[
 function ghExpr(src, github) {
   const inner = String(src).trim().replace(/^\$\{\{/, "").replace(/\}\}$/, "");
   const js = inner.replace(/!=/g, "!==").replace(/([^!=])==(?!=)/g, "$1===")
-    .replace(/\bgithub((?:\.[\w-]+|\[\d+\])+)/g, (m, rest) => "ctx" + rest.replace(/\./g, "?.").replace(/\[/g, "?.["));
+    .replace(/\bgithub((?:\.[\w-]+|\[\d+\])+)/g, (m, rest) => "ctx" + rest.replace(/\./g, "?.").replace(/\[/g, "?.["))
+    .replace(/\.\*\.(\w+)/g, ".map?.((x) => x.$1)"); // object filter `labels.*.name`
   const format = (f, ...a) => f.replace(/\{(\d+)\}/g, (_, i) => String(a[i] ?? ""));
-  return new Function("ctx", "format", `return (${js});`)(github, format);
+  const contains = (hay, x) => (Array.isArray(hay) ? hay.includes(x) : String(hay ?? "").includes(x));
+  const startsWith = (a, b) => String(a ?? "").startsWith(b);
+  const cancelled = () => false;
+  return new Function("ctx", "format", "contains", "startsWith", "cancelled", "needs", `return (${js.replace(/\bneeds\./g, "needs?.")});`)(github, format, contains, startsWith, cancelled, github?.needs);
 }
 
 test("land.yml triggers: pull_request_target (never pull_request), workflow_run kept, check_suite gone", () => {
@@ -472,12 +565,14 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
   assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
+  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt"], "the immediate re-gate: one PR, the head its budget counts against, the attempt");
+  assert.equal(on.repository_dispatch, undefined);
   assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
   assert.deepEqual(LAND.permissions, {}, "the workflow-level token has no permissions; each job states its own");
 });
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
-  assert.deepEqual(jobsWhere(writes), ["post", "arm"]);
+  assert.deepEqual(jobsWhere(writes), ["post", "arm", "retry"]);
   assert.deepEqual(jobsWhere(usesSecret), ["post", "arm"]);
   assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
   const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
@@ -532,4 +627,115 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   assert.equal(runGate("2026-10-27T10:00:04Z"), "POSTED", "an older status is replaced");
   assert.equal(runGate("2026-10-27T10:00:05Z"), "POSTED", "same second as AT: the old string compare kept it (`Z` > `.`)");
   assert.notEqual(runGate("2026-10-27T10:00:06Z"), "POSTED", "a status newer than this run's read is kept");
+});
+
+// ---- the immediate re-gate: a gate passed on a tip that moved is re-dispatched at once, bounded per head ---------
+
+/** Runs one land.yml step script under bash with `gh` stubbed: GH_LOG records each call; FAKE_PR answers pulls/<n>. */
+function runStep(script, env) {
+  const stub = [
+    `gh() { echo "gh $*" >> "$GH_LOG"; local q="" a args=("$@");`,
+    `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
+    `  case " \${args[*]} " in *" --method POST "*) return "\${GH_POST_RC:-0}" ;; *"/issues"*) echo "\${PAUSED:-false}"; return 0 ;; *"/branches/"*) echo "$NOW_TIP"; return 0 ;; *" pr merge "*) return 0 ;; esac;`,
+    `  if [ -n "$q" ]; then jq -r "$q" <<<"$FAKE_PR"; else echo "$FAKE_PR"; fi; }`,
+  ].join("\n");
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "land-step-"));
+  const files = { GH_LOG: path.join(dir, "gh.log"), GITHUB_OUTPUT: path.join(dir, "out"), GITHUB_STEP_SUMMARY: path.join(dir, "summary") };
+  for (const f of Object.values(files)) fs.writeFileSync(f, "");
+  const r = spawnSync("bash", ["-c", `${stub}\n${script}`], { encoding: "utf8",
+    env: { ...process.env, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH, RETRY_MAX: String(LAND.env.RETRY_MAX), ...files, ...env } });
+  const out = Object.fromEntries(fs.readFileSync(files.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+  const calls = fs.readFileSync(files.GH_LOG, "utf8").split("\n").filter(Boolean);
+  fs.rmSync(dir, { recursive: true, force: true });
+  return { ...r, out, calls };
+}
+fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+const HEAD7 = "a".repeat(40), TIP_A = "b".repeat(40), TIP_B = "c".repeat(40);
+const pr7 = (o = {}) => JSON.stringify({ number: 7, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: HEAD7 }, auto_merge: null, created_at: "2026-10-27T10:00:00Z", labels: [{ name: "land" }], ...o });
+
+test("land.yml retry: workflow_dispatch on the deploy branch only, in the PR's own group, never cancelling", () => {
+  const disp = (ref, pr = "7") => ({ event_name: "workflow_dispatch", ref, run_id: 9, event: { inputs: { pr, head: HEAD7, attempt: "1" } } });
+  assert.equal(ghExpr(LAND.jobs.resolve.if, disp(`refs/heads/${DEPLOY_BRANCH}`)), true);
+  assert.equal(ghExpr(LAND.jobs.resolve.if, disp("refs/heads/cursor/x")), false, "a dispatch on another ref runs that ref's copy of this file: refused");
+  assert.equal(ghExpr(LAND.concurrency.group, disp(`refs/heads/${DEPLOY_BRANCH}`)), "land-7", "queues with the PR's events and CI re-gates");
+  assert.equal(ghExpr(LAND.concurrency["cancel-in-progress"], disp(`refs/heads/${DEPLOY_BRANCH}`)), false, "a dispatched re-gate never cancels the PR's CI re-gate");
+  assert.ok(Number(LAND.env.RETRY_MAX) >= 1 && Number(LAND.env.RETRY_MAX) <= 5, "a small, finite budget per head");
+});
+
+test("land.yml retry job: actions write only, no checkout, no repo code, no secret; runs after post and arm", () => {
+  const j = LAND.jobs.retry;
+  assert.deepEqual(j.permissions, { actions: "write" });
+  assert.deepEqual(j.needs, ["resolve", "post", "arm"]);
+  assert.equal(runsRepoCode(j), false);
+  assert.equal(usesSecret(j), false, "GITHUB_TOKEN: its workflow_dispatch is one of the two events it may start");
+  const needs = (post, arm) => ({ needs: { resolve: { result: "success" }, post: { outputs: { retry: post } }, arm: { outputs: { retry: arm } } } });
+  assert.equal(ghExpr(j.if, needs("[]", "")), false);
+  assert.equal(ghExpr(j.if, needs("", "")), false, "post skipped");
+  assert.equal(ghExpr(j.if, needs('[{"number":7}]', "")), true);
+  assert.equal(ghExpr(j.if, needs("[]", '{"number":7}')), true);
+});
+
+test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other veto is not", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const ARM = JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A });
+  const go = (pr, now) => runStep(run, { ARM, FAKE_PR: pr, NOW_TIP: now, LAND_TOKEN: "", GITHUB_TOKEN: "t" });
+  let r = go(pr7(), TIP_B);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 });
+  assert.ok(!r.calls.some((c) => /pr merge/.test(c)), "never arms onto an ungated tip");
+  r = go(pr7({ labels: [{ name: "land" }, { name: "hold" }] }), TIP_B);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.retry, undefined, "`hold` set: no re-gate");
+  r = go(pr7({ head: { sha: "d".repeat(40) } }), TIP_B);
+  assert.equal(r.out.retry, undefined, "head moved: its push re-gates");
+  r = go(pr7(), TIP_A);
+  assert.equal(r.out.retry, undefined);
+  assert.ok(r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`)), "same tip: arms as before");
+});
+
+test("land.yml post: the trusted-rows/land-gate tip split is handed to retry; other errors are not", () => {
+  const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
+  assert.match(run, /the deploy tip moved between trusted-rows[^\n]*\n\s*#[^\n]*\n\s*retry=\$\(jq -c --argjson n "\$n" --arg h "\$head" '\. \+ \[\{number: \$n, head: \$h\}\]'/,
+    "the retry append sits in the tip-split branch only");
+  assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "no other branch asks for a re-gate");
+  assert.match(run, /echo "retry=\$retry"/);
+});
+
+test("land.yml retry: dispatches each PR once on the deploy branch with attempt+1, and stops at RETRY_MAX", () => {
+  const run = LAND.jobs.retry.steps[0].run;
+  const go = (attempt, post, arm, extra = {}) => runStep(run, { ATTEMPT: attempt, POST_RETRY: post, ARM_RETRY: arm, ...extra });
+  const item = JSON.stringify({ number: 7, head: HEAD7 });
+  let r = go("0", `[${item}]`, item);
+  assert.equal(r.status, 0, r.stderr);
+  const posts = r.calls.filter((c) => c.includes("--method POST"));
+  assert.equal(posts.length, 1, "post and arm naming one PR dispatch once");
+  assert.equal(posts[0], `gh api --method POST repos/o/r/actions/workflows/land.yml/dispatches -f ref=${DEPLOY_BRANCH} -f inputs[pr]=7 -f inputs[head]=${HEAD7} -f inputs[attempt]=1`);
+  r = go(String(Number(LAND.env.RETRY_MAX) - 1), "", item);
+  assert.match(r.calls.find((c) => c.includes("--method POST")) || "", new RegExp(`inputs\\[attempt\\]=${LAND.env.RETRY_MAX}$`));
+  r = go(String(LAND.env.RETRY_MAX), `[${item}]`, "");
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.calls.length, 0, "budget spent: nothing dispatched, the next train re-gates");
+  r = go("junk; rm -rf /", `[${item}]`, "");
+  assert.match(r.calls[0], /inputs\[attempt\]=1$/, "a malformed attempt counts as 0, never runs");
+  r = go("0", `[${item}]`, "", { GH_POST_RC: "1" });
+  assert.equal(r.status, 0, "a failed dispatch warns and leaves the next train to re-gate");
+});
+
+test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budget resets when the head moved", () => {
+  const run = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+  const go = (env) => runStep(run, { EVENT: "workflow_dispatch", PR_NUMBER: "", RUN_CONCLUSION: "", RUN_BRANCH: "", RUN_REPO: "", RUN_SHA: "", CANDIDATES: "null", FAKE_PR: pr7(), ...env });
+  let r = go({ IN_PR: "7", IN_HEAD: HEAD7, IN_ATTEMPT: "2" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.landable, "true");
+  assert.deepEqual(JSON.parse(r.out.prs), [{ number: 7, head: HEAD7 }]);
+  assert.equal(r.out.attempt, "2");
+  r = go({ IN_PR: "7", IN_HEAD: "e".repeat(40), IN_ATTEMPT: "2" });
+  assert.equal(r.out.attempt, "0", "a new head starts a new budget");
+  r = go({ IN_PR: "7", IN_HEAD: HEAD7, IN_ATTEMPT: "2", FAKE_PR: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) });
+  assert.equal(r.out.landable, "false");
+  assert.equal(JSON.parse(r.out.notasked)[0].why, "the `hold` label is set", "resolved like a label event: a hold turns gate red");
+  r = go({ IN_PR: "7; echo pwned", IN_HEAD: "", IN_ATTEMPT: "0" });
+  assert.notEqual(r.status, 0, "a non-numeric pr input is refused");
+  r = go({ EVENT: "pull_request_target", PR_NUMBER: "7", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "" });
+  assert.equal(r.out.attempt, "0", "every other event starts at 0");
 });
