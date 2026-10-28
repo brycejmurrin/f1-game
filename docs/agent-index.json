@@ -2135,6 +2135,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/camera/cam-picker.js",
+      "global": "CamPicker",
+      "roster": "tag"
+    },
+    {
       "path": "js/camera/cam-tuner-boot.js",
       "global": "CamTunerPanel",
       "roster": "tag"
@@ -2160,18 +2165,8 @@
       "roster": "tag"
     },
     {
-      "path": "js/camera/drive-broadcast.js",
-      "global": "DriveBroadcast",
-      "roster": "tag"
-    },
-    {
-      "path": "js/camera/drive-chase.js",
-      "global": "DriveChase",
-      "roster": "tag"
-    },
-    {
-      "path": "js/camera/drive-onboard.js",
-      "global": "DriveOnboard",
+      "path": "js/camera/drive-lens.js",
+      "global": "DriveLens",
       "roster": "tag"
     },
     {
@@ -2182,6 +2177,11 @@
     {
       "path": "js/camera/feel.js",
       "global": "CamFeel",
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/flyby-clear.js",
+      "global": "FlybyClear",
       "roster": "tag"
     },
     {
@@ -2210,6 +2210,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/camera/fov-mode.js",
+      "global": "CamFov",
+      "roster": "tag"
+    },
+    {
       "path": "js/camera/free-cam.js",
       "global": "FreeCam",
       "roster": "tag"
@@ -2235,6 +2240,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/camera/photo-looks.js",
+      "global": "PhotoLooks",
+      "roster": "tag"
+    },
+    {
       "path": "js/camera/replay-buf.js",
       "global": "ReplayBuf",
       "roster": "tag"
@@ -2253,6 +2263,11 @@
       "path": "js/camera/tuner-panel.js",
       "global": "CamTunerEditor",
       "roster": "LAZY_CAM_EDITOR"
+    },
+    {
+      "path": "js/camera/vantage-ride.js",
+      "global": "VantageRide",
+      "roster": "tag"
     },
     {
       "path": "js/camera/vantage.js",
