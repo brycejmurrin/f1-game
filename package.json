@@ -9,6 +9,7 @@
   "scripts": {
     "test": "node tools/ci/run-playwright.mjs",
     "test:render": "node tools/ci/run-playwright.mjs --project=render --workers=4",
+    "test:results-flow": "node tools/ci/run-playwright.mjs tests/specs/results-flow.spec.js",
     "test:smoke": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js",
     "test:webkit": "node tools/ci/run-playwright.mjs --project=webkit tests/specs/webkit-boot.spec.js",
     "test:xr": "node tools/ci/run-playwright.mjs --project=xr-emulated tests/specs/vr-emulated.spec.js tests/specs/xr-plan.spec.js",

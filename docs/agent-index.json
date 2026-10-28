@@ -1390,6 +1390,15 @@
       "twinned": false
     },
     {
+      "id": "results-flow",
+      "script": "test:results-flow",
+      "kind": "browser",
+      "files": [
+        "tests/specs/results-flow.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",

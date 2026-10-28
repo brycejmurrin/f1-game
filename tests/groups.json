@@ -2074,6 +2074,12 @@
       ],
       "kind": "browser"
     },
+    "test:results-flow": {
+      "files": [
+        "tests/specs/results-flow.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",
