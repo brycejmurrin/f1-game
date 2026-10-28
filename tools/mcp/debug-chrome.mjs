@@ -11,9 +11,9 @@ import { chromiumPath } from "../lib/chromium-path.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 export const DIR = path.join(ROOT, "artifacts/debug-chrome");
-export const PID_FILE = path.join(DIR, "pids.json");
+const PID_FILE = path.join(DIR, "pids.json");
 export const PROFILE = path.join(ROOT, "scratch/debug-chrome");
-export const SERVER_PORT = 3456;
+const SERVER_PORT = 3456;
 
 // headless=new --window-size is the OUTER window: 844x390 gave an 844x198 viewport. The viewport is
 // therefore set by a small holder process (Emulation.setDeviceMetricsOverride lives only as long as
@@ -52,7 +52,7 @@ export function discoveryFile({ configHome = process.env.XDG_CONFIG_HOME, home =
   const base = configHome && path.isAbsolute(configHome) ? configHome : path.join(home, ".config");
   return path.join(base, "chromium", "DevToolsActivePort");
 }
-export const BU_DISCOVERY = discoveryFile();
+const BU_DISCOVERY = discoveryFile();
 export const discoveryText = (port, wsUrl) => `${port}\n${new URL(wsUrl).pathname}\n`;
 async function writeDiscovery(port, file = BU_DISCOVERY) {
   const v = await (await fetch(`http://127.0.0.1:${port}/json/version`, { signal: AbortSignal.timeout(3000) })).json();
@@ -63,7 +63,7 @@ export function removeDiscovery(port, file = BU_DISCOVERY) {
   try { if (readFileSync(file, "utf8").split("\n")[0] === String(port)) { rmSync(file, { force: true }); return true; } } catch {}
   return false;
 }
-export const readPids = () => { try { return JSON.parse(readFileSync(PID_FILE, "utf8")); } catch { return null; } };
+const readPids = () => { try { return JSON.parse(readFileSync(PID_FILE, "utf8")); } catch { return null; } };
 const cmdline = pid => { try { return readFileSync(`/proc/${pid}/cmdline`, "utf8").replaceAll("\0", " "); } catch { return null; } };
 // A recorded PID is ours only while its command line still carries the marker we launched it with.
 export const owns = (p, read = cmdline) => (read(p.pid) || "").includes(p.marker);

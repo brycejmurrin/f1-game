@@ -114,7 +114,7 @@ export function createSnapshot({ repo, runDir, sha = "HEAD" }) {
   }
 }
 
-export function validatePlan(plan) {
+function validatePlan(plan) {
   if (!plan || !Array.isArray(plan.workers) || !plan.workers.length) throw fail("plan.workers must be a non-empty array");
   const ids = new Set(), known = new Set([...Object.keys(TOOL_SCHEMAS), ...LSP_TOOLS.map(x => x.name)]);
   for (const w of plan.workers) {
