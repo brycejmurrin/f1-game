@@ -4,7 +4,7 @@ Plan, 2026-10-27 (Pacific). Bryce's asks, typed in this session: "I feel like we
 lot are out of date we need a way to fix this", then "How can we improve this process so we combine prs or do a better
 review process? Search best practices all over the web", then "We can change our rules consider all options", then
 "Begin writing plan, also have researchers on how to streamline cleaning up and hooks and which models to use when".
-Status: DRAFT. Phase 0 is in flight; Phases 1–2 and §5 are proposals; §4 waits on Bryce's decisions.
+Status: DRAFT. Phase 0 is in flight; §4's three rule changes are decided (2026-10-28); Phase 1 and §5 are proposals.
 
 Evidence: a board snapshot of all open PRs (`node tools/ci/pr-board.mjs --json`) plus each head's `gate` status, git
 history of the deploy branch, and three research reports built from eleven web-research fact sheets (sources dated,
@@ -101,6 +101,17 @@ TinyFish and web search): [PR landing](../notes/agent-ops-research-2026-10-27/pr
 | E. Stacked PRs (GitHub stacks, Graphite) | Smaller review units for layered work | No auto-merge on stacks; needs rebase/force-push; does not fit independent agents | No |
 | F. A separate GitHub App identity for agents | Makes a required human/CODEOWNERS approval possible (an author can never approve their own PR) | Setup, token rotation | Only if Bryce wants a human review step on high-risk paths |
 | G. Mergify (hosted queue, $0 open-source plan, works on a user-owned public repo) | Batching, parallel checks and bisection without writing them | A third-party app with write access; whether the free plan includes batching is disputed (its listing says "all features"); its config would partly replace `land.yml` | Try only if Phase 1.1 stalls; check batching on the free plan first |
+
+**Decided 2026-10-28** (Bryce, answering three questions in this session):
+- Generated files: "Build at deploy" — option A. Stop committing the generated files the site serves and build them
+  in `pages.yml`; a checkout runs `npm run gen` first (SessionStart already installs); AGENTS.md rule 11 changes.
+- Commit hook: "Yes, split it" — `.githooks/pre-commit` becomes the one owner of `test:guards` for every host;
+  `bash-guard.sh` keeps only fast fail-closed refusals; hooks, settings and AGENTS.md rule 12 change in one rules PR.
+- Review: "Bot review gates, you label" — the gate gains a `review` row: it waits for Claude Code Review on the head
+  and refuses when its `bughunter-severity` line reports any Important finding (no line = pending); a PR touching a
+  high-risk path (physics, `js/game.js`, `.github/workflows/`, `tools/ci/`, `.claude/hooks/`) also needs a label Bryce
+  added, checked by actor in the timeline.
+- Not chosen: moving to an organization, squash/rebase merges, stacked PRs (§4 table: No).
 
 ## 5. Agent operations
 
