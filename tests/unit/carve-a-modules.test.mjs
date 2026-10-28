@@ -114,17 +114,73 @@ test("GradeTint keeps a neutral tint neutral and LightTuneEdit clears the chunk 
   // The module reads the GLOBAL localStorage (setting ctx.localStorage did nothing): record its removeItem.
   const LightTuneEdit = load("../../js/race/light-tune-edit.js", "LightTuneEdit",
     { localStorage: { removeItem: (k) => removed.push(k) } });
-  const LTe = { perChunkLights: 0, carEnvCube: 0 };
+  // LTe (not LT): GradeTint.carPaint scratch above already binds LT.
+  const LTe = { perChunkLights: 0, roadChunkLamps: 0, carEnvCube: 0 };
   let stored = null;
   const ctx = {
     LT: LTe, ltStore: { set(id, v) { stored = [id, v]; return true; } }, gfx: { invalidateSoftPresent() {} },
     get perChunkOff() { return this._off; }, set perChunkOff(v) { this._off = v; }, _off: true,
-    envProbeOff: false,
+    get envProbeOff() { return this._env; }, set envProbeOff(v) { this._env = v; }, _env: true,
   };
   LightTuneEdit.set("perChunkLights", 1, ctx);
   assert.equal(ctx.perChunkOff, false);
   assert.deepEqual(removed, ["apex26.perChunkOff"], "the persisted latch is cleared too");
   assert.deepEqual(stored, ["perChunkLights", 1]);
+  // PER-CHUNK ROAD: the tuner note covers BOTH knobs; rising edge must clear the same latch.
+  ctx.perChunkOff = true; removed.length = 0; LTe.roadChunkLamps = 0;
+  LightTuneEdit.set("roadChunkLamps", 1, ctx);
+  assert.equal(ctx.perChunkOff, false, "roadChunkLamps 0→>0 clears the chunk latch");
+  assert.deepEqual(removed, ["apex26.perChunkOff"]);
+  // ENV REFLECTION: same gesture for the env-probe latch.
+  removed.length = 0; LTe.carEnvCube = 0;
+  LightTuneEdit.set("carEnvCube", 1, ctx);
+  assert.equal(ctx.envProbeOff, false, "carEnvCube 0→>0 clears apex26.envProbeOff");
+  assert.deepEqual(removed, ["apex26.envProbeOff"]);
+  assert.deepEqual(stored, ["carEnvCube", 1]);
+});
+
+test("JumpStartPenalty fines throttle at green and a fast launch; auto-throttle is exempt; unset penalty cannot NaN", () => {
+  const SportingRegs = load("../../js/race/sporting-regs.js", "SportingRegs");
+  const announced = [], pens = [];
+  const JumpStartPenalty = load("../../js/race/jump-start-penalty.js", "JumpStartPenalty", {
+    SportingRegs, Log: { info() {}, debug() {} },
+    Input: { throttleLevel: () => 0 },
+    GameAudio: { penalty: () => pens.push(1) },
+  });
+  const G = {
+    session: "race", track: { id: "monza" }, raceT: 0, resultT: 1,
+    vTop: () => 80, announce: (m) => announced.push(m),
+  };
+  const js = JumpStartPenalty.create(G, {
+    autoThrottle: () => false,
+    inputOf: (c) => c._inp,
+    launchT0: () => 0,
+    soundOn: () => true,
+    isQuali: () => false,
+    isTimeTrial: () => false,
+  });
+  const player = { human: true, isPlayer: true, code: "TST", retired: false, finished: false, speed: 0 };
+  // Unset penalty: the belt must seed 0, not NaN.
+  player._inp = { throttle: true, throttleLevel: 1 };
+  js.tickAtGreen(player);
+  assert.equal(player.jumpStartFined, true);
+  assert.equal(player.penalty, SportingRegs.JUMP_START_PEN_S);
+  assert.ok(Number.isFinite(player.penalty));
+  assert.match(announced[0], /FALSE START/);
+  assert.equal(pens.length, 1);
+  // Second call is a no-op (already fined).
+  js.tickAtGreen(player);
+  assert.equal(player.penalty, SportingRegs.JUMP_START_PEN_S);
+  // Auto-throttle exempt through the reaction window.
+  const auto = { human: true, isPlayer: true, code: "AUT", retired: false, finished: false, speed: 10, penalty: 0 };
+  const jsAuto = JumpStartPenalty.create(G, {
+    autoThrottle: () => true, inputOf: () => null, launchT0: () => 0,
+    soundOn: () => false, isQuali: () => false, isTimeTrial: () => false,
+  });
+  G.raceT = 0.05;
+  jsAuto.tickReaction(auto);
+  assert.equal(auto.jumpStartFined, undefined);
+  assert.equal(auto.penalty, 0);
 });
 
 test("AnnounceBanner holds the floor: a higher card queues instead of replacing the one on screen", () => {
