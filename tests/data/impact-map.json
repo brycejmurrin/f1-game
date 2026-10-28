@@ -13374,19 +13374,10 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
-      "blueFlagCar": [
-        "tests/unit/sporting-regs.test.mjs"
-      ],
       "champOrder": [
         "tests/unit/sporting-regs.test.mjs"
       ],
       "compoundShort": [
-        "tests/unit/sporting-regs.test.mjs"
-      ],
-      "compoundVerdict": [
-        "tests/unit/sporting-regs.test.mjs"
-      ],
-      "compoundsRun": [
         "tests/unit/sporting-regs.test.mjs"
       ],
       "createBlueFlagWatch": [
@@ -13406,9 +13397,6 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "jumpStartFastLaunch": [
-        "tests/unit/sporting-regs.test.mjs"
-      ],
-      "passPenaltyS": [
         "tests/unit/sporting-regs.test.mjs"
       ],
       "reset": [

@@ -1186,8 +1186,9 @@ test("a real PitLane stop handed back before or after fitting matches uninterrup
       assert.equal(ai.tyre.code, "M"); assert.equal(ai.tyreStints, 2); assert.equal(ai.pitStops, 1);
       assert.equal(ai.tyreWear, phase === "before-fit" ? 0 : 0.2);
       ai.finished = true;
-      const verdict = regs.compoundVerdict(ai, { applies: true });
-      assert.equal(verdict && verdict.dsq, phase === "post-flag-fit" ? "one dry compound" : null,
+      // compoundVerdict stays module-local; applyCompoundRule owns the public surface.
+      regs.applyCompoundRule([ai], { applies: true });
+      assert.equal(ai.dsq || null, phase === "post-flag-fit" ? "one dry compound" : null,
         "the frozen flag verdict survives independently of later service history");
       net.stop();
     }
