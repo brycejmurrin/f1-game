@@ -12,6 +12,7 @@ function makeFixture(options = {}) {
   vm.createContext(sandbox);
   for (const [file, name] of [
     ['js/track/core/geom.js', 'TrackGeom'], ['js/track/scenery/graph.js', 'TrackGraph'],
+    ['js/track/scenery/landforms.js', 'SceneryLandforms'],
     ['js/track/scenery/nature.js', 'SceneryNature'], ['js/track/scenery/models.js', 'TrackModels'],
     ['js/track/scenery/circuit-kit.js', 'CircuitKit'],
   ]) vm.runInContext(fs.readFileSync(path.join(ROOT, file), 'utf8') + '\nthis.' + name + '=' + name, sandbox);
