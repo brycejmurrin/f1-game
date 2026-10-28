@@ -2649,6 +2649,7 @@
         "tests/unit/livery-tier.test.mjs"
       ],
       "setPlayerParts": [
+        "tests/unit/car-presentation-canary.test.mjs",
         "tests/unit/livery-tier.test.mjs"
       ],
       "sharedRivalBodyMesh": [
@@ -2660,12 +2661,14 @@
         "tests/unit/car-presentation-vm.test.mjs"
       ],
       "teamDecalState": [
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/daily-challenge.test.mjs"
       ],
       "teamMesh": [
         "tests/specs/parts-mesh-cache.spec.js",
         "tests/unit/car-draw-decal-budget.test.mjs",
-        "tests/unit/car-presentation-vm.test.mjs"
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/daily-challenge.test.mjs"
       ],
       "warmCarAssets": [
         "tests/unit/car-presentation-vm.test.mjs",
