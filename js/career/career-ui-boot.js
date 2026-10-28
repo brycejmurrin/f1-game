@@ -124,6 +124,7 @@ function create(G) {
   };
 }
 
-return { create, ensureScreen };
+// ensureScreen stays module-local (create / ensure only).
+return { create };
 })();
 Object.freeze(CareerUI);
