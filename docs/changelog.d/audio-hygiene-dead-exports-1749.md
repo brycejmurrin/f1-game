@@ -1,0 +1,1 @@
+Removed: Unused audio public exports (RivalAudio pass-by helpers, CrowdAudio boost helpers, ErsLayer gain helpers, GameAudio radioChannels/sessionType/tiltDb, VoicePack internals, BattleEarcon pcmFor/KEYS). Heard mix unchanged.

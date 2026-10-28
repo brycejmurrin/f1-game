@@ -42,16 +42,22 @@ const offlineRetries = new Map();
 // Default chosen backend at install: TLX (three) is the shipped picker default.
 // GLX stays in the required pool separately. Scenery + data/net are the
 // background pool, fetched after it (download priority only — see install).
-// WGX stays in the optional Set (gen-shell lockstep with DEFERRED) but is
-// skipped at install — explicit opt-in; fetch handler runtime-caches on use.
+// Runtime-only doors (WGX, track designer, XR, camera editors) stay in the
+// optional Set for gen-shell lockstep with DEFERRED/LAZY_*, but are skipped at
+// install — explicit opt-in; fetch handler runtime-caches on use.
 function isInstallCriticalOptional(u) {
   return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
 }
 // Default-off / explicit opt-in: still seeded in `optional` when gen-shell
-// requires lockstep (WGX), but never install-precached. Hand-authored vendors
-// (Rapier, jsQR, trystero) are omitted from the Set entirely — same outcome.
+// requires lockstep, but never install-precached. WGX + LAZY_EDITOR / LAZY_XR /
+// LAZY_CAM_EDITOR (~510 KB raw) are title doors a race session never opens.
+// Hand-authored vendors (Rapier, jsQR, trystero) are omitted from the Set
+// entirely — same outcome.
 function isRuntimeOnlyOptional(u) {
-  return /^js\/render\/webgpu\//.test(u);
+  return /^js\/render\/webgpu\//.test(u)
+    || /^js\/editor\//.test(u)
+    || /^js\/xr\//.test(u)
+    || /^js\/camera\/(tuner-panel|flyby-editor)\.js$/.test(u);
 }
 // Is this navigation the game's own shell? Any *.html page other than
 // index.html is a different document and must never be answered with the game.
@@ -774,14 +780,14 @@ self.addEventListener("install", (event) => {
       /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
-          // GLX and career UI went in `required`; WGX is runtime-only (opt-in).
+          // GLX and career UI went in `required`; runtime-only doors are skipped.
           return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
         });
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
-    // BACKGROUND pool (scenery / data / net — not WGX), then SETTLED, then
-    // skipWaiting. The order of the pools is a download priority, nothing
-    // more: skipWaiting() only SETS A FLAG, and the browser reads it after
-    // every install extend-lifetime promise has settled
+    // BACKGROUND pool (scenery / data / net — not runtime-only doors), then
+    // SETTLED, then skipWaiting. The order of the pools is a download priority,
+    // nothing more: skipWaiting() only SETS A FLAG, and the browser reads it
+    // after every install extend-lifetime promise has settled
     // (https://w3c.github.io/ServiceWorker/ — Install, then Try Activate). A
     // skipWaiting between the pools — the old layout — activated nothing early
     // and only read as if it did; activation always followed SETTLED.
