@@ -36,7 +36,7 @@ const MirrorPass = (function () {
   // QUALITY LADDER. The mirror is never hidden for performance — a player
   // with MIRROR on and GRAPHICS: LOW (PerfGov tier 4) saw no mirror at all
   // under the first rule — it steps down instead:
-  //   full  a healthy desktop: the whole world, every frame. Audit #8:
+  //   full  a healthy desktop: the world out to 280 m, every frame. Audit #8:
   //         instEvery:2 freezes instanced prop cull/upload on odd frames
   //         (cars + chunked world still every frame) via frame.mirrorFreezeInstanced;
   //         apex26.mirrorInstEvery=1 restores a full re-cull every frame.
@@ -63,13 +63,15 @@ const MirrorPass = (function () {
   //   CPU: the re-rank (FrameLights.viewLights) is reused while the eye stays
   //        within RERANK_M of the last rank, the aim within ~2 deg, for at most
   //        RERANK_EVERY mirror frames; this frame's tail-lights are always fresh.
-  // apex26.tlxMirLampCap: unset = 12 (half the per-chunk cap), "0" = both off
-  // (today's mirror on every backend), 1..48 = that cap.
-  let _lampCap = 12;
+  // apex26.tlxMirLampCap: unset = 8, "0" = the cap off (the full ranked
+  // set on every backend), 1..48 = that cap. The list handed to the pass
+  // is shortened to the cap, so GLX / WGX / TLX all break their lamp loop
+  // there; tsl-lit also reads it as the per-chunk cap.
+  let _lampCap = (typeof LightBudget !== "undefined" && LightBudget.MIRROR > 0) ? LightBudget.MIRROR : 8;
   try {
     const lc = localStorage.getItem("apex26.tlxMirLampCap");
     if (lc != null && lc !== "" && +lc >= 0) _lampCap = Math.min(48, +lc | 0);
-  } catch (_) { /* default 12 */ }
+  } catch (_) { /* default 8 */ }
   // Align with FrameLights' distance/time budget (5 m / ~100 ms): holding here
   // means the mirror often never calls viewLights, and when it does _rankSet
   // reuses the view heap. Was 2 m / 4 frames — at 60 m/s that still re-ranked
@@ -81,10 +83,10 @@ const MirrorPass = (function () {
   // — the floor is TLX's one unchunked whole-lap road (~51k tris, tlx.js chunkedTrackCoords:false), which no cull
   // reaches. The low and min rungs never draw further than lite. QUALITY is exported so a probe can sweep it live.
   const QUALITY = [
-    { name: "full", lite: false, res: 1.0, cull: 400, reach: 260, every: 1, instEvery: _instEvery },
-    { name: "lite", lite: true,  res: 0.6, cull: LITE_CULL, reach: Math.min(140, LITE_CULL), every: 1, instEvery: 1 },
-    { name: "low",  lite: true,  res: 0.5, cull: Math.min(150, LITE_CULL), reach: Math.min(120, LITE_CULL), every: 2, instEvery: 1 },
-    { name: "min",  lite: true,  res: 0.4, cull: Math.min(120, LITE_CULL), reach: Math.min(100, LITE_CULL), every: 3, instEvery: 1 },
+    { name: "full", lite: false, res: 1.0, ss: 2, cull: 280, reach: 260, every: 1, instEvery: _instEvery },
+    { name: "lite", lite: true,  res: 0.6, ss: 2, cull: LITE_CULL, reach: Math.min(140, LITE_CULL), every: 1, instEvery: 1 },
+    { name: "low",  lite: true,  res: 0.5, ss: 1, cull: Math.min(150, LITE_CULL), reach: Math.min(120, LITE_CULL), every: 2, instEvery: 1 },
+    { name: "min",  lite: true,  res: 0.4, ss: 1, cull: Math.min(120, LITE_CULL), reach: Math.min(100, LITE_CULL), every: 3, instEvery: 1 },
   ];
   const EYE_UP = 1.05;                // helmet height above the road surface
   const LOOK_M = 20, LOOK_DROP = 0.75; // aim 20 m back, dipped ~2° toward the road
@@ -152,6 +154,7 @@ const MirrorPass = (function () {
     // E9's held re-rank: the ranked lamps (no tail-lights) of the last viewLights
     // call, where and which way it ranked from, and how many frames it has served.
     const _vlBuf = [], _vlEye = [0, 0, 0], _vlAim = [0, 0, 0];
+    const _capBuf = [];
     const _vlOut = { lights: null, tailStart: 0, tailCount: 0 };
     let _vlLamps = 0, _vlAge = Infinity, _vlTrack = null, _vlSrc = null, _vlRanks = 0, _vlHeld = 0;
     function mirrorLights(frame) {
@@ -184,6 +187,26 @@ const MirrorPass = (function () {
       for (let i = 0; i < 3; i++) { _vlEye[i] = _eye[i]; _vlAim[i] = _aim[i]; }
       return vl;
     }
+    // Rear-ranked lamps are nearest-first. Keep that prefix plus the
+    // tail-lights and drop the rest, so the inset's lamp loop stops at
+    // the cap on every backend. A list already inside the cap is returned
+    // as-is (same array the re-rank cache holds).
+    function capMirrorLights(src, tailStart, tailCount) {
+      if (!(_lampCap > 0) || !src) return null;
+      const tc = tailCount | 0;
+      const nRec = (src.length / 15) | 0;
+      const ts = tc > 0 ? (tailStart | 0) : nRec;
+      if (ts <= _lampCap) return null;
+      const keepLamps = Math.min(_lampCap, ts);
+      let j = 0;
+      const endLamps = keepLamps * 15;
+      for (let i = 0; i < endLamps; i++) _capBuf[j++] = src[i];
+      const tailFrom = ts * 15;
+      const tailTo = Math.min(src.length, (ts + tc) * 15);
+      for (let i = tailFrom; i < tailTo; i++) _capBuf[j++] = src[i];
+      _capBuf.length = j;
+      return { lights: _capBuf, tailStart: keepLamps, tailCount: tc };
+    }
     // THE SUN'S VIEW-DEPENDENT TERMS STAY OUT OF THE MIRROR (a phone report:
     // "still a little flashy … sun and shadows"). The mirror is a small target
     // with no anti-aliasing of its own (FXAA runs before its composite), so
@@ -208,7 +231,8 @@ const MirrorPass = (function () {
     function targetSize(cssW, cssH, res) {
       const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
       res = scaledRes(res);
-      let w = cssW * dpr * res * SS, h = cssH * dpr * res * SS;
+      const ss = _q.ss || SS;
+      let w = cssW * dpr * res * ss, h = cssH * dpr * res * ss;
       const k = Math.min(1, MAX_W / (w || 1), MAX_H / (h || 1));
       w = Math.round(w * k); h = Math.round(h * k);
       _sz[0] = w; _sz[1] = h;
@@ -730,7 +754,11 @@ const MirrorPass = (function () {
       sv.lights = frame.lights; sv.tailStart = frame.tailStart; sv.tailCount = frame.tailCount;
       _aim[0] = _tgt[0] - _eye[0]; _aim[1] = 0; _aim[2] = _tgt[2] - _eye[2];
       const vl = mirrorLights(frame);
-      if (vl) { frame.lights = vl.lights; frame.tailStart = vl.tailStart; frame.tailCount = vl.tailCount; }
+      if (vl) {
+        const capped = capMirrorLights(vl.lights, vl.tailStart, vl.tailCount);
+        const use = capped || vl;
+        frame.lights = use.lights; frame.tailStart = use.tailStart; frame.tailCount = use.tailCount;
+      }
       sv.lampCap = frame.mirrorLampCap;
       frame.mirrorLampCap = _lampCap;   // tsl-lit's per-chunk cap for this pass (0 = uncapped)
       let began = false;

@@ -546,6 +546,32 @@ test("A·W14: decal glows share one program; each material keeps its own glow", 
   assert.equal(fg.counts.linkProgram || 0, 1, `four glows link ONE program (was one per glow): ${fg.counts.linkProgram}`);
 });
 
+test("a decal created while scene MRT is on is born on the MRT key", () => {
+  if (!globalThis.TLXShaders.fx) vm.runInThisContext(read("js/render/three/tsl-fx.js"), { filename: absSrc("js/render/three/tsl-fx.js") });
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+    ssrTag: true, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+  const fx = globalThis.TLXShaders.fx(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), sharedUniforms: true, lit });
+  const tex = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+  const early = fx.decalMaterialFor(tex, 0.35);
+  assert.equal(early.customProgramCacheKey(), "tlx-fx-decal");
+  fx.setSsrMrt(true);
+  assert.equal(early.customProgramCacheKey(), "tlx-fx-decal-mrt");
+  const tex2 = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+  const born = fx.decalMaterialFor(tex2, 1.6);
+  assert.equal(born.customProgramCacheKey(), "tlx-fx-decal-mrt");
+  assert.equal(born.mrtNode, early.mrtNode, "one tag node for decals born before and after the arm");
+  const glass = fx.mirrorGlassMaterial(tex);
+  assert.equal(glass.customProgramCacheKey(), "tlx-fx-mirror-glass");
+  assert.equal(glass.mrtNode, null, "mirror glass keeps the scene MRT tag and has no node of its own");
+  fx.setSsrMrt(false);
+  const tex3 = new THREE.DataTexture(new Uint8Array([255, 0, 0, 255]), 1, 1);
+  const off = fx.decalMaterialFor(tex3, 0.5);
+  assert.equal(off.customProgramCacheKey(), "tlx-fx-decal");
+  assert.equal(off.mrtNode, null);
+  assert.equal(born.mrtNode, null);
+  assert.equal(glass.mrtNode, null);
+});
+
 // A·W14: the caster warm with NO caster in any pool (a night grid: no sun pass, no lamp reached yet) compiled
 // nothing, so the first lamp pass built its depth pipelines mid-race. Probe casters in the scene's layouts
 // compile them in the warm, one pair (both winding signs) per layout, a fresh set each warm, never in castScene after.
