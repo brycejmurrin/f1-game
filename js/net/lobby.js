@@ -1160,7 +1160,7 @@ const NetLobby = (function () {
       if (!e.roomStep || e.roomStep.hidden) return;
       const host = role === "host";
       const track = (Tracks.LIST && Tracks.LIST[G.trackIdx]) || null;
-      const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Overcast", fog: "Fog" };
+      const WX_LABEL = { dry: "Dry", wet: "Wet", rain: "Rain", overcast: "Overcast", fog: "Fog", storm: "Storm" };
       const arc = G.raceChangeable && G.wxArcPlan;
       const wx = (WX_LABEL[G.raceWeather] || "Mixed") + (arc && WX_LABEL[arc.to] ? " → " + WX_LABEL[arc.to] : "");
       const tod = G.raceTimeOfDay && G.raceTimeOfDay !== "default"

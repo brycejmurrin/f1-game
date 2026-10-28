@@ -1,5 +1,6 @@
 /* Render the real hub's failure/retry path; source text is not a UI oracle. */
 import test from 'node:test';
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
@@ -14,7 +15,7 @@ function harness(online) {
   const empty = () => Promise.resolve(dom.document.createElement('div'));
   const create = (value) => ({ create: () => value });
   class Clock extends Date { static now() { return now; } }
-  const ctx = vm.createContext({ document: dom.document, navigator, Date: Clock, queueMicrotask,
+  const ctx = vm.createContext({ I18n: i18nStub(),  document: dom.document, navigator, Date: Clock, queueMicrotask,
     Log: { info() {}, warn() {} }, F1API: { cancelAll() {}, staleMark: () => staleSeq,
       staleSince: mark => staleEvent && staleEvent.seq > mark ? staleEvent.at : null },
     DataSchedule: create({ loadSchedule: () => { calls++; return new Promise((resolve, reject) => pending.push({resolve, reject})); } }),

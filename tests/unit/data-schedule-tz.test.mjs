@@ -6,6 +6,7 @@
 process.env.TZ = "America/Los_Angeles";
 
 import test from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
@@ -13,7 +14,7 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const SRC = readFileSync(new URL("../../js/data/schedule.js", import.meta.url), "utf8");
 const API_SRC = readFileSync(new URL("../../js/data/api.js", import.meta.url), "utf8");
-const ctx = vm.createContext({});
+const ctx = vm.createContext({ I18n: i18nStub() });
 vm.runInContext(SRC + ";globalThis.DataSchedule = DataSchedule;", ctx, { filename: absSrc("js/data/schedule.js") });
 const S = ctx.DataSchedule;
 
@@ -58,6 +59,7 @@ test("schedule venue lines do not stamp a native title (scroll leaves it hung)",
     const n = {
       tag, cls, text: text || "", attrs: {}, listeners: {}, children: [],
       addEventListener(t, f) { (n.listeners[t] = n.listeners[t] || []).push(f); },
+      setAttribute(k, v) { n.attrs[k] = v; },
       removeAttribute(k) { delete n.attrs[k]; },
       set title(v) { n.attrs.title = v; },
       get title() { return n.attrs.title; },
@@ -68,7 +70,7 @@ test("schedule venue lines do not stamp a native title (scroll leaves it hung)",
     nodes.push(n);
     return n;
   }
-  const ctx2 = vm.createContext({
+  const ctx2 = vm.createContext({ I18n: i18nStub(),
     F1API: { schedule: () => Promise.resolve([{
       round: 1, name: "Australian Grand Prix", circuit: "Albert Park Circuit",
       locality: "Melbourne", country: "Australia", date: "2026-03-08", time: "05:00:00Z"
@@ -195,7 +197,7 @@ test("final-minute countdown announces the race start, including reduced motion"
         appendChild(child) { child.parentElement = this; this.children.push(child); return child; }
       };
     }
-    const context = vm.createContext({
+    const context = vm.createContext({ I18n: i18nStub(),
       Date: ClockDate, MutationObserver: Observer,
       document: { documentElement: {} },
       matchMedia: () => ({ matches: reduced }),
@@ -233,7 +235,7 @@ test("countdown ownership retires document observers and timers, including queue
       appendChild(child) { child.parentElement = this; this.children.push(child); return child; },
       classList: {add() {}}, scrollWidth: 0, clientWidth: 0};
   }
-  const context = vm.createContext({MutationObserver: Observer,
+  const context = vm.createContext({ I18n: i18nStub(), MutationObserver: Observer,
     document: {documentElement: {}, querySelector: () => null},
     queueMicrotask: fn => microtasks.push(fn),
     setInterval: fn => { timers.add(fn); return fn; }, clearInterval: id => timers.delete(id),
@@ -280,7 +282,7 @@ test("countdown watches child lists inside the hub only, and `hidden` anywhere",
       classList: {add() {}}, scrollWidth: 0, clientWidth: 0};
   }
   const root = {}, hub = { id: "datahub" };
-  const context = vm.createContext({MutationObserver: Observer,
+  const context = vm.createContext({ I18n: i18nStub(), MutationObserver: Observer,
     document: {documentElement: root, querySelector: () => null, getElementById: (id) => (id === "datahub" ? hub : null)},
     queueMicrotask: () => {}, setInterval: () => 1, clearInterval: () => {},
     F1API: {schedule: () => Promise.resolve([{...VEGAS, date: "2099-11-22"}])}});
