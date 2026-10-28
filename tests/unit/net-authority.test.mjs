@@ -58,7 +58,8 @@ test("quali-wire and strategy-wire evaluate before netplay", () => {
   const { LAZY_NET, LAZY_NET_EDGES } = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
   const play = LAZY_NET.indexOf("js/net/netplay.js");
   for (const file of ["js/net/quali-wire.js", "js/net/strategy-wire.js"]) {
-    assert.ok(LAZY_NET.indexOf(file) >= 0 && LAZY_NET.indexOf(file) < play, file + " loads before netplay.js");
+    const i = LAZY_NET.indexOf(file);
+    assert.ok(i >= 0 && i < play, file + " loads before netplay.js");
     assert.ok(LAZY_NET_EDGES.some(([a, b]) => a === file && b === "js/net/netplay.js"), file + " is an eval-time edge");
   }
 });
