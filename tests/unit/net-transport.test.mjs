@@ -18,6 +18,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { deflateRawSync } from "node:zlib";
 import { seedLogGlobal } from "../helpers/seed-log.mjs";
 import { NetworkAdversary } from "../helpers/network-adversary.mjs";
@@ -28,8 +29,22 @@ const load = (rel, name) =>
   eval(fs.readFileSync(path.join(ROOT, rel), "utf8") + ";" + name);
 
 globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");   // both bind it at call time
+const NetIce = load("js/net/ice.js", "NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = load("js/net/transport.js", "NetTransport");
 const NetHandshake = load("js/net/handshake.js", "NetHandshake");
+
+test("ice.js is on the net roster ahead of transport.js", () => {
+  const { LAZY_NET, LAZY_NET_EDGES, CONTROLLER } = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
+  for (const list of [LAZY_NET, CONTROLLER]) {
+    const ice = list.indexOf("js/net/ice.js");
+    const transport = list.indexOf("js/net/transport.js");
+    assert.ok(ice >= 0 && transport > ice, "NetIce.create() runs while transport.js evaluates");
+  }
+  assert.ok(
+    LAZY_NET_EDGES.some(([a, b]) => a === "js/net/ice.js" && b === "js/net/transport.js"),
+    "transport.js calls NetIce.create() at eval time, so the pair is a declared edge"
+  );
+});
 
 test("network adversary can reorder headers and stall each response body", async () => {
   const net = new NetworkAdversary();

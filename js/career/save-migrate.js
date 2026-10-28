@@ -410,7 +410,8 @@ const SaveMigrate = (function () {
     } catch (_) { return false; }
   }
 
-  return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V, tallyOf,
+  // tallyOf is migration-only (cleanTally); Career.tallyOf owns the live save.
+  return { migrateCareer, migrateSeasonPoints, remapPoints, roundMap, finishMap, CAREER_V,
            careerVersion,
            validateCareerSave,
            LIMITS: Object.freeze({ TDEV_MAX: TDEV_LIMIT, DEV_MAX: DEV_LIMIT, EXP_MAX: EXP_LIMIT }) };

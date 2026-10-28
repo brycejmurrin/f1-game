@@ -14,6 +14,8 @@ const LOBBY_SETTINGS = await readFile(new URL("../../js/net/lobby-settings.js", 
 // through NetPlay.bindQuali / qualiReporters (one validation site for both
 // phases), and a stub of those would only pin the stub.
 const NETPLAY = await readFile(new URL("../../js/net/netplay.js", import.meta.url), "utf8");
+const QUALI_WIRE = await readFile(new URL("../../js/net/quali-wire.js", import.meta.url), "utf8");
+const STRATEGY_WIRE = await readFile(new URL("../../js/net/strategy-wire.js", import.meta.url), "utf8");
 
 function deferred() {
   let resolve, reject;
@@ -155,6 +157,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-codes.js") });
   vm.runInContext(LOBBY_ROSTER.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-roster.js") });
   vm.runInContext(LOBBY_SETTINGS.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-settings.js") });
+  vm.runInContext(QUALI_WIRE, context, { filename: absSrc("js/net/quali-wire.js") });
+  vm.runInContext(STRATEGY_WIRE, context, { filename: absSrc("js/net/strategy-wire.js") });
   context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: absSrc("js/net/netplay.js") });
   const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: absSrc("js/net/lobby.js") });
   const G = {

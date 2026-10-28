@@ -57,6 +57,27 @@ test("a chain a -> b -> c: b and c are fetched at load(), injected only after th
   assert.equal(r.links().length, 2, "no second hint for a file already preloaded");
 });
 
+test("warm reads each final URL into the HTTP cache and does not re-key it", async () => {
+  const r = rig();
+  const fetched = [];
+  r.ctx.fetch = async (href, opts) => {
+    fetched.push([href, opts && opts.credentials]);
+    return { ok: true, arrayBuffer: async () => new ArrayBuffer(2) };
+  };
+  const n = await r.ctx.ScriptLoader.warm(["http://x/js/a.js?v=abc", "http://x/js/b.js?v=def"]);
+  assert.equal(n, 2);
+  assert.deepEqual(fetched, [
+    ["http://x/js/a.js?v=abc", "same-origin"],
+    ["http://x/js/b.js?v=def", "same-origin"],
+  ]);
+});
+
+test("warm counts a failed fetch as unread and still settles", async () => {
+  const r = rig();
+  r.ctx.fetch = async (href) => href.includes("bad") ? { ok: false, status: 503 } : { ok: true, arrayBuffer: async () => new ArrayBuffer(1) };
+  assert.equal(await r.ctx.ScriptLoader.warm(["http://x/ok.js", "http://x/bad.js"]), 1);
+});
+
 test("files with no waiting predecessor get no hint (they are injected at once)", async () => {
   const r = rig();
   const p = r.ctx.ScriptLoader.create().load(["x.js", "y.js"], []);

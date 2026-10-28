@@ -25,6 +25,7 @@ const RACE_SESSION_READY = {
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
   "js/race/duel.js": () => typeof Duel !== "undefined" && !!Duel && !Duel._stub,
   "js/race/session-records.js": () => typeof SessionRecords !== "undefined" && !!SessionRecords && !SessionRecords._stub,
+  "js/race/pit-geom.js": () => typeof PitGeom !== "undefined" && !!PitGeom,
   "js/race/pit-lane.js": () => typeof PitLane !== "undefined" && !!PitLane && !PitLane._stub,
   "js/race/engineer.js": () => typeof RaceEngineer !== "undefined" && !!RaceEngineer && !RaceEngineer._stub,
   "js/race/radio-lines.js": () => typeof RadioLines !== "undefined" && !!RadioLines && !RadioLines._stub,
@@ -240,11 +241,16 @@ async function ensureScenery(idx) {
       return false;
     }
   }
+  // Model bytes need the closure's source and nothing from the toolkit. Ask
+  // now so their fetch overlaps the rest of the toolkit's download and eval
+  // instead of starting after both have finished.
+  const modelsP = sceneryModels(def);
   if (!(await buildP)) {
+    await modelsP;
     Log.warn("track", "track-build toolkit missing — Tracks.build cannot dress the world");
     return false;
   }
-  await sceneryModels(def);
+  await modelsP;
   return true;
 }
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
@@ -337,11 +343,15 @@ const NET_READY = {
   "js/net/sdp.js": () => typeof NetSdp !== "undefined",
   "js/net/qr.js": () => typeof NetQr !== "undefined",
   "js/net/scan.js": () => typeof NetScan !== "undefined",
+  "js/net/ice.js": () => typeof NetIce !== "undefined",
+  "js/net/interp.js": () => typeof NetInterp !== "undefined",
   "js/net/transport.js": () => typeof NetTransport !== "undefined",
   "js/net/handshake.js": () => typeof NetHandshake !== "undefined",
   "js/net/lobby-codes.js": () => typeof LobbyCodes !== "undefined",
   "js/net/snapshot.js": () => typeof NetSnapshot !== "undefined",
   "js/net/session.js": () => typeof NetSession !== "undefined",
+  "js/net/quali-wire.js": () => typeof QualiWire !== "undefined",
+  "js/net/strategy-wire.js": () => typeof StrategyWire !== "undefined",
   "js/net/netplay.js": () => typeof NetPlay !== "undefined",
   "js/net/lobby.js": () => typeof NetLobby !== "undefined",
   "js/input/phone-pad-codec.js": () => typeof PhonePadCodec !== "undefined",
