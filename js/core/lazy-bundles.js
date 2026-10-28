@@ -356,6 +356,8 @@ const NET_READY = {
   "js/net/strategy-wire.js": () => typeof StrategyWire !== "undefined",
   "js/net/netplay.js": () => typeof NetPlay !== "undefined",
   "js/net/lobby.js": () => typeof NetLobby !== "undefined",
+  "js/input/phone-pad-codec.js": () => typeof PhonePadCodec !== "undefined",
+  "js/input/phone-pad-page.js": () => typeof PhonePadPage !== "undefined",
   "js/input/phone-pad.js": () => typeof PhonePad !== "undefined",
 };
 function ensureNet() {

@@ -21,8 +21,9 @@ const ROOT = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
-// 321: GarageCrewDraw extract adds js/garage/crew-draw.js on top of tip's 320.
-const MAX_EAGER_SCRIPTS = 321;
+// 322: union of PedalTravel (js/input/pedal-travel.js) and GarageCrewDraw
+// (js/garage/crew-draw.js); each landed as +1 on a tip already at 320.
+const MAX_EAGER_SCRIPTS = 322;
 const MAX_EAGER_BYTES = 8_200_000;
 
 function eagerScripts() {

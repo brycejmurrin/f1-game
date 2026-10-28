@@ -451,10 +451,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `bindings.js` | `InputBindings` | tag | InputBindings: keyboard and controller maps, conflict resolution and device-aware labels. |
 | `pad-menu.js` | `InputPadMenu` | tag | InputPadMenu: gamepad/phone menu navigation, focus seeding and held-direction repeats. |
 | `haptics.js` | `InputHaptics` | tag | InputHaptics: device/remote vibration, controller rumble and capability checks. |
+| `pedal-travel.js` | `PedalTravel` | tag | PedalTravel — stamp-then-ease thumb travel, one home for both pedals. |
 | `hold-buttons.js` | `InputHoldButtons` | tag | InputHoldButtons: multi-pointer hold/tap buttons, analog travel and teardown safety nets. |
 | `controller-profiles.js` | `ControllerProfiles` | tag | ControllerProfiles — bounded physical-device maps; legacy maps seed only the first device. |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
 | `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for the ADVANCED pause-menu page. |
+| `phone-pad-codec.js` | `PhonePadCodec` | LAZY_NET | PhonePadCodec — the PHONE AS CONTROLLER wire format, one home. |
+| `phone-pad-page.js` | `PhonePadPage` | LAZY_NET | PhonePadPage — the phone wheel. |
 | `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |
 
 **`js/audio/`**

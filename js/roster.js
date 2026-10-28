@@ -563,6 +563,8 @@
     "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
+    "js/input/phone-pad-codec.js",
+    "js/input/phone-pad-page.js",
     "js/input/phone-pad.js"
   ],
     LAZY_NET_EDGES: [
@@ -633,6 +635,14 @@
     [
       "js/net/lobby-settings.js",
       "js/net/lobby.js"
+    ],
+    [
+      "js/input/phone-pad-codec.js",
+      "js/input/phone-pad.js"
+    ],
+    [
+      "js/input/phone-pad-page.js",
+      "js/input/phone-pad.js"
     ]
   ],
     LAZY_WORKER: [

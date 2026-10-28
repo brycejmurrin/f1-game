@@ -8884,19 +8884,30 @@
         "tests/unit/phone-touch-surface.test.mjs"
       ]
     },
-    "js/input/phone-pad.js": {
-      "cancel": [
-        "tests/unit/desktop-native.test.mjs",
-        "tests/unit/net-lobby-lifecycle.test.mjs",
-        "tests/unit/phone-input-improvements.test.mjs",
+    "js/input/pedal-travel.js": {
+      "ease": [
+        "tests/unit/key-binds-hunt.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
+      "*": [
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/boot-load-budget.test.mjs",
+        "tests/unit/controller-profiles.test.mjs",
+        "tests/unit/digital-steer.test.mjs",
+        "tests/unit/free-cam.test.mjs",
+        "tests/unit/input-bindings.test.mjs",
+        "tests/unit/pad-haptics.test.mjs",
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-touch-surface.test.mjs",
+        "tests/unit/photomode-hold.test.mjs",
+        "tests/unit/throttle-latch.test.mjs",
+        "tests/unit/touch-drag-anchor.test.mjs",
+        "tests/unit/touch-drag-speed.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ]
+    },
+    "js/input/phone-pad-codec.js": {
       "codeFromUrl": [
-        "tests/unit/phone-pad.test.mjs"
-      ],
-      "connect": [
-        "tests/unit/net-lobby-lifecycle.test.mjs",
-        "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "decodeEvent": [
@@ -8928,18 +8939,56 @@
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
-      "event": [
+      "fmtLap": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "padUrl": [
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "teamHex": [
+        "tests/unit/phone-pad.test.mjs"
+      ]
+    },
+    "js/input/phone-pad-page.js": {
+      "cancel": [
+        "tests/unit/desktop-native.test.mjs",
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
-      "fmtLap": [
+      "connect": [
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "paintHud": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "redialNow": [
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "scan": [
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "setSteeringMode": [
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ]
+    },
+    "js/input/phone-pad.js": {
+      "cancel": [
+        "tests/unit/desktop-native.test.mjs",
+        "tests/unit/phone-input-improvements.test.mjs",
+        "tests/unit/phone-pad.test.mjs"
+      ],
+      "event": [
+        "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "health": [
         "tests/unit/phone-input-improvements.test.mjs"
       ],
       "host": [
-        "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
       "link": [
@@ -8950,33 +8999,8 @@
         "tests/unit/phone-input-improvements.test.mjs",
         "tests/unit/phone-pad.test.mjs"
       ],
-      "padUrl": [
-        "tests/unit/desktop-native.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
-      ],
-      "paintHud": [
-        "tests/unit/phone-pad.test.mjs"
-      ],
-      "redialNow": [
-        "tests/unit/phone-pad.test.mjs"
-      ],
-      "scan": [
-        "tests/unit/net-lobby-lifecycle.test.mjs",
-        "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
-      ],
       "send": [
         "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
-      ],
-      "setSteeringMode": [
-        "tests/unit/phone-input-improvements.test.mjs",
-        "tests/unit/phone-pad.test.mjs"
-      ],
-      "stopScan": [
-        "tests/unit/net-lobby-lifecycle.test.mjs"
-      ],
-      "teamHex": [
         "tests/unit/phone-pad.test.mjs"
       ],
       "*": [

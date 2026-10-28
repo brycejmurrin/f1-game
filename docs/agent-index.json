@@ -3490,6 +3490,21 @@
       "roster": "tag"
     },
     {
+      "path": "js/input/pedal-travel.js",
+      "global": "PedalTravel",
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/phone-pad-codec.js",
+      "global": "PhonePadCodec",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/input/phone-pad-page.js",
+      "global": "PhonePadPage",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/input/phone-pad.js",
       "global": "PhonePad",
       "roster": "LAZY_NET"

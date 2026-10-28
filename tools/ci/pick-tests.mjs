@@ -224,7 +224,7 @@ export const RULES = [
   [/^js\/input\/controller-profiles\.js$/, ["steering-unit"], "controller-profiles.test.mjs — per-device maps, legacy migration and input-owner release"],
   // PHONE AS CONTROLLER: its node suite (phone-pad.test.mjs) is in steering-unit,
   // and the roll math it shares with input.js is asserted there too.
-  [/^js\/input\/(phone-pad|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],
+  [/^js\/input\/(phone-pad(?:-codec|-page)?|pedal-travel|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],
   // WebXR Phase 0: seated-rig math + controller remoteSample mapping + session
   // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
   // the optional iwer Playwright smoke is test:xr (not selected by path alone).
