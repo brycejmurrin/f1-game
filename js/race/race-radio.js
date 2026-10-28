@@ -498,7 +498,7 @@ var RaceRadio = (function () {
           break;
         case "retire":
           offer({ id: "retire", ch: "tv", tier: 3, key: "tv.retire",
-            vars: { a: S(e.car), why: RadioLines.WHY[e.why] || RadioLines.WHY.mechanical }, ttl: 12 });
+            vars: { a: S(e.car), why: RadioLines.why(e.why) }, ttl: 12 });
           break;
         case "mistake": {
           if (f.caution >= 2) break;
@@ -712,7 +712,7 @@ var RaceRadio = (function () {
           return true;
         }
         case "out":
-          offer({ id: "retire", ch: "tv", tier: 3, key: "tv.retire", vars: { a: S(a), why: RadioLines.WHY.mechanical }, ttl: 12 });
+          offer({ id: "retire", ch: "tv", tier: 3, key: "tv.retire", vars: { a: S(a), why: RadioLines.why("mechanical") }, ttl: 12 });
           return true;
         case "fastest":
           if (!(h.dur > 0)) return false;

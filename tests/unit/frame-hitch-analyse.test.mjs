@@ -20,7 +20,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
+import { analyse, analyseHeap, analyseAlloc, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, raceEntrySpanList, analyseDepthDiscard } from "../../tools/gfx/frame-hitch.mjs";
 
 // A frame series: `spikeEvery` frames apart, `spikeMs` long, `baseMs` otherwise.
 function series(frames, baseMs, spikeEvery, spikeMs) {
@@ -310,6 +310,21 @@ test("analyseSpikePassKinds ranks the pass kinds that spike frames run and norma
   assert.match(k.summary, /^2048x2048\/depth:clear: 4\/4 spike frames, 1\/f vs 0\/f/);
   assert.match(analyseSpikePassKinds(passSig, dur.map(() => 16), 100).note, /no rendering frame/);
   assert.match(analyseSpikePassKinds(null, dur, 100).note, /no per-frame pass/);
+});
+
+test("analysePassOps tallies each attachment's load>store and the median submits (#2649 store inventory)", () => {
+  const scene = "844x390/rg11b10ufloat:clear>store+844x390/r16float:clear>discard+d:clear>discard";
+  const fxaa = "844x390/bgra8unorm:clear>store";
+  const ops = [], subs = [];
+  for (let i = 0; i < 20; i++) { ops.push(i % 2 ? [scene, fxaa] : [scene, fxaa, fxaa]); subs.push(i % 2 ? 9 : 10); }
+  ops.push([]); subs.push(0);                          // a frame that drew nothing is not counted
+  const o = analysePassOps(ops, subs);
+  assert.equal(o.frames, 20);
+  assert.equal(o.medianSubmits, 10);
+  assert.equal(o.rows[0].pass, fxaa); assert.equal(o.rows[0].perFrame, 1.5);
+  assert.equal(o.storedPerFrame, 2.5);                // the scene colour + 1.5 FXAA
+  assert.equal(o.discardedPerFrame, 2);               // the scene tag + depth
+  assert.match(analysePassOps([], []).note, /no per-frame store inventory/);
 });
 
 test("analyseWindow reads the driven window in GAME frames, not callbacks or the end-of-run ring (hunt 4 I4)", () => {

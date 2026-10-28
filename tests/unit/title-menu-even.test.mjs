@@ -345,7 +345,7 @@ test("title explore: #mb-watch is WATCH with BROADCAST / REAL RACES in .mb-sub",
   const html = read("index.html");
   assert.match(
     html,
-    /<button id="mb-watch"[^>]*>[\s\S]*?>WATCH <span class="mb-sub">BROADCAST \/ REAL RACES<\/span><\/span><\/button>/,
+    /<button id="mb-watch"[^>]*>[\s\S]*?>WATCH <span class="mb-sub"[^>]*>BROADCAST \/ REAL RACES<\/span><\/span><\/button>/,
     "#mb-watch main label is WATCH; BROADCAST / REAL RACES lives in .mb-sub",
   );
   assert.doesNotMatch(html, /id="mb-watch"[^>]*>[\s\S]*?WATCH REAL RACES/,
@@ -385,7 +385,7 @@ test("title menu: the doors the script re-names start with their visible label",
   assert.match(js, /"Continue — " \+ contSub\.textContent/, "the visible label is CONTINUE");
   assert.doesNotMatch(js, /Daily challenge — |Continue career — /);
   // the shell's own label is what the script writes, so there is no first-paint flip
-  assert.match(read("index.html"), /<span class="mb-label">CAREER MODES<\/span>/);
+  assert.match(read("index.html"), /<span class="mb-label"[^>]*>CAREER MODES<\/span>/);
 });
 
 
