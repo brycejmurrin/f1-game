@@ -15440,6 +15440,9 @@
       ],
       "slug": [
         "tests/unit/share-card.test.mjs"
+      ],
+      "*": [
+        "tests/unit/ui-sheets-audit.test.mjs"
       ]
     },
     "js/share/share-card-data.js": {
@@ -15462,7 +15465,8 @@
         "tests/unit/share-card-data.test.mjs"
       ],
       "text": [
-        "tests/unit/share-card-data.test.mjs"
+        "tests/unit/share-card-data.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
       ]
     },
     "js/share/share-card-layout.js": {

@@ -81,6 +81,18 @@ function seasonTable(cars, season) {
   });
 }
 function seatColor(G, c) { return c.team && c.team.color ? G.cssCol(c.team.color) : "#555"; }
+// The chip onclick must not close over buildResults's `track` or the car
+// array. A closure in that function keeps the whole binding alive, and hiding
+// the sheet left the button in the document — the finished circuit stayed
+// reachable after the next one was built (race-cycle-memory). The model is
+// plain strings; this function's environment holds nothing else.
+function cardHold(model) { return () => model; }
+function ghostCardHold(trackId, trackName, ghost, rival, day, rivalName) {
+  return () => {
+    const lap = typeof ShareCode !== "undefined" ? ShareCode.encode("lap", { track: trackId, day, time: ghost.time }) : {};
+    return ShareCardData.fromGhost(ghost, rival, { trackId, trackName, day, link: lap.ok ? lap.url : null, rivalName: rivalName || "" });
+  };
+}
 
 // Bring the player's classification row into the sheet body after open. Sticky
 // top alone only helps once the row has scrolled past the fold — on open a
@@ -290,11 +302,12 @@ function buildResults(order, race) {
       fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null });
     if (story) els.resultsTable.appendChild(story);
   }
-  if (!watched && !G.practice && order.length && typeof ShareCardChips !== "undefined") {
-    ShareCardChips.append(els.resultsTable, "res-race-card", () => ShareCardData.fromRace(order, { dnfOf, points: table,
+  if (!watched && !G.practice && order.length && typeof ShareCardChips !== "undefined" && typeof ShareCardData !== "undefined") {
+    const raceCard = ShareCardData.fromRace(order, { dnfOf, points: table,
       title: sprint ? "SPRINT RESULT" : G.seasonMode ? "ROUND " + season.round + " RESULT" : "RACE RESULT",
       trackId: track.def.id, trackName: track.def.name, color: (c) => seatColor(G, c),
-      fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null }), "race-" + track.def.id);
+      fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null });
+    ShareCardChips.append(els.resultsTable, "res-race-card", cardHold(raceCard), "race-" + raceCard.trackId);
   }
   const playerPlace = order.findIndex((c) => c.isPlayer);
   if (playerPlace >= 0 && !watched) {
@@ -653,11 +666,10 @@ function buildTTResults() {
       context: Ghost.context(),
       day: activeDaily && activeDaily.day ? activeDaily.day : null,
     };
-    if (typeof ShareCardChips !== "undefined") ShareCardChips.append(els.resultsTable, "res-ghost-card", () => {
-      const lap = typeof ShareCode !== "undefined" ? ShareCode.encode("lap", { track: track.def.id, day: shareOpts.day, time: shareGhost.time }) : {};
-      return ShareCardData.fromGhost(shareGhost, guestGhost ? GhostShare.guest().ghost : null, { trackId: track.def.id,
-        trackName: track.def.name, day: shareOpts.day, link: lap.ok ? lap.url : null, rivalName: guestGhost ? "RIVAL" : "" });
-    }, "lap-" + track.def.id);
+    if (typeof ShareCardChips !== "undefined" && typeof ShareCardData !== "undefined") {
+      ShareCardChips.append(els.resultsTable, "res-ghost-card", ghostCardHold(track.def.id, track.def.name, shareGhost,
+        guestGhost ? GhostShare.guest().ghost : null, shareOpts.day, guestGhost ? "RIVAL" : ""), "lap-" + track.def.id);
+    }
     const encoded = GhostShare.encode(shareGhost, shareOpts);
     const fallback = (btn, value, label) => {
       const box = document.createElement("textarea");
@@ -841,10 +853,12 @@ function buildChampion() {
   sorted.forEach((c, i) => {
     rankRow(driverRanking, i, seatColor(G, c), c.code, ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
   });
-  if (typeof ShareCardChips !== "undefined") ShareCardChips.append(els.resultsTable, "res-champion-card",
-    () => ShareCardData.fromSeason(sorted.map((c) => ({ code: c.code, name: c.name, teamColor: seatColor(G, c),
+  if (typeof ShareCardChips !== "undefined" && typeof ShareCardData !== "undefined") {
+    const champCard = ShareCardData.fromSeason(sorted.map((c) => ({ code: c.code, name: c.name, teamColor: seatColor(G, c),
       value: ptsLabel(season, c.driverId), you: !!c.isPlayer })), { round: season.round, rounds: SeasonCal.rounds(),
-      headline: champ.code + " IS WORLD CHAMPION" }), "champion");
+      headline: champ.code + " IS WORLD CHAMPION" });
+    ShareCardChips.append(els.resultsTable, "res-champion-card", cardHold(champCard), "champion");
+  }
   els.resNext.textContent = "MAIN MENU";
   G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);
   // endRace already played the finish fanfare; a second finish() here stacked blips on the season finale.
