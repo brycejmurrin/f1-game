@@ -1,0 +1,1 @@
+Improved: the BRAKE CUE and driving-line audio cue now account for weather/tyre grip and the car's downforce by default (CONDITION-AWARE BRAKING CUES, now ON), so the cue no longer calls late on slicks in the rain or pulses through corners taken flat (#2177).
