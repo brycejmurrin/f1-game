@@ -1,7 +1,7 @@
 /* mix-duck-radio.test.mjs — Job 5 done-when for mix ducking under voice.
  *
  * Radio / announcer already emit GameAudio.setRadioDuck(on, src). This suite
- * proves the mix/bus SUBSCRIBER in js/audio/engine.js, on the fake-audio VM:
+ * proves the mix/bus SUBSCRIBER in js/audio/mix-duck.js, on the fake-audio VM:
  *   - SFX bus dips on voice start (−8 dB) and releases after the end
  *   - overlapping lines hold the duck without a second attack (no pump)
  *   - ramps are setTargetAtTime only (80 ms attack / 400 ms release)
@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const SR = 44100;
 const DUCK_DB = -8;

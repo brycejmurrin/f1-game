@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs"; import path from "node:path"; import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..", "..");
-const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+const SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const param = (v) => ({ value: v, setTargetAtTime() {}, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, cancelScheduledValues() {} });
 function boot(opts = {}) {

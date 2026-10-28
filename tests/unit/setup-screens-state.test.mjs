@@ -22,6 +22,7 @@
  * Run: node --test tests/unit/setup-screens-state.test.mjs   (npm run test:state-unit)
  */
 import test from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -39,6 +40,7 @@ const src = (p) => read(p).replace(/^const\b/gm, "var");
 
 function sandbox(dom, extra = {}) {
   const sb = {
+    I18n: i18nStub(),
     Math, console, Object, Array, Number, String, JSON, Map, Set, Date, parseFloat, parseInt, isFinite,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     document: dom.document,

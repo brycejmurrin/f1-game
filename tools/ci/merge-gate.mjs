@@ -62,9 +62,12 @@ export const gameFiles = (files) => (files || []).filter(isGamePath);
 export const touchesGame = (files) => gameFiles(files).length > 0;
 /** Default for --max-behind. Plan §4.3 started at an unmeasured N = 2; on 2026-10-27 the deploy branch took ~15 game
  *  merges per ~40 min full CI tier, so game PRs went green and were refused on distance again and again (#3964, #3932,
- *  #3886: 3 syncs each). 6 is safe because land-gate still runs gen:check and the ratchets on the real merge result
- *  against the current tip, and the Pages train gates every deploy tip before it publishes. */
-export const MAX_BEHIND = 6;
+ *  #3886: 3 syncs each). 6 was still too tight: on 2026-10-28 #4004 was synced onto tip 1c3263c2, passed distance,
+ *  and one CI tier later the tip was 9 merges ahead (8 touching game paths) so the green PR was refused again; the tip
+ *  took 11 merges in 2 h. 12 covers one CI tier plus a margin. It stays safe because land-gate still runs gen:check and
+ *  the ratchets on the real merge result against the current tip, and the Pages train gates every deploy tip before it
+ *  publishes. */
+export const MAX_BEHIND = 12;
 /** Row order, which is also print order. */
 export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "gen", "ratchets", "distance"]);
 /** The rows `--trusted` evaluates: none of them runs code from the PR. */

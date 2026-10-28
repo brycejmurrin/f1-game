@@ -210,6 +210,7 @@
     "js/race/damage.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",
     "js/race/radio-lines.js",
@@ -222,6 +223,10 @@
     "js/race/jump-start-penalty.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
+    [
+      "js/race/pit-geom.js",
+      "js/race/pit-lane.js"
+    ],
     [
       "js/race/radio-lines.js",
       "js/race/race-radio.js"
@@ -298,6 +303,7 @@
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
+    "js/audio/mix-duck.js",
     "js/audio/engine.js",
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
@@ -331,6 +337,10 @@
     ],
     [
       "js/audio/ers-layer.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/mix-duck.js",
       "js/audio/engine.js"
     ],
     [
@@ -385,9 +395,12 @@
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
+    "js/data/ics.js",
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-script.js",
+    "js/data/real-race-fetch.js",
     "js/data/real-race-tab.js",
     "js/data/hub.js"
   ],
@@ -433,6 +446,10 @@
       "js/data/hub.js"
     ],
     [
+      "js/data/ics.js",
+      "js/data/hub.js"
+    ],
+    [
       "js/data/standings.js",
       "js/data/hub.js"
     ],
@@ -442,6 +459,14 @@
     ],
     [
       "js/data/live.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-fetch.js",
       "js/data/hub.js"
     ],
     [
@@ -503,6 +528,18 @@
     [
       "js/data/telemetry-view.js",
       "js/data/telemetry.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/real-race-fetch.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/real-race-tab.js"
+    ],
+    [
+      "js/data/real-race-fetch.js",
+      "js/data/real-race-tab.js"
     ]
   ],
     LAZY_NET: [
@@ -512,22 +549,44 @@
     "js/net/sdp.js",
     "js/net/qr.js",
     "js/net/scan.js",
+    "js/net/ice.js",
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
     "js/net/lobby-roster.js",
     "js/net/lobby-settings.js",
+    "js/net/interp.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/quali-wire.js",
+    "js/net/strategy-wire.js",
     "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
+    "js/input/phone-pad-codec.js",
+    "js/input/phone-pad-page.js",
     "js/input/phone-pad.js"
   ],
     LAZY_NET_EDGES: [
     [
+      "js/net/ice.js",
+      "js/net/transport.js"
+    ],
+    [
+      "js/net/interp.js",
+      "js/net/snapshot.js"
+    ],
+    [
       "js/net/snapshot.js",
       "js/net/session.js"
+    ],
+    [
+      "js/net/quali-wire.js",
+      "js/net/netplay.js"
+    ],
+    [
+      "js/net/strategy-wire.js",
+      "js/net/netplay.js"
     ],
     [
       "js/net/spectate.js",
@@ -576,6 +635,14 @@
     [
       "js/net/lobby-settings.js",
       "js/net/lobby.js"
+    ],
+    [
+      "js/input/phone-pad-codec.js",
+      "js/input/phone-pad.js"
+    ],
+    [
+      "js/input/phone-pad-page.js",
+      "js/input/phone-pad.js"
     ]
   ],
     LAZY_WORKER: [
@@ -593,6 +660,7 @@
     "js/editor/scenery-preview.js",
     "js/editor/canvas.js",
     "js/editor/elev-presets.js",
+    "js/editor/zones.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
     "js/editor/followup-tools.js",
@@ -625,6 +693,10 @@
     [
       "js/editor/shape.js",
       "js/editor/canvas.js"
+    ],
+    [
+      "js/editor/shape.js",
+      "js/editor/zones.js"
     ],
     [
       "js/editor/shape.js",
@@ -672,6 +744,10 @@
     ],
     [
       "js/editor/elev-presets.js",
+      "js/editor/designer.js"
+    ],
+    [
+      "js/editor/zones.js",
       "js/editor/designer.js"
     ],
     [
@@ -754,19 +830,39 @@
     "js/track/scenery/landmark-kit.js",
     "js/track/scenery/circuit-kit.js",
     "js/track/core/hidden-faces.js",
+    "js/track/scenery/landforms.js",
     "js/track/scenery/nature.js",
+    "js/track/scenery/stands.js",
     "js/track/scenery/structures.js",
+    "js/track/scenery/facade.js",
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/api-wrap.js",
     "js/track/scenery/build-props.js"
   ],
     LAZY_TRACK_BUILD_EDGES: [
     [
       "js/track/scenery/models.js",
       "js/track/scenery/circuit-kit.js"
+    ],
+    [
+      "js/track/scenery/landforms.js",
+      "js/track/scenery/nature.js"
+    ],
+    [
+      "js/track/scenery/stands.js",
+      "js/track/scenery/structures.js"
+    ],
+    [
+      "js/track/scenery/facade.js",
+      "js/track/scenery/city.js"
+    ],
+    [
+      "js/track/scenery/api-wrap.js",
+      "js/track/scenery/build-props.js"
     ],
     [
       "js/track/scenery/nature.js",
@@ -836,13 +932,17 @@
     "js/track/core/mesh.js",
     "js/track/core/hidden-faces.js",
     "js/track/core/def.js",
+    "js/track/scenery/landforms.js",
     "js/track/scenery/nature.js",
+    "js/track/scenery/stands.js",
     "js/track/scenery/structures.js",
+    "js/track/scenery/facade.js",
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/api-wrap.js",
     "js/track/scenery/build-props.js",
     "js/data/teams.js",
     "js/garage/experience.js",
@@ -850,6 +950,7 @@
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",
     "js/garage/scene-dress.js",
+    "js/garage/crew-draw.js",
     "js/garage/crew-motion.js",
     "js/garage/crew-service.js",
     "js/garage/crew-choreo.js",

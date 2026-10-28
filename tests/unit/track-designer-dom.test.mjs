@@ -15,7 +15,7 @@ import { gameSource } from "../helpers/game-source.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
-const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/workspace.js", "js/editor/designer.js"];
+const SCREEN_FILES = ["js/editor/followup-tools.js", "js/ui/dom.js", "js/editor/scenery-preview.js", "js/editor/canvas.js", "js/editor/elev-presets.js", "js/editor/zones.js", "js/editor/profile.js", "js/editor/scenery-panel.js", "js/editor/selection-panel.js", "js/editor/bridge-panel.js", "js/editor/workspace.js", "js/editor/designer.js"];
 
 function bootScreen(stored = {}) {
   const vmx = bootEditor(stored);
