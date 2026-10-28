@@ -112,11 +112,30 @@ test("cleared caption id can re-arm on a later patch (dispose the latch)", () =>
 
 test("leaving race forces battle:null on the differ so overlays cannot stick", () => {
   const Feed = load();
+  // Unchanged gap on a patch — battle key was omitted, then forced null.
   const diff = Feed.createDiffer(2000);
   diff.next(Feed.frame({ seq: 1, t: 0, state: "race", ranked: cars(.4) }), 0);
   const ended = diff.next(Feed.frame({ seq: 2, t: .25, state: "results", ranked: cars(.4) }), 250);
   assert.equal(ended.state, "results");
   assert.equal(ended.battle, null, "battle must clear when the session leaves race/count");
+
+  // Gap change on the same leave-race patch — must not ship the new fight.
+  const diffGap = Feed.createDiffer(2000);
+  diffGap.next(Feed.frame({ seq: 1, t: 0, state: "race", ranked: cars(.4) }), 0);
+  const endedGap = diffGap.next(Feed.frame({ seq: 2, t: .25, state: "results", ranked: cars(.2) }), 250);
+  assert.equal(endedGap.battle, null, "leave-race wins over a changed battle on a patch");
+
+  // Full frame coinciding with the flag still carries ranked cars — must not re-arm.
+  const diffFull = Feed.createDiffer(2000);
+  diffFull.next(Feed.frame({ seq: 1, t: 0, state: "race", ranked: cars(.4) }), 0);
+  const endedFull = diffFull.next(Feed.frame({ seq: 2, t: 2, state: "results", ranked: cars(.4) }), 2000);
+  assert.equal(endedFull.full, true);
+  assert.equal(endedFull.battle, null, "full leave-race frame must force battle:null");
+
+  const diffCount = Feed.createDiffer(2000);
+  diffCount.next(Feed.frame({ seq: 1, t: 0, state: "count", ranked: cars(.4) }), 0);
+  const endedIdle = diffCount.next(Feed.frame({ seq: 2, t: 2, state: "idle", ranked: cars(.4) }), 2000);
+  assert.equal(endedIdle.battle, null, "count→idle full frame must force battle:null");
 });
 
 test("overlay source is display-only", () => {
