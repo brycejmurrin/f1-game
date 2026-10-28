@@ -4,7 +4,9 @@ Plan, 2026-10-27 (Pacific). Bryce's asks, typed in this session: "I feel like we
 lot are out of date we need a way to fix this", then "How can we improve this process so we combine prs or do a better
 review process? Search best practices all over the web", then "We can change our rules consider all options", then
 "Begin writing plan, also have researchers on how to streamline cleaning up and hooks and which models to use when".
-Status: DRAFT. Phase 0 is in flight; §4's three rule changes are decided (2026-10-28); Phase 1 and §5 are proposals.
+Status: historical planning snapshot, recorded 2026-10-28 ~04:40 UTC. At that time Phase 0 was in flight;
+§4's three rule changes were decided; Phase 1 and §5 were proposals. This document does not set current policy;
+[WORKERS.md](../WORKERS.md) and the current PR Plans and Hand-off blocks own ongoing work.
 
 Evidence: a board snapshot of all open PRs (`node tools/ci/pr-board.mjs --json`) plus each head's `gate` status, git
 history of the deploy branch, and three research reports built from eleven web-research fact sheets (sources dated,
@@ -167,9 +169,9 @@ Tracked on the Board issue each dispatcher cycle: open PRs and `land` queue dept
 median open→merge time for a `land` PR, `gate` refusals by row, minutes the tip fails `gen:check` or Pages, and CI
 minutes per merged PR (rollups should lower it).
 
-## 7. Status and hand-off (live; updated 2026-10-28 ~04:40 UTC)
+## 7. Status and hand-off (historical snapshot: 2026-10-28 ~04:40 UTC)
 
-Owner: Claude Code session `session_01Ap97PUkoACNwXY4fpfa4ya`. Bryce ended every other agent session on 2026-10-28,
+Snapshot owner: Claude Code session `session_01Ap97PUkoACNwXY4fpfa4ya`. Bryce ended every other agent session on 2026-10-28,
 but Cursor agents kept pushing (#4033 #4037 #4041 #4048 #4073 #4074 #4075, new #4066): a PR whose Hand-off names a
 `cursor:` owner or that a Cursor agent pushed within the hour is theirs; this session stays off it. Both dispatcher
 scheduled wake-ups stay paused.
@@ -201,6 +203,6 @@ Process drafts of this session: #4063 commit-hook split and #4062 deploy-time ge
 patches and Plans say what remains; #4062 needs Bryce's yes on `package.json` `prepare` and `session-start.sh`).
 Review gate row: not begun.
 
-Next, in order: keep the land queue moving (tick stale Plan items, sync conflicts, per-PR raises); #4030/#4032 GPU
+Next at the snapshot time (ongoing execution belongs to current PR owners): keep the land queue moving (tick stale Plan items, sync conflicts, per-PR raises); #4030/#4032 GPU
 evidence; the foreign-push hook fix if Bryce says yes; then the refactor drafts one at a time; then the review gate
 row and Phase 1 batch landing. Research reports: [docs/notes/agent-ops-research-2026-10-27/](../notes/agent-ops-research-2026-10-27/pr-landing.md).
