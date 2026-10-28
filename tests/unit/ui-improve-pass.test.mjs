@@ -957,6 +957,7 @@ test("an active career locks team and seat selection in the garage", () => {
 function bootCamModes(camMode = 2, extra = {}) {
   const dom = makeDom();
   const sb = uiSandbox(dom, { CamTunerPanel: { refresh() {} }, ...extra });
+  vm.runInNewContext(src("js/camera/cam-picker.js"), sb, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInNewContext(src("js/camera/mode-switch.js"), sb, { filename: absSrc("js/camera/mode-switch.js") });
   const store = {};
   const G = { $: (id) => dom.byId(id), state: "race", paused: false, camMode, camCutT: 0, store: { set: (k, v) => { store[k] = v; }, get: () => null } };
@@ -1232,7 +1233,7 @@ function bootInput() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   const pad = (ax, buttons = [], ax2 = 0) => ({
     connected: true, axes: [ax, 0, ax2, 0],

@@ -110,7 +110,7 @@ test("heli and TV side: straight-road pose (eye height, back/out offsets, aim)",
   const pose = (street, mode) => {
     const track = makeElevationTrack(() => Y);
     if (!street) track.def = {};    // open circuit: no street-canyon corridor
-    const cams = loadElevationRig(null, ["js/camera/vantage.js"]);   // vantage alone: the lens asserts below are "no CamFeel"
+    const cams = loadElevationRig(null, ["js/camera/vantage-ride.js", "js/camera/vantage.js"]);   // vantage ride + solver: the lens asserts below are "no CamFeel"
     const v = cams.vantage(track, mode, s, x, 60, 0, { carPos: [x, s], carHead: 0 });
     return { eye: v.eye.slice(), tgt: v.tgt.slice(), fov: v.fov };
   };
@@ -323,6 +323,7 @@ test("VISOR is the cockpit eye, same aim, and the rig is anchored on the same ca
 test("VISOR draws the cockpit rig without the steering wheel, and the column and bulkhead it unclips from", () => {
   // Check the fitted geometry, so a curved bulkhead can replace a square slab.
   const ctx=vm.createContext({ GaragePrims:{ block() {} } }); seedLog(ctx);
+  vm.runInContext(readFileSync(join(ROOT,"js/car/cockpit-rig.js"),"utf8"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(readFileSync(join(ROOT,"js/car/car-mesh.js"),"utf8")+"\n;this.mesh=CarMesh;",ctx);
   ctx.mesh.init({ createMesh:d=>d });
   const dash=ctx.mesh.getCockpitDash(), x=[], y=[];
@@ -542,6 +543,7 @@ test("HELMET is the cockpit from inside the lid: the eye a few cm forward, the s
   const dom = makeDom();
   const mctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
   mctx.window = mctx;
+  vm.runInNewContext(readFileSync(join(ROOT, "js/camera/cam-picker.js"), "utf8"), mctx, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInNewContext(readFileSync(join(ROOT, "js/camera/mode-switch.js"), "utf8"), mctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = mctx.CamModes.CAM_MODES, hi = modes.findIndex((m) => m.id === "helmet");
   assert.equal(hi, modes.length - 1, "appended: apex26.camMode is an index");

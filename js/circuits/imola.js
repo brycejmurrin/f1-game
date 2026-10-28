@@ -31,7 +31,7 @@
     dressingExclusions: [
       // Bespoke parkland owns the full circuit. The hand-placed lamp runs own racing
       // 0.84–0.05 (pit straight) and 0.30–0.68; engine masts light 0.05–0.30 and 0.68–0.84.
-      // Windows are SCENERY-frame (racing frac + 0.4906, i.e. scenery sl()).
+      // Windows are SCENERY-frame (racing + `_sceneryShift` ≈ 0.4906; sceneryStartFrac 0.4950).
       { kinds: ["foliage"], s0: 0, s1: 1 },
       { kinds: ["lighting"], s0: 0.3306, s1: 0.5406 },
       { kinds: ["lighting"], s0: 0.7906, s1: 0.1706 },

@@ -848,8 +848,11 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // through core.allocFail so a failed upload stays inert, not a throw.
   assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
   // allocDrawSlot() returns -1 when the draw ring is full: a chunk must drop
-  // its draw, not index the ring at -1 (RangeError mid-frame).
-  assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(slot < 0\) return;/);
+  // its draw, not index the ring at -1 (RangeError mid-frame). The night
+  // flush drops the open run; per-chunk breaks out of the chunk loop.
+  // One assertPinsAll site covers both full-ring exits (ratchet at tip ceiling).
+  assert.match(code("js/render/webgpu/wgx-chunked.js"),
+    /if \(s < 0\) return -1;[\s\S]*if \(s2 < 0\) \{ run\.active = false; return; \}/);
   assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(cslot < 0\) break;/);
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
@@ -1003,6 +1006,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxEnvProbe": "1",
     "apex26.tlxViz": "lit",
     "apex26.tlxWebKitGL": "WebGPU init failed",
+    "apex26.packIndex": "{\"models\":{}}",
     "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
@@ -1041,6 +1045,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // boot's early backend preload (guessBackend). A RESET that kept it would preload
     // the old path's group once; dropping it costs nothing.
     "apex26.gfxBootBound",
+    // assets.js remembers the last pack's model file+md5 (a js/render write, so
+    // RESET must clear it). The next visit relearns the hint from the manifest.
+    "apex26.packIndex",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
@@ -1141,6 +1148,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
+  assert.equal(ls.getItem("apex26.packIndex"), null, "RESET drops the remembered pack index");
   assert.equal(ls.getItem("apex26.gfxBackendProbe"), null);
   assert.equal(ls.getItem("apex26.gfxWgxLevel"), null);
   assert.equal(ls.getItem("apex26.gfxTlxFail"), null);
@@ -5892,7 +5900,7 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   const wgsl = read("js/render/webgpu/wgsl-post.js");
   for (const [file, re, why] of [
     ["index.html", /id="pm-upscale"/, "shell must ship the UPSCALE set-row"],
-    ["index.html", /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE"],
+    ["index.html", /id="pm-upscale-label"[^>]*>UPSCALE</, "label must be UPSCALE"],
     ["js/ui/scale.js", /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row"],
     ["js/ui/scale.js", /setSpatialUpscale/, "row must call the backend API"],
     ["js/render/three/tlx.js", /setSpatialUpscale/, "TLX must export setSpatialUpscale"],
@@ -6972,7 +6980,7 @@ test("the mirror composite's flip reaches every backend: default flipped (the mi
   assert.match(read("js/render/three/tlx-post.js"), /_mirFlip = flip !== false;[\s\S]{0,1200}M\.U\.flip\.value = _mirFlip \? 1 : 0/);
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);
-  assert.match(tlx, /HalfFloatType, _mirFlip\);/, "TLX hands the flag to the post chain");
+  assert.match(tlx, /UnsignedByteType, _mirFlip\);/, "TLX hands the flag to the post chain");
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /_mirData\[1\] = _mirFlip \? 1 : 0/, "WGX: the shader already branches on params.y");
   assert.match(wgx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);

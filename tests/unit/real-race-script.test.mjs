@@ -16,6 +16,7 @@
  * Run: node --test tests/unit/real-race-script.test.mjs   (npm run test:tooling-fast)
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -23,6 +24,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -54,7 +56,7 @@ function load(extra = {}) {
   const ctx = vm.createContext(sb);
   seedLog(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/teams.js"), "utf8"), ctx, { filename: absSrc("js/data/teams.js") });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(ctx);
   const Teams = vm.runInContext("Teams", ctx);
   // js/data/hub.js's team matcher, reduced to what the fixture's names need.
   const KEYS = [["racing bulls", "RB"], ["red bull", "RBR"], ["mercedes", "MER"], ["ferrari", "FER"], ["mclaren", "MCL"], ["alpine", "ALP"],
@@ -97,6 +99,7 @@ test("WATCH downloads cannot launch a replaced view and keep the seat selected w
 test("WATCH can start after the followed driver's retirement while JUMP IN still protects its seat", () => {
   const { ctx, Teams } = load({ Tracks: { LIST: TRACKS }, RealReplay: { create: () => ({ stop() {} }) } });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const R = vm.runInContext("RealRace", ctx);
   const seated = Teams.LIST.find((t) => !t.custom && !t.legends && t.drivers && t.drivers.length);
@@ -209,6 +212,7 @@ test("the circuit resolves by name before country, and the weather and hour read
 test("a lapped finisher stays on the final lap board as '+N LAP'; a retirement stays OUT; fmtLap never prints :60", () => {
   const { D, ctx } = load();
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const lap = (n, t) => Array.from({ length: n }, () => t);
   const script = { laps: 5, drivers: [
@@ -448,7 +452,7 @@ test("cancel/reopen and session replacement discard stale WATCH completions", as
 test("the hub cancels pending WATCH immediately when year or Grand Prix changes", () => {
   const dom = makeDom();
   let deps, cancellations = 0, repaints = 0;
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el: (...args) => { const node = dom.el(...args); node.classList = { toggle() {} }; return node; } },
     F1API: { meetings: () => new Promise(() => {}), sessionsForMeeting: () => new Promise(() => {}) },
     DataSchedule: { create: () => ({}) }, DataStandings: { create: () => ({}) },
@@ -492,7 +496,7 @@ function hubWatchHarness() {
     return node;
   }
   const schedule = el("div", "schedule-result"), root = el("div");
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el }, navigator: { onLine: true }, queueMicrotask,
     document: { activeElement: null, getElementById: () => null, addEventListener() {} },
     DataSchedule: { create: () => ({ loadSchedule: () => { scheduleLoads++; return Promise.resolve(schedule); } }) },
@@ -583,6 +587,7 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
   const { D, findTeam, ctx } = load({ localStorage, F1API, RealRace, Teams, Tracks });
   // The lap board needs the director's cumulative table: the real module, in the same realm.
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8").replace("const RealRace = (function", "const RealRaceReal = (function").replace("Object.freeze(RealRace);", "RealRace.cumTable = RealRaceReal.cumTable;"), ctx, { filename: absSrc("js/race/real-race.js") });
   const dom = makeDom();
   let closed = 0;
@@ -697,6 +702,7 @@ test("the RACE IT tab: the entry list, DRIVE AS, the race lap by lap, and JUMP I
 test("the passes, the lap board and the race book read straight off the real timing", () => {
   const { D, findTeam, ctx } = load();
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   const s = D.build(rawBaku(), findTeam, TRACKS);
   assert.equal(s.passes.length, 128, "OpenF1's 160 overtakes dated onto laps, minus the 32 on either side of a car retiring that lap");
@@ -898,7 +904,7 @@ test("reading an old trace cache refreshes recency before capacity eviction", as
 
 test("session picker cancels owned WATCH requests before selecting and repainting", async () => {
   const dom = makeDom(), order = []; let deps;
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el: (...args) => { const node = dom.el(...args); node.classList = { toggle() {} }; return node; } },
     F1API: { meetings: async () => [{ meetingKey: 42 }], sessionsForMeeting: async () => [{ sessionKey: 1, type: "race" }, { sessionKey: 2, type: "practice" }] },
     DataSchedule: { create: () => ({}) }, DataStandings: { create: () => ({}) }, DataResults: { create: () => ({}) },

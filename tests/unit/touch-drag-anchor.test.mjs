@@ -91,7 +91,7 @@ function boot({ dragAnchor = true } = {}) {
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js",
-    "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+    "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   const canvasL = {};
@@ -233,4 +233,18 @@ test("a rotation drops a drag whose anchor lives in the old screen space (B·H20
   onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 744, clientY: 200 }] });   // the same physical spot, mirrored x
   for (let i = 0; i < 60; i++) { clock.t += 16; Input.steer(); }
   assert.equal(Input.steer(), 0, "a finger that did not move reads no steer after a rotation");
+});
+
+test("a rotation zeroes the touch ramp at once, not over KEY_RAMP_OUT", () => {
+  // onScreenRotate used to clear touches/touchActive but leave touchSteerVal at
+  // full lock, so steer() unwound for ~125 ms after the fingers were gone.
+  const { Input, onCanvas, listeners, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 100 + 2000, clientY: 200 }] });
+  assert.equal(Input.steer(), 1, "precondition: full lock");
+  for (const f of listeners.orientationchange || []) f({});
+  clock.t += 1;   // one sample, nowhere near a KEY_RAMP_OUT unwind
+  assert.equal(Input.steer(), 0, "rotation snaps the wheel to centre");
 });

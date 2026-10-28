@@ -24,6 +24,7 @@ async function dataReady(page) {
   await page.addScriptTag({ url: "/js/ui/modal.js" });
   await page.addScriptTag({ url: "/js/core/mat4.js" });
   await page.addScriptTag({ url: "/js/ui/dom.js" });
+  await page.addScriptTag({ url: "/js/core/i18n.js" });   // hub.js and schedule.js call I18n at init/render
   for (const file of LAZY_DATA) await page.addScriptTag({ url: "/" + file });
   await page.waitForFunction(() => typeof F1API !== "undefined" && typeof DataHub !== "undefined");
 }

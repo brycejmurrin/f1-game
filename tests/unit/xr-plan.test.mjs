@@ -1,4 +1,4 @@
-/* XRPlan — table-driven path selection (task 20). Pure; no DOM/navigator. */
+/* XRPlan — table-driven path selection. Pure; no DOM/navigator. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -18,7 +18,7 @@ function bootPlan() {
   return ctx.XRPlan;
 }
 
-const CAPS_FULL = { xr: true, vr: true, gpu: true, xrgpu: true, layers: true, mobileQuest: false };
+const CAPS_FULL = { xr: true, vr: true, gpu: true, xrgpu: true, mobileQuest: false };
 const CAPS_NO_GPU = { xr: true, vr: true, gpu: false, xrgpu: false };
 const CAPS_NO_XRGPU = { xr: true, vr: true, gpu: true, xrgpu: false };
 const CAPS_NO_VR = { xr: true, vr: false, gpu: true, xrgpu: true };
@@ -37,14 +37,14 @@ const ROWS = [
     want: { xrMode: "off", path: null, backendPref: null },
   },
   {
-    name: "armed default → webgl2 / GLX",
+    name: "armed default → webgl2 path on TLX+forceGL (not GLX)",
     input: { caps: CAPS_FULL, prefs: { xr: "1", xrBackend: "webgl2" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2", forceGL: false },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
   },
   {
-    name: "armed unset xrBackend → webgl2",
+    name: "armed unset xrBackend → TLX+forceGL",
     input: { caps: CAPS_FULL, prefs: { xr: "1" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
   },
   {
     name: "armed + webgpu with all caps → three / experimental",
@@ -52,27 +52,27 @@ const ROWS = [
     want: { xrMode: "armed", path: "webgpu", backendPref: "three", forceGL: false },
   },
   {
-    name: "armed + webgpu missing gpu → fallback webgl2",
+    name: "armed + webgpu missing gpu → fallback TLX+forceGL",
     input: { caps: CAPS_NO_GPU, prefs: { xr: "1", xrBackend: "webgpu" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
     fallbackFrom: "webgpu",
     fallbackReason: "no navigator.gpu",
   },
   {
-    name: "armed + webgpu missing XRGPUBinding → fallback webgl2",
+    name: "armed + webgpu missing XRGPUBinding → fallback TLX+forceGL",
     input: { caps: CAPS_NO_XRGPU, prefs: { xr: "1", xrBackend: "webgpu" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
     fallbackFrom: "webgpu",
     fallbackReason: "no XRGPUBinding",
   },
   {
-    name: "fallback latch forces webgl2 even when webgpu caps ok",
+    name: "fallback latch forces TLX+forceGL even when webgpu caps ok",
     input: {
       caps: CAPS_FULL,
       prefs: { xr: "1", xrBackend: "webgpu" },
       boot: { xrFallback: "webgl2" },
     },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
     fallbackFrom: "webgpu",
     fallbackReason: "xrFallback latch",
   },
@@ -87,14 +87,14 @@ const ROWS = [
     want: { xrMode: "off", path: null, backendPref: null },
   },
   {
-    name: "garbage xrBackend → webgl2 when armed",
+    name: "garbage xrBackend → TLX+forceGL when armed",
     input: { caps: CAPS_FULL, prefs: { xr: "1", xrBackend: "metal" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
   },
   {
     name: "xr=true boolean accepted as armed",
     input: { caps: CAPS_FULL, prefs: { xr: true, xrBackend: "webgl2" } },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
   },
   {
     name: "Quest UA still arms webgpu experimental with a reason",
@@ -108,12 +108,12 @@ const ROWS = [
     want: { xrMode: "off", path: null, backendPref: null },
   },
   {
-    name: "armed with gfxBackend three still returns webgl2 override (never writes)",
+    name: "armed with gfxBackend three still returns TLX+forceGL override (never writes)",
     input: {
       caps: CAPS_FULL,
       prefs: { xr: "1", xrBackend: "webgl2", gfxBackend: "three" },
     },
-    want: { xrMode: "armed", path: "webgl2", backendPref: "webgl2" },
+    want: { xrMode: "armed", path: "webgl2", backendPref: "three", forceGL: true },
   },
   {
     name: "storage-blocked shape: missing caps.vr with xr on → off",

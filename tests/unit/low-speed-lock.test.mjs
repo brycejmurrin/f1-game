@@ -11,7 +11,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { gameSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const require = createRequire(import.meta.url);
@@ -27,12 +26,17 @@ function blendTaper(vs, ref) {
   return vs <= 15 ? LOW_PLATEAU : (vs >= 30 ? raw : LOW_PLATEAU + (raw - LOW_PLATEAU) * (vs - 15) / 15);
 }
 
-test("source: game.js plateau is 1.06 and steer-tuning documents the hairpin boost", () => {
-  const game = gameSource();
-  const tuning = fs.readFileSync(path.join(ROOT, "js/input/steer-tuning.js"), "utf8");
-  assert.match(game, /lockTaper = vs <= 15 \? 1\.06 :/);
-  assert.match(tuning, /1\.06× plateau/);
-  assert.match(tuning, /function lockFromSlider\(v\)\s*\{\s*return 0\.18 \+ \(0\.435 - 0\.18\) \* \(v - 1\) \/ 9; \}/);
+test("steer-tuning's real lockFromSlider keeps notch 7 at the 0.35 rad the plateau multiplies", () => {
+  // The plateau itself is asserted by the VM test below (10 m/s -> 1.06x the lock);
+  // this reads the shipped slider map instead of quoting its source.
+  const src = fs.readFileSync(path.join(ROOT, "js/input/steer-tuning.js"), "utf8");
+  const at = src.indexOf("function lockFromSlider(");
+  assert.ok(at >= 0, "lockFromSlider moved");
+  const end = src.indexOf("}", at);
+  const lockFromSlider = new Function(`${src.slice(at, end + 1)}; return lockFromSlider;`)();
+  assert.ok(Math.abs(lockFromSlider(1) - 0.18) < 1e-9);
+  assert.ok(Math.abs(lockFromSlider(7) - 0.35) < 1e-9);
+  assert.ok(Math.abs(lockFromSlider(10) - 0.435) < 1e-9);
 });
 
 test("VM: full-lock wheel angle rises ~6% at 10 m/s, blends at 22 m/s, unchanged at 60 m/s", async () => {

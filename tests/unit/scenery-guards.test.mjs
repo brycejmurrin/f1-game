@@ -78,7 +78,7 @@ test("bakedModel rides the scenery transform like the fallback it replaces", () 
   // so RK() was handed a string and the real k was read as the side — see the
   // behavioural test below for what that cost. This guard now pins the shape the
   // signature actually needs: out of the list, and its own wrapper.
-  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/api-wrap.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
   const kSide = src.slice(i).match(/for \(const name of \[([^\]]*)\]\) \{\s*const f = api\[name\]; if \(f\) w\[name\] = \(k, side, \.\.\.r\)/);
@@ -226,7 +226,7 @@ test("one tree per spot", () => {
 test("a facade draws no rail on its bottom face", () => {
   // The rail at i=0 sits exactly on the section's base, so on every stacked
   // massing it lands in the plane of the rail on the section below.
-  assert.match(read("js/track/scenery/city.js"), /if \(!simple\) for \(let i = 2; i <= rowN; i \+= 2\)/,
+  assert.match(read("js/track/scenery/facade.js"), /if \(!simple\) for \(let i = 2; i <= rowN; i \+= 2\)/,
     "the facade rail loop must start at 2, not 0");
 });
 
@@ -260,11 +260,12 @@ test("abutting runs do not emit their seam node twice", () => {
   // passes one that deliberately omits the stripe colour (the plain slab
   // underneath is what duplicates).
   const src = read("js/track/scenery/structures.js");
+  const stands = read("js/track/scenery/stands.js");
   assert.match(src, /const along = \(s0, s1, stepM, fn, tag\) =>/,
     "along must take a seam tag");
   assert.match(src, /if \(seen\.has\(k\)\) continue;/,
     "and skip a node it has already walked under that tag");
-  const tagged = src.match(/^ {6}\}, `[a-zA-Z]+\|/gm) || [];
+  const tagged = (src + "\n" + stands).match(/^ {6}\}, `[a-zA-Z]+\|/gm) || [];
   assert.ok(tagged.length >= 9,
     `every along-based emitter must pass a tag — found ${tagged.length}`);
   assert.match(read("js/track/scenery/identity.js"), /\}, `canyon\|\$\{side\}\|\$\{gap\}/,
@@ -305,7 +306,7 @@ test("along + wrapped helpers stay on the authored span (imola / spa)", () => {
 });
 
 test("transformSceneryApi along hands authored-frame k via sceneryNodeToAuthored", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/build-props.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/track/scenery/api-wrap.js"), "utf8");
   const i = src.indexOf("function transformSceneryApi(");
   assert.ok(i >= 0);
   const end = src.indexOf("\n  function ", i + 1);

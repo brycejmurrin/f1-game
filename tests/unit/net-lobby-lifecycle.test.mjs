@@ -14,6 +14,8 @@ const LOBBY_SETTINGS = await readFile(new URL("../../js/net/lobby-settings.js", 
 // through NetPlay.bindQuali / qualiReporters (one validation site for both
 // phases), and a stub of those would only pin the stub.
 const NETPLAY = await readFile(new URL("../../js/net/netplay.js", import.meta.url), "utf8");
+const QUALI_WIRE = await readFile(new URL("../../js/net/quali-wire.js", import.meta.url), "utf8");
+const STRATEGY_WIRE = await readFile(new URL("../../js/net/strategy-wire.js", import.meta.url), "utf8");
 
 function deferred() {
   let resolve, reject;
@@ -45,6 +47,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   element("vs-pick");
   element("vs-roster");
   element("vs-player-count");
+  element("vs-race-summary");
   const room = element("vs-room");
   const status = element("vs-status");
   status.classList = { toggle() {} };
@@ -154,6 +157,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   vm.runInContext(LOBBY_CODES.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-codes.js") });
   vm.runInContext(LOBBY_ROSTER.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-roster.js") });
   vm.runInContext(LOBBY_SETTINGS.replace(/^const\b/gm, "var"), context, { filename: absSrc("js/net/lobby-settings.js") });
+  vm.runInContext(QUALI_WIRE, context, { filename: absSrc("js/net/quali-wire.js") });
+  vm.runInContext(STRATEGY_WIRE, context, { filename: absSrc("js/net/strategy-wire.js") });
   context.NetPlay = vm.runInContext(NETPLAY + ";NetPlay", context, { filename: absSrc("js/net/netplay.js") });
   const NetLobby = vm.runInContext(SOURCE + ";NetLobby", context, { filename: absSrc("js/net/lobby.js") });
   const G = {
@@ -1122,6 +1127,41 @@ test("a guest accepts STORM in settings and in a MIXED plan, and still rejects u
   } finally { h.lobby.cancel(); }
 });
 
+test("the room summary labels STORM (and a MIXED arc to storm), not Mixed", async () => {
+  // LobbySettings.WEATHER accepts storm; race-settings offers it; the summary
+  // map used to omit it so Storm painted as Mixed and → Storm never appeared.
+  const { h } = await connectedHost();
+  const rowsOf = (summary) => {
+    const out = [];
+    while (summary.firstChild) {
+      const row = summary.firstChild;
+      const parts = [];
+      while (row.firstChild) { parts.push(row.firstChild.textContent); row.removeChild(row.firstChild); }
+      out.push(parts);
+      summary.removeChild(row);
+    }
+    return out;
+  };
+  try {
+    h.elements.get("vs-room").hidden = false;
+    const summary = h.elements.get("vs-race-summary");
+    h.G.raceWeather = "storm";
+    h.G.raceChangeable = false;
+    h.G.wxArcPlan = null;
+    assert.equal(h.lobby.roomChanged("settings"), true);
+    const stormRows = rowsOf(summary);
+    assert.ok(stormRows.some((p) => p[0] === "Weather" && p[1] === "Storm"),
+      "storm must paint as Storm, not Mixed: " + JSON.stringify(stormRows));
+    h.G.raceWeather = "rain";
+    h.G.raceChangeable = true;
+    h.G.wxArcPlan = { to: "storm", dur: 600 };
+    h.lobby.roomChanged("settings");
+    const arcRows = rowsOf(summary);
+    assert.ok(arcRows.some((p) => p[0] === "Weather" && p[1] === "Rain → Storm"),
+      "mixed arc to storm must show → Storm: " + JSON.stringify(arcRows));
+  } finally { h.lobby.cancel(); }
+});
+
 // ── dirty air and AI pace are race rules; a guest's own rules come back ───────
 // Both change every AI car's grip / vmax, and each peer simulated its own saved
 // choice. And applySettings overwrote the guest's laps/difficulty/tyres/… in
@@ -1702,7 +1742,7 @@ test("codeJoin and phone-pad acceptInvite do not pass gatherTimeoutMs: 2500", as
   assert.match(SOURCE, /const ICE_WAIT_MS = 2500/, "readyIce prefetch race stays at 2500 ms");
   assert.ok(!/gatherTimeoutMs:\s*2500/.test(SOURCE),
     "lobby room-code acceptInvite must not force gatherTimeoutMs: 2500");
-  const phone = await readFile(new URL("../../js/input/phone-pad.js", import.meta.url), "utf8");
+  const phone = (await Promise.all(["phone-pad.js", "phone-pad-page.js"].map((f) => readFile(new URL("../../js/input/" + f, import.meta.url), "utf8")))).join("\n");
   assert.ok(!/gatherTimeoutMs:\s*2500/.test(phone),
     "phone-pad acceptInvite must not force gatherTimeoutMs: 2500");
 });
