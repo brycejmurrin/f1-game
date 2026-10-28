@@ -918,6 +918,7 @@
     "js/garage/scene-equipment.js",
     "js/garage/scene-live.js",
     "js/garage/scene-dress.js",
+    "js/garage/crew-draw.js",
     "js/garage/crew-motion.js",
     "js/garage/crew-service.js",
     "js/garage/crew-choreo.js",
