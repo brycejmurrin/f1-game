@@ -11,7 +11,8 @@
               addPrism, addFrustum, addPyramid, grandstand, grandstandEx, sponsorHoarding,
               gantry, marshalPost, palm, bush, ds, recordBarrier, seat,
               fence, tyreWall, vadd, hash, cityFront, tower, modelGroup,
-              overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit, pyMin } = api;
+              overheadSpan, waterSurface, waterBand, floodMastRing, circuitKit, pyMin,
+              bakedModel } = api;
       // Landing a raw anchor() on a circuitKit structure (the pit-race-control
       // beacon below). `anchor` is NOT raw here: transformSceneryApi wraps every
       // k-keyed helper as f(sceneryNode(k), -side) for this reverse +
@@ -1173,4 +1174,13 @@
         if (onTrack(a.c[0], a.c[2], 8)) continue;
         bumboat(a, 1.0 + hash(i * 5) * 0.6, i % 2 ? WIN_WARM : WIN_GOLD);
       }
+
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      // Authored-frame fracs (sceneryStartFrac 0.5075); pit hospitality is K(0.01)/-1.
+      for (const s of [0.96, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const [s, side] of [[0.10, 1], [0.18, 1], [0.34, -1], [0.62, 1], [0.86, 1]])
+        bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
     };
