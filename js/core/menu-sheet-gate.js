@@ -8,7 +8,7 @@
    garage CPU work was not.
 
    WHAT. One gate used by game.js menuIdle/menuSlice and GaragePrebuild:
-     - open()  — #pmsettings visible, or the Settings door still focused
+     - open()  — #pmsettings visible (door focus alone is not open; see open())
      - idle()  — MENU_IDLE_MS quiet AND no open sheet (yields while the sheet
        is up so warmPrograms / garage prewarm do not start on top of it)
      - parkWarm(gate) / resumeWarm(gate) — hold `_menuGate.warm` and
@@ -32,15 +32,17 @@ const MenuSheetGate = (function () {
     } catch (_) { /* User Timing optional */ }
   }
 
-  /** Settings hub visible, or the Settings door still focused after the tap. */
+  /** Settings hub visible. Door focus alone is NOT open: closeSettings() often
+   *  returns focus to #mb-settings / #pm-settings while #pmsettings stays
+   *  hidden, and treating that as open parked warm/garage forever (review F4).
+   *  openSettings() unhides the sheet synchronously on the click, so the door
+   *  bridge is unnecessary for the player path. */
   function open(doc) {
     try {
       const d = doc || (typeof document !== "undefined" ? document : null);
       if (!d || typeof d.getElementById !== "function") return false;
       const pm = d.getElementById("pmsettings");
-      if (pm && !pm.hidden) return true;
-      const a = d.activeElement;
-      if (a && (a.id === "mb-settings" || a.id === "pm-settings")) return true;
+      return !!(pm && !pm.hidden);
     } catch (_) { /* detached */ }
     return false;
   }

@@ -198,6 +198,13 @@ window.TopModal = (function () {
   const TEXTY = /^(text|search|url|email|password|tel|number)$/;
   const isTexty = (el) => el.tagName === "TEXTAREA" ||
     (el.tagName === "INPUT" && TEXTY.test((el.type || "text").toLowerCase()));
+  // The rotate blocker manages its own focus (js/game.js) and is CSS-gated;
+  // the fly-cam is not a menu — its arrows are the camera's (MenuNav refuses
+  // it too) and a focused button there would turn Space into a click. Used by
+  // scanLayers (no focus memory) and onFocusIn (no Tab trap into them).
+  const LAYER_SKIP = {
+    "rotate-device": 1, "photo-controls": 1,
+  };
   function firstFocusable(layer, skipTexty) {
     for (const el of layer.querySelectorAll(focusableSel())) {
       if (!usable(el) || (skipTexty && isTexty(el))) continue;
@@ -215,6 +222,9 @@ window.TopModal = (function () {
     // its chrome.
     const layer = window.UiLayers && window.UiLayers.top();
     if (!layer) return;
+    // LAYER_SKIP layers never get wireLayer focus memory. Trapping Tab into
+    // them here would undo that: a focused #pc-* button turns Space into a click.
+    if (LAYER_SKIP[layer.id]) return;
     const t = e.target;
     if (layer.tagName === "DIALOG") {
       if (t && t !== document.body && layer.contains(t)) return;
@@ -257,12 +267,6 @@ window.TopModal = (function () {
      layer and weak; nothing here outlives the DOM it points at. */
   const lastFocus = new WeakMap();
   const opener = new WeakMap();
-  const LAYER_SKIP = {
-    // The rotate blocker manages its own focus (js/game.js) and is CSS-gated;
-    // the fly-cam is not a menu — its arrows are the camera's (MenuNav refuses
-    // it too) and a focused button there would turn Space into a click.
-    "rotate-device": 1, "photo-controls": 1,
-  };
   const inside = (layer, el) => !!el && el !== document.body && layer.contains(el);
   const connected = (el) => !!el && !!document.body && document.body.contains(el);
   const focusQuiet = (el) => { try { el.focus({ preventScroll: true }); } catch (_) { /* detached */ } };
