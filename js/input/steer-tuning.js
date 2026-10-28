@@ -1,4 +1,6 @@
-/* Apex 26 — steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). Writes the live physics tunables through the ctx faça… */
+/* Apex 26 — steering-tuning sliders, presets and macro levels for the ADVANCED
+   pause-menu page. SteerTuning.create(G) writes the live physics tunables
+   through the game.js façade (store, clamp, $). */
 const SteerTuning = (function () {
   "use strict";
 

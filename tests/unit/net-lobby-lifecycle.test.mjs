@@ -45,6 +45,7 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   element("vs-pick");
   element("vs-roster");
   element("vs-player-count");
+  element("vs-race-summary");
   const room = element("vs-room");
   const status = element("vs-status");
   status.classList = { toggle() {} };
@@ -1119,6 +1120,41 @@ test("a guest accepts STORM in settings and in a MIXED plan, and still rejects u
     h.G.raceLaps = 3;
     s.deliver("settings", initialGuestSettings({ laps: 9, weather: "rain", wxArc: { to: "storm", dur: 200 }, revision: 2 }));
     assert.equal(h.G.raceLaps, 9, "a MIXED plan drawn toward storm is accepted");
+  } finally { h.lobby.cancel(); }
+});
+
+test("the room summary labels STORM (and a MIXED arc to storm), not Mixed", async () => {
+  // LobbySettings.WEATHER accepts storm; race-settings offers it; the summary
+  // map used to omit it so Storm painted as Mixed and → Storm never appeared.
+  const { h } = await connectedHost();
+  const rowsOf = (summary) => {
+    const out = [];
+    while (summary.firstChild) {
+      const row = summary.firstChild;
+      const parts = [];
+      while (row.firstChild) { parts.push(row.firstChild.textContent); row.removeChild(row.firstChild); }
+      out.push(parts);
+      summary.removeChild(row);
+    }
+    return out;
+  };
+  try {
+    h.elements.get("vs-room").hidden = false;
+    const summary = h.elements.get("vs-race-summary");
+    h.G.raceWeather = "storm";
+    h.G.raceChangeable = false;
+    h.G.wxArcPlan = null;
+    assert.equal(h.lobby.roomChanged("settings"), true);
+    const stormRows = rowsOf(summary);
+    assert.ok(stormRows.some((p) => p[0] === "Weather" && p[1] === "Storm"),
+      "storm must paint as Storm, not Mixed: " + JSON.stringify(stormRows));
+    h.G.raceWeather = "rain";
+    h.G.raceChangeable = true;
+    h.G.wxArcPlan = { to: "storm", dur: 600 };
+    h.lobby.roomChanged("settings");
+    const arcRows = rowsOf(summary);
+    assert.ok(arcRows.some((p) => p[0] === "Weather" && p[1] === "Rain → Storm"),
+      "mixed arc to storm must show → Storm: " + JSON.stringify(arcRows));
   } finally { h.lobby.cancel(); }
 });
 
