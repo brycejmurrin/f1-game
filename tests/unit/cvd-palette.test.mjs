@@ -239,3 +239,73 @@ test("the palette module does not read the track, physics or the player", () => 
   const src = read("js/ui/cvd-palette.js").replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/[^\n]*/g, "");
   assert.doesNotMatch(src, /\bTracks\b|\bcurvature\b|\bphysics\b|\bplayer\./);
 });
+
+// #1595: the HUD's colour sources read the palette. Every #rrggbb literal left
+// at these sites must match a reasoned row (line pattern, the hexes it may hold, why); a new hue fails here until it is a
+// token / CvdPalette row or argues its way onto this list.
+const LITERAL_OK = {
+  "css/hud.css": [
+    [/^(:root \{ )?\s*--(tyre|flag)-/, "#ff3b3b #ffd12e #f2f2f2 #3ccf4e #3a8dff #ffd600 #ffb300 #f4f6ff #ff1a1a", "the HUD hue tokens' own off values"],
+    [/^#hud-rpm-fill|linear-gradient\(90deg in oklab, #2ad1ff/, "#2ad1ff #aeea00 #ffd600", "tach ramp stops: chosen against each other, not palette states (tokens.css --you note)"],
+    [/^#hud-energy-fill, #hud-tyre-fill/, "#00c853 #aeea00", "level-bar ramp: meaning is the bar's length"],
+    [/^#hud-ot \{ --ot-hue: #ffd21a; \}/, "#ffd21a", "the OT button's yellow, already one token (--ot-hue) declared once; a real-world signal labelled OT"],
+    [/^#hud-ot\.ot-(armed|active)/, "#2b2400 #ffeeae #7e5c00", "OT ink and its dark active plate: shades of --ot-yellow, not a state of their own"],
+    [/^#hud-aero\.ax-(armed|open)/, "#04202e #d6efff #083e78", "aero ink, hatch and open plate: shades of --zone, which the palette remaps"],
+    [/^#hud-flag\.flag-(vsc|sc)/, "#201400 #101018", "dark ink on the flag's own fill (the fill is a token)"],
+    [/^\.light \{/, "#2a2a32", "an unlit lamp: off is dark in every colour vision"],
+  ],
+  "js/ui/track-maps.js": [
+    [/^\s*(green|modern|desert|street_night|street_day): "#/, "#5ec269 #39b7f0 #f0b429 #a78bfa #fb923c", "circuit theme accent: identity, not a state; the name is printed beside it"],
+    [/return \(def && THEME\[def\.theme\]\) \|\| "#/, "#cfd2d8", "the theme table's neutral fallback"],
+    [/^\s*const SECTOR_COLORS = /, "#ffd700 #c0c0c0 #cd9b5a", "fallback = --gold/--silver/--bronze (pinned by hud-feel); CVD modes take sec1-3"],
+    [/opts\.(startColor|markColor) \|\| "#e10600"/, "#e10600", "brand-red start/mark pin, labelled on the map"],
+    [/g\.fillStyle = "#ffffff"; g\.textAlign/, "#ffffff", "label ink"],
+  ],
+  "js/ui/hud-inputs.js": [
+    [/^\s*const C_STR = "#ffffff"/, "#ffffff", "steering trace: white in every mode"],
+    [/c\.fillStyle = "#10131b"; c\.fillRect/, "#10131b", "review canvas plate"],
+    [/c\.fillStyle = "#f1f3fa";/, "#f1f3fa", "axis label ink"],
+  ],
+  "js/ui/hud-minimap.js": [
+    [/fillStyle = "#14161c"; \w+\.font/, "#14161c", "dark ink on the pit/you marker"],
+  ],
+};
+
+test("HUD colour sources route hues through CvdPalette / tokens (#1595)", () => {
+  for (const [file, rows] of Object.entries(LITERAL_OK)) {
+    const used = new Set();
+    read(file).split("\n").forEach((line, i) => {
+      if (!/#[0-9a-fA-F]{6}\b/.test(line) || /^\s*(\/\/|\/?\*)/.test(line)) return;
+      const hexes = line.match(/#[0-9a-fA-F]{6}\b/g).map((h) => h.toLowerCase());
+      const row = rows.findIndex(([re, ok]) => re.test(line) && hexes.every((h) => ok.split(" ").includes(h)));
+      assert.ok(row >= 0, `${file}:${i + 1} hard-codes a colour — read a token / CvdPalette row, or add a reasoned LITERAL_OK row:\n  ${line.trim()}`);
+      used.add(row);
+    });
+    rows.forEach(([re], k) => assert.ok(used.has(k), `${file}: LITERAL_OK row ${re} matches nothing — drop it`));
+  }
+  // The off palette is the old literals, and hud.css :root (the race-only tokens' off values) agrees.
+  // The scan above already fails a routed site that goes back to a literal.
+  const hud = read("css/hud.css");
+  const { P } = load();
+  const OLD = { tyreS: "#ff3b3b", tyreM: "#ffd12e", tyreH: "#f2f2f2", tyreI: "#3ccf4e", tyreW: "#3a8dff", thr: "#2ecc71", brk: "#ff3b3b",
+    cnrHairpin: "#f87171", cnrSlow: "#fb923c", cnrMedium: "#facc15", cnrFast: "#4ade80" };
+  const offRoot = Object.fromEntries([...((hud.match(/^:root \{[^}]*\}/m) || [""])[0]).matchAll(/(--[\w-]+): (#[0-9a-f]{6});/g)].map((m) => [m[1], m[2]]));
+  for (const [key, hex] of Object.entries(OLD)) {
+    assert.equal(P.hex(key), hex, `off ${key} keeps today's colour`);
+    if (P.HUD_CSS_OF[key]) assert.equal(offRoot[P.HUD_CSS_OF[key]], hex, `hud.css :root ${P.HUD_CSS_OF[key]}`);
+  }
+  // A CVD mode paints the race-only tokens inline (no CSS block), and they read on the plate like the other inks.
+  const lin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const relL = (h) => [1, 3, 5].map((i) => lin(parseInt(h.slice(i, i + 2), 16))).reduce((t, v, i) => t + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const plateL = relL("#" + [8, 8, 14].map((c) => Math.round(c * 0.72 + 128 * 0.28).toString(16).padStart(2, "0")).join(""));
+  const { P: Q, style } = load();
+  for (const mode of ["deutan", "protan", "tritan"]) {
+    Q.set(mode);
+    for (const [key, name] of Object.entries(Q.HUD_CSS_OF)) {
+      assert.equal(style.get(name), Q.hex(key), `${mode} paints ${name}`);
+      assert.ok((relL(Q.hex(key)) + 0.05) / (plateL + 0.05) >= 4.5, `${mode} ${name} clears 4.5:1`);
+    }
+  }
+  Q.set("off");
+  for (const name of Object.values(Q.HUD_CSS_OF)) assert.equal(style.has(name), false, `off leaves ${name} to hud.css`);
+});

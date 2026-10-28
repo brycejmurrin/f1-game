@@ -425,21 +425,38 @@ export function changedFiles() {
 /** A topic-branch delta may RAISE anything, but LOWER only a file the branch
  *  changed; tree metrics are not attributable to one file and pass. */
 export function scopeToBranch(rows, touched = changedFiles()) {
-  if (!touched) return rows;
-  return rows.filter((r) => r.tree || r.value >= r.ceiling || touched.has(r.file));
+  // A tree-wide row enters a fragment only when it is AT or OVER its ceiling (a
+  // deliberate `--update --fragment` raise). Snapping a LOOSE tree ceiling down to
+  // this branch's count wrote e.g. assertPins −54 into every topic fragment: the
+  // first sibling to merge one pin then left each of them over on the merge
+  // result (2026-10-27, PRs #3970/#3981/#3985). Tree lowering is the deploy
+  // branch's `--update` / `--fold`, never a topic branch's (#2583 for files).
+  if (!touched) return rows.filter((r) => !r.tree || r.value >= r.ceiling);
+  return rows.filter((r) => (r.tree ? r.value >= r.ceiling : r.value >= r.ceiling || touched.has(r.file)));
 }
 
-/** Add `rows`' (value - ceiling) to this branch's fragment; delete it when
- *  every delta nets to zero. */
-async function writeFragment(name, rows) {
-  const file = path.join(FRAG_DIR, name);
-  const frag = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {};
+/** Add `rows`' (value - ceiling) to fragment `frag` in place. A tree delta that
+ *  nets below zero is dropped, not kept: a topic fragment never lowers a
+ *  tree-wide ceiling (scopeToBranch). Before #3996 the commit hook wrote stale
+ *  lowerings (assertPins −50) into open fragments; re-snapping one kept it
+ *  negative at zero slack, so each pin the tip gained turned the PR red again
+ *  (2026-10-27, #3970/#3981/#3985). Dropping it leaves the deploy's ceiling.
+ *  Returns `frag`. PURE. */
+export function mergeFragment(frag, rows) {
   for (const r of rows) {
     const scope = r.tree ? (frag.tree ||= {}) : ((frag.files ||= {})[r.file] ||= {});
     const d = (scope[r.metric] || 0) + (r.value - r.ceiling);
-    if (d) scope[r.metric] = d; else delete scope[r.metric];
+    if (d > 0 || (d && !r.tree)) scope[r.metric] = d; else delete scope[r.metric];
     if (!r.tree && !Object.keys(scope).length) delete frag.files[r.file];
   }
+  return frag;
+}
+
+/** Merge `rows` into this branch's fragment; delete it when every delta nets
+ *  to zero. */
+async function writeFragment(name, rows) {
+  const file = path.join(FRAG_DIR, name);
+  const frag = mergeFragment(fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, "utf8")) : {}, rows);
   const { stableStringify } = await import("./merge-hygiene.mjs");
   const empty = !Object.keys(frag.files || {}).length && !Object.keys(frag.tree || {}).length;
   if (empty) { fs.rmSync(file, { force: true }); return; }

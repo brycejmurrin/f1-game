@@ -17,6 +17,19 @@
     "js/ui/hud-tyres.js",
     "js/ui/quali-sheet.js"
   ],
-  "html": [],
+  "html": [
+    "#dlg-settings",
+    "#pm-pit-choice-label",
+    "#pm-drill-label",
+    "#pm-res-label",
+    "#pm-fullscreen-label",
+    "#pm-upscale-label",
+    "#pm-occlusion-label",
+    "#pm-debris-label",
+    "#pm-ssao-label",
+    "#pm-godrays-label",
+    "#pm-buildworker-label",
+    "#pm-feel-label"
+  ],
   "allow": {}
 }

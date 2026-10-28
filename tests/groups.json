@@ -222,6 +222,8 @@
     "tests/unit/cockpit-wheel-finish.test.mjs",
     "// The COCKPIT WHEEL choice: option, meshes per style, draw path, HUD gate.",
     "tests/unit/cockpit-wheels.test.mjs",
+    "// Codex Cloud history: offline pagination, descendant scope, resume, credential redaction and read-only protocol fixtures.",
+    "tests/unit/codex-cloud-history.test.mjs",
     "tests/unit/comment-citations.test.mjs",
     "// No screenshot outside a *-snapshots/ baseline under tests/, no image over",
     "// 4 MB outside assets/: a June burst left ~750 MB in history. ~0.1 s.",
@@ -2287,6 +2289,7 @@
       "files": [
         "tests/specs/albert-park-foundation.spec.js",
         "tests/specs/autopilot.spec.js",
+        "tests/specs/cota-foundation.spec.js",
         "tests/specs/logging.spec.js",
         "tests/unit/adapted-specs.test.mjs"
       ],
@@ -2296,7 +2299,6 @@
       "cmd": "APEX_VM_PAGE_GROUP=b node --test tests/unit/adapted-specs.test.mjs",
       "files": [
         "tests/specs/agent-drive-bench.spec.js",
-        "tests/specs/cota-foundation.spec.js",
         "tests/specs/imola-foundation.spec.js",
         "tests/specs/parts-livery-contrast.spec.js",
         "tests/specs/physics-fixes.spec.js",
