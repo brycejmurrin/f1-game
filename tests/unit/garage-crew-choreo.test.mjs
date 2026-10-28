@@ -22,8 +22,8 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
-const FILES = ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-motion.js", "js/garage/crew-service.js",
-  "js/garage/crew-choreo.js", "js/garage/scene-crew.js", "js/garage/pit-crew.js", "js/garage/arrival.js"];
+const FILES = ["js/core/mat4.js", "js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/crew-draw.js",
+  "js/garage/crew-motion.js", "js/garage/crew-service.js", "js/garage/crew-choreo.js", "js/garage/scene-crew.js", "js/garage/pit-crew.js", "js/garage/arrival.js"];
 function load(extra = {}) {
   const draws = [], meshes = [];
   const gfx = { createMesh: (d) => { const mesh = { n: d.pos.length }; meshes.push(mesh); return mesh; }, freeMesh() {}, draw: (mesh, m) => draws.push({ mesh, m: Array.from(m) }) };

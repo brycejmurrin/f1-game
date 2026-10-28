@@ -1742,7 +1742,7 @@ test("codeJoin and phone-pad acceptInvite do not pass gatherTimeoutMs: 2500", as
   assert.match(SOURCE, /const ICE_WAIT_MS = 2500/, "readyIce prefetch race stays at 2500 ms");
   assert.ok(!/gatherTimeoutMs:\s*2500/.test(SOURCE),
     "lobby room-code acceptInvite must not force gatherTimeoutMs: 2500");
-  const phone = await readFile(new URL("../../js/input/phone-pad.js", import.meta.url), "utf8");
+  const phone = (await Promise.all(["phone-pad.js", "phone-pad-page.js"].map((f) => readFile(new URL("../../js/input/" + f, import.meta.url), "utf8")))).join("\n");
   assert.ok(!/gatherTimeoutMs:\s*2500/.test(phone),
     "phone-pad acceptInvite must not force gatherTimeoutMs: 2500");
 });

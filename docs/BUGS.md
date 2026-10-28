@@ -315,7 +315,7 @@ to other sessions on 2026-10-09 (the last line had no owner). Today's owner of a
 - M20 net — wire `gear` (0-15) unclamped; gear 9-15 makes `rpmFor` NaN for that rival. `js/net/netplay.js:59,396` · low · **fixed in #1289**
 - M21 net — `EVENT_CRITICAL` omits `quali`/`settings`; a lost QUALI on a backed-up reliable channel wrecks the grid. `js/net/transport.js:454,622` · low · **already fixed on tip** (`quali`/`settings`/`lap`/`hello`/`ready` in `EVENT_CRITICAL`; pinned by `tests/unit/net-transport.test.mjs`)
 - M24 data hub — switching tabs does not abort the previous tab's OpenF1 requests. `js/data/hub.js:300`, `js/data/telemetry.js:357` · low-med · **fixed in #1284**
-- M27 car — daily "standard" class builds the player mesh from SAVED parts under the FACTORY cache key; `visualSetup` is stamped once. `js/game.js:1611,1635`, `js/car/car-draw.js:24-31,915` · low
+- M27 car — daily "standard" class builds the player mesh from SAVED parts under the FACTORY cache key; `visualSetup` is stamped once. `js/game.js:1611,1635`, `js/car/car-draw.js:24-31,915` · low · **fixed in `cursor/car-m27-visualsetup-f958`** (`playerPartsFor` / `setPlayerParts` capture + restamp; `teamDecalState` prefers the captured recipe)
 - M28 car — a custom-emblem image that decodes after CLEAR / a newer upload reinstalls the stale emblem. `js/car/liverytex.js:1148-1160` · low · **fixed in #1284**
 - M31 audio — race started with SOUND OFF then on never calls `setVenue`; the panel mid-race path skips `setVoice`. `js/game.js:8875,2809`, `js/audio/panel.js:49` · low
 - M32 audio — RivalAudio binds 4 voice slots, the mobile engine has 2; rivals in slots 2-3 swap voices on rank changes. `js/audio/rivals.js:20`, `js/audio/engine.js:106,2125` · low

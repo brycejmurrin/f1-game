@@ -68,7 +68,8 @@
         tree: rawTree, bush, hedge, forestEdge, building, grandstandEx, spectatorHill,
         guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
         sponsorHoarding, place, ridge, groundPatch,
-        modelGroup, vadd, MAT, seat, indexSolid, overheadSpan, addBox, addCyl } = api;
+        modelGroup, vadd, MAT, seat, indexSolid, overheadSpan, addBox, addCyl,
+        bakedModel } = api;
 
       const { K } = api;            // the contract's frac -> node index (normalised, as this copy was)
 
@@ -725,4 +726,14 @@
         bush(K(s), -1, 6.5 + hh * 2, hh > 0.7 ? SCRUB_L : SCRUB);
         tree(K(s), -1, 11 + hh * 4, 9 + hh * 6, hh > 0.8 ? BAMBOO : LEAF);
       }
+
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.01, 0.025, 0.04]) bakedModel("k_tentlong", K(s), 1, 48, { scale: 2.4 });
+      // Clear infield gaps only — forested corners clip the mesh at gap 13 (clip-audit).
+      for (const [s, side, dist] of [
+        [0.048, 1, 28], [0.1172, 1, 16], [0.2107, 1, 20], [0.6937, 1, 16], [0.8678, 1, 16],
+      ]) bakedModel("k_camera_exclusive", K(s), side, dist, { scale: 3 });
   };
