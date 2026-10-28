@@ -305,6 +305,7 @@ const FULL = [
   "js/camera/offsets.js",
   "js/camera/extra-rigs.js",   // RIVAL LOCK / PIT WALL / DRONE solvers (before vantage)
   "js/camera/flyby-sight.js",   // FlybySight: the flyby planner's (and frame-report's) sightline/occluder model
+  "js/camera/flyby-clear.js",   // FlybyClear: solid props, roof lift, ground floor (before flyby-seq)
   "js/camera/flyby-seq.js",
   "js/camera/cam-avoid.js",   // open-circuit wall/building step-in + clearEye for broadcast cams
   "js/camera/trackside.js",   // TRACKSIDE fixed corner cams (CAM_MODES append)
@@ -366,6 +367,7 @@ const FULL = [
   "js/race/rain-cells.js",     // RainCells: pure localized-rain maths (a drifting shower over a window of the lap; WeatherArc reads it)
   "js/race/weather-arc.js",
   "js/race/forecast.js",       // Forecast: pure timed + uncertain forecast off a weather arc (engineer speaks it; Forecast.current())
+  "js/camera/photo-looks.js",  // PhotoLooks: transient photo grades (before photo-kit re-exports them)
   "js/camera/photo-kit.js",    // free-cam grids / DoF / bookmarks (before free-cam)
   "js/camera/free-cam.js",
   "js/camera/photo-cam.js",
@@ -395,9 +397,8 @@ const FULL = [
   "js/camera/cockpit-opts.js",
   "js/camera/cockpit-finishes.js",
   "js/camera/cockpit-preview.js",
-  "js/camera/drive-chase.js",      // per-mode live motion (before feel.js dispatches)
-  "js/camera/drive-broadcast.js",
-  "js/camera/drive-onboard.js",
+  "js/camera/fov-mode.js",         // CamFov: shared speed-FOV curve (before feel.js forwards it)
+  "js/camera/drive-lens.js",       // DriveLens: chase / broadcast / onboard FOV deltas (before feel.js)
   "js/camera/feel.js",
   "js/ui/driving-line-opts.js",
   "js/ui/cvd-palette.js",   // CvdPalette: semantic colours; AppearanceOpts.setCvdMode calls set()
@@ -428,7 +429,9 @@ const FULL = [
   "js/perf/bench-run.js",      // BenchRun: SETTINGS > GRAPHICS > BENCHMARK (#bench): GPU TEST per three.js path across reloads, results file
   "js/camera/cam-comfort.js", // touch/XR auto comfort preset (before mode-switch boots it)
   "js/camera/fov-fit.js",     // CamFovFit.fitFovY: HFOV cap (wide) + floor (portrait); pure
+  "js/camera/vantage-ride.js", // VantageRide: smoothed ride height / grade / soft floor (before vantage)
   "js/camera/vantage.js",
+  "js/camera/cam-picker.js",  // CamPicker: CAM button grid (before mode-switch create())
   "js/camera/mode-switch.js",
   // WebXR boot half: SETTINGS › VR rows (call-time; hidden unless caps.vr) and
   // the game.js façade (applyEyes / present no-op until LAZY_XR lands). The
@@ -738,6 +741,7 @@ const HARD_EDGES = [
   ["js/core/mat4.js", "js/game.js"],
   ["js/core/mat4.js", "js/car/input-ghost.js"],                 // aliases M4.clamp at eval
   ["js/core/mat4.js", "js/camera/photo-kit.js"],  // PhotoKit aliases M4.clamp at eval
+  ["js/core/mat4.js", "js/camera/fov-mode.js"],   // CamFov aliases M4.clamp at eval
   ["js/core/mat4.js", "js/camera/free-cam.js"],   // FreeCam aliases M4.clamp at eval
   ["js/race/car-fields.js", "js/game.js"],                 // game.js wraps its pooled AI/scratch literals in CarFields.warmDoubles at eval
   ["js/core/mat4.js", "js/track/core/spline.js"],
