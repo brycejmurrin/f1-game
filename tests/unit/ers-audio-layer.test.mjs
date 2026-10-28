@@ -243,7 +243,7 @@ test("GameAudio.setEngine drives the layer through the init/update hook", async 
   const files = [
     "js/core/mat4.js",
     "js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js",
-    "js/audio/radio-fx.js", "js/audio/ers-layer.js", "js/audio/engine.js",
+    "js/audio/radio-fx.js", "js/audio/ers-layer.js", "js/audio/mix-duck.js", "js/audio/engine.js",
   ];
   for (const f of files) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), vctx, { filename: absSrc(f) });

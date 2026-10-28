@@ -2670,7 +2670,7 @@ const LiveryTex = (function () {
            CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, CREST_TONE_IDS, CREST_FRAME_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            FILL_SURFACES, fillInert,
-           airboxMeshColour, resolveFinPaint,
+           airboxMeshColour, resolveFinPaint, driverCode,
            hasFlankBull: (teamId) => !!bullPath(teamId) };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

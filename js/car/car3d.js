@@ -89,16 +89,16 @@ const Car3D = (function () {
     // Barge (reads): short fat blunt hull, wide low pods, heavy waist, low flat cover.
     barge:   Object.freeze({ noseTipZ: -0.32, noseSlim: 2.10, noseDroop: -0.006, airbox: 1.55, fin: 1, mirror: 2, inlet:  0.100, inletH: -0.060, inletW:  0.240, undercutD: -0.160, waist:  0.260, floorStep: -0.120, coverCrown: -0.080, coverLift: -0.100, wingStyle: W({ arch: 1.05, twist: 0.32, teCurve: 0.150, foot: 1.55, canard: 2, tipRise: 0.055 }) }),
     // Hammerhead: thin shovel tip on a narrow neck; broad low cooling shoulders.
-    hammerhead: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.34, noseSlim: 4.10, noseDroop: 0.015, noseTipH: 0.55, noseMidSlim: 0.70, noseMidH: 0.65, airbox: 0.42, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.180, undercutD: 0.050, waist: 0.080, floorStep: -0.060, coverCrown: -0.040, coverLift: -0.120, wingStyle: W({ flaps: 2, arch: 0.24, twist: 0.08, foot: 0.78, canard: 0 }) }),
+    hammerhead: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: -0.34, noseSlim: 4.10, noseDroop: 0.015, noseTipH: 0.55, noseMidSlim: 0.70, noseMidH: 0.65, airbox: 0.42, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.180, undercutD: 0.050, waist: 0.080, floorStep: -0.060, coverCrown: -0.040, coverLift: -0.120, wingStyle: W({ flaps: 2, arch: 0.24, twist: 0.08, foot: 0.78, canard: 0 }) }),
     // Swan: raised slim nose bridge over low pods and a sunken cover.
-    swan: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.18, noseSlim: 0.84, noseLow: true, noseDroop: 0.200, noseTipH: 1.20, noseMidSlim: 0.86, noseMidH: 0.75, airbox: 0.38, fin: 0, mirror: 0, inlet: -0.030, inletH: -0.110, inletW: -0.100, undercutD: 0.060, waist: -0.080, floorStep: 0.030, coverCrown: 0.060, coverLift: -0.150, wingStyle: W({ arch: 1.08, twist: 0.32, foot: 1.40, tipRise: 0.050 }) }),
+    swan: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: 0.18, noseSlim: 0.84, noseLow: true, noseDroop: 0.200, noseTipH: 1.20, noseMidSlim: 0.86, noseMidH: 0.75, airbox: 0.38, fin: 0, mirror: 0, inlet: -0.030, inletH: -0.110, inletW: -0.100, undercutD: 0.060, waist: -0.080, floorStep: 0.030, coverCrown: 0.060, coverLift: -0.150, wingStyle: W({ arch: 1.08, twist: 0.32, foot: 1.40, tipRise: 0.050 }) }),
     // Manta: flat broad shoulders sweeping into a sharply pinched rear waist.
-    manta: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.12, noseSlim: 1.80, noseDroop: 0.035, noseTipH: 0.70, noseMidSlim: 1.20, noseMidH: 0.80, airbox: 0.28, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.240, undercutD: 0.060, waist: -0.220, floorStep: -0.080, coverCrown: -0.060, coverLift: -0.140, wingStyle: W({ flaps: 2, arch: 0.32, twist: 0.10, chordTaper: 0.18, foot: 0.85 }) }),
-    wasp: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.28, noseSlim: 0.86, noseTipH: 0.55, noseMidH: 0.62, noseLow: true, noseDroop: 0.040, airbox: 1.00, fin: 1, mirror: 1, inlet: -0.020, inletH: -0.080, inletW: -0.200, undercutD: 0.080, waist: 0.220, waistH: 0.230, floorStep: 0.070, coverCrown: 0.180, coverLift: 0.000, wingStyle: W({ arch: 0.80, twist: 0.26, chordTaper: 0.42, canard: 2 }) }),
+    manta: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: -0.12, noseSlim: 1.80, noseDroop: 0.035, noseTipH: 0.70, noseMidSlim: 1.20, noseMidH: 0.80, airbox: 0.28, fin: 0, mirror: 2, inlet: 0.010, inletH: -0.040, inletW: 0.240, undercutD: 0.060, waist: -0.220, floorStep: -0.080, coverCrown: -0.060, coverLift: -0.140, wingStyle: W({ flaps: 2, arch: 0.32, twist: 0.10, chordTaper: 0.18, foot: 0.85 }) }),
+    wasp: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: 0.28, noseSlim: 0.86, noseTipH: 0.55, noseMidH: 0.62, noseLow: true, noseDroop: 0.040, airbox: 1.00, fin: 1, mirror: 1, inlet: -0.020, inletH: -0.080, inletW: -0.200, undercutD: 0.080, waist: 0.220, waistH: 0.230, floorStep: 0.070, coverCrown: 0.180, coverLift: 0.000, wingStyle: W({ arch: 0.80, twist: 0.26, chordTaper: 0.42, canard: 2 }) }),
     // Scorpion: low snout and front cover with a conspicuously rising tail crown.
-    scorpion: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: 0.40, noseSlim: 0.95, noseDroop: -0.020, noseTipH: 0.65, noseMidH: 0.75, airbox: 0.55, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.040, inletW: -0.040, undercutD: 0.040, waist: -0.060, floorStep: 0.040, coverCrown: 0.140, coverLift: -0.150, coverTailLift: 0.390, wingStyle: W({ flaps: 2, arch: 0.95, twist: 0.34, foot: 1.40, tipRise: 0.045 }) }),
+    scorpion: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: 0.40, noseSlim: 0.95, noseDroop: -0.020, noseTipH: 0.65, noseMidH: 0.75, airbox: 0.55, fin: 0, mirror: 1, inlet: 0.010, inletH: 0.040, inletW: -0.040, undercutD: 0.040, waist: -0.060, floorStep: 0.040, coverCrown: 0.140, coverLift: -0.150, coverTailLift: 0.390, wingStyle: W({ flaps: 2, arch: 0.95, twist: 0.34, foot: 1.40, tipRise: 0.045 }) }),
     // Blade: tall knife nose and upright radiator towers above a low flat cover.
-    blade: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseTipZ: -0.10, noseSlim: 0.70, noseLow: true, noseDroop: 0.100, noseTipH: 2.60, noseMidSlim: 0.62, noseMidH: 1.70, airbox: 0.35, fin: 0, mirror: 0, inlet: 0.020, inletH: 0.260, inletW: -0.210, undercutD: 0.180, waist: -0.160, floorStep: 0.110, coverCrown: -0.080, coverLift: -0.130, wingStyle: W({ arch: 0.38, twist: 0.12, foot: 0.90, canard: 0 }) }),
+    blade: Object.freeze({ minPodSpan: 0.08, fitBodyDetails: true, noseSeat: 0.012, noseTipZ: -0.10, noseSlim: 0.70, noseLow: true, noseDroop: 0.100, noseTipH: 2.60, noseMidSlim: 0.62, noseMidH: 1.70, airbox: 0.35, fin: 0, mirror: 0, inlet: 0.020, inletH: 0.260, inletW: -0.210, undercutD: 0.180, waist: -0.160, floorStep: 0.110, coverCrown: -0.080, coverLift: -0.130, wingStyle: W({ arch: 0.38, twist: 0.12, foot: 0.90, canard: 0 }) }),
     // B·D1 period bodies (Bryce's resized pick, 2026-10-20). fitSeat seats nose details
     // on the measured skin; sizes are cut to the shipped bodies' envelope (fin under
     // the roll hoop, noses within ~4 % of the tallest shipped one).
@@ -423,10 +423,14 @@ const Car3D = (function () {
       }
       addBox(out, 0, 0.432, 0.176, 0.088, 0.078, 0.034, [0.32, 0.32, 0.36], SURFACES.metal);
     } else {
+      // Concept bodies (not the narrow-waisted needle, whose pods wrap the old block) seat the block between
+      // the tub and the pod's inner wall: 0.24/0.40 ran 30-40 mm into both (#3156 row 2).
+      const fit = BODY_STYLES[styleKey] === teamStyle && !(teamStyle.waist < -0.2), iF = fit ? 0.27 : 0.24;
+      const bF = fit ? Math.min(0.40, anchors.podAt(0.12).inner + 0.004) : 0.40, bR = fit ? Math.min(0.40, anchors.podAt(-0.43).inner + 0.004) : 0.40;
       for (const s of [-1, 1]) {
         (shadeFlags.round ? CarShade.blockFn(addTri, { r: [0, 0.03, 0.07, 0.02] }) : addBlock)(out, [   // rounded: outer shoulder r 70 mm
-          [s*0.24, 0.42, 0.14], [s*0.40, 0.42, 0.14], [s*0.40, 0.60, 0.10], [s*0.24, 0.58, 0.10],
-          [s*0.24, 0.44, -0.42], [s*0.40, 0.44, -0.42], [s*0.40, 0.62, -0.44], [s*0.24, 0.60, -0.44],
+          [s*iF, 0.42, 0.14], [s*bF, 0.42, 0.14], [s*bF, 0.60, 0.10], [s*iF, 0.58, 0.10],
+          [s*0.24, 0.44, -0.42], [s*bR, 0.44, -0.42], [s*bR, 0.62, -0.44], [s*0.24, 0.60, -0.44],
         ], c1);
       }
     }

@@ -234,3 +234,17 @@ test("a rotation drops a drag whose anchor lives in the old screen space (B·H20
   for (let i = 0; i < 60; i++) { clock.t += 16; Input.steer(); }
   assert.equal(Input.steer(), 0, "a finger that did not move reads no steer after a rotation");
 });
+
+test("a rotation zeroes the touch ramp at once, not over KEY_RAMP_OUT", () => {
+  // onScreenRotate used to clear touches/touchActive but leave touchSteerVal at
+  // full lock, so steer() unwound for ~125 ms after the fingers were gone.
+  const { Input, onCanvas, listeners, clock } = boot();
+  Input.setSteerMode("touch");
+  Input.setDragSmoothing(0);
+  onCanvas("touchstart", { changedTouches: [{ identifier: 1, clientX: 100, clientY: 200 }] });
+  onCanvas("touchmove", { changedTouches: [{ identifier: 1, clientX: 100 + 2000, clientY: 200 }] });
+  assert.equal(Input.steer(), 1, "precondition: full lock");
+  for (const f of listeners.orientationchange || []) f({});
+  clock.t += 1;   // one sample, nowhere near a KEY_RAMP_OUT unwind
+  assert.equal(Input.steer(), 0, "rotation snaps the wheel to centre");
+});

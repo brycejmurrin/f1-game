@@ -747,7 +747,7 @@ function buildSetup() {
 
     const main = document.createElement("div"); main.className = "cs-opt-main";
     const nameRow = document.createElement("div"); nameRow.className = "cs-opt-name";
-    nameRow.appendChild(document.createTextNode(opt.label));
+    nameRow.appendChild(document.createTextNode(Parts.optLabel(activeCat.id, opt)));
     const badges = [];
     // Leads the row: on a wet compound it is the only badge that explains why
     // all four stat chips are pointing down.
