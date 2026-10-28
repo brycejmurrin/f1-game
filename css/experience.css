@@ -27,9 +27,8 @@
      PHOTO | HOW TO PLAY | REWIND & RETRY. */
   #pm-quick-doors #pm-howto { grid-column: auto; }
   #pm-checkpoint { font-size: var(--fs-micro); border: 1px solid var(--plate-line); padding: 0 calc(var(--gap) / 3); border-radius: var(--r-md); background: var(--carbon); min-width: 0; }
-  #pm-checkpoint[open] { grid-column: 1 / -1; }
+  #pm-checkpoint[open] { grid-column: 1 / -1; padding-bottom: calc(var(--gap) / 2); }
   #pm-checkpoint summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
-  #pm-checkpoint[open] { padding-bottom: calc(var(--gap) / 2); }
   #pm-checkpoint button { font-size: var(--fs-micro); }
   /* Short landscape phone (the compact pause card, css/dialogs.css): tighter tray
      gap and the --tap-paint floors. Here, after the base rules above, because
