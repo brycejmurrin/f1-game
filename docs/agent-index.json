@@ -2055,6 +2055,11 @@
       "roster": "LAZY_AUDIO"
     },
     {
+      "path": "js/audio/mix-duck.js",
+      "global": "GameAudioMix",
+      "roster": "LAZY_AUDIO"
+    },
+    {
       "path": "js/audio/music-lib.js",
       "global": "MusicLib",
       "roster": "LAZY_AUDIO"
