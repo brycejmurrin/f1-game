@@ -9,7 +9,7 @@ const DataRealRace = (function () {
   } = DataRealRaceScript;
   const {
     fetchRaw, forgetRaw, cached, remember, fetchTraces, packTrace, traceGet, tracePut,
-    traceFits, OPENF1, TRACE_V, TRACE_HZ, TRACE_MAX, CACHE_KEY, CACHE_MAX
+    traceFits, OPENF1, TRACE_V, TRACE_MAX, CACHE_KEY, CACHE_MAX
   } = DataRealRaceFetch;
 
   const DATA_CREDIT = "Timing data: OpenF1 (CC BY-NC-SA 4.0) · pace, stops, flags and the grid are the real ones; the racing is yours.";
@@ -488,6 +488,6 @@ const DataRealRace = (function () {
   }
 
   return { create, build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, gridFor, lapBoard, raceBook, fmtLap, fetchRaw, forgetRaw, cached, remember,
-           pitDuel, traceDetails, fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_HZ, TRACE_MAX, DISTANCES, CACHE_KEY, CACHE_MAX };
+           pitDuel, traceDetails, fetchTraces, packTrace, traceGet, tracePut, SCRIPT_V, TRACE_V, TRACE_MAX, CACHE_KEY, CACHE_MAX };
 })();
 Object.freeze(DataRealRace);
