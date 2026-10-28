@@ -206,10 +206,18 @@ const GLTF = (function () {
       throw new Error("GLTF: accessor exceeds bufferView bounds or has invalid stride");
     }
 
-    const out = new Array(count * nc);
-    // Need a DataView for arbitrary (possibly unaligned) offsets.
-    const dv = new DataView(bufBytes.buffer, bufBytes.byteOffset, bufBytes.byteLength);
     const normalized = acc.normalized;
+    const n = count * nc;
+    // Tightly packed and component-aligned: a typed view, not one heap number per
+    // component. A 40k-vert import was allocating ~17 MB of boxed arrays for a
+    // ~1.5 MB mesh (scratch/gltf-bench.mjs, 2026-10-27). Unaligned or strided
+    // accessors still go through DataView below.
+    const aligned = ((bufBytes.byteOffset + baseByte) % bytes) === 0;
+    if (stride === elemStride && aligned && !normalized) {
+      return { data: new TA(bufBytes.buffer, bufBytes.byteOffset + baseByte, n), count, numComponents: nc };
+    }
+    const out = new Float32Array(n);
+    const dv = new DataView(bufBytes.buffer, bufBytes.byteOffset, bufBytes.byteLength);
     for (let i = 0; i < count; i++) {
       const rowByte = baseByte + i * stride;
       for (let c = 0; c < nc; c++) {
@@ -290,11 +298,16 @@ const GLTF = (function () {
     const instances = collectMeshInstances(json);
     const quantized = (json.extensionsUsed || []).includes("KHR_mesh_quantization");
 
-    const posOut = [];
-    const nrmOut = [];
-    const colOut = [];
-    const idxOut = [];
-    let vertBase = 0;
+    // Grow typed outputs. Pushing into JS arrays boxed every float (the same
+    // import measured above) and then copied into the typed mesh anyway.
+    function ensure(buf, need) {
+      if (buf.length >= need) return buf;
+      const next = new buf.constructor(Math.max(need, (buf.length * 2) || need));
+      if (buf.length) next.set(buf);
+      return next;
+    }
+    let pos = new Float32Array(0), nrm = new Float32Array(0), col = new Float32Array(0);
+    let idx = new Uint32Array(0), idxN = 0, vertBase = 0;
 
     for (const inst of instances) {
       const mesh = json.meshes[inst.mesh];
@@ -325,8 +338,9 @@ const GLTF = (function () {
         const posA = readAccessor(json, bin, attr.POSITION);
         const posAcc = json.accessors[attr.POSITION];
         if (posA.numComponents !== 3 || !(posAcc.componentType === 5126 ||
-            (quantized && [5120, 5121, 5122, 5123].includes(posAcc.componentType))) ||
-            posA.data.some((v) => !Number.isFinite(v))) throw new Error("GLTF: invalid POSITION accessor");
+            (quantized && [5120, 5121, 5122, 5123].includes(posAcc.componentType)))) {
+          throw new Error("GLTF: invalid POSITION accessor");
+        }
         const vCount = posA.count;
         const positions = posA.data;
 
@@ -339,13 +353,10 @@ const GLTF = (function () {
           }
           indices = readAccessor(json, bin, prim.indices).data;
         } else {
-          indices = new Array(vCount);
+          indices = new Uint32Array(vCount);
           for (let i = 0; i < vCount; i++) indices[i] = i;
         }
-
-        if (indices.length % 3 || indices.some((v) => !Number.isInteger(v) || v < 0 || v >= vCount)) {
-          throw new Error("GLTF: invalid triangle indices");
-        }
+        if (indices.length % 3) throw new Error("GLTF: invalid triangle indices");
 
         // normals: read, or compute flat face normals below
         let normals = null;
@@ -353,8 +364,7 @@ const GLTF = (function () {
           const normalA = readAccessor(json, bin, attr.NORMAL);
           if (normalA.numComponents !== 3 || normalA.count !== vCount ||
               !(json.accessors[attr.NORMAL].componentType === 5126 ||
-                (quantized && [5120, 5122].includes(json.accessors[attr.NORMAL].componentType) && json.accessors[attr.NORMAL].normalized)) ||
-              normalA.data.some((v) => !Number.isFinite(v))) {
+                (quantized && [5120, 5122].includes(json.accessors[attr.NORMAL].componentType) && json.accessors[attr.NORMAL].normalized))) {
             throw new Error("GLTF: invalid NORMAL accessor");
           }
           normals = normalA.data;
@@ -378,43 +388,72 @@ const GLTF = (function () {
           const acc = json.accessors && json.accessors[attr.COLOR_0];
           vcolA = readAccessor(json, bin, attr.COLOR_0);
           if (![3, 4].includes(vcolA.numComponents) || vcolA.count !== vCount ||
-              !(acc.componentType === 5126 || ([5121, 5123].includes(acc.componentType) && acc.normalized)) ||
-              vcolA.data.some((v) => !Number.isFinite(v))) throw new Error("GLTF: invalid COLOR_0 accessor");
+              !(acc.componentType === 5126 || ([5121, 5123].includes(acc.componentType) && acc.normalized))) {
+            throw new Error("GLTF: invalid COLOR_0 accessor");
+          }
         }
 
-        // transform + emit vertices
+        pos = ensure(pos, (vertBase + vCount) * 3);
+        nrm = ensure(nrm, (vertBase + vCount) * 3);
+        col = ensure(col, (vertBase + vCount) * 3);
+        // transform + emit vertices straight into the typed outputs
+        const m0 = world[0], m1 = world[1], m2 = world[2], m3 = world[3];
+        const m4 = world[4], m5 = world[5], m6 = world[6], m7 = world[7];
+        const m8 = world[8], m9 = world[9], m10 = world[10], m11 = world[11];
+        const m12 = world[12], m13 = world[13], m14 = world[14], m15 = world[15];
         for (let i = 0; i < vCount; i++) {
-          let p = [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]];
-          p = mPoint(world, p);
-          posOut.push(p[0] * scale, p[1] * scale, p[2] * scale);
+          const px = positions[i * 3], py = positions[i * 3 + 1], pz = positions[i * 3 + 2];
+          if (!Number.isFinite(px) || !Number.isFinite(py) || !Number.isFinite(pz)) {
+            throw new Error("GLTF: invalid POSITION accessor");
+          }
+          // mPoint, inlined: a 40k-vert import was spending the stall on one
+          // short-lived array per vertex after the boxed accessor was gone.
+          const pw = m3 * px + m7 * py + m11 * pz + m15 || 1;
+          const inv = scale / pw;
+          const o = (vertBase + i) * 3;
+          pos[o] = (m0 * px + m4 * py + m8 * pz + m12) * inv;
+          pos[o + 1] = (m1 * px + m5 * py + m9 * pz + m13) * inv;
+          pos[o + 2] = (m2 * px + m6 * py + m10 * pz + m14) * inv;
 
           if (normals) {
             const nx = normals[i * 3], ny = normals[i * 3 + 1], nz = normals[i * 3 + 2];
+            if (!Number.isFinite(nx) || !Number.isFinite(ny) || !Number.isFinite(nz)) {
+              throw new Error("GLTF: invalid NORMAL accessor");
+            }
             const x = nm[0] * nx + nm[1] * ny + nm[2] * nz;
             const y = nm[3] * nx + nm[4] * ny + nm[5] * nz;
             const z = nm[6] * nx + nm[7] * ny + nm[8] * nz;
             const l = (Math.hypot(x, y, z) || 1) * nSign;
-            nrmOut.push(x / l, y / l, z / l);
+            nrm[o] = x / l; nrm[o + 1] = y / l; nrm[o + 2] = z / l;
           } else {
-            nrmOut.push(0, 0, 0); // filled after, from faces
+            nrm[o] = 0; nrm[o + 1] = 0; nrm[o + 2] = 0; // filled after, from faces
           }
 
           let cr = baseCol[0], cg = baseCol[1], cb = baseCol[2];
           if (vcolA) {
             const ncn = vcolA.numComponents;
-            cr *= vcolA.data[i * ncn];
-            cg *= vcolA.data[i * ncn + 1];
-            cb *= vcolA.data[i * ncn + 2];
+            const r = vcolA.data[i * ncn], g = vcolA.data[i * ncn + 1], b = vcolA.data[i * ncn + 2];
+            const a = ncn === 4 ? vcolA.data[i * ncn + 3] : 0;
+            if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b) || (ncn === 4 && !Number.isFinite(a))) {
+              throw new Error("GLTF: invalid COLOR_0 accessor");
+            }
+            cr *= r; cg *= g; cb *= b;
           }
-          colOut.push(cr, cg, cb);
+          col[o] = cr; col[o + 1] = cg; col[o + 2] = cb;
         }
 
+        for (let i = 0; i < indices.length; i++) {
+          const v = indices[i];
+          if (!Number.isInteger(v) || v < 0 || v >= vCount) throw new Error("GLTF: invalid triangle indices");
+        }
         // Restore counter-clockwise front faces on a mirrored node (swap the
         // 2nd and 3rd index of every triangle) BEFORE any normal is derived
         // from the winding below.
         if (mirrored) {
-          const flipped = new Array(indices.length);
-          for (let t = 0; t < indices.length; t++) flipped[t] = indices[t];
+          // Copy first: a tight accessor is a view of the GLB, and swapping it
+          // in place would rewrite the file bytes.
+          const flipped = new Uint32Array(indices.length);
+          flipped.set(indices);
           for (let t = 0; t + 2 < flipped.length; t += 3) {
             const b = flipped[t + 1]; flipped[t + 1] = flipped[t + 2]; flipped[t + 2] = b;
           }
@@ -423,22 +462,22 @@ const GLTF = (function () {
 
         // compute averaged vertex normals if the primitive had none
         if (!normals) {
-          computeVertexNormals(posOut, indices, vertBase, vCount, nrmOut);
+          computeVertexNormals(pos, indices, vertBase, vCount, nrm);
         }
 
-        // emit indices, offset by this primitive's vertex base
-        for (let i = 0; i < indices.length; i++) idxOut.push(indices[i] + vertBase);
+        idx = ensure(idx, idxN + indices.length);
+        for (let i = 0; i < indices.length; i++) idx[idxN++] = indices[i] + vertBase;
         vertBase += vCount;
       }
     }
 
     if (vertBase === 0) throw new Error("GLTF: no triangle geometry found");
 
-    const pos = new Float32Array(posOut);
-    const nrm = new Float32Array(nrmOut);
-    const col = new Float32Array(colOut);
+    pos = pos.slice(0, vertBase * 3);
+    nrm = nrm.slice(0, vertBase * 3);
+    col = col.slice(0, vertBase * 3);
     const big = vertBase > 65535;
-    const idx = big ? new Uint32Array(idxOut) : new Uint16Array(idxOut);
+    idx = big ? idx.slice(0, idxN) : Uint16Array.from(idx.subarray(0, idxN));
     if (Log.enabled("assets", Log.DEBUG)) Log.debug("assets", "glb verts=" + vertBase);
     return { pos, nrm, col, idx };
   }
