@@ -27,8 +27,23 @@ const DataExport = (function () {
       }
       function sleepCk(ms) { ck(); return sleep(ms).then(ck); }
 
+      // OpenF1 reuses circuit_short_name across Pre-Season Testing weekends
+      // (and Testing vs the Bahrain GP: both "Sakhir"). One ZIP entry per
+      // circuit: keep a Grand Prix lap over a testing one, and never spend a
+      // second Testing fetch on a key we already hold.
+      const testingKeys = Object.create(null);
+      function isTestingMeeting(m) {
+        return /test/i.test(String((m && m.name) || ""));
+      }
+
       function tryMeeting(m, retrying) {
         const key = m.circuit || m.name;
+        const have = Object.prototype.hasOwnProperty.call(out.circuits, key);
+        const incomingTest = isTestingMeeting(m);
+        if (have && (incomingTest || !testingKeys[key])) {
+          log("· already have " + key);
+          return Promise.resolve(true);
+        }
         return F1API.sessionsForMeeting(m.meetingKey).then(function (ss) {
           const s = ss.find(function (x) { return /quali/i.test(x.name || ""); }) ||
                     ss.find(function (x) { return /race/i.test(x.name || ""); }) ||
@@ -76,6 +91,8 @@ const DataExport = (function () {
                       circuit: m.circuit, country: m.country, driver: d.code,
                       lapDur: fl.lapDuration, sf: trace[0], nLoc: loc.length, trace: trace
                     };
+                    if (incomingTest) testingKeys[key] = true;
+                    else delete testingKeys[key];
                     log("✓ " + key + "  pts=" + trace.length + " (" + (d.code || ("#" + d.num)) + ")");
                     return true;
                   });

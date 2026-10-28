@@ -49,6 +49,9 @@
       if (o.doubleSided) { m.side = THREE.DoubleSide; m.forceSinglePass = true; }
       m.lights = false;
       m.customProgramCacheKey = () => (o.key || "tlx-fx") + (m.mrtNode ? "-mrt" : "");
+      // A decal built after setSsrMrt(true) used to compile the single-target
+      // program on its first draw, then the MRT one next present().
+      if (_ssrOn) m.mrtNode = _ssrTagNode;
       return m;
     }
 
@@ -80,8 +83,10 @@
     // heap +17.4 MB, with 773 createBindGroup and 512 createBuffer calls
     // arriving AFTER the warm-up window instead of settling.
     let _ssrTagNode = null;
+    let _ssrOn = false;
     function setSsrMrt(on) {
       if (typeof mrt !== "function") return;
+      _ssrOn = !!on;
       if (on && !_ssrTagNode) _ssrTagNode = mrt({ ssrTag: float(1) }).setBlendMode("ssrTag", _tagKeep);
       const node = on ? _ssrTagNode : null;
       for (let i = 0; i < _fxMats.length; i++) _fxMats[i].mrtNode = node;

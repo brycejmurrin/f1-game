@@ -1,6 +1,6 @@
 # AI personality — workstream plan (2026-09-30)
 
-Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the aggression and optimism rating axes exist (js/data/driver-ratings.js STYLE_AXES, js/physics/ai-drive.js); the mistake-visibility and rubber-band slices were not verified.
+Status: **PARTLY SHIPPED** (checked against the code 2026-10-26) — the aggression and optimism rating axes exist (js/data/driver-ratings.js STYLE_AXES, js/physics/ai-drive.js); the mistake-visibility slice was not verified; the rubber-band slice (5) is CLOSED, not built (2026-10-27, #1565).
 
 Status when written: **PLAN** — docs-only PR first; then one draft PR per slice.
 Owner: this workstream (Cursor agent). Ship base: `claude/f1-game-project-26h3ng`.
@@ -224,7 +224,25 @@ Tests: unit formula pins; `ai-field` n≥5 (easy n≥15 if median integer-coarse
 shows mistakesPer100s above Slice 1 baseline with ranges non-overlapping on
 easy/normal; hard within noise of baseline; replay/determinism green.
 
-### Slice 5 — Rubber band via skill / brake points — **M**
+### Slice 5 — Rubber band via skill / brake points — **M** — CLOSED, not built (2026-10-27, #1565)
+
+**Decision (dispatcher under Bryce's 2026-10-27 delegation; Bryce can reverse it on #1565):** no Melder-style
+band. `scripted` stays the default `apex26.aiPace` in `js/physics/ai-band.js` (pace = tier × skill × DIFF.ai ×
+pacePhase, no live term from the player's gap) and `catchup` stays the legacy reverse-only mode, unchanged.
+
+Measured reason, `node tools/check/ai-band.mjs` (Monza, 90 s, wear off, aiPace forced to `catchup`, 2026-10-27):
+
+| diff | band-on share | P(band\|behind) | P(band\|ahead) | P(band\|dead < 40 m) | mean `_bandNow` when on | median gap when banded |
+|---|---|---|---|---|---|---|
+| normal | 0.061 | 1.000 | 0.000 | 0.361 | 0.006 | 47.2 m |
+| easy | 0.099 | 1.000 | 0.000 | 0.521 | 0.009 | 26.8 m |
+
+Even the legacy band, forced on, moves AI vmax by under 1 % on the frames it fires, and the default fires on
+none. A Melder band (dead zone, forward and reverse help through skill/brake points) would add a live,
+player-gap-driven pace term on top of the personality axes this workstream built (aggression, optimism,
+mistakes): two drivers' differences would be partly the band's, not theirs, and difficulty is already the
+DIFF ladder. The table below stays as the design record should the call be reversed.
+
 
 Rework the L4724–4739 block (extract `js/physics/<ai-band>.js` proposed, or
 similar, so `game.js` does not grow):
