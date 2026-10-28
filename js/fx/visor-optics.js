@@ -46,6 +46,10 @@ const VisorOptics = (function () {
   let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _acc = 1, _bendLevelBuilt = "";
   let _portKey = "", _bendKey = "", _paths = null, _svg = null;
+  // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
+  // restyling every frame that is a forced style recalc of the page, and the 15 Hz paint asked for it on every
+  // repaint (39 forced reads per 15 s in a rain race here, up to 2.4 ms each on a desktop CPU).
+  let _lens = null, _portW = 0, _portH = 0, _portV = "", _portC = "", _portS = "";
   const _stats = { ticks: 0, paints: 0, msLast: 0, msMax: 0, msSum: 0, glints: 0, sun: 0, rim: 0, lamp: 0, msBend: 0, msLookup: 0, errors: 0 };
   const _tmpSun = [0, 0, 0], _glintBuf = [];
   const _basis = { fwd: [0, 0, -1], right: [1, 0, 0], up: [0, 1, 0] };
@@ -410,18 +414,20 @@ const VisorOptics = (function () {
   function _port() {
     if (!_helmet() || typeof document === "undefined" || !document.body || !document.body.style) return;
     const visor = _opt("visor", "off"), color = _opt("visorColor", "neutral"), strength = _opt("visorIntensity", "light");
-    const key = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;
-    if (key === _portKey) return;
-    _portKey = key;
+    if (_portKey && _w === _portW && _h === _portH && visor === _portV && color === _portC && strength === _portS) return;   // no per-frame key string
+    _portW = _w; _portH = _h; _portV = visor; _portC = color; _portS = strength;
+    _portKey = _w + "x" + _h + "|" + visor + "|" + color + "|" + strength;
     // OFF is no visor at all: the eye-port (bezel, cheek pads, oval falloff) goes with it, or the plain helmet
     // view keeps an oval frame the player switched off.
     if (visor === "off") {
+      _lens = null;
       document.body.style.removeProperty("--visor-port");
       document.body.removeAttribute("data-visor-port");
       return;
     }
     const tinted = visor === "smoke";
-    document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: tinted ? tintRGB(color) : null, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
+    _lens = tinted ? tintRGB(color) : null;
+    document.body.style.setProperty("--visor-port", portImage(_w, _h, { tint: _lens, tintAlpha: tinted ? TINT_ALPHA[strength] || TINT_ALPHA.light : 0 }));
     document.body.setAttribute("data-visor-port", "1");
   }
 
@@ -655,7 +661,7 @@ const VisorOptics = (function () {
     const kn = readKnobs(t0 || 0);
     let m;
     try {
-      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? tintRGB(_opt("visorColor", "neutral")) : null, bloom: kn.bloom, glare: kn.glare, beams });
+      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null, bloom: kn.bloom, glare: kn.glare, beams });
       _paint(m);
     } catch (e) {
       // Cosmetic layer: a bad frame (a non-finite gradient, a hook mid-rebuild) must never take the render loop
