@@ -17406,6 +17406,7 @@
     "js/ui/menu-nav.js": {
       "activeLayer": [
         "tests/specs/menu-keyboard.spec.js",
+        "tests/unit/menu-nav-spatial.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "currentItem": [
