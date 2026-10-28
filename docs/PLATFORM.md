@@ -88,6 +88,20 @@ btn 8 View/Back  camera              btn 9 Menu/Start  pause
 - Web Audio (synthesized SFX plus the baked `assets/music`, `assets/sfx` and
   `assets/voice` mp3s) is resumed from the first user gesture, as iOS requires.
 
+## Share cards on Safari
+
+`navigator.share()` needs transient activation and rejects with `NotAllowedError` without it
+([MDN Navigator.share](https://developer.mozilla.org/en-US/docs/Web/API/Navigator/share)).
+Drawing a card is async (fonts, the QR encoder, PNG encoding), so a tap that drew and then shared
+could lose its activation on iOS Safari before `share()` ran. The SHARE CARD chip therefore opens a
+preview sheet (`js/share/share-card-chips.js`) that draws first and shares on a second, fresh tap;
+a `NotAllowedError` there keeps the sheet open and asks for one more tap, and SAVE IMAGE is always
+offered. Every card stays at scale 1 (at most 1080×1350, about 1.5 Mpx: far under Safari's canvas area
+cap) and its canvas is zeroed after export; an export over 1.5 MB is re-encoded once as JPEG and
+otherwise refused with a message (`ShareCard.MAX_BYTES`). `canShare({ files })` is tested before
+every share, since PNG is only "usually" shareable; where it is false (desktop Firefox) SHARE is
+hidden and SAVE IMAGE downloads the file.
+
 ## On-device checklist
 
 ```
@@ -96,4 +110,5 @@ btn 8 View/Back  camera              btn 9 Menu/Start  pause
 [ ] 60 fps holds in landscape; device doesn't get hot over a ~15 min race
 [ ] Rotation-lock (Control Center) is respected
 [ ] Hard-refresh after deploy picks up the new ?v= assets
+[ ] SHARE CARD → SHARE opens the share sheet with the PNG (iOS Safari, Android Chrome)
 ```
