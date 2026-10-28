@@ -230,6 +230,7 @@ const FULL = [
   "js/input/bindings.js",
   "js/input/pad-menu.js",
   "js/input/haptics.js",
+  "js/input/pedal-travel.js", // PedalTravel: stamp-then-ease numbers; hold-buttons.js and the phone wheel
   "js/input/hold-buttons.js",
   "js/input/controller-profiles.js",
   "js/input/input.js",
@@ -697,6 +698,7 @@ const HARD_EDGES = [
   ["js/input/bindings.js", "js/input/input.js"],
   ["js/input/pad-menu.js", "js/input/input.js"],
   ["js/input/haptics.js", "js/input/input.js"],
+  ["js/input/pedal-travel.js", "js/input/hold-buttons.js"],
   ["js/input/hold-buttons.js", "js/input/input.js"],
   // js/audio's intra-directory pairs moved to LAZY_AUDIO_EDGES when the
   // engine/panel stack left FULL (HARD_EDGES needs both ends in FULL).
@@ -1162,6 +1164,8 @@ const LAZY_DATA = [
   "js/data/standings.js",
   "js/data/results.js",
   "js/data/live.js",
+  "js/data/real-race-script.js",
+  "js/data/real-race-fetch.js",
   "js/data/real-race-tab.js",
   "js/data/hub.js",
 ];
@@ -1187,6 +1191,9 @@ const LAZY_DATA_EDGES = LAZY_DATA.filter((f) => f !== "js/data/hub.js")
     ["js/data/telemetry-render.js", "js/data/telemetry.js"],
     ["js/data/telemetry-player.js", "js/data/telemetry.js"],
     ["js/data/telemetry-view.js", "js/data/telemetry.js"],
+    ["js/data/real-race-script.js", "js/data/real-race-fetch.js"],
+    ["js/data/real-race-script.js", "js/data/real-race-tab.js"],
+    ["js/data/real-race-fetch.js", "js/data/real-race-tab.js"],
   ]);
 
 // THE TRACK DESIGNER (js/editor/*, the part behind the TRACK DESIGNER door).
@@ -1346,8 +1353,11 @@ const LAZY_NET = [
   "js/net/netplay.js",
   "js/net/lobby.js",
   // PHONE AS CONTROLLER rides the same wire (rtc + handshake + rendezvous), so
-  // it loads with the stack and ships in the same precache group. Call-time
-  // binding only; controller.html's CONTROLLER subset below also carries it.
+  // it loads with the stack and ships in the same precache group. The codec
+  // and the phone page evaluate before the session (eval-time destructure).
+  // controller.html's CONTROLLER subset below carries the same three.
+  "js/input/phone-pad-codec.js",
+  "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",
 ];
 
@@ -1391,6 +1401,9 @@ const CONTROLLER = [
   "js/net/handshake.js",
   "js/net/scan.js",         // the pairing screen's SCAN QR CODE (jsQR is injected on demand)
   "js/input/tilt-roll.js",
+  "js/input/pedal-travel.js", // the phone wheel's pedals share hold-buttons' travel numbers
+  "js/input/phone-pad-codec.js",
+  "js/input/phone-pad-page.js",
   "js/input/phone-pad.js",
 ];
 // Eval-time pairs, moved verbatim from HARD_EDGES. Listed, not derived: unlike
@@ -1415,6 +1428,8 @@ const LAZY_NET_EDGES = [
   ["js/net/lobby-codes.js", "js/net/lobby.js"],
   ["js/net/lobby-roster.js", "js/net/lobby.js"],   // lobby destructures LobbyRoster inside create(), which game.js evals
   ["js/net/lobby-settings.js", "js/net/lobby.js"], // lobby destructures LobbySettings inside create()
+  ["js/input/phone-pad-codec.js", "js/input/phone-pad.js"], // session destructures PhonePadCodec at eval
+  ["js/input/phone-pad-page.js", "js/input/phone-pad.js"],  // session destructures PhonePadPage at eval
 ];
 
 const DEFERRED_EDGES = [

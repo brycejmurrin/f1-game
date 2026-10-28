@@ -1006,6 +1006,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxEnvProbe": "1",
     "apex26.tlxViz": "lit",
     "apex26.tlxWebKitGL": "WebGPU init failed",
+    "apex26.packIndex": "{\"models\":{}}",
     "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
@@ -1044,6 +1045,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // boot's early backend preload (guessBackend). A RESET that kept it would preload
     // the old path's group once; dropping it costs nothing.
     "apex26.gfxBootBound",
+    // assets.js remembers the last pack's model file+md5 (a js/render write, so
+    // RESET must clear it). The next visit relearns the hint from the manifest.
+    "apex26.packIndex",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
@@ -1144,6 +1148,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
+  assert.equal(ls.getItem("apex26.packIndex"), null, "RESET drops the remembered pack index");
   assert.equal(ls.getItem("apex26.gfxBackendProbe"), null);
   assert.equal(ls.getItem("apex26.gfxWgxLevel"), null);
   assert.equal(ls.getItem("apex26.gfxTlxFail"), null);
