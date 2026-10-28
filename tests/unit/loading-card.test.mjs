@@ -38,8 +38,8 @@ const ruleDecls = (css, sel) => {
 };
 const phaseCard = (phase) => ruleDecls(readCssSource("css/overlays.css"), `#loading[data-phase="${phase}"] #ld-card`);
 
-/** LoadingScreen's module surface, evaluated on its own — the same `const` ->
- *  `var` rewrite tests/unit/flyby-panel.test.mjs uses for the other UI modules. */
+/** LoadingCard + LoadingScreen, evaluated alone — the same `const` → `var`
+ *  rewrite tests/unit/flyby-panel.test.mjs uses for the other UI modules. */
 function load() {
   const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console };
   sb.window = sb;
@@ -47,12 +47,29 @@ function load() {
     { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
+  assert.ok(sb.LoadingCard, "js/ui/loading-card.js assigns the LoadingCard global");
   assert.ok(sb.LoadingScreen, "js/ui/loading-screen.js assigns the LoadingScreen global");
-  return sb.LoadingScreen;
+  return sb;
 }
 
-const LS = load();
+const { LoadingCard: LC, LoadingScreen: LS } = load();
 const { CARD, CARD_KEYS, clampCard, cardPristine, cardVars } = LS;
+
+/** Pure keys LoadingScreen must keep as the same references LoadingCard exports. */
+const PURE_KEYS = [
+  "FLY_MS", "isAutomation", "CARD_MS", "SHORT_FLY_MS", "SKIP_GRACE_MS", "SKIP_STREAK", "FLY_MAX_MS",
+  "flyMsFor", "packSettled", "warmPresentReady", "metaRows", "nextSkips",
+  "CARD", "CARD_KEYS", "clampCard", "cardPristine", "cardVars",
+  "isGridShot", "gridField", "gridLayout", "gridColour", "gridInk", "GRID_ROW_MIN",
+];
+
+test("LoadingScreen re-exports LoadingCard's pure helpers by reference", () => {
+  for (const k of PURE_KEYS) {
+    assert.ok(Object.prototype.hasOwnProperty.call(LC, k), `LoadingCard missing ${k}`);
+    assert.ok(Object.prototype.hasOwnProperty.call(LS, k), `LoadingScreen missing re-export ${k}`);
+    assert.equal(LS[k], LC[k], `${k} must be the same reference on LoadingScreen`);
+  }
+});
 
 test("the registry is complete: every key has a range, a step, a label and a default inside it", () => {
   assert.ok(CARD_KEYS.length >= 3, "size and both axes, at least");
