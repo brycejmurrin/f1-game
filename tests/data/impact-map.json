@@ -7853,12 +7853,17 @@
       ]
     },
     "js/garage/scene-dress.js": {
+      "boardInfo": [
+        "tests/unit/garage-sheet-round2.test.mjs"
+      ],
+      "releaseDress": [
+        "tests/unit/garage-sheet-round2.test.mjs"
+      ],
       "*": [
         "tests/unit/garage-looks.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/garage-prebuild.test.mjs",
-        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/garage-sign-occlusion.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs"
@@ -8313,6 +8318,7 @@
       ],
       "mods": [
         "tests/unit/garage-followups.test.mjs",
+        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
       "rake": [
@@ -8322,7 +8328,6 @@
         "tests/unit/setup-tune.test.mjs"
       ],
       "*": [
-        "tests/unit/garage-sheet-round2.test.mjs",
         "tests/unit/player-tools-ui.test.mjs"
       ]
     },
@@ -10265,6 +10270,12 @@
       ]
     },
     "js/perf/menu-quit-tail.js": {
+      "afterOverlay": [
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
+      "wire": [
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ]
@@ -10466,13 +10477,16 @@
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
+      "clearMenuEntrySession": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
       "continueWindow": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "diffStages": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
-      "introBudgetExpired": [
+      "introBudgetLeft": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "mark": [
@@ -15598,11 +15612,18 @@
       "chip": [
         "tests/unit/share-card.test.mjs"
       ],
+      "close": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "preview": [
+        "tests/unit/share-card.test.mjs"
+      ],
       "slug": [
         "tests/unit/share-card.test.mjs"
       ],
       "*": [
-        "tests/specs/race-cycle-memory.spec.js"
+        "tests/specs/race-cycle-memory.spec.js",
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/share/share-card-data.js": {
@@ -15635,7 +15656,16 @@
       ]
     },
     "js/share/share-card.js": {
+      "canShareFiles": [
+        "tests/unit/share-card.test.mjs"
+      ],
       "deliver": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "encode": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "extension": [
         "tests/unit/share-card.test.mjs"
       ],
       "paint": [
@@ -17527,6 +17557,7 @@
       ],
       "create": [
         "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",

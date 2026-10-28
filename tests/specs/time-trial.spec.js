@@ -4,6 +4,7 @@
 import { test, expect } from "@playwright/test";
 import { BOOT_MS, test as journeyTest } from "../helpers/fixtures.js";
 import { pinFactorySeat } from "../helpers/factory-seat.js";
+import { saveSharedCard } from "../helpers/share-card.js";
 import { uiTestOptions } from "../../tools/lib/ui-device-profile.mjs";
 
 const LANDSCAPE = { width: 844, height: 390 };
@@ -417,12 +418,7 @@ test.describe("Time Trial — results panel", () => {
     });
     await page.evaluate(() => window.__apex.finishRace());
     await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
-    const chip = page.locator("#res-ghost-card");
-    await chip.scrollIntoViewIfNeeded();
-    await expect(chip).toBeVisible();
-    const [file] = await Promise.all([page.waitForEvent("download", { timeout: 20_000 }), chip.click()]);
-    expect(file.suggestedFilename()).toMatch(/^apex26-lap-[a-z0-9-]+\.png$/);
-    await expect(chip).toHaveText("DOWNLOADED");
+    await saveSharedCard(page, "#res-ghost-card", /^apex26-lap-[a-z0-9-]+\.png$/);
   });
 
   test("TRY AGAIN button shown in TT results", async ({ page }) => {
