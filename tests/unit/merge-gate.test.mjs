@@ -478,7 +478,7 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
   assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
-  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt"], "the immediate re-gate: one PR, the head its budget counts against, the attempt");
+  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "sync"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or an AUTO-SYNC sweep");
   assert.equal(on.repository_dispatch, undefined);
   assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
   assert.deepEqual(LAND.permissions, {}, "the workflow-level token has no permissions; each job states its own");
@@ -486,7 +486,7 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
   assert.deepEqual(jobsWhere(writes), ["post", "arm", "retry"]);
-  assert.deepEqual(jobsWhere(usesSecret), ["post", "arm"]);
+  assert.deepEqual(jobsWhere(usesSecret), ["post", "arm", "sync"]);
   assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
   const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
   assert.deepEqual(LAND.jobs["land-gate"].permissions, readOnly);
@@ -581,7 +581,7 @@ function runStep(script, env, files = {}) {
   }
   const r = spawnSync("bash", ["-c", `${stub}\n${script}`], { encoding: "utf8", cwd: dir,
     env: { ...process.env, GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
-      RETRY_MAX: String(LAND.env.RETRY_MAX), ...logs, ...env } });
+      RETRY_MAX: String(LAND.env.RETRY_MAX), SYNC_MAX: String(LAND.env.SYNC_MAX), ...logs, ...env } });
   const out = Object.fromEntries(fs.readFileSync(logs.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   const calls = fs.readFileSync(logs.GH_LOG, "utf8").split("\n").filter(Boolean);
   const summary = fs.readFileSync(logs.GITHUB_STEP_SUMMARY, "utf8");
@@ -724,4 +724,153 @@ test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budge
   assert.notEqual(r.status, 0, "a non-numeric pr input is refused");
   r = go({ EVENT: "pull_request_target", PR_NUMBER: "7", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "" });
   assert.equal(r.out.attempt, "0", "every other event starts at 0");
+});
+
+// ---- AUTO-SYNC: the deploy tip merged into `land` PRs whose gate refused on distance alone, throttled -------------
+
+const RESOLVE_RUN = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+const hx = (c) => c.repeat(40);
+const refusal = (rows, n = 7, h = HEAD7) => `= merge-gate refused — ${rows} pr=#${n} sha=${h} tip=${TIP_A}`;
+const TRUSTED_DIST = "open=ok hold=ok plan=ok ci=ok distance=FAIL";
+const FULL_DIST = "open=ok hold=ok plan=ok ci=ok gen=ok ratchets=ok distance=FAIL";
+
+test("land.yml sync job (AUTO-SYNC): LAND_TOKEN only for the update-branch PUT, no checkout or repo code, read-only GITHUB_TOKEN, off under merge-pause", () => {
+  const j = LAND.jobs.sync;
+  assert.ok(j, "the sync job exists");
+  assert.equal(j.needs, "resolve");
+  assert.deepEqual(j.permissions, { "pull-requests": "read", issues: "read", statuses: "read", actions: "read" }, "GITHUB_TOKEN only reads");
+  assert.equal(writes(j), false);
+  assert.equal(runsRepoCode(j), false, "gh and jq only");
+  assert.ok(!j.steps.some((st) => /actions\/checkout@/.test(st.uses || "")), "no actions/checkout");
+  assert.equal(j.steps.length, 1);
+  const st = j.steps[0];
+  assert.equal(st.env.LAND_TOKEN, "${{ secrets.LAND_TOKEN }}");
+  assert.equal((JSON.stringify(j).match(/secrets\./g) || []).length, 1, "LAND_TOKEN, in this one step's env, is the job's only secret");
+  const puts = st.run.split("\n").filter((l) => /update-branch/.test(l) && /--method PUT/.test(l));
+  assert.equal(puts.length, 1, "one update-branch call");
+  assert.match(puts[0], /GH_TOKEN="\$LAND_TOKEN" gh api --method PUT "repos\/\$R\/pulls\/\$n\/update-branch" -f expected_head_sha="\$head"/,
+    "LAND_TOKEN (a GITHUB_TOKEN push leaves the new head's CI awaiting approval), pinned to the head resolve read");
+  assert.doesNotMatch(puts[0], /GITHUB_TOKEN|github\.token/);
+  assert.match(st.run, /if \[ -z "\$\{LAND_TOKEN:-\}" \]; then[^]*?exit 0/, "no LAND_TOKEN: nothing synced, never a GITHUB_TOKEN fallback");
+  assert.match(st.run, /labels=dispatch:merge-pause/, "merge-pause is re-read before acting");
+  assert.ok(Number(LAND.env.SYNC_MAX) >= 1 && Number(LAND.env.SYNC_MAX) <= 5, "SYNC_MAX: a small throttle");
+  const needs = (sync, paused) => ({ needs: { resolve: { outputs: { sync, paused } } } });
+  assert.equal(ghExpr(j.if, needs('[{"number":7}]', "false")), true);
+  assert.equal(ghExpr(j.if, needs('[{"number":7}]', "true")), false, "dispatch:merge-pause syncs nothing");
+  assert.equal(ghExpr(j.if, needs("[]", "false")), false);
+  assert.equal(ghExpr(j.if, needs("", "false")), false, "resolve skipped");
+});
+
+test("land.yml resolve distance_only: every row ok but distance, trusted-only or full, cut at 140 characters; anything else is not a candidate", () => {
+  const start = RESOLVE_RUN.indexOf("distance_only() {");
+  const fn = RESOLVE_RUN.slice(start, RESOLVE_RUN.indexOf("\n}\n", start) + 3);
+  const ok = (d) => spawnSync("bash", ["-c", `${fn}\ndistance_only "$D"`], { encoding: "utf8", env: { ...process.env, D: d } }).status === 0;
+  assert.equal(ok(refusal(TRUSTED_DIST)), true, "a trusted-only verdict names no gen/ratchets rows");
+  assert.equal(ok(refusal(FULL_DIST)), true);
+  assert.equal(ok(refusal(FULL_DIST, 4017).slice(0, 140)), true, "post cuts the status description at 140 characters");
+  for (const rows of ["open=ok hold=ok plan=ok ci=ok gen=FAIL ratchets=ok distance=FAIL", "open=ok hold=ok plan=ok ci=ok ratchets=FAIL distance=FAIL",
+    "open=ok hold=ok plan=ok ci=WAIT distance=FAIL", "open=ok hold=ok plan=FAIL ci=ok distance=FAIL", "open=ok hold=ok plan=ok ci=ok distance=ok",
+    "open=ok hold=ok plan=ok distance=FAIL", "open=ok hold=ok plan=ok ci=ok newrow=ok distance=FAIL"]) {
+    assert.equal(ok(refusal(rows)), false, rows);
+  }
+  assert.equal(ok(`= merge-gate passed — open=ok hold=ok plan=ok ci=ok distance=ok pr=#7 sha=${HEAD7}`), false);
+  assert.equal(ok("= merge-gate not asked — the `hold` label is set"), false);
+  assert.equal(ok(`= merge-gate error, will retry — ${refusal(TRUSTED_DIST)}`), false);
+  assert.equal(ok(""), false);
+});
+
+test("land.yml resolve: a train or a sync=true dispatch lists the distance-only refusals (priority, then oldest); a dispatched sweep re-gates nothing", () => {
+  const H = { 7: HEAD7, 8: hx("8"), 9: hx("9"), 10: hx("e"), 11: hx("f"), 12: hx("d"), 13: hx("c") };
+  const pr = (n, o = {}) => ({ number: n, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: H[n], repo: { full_name: "o/r" } },
+    auto_merge: null, created_at: `2026-10-27T${String(n).padStart(2, "0")}:00:00Z`, labels: [{ name: "land" }], ...o });
+  const label = (...names) => ({ labels: names.map((name) => ({ name })) });
+  const prs = { 7: pr(7), 8: pr(8, label("land", "priority")), 9: pr(9), 10: pr(10, label("land", "needs-decision")), 11: pr(11),
+    12: pr(12, { head: { sha: H[12], repo: { full_name: "fork/r" } } }), 13: pr(13, label("land", "hold")) };
+  const gate = (n, state, description) => [{ id: 100 + n, context: "gate", state, description }];
+  const statuses = { [H[7]]: gate(7, "failure", refusal(TRUSTED_DIST, 7, H[7])), [H[8]]: gate(8, "failure", refusal(FULL_DIST, 8, H[8])),
+    [H[9]]: gate(9, "failure", refusal("open=ok hold=ok plan=ok ci=ok gen=FAIL ratchets=ok distance=FAIL", 9, H[9])),
+    [H[10]]: gate(10, "failure", refusal(TRUSTED_DIST, 10, H[10])), [H[11]]: gate(11, "pending", "= merge-gate waiting"),
+    [H[12]]: gate(12, "failure", refusal(TRUSTED_DIST, 12, H[12])), [H[13]]: gate(13, "failure", refusal(TRUSTED_DIST, 13, H[13])) };
+  const base = { EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_CONCLUSION: "success", RUN_SHA: "", CANDIDATES: "null", PR_NUMBER: "",
+    IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "", IN_SYNC: "", FAKE_LANDS: JSON.stringify(Object.keys(prs).map((n) => ({ number: Number(n) }))),
+    FAKE_PRS: JSON.stringify(prs), FAKE_STATUSES: JSON.stringify(statuses) };
+  const want = [{ number: 8, head: H[8], gate: 108 }, { number: 7, head: H[7], gate: 107 }];
+
+  let r = runStep(RESOLVE_RUN, base);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.sync), want, "`priority` first, then oldest; gen=FAIL, needs-decision, a fork head and hold are not synced");
+  assert.deepEqual(JSON.parse(r.out.prs), [{ number: 11, head: H[11] }], "a head whose gate is not failure is re-gated by the train as before");
+  assert.match(r.stdout, /PR #9: gate is already failure/);
+  assert.equal(JSON.parse(r.out.notasked)[0].number, 13);
+
+  r = runStep(RESOLVE_RUN, { ...base, PAUSED: "true" });
+  assert.equal(r.out.sync, "[]", "dispatch:merge-pause syncs nothing");
+
+  r = runStep(RESOLVE_RUN, { ...base, EVENT: "workflow_dispatch", RUN_BRANCH: "", RUN_CONCLUSION: "", IN_SYNC: "true" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.sync), want, "a sweep by hand finds the same candidates");
+  assert.equal(r.out.landable, "false", "and re-gates nothing");
+
+  r = runStep(RESOLVE_RUN, { ...base, EVENT: "workflow_dispatch", RUN_BRANCH: "", RUN_CONCLUSION: "", IN_SYNC: "false" });
+  assert.notEqual(r.status, 0, "without sync=true an empty pr input is refused as before");
+
+  r = runStep(RESOLVE_RUN, { ...base, EVENT: "pull_request_target", PR_NUMBER: "7" });
+  assert.equal(r.out.sync, "[]", "a label or push event never syncs");
+
+  const disp = (inputs) => ({ event_name: "workflow_dispatch", ref: `refs/heads/${DEPLOY_BRANCH}`, run_id: 9, event: { inputs } });
+  assert.equal(ghExpr(LAND.concurrency.group, disp({ pr: "", sync: "true" })), "land-sync", "a sweep never replaces a pending train re-gate in land-tip");
+  assert.equal(ghExpr(LAND.concurrency.group, disp({ pr: "7", sync: "false" })), "land-7");
+});
+
+test("land.yml sync step: budget = SYNC_MAX minus the land PRs already in CI; LAND_TOKEN PUT pinned to the head; 422, busy, moved or re-gated heads skipped", () => {
+  const run = LAND.jobs.sync.steps.find((s) => s.id === "sync").run;
+  const H = { 7: HEAD7, 8: hx("8"), 9: hx("9"), 11: hx("f") };
+  const pr = (n, o = {}) => ({ number: n, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: H[n], repo: { full_name: "o/r" } }, labels: [{ name: "land" }], ...o });
+  const prs = (o = {}) => JSON.stringify({ 7: pr(7), 8: pr(8), 9: pr(9), ...o });
+  const statuses = (o = {}) => JSON.stringify({ [H[7]]: [{ id: 107, context: "gate", state: "failure" }], [H[8]]: [{ id: 108, context: "gate", state: "failure" }],
+    [H[9]]: [{ id: 109, context: "gate", state: "failure" }], ...o });
+  const runs = (...heads) => JSON.stringify({ workflow_runs: [...heads.map((h) => ({ head_sha: h, display_title: "fix: x" })),
+    { head_sha: H[9], display_title: "CI ignored: label priority" }] });
+  const env = (o = {}) => ({ GH_TOKEN: "ghtok", LAND_TOKEN: "landtok", SYNC_MAX: "3", PAUSED: "false",
+    SYNC: JSON.stringify([8, 7, 9].map((n) => ({ number: n, head: H[n], gate: 100 + n }))), FAKE_PRS: prs(), FAKE_STATUSES: statuses(),
+    FAKE_RUNS: runs(H[11]), FAKE_LANDS: JSON.stringify([7, 8, 9, 11].map((n) => ({ number: n, headRefOid: H[n] }))), ...o });
+  const tried = (r) => r.calls.filter((c) => / --method PUT /.test(c)).map((c) => Number(c.match(/pulls\/(\d+)\/update-branch/)[1]));
+
+  let r = runStep(run, env());
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(tried(r), [8, 7], "#11 already waits on CI: 3 - 1 = 2 syncs, in resolve's order (a `CI ignored` run is not counted)");
+  r.calls.forEach((c, i) => {
+    if (!/ --method PUT /.test(c)) return;
+    const n = Number(c.match(/pulls\/(\d+)\//)[1]);
+    assert.ok(c.endsWith(`-f expected_head_sha=${H[n]}`), "pinned to the head resolve read");
+    assert.equal(r.calls[i + 1], "token=landtok", "the PUT runs with LAND_TOKEN, never GITHUB_TOKEN");
+  });
+  assert.equal(r.out.synced, "2");
+  assert.match(r.summary, /budget spent/);
+
+  r = runStep(run, env({ GH_PUT_FAIL: "8" }));
+  assert.deepEqual(tried(r), [8, 7, 9], "a 422 (conflict, moved head) spends no budget");
+  assert.equal(r.out.synced, "2");
+  assert.match(r.summary, /#8: update-branch refused[^\n]*HTTP 422/, "logged in the step summary");
+
+  r = runStep(run, env({ FAKE_RUNS: runs(H[8]) }));
+  assert.deepEqual(tried(r), [7, 9], "a head whose own ci.yml run is still going is never synced (it counts as in flight)");
+  assert.match(r.summary, /#8: not synced: a ci\.yml run/);
+
+  r = runStep(run, env({ FAKE_PRS: prs({ 8: pr(8, { head: { sha: hx("a"), repo: { full_name: "o/r" } } }), 9: pr(9, { labels: [{ name: "land" }, { name: "hold" }] }) }),
+    FAKE_STATUSES: statuses({ [H[7]]: [{ id: 999, context: "gate", state: "pending" }] }) }));
+  assert.deepEqual(tried(r), [], "head moved (#8), gate re-posted since resolve (#7), hold set (#9)");
+  assert.match(r.summary, /#8: not synced: its head moved/);
+  assert.match(r.summary, /#7: not synced: its `gate` changed/);
+
+  r = runStep(run, env({ SYNC_MAX: "1" }));
+  assert.deepEqual(tried(r), [], "the land PRs already in CI fill the window");
+
+  r = runStep(run, env({ LAND_TOKEN: "" }));
+  assert.equal(r.status, 0);
+  assert.deepEqual(tried(r), [], "no LAND_TOKEN: nothing synced, no GITHUB_TOKEN fallback");
+  assert.match(r.summary, /LAND_TOKEN is not set/);
+
+  r = runStep(run, env({ PAUSED: "true" }));
+  assert.deepEqual(tried(r), [], "merge-pause re-read at the act");
 });
