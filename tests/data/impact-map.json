@@ -5492,9 +5492,11 @@
         "tests/unit/telemetry-trace.test.mjs"
       ],
       "constructorStandings": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-standings.test.mjs"
       ],
       "driverStandings": [
+        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-standings.test.mjs"
       ],
       "fastestLap": [
