@@ -1343,9 +1343,12 @@ const HudLayout = (function () {
     else init();
   }
 
+  // Public surface: PACK_AIR + packPhoneRects for the unit packer; KEY / LIM /
+  // PACK_SCALE_MIN / PACK_FIXED / PACK_MOVE stay module-local (no js/ or test
+  // callers). Survey lockstep still parses the LIM const from source.
   return {
-    KEY, ELEMENTS, SETS, PROFILES, LIM, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
-    PACK_AIR, PACK_SCALE_MIN, PACK_FIXED, PACK_MOVE,
+    ELEMENTS, SETS, PROFILES, COCKPIT_CAMS, SHIPPED, TOUCH_SHIPPED, PRESETS, presetFits,
+    PACK_AIR,
     holdArrangePreview: (on) => { arrangePreview = !!on; },
     get, set, resetEl, resetSet, isShipped, scaleOf, setCam, apply, fit, clearReadouts, build,
     camSet, shown: () => shown(), profile, all, migrate, presetLayout, applyPreset, presetOf,
