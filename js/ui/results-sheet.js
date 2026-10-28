@@ -626,8 +626,10 @@ function buildTTResults() {
       }, () => { btn.textContent = text; });
     };
     els.resultsTable.appendChild(btn);
-    if (typeof G.daily.shareCard === "function" && typeof ShareCardChips !== "undefined") {
-      els.resultsTable.appendChild(ShareCardChips.chip("res-card-share", () => G.daily.shareCard()));
+    if (typeof G.daily.card === "function" && typeof ShareCardChips !== "undefined") {
+      let daily = null;   // one card() per tap: the builder and the share text read the same result
+      ShareCardChips.append(els.resultsTable, "res-card-share", () => (daily = G.daily.card()).model,
+        () => daily ? daily.name : "daily", () => daily ? daily.text : "");
     }
     if (typeof ShareCode !== "undefined" && ShareCode.encode) {
       const codeBtn = document.createElement("button");

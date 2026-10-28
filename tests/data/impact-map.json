@@ -7248,16 +7248,12 @@
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/mirror-pass-carbuild.test.mjs",
-        "tests/unit/render-lighting-prep.test.mjs",
         "tests/unit/repo-size.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/session-transcript.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
-      ],
-      "renderLightingPrep": [
-        "tests/unit/render-lighting-prep.test.mjs"
       ],
       "renderPosOf": [
         "tests/unit/field-lod.test.mjs"
@@ -7505,7 +7501,6 @@
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
-        "tests/unit/game-m33-m35-m42.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/global-registry.test.mjs",
@@ -15591,11 +15586,18 @@
       "chip": [
         "tests/unit/share-card.test.mjs"
       ],
+      "close": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "preview": [
+        "tests/unit/share-card.test.mjs"
+      ],
       "slug": [
         "tests/unit/share-card.test.mjs"
       ],
       "*": [
-        "tests/specs/race-cycle-memory.spec.js"
+        "tests/specs/race-cycle-memory.spec.js",
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/share/share-card-data.js": {
@@ -15628,7 +15630,16 @@
       ]
     },
     "js/share/share-card.js": {
+      "canShareFiles": [
+        "tests/unit/share-card.test.mjs"
+      ],
       "deliver": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "encode": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "extension": [
         "tests/unit/share-card.test.mjs"
       ],
       "paint": [
@@ -17520,6 +17531,7 @@
       ],
       "create": [
         "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
