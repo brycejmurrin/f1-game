@@ -135,6 +135,19 @@ test.describe("Menu keyboard + trackpad (desktop)", () => {
     expect(await page.evaluate(() => document.getElementById("select").contains(document.activeElement))).toBe(true);
   });
 
+  // #3893: Enter from the title must move FORWARD. The picker used to land on
+  // the ALL filter chip and Race Settings on BACK (its [autofocus]), so a
+  // keyboard player's Enter bounced back to the picker instead of racing.
+  test("Enter walks title → picker → Race Settings forward: initial focus is the forward button", async ({ page }) => {
+    await page.goto("/"); await waitReady(page);
+    await openSelect(page);
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === "sel-go", null, { polling: 100, timeout: 5_000 });
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => !document.getElementById("race-settings").hidden, null, { polling: 100, timeout: BOOT_MS });
+    await page.waitForFunction(() => document.activeElement && document.activeElement.id === "rs-go", null, { polling: 100, timeout: 5_000 });
+    expect(await page.evaluate(() => document.activeElement.id)).toBe("rs-go");
+  });
+
   test("ArrowRight walks the flag strip and scrolls it into view; ArrowDown leaves it for the hero", async ({ page }) => {
     await page.goto("/"); await waitReady(page);
     await openSelect(page);
