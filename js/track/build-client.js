@@ -162,7 +162,13 @@ const TrackBuildClient = (function () {
     worker.onmessageerror = () => failed("unreadable worker response");
     // `base`: the PAGE's URL. The worker resolves relative fetches (assets.js's
     // "assets/pack/…") against it, not against js/track/build-worker.js.
-    try { worker.postMessage({ type: "init", files: pageUrls(files), base: location.href }); }
+    // Start the worker's script fetches on this thread while worker.js itself
+    // is still downloading. The worker awaits the same URLs, so the two fetches
+    // join and importScripts reads the cache instead of one round trip per file.
+    const hrefs = pageUrls(files);
+    try { if (typeof ScriptLoader !== "undefined" && ScriptLoader.warm) ScriptLoader.warm(hrefs); }
+    catch (_) { /* the worker still warms its own list */ }
+    try { worker.postMessage({ type: "init", files: hrefs, base: location.href }); }
     catch (e) { failed("init " + e.message); }
     return ready;
   }
