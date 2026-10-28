@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import {
   planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, extractSessions, sessionRefs, activityAt, applyPlan, loadConfig,
   issuePrompt, continuePrompt, deployRedPrompt, waitingWhy, PROMPT_MAX_LINES, BOARD_MARKER, LAUNCH_RE,
-  titleNames, readSessionPages, childSessionIds, sessionsPage, readState, getAll, landProblem, recordToken, recordComment, main, claimedSessionIds,
+  titleNames, readSessionPages, childSessionIds, sessionsPage, readState, getAll, landProblem, distanceOnlyRefusal, recordToken, recordComment, main, claimedSessionIds,
   renderPlan,
 } from "../../tools/ci/dispatch.mjs";
 
@@ -363,6 +363,22 @@ test("WP-L7 F5: a `land` PR whose `gate` commit STATUS failed (or sat pending pa
   assert.equal(landProblem(newerGreen, NOW, 2), null, "the newest gate status decides");
 });
 
+test("a distance-only gate refusal waits for land.yml AUTO-SYNC; any other refusal is still re-owned", () => {
+  const refused = (description) => ({ context: "gate", state: "failure", updated_at: ago(4), description });
+  const land = (gate) => pr(92, { labels: ["land"], updated_at: ago(5), checks: [{ id: 1, name: "CI", status: "completed", conclusion: "success" }], statuses: [gate] });
+  const only = "= merge-gate refused — open=ok hold=ok plan=ok ci=ok distance=FAIL pr=#92 sha=5897ccfd tip=265cf15";
+  assert.equal(distanceOnlyRefusal(only), true);
+  assert.equal(landProblem(land(refused(only)), NOW, 2), null, "a distance-only refusal only waits");
+  assert.equal(planDispatch(state({ prs: [land(refused(only))] }), cfg(), NOW).launches.length, 0, "no takeover worker just to sync");
+  assert.equal(distanceOnlyRefusal("= merge-gate refused — open=ok hold=ok plan=ok ci=WAIT distance=FAIL pr=#92"), true, "CI still running only waits too");
+  for (const d of ["= merge-gate refused — open=ok hold=ok plan=ok ci=ok gen=FAIL distance=FAIL pr=#92", "= merge-gate refused — open=ok hold=FAIL plan=ok ci=ok distance=FAIL pr=#92",
+    "= merge-gate refused — open=ok hold=ok plan=ok ci=FAIL distance=FAIL pr=#92", "= merge-gate refused — open=ok hold=ok plan=ok ci=ok distance=ok pr=#92", "x", "", undefined]) {
+    assert.equal(distanceOnlyRefusal(d), false, String(d));
+  }
+  assert.equal(landProblem(land(refused("= merge-gate refused — open=ok hold=ok plan=ok ci=FAIL distance=FAIL pr=#92")), NOW, 2), "gate failure", "a failed ci row is still a problem");
+  assert.equal(landProblem(land({ context: "gate", state: "error", updated_at: ago(4), description: only }), NOW, 2), null, "an error state with a distance-only description waits as well");
+});
+
 test("WP-L7 F5: readState reads the `gate` commit status of a land PR", () => {
   const sha = "c".repeat(40);
   const api = (p) => {
@@ -375,7 +391,7 @@ test("WP-L7 F5: readState reads the `gate` commit status of a land PR", () => {
     return { json: [] };
   };
   const s = readState({ api, config: DEFAULT_CONFIG, quota: "allowed" });
-  assert.deepEqual(s.prs[0].statuses, [{ context: "gate", state: "failure", created_at: ago(4), updated_at: ago(4) }]);
+  assert.deepEqual(s.prs[0].statuses, [{ context: "gate", state: "failure", description: "x", created_at: ago(4), updated_at: ago(4) }]);
   assert.equal(landProblem(s.prs[0], NOW, 2), "gate failure");
 });
 
