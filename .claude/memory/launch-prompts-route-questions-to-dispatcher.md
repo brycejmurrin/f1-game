@@ -12,4 +12,4 @@ Bryce, 2026-10-28: when launching sessions, make clear they message the dispatch
 
 **Why:** child sessions asking Bryce directly fragment his phone attention and stall unattended workers.
 
-**How to apply:** put in every create_session prompt: "Do not use AskUserQuestion. Send questions, blockers and decisions to the dispatcher with send_message (session id of the dispatcher), then end your turn." The dispatcher batches them into one AskUserQuestion. Also: trigger minimum interval is 1 hour, so stagger several hourly triggers (:10, :25, :40, :55) for a ~15 min cadence. See [[workers-never-wait-for-user]], [[ask-via-askuserquestion]].
+**How to apply:** put in every create_session prompt: "Do not use AskUserQuestion. Send questions, blockers and decisions to the dispatcher with send_message (session id of the dispatcher); keep working on independent scope while awaiting an answer, following docs/WORKERS.md §7." The dispatcher batches them into one AskUserQuestion. Also: trigger minimum interval is 1 hour, so stagger several hourly triggers (:10, :25, :40, :55) for a ~15 min cadence. See [[workers-never-wait-for-user]], [[ask-via-askuserquestion]].
