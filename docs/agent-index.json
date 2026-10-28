@@ -3900,6 +3900,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/pit-geom.js",
+      "global": "PitGeom",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/pit-lane.js",
       "global": "PitLane",
       "roster": "LAZY_RACE_SESSION"
@@ -3950,6 +3955,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/real-race-pace.js",
+      "global": "RealRacePace",
+      "roster": "tag"
+    },
+    {
       "path": "js/race/real-race.js",
       "global": "RealRace",
       "roster": "tag"
@@ -3967,6 +3977,11 @@
     {
       "path": "js/race/session-entry.js",
       "global": "SessionEntry",
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/session-phys.js",
+      "global": "SessionPhys",
       "roster": "tag"
     },
     {
@@ -4022,6 +4037,11 @@
     {
       "path": "js/race/wind.js",
       "global": "Wind",
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/wx-hash.js",
+      "global": "WxHash",
       "roster": "tag"
     },
     {

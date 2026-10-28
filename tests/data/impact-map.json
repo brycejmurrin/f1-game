@@ -4918,6 +4918,9 @@
       ]
     },
     "js/core/hash32.js": {
+      "unit": [
+        "tests/unit/storm-weather.test.mjs"
+      ],
       "*": [
         "tests/unit/career-ai-dev.test.mjs",
         "tests/unit/career-backup.test.mjs",
@@ -4938,7 +4941,8 @@
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/share-code.test.mjs",
-        "tests/unit/store-cross-tab.test.mjs"
+        "tests/unit/store-cross-tab.test.mjs",
+        "tests/unit/wind.test.mjs"
       ]
     },
     "js/core/i18n-pseudo.js": {
@@ -12244,6 +12248,30 @@
         "tests/unit/pace-math.test.mjs"
       ]
     },
+    "js/race/pit-geom.js": {
+      "entryRunM": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
+      "inWindow": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
+      "laneWidth": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
+      "teamRow": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
+      "throughM": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
+      "zoneOf": [
+        "tests/unit/pit-lane.test.mjs"
+      ],
+      "*": [
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/race-settings-pitplan-key.test.mjs"
+      ]
+    },
     "js/race/pit-lane.js": {
       "addWork": [
         "tests/unit/pit-lane-vm.test.mjs"
@@ -12278,9 +12306,6 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ],
-      "entryRunM": [
-        "tests/unit/pit-lane.test.mjs"
-      ],
       "entryV": [
         "tests/unit/pit-lane-vm.test.mjs"
       ],
@@ -12300,9 +12325,6 @@
         "tests/unit/race-session-lazy.test.mjs"
       ],
       "inLaneLat": [
-        "tests/unit/pit-lane.test.mjs"
-      ],
-      "inWindow": [
         "tests/unit/pit-lane.test.mjs"
       ],
       "info": [
@@ -12326,9 +12348,6 @@
       "laneUniform": [
         "tests/unit/pit-lane-vm.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
-      ],
-      "laneWidth": [
-        "tests/unit/pit-lane.test.mjs"
       ],
       "laneX": [
         "tests/unit/pit-lane-vm.test.mjs",
@@ -12390,14 +12409,8 @@
       "stopAnim": [
         "tests/unit/pit-lane-vm.test.mjs"
       ],
-      "teamRow": [
-        "tests/unit/pit-lane.test.mjs"
-      ],
       "think": [
         "tests/unit/pit-lane-vm.test.mjs",
-        "tests/unit/pit-lane.test.mjs"
-      ],
-      "throughM": [
         "tests/unit/pit-lane.test.mjs"
       ],
       "twoCompoundApplies": [
@@ -12417,15 +12430,8 @@
       "worthStopping": [
         "tests/unit/pit-lane.test.mjs"
       ],
-      "zoneOf": [
-        "tests/unit/damage.test.mjs",
-        "tests/unit/pit-lane-vm.test.mjs",
-        "tests/unit/pit-lane.test.mjs",
-        "tests/unit/race-settings-vm.test.mjs"
-      ],
       "*": [
         "tests/unit/ai-strategy.test.mjs",
-        "tests/unit/curvature-channels.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchets.test.mjs"
       ]
@@ -12919,18 +12925,8 @@
         "tests/unit/wet-grip-ladder.test.mjs"
       ]
     },
-    "js/race/real-race.js": {
+    "js/race/real-race-pace.js": {
       "cautionsFor": [
-        "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-race.test.mjs"
-      ],
-      "count": [
-        "tests/unit/announcer.test.mjs"
-      ],
-      "create": [
-        "tests/unit/announcer.test.mjs",
-        "tests/unit/data-replay-improvements.test.mjs",
-        "tests/unit/loading-card.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
@@ -12941,17 +12937,7 @@
       "dnfAtFor": [
         "tests/unit/real-race.test.mjs"
       ],
-      "dropSpeed": [
-        "tests/unit/real-race.test.mjs"
-      ],
       "fieldAt": [
-        "tests/unit/real-race.test.mjs"
-      ],
-      "intro": [
-        "tests/unit/announcer.test.mjs",
-        "tests/unit/real-race.test.mjs"
-      ],
-      "launch": [
         "tests/unit/real-race.test.mjs"
       ],
       "mapField": [
@@ -12961,13 +12947,6 @@
         "tests/unit/real-race.test.mjs"
       ],
       "paceTable": [
-        "tests/unit/real-race.test.mjs"
-      ],
-      "place": [
-        "tests/unit/announcer.test.mjs",
-        "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/loading-card.test.mjs",
-        "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "planFor": [
@@ -12980,7 +12959,35 @@
         "tests/unit/real-race.test.mjs"
       ],
       "situation": [
+        "tests/unit/real-race.test.mjs"
+      ]
+    },
+    "js/race/real-race.js": {
+      "count": [
+        "tests/unit/announcer.test.mjs"
+      ],
+      "create": [
         "tests/unit/announcer.test.mjs",
+        "tests/unit/data-replay-improvements.test.mjs",
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/real-race-script.test.mjs",
+        "tests/unit/real-race.test.mjs"
+      ],
+      "dropSpeed": [
+        "tests/unit/real-race.test.mjs"
+      ],
+      "intro": [
+        "tests/unit/announcer.test.mjs",
+        "tests/unit/real-race.test.mjs"
+      ],
+      "launch": [
+        "tests/unit/real-race.test.mjs"
+      ],
+      "place": [
+        "tests/unit/announcer.test.mjs",
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/loading-card.test.mjs",
+        "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "stage": [
@@ -13147,6 +13154,14 @@
         "tests/unit/devicefarm-syslog.test.mjs",
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/session-entry-vm.test.mjs"
+      ]
+    },
+    "js/race/session-phys.js": {
+      "*": [
+        "tests/unit/daily-challenge.test.mjs",
+        "tests/unit/ghost-share.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
+        "tests/unit/setup-trial-session.test.mjs"
       ]
     },
     "js/race/session-records.js": {
@@ -13468,6 +13483,13 @@
       ],
       "*": [
         "tests/unit/ratchets.test.mjs"
+      ]
+    },
+    "js/race/wx-hash.js": {
+      "*": [
+        "tests/unit/forecast.test.mjs",
+        "tests/unit/rain-cells.test.mjs",
+        "tests/unit/weather-arc-rain.test.mjs"
       ]
     },
     "js/render/gfx.js": {

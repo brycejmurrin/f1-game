@@ -330,9 +330,11 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `session-stub.js` | `—` | tag | race-session stub for the title script wall. |
 | `session-entry.js` | `SessionEntry` | tag | One owner for the asynchronous gap before a race or qualifying sheet commits. |
+| `session-phys.js` | `SessionPhys` | tag | SESSION PHYS (SessionPhys): the physics keys a comparable session records, shared by SessionRecords and setup trials. |
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
 | `setup-trial-session.js` | `SetupTrialSession` | tag | Fresh solo setup trials use normal race construction; never restore a world checkpoint. |
+| `wx-hash.js` | `WxHash` | tag | WX HASH (WxHash): the FNV-1a unit draw shared by Forecast and RainCells. |
 | `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
@@ -346,6 +348,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `tv-graphics.js` | `TvGraphics` | tag | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
 | `broadcast.js` | `Broadcast` | tag | BROADCAST (Broadcast.create(G, replay)) The TV view of a REAL RACE WATCH / HIGHLIGHTS run: a timing tower down the left (position, team colour, the real… |
 | `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
+| `real-race-pace.js` | `RealRacePace` | tag | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
 | `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
 | `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
@@ -359,6 +362,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `damage.js` | `Damage` | LAZY_RACE_SESSION | DAMAGE: a per-car damage READOUT derived from the impacts the game already resolves (car-to-car contact through game.js collideFx, barrier strikes through… |
 | `duel.js` | `Duel` | LAZY_RACE_SESSION | DUEL: a practice race against ONE rival with his rating lifted. |
 | `session-records.js` | `SessionRecords` | LAZY_RACE_SESSION | Comparable time-trial classes and lap configuration continuity. |
+| `pit-geom.js` | `PitGeom` | LAZY_RACE_SESSION | PIT GEOMETRY (PitGeom): the lane window, box row and widths the state machine reads, including the surface curvature channel entryRunM. |
 | `pit-lane.js` | `PitLane` | LAZY_RACE_SESSION | PIT LANE: the other half of the sentence js/physics/tyre-model.js opened. |
 | `engineer.js` | `RaceEngineer` | LAZY_RACE_SESSION | RACE ENGINEER: the voice that makes the tyre model legible. |
 | `radio-lines.js` | `RadioLines` | LAZY_RACE_SESSION | RADIO LINES: the phrasebook the race engineer and the TV commentator speak from (js/race/race-radio.js decides WHEN; this decides the WORDS). |

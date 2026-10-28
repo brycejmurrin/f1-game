@@ -25,6 +25,7 @@ const RACE_SESSION_READY = {
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
   "js/race/duel.js": () => typeof Duel !== "undefined" && !!Duel && !Duel._stub,
   "js/race/session-records.js": () => typeof SessionRecords !== "undefined" && !!SessionRecords && !SessionRecords._stub,
+  "js/race/pit-geom.js": () => typeof PitGeom !== "undefined" && !!PitGeom,
   "js/race/pit-lane.js": () => typeof PitLane !== "undefined" && !!PitLane && !PitLane._stub,
   "js/race/engineer.js": () => typeof RaceEngineer !== "undefined" && !!RaceEngineer && !RaceEngineer._stub,
   "js/race/radio-lines.js": () => typeof RadioLines !== "undefined" && !!RadioLines && !RadioLines._stub,

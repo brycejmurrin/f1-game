@@ -210,6 +210,7 @@
     "js/race/damage.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",
     "js/race/radio-lines.js",
@@ -222,6 +223,10 @@
     "js/race/jump-start-penalty.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
+    [
+      "js/race/pit-geom.js",
+      "js/race/pit-lane.js"
+    ],
     [
       "js/race/radio-lines.js",
       "js/race/race-radio.js"
