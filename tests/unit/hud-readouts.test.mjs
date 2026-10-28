@@ -364,6 +364,7 @@ test("LiveRegion: a lower-priority line waits out the hold; stale HUD lines are 
   assert.equal(live.textContent, "RACE CONTROL: 5 SECOND PENALTY", "the region is left as it was");
   L.say("ENGINEER: PUSH", "race"); L.reset();
   assert.deepEqual(JSON.parse(JSON.stringify(L.state())), { phase: "idle", current: null, queued: [] }, "a new session starts empty");
+  assert.equal(live.textContent, "", "reset clears #announce-live so browse mode keeps no race call");
 });
 
 // UI-05 (hunt2): a flag preempting a HUD line mid-beat re-queues that older
