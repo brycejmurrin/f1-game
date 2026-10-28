@@ -269,7 +269,7 @@ const DataSchedule = (function () {
       bar.setAttribute("data-ics", "bar");
       const pick = el("select", "dh-pick-select");
       pick.setAttribute("data-ics", "alarm");
-      pick.setAttribute("aria-label", "Reminder before each session");
+      pick.setAttribute("aria-label", I18n.t("hub.icsReminder", null, "Reminder before each session"));
       for (const [min, label] of [[0, "No reminder"], [15, "15 min before"], [30, "30 min before"], [60, "1 h before"], [1440, "1 day before"]]) {
         const opt = el("option", null, label);
         opt.value = String(min);
