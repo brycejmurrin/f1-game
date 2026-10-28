@@ -136,8 +136,10 @@ const VertexPack = (function () {
     return sign | ((((hi >>> 20) - 1008) << 10) + (((hi & 0xfffff) + 0x200) >>> 10));
   }
 
+  // qc / qm stay local (pack() only). unorm16col / unorm16mat had no reader;
+  // snorm16 + toHalf stay — WGX packs normals / half-float colours through them.
   return { COL_SCALE, MAT_SCALE, COL_Q, MAT_Q, STRIDE, STRIDE_TRK,
-           pack, bindAttribs, snorm16: qs, unorm16col: qc, unorm16mat: qm, toHalf };
+           pack, bindAttribs, snorm16: qs, toHalf };
 })();
 
 if (typeof window !== "undefined") window.VertexPack = VertexPack;
