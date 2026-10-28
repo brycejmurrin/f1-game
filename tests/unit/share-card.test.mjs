@@ -301,7 +301,7 @@ test("SHARE CARD opens a preview sheet: alt text, polite status, size redraw, se
   assert.equal(dom.byId.get("scp-img").alt, "RACE RESULT. SPA. P1 AAA A Driver +25 PTS. Unofficial fan game card.");
   const status = dom.byId.get("scp-status");
   assert.equal(status.getAttribute("aria-live"), "polite");
-  assert.match(status.textContent, /^Card ready — portrait, 90 KB\.$/);
+  assert.equal(status.textContent, "Card ready — portrait, 90 KB.");
   assert.equal(dom.byId.get("scp-size-portrait").getAttribute("aria-pressed"), "true");
   dom.byId.get("scp-size-landscape").onclick();
   await tick();

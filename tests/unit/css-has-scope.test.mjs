@@ -143,7 +143,7 @@ test("scoped :has(> .screen…) holds: every .screen is a <body> child; the one 
   } };
   walk("js");
   assert.deepEqual(js, ["js/share/share-card-chips.js"], "a .screen built at runtime must be a body child (and named here)");
-  assert.match(read("js/share/share-card-chips.js"), /document\.body\.appendChild\(dlg\)/);
+  assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true);
 });
 
 test("a <body> or #hud child is never searched for unscoped (write `:has(> #id…)` / `:has(> :where(#hud) > #id…)`)", () => {
@@ -171,7 +171,7 @@ test("scoped :has(> dialog…) holds: every shell <dialog> is a <body> child; ru
   } };
   walk("js");
   assert.deepEqual(built, ["js/data/telemetry.js", "js/share/share-card-chips.js"], "a new runtime <dialog>: append it to <body> or #datahub, or widen the scoped rules");
-  assert.match(read("js/share/share-card-chips.js"), /document\.body\.appendChild\(dlg\)/, "the share-card preview is a <body> child");
+  assert.equal(/document\.body\.appendChild\(dlg\)/.test(read("js/share/share-card-chips.js")), true, "the share-card preview is a <body> child");
   assert.match(read("js/data/telemetry.js"), /const host = document\.getElementById\("datahub"\) \|\| document\.body;\s*host\.appendChild\(overlay\);/);
   const bad = [];
   for (const [file, src] of CSS) for (const m of hasArgs(src)) if (/^dialog\b/.test(m[2])) bad.push(`${file}: ${m[0]}`);
