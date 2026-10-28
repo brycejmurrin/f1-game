@@ -67,7 +67,7 @@ const FOG_WX_DEF_BOOST = 1.5;
 const WX_BLEND_S = 25;
 const WX_FRAME = ["sunColor", "ambientSky", "ambientGround", "fogColor", "fogDensity", "exposure", "groundMist"];
 const WX_SKY = ["sunColor", "cloud", "zenith", "horizon", "cityGlow", "moon"];
-let _wx = null;   // { from, to, t, dur, last } while a fade is in flight
+let _wx = null;   // { from, to, t, dur, lt } while a fade is in flight (lt: _ltMoving)
 let _hold = false;   // true while a blended re-apply resolves LT (holds the lamp set)
 const _pick = (o, keys) => { const r = {}; for (const k of keys) { const v = o[k]; r[k] = Array.isArray(v) ? v.slice() : v; } return r; };
 const _snapLt = () => { const r = {}; for (const d of TUNE_DEFS) if (typeof LT[d.id] === "number") r[d.id] = LT[d.id]; return r; };
@@ -88,37 +88,29 @@ function _snapWx() {
 // right length that is not one of the fade snapshots. A weather blend ticks
 // for WX_BLEND_S seconds; returning a.map() built a new array per colour per
 // frame (sun included). Scalars and a missing/aliased out still allocate once.
+// No closures (R2-4, #3104): the blend runs every frame for 25 s, and the old
+// rgb(src, fn) helper minted two closures per key per frame.
+const _vec = (out, n) => (out && out.length === n ? out : new Array(n));
 const _mixv = (a, b, s, out) => {
-  const rgb = (src, fn) => {
-    const n = src.length;
-    if (out && out.length === n) {
-      for (let i = 0; i < n; i++) out[i] = fn(src[i], i);
-      return out;
-    }
-    const r = new Array(n);
-    for (let i = 0; i < n; i++) r[i] = fn(src[i], i);
-    return r;
-  };
   if (b == null) {
     if (a == null || s >= 1) return null;
-    if (Array.isArray(a)) return rgb(a, (v) => v * (1 - s));
+    if (Array.isArray(a)) { const r = _vec(out, a.length); for (let i = 0; i < a.length; i++) r[i] = a[i] * (1 - s); return r; }
     return typeof a === "number" ? a * (1 - s) : a;
   }
   if (a == null) {
     if (s <= 0) return null;
-    if (Array.isArray(b)) return rgb(b, (v) => v * s);
+    if (Array.isArray(b)) { const r = _vec(out, b.length); for (let i = 0; i < b.length; i++) r[i] = b[i] * s; return r; }
     return typeof b === "number" ? b * s : b;
   }
   if (Array.isArray(b)) {
-    if (!Array.isArray(a)) {
-      const a0 = typeof a === "number" && isFinite(a) ? a : 0;
-      return rgb(b, (v) => a0 + (v - a0) * s);
-    }
-    return rgb(b, (v, i) => {
-      const ai = a[i];
+    const r = _vec(out, b.length), arr = Array.isArray(a);
+    const k = !arr && typeof a === "number" && isFinite(a) ? a : 0;
+    for (let i = 0; i < b.length; i++) {
+      const ai = arr ? a[i] : k;
       const a0 = typeof ai === "number" && isFinite(ai) ? ai : 0;
-      return a0 + (v - a0) * s;
-    });
+      r[i] = a0 + (b[i] - a0) * s;
+    }
+    return r;
   }
   return a + (b - a) * s;
 };
@@ -149,15 +141,28 @@ function _writeWx(s) {
   if (G._ltBase) G._ltBase = { ambientSky: G.frame.ambientSky.slice(), ambientGround: G.frame.ambientGround.slice(),
                                exposure: G.frame.exposure != null ? G.frame.exposure : 1.0 };
 }
-function _writeLt(s) {
-  const { from, to, last } = _wx;
+// The knobs that differ between the two ends, resolved once per fade: per frame
+// the walk visits only those (84 of 192 for dawn dry -> wet) by index, not the
+// whole registry by id with an `in` probe each (R2-4, #3104). The LT[id] write
+// itself still boxes a heap number per moving knob: LT is the knob store.
+function _ltMoving(from, to) {
+  const m = [];
   for (const d of TUNE_DEFS) {
-    const id = d.id, a = from.lt[id], b = to.lt[id];
-    if (a === undefined || b === undefined || a === b) continue;
-    if (id in last && LT[id] !== last[id]) { delete from.lt[id]; continue; }   // written by someone else: theirs now
+    const a = from.lt[d.id], b = to.lt[d.id];
+    if (a !== undefined && b !== undefined && a !== b) m.push({ d, a, b });
+  }
+  return { m, last: new Float64Array(m.length), wrote: new Uint8Array(m.length) };
+}
+function _writeLt(s) {
+  const { m, last, wrote } = _wx.lt;
+  for (let i = 0; i < m.length; i++) {
+    const e = m[i];
+    if (!e) continue;
+    const d = e.d, id = d.id, a = e.a, b = e.b;
+    if (wrote[i] && LT[id] !== last[i]) { m[i] = null; continue; }   // written by someone else: theirs now
     let v = s >= 1 ? b : s <= 0 ? a : a + (b - a) * s;
     if (d.step >= 1 && s > 0 && s < 1) v = Math.min(Math.max(a, b), Math.max(Math.min(a, b), d.min + Math.round((v - d.min) / d.step) * d.step));
-    LT[id] = v; last[id] = v;
+    LT[id] = v; last[i] = v; wrote[i] = 1;
   }
 }
 function tick(dt) {
@@ -174,7 +179,7 @@ function applyRaceSettings(blendS) {
   const from = (blendS > 0 && G.frame && G.frame.sunColor && G.frameSky) ? _snapWx() : null;
   _hold = !!from;
   try { _applyRaceBody(); } finally { _hold = false; }
-  _wx = from ? { from, to: _snapWx(), t: 0, dur: blendS, last: {} } : null;
+  if (from) { const to = _snapWx(); _wx = { from, to, t: 0, dur: blendS, lt: _ltMoving(from, to) }; } else _wx = null;
   if (_wx) _writeWx(0);   // start the fade on the look the frame had
 }
 
