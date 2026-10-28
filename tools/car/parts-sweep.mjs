@@ -109,7 +109,7 @@ export function loadParts({ shade = false } = {}) {
                    "js/car/livery-design.js", "js/car/livery-graphics.js", "js/car/crest-draw.js", "js/car/liverytex.js", "js/car/helmets.js",
                    "js/car/car-geometry.js", "js/car/car-wheels.js", "js/car/car-material-shade.js", "js/car/car-materials.js",
                    ...(shade ? ["js/car/car-shade.js"] : []),
-                   "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/car-mesh.js"])
+                   "js/car/car-body-geom.js", "js/car/car3d.js", "js/car/cockpit-rig.js", "js/car/car-mesh.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
   // Every one of these is `const X = (function(){})()` at script level — a
   // LEXICAL binding, which never becomes a property of the vm's global object,

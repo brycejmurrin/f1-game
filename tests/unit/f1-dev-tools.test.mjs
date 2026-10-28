@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {createRequire} from 'node:module';
+import {evalRealRace} from '../helpers/eval-real-race.mjs';
 import path from 'node:path';
 import {webcrypto} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
@@ -147,7 +148,7 @@ test('production WATCH API: batch validation is atomic and timeout restores repl
   const g=await createGame({track:'baku',carMeshes:false});
   try {
     vm.runInContext(source,g.ctx);
-    vm.runInContext(fs.readFileSync(root+'/js/data/real-race-tab.js','utf8'),g.ctx);
+    evalRealRace(g.ctx);
     const fixture=JSON.parse(fs.readFileSync(root+'/tests/fixtures/openf1-baku-2026-race.json','utf8'));
     g.ctx.fixture=fixture;
     vm.runInContext(`{

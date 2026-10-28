@@ -199,6 +199,7 @@ test("CarMesh.aeroEdgeOn is memoised and tested AFTER the blend: no localStorage
   ctx.Log = { info() {}, warn() {}, error() {}, debug() {} };
   ctx.Car3D = { aeroFlaps: () => [] };
   vm.createContext(ctx);
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   const CarMesh = vm.runInContext("CarMesh", ctx);
   CarMesh.init({ createMesh: () => ({}), draw() {}, freeMesh() {} });
@@ -275,6 +276,7 @@ function tailGlowVm(gfxExtra) {
   const g2d = { createRadialGradient: () => ({ addColorStop() {} }), fillRect() {}, fillStyle: "" };
   ctx.document = { createElement: () => ({ width: 0, height: 0, getContext: () => g2d }) };
   vm.createContext(ctx);
+  vm.runInContext(read("js/car/cockpit-rig.js"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(read("js/car/car-mesh.js"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   const CarMesh = vm.runInContext("CarMesh", ctx);
   const decals = [];

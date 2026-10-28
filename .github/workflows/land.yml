@@ -33,7 +33,8 @@ name: Land
 # times in 14 days, r2 workflows.md). A CI run that ends red re-gates too, so a `gate` posted while CI ran never stays
 # pending. A Pages train finishing re-gates the open `land` PRs because the deploy tip moved (the gen, ratchets and
 # distance rows are measured against the tip), skipping a PR whose head's `gate` is already failure (a push or a
-# label flip re-gates it), and arms at most one of them (`priority` first, then oldest); the next train arms the next.
+# label flip re-gates it; AUTO-SYNC below merges the tip into one refused on distance alone), and arms at most one
+# of them (`priority` first, then oldest); the next train arms the next.
 # `workflow_run` "only triggers a workflow run if the workflow file exists on the default branch" (the deploy
 # branch). Its `pull_requests` array is the Pull Request Minimal shape (empty for forks,
 # https://docs.github.com/en/rest/checks/suites), so `resolve` reads each PR's state itself.
@@ -50,13 +51,74 @@ name: Land
 # newer than this run's resolve read (AT, whole seconds, compared as epoch seconds) exists, so a slow stale run never
 # replaces a newer verdict. The full
 # merge-gate output is the run's step summary; the status links to the run.
-#   merge-gate exit 0 → success (pending "paused" while `dispatch:merge-pause` is set on Dispatch)
+#   merge-gate exit 0 → success (pending "paused" while `dispatch:merge-pause` is set on Dispatch; pending
+#   "re-gating" when the deploy tip is no longer the verdict's `tip=`, STALE TIP below)
 #   exit 3 (CI still running) → pending    exit 2 → failure    exit 1 or no verdict → pending
 #   "error, will retry" (an API or git hiccup is not a refusal)    `hold`, `land` removed, back to draft →
-#   failure "not asked", and an armed auto-merge is disabled.
+#   failure "not asked", and an armed auto-merge is disabled. post disarms too whenever it writes anything but
+#   success on a PR whose auto-merge is armed.
 #
-# MERGE-PAUSE. `dispatch:merge-pause` on the open issue titled `Dispatch` arms nothing and disarms what this event
-# touches. Removing the label re-gates nothing by itself: the next push, label flip, CI or train run does.
+# IMMEDIATE RE-GATE (`retry` job). A gated, green PR whose arm found the deploy tip moved (another PR merged in
+# between), or whose post read "the deploy tip moved between trusted-rows and land-gate" (or, since STALE TIP below,
+# found the tip moved since the gate measured it), used to wait for the next
+# train or its own next CI run: 60–90 min on a busy day (#3957, #3942, #3940, 2026-10-27). `retry` (actions: write
+# only, no checkout, no repo code, GITHUB_TOKEN) now dispatches this workflow again for that ONE PR. "events
+# triggered by the GITHUB_TOKEN will not create a new workflow run, with the following exceptions: workflow_dispatch
+# and repository_dispatch events always create workflow runs" (https://docs.github.com/en/actions/how-tos/
+# write-workflows/choose-when-workflows-run/trigger-a-workflow#triggering-a-workflow-from-a-workflow, read
+# 2026-10-27). The dispatch is the REST call (POST …/actions/workflows/land.yml/dispatches, `ref` + `inputs`,
+# https://docs.github.com/en/rest/actions/workflows#create-a-workflow-dispatch-event; the Actions permission
+# "write" per https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens),
+# with `ref` = the deploy branch, so the run uses the deploy branch's copy of this file ("GITHUB_REF: the branch or
+# tag that received the dispatch"; the file must exist on the default branch, https://docs.github.com/en/actions/
+# reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch). resolve refuses a dispatch on
+# any other ref. A dispatched run is resolved like a land/hold label event: one PR, re-gated, armed on a pass. It is
+# BOUNDED per head: inputs carry `head` and `attempt`; resolve resets the count to 0 when the PR's head is no longer
+# `head` (a push re-gates on its own), and `retry` stops at RETRY_MAX dispatches per head ("retry budget spent; the
+# next train re-gates"), so a tip that keeps moving cannot loop. Nothing is counted in repo files. Still ONE arm per
+# run; a train arming one PR and the next train arming the next is unchanged. Anyone with write access may dispatch
+# it by hand too (`gh workflow run land.yml --ref claude/f1-game-project-26h3ng -f pr=<n>`): a re-gate now.
+#
+# STALE TIP. A `gate` success is only as good as the tip it measured. post writes success only after re-reading the
+# deploy tip (GET …/branches/<deploy>) and finding the verdict's `tip=` still there; a moved tip writes pending
+# "re-gating" instead and hands the PR to `retry` (same RETRY_MAX budget per head). arm's own tip check is not
+# enough: an auto-merge armed earlier fires on the next success GitHub sees, with no arm run in between. #3982
+# (armed 23:04Z) got a success at 23:12:37Z measured on bfd8f509 although #4020 had moved the tip to 834754fa at
+# 23:10:07Z; GitHub merged it at 23:13:38Z and the two left docs/agent-index.json stale on the tip (gen:check red,
+# 2026-10-27). So any non-success `gate` this run writes also disarms an armed PR, and the next pass re-arms it
+# through arm's checks. A tip that moves between post's read and GitHub's merge is still a seconds-wide window.
+#
+# AUTO-SYNC (`sync` job). On 2026-10-27 ~33 of 42 `land` PRs had green CI and a closed Plan but a `gate` failure on
+# distance alone (merge-base 9–20 game merges behind the tip; MAX_BEHIND is 6), and nothing re-synced them: the
+# train skips a head whose `gate` is already failure, so each waited for a person or agent to run `sync-pr.mjs`
+# while ~3.5 PRs/h merged (~2 game merges/h) and ~7 PRs/h arrived. GitHub's merge queue needs an organization-owned
+# repository (https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/
+# configuring-pull-request-merges/managing-a-merge-queue). So on a train re-gate, or a dispatch with `sync=true`,
+# resolve also lists the open, ready, same-repository `land` PRs without `hold` or `needs-decision` whose CURRENT
+# head's `gate` is a refusal naming every row ok except distance (gen and ratchets may be absent: a trusted-only
+# verdict; a row it does not know never counts as ok), and `sync` calls PUT /repos/{o}/{r}/pulls/{n}/update-branch
+# with expected_head_sha = that head: "Updates the pull request branch with the latest upstream changes by merging
+# HEAD from the base branch into the pull request branch", 422 when the head moved or the merge conflicts, and a
+# fine-grained token needs Pull requests: write (https://docs.github.com/en/rest/pulls/pulls#update-a-pull-request-
+# branch; https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens,
+# read 2026-10-27). The new head's push re-gates the PR, its CI re-gates it again, and distance counts from today's
+# tip. A 422 is logged in the step summary and the next candidate is tried: a conflict stays the owner's
+# `sync-pr.mjs` job. THROTTLE: each sync starts a full CI tier, and Actions capacity is the scarce resource (a third
+# of all PR runs on 2026-10-15 were update-branch merges, docs/notes/CI-CLOG-SURVEY-2026-10-15.md, which is why
+# agents and bots never sync that way). SYNC_MAX caps the `land` PRs waiting on a ci.yml run at once: a run syncs at
+# most SYNC_MAX minus the `land` heads whose ci.yml run is still queued or running (what lands in the next window),
+# `priority` first, then oldest, and never a head whose own ci.yml run is still going. TOKEN: LAND_TOKEN, never
+# GITHUB_TOKEN: "when a workflow using GITHUB_TOKEN creates or updates a pull request, the resulting pull_request
+# event creates workflow runs in an approval-required state" (the TOKEN page below), so its push would leave the new
+# head with no CI; without LAND_TOKEN nothing is synced. TRUST: `sync` checks out nothing and runs no repo code (gh
+# and jq), its GITHUB_TOKEN only reads, and LAND_TOKEN is in the one step's env. update-branch only merges the
+# deploy branch INTO the PR branch; nothing reaches the deploy branch except through gate and arm. The `gate`
+# description only picks candidates: a forged refusal (any workflow with statuses: write can post one) costs at
+# worst one throttled CI run.
+#
+# MERGE-PAUSE. `dispatch:merge-pause` on the open issue titled `Dispatch` arms nothing, syncs nothing and disarms
+# what this event touches. Removing the label re-gates nothing by itself: the next push, label flip, CI or train
+# run does.
 #
 # TOKEN. "events triggered by the GITHUB_TOKEN will not create a new workflow run"
 # (https://docs.github.com/en/actions/concepts/security/github_token), so a merge made with it starts no pages.yml
@@ -74,9 +136,37 @@ on:
   workflow_run:   # zizmor: ignore[dangerous-triggers] same as pull_request_target above
     workflows: ["CI", "Deploy to GitHub Pages"]
     types: [completed]
+  # The immediate re-gate (`retry` below; IMMEDIATE RE-GATE above), or with sync=true an AUTO-SYNC sweep by hand.
+  # Runs the dispatched ref's file: resolve accepts only the deploy branch. Inputs are read through env and
+  # validated, never interpolated into a script.
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: PR number to re-gate (and arm on a pass); leave empty with sync=true
+        required: false
+        default: ""
+        type: string
+      head:
+        description: the head sha the retry budget counts against (empty = the PR's current head)
+        required: false
+        default: ""
+        type: string
+      attempt:
+        description: immediate re-gates already spent on that head (retry adds 1; stops at RETRY_MAX)
+        required: false
+        default: "0"
+        type: string
+      sync:
+        description: "true = an AUTO-SYNC sweep of the open land PRs instead of a re-gate (pr is ignored)"
+        required: false
+        default: "false"
+        type: string
 
 env:
   DEPLOY_BRANCH: claude/f1-game-project-26h3ng
+  RETRY_MAX: 3
+  # AUTO-SYNC: at most 6 `land` PRs may wait on a ci.yml run at once after a sync (THROTTLE in the header).
+  SYNC_MAX: 6
 
 # ONE group per PR (a CI run on a PR head carries the PR number); the deploy branch's train runs share `land-tip`; a
 # CI run that names no PR (a fork) gets `land-sha-<head>`, never the train's group (GitHub keeps one pending run per
@@ -85,11 +175,17 @@ env:
 # itself; a CI or train re-gate never cancels, it queues. A label that is not land/hold is noise and runs alone in
 # `land-noise-<run id>` (its resolve is skipped): before, it cancelled an in-flight CI re-gate and left `gate` pending
 # on a green PR (WP-L3a). The train run and a PR run can still overlap: AT and arm's re-read of every veto cover that.
+# A dispatched re-gate joins its PR's `land-<n>` group and never cancels (cancel-in-progress is true only for
+# pull_request_target): it queues behind the run that dispatched it. "At most one … workflow run can be pending in the
+# concurrency group … any existing pending … run in the same group is canceled and replaced"
+# (https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency, read 2026-10-27):
+# a pending CI re-gate and a pending dispatch of one PR do the same work, since resolve reads the PR's live state.
+# A dispatched AUTO-SYNC sweep gets `land-sync`: in `land-tip` it would replace a pending train re-gate.
 concurrency:
   group: >-
     ${{ (github.event_name == 'pull_request_target' && (github.event.action == 'labeled' || github.event.action == 'unlabeled') && github.event.label.name != 'land' && github.event.label.name != 'hold')
     && format('land-noise-{0}', github.run_id)
-    || format('land-{0}', github.event.pull_request.number || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
+    || format('land-{0}', github.event.pull_request.number || (github.event.inputs.sync == 'true' && 'sync') || github.event.inputs.pr || github.event.workflow_run.pull_requests[0].number || (github.event.workflow_run.head_branch == 'claude/f1-game-project-26h3ng' && 'tip') || format('sha-{0}', github.event.workflow_run.head_sha)) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request_target' }}
 
 permissions: {}
@@ -105,6 +201,7 @@ jobs:
         || (github.event.action != 'labeled' && github.event.action != 'unlabeled' && contains(github.event.pull_request.labels.*.name, 'land'))))
       || (github.event_name == 'workflow_run' && !startsWith(github.event.workflow_run.display_title, 'CI ignored')
         && github.event.workflow_run.conclusion != 'cancelled' && github.event.workflow_run.conclusion != 'skipped')
+      || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/claude/f1-game-project-26h3ng')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     permissions:
@@ -112,12 +209,14 @@ jobs:
       issues: read
       statuses: read
     outputs:
+      attempt: ${{ steps.pick.outputs.attempt }}
       landable: ${{ steps.pick.outputs.landable }}
       prs: ${{ steps.pick.outputs.prs }}
       notasked: ${{ steps.pick.outputs.notasked }}
       disarm: ${{ steps.pick.outputs.disarm }}
       paused: ${{ steps.pick.outputs.paused }}
       at: ${{ steps.pick.outputs.at }}
+      sync: ${{ steps.pick.outputs.sync }}
     steps:
       - name: Resolve the PRs and their state
         id: pick
@@ -130,21 +229,56 @@ jobs:
           RUN_REPO: ${{ github.event.workflow_run.head_repository.full_name || github.repository }}
           RUN_SHA: ${{ github.event.workflow_run.head_sha }}
           CANDIDATES: ${{ toJSON(github.event.workflow_run.pull_requests) }}
+          IN_PR: ${{ github.event.inputs.pr }}
+          IN_HEAD: ${{ github.event.inputs.head }}
+          IN_ATTEMPT: ${{ github.event.inputs.attempt }}
+          IN_SYNC: ${{ github.event.inputs.sync }}
         run: |
           set -euo pipefail
+          # distance_only <gate description>: a merge-gate refusal whose rows are all ok except distance (AUTO-SYNC in
+          # the header). open, hold, plan and ci must be named; gen and ratchets are absent from a trusted-only verdict;
+          # a row this script does not know refuses, so a new gate row never widens what is synced.
+          distance_only() {
+            local rows tok seen=" " toks=()
+            rows=$(sed -n 's/^= merge-gate refused — \(.*\) pr=#[0-9]*.*$/\1/p' <<<"$1")
+            [ -n "$rows" ] || return 1
+            read -r -a toks <<<"$rows"
+            for tok in "${toks[@]}"; do
+              case "$tok" in
+                open=ok|hold=ok|plan=ok|ci=ok|gen=ok|ratchets=ok|distance=FAIL) seen+="${tok%%=*} " ;;
+                *) return 1 ;;
+              esac
+            done
+            for tok in open hold plan ci distance; do [[ "$seen" == *" $tok "* ]] || return 1; done
+          }
           # The moment the PR state was read, in WHOLE seconds like a status's `created_at`; post compares the two
           # as epoch seconds (a string compare of `…:05Z` against `…:05.123Z` read a same-second older status as newer).
           at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           paused=$(gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
             --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0')
           numbers=()
-          train=false
+          train=false   # the tip moved: re-gate every open `land` PR (at most 4 per run)
+          sweep=false   # AUTO-SYNC: collect the `land` PRs whose `gate` refused on distance alone
+          attempt=0
           if [ "$EVENT" = pull_request_target ]; then
             numbers=("$PR_NUMBER")
+          elif [ "$EVENT" = workflow_dispatch ] && [ "${IN_SYNC:-}" = true ]; then
+            # An AUTO-SYNC sweep by hand: every open `land` PR is considered; nothing is re-gated.
+            sweep=true
+            mapfile -t numbers < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --label land --limit 50 --json number --jq '.[].number')
+            echo "dispatched AUTO-SYNC sweep over ${#numbers[@]} \`land\` PR(s)"
+          elif [ "$EVENT" = workflow_dispatch ]; then
+            # An immediate re-gate (the `retry` job, or a person): one PR, resolved like a land/hold label event.
+            if ! [[ "$IN_PR" =~ ^[0-9]{1,7}$ ]]; then echo "::error::workflow_dispatch input pr='$IN_PR' is not a PR number"; exit 1; fi
+            numbers=("$IN_PR")
+            # The budget counts per head: a head that moved since the retry was asked for starts again at 0.
+            [[ "$IN_ATTEMPT" =~ ^[0-9]{1,3}$ ]] && attempt=$IN_ATTEMPT
+            if [ -n "$IN_HEAD" ] && [ "$(gh api "repos/$GITHUB_REPOSITORY/pulls/$IN_PR" --jq .head.sha)" != "$IN_HEAD" ]; then attempt=0; fi
+            echo "dispatched re-gate of #$IN_PR (attempt $attempt of $RETRY_MAX on ${IN_HEAD:0:12})"
           elif [ "$RUN_BRANCH" = "$DEPLOY_BRANCH" ] && [ "$RUN_REPO" = "$GITHUB_REPOSITORY" ]; then
             if [ "$RUN_CONCLUSION" = success ]; then
               # The train (or the tip's own suite) finished: the tip moved, so every open `land` PR is re-gated.
-              train=true
+              train=true; sweep=true
               mapfile -t numbers < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --base "$DEPLOY_BRANCH" --label land --limit 50 --json number --jq '.[].number')
             else
               echo "::notice::deploy-branch $EVENT concluded '$RUN_CONCLUSION' — nothing to re-gate"
@@ -159,12 +293,13 @@ jobs:
           rows='[]'
           notasked='[]'
           disarm='[]'
+          sync='[]'
           for n in "${numbers[@]}"; do
             [ -n "$n" ] || continue
             pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
             state=$(jq -r .state <<<"$pr"); draft=$(jq -r .draft <<<"$pr"); base=$(jq -r .base.ref <<<"$pr")
             head=$(jq -r .head.sha <<<"$pr"); armed=$(jq -r '.auto_merge != null' <<<"$pr")
-            created=$(jq -r .created_at <<<"$pr")
+            created=$(jq -r .created_at <<<"$pr"); hrepo=$(jq -r '.head.repo.full_name // ""' <<<"$pr")
             labels=$(jq -r '[.labels[].name] | join(" ")' <<<"$pr")
             has() { [[ " $labels " == *" $1 "* ]]; }
             echo "PR #$n: state=$state draft=$draft base=$base head=${head:0:12} armed=$armed labels=[$labels]"
@@ -176,14 +311,25 @@ jobs:
             fi
             if [ -z "$why" ]; then
               if [ "$paused" = true ] && [ "$armed" = true ]; then disarm=$(jq -c --argjson n "$n" '. + [$n]' <<<"$disarm"); fi
-              if [ "$train" = true ]; then
-                # A train re-gate skips a head whose `gate` is already failure: a PR refused on every train would
-                # otherwise hold a slot of the 4-PR slice for ever (WP-L3d). A push or a label flip re-gates it.
-                last=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/statuses?per_page=100" \
-                  --jq '[.[] | select(.context == "gate")] | first | .state // ""') || last=""
-                if [ "$last" = failure ]; then echo "PR #$n: gate is already failure on ${head:0:12}; not re-gated by the train"; continue; fi
-              fi
               prio=1; has priority && prio=0
+              if [ "$sweep" = true ]; then
+                # A train re-gate skips a head whose `gate` is already failure: a PR refused on every train would
+                # otherwise hold a slot of the 4-PR slice for ever (WP-L3d). A push or a label flip re-gates it, and a
+                # refusal on distance ALONE goes to `sync` instead: only a newer merge-base passes that row.
+                g=$(gh api "repos/$GITHUB_REPOSITORY/commits/$head/statuses?per_page=100" \
+                  --jq '[.[] | select(.context == "gate")] | first // {} | {id: (.id // 0), state: (.state // ""), description: (.description // "")}') || g='{}'
+                if [ "$(jq -r '.state // ""' <<<"$g")" = failure ]; then
+                  if [ "$hrepo" = "$GITHUB_REPOSITORY" ] && ! has needs-decision && distance_only "$(jq -r '.description // ""' <<<"$g")"; then
+                    sync=$(jq -c --argjson n "$n" --arg h "$head" --argjson p "$prio" --arg c "$created" --argjson g "$(jq '.id // 0' <<<"$g")" \
+                      '. + [{number: $n, head: $h, prio: $p, created: $c, gate: $g}]' <<<"$sync")
+                    echo "PR #$n: gate refused on distance alone on ${head:0:12}; an AUTO-SYNC candidate"
+                  else
+                    echo "PR #$n: gate is already failure on ${head:0:12}; not re-gated by the train"
+                  fi
+                  continue
+                fi
+                [ "$train" = true ] || continue   # a dispatched sweep re-gates nothing
+              fi
               rows=$(jq -c --argjson n "$n" --arg h "$head" --argjson p "$prio" --arg c "$created" '. + [{number: $n, head: $h, prio: $p, created: $c}]' <<<"$rows")
             else
               notasked=$(jq -c --argjson n "$n" --arg h "$head" --arg w "$why" '. + [{number: $n, head: $h, why: $w}]' <<<"$notasked")
@@ -193,6 +339,9 @@ jobs:
           # `priority` first, then oldest; at most 4 gates per run (the rest wait for the next train).
           prs=$(jq -c 'sort_by(.prio, .created, .number) | .[:4] | map({number, head})' <<<"$rows")
           landable=false; [ "$prs" != '[]' ] && landable=true
+          # Every candidate in the same order; `sync` applies the SYNC_MAX budget. Nothing is synced under merge-pause.
+          sync=$(jq -c 'sort_by(.prio, .created, .number) | map({number, head, gate})' <<<"$sync")
+          if [ "$paused" = true ] && [ "$sync" != '[]' ]; then echo "::notice::AUTO-SYNC off: dispatch:merge-pause is set"; sync='[]'; fi
           {
             echo "landable=$landable"
             echo "prs=$prs"
@@ -200,8 +349,10 @@ jobs:
             echo "disarm=$disarm"
             echo "paused=$paused"
             echo "at=$at"
+            echo "attempt=$attempt"
+            echo "sync=$sync"
           } >> "$GITHUB_OUTPUT"
-          echo "landable=$landable prs=$prs notasked=$notasked disarm=$disarm paused=$paused at=$at"
+          echo "landable=$landable prs=$prs notasked=$notasked disarm=$disarm paused=$paused at=$at attempt=$attempt sync=$sync"
 
   # THE TRUSTED ROWS: merge-gate.mjs --trusted (open, hold, plan, ci, distance) from the deploy branch's own code. It
   # fetches each head's objects for the merge-base and never checks them out or runs them, so `post` can believe it
@@ -303,7 +454,7 @@ jobs:
           if-no-files-found: ignore
 
   # POST: the only job that writes `gate`. No checkout and no repo code. Also turns `gate` red for a PR that no longer
-  # asks to land, disarms, and picks the ONE PR `arm` may merge.
+  # asks to land, disarms, and picks the ONE PR `arm` may merge. A success is written only onto the tip it measured.
   post:
     name: post
     needs: [resolve, trusted-rows, land-gate]
@@ -320,6 +471,7 @@ jobs:
       actions: read
     outputs:
       arm: ${{ steps.post.outputs.arm }}
+      retry: ${{ steps.post.outputs.retry }}
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         if: needs.resolve.outputs.landable == 'true'
@@ -348,8 +500,10 @@ jobs:
           # time, in epoch seconds (`created_at` has whole seconds; AT is whole seconds too).
           # Not a check run: an API-made check run on a PR head joins an arbitrary Actions suite, and a newer run of that
           # suite's workflow then hides it from the ruleset ("Expected", #3914 2026-10-27).
+          # WROTE is the state write_gate posted ("" when it posted nothing).
           write_gate() {
             local head=$1 st=$2 c=$3 title=$4 summary=$5 seen state body
+            WROTE=""
             seen=$(gh api "repos/$R/commits/$head/statuses?per_page=100" --jq \
               '[.[] | select(.context == "gate")] | first | if . == null then "" else (.created_at | fromdateiso8601 | floor | tostring) end') || return 1
             if [ -n "$seen" ] && [ "$seen" -gt "$AT_S" ]; then
@@ -360,8 +514,21 @@ jobs:
               '{state: $st, context: "gate", description: ($t | .[0:140]), target_url: $u}')
             # shellcheck disable=SC2016 # the backticks are Markdown for the step summary, not a command substitution
             printf '### gate %s → %s\n\n%s\n\n```\n%s\n```\n' "${head:0:12}" "$state" "$title" "$summary" >> "$GITHUB_STEP_SUMMARY"
-            gh api --method POST "repos/$R/statuses/$head" --input - --jq '.url' <<<"$body"
+            gh api --method POST "repos/$R/statuses/$head" --input - --jq '.url' <<<"$body" || return 1
+            WROTE=$state
           }
+          # An auto-merge armed earlier merges on the NEXT success GitHub sees, and arm's tip re-check never runs for
+          # it: so a `gate` this run wrote as anything but success disarms the PR (STALE TIP in the header).
+          disarm_if_armed() {
+            [ "$(gh api "repos/$R/pulls/$1" --jq '.auto_merge != null')" = true ] || return 0
+            if GH_TOKEN="$DISARM_TOKEN" gh pr merge "$1" --repo "$R" --disable-auto; then
+              echo "disarmed #$1: $2" | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning::PR #$1: --disable-auto failed"
+            fi
+          }
+          # want_retry <n> <head>: hand the PR to the `retry` job (an immediate re-gate, RETRY_MAX per head).
+          want_retry() { retry=$(jq -c --argjson n "$1" --arg h "$2" '. + [{number: $n, head: $h}]' <<<"$retry"); }
           # A PR that no longer asks to land: an existing `gate` status turns red ("not asked" is not a pass).
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row"); why=$(jq -r .why <<<"$row")
@@ -377,6 +544,7 @@ jobs:
             fi
           done
           arm=""
+          retry='[]'
           while IFS= read -r row <&3; do
             n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row"); f="verdicts/$n.json"
             if [ -f "$f" ]; then
@@ -400,6 +568,8 @@ jobs:
               code=3; line="$tline"
             elif [ "$code" = 0 ] && [ "$ttip" != "$tip" ]; then
               code=1; line="the deploy tip moved between trusted-rows (${ttip:0:12}) and land-gate (${tip:0:12})"
+              # Both halves passed on different tips: re-gate this PR at once (the `retry` job), not on the next train.
+              want_retry "$n" "$head"
             elif [ "$code" = 0 ]; then
               line="$tline (gen, ratchets: land-gate)"
             fi
@@ -418,12 +588,21 @@ jobs:
               fi
             fi
             ok=true
+            WROTE=""
             case "$code" in
-              0) if [ "$PAUSED" = true ]; then
+              0) # The verdict measured the merge onto `tip`; success is written only while `tip` is still the deploy
+                 # tip (STALE TIP in the header: #3982 merged on a success measured before #4020 moved the tip).
+                 now=$(gh api "repos/$R/branches/$DEPLOY_BRANCH" --jq .commit.sha) || now=""
+                 if [ "$PAUSED" = true ]; then
                    write_gate "$head" in_progress "" "= merge-gate paused — dispatch:merge-pause is set on the Dispatch issue" "$line"$'\n\n'"$out" || ok=false
+                 elif [ -z "$now" ]; then
+                   write_gate "$head" in_progress "" "= merge-gate error, will retry — could not read the deploy tip" "$line"$'\n\n'"$out" || ok=false
+                 elif [ "$now" != "$tip" ]; then
+                   write_gate "$head" in_progress "" "= merge-gate waiting — the deploy tip moved since the gate measured ${tip:0:12} (now ${now:0:12}): re-gating" "$line"$'\n\n'"$out" || ok=false
+                   want_retry "$n" "$head"
                  elif write_gate "$head" completed success "$line" "$out"; then
                    # ONE arm per run, in resolve's order: the first pass wins; the merge it makes moves the tip.
-                   [ -n "$arm" ] || arm=$(jq -c -n --argjson n "$n" --arg h "$head" --arg t "$tip" '{number: $n, head: $h, tip: $t}')
+                   [ -n "$arm" ] || [ "$WROTE" != success ] || arm=$(jq -c -n --argjson n "$n" --arg h "$head" --arg t "$tip" '{number: $n, head: $h, tip: $t}')
                  else ok=false
                  fi ;;
               3) write_gate "$head" in_progress "" "$line" "$out" || ok=false ;;
@@ -432,9 +611,10 @@ jobs:
                  write_gate "$head" in_progress "" "= merge-gate error, will retry — ${line:-exit $code}" "$out" || ok=false ;;
             esac
             [ "$ok" = true ] || echo "::warning::PR #$n: could not write gate"
+            if [ -n "$WROTE" ] && [ "$WROTE" != success ]; then disarm_if_armed "$n" "gate is now $WROTE on ${head:0:12}"; fi
           done 3< <(jq -c '.[]' <<<"$PRS")
-          echo "arm=$arm" >> "$GITHUB_OUTPUT"
-          echo "arm=${arm:-none}"
+          { echo "arm=$arm"; echo "retry=$retry"; } >> "$GITHUB_OUTPUT"
+          echo "arm=${arm:-none} retry=$retry"
 
   # ARM one PR. gh merges at once when the PR is mergeable (see the header), so every veto is re-read first.
   arm:
@@ -447,8 +627,11 @@ jobs:
       contents: write
       pull-requests: write
       issues: read
+    outputs:
+      retry: ${{ steps.arm.outputs.retry }}
     steps:
       - name: Re-check the vetoes and the tip, then arm pinned to the gated head
+        id: arm
         env:
           LAND_TOKEN: ${{ secrets.LAND_TOKEN }}
           GITHUB_TOKEN: ${{ github.token }}
@@ -467,10 +650,16 @@ jobs:
           [ "$(jq -r .draft <<<"$pr")" = false ] || skip="PR is a draft"
           [ "$(jq -r .head.sha <<<"$pr")" = "$head" ] || skip="head moved past ${head:0:12}"
           jq -e '[.labels[].name] | index("land") and (index("hold") | not)' <<<"$pr" >/dev/null || skip="\`land\` gone or \`hold\` set"
-          # The gate measured gen:check and the ratchets on a merge onto `tip`; a moved tip is an ungated combination.
-          if [ -z "$tip" ] || [ "$now" != "$tip" ]; then skip="deploy tip moved ${tip:0:12} -> ${now:0:12}; the next train re-gates"; fi
+          [ -n "$tip" ] || skip="the verdict names no deploy tip"
           if [ -n "$skip" ]; then
             echo "::notice::not arming #$n: $skip" | tee -a "$GITHUB_STEP_SUMMARY"; exit 0
+          fi
+          # The gate measured gen:check and the ratchets on a merge onto `tip`; a moved tip is an ungated combination.
+          # Skipped ONLY for that reason: hand the PR to `retry`, which re-gates it at once (bounded per head).
+          if [ "$now" != "$tip" ]; then
+            echo "::notice::not arming #$n: deploy tip moved ${tip:0:12} -> ${now:0:12}; re-gating at once" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           who=GITHUB_TOKEN
           if [ -n "$LAND_TOKEN" ]; then
@@ -482,3 +671,121 @@ jobs:
           fi
           gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --auto --merge --match-head-commit "$head"
           echo "armed (or merged) #$n @ ${head:0:12} onto ${tip:0:12} with $who" | tee -a "$GITHUB_STEP_SUMMARY"
+
+  # RETRY: the immediate re-gate (IMMEDIATE RE-GATE in the header). Dispatches this workflow on the deploy branch for
+  # each PR that post or arm handed over because ONLY the deploy tip moved. actions: write and nothing else, no
+  # checkout, no repo code, no secret: GITHUB_TOKEN's workflow_dispatch is one of the two events it may start.
+  retry:
+    name: retry
+    needs: [resolve, post, arm]
+    if: >-
+      !cancelled() && needs.resolve.result == 'success'
+      && ((needs.post.outputs.retry != '' && needs.post.outputs.retry != '[]') || needs.arm.outputs.retry != '')
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch a re-gate of each PR whose gate passed on a tip that has since moved
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ATTEMPT: ${{ needs.resolve.outputs.attempt }}
+          POST_RETRY: ${{ needs.post.outputs.retry }}
+          ARM_RETRY: ${{ needs.arm.outputs.retry }}
+        run: |
+          set -euo pipefail
+          a=0; [[ "${ATTEMPT:-}" =~ ^[0-9]{1,3}$ ]] && a=$ATTEMPT
+          list=$(jq -c -n --arg p "${POST_RETRY:-}" --arg a "${ARM_RETRY:-}" \
+            '((if $p == "" then [] else ($p | fromjson) end) + (if $a == "" then [] else [$a | fromjson] end)) | unique_by(.number)')
+          while IFS= read -r row <&3; do
+            n=$(jq -r .number <<<"$row"); head=$(jq -r .head <<<"$row")
+            if [ "$a" -ge "$RETRY_MAX" ]; then
+              echo "::notice::#$n: retry budget spent ($a of $RETRY_MAX immediate re-gates on ${head:0:12}); the next train re-gates" | tee -a "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            # POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches: `ref` + `inputs` (strings).
+            if gh api --method POST "repos/$GITHUB_REPOSITORY/actions/workflows/land.yml/dispatches" \
+                 -f ref="$DEPLOY_BRANCH" -f "inputs[pr]=$n" -f "inputs[head]=$head" -f "inputs[attempt]=$((a + 1))" >/dev/null; then
+              echo "re-gate of #$n dispatched (attempt $((a + 1)) of $RETRY_MAX on ${head:0:12})" | tee -a "$GITHUB_STEP_SUMMARY"
+            else
+              echo "::warning::#$n: could not dispatch the re-gate; the next train or CI run re-gates"
+            fi
+          done 3< <(jq -c '.[]' <<<"$list")
+
+  # SYNC: AUTO-SYNC in the header. Merges the deploy tip into the `land` PRs whose `gate` refused on distance alone,
+  # at most SYNC_MAX waiting on CI at once. No checkout and no repo code (gh and jq); GITHUB_TOKEN only reads;
+  # LAND_TOKEN, in this one step's env, makes only the update-branch call.
+  sync:
+    name: sync
+    needs: resolve
+    if: needs.resolve.outputs.sync != '' && needs.resolve.outputs.sync != '[]' && needs.resolve.outputs.paused != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+      issues: read
+      statuses: read
+      actions: read
+    steps:
+      - name: Merge the deploy tip into each distance-refused land PR (update-branch), throttled by SYNC_MAX
+        id: sync
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LAND_TOKEN: ${{ secrets.LAND_TOKEN }}
+          SYNC: ${{ needs.resolve.outputs.sync }}
+        run: |
+          set -uo pipefail
+          R="$GITHUB_REPOSITORY"
+          say() { echo "$1" | tee -a "$GITHUB_STEP_SUMMARY"; }
+          if [ -z "${LAND_TOKEN:-}" ]; then
+            echo "::warning::AUTO-SYNC needs LAND_TOKEN; nothing synced"
+            say "AUTO-SYNC skipped: LAND_TOKEN is not set (an update-branch made by GITHUB_TOKEN leaves the new head's CI awaiting approval)"
+            exit 0
+          fi
+          # MERGE-PAUSE, re-read right before acting (resolve's read may be minutes old).
+          paused=$(gh api --method GET "repos/$R/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || paused=unreadable
+          if [ "$paused" != false ]; then say "AUTO-SYNC skipped: dispatch:merge-pause is set (or unreadable: $paused)"; exit 0; fi
+          # The heads with a ci.yml run not finished yet. A "CI ignored" run (label/edit noise, ci.yml run-name) ends
+          # in seconds and starts no tier, so it is not counted. Any read error syncs nothing (fail closed).
+          busy='[]'
+          for s in queued in_progress pending waiting requested; do
+            b=$(gh api "repos/$R/actions/workflows/ci.yml/runs?status=$s&per_page=100" \
+              --jq '[.workflow_runs[] | select(.display_title | startswith("CI ignored") | not) | .head_sha]') \
+              || { say "AUTO-SYNC skipped: could not list the $s ci.yml runs"; exit 0; }
+            busy=$(jq -c --argjson b "$b" '. + $b | unique' <<<"$busy")
+          done
+          lands=$(gh pr list --repo "$R" --state open --base "$DEPLOY_BRANCH" --label land --limit 100 --json headRefOid --jq '[.[].headRefOid]') \
+            || { say "AUTO-SYNC skipped: could not list the land PRs"; exit 0; }
+          inflight=$(jq -n --argjson b "$busy" --argjson l "$lands" '[$l[] | select(. as $h | $b | index($h) != null)] | length')
+          budget=$((SYNC_MAX - inflight))
+          say "AUTO-SYNC: $inflight \`land\` PR(s) already wait on a ci.yml run; this run may sync $((budget > 0 ? budget : 0)) (SYNC_MAX=$SYNC_MAX)"
+          synced=0
+          while IFS= read -r c <&3; do
+            if [ "$synced" -ge "$budget" ]; then say "budget spent: the other candidates wait for the next train"; break; fi
+            n=$(jq -r .number <<<"$c"); head=$(jq -r .head <<<"$c"); gid=$(jq -r .gate <<<"$c")
+            pr=$(gh api "repos/$R/pulls/$n") || { say "#$n: not synced: could not read the PR"; continue; }
+            skip=""
+            [ "$(jq -r .state <<<"$pr")" = open ] || skip="the PR is $(jq -r .state <<<"$pr")"
+            [ "$(jq -r .base.ref <<<"$pr")" = "$DEPLOY_BRANCH" ] || skip="its base is not the deploy branch"
+            [ "$(jq -r .draft <<<"$pr")" = false ] || skip="the PR is a draft"
+            [ "$(jq -r '.head.repo.full_name // ""' <<<"$pr")" = "$R" ] || skip="its head is in another repository"
+            [ "$(jq -r .head.sha <<<"$pr")" = "$head" ] || skip="its head moved past ${head:0:12}"
+            jq -e '[.labels[].name] | index("land") != null and index("hold") == null and index("needs-decision") == null' <<<"$pr" >/dev/null \
+              || skip="\`land\` is gone, or \`hold\` / \`needs-decision\` is set"
+            if jq -e --arg h "$head" 'index($h) != null' <<<"$busy" >/dev/null; then skip="a ci.yml run on ${head:0:12} is still going"; fi
+            if [ -z "$skip" ]; then
+              now=$(gh api "repos/$R/commits/$head/statuses?per_page=100" \
+                --jq '[.[] | select(.context == "gate")] | first // {} | "\(.id // 0) \(.state // "")"') || now=""
+              [ "$now" = "$gid failure" ] || skip="its \`gate\` changed since resolve read it (${now:-unreadable})"
+            fi
+            if [ -n "$skip" ]; then say "#$n: not synced: $skip"; continue; fi
+            # A server-side merge of the deploy tip into the PR branch, pinned to the head resolve read (422 otherwise).
+            if out=$(GH_TOKEN="$LAND_TOKEN" gh api --method PUT "repos/$R/pulls/$n/update-branch" -f expected_head_sha="$head" 2>&1); then
+              synced=$((synced + 1))
+              say "#$n: merged the deploy tip into ${head:0:12} (update-branch accepted); its CI and re-gate follow"
+            else
+              say "#$n: update-branch refused, the owner syncs with \`sync-pr.mjs\`: $(tr '\n' ' ' <<<"$out" | cut -c1-300)"
+            fi
+          done 3< <(jq -c '.[]' <<<"$SYNC")
+          echo "synced=$synced" >> "$GITHUB_OUTPUT"

@@ -60,13 +60,13 @@
       { s: 0.1969, halfM: 480, rise: -7 },
     ],
     bankZones: [
-      { frac: 0.6536, angleDeg: 4.0, widthM: 110 },   // Loop (engine 0.177)
-      { frac: 0.8391, angleDeg: 3.5, widthM: 190 },   // Luffield (engine 0.362)
-      { frac: 0.9992, angleDeg: 4.5, widthM: 150 },   // Copse (engine 0.523)
-      { frac: 0.1628, angleDeg: 3.5, widthM: 150 },   // Becketts (engine 0.686)
-      { frac: 0.3333, angleDeg: 4.0, widthM: 200 },   // Stowe (engine 0.857)
-      { frac: 0.4270, angleDeg: 3.5, widthM: 200 },   // Vale/Club (engine 0.950)
-      { frac: 0.5468, angleDeg: 3.0, widthM: 100 },   // Abbey (engine 0.070)
+      { frac: 0.6536, angleDeg: 4.0, widthM: 110 },   // Loop
+      { frac: 0.8391, angleDeg: 3.5, widthM: 190 },   // Luffield
+      { frac: 0.9992, angleDeg: 4.5, widthM: 150 },   // Copse
+      { frac: 0.1628, angleDeg: 3.5, widthM: 150 },   // Becketts
+      { frac: 0.3333, angleDeg: 4.0, widthM: 200 },   // Stowe
+      { frac: 0.4270, angleDeg: 3.5, widthM: 200 },   // Vale/Club
+      { frac: 0.5468, angleDeg: 3.0, widthM: 100 },   // Abbey
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

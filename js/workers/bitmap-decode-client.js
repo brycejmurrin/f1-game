@@ -2,8 +2,9 @@
    Decodes a Blob to an ImageBitmap on a Worker, then transfers it back.
    Falls back to main-thread createImageBitmap when Workers are missing or
    the worker errors. Upload / draw stays on the caller (render thread).
-   Not a <script> tag dependency of the boot path — callers import via
-   new Worker URL the same way TrackBuildClient loads build-worker.js.
+   The client ships as a boot <script> tag (tools/manifest.cjs FULL); only the
+   worker entry is loaded via new Worker(ScriptLoader.url(...)), same pattern
+   as TrackBuildClient / build-worker.js.
    strip() is the pack-strip lane (PARALLEL-HUNT-2026-10-24 P1): the worker
    inflates + unfilters a baked strip PNG and transfers the RGBA bytes back,
    behind apex26.packDecodeWorker ("1" on; unset or "0" OFF — a prototype).
@@ -59,7 +60,23 @@ const BitmapDecode = (function () {
         // A reply from a worker we already terminated (drop + respawn) must not
         // settle a newer seq, and its transferred bitmap still needs closing.
         if (_w !== w) { closeBitmap(m.bmp); return; }
-        if (m.type === "strip") { settle(m.seq, null, m.pix ? { pix: m.pix, stride: m.stride } : null); return; }
+        const pending = _pending.get(m.seq);
+        // Reply kind must match the waiting request. A crossed strip/decode
+        // reply used to resolve the wrong shape (decode got {pix,stride}, or
+        // strip kept an ImageBitmap it then discarded without close()).
+        if (m.type === "strip") {
+          if (pending && !pending.strip) {
+            settle(m.seq, new Error("invalid bitmap worker reply"), null);
+            return;
+          }
+          settle(m.seq, null, m.pix ? { pix: m.pix, stride: m.stride } : null);
+          return;
+        }
+        if (pending && pending.strip) {
+          closeBitmap(m.bmp);
+          settle(m.seq, null, null);
+          return;
+        }
         const valid = m.type === "decoded" && m.bmp && typeof m.bmp.close === "function" &&
           Number.isFinite(m.bmp.width) && m.bmp.width > 0 && Number.isFinite(m.bmp.height) && m.bmp.height > 0;
         settle(m.seq, valid ? null : new Error(m.message || "invalid bitmap worker reply"), m.bmp);

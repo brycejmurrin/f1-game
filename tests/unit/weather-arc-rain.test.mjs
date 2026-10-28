@@ -23,7 +23,7 @@ function boot() {
   seedLog(ctx);
   // hash("dur") = 0.99 draws the raw 7-minute MIXED walk so the cap is visible.
   ctx.Career = { inCareer: () => false, hash: (_s, _r, _k, n) => n === "dur" ? 0.99 : 0.1 };
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/physics/tyre-model.js", "js/fx/particles.js", "js/race/wx-hash.js", "js/race/rain-cells.js", "js/race/weather-arc.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   const P = ctx.Particles, TM = ctx.TyreModel;
   let drawn = 0;

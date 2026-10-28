@@ -37,7 +37,7 @@ async function litShader(language) {
 
 test("lamp Smith visibility caches preserve f32 arithmetic and defer roots until accepted", () => {
   const src = read("js/render/three/tsl-lit.js");
-  const body = src.match(/const V_SmithGGX = \(NoV, NoL, a, viewRoot\) => \{([\s\S]*?)\n    \};/)[1];
+  const body = src.match(/const V_SmithGGX = Fn\(\(\[NoV, NoL, a, viewRoot\]\) => \{([\s\S]*?)\n    \}\)/)[1];
   const rootBody = src.match(/const smithViewRoot = \(NoV, a\) => \{([\s\S]*?)\n    \};/)[1];
   let roots = 0;
   class Scalar {
@@ -114,7 +114,9 @@ for (const language of ["GLSL", "WGSL"]) test(`lamp Smith ${language} caches ret
     const rootAt = src.indexOf(`${id} = sqrt(`);
     assert(branchAt > loopAt && rootAt > branchAt);
     assert.equal(src.slice(branchAt, rootAt).includes("}"), false, "assignment stays in the lazy branch");
-    const light = new RegExp(`\\( (nodeVar\\d+) \\* ${id} \\)`).exec(src.slice(rootAt))?.[1];
+    // The product NoL * cache now lives inside apexSmithGGX. The call still
+    // names the NoL that the front-face gate tested, as its second argument.
+    const light = new RegExp(`apexSmithGGX\\( nodeVar\\d+, (nodeVar\\d+), (?:nodeVar\\d+|0\\.01), ${id} \\)`).exec(src)?.[1];
     assert.ok(light, "identify the actual NoL operand consuming the cache");
     const scopes = scopesAt(rootAt);
     assert.ok(scopes.some(header => /^for \(/.test(header) && /i < 16/.test(header)), "root assignment stays inside the bounded lamp loop");

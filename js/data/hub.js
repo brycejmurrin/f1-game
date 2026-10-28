@@ -96,7 +96,7 @@ const DataHub = (function () {
     if (!iso) return "—";
     const d = new Date(iso);
     if (isNaN(d.getTime())) return iso;
-    return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    return I18n.date(d, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   }
 
   const TEAM_KEYS = [
@@ -176,7 +176,7 @@ const DataHub = (function () {
       closeBtn = el("button", "dh-close", "✕");
       closeBtn.type = "button";
       closeBtn.id = "dh-close-btn";
-      closeBtn.setAttribute("aria-label", "Close data hub");
+      closeBtn.setAttribute("aria-label", I18n.t("hub.close", null, "Close data hub"));
     }
     closeBtn.hidden = false;
     closeBtn.addEventListener("click", close);
@@ -186,7 +186,7 @@ const DataHub = (function () {
     // tabs
     const tabs = el("div", "dh-tabs");
     tabs.setAttribute("role", "tablist");
-    tabs.setAttribute("aria-label", "Data hub sections");
+    tabs.setAttribute("aria-label", I18n.t("hub.sections", null, "Data hub sections"));
     developerTools = el("details", "dh-developer-tools");
     const developerLabel = el("summary", "", "Developer tools");
     developerTools.appendChild(developerLabel);
@@ -779,7 +779,7 @@ const DataHub = (function () {
       pickerError.appendChild(el("span", "dh-error-msg", "Couldn't load the " + label + " list. Try again."));
       const button = el("button", "dh-retry dh-picker-retry", "RETRY");
       button.type = "button";
-      button.setAttribute("aria-label", "Retry " + label + " list");
+      button.setAttribute("aria-label", I18n.t("hub.retry", {list: label}, "Retry {list} list"));
       button.addEventListener("click", retry);
       pickerError.appendChild(button);
     }

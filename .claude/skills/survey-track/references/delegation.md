@@ -3,7 +3,10 @@
 Fill the `<…>` fields; one prompt, and one track-surveyor subagent, per circuit. Children never run a browser (AGENTS.md rule 10).
 
 ```
-Circuit <id>, target <year/layout>. Start SHA <sha>. Evidence: scratch/survey-track/<id>/evidence.json
+Circuit <id>, target <year/layout>. Start SHA <sha>.
+Evidence (ABSOLUTE main-checkout paths — scratch/ is gitignored and absent from your worktree; Read them there):
+  <main-checkout>/scratch/survey-track/<id>/evidence.json
+  <main-checkout>/scratch/captures/survey-track/<id>/
 OWNED (the only writes the edit hook allows): js/circuits/<id>.js, js/circuits/scenery/<id>.js, plus scratch/ and artifacts/
 FORBIDDEN: js/track/**, js/render/**, assets/pack/**, tests/**, docs/** (incl. docs/tracks/<id>.md), any other circuit, generated files
 Goal: <3-5 observable improvements, each with an evidence id>

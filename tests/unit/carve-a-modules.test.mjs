@@ -84,19 +84,40 @@ test("StormFlash in the rain: a strike sets exposure FROM the base, thunder foll
 });
 
 test("GradeTint keeps a neutral tint neutral and LightTuneEdit clears the chunk latch on a rising edge", () => {
-  const GradeTint = load("../../js/fx/grade-tint.js", "GradeTint");
+  const GradeTint = load("../../js/fx/grade-tint.js", "GradeTint", {
+    M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
+  });
   const neutral = GradeTint.hue([1, 1, 1], 40);
   assert.ok(neutral.every((c) => Math.abs(c - 1) < 1e-9), JSON.stringify(neutral));
+  // CSS hue-rotate can go out of gamut; the grade path must not hand the post a negative channel.
+  const spun = GradeTint.hue([1, 0, 0], 90);
+  assert.ok(spun.every((c) => c >= 0), "hue clamps out-of-gamut channels: " + JSON.stringify(spun));
+  assert.ok(spun[1] > spun[0] && spun[1] > spun[2], "90° on red leans toward green");
   const sat = GradeTint.sat([1, 0, 0], 0);
   assert.ok(sat[0] > 0 && sat[1] > 0 && sat[2] > 0);
+  // Paint presets are frozen shared bases; carPaint copies into one scratch per call.
+  for (const k of ["PAINT_WET_NIGHT", "PAINT_WET_DAY", "PAINT_DRY_NIGHT", "PAINT_DRY_DAY"]) {
+    assert.ok(Object.isFrozen(GradeTint[k]), `${k} must be frozen (a mutation would stick for every car)`);
+  }
+  const LT = { carGloss: 1, carMetal: 1, carSpecular: 1, carClearcoat: 1, carGlow: 1 };
+  const day = GradeTint.carPaint(GradeTint.PAINT_DRY_DAY, LT);
+  assert.equal(day.roughness, 0.22);
+  assert.equal(day.emissive, 0, "day paint has no emissive");
+  assert.equal(day.carFinish, true);
+  assert.equal(day.doubleSided, true);
+  const night = GradeTint.carPaint(GradeTint.PAINT_WET_NIGHT, LT);
+  assert.equal(day, night, "one scratch object across cars in a frame");
+  assert.equal(night.emissive, 0.20, "night wet writes over the previous day scratch");
+  assert.equal(night.roughness, 0.16);
+  assert.equal(GradeTint.PAINT_DRY_DAY.roughness, 0.22, "preset untouched after carPaint");
   const removed = [];
   // The module reads the GLOBAL localStorage (setting ctx.localStorage did nothing): record its removeItem.
   const LightTuneEdit = load("../../js/race/light-tune-edit.js", "LightTuneEdit",
     { localStorage: { removeItem: (k) => removed.push(k) } });
-  const LT = { perChunkLights: 0, carEnvCube: 0 };
+  const LTe = { perChunkLights: 0, carEnvCube: 0 };
   let stored = null;
   const ctx = {
-    LT, ltStore: { set(id, v) { stored = [id, v]; return true; } }, gfx: { invalidateSoftPresent() {} },
+    LT: LTe, ltStore: { set(id, v) { stored = [id, v]; return true; } }, gfx: { invalidateSoftPresent() {} },
     get perChunkOff() { return this._off; }, set perChunkOff(v) { this._off = v; }, _off: true,
     envProbeOff: false,
   };

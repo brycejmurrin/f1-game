@@ -93,7 +93,7 @@ async function dataReady(page) {
     </body>`);
   await page.evaluate(() => { window.Teams = { LIST: [] }; });
   for (const url of [
-    "/js/core/log.js", "/js/ui/modal.js", "/js/core/mat4.js", "/js/ui/dom.js",
+    "/js/core/log.js", "/js/ui/modal.js", "/js/core/mat4.js", "/js/ui/dom.js", "/js/core/i18n.js",
     ...LAZY_DATA.map((file) => "/" + file),
   ]) await page.addScriptTag({ url });
   await page.evaluate(() => {

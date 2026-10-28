@@ -188,6 +188,13 @@ const GfxDebug = (() => {
         `  total=${h.frames} staleMs=${h.staleMs == null ? "-" : h.staleMs}` +
         `  faults=${h.faults}/${h.totalCap} run=${h.run}/${h.cap}` +
         (h.lastFault ? `\n      lastFault: ${h.lastFault}` : ""));
+      // Slow frames do not throw. The stall watchdog already counted them;
+      // a paste that only shows faults reads a 1 fps WebGPU present as healthy.
+      if (h.stall) {
+        const s = h.stall;
+        lines.push(`stall: watch=${s.watching ? "on" : "off"} slow=${num(s.slowRun)} worst=${num(s.worstMs)}ms` +
+          ` act=${s.act || "-"} sheds=${num(s.sheds)} reloads=${num(s.reloads)}`);
+      }
     } catch (_) { lines.push("loop: unreadable"); }
   }
 
