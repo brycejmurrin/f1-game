@@ -240,7 +240,7 @@ var ErsLayer = (function () {
   return {
     attach, detach, silence, update, cueBoost, inspect, attached,
     deployLevel, harvestLevel, sustainLevel, cueCount, builds,
-    deployHz, harvestHz, deployGain, harvestGain, sustainGain, isLive,
+    deployHz, harvestHz, isLive,
   };
 })();
 Object.freeze(ErsLayer);

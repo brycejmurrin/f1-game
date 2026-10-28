@@ -365,8 +365,11 @@ function _fillAllLights(frame, src, sr, sg, sb, fl, tNow) {
   const out = _allLightsBuf;
   const n = src.length;
   const fresh = _alSrc !== src || _alLen !== n;
-  if (!fresh && tNow != null && fl === _alFl && sr === _alR && sg === _alG && sb === _alB
-      && out.length === n && tNow - _alT >= 0 && tNow - _alT < _AL_MIN_DT) {
+  // DIRTY-ONLY (R2-2, #3104): the steady factor (flicker 0 and warm-up done; 52 preset
+  // rows ship lampFlicker 0) is a constant, so the same source and scale
+  // mean nothing moved: skip the whole-set re-tint outright, not every 50 ms.
+  if (!fresh && fl === _alFl && sr === _alR && sg === _alG && sb === _alB && out.length === n
+      && (fl === _flSteadyFn || (tNow != null && tNow - _alT >= 0 && tNow - _alT < _AL_MIN_DT))) {
     frame.allLights = out;
     frame.allLightsGen = _allLightsGen;
     return;

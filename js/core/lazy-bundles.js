@@ -283,6 +283,8 @@ const DATA_READY = {
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/real-race-script.js": () => typeof DataRealRaceScript !== "undefined",
+  "js/data/real-race-fetch.js": () => typeof DataRealRaceFetch !== "undefined",
   "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };
@@ -358,6 +360,8 @@ const NET_READY = {
   "js/net/strategy-wire.js": () => typeof StrategyWire !== "undefined",
   "js/net/netplay.js": () => typeof NetPlay !== "undefined",
   "js/net/lobby.js": () => typeof NetLobby !== "undefined",
+  "js/input/phone-pad-codec.js": () => typeof PhonePadCodec !== "undefined",
+  "js/input/phone-pad-page.js": () => typeof PhonePadPage !== "undefined",
   "js/input/phone-pad.js": () => typeof PhonePad !== "undefined",
 };
 function ensureNet() {
