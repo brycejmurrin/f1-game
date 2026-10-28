@@ -860,8 +860,17 @@ const Car3D = (function () {
     // (drawCarDecals swaps in the nose-number quad), so it is a bare light
     // panel on the near plane. Its sibling flash is !ckpt-gated; this was not.
     // External keeps it — it is the substrate titleA is inked on.
-    if (!ckpt) addPodFlankSpan(0.46, -0.34, 0.56, 0.48, PANEL, null, 0.008, true);
-    addPodFlankSpan(0.46, -0.34, 0.19, 0.22, c2, null, 0.008, true);
+    // Sculpt: PANEL + c2 z-fight the loft (#3959). Re-emit both in pod paint
+    // so sameLook skips the fight while face count (and OPEN sealing) matches
+    // factory; visual stripe is lost on concept bodies only.
+    if (anchors.podSculpt) {
+      const seal = podC || c1;
+      if (!ckpt) addPodFlankSpan(0.46, -0.34, 0.56, 0.48, seal, SURFACES.paint, 0.008, true);
+      addPodFlankSpan(0.46, -0.34, 0.19, 0.22, seal, SURFACES.paint, 0.008, true);
+    } else {
+      if (!ckpt) addPodFlankSpan(0.46, -0.34, 0.56, 0.48, PANEL, null, 0.008, true);
+      addPodFlankSpan(0.46, -0.34, 0.19, 0.22, c2, null, 0.008, true);
+    }
 
     // ERS: a color-coded ENERGY-CELL strip on the coke-bottle shoulder, plus a
     // recipe-gated 2026 hybrid tell: pack blister and/or HV conduit run.

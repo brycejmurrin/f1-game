@@ -91,9 +91,12 @@ the inner edge is x 0.27 and the outer edge `podAt(z).inner + 0.004` at z 0.12 /
 Measured (ferrari, anteater/wedge/barge/brick): chassis~bolsters 32.4 -> 4.4 mm, bolsters~chassis 31.3 -> 1.5 mm,
 bolsters~sidepods cleared. Six-body `--baseline` (written at e470b830): PASS, 0 NEW/WORSE, factory builds unchanged.
 
-## Row 3 deferred: engineCover~sidepods ZFIGHT
-deferred: shared cover/pod loft overlap, not a concept-body mount. Measured ZFIGHT engineCover~sidepods max cm2 per
-body over 11 cars: needle 127, brick 71, anteater 323, arched 181, wedge 332, barge 80 (z about 0.03, x -0.68, y 0.18:
-the cover foot and the pod top share a plane). Needle (near-factory) fails too, so the fix is in the shared
-`coverLoft`/pod seam (`js/car/car-shade.js`, `car-body-geom.js`), which moves factory cars; needs its own change with a
-factory-wide baseline.
+## Row 3 landed: engineCover~sidepods ZFIGHT (#3959)
+Cause was not the shared loft: sculpt pods emit a pale PANEL sponsor board + c2 band under
+`part("engineCover")` via `addPodFlankSpan` (`js/car/car3d.js`), coplanar with the rolled pod
+loft (`sidepods`). Factory keeps PANEL/c2 (non-sculpt path). Fix: on `anchors.podSculpt`, re-emit
+both spans in `podC || c1` + `SURFACES.paint` so fit-audit `sameLook` skips the fight; face count
+matches tip so OPEN sealing (e.g. wheels) does not flap. Measured 2026-10-28 against
+`artifacts/car-fit/tip-baseline-3959.json` (60 failing ec~sp ZFIGHT rows on tip): six-body
+`--bodies=needle,brick,anteater,arched,wedge,barge --baseline` → PASS, 0 NEW/WORSE, 0
+engineCover~sidepods ZFIGHT; factory builds unchanged.

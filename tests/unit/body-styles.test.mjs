@@ -352,6 +352,18 @@ test("Blender noses retain seated wing mounts and suspension roots", () => {
   }
 });
 
+// #3959: sculpt PANEL/c2 boards were a different colour from the loft, so
+// engineCover~sidepods ZFIGHT'd. sameLook pod-paint seals keep face count and
+// clear the fight (docs/notes/BODY-STYLE-FIT-ROWS-2026-10-27.md row 3).
+test("concept bodies: engineCover~sidepods sponsor board is sameLook (no ZFIGHT) (#3959)", () => {
+  for (const bodyStyle of ["needle", "brick", "anteater", "arched", "wedge", "barge"]) {
+    const { rows } = auditMesh(build(bodyStyle), ["ZFIGHT"]);
+    assert.deepEqual(rows.filter((r) => r.fail && r.check === "ZFIGHT" &&
+      ((r.a === "engineCover" && r.b === "sidepods") || (r.a === "sidepods" && r.b === "engineCover"))),
+      [], `${bodyStyle}: engineCover~sidepods ZFIGHT`);
+  }
+});
+
 test("Caldra bathtub and Talven waterslide are recessed emitted roofs with different widths and depths", () => {
   for (const smooth of [false, true]) for (const [bodyStyle, minimumDepth, shoulderU] of [
     ["caldra", .035, .91], ["talven", .070, .78],
