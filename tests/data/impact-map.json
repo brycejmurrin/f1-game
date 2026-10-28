@@ -158,7 +158,8 @@
     },
     "js/agent/apex-lobby.js": {
       "*": [
-        "tests/unit/car-presentation-canary.test.mjs"
+        "tests/unit/car-presentation-canary.test.mjs",
+        "tests/unit/overlay-publisher.test.mjs"
       ]
     },
     "js/agent/apex-net.js": {
@@ -10108,6 +10109,14 @@
         "tests/unit/phone-input-improvements.test.mjs"
       ]
     },
+    "js/overlay/bridge.js": {
+      "host": [
+        "tests/unit/overlay-publisher.test.mjs"
+      ],
+      "subscribe": [
+        "tests/unit/overlay-publisher.test.mjs"
+      ]
+    },
     "js/overlay/feed.js": {
       "accept": [
         "tests/unit/overlay-feed.test.mjs"
@@ -10119,13 +10128,28 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "frame": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-publisher.test.mjs"
       ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
       ],
       "*": [
         "tests/unit/select-specs.test.mjs"
+      ]
+    },
+    "js/overlay/publisher.js": {
+      "input": [
+        "tests/unit/overlay-publisher.test.mjs"
+      ],
+      "start": [
+        "tests/unit/overlay-publisher.test.mjs"
+      ],
+      "tapCaptions": [
+        "tests/unit/overlay-publisher.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/overlay-publisher.test.mjs"
       ]
     },
     "js/overlay/render.js": {
@@ -10145,7 +10169,8 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "text": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-publisher.test.mjs"
       ]
     },
     "js/perf/bench-capture.js": {
@@ -11955,6 +11980,7 @@
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
       "start": [
+        "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
       "status": [
@@ -11962,12 +11988,14 @@
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
       "stop": [
+        "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
       "tick": [
         "tests/unit/director.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
       "towerAt": [

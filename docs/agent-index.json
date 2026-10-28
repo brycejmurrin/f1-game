@@ -1245,6 +1245,7 @@
         "tests/specs/career-season.spec.js",
         "tests/specs/career.spec.js",
         "tests/specs/jump-start.spec.js",
+        "tests/specs/overlay-live.spec.js",
         "tests/specs/quali.spec.js",
         "tests/specs/real-race.spec.js",
         "tests/specs/season-format.spec.js",
@@ -1467,6 +1468,7 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-publisher.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/quali-persist.test.mjs",
@@ -3666,8 +3668,18 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/overlay/bridge.js",
+      "global": "OverlayBridge",
+      "roster": "tag"
+    },
+    {
       "path": "js/overlay/feed.js",
       "global": "OverlayFeed",
+      "roster": "tag"
+    },
+    {
+      "path": "js/overlay/publisher.js",
+      "global": "OverlayPublisher",
       "roster": "tag"
     },
     {

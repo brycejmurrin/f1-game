@@ -607,6 +607,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `feed.js` | `OverlayFeed` | tag | stream/broadcast overlay frame schema. |
 | `render.js` | `OverlayRender` | tag | transform-only DOM painter for overlay.html. |
+| `bridge.js` | `OverlayBridge` | tag | OverlayBridge: the same-browser transport between the game and overlay.html. |
+| `publisher.js` | `OverlayPublisher` | tag | OverlayPublisher: the game page's half of the stream overlay. |
 
 **`js/xr/`**
 

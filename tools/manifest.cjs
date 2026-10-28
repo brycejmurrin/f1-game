@@ -365,6 +365,8 @@ const FULL = [
   "js/race/tv-graphics.js",    // TvGraphics: broadcast-profile pass/battle/fastest-lap cards
   "js/race/broadcast.js",      // Broadcast.create(G, replay): the WATCH timing tower + AUTO director (RealReplay.create makes one)
   "js/overlay/render.js",      // OverlayRender: transform-only overlay.html painter; inert in the game shell
+  "js/overlay/bridge.js",      // OverlayBridge: BroadcastChannel game ⇄ overlay.html (overlay.html loads it too)
+  "js/overlay/publisher.js",   // OverlayPublisher: 4 Hz __apex sampler + #announce caption tap, only while an overlay listens
   "js/camera/director.js",     // Director.create(G): live TV director (CAM_MODES "tv"); reuses Broadcast pure cut policy
   "js/ui/watch-transport.js",
   "js/race/real-replay.js",    // RealReplay.create(G): the field posed from OpenF1 positions — WATCH / HIGHLIGHTS (the director starts it)
