@@ -414,6 +414,15 @@
       ]
     },
     {
+      "path": "tools/check/brake-cue-calibrate.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--json"
+      ]
+    },
+    {
       "path": "tools/check/check-gctx.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "targeted-summary",
