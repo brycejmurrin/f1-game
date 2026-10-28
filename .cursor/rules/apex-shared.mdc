@@ -26,8 +26,8 @@ alwaysApply: true
   CLI-only. Map: `docs/AGENT-SURFACE.md`.
 - **Cursor Cloud:** model `default` only. Namespaces: `cursor*` plus six repo
   servers after Bootstrap §3; bare `cursor*` only → CLI fallbacks, re-Save when
-  `environment-info` shows nameless `bash` rows. PR push: `subscribe_github_ci` +
-  `subscribe_github_pr`. AGENTS.md and the skills win.
+  `environment-info` shows nameless `bash` rows. A `lane:cursor` run does not
+  call `subscribe_github_*` (`docs/WORKERS.md` §Per vendor). AGENTS.md and the skills win.
 - **Token hygiene:** one skill per task; prefer `__apex` / `verify-track` /
   `test:tooling-fast` before screenshots or browser groups. Bootstrap / Cloud
   MCP: `docs/AGENT-SURFACE.md` §Bootstrap.

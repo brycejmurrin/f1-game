@@ -5,10 +5,10 @@ alwaysApply: false
 
 # Apex lanes
 The contract is `docs/WORKERS.md` (one session, one issue, one PR); this rule only points at it.
-- Work comes from a `ready` issue: claim comment `claims #<n> — cursor:<agent id>` (the older claim wins).
-- Draft PR on `cursor/<topic>-<hash>` into `claude/f1-game-project-26h3ng`, template body, `Closes #<n>`,
-  `lane:cursor`, and a ```handoff block (branch, head, owner, lane, verified, not-run, next) kept current. A
-  Cursor agent cannot set labels: the dispatcher reads the block (WORKERS §Per vendor).
+- Work comes from a `ready` issue. A Cursor agent does not post the claim comment (WORKERS §Per vendor).
+- Draft PR on `cursor/<topic>-<hash>` into `claude/f1-game-project-26h3ng`, template body, and a ```handoff
+  block (branch, head, owner, lane, verified, not-run, next) kept current. Put `lane:cursor` in `next:`. A
+  Cursor agent cannot set labels (WORKERS §Per vendor).
 - Comments on the issue or PR are the only messages; the PR is the report. No bus, no watcher lane, no
   second hand-off format.
 - Subsystem boundaries follow the issue's `area:*` label: UI chrome (menus, HUD, garage sheets) vs car meshes and
