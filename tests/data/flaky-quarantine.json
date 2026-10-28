@@ -19,16 +19,6 @@
       "review": "By 2026-11-15, fix the cold TLX preparation deadline and remove this row after the exact test passes without retry on three cold CI runs. Any extension needs fresh failed-run evidence and an explicit new deadline."
     },
     {
-      "spec": "tests/specs/menu-baseline.spec.js",
-      "since": "2026-10-16",
-      "owner": "brycejmurrin",
-      "why": "CI 38833820199 observed 3766 differing pixels in the phone title, around lower-door compositing and the sound glyph; the other five goldens passed. Prior CI on f63c2ff10 and scoped local captures on Chromium 153 and 154 passed unchanged goldens. The precise cause remains unresolved; capture-state diagnostics retain masks, pseudo-elements, fonts and browser identity. Persistent mismatches still fail. Renewed 2026-10-22 (W3): no new failure of this test has been recorded since run 38833820199 (the only evidence), so the cause is still unresolved and cannot be fixed without a failing capture-state artifact to diff; the diagnostics added by the spec stay in place.",
-      "title": "menu identity \u2014 phone-landscape \u203a title looks like itself",
-      "evidence": "https://github.com/brycejmurrin/f1-game/actions/runs/38833820199",
-      "expires": "2026-10-30",
-      "review": "By 2026-10-30, if a CI failure attaches capture-state artifacts, diff them against a passing run and fix the readiness or compositing cause; if the test passes without retry on three cold CI runs with no recurrence, remove this row. No automatic extension; a further deadline needs a fresh failed-run link. Keep the golden, tolerance and the other five exact tests blocking."
-    },
-    {
       "spec": "tests/specs/image-grade-visual.spec.js",
       "since": "2026-10-21",
       "owner": "brycejmurrin",
