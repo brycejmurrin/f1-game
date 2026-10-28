@@ -53,8 +53,11 @@ A PR that ends `cancelled` twice with zero failures:
 When to sync is AGENTS.md §Git branch & deploy; `node tools/ci/needs-sync.mjs <branch>`
 answers it (`= sync needed: conflict | stale-red | no`) and `sync-pr` refuses `no` (exit 4). The third reason,
 which needs-sync cannot see, is the `gate` status's `distance` row (the merge-base is too many game merges behind
-the tip; `tools/ci/merge-gate.mjs` holds the limit): on a `distance` failure run
-`node tools/ci/sync-pr.mjs <branch> --force-clean-behind --push`.
+the tip; `tools/ci/merge-gate.mjs` holds the limit; `needs-sync` still prints `no` there): on a `distance`
+failure run `node tools/ci/sync-pr.mjs <branch> --force-clean-behind --push`, unless the PR is a ready `land` PR:
+`land.yml`'s AUTO-SYNC update-branches those on the next train (at most `SYNC_MAX` waiting on CI), so fetch first
+and sync by hand only when it has not. Run it as ONE background Bash task with `timeout: 7200000`: its stage
+ceilings (`STAGE_TIMEOUT_MS`) add up past the 30-min default, and a killed run resumes with `--resume --from=<stage>`.
 
     node tools/ci/sync-pr.mjs <branch> --plan   # cached refs only; no conflict proof
     node tools/ci/sync-pr.mjs <branch>          # real merge, pushes nothing, leaves you ON sync-pr-<branch>
