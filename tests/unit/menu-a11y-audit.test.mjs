@@ -545,12 +545,13 @@ const ids = new Set([...HTML.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]));
 
 test("every layer in the shell is a named region or dialog, and #announce is a live region", () => {
   const SKIP = {
-    overlay: "the title page itself — the document's main content, not a layer over it",
+    overlay: "title page is role=main (pinned below), not a region-over-itself",
     "photo-controls": "a toolbar of labelled buttons over the free camera, not a screen",
     "hud-arrange-bar": "a named toolbar built by HudArrange, covered by its editor tests",
     // Pre-race plate: role=status (not region/dialog); named via aria-label.
     loading: "status plate — announces once, not a navigable region",
   };
+  assert.equal(/role="main"[^>]*aria-label="Title menu"/.test(openTag("overlay") || ""), true, "#overlay is the titled main landmark");
   for (const id of loadLayerIds()) {
     if (SKIP[id]) continue;
     const tag = openTag(id);
@@ -798,4 +799,20 @@ test("the SAVING UNAVAILABLE banner is static, spoken once, dismissible, and sta
   assert.ok(ruleFor(css, /(^|, )body\.in-race #save-warning(,|$)/), "hidden during a race");
   assert.ok(ruleFor(css, /body:has\(> dialog\[open\]\) #save-warning/), "hidden under an open dialog, where it is inert");
   assert.equal(decl(css, "#save-warning[data-collapsed] > :not(#save-dismiss)", "display"), "none", "DISMISS folds it to its toggle");
+});
+
+test("dense-Home title doors with a hidden .mb-sub keep the subtitle in aria-label", () => {
+  // Dense Home hides .mb-sub (css/menu-destinations.css #menu-buttons .mb-sub);
+  // without aria-label the subtitle vanishes from the accessible name.
+  const want = {
+    "mb-practice": "Practice — Goals &amp; checkpoints",
+    "mb-photo": "Photo Studio — Capture &amp; backgrounds",
+    "mb-garage": "Garage — Setup &amp; livery",
+  };
+  const got = {};
+  for (const id of Object.keys(want)) {
+    const m = HTML.match(new RegExp("<button[^>]*\\bid=\"" + id + "\"[^>]*>"));
+    got[id] = m ? ((m[0].match(/aria-label="([^"]*)"/) || [])[1] || null) : null;
+  }
+  assert.deepEqual(got, want);
 });

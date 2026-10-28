@@ -47,8 +47,9 @@ window.MenuNav = (function () {
 
   const shown = UL.shown;          // a zero box, not the hidden attribute
 
-  /* THE FREE CAMERA IS NOT A MENU, and this is the one layer MenuNav has to
-     refuse. In the tuner's fly-cam the arrow keys PITCH AND YAW the camera
+  /* THE FREE CAMERA IS NOT A MENU, and these are the layers MenuNav has to
+     refuse. In the tuner's fly-cam (#photo-controls) and the pause FREE CAMERA
+     sheet (#freecam) the arrow keys PITCH AND YAW the camera
      (js/camera/photo-cam.js) — but that handler is added when free-cam opens,
      which puts it AFTER this one among window-capture listeners, so whatever
      MenuNav does with an arrow happens first. Left to itself it would walk
@@ -59,7 +60,7 @@ window.MenuNav = (function () {
      case: its arrows move the selected title-screen piece. */
   function activeLayer() {
     const t = UL.top();
-    return (t && (t.id === "photo-controls" || t.id === "tl-editor")) ? null : t;
+    return (t && (t.id === "photo-controls" || t.id === "freecam" || t.id === "tl-editor")) ? null : t;
   }
 
   // `oyIn` lets onWheel's ancestor walk share ONE getComputedStyle between
