@@ -498,7 +498,7 @@ test("first-person views cast the first-person caster at the cockpit matrix; ext
   const { ctx, G, carDraw } = v;
   ctx.CamModes.CAM_MODES.push({ id: "helmet" }, { id: "visor" });   // [chase, cockpit, helmet, visor]
   ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });      // a seat that is not the visor's
-  for (const f of ["js/camera/vantage.js", "js/render/shared/shadow-pass.js"])
+  for (const f of ["js/camera/vantage-ride.js", "js/camera/vantage.js", "js/render/shared/shadow-pass.js"])
     vm.runInContext(read(f).replace(/^const\b/gm, "var"), ctx, { filename: absSrc(f) });
   v.field((c, i) => 1000 + 9 * i);
   const player = G.player;
@@ -803,6 +803,7 @@ test("with no car or lamp map, resolvePlayer builds no first-person caster", () 
   const { ctx, G, carDraw, rec } = v;
   ctx.CamModes.CAM_MODES.push({ id: "helmet" });
   ctx.CockpitOpts.layout = () => ({ eyeF: -0.10, eyeU: 0.75 });
+  vm.runInContext(read("js/camera/vantage-ride.js"), ctx, { filename: absSrc("js/camera/vantage-ride.js") });
   vm.runInContext(read("js/camera/vantage.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/camera/vantage.js") });
   vm.runInContext(read("js/render/shared/shadow-pass.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/render/shared/shadow-pass.js") });
   v.field((c, i) => 1000 + 9 * i);

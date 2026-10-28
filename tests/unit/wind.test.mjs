@@ -21,7 +21,7 @@ function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, JSON, isFinite, String });
   seedLog(ctx);
   ctx.window = ctx;
-  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/race/wind.js"]) {
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/core/hash32.js", "js/race/wind.js"]) {
     vm.runInContext(readFileSync(join(ROOT, f), "utf8"), ctx, { filename: absSrc(f) });
   }
   return vm.runInContext("Wind", ctx);

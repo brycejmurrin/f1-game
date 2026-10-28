@@ -29,10 +29,12 @@ const GradeTint = (function () {
     const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
     const m = rgb[0] * 0.213 + rgb[1] * 0.715 + rgb[2] * 0.072;
     const r = rgb[0] - m, g = rgb[1] - m, b = rgb[2] - m;
+    // The CSS hue-rotate matrix can go out of gamut; clamp like sat() so a grade
+    // multiplier never feeds a negative channel into the post (shadow/hi knobs).
     return [
-      m + (r * (0.213 + c * 0.787 - s * 0.213) + g * (0.715 - c * 0.715 - s * 0.715) + b * (0.072 - c * 0.072 + s * 0.928)),
-      m + (r * (0.213 - c * 0.213 + s * 0.143) + g * (0.715 + c * 0.285 + s * 0.140) + b * (0.072 - c * 0.072 - s * 0.283)),
-      m + (r * (0.213 - c * 0.213 - s * 0.787) + g * (0.715 - c * 0.715 + s * 0.715) + b * (0.072 + c * 0.928 + s * 0.072)),
+      Math.max(0, m + (r * (0.213 + c * 0.787 - s * 0.213) + g * (0.715 - c * 0.715 - s * 0.715) + b * (0.072 - c * 0.072 + s * 0.928))),
+      Math.max(0, m + (r * (0.213 - c * 0.213 + s * 0.143) + g * (0.715 + c * 0.285 + s * 0.140) + b * (0.072 - c * 0.072 - s * 0.283))),
+      Math.max(0, m + (r * (0.213 - c * 0.213 - s * 0.787) + g * (0.715 - c * 0.715 + s * 0.715) + b * (0.072 + c * 0.928 + s * 0.072))),
     ];
   }
 
