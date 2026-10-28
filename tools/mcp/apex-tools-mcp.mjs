@@ -1757,7 +1757,7 @@ const HUD_TIMEOUT_MS = (name, args) => {
 /** The CLI's --json summary → an MCP result: structuredContent, its serialized
  *  copy as the FIRST text block (cmdCall and older clients read content[0]),
  *  a human summary, and resource_links to the files on disk. */
-export function hudResult(name, result, args = {}) {
+function hudResult(name, result, args = {}) {
   let body;
   try { body = JSON.parse(result.content[0].text); } catch { return result; }
   const sum = body.out;

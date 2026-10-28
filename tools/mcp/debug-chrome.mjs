@@ -10,9 +10,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromiumPath } from "../lib/chromium-path.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const DIR = path.join(ROOT, "artifacts/debug-chrome");
+const DIR = path.join(ROOT, "artifacts/debug-chrome");
 const PID_FILE = path.join(DIR, "pids.json");
-export const PROFILE = path.join(ROOT, "scratch/debug-chrome");
+const PROFILE = path.join(ROOT, "scratch/debug-chrome");
 const SERVER_PORT = 3456;
 
 // headless=new --window-size is the OUTER window: 844x390 gave an 844x198 viewport. The viewport is
@@ -39,7 +39,7 @@ export function refusal({ load = os.loadavg()[0], live = liveRun() } = {}) {
   if (load >= 3) return `loadavg ${load.toFixed(2)} >= 3; the machine is busy — reap what is running first`;
   return null;
 }
-export function liveRun() {
+function liveRun() {
   const r = spawnSync("python3", [path.join(ROOT, ".claude/hooks/live-run.py"), ROOT], { encoding: "utf8" });
   return (r.stdout || "").trim() || null;
 }
@@ -99,7 +99,7 @@ async function pageSocket(port) {
   const send = (method, params = {}) => new Promise((res, rej) => { const i = ++id; pending.set(i, { res, rej }); ws.send(JSON.stringify({ id: i, method, params })); setTimeout(() => rej(Error(method + " timed out")), 8000); });
   return { send, ws };
 }
-export async function viewport(port) {
+async function viewport(port) {
   const { send, ws } = await pageSocket(port);
   try { return (await send("Runtime.evaluate", { expression: 'innerWidth + "x" + innerHeight', returnByValue: true })).result.value; } finally { ws.close(); }
 }
