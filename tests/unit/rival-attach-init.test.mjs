@@ -22,7 +22,7 @@ const require = createRequire(import.meta.url);
 const fakeAudio = require("./fake-audio-vm.cjs");
 
 const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js",
-  "js/audio/radio-fx.js", "js/audio/engine.js"].map((file) =>
+  "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"].map((file) =>
   fs.readFileSync(path.join(ROOT, file), "utf8")).join("\n").replace(/^const\b/gm, "var");
 const RIVALS_SRC = fs.readFileSync(path.join(ROOT, "js/audio/rivals.js"), "utf8");
 const MAT4 = fs.readFileSync(path.join(ROOT, "js/core/mat4.js"), "utf8").replace(/^const\b/gm, "var");

@@ -1,0 +1,1 @@
+Fixed: Circuit def comments that contradicted their values — tyreSeverity “below Japan/Monza” comparisons, Hungaroring bank turn labels, and stale hwZone racing-arc citations on Hockenheim and Istanbul.
