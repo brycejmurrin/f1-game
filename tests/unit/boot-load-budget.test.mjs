@@ -21,7 +21,8 @@ const ROOT = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
-const MAX_EAGER_SCRIPTS = 320;
+// 321: tip sat at 320; AiStrategy extract (#4040) adds one eager tag (ai-strategy.js).
+const MAX_EAGER_SCRIPTS = 321;
 const MAX_EAGER_BYTES = 8_200_000;
 
 function eagerScripts() {
