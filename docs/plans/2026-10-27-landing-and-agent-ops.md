@@ -4,12 +4,13 @@ Plan, 2026-10-27 (Pacific). Bryce's asks, typed in this session: "I feel like we
 lot are out of date we need a way to fix this", then "How can we improve this process so we combine prs or do a better
 review process? Search best practices all over the web", then "We can change our rules consider all options", then
 "Begin writing plan, also have researchers on how to streamline cleaning up and hooks and which models to use when".
-Status: DRAFT. Phase 0 is in flight; Phases 1–2 are proposals; §5's cleanup part waits on one research report.
+Status: DRAFT. Phase 0 is in flight; Phases 1–2 and §5 are proposals; §4 waits on Bryce's decisions.
 
 Evidence: a board snapshot of all open PRs (`node tools/ci/pr-board.mjs --json`) plus each head's `gate` status, git
-history of the deploy branch, and four web-research fact sheets (merge trains, stacked/combined PRs, freshness and
-semantic conflicts, review at scale), each citing its sources with dates. The fact sheets and the final report get
-committed under `docs/notes/` when the last one lands.
+history of the deploy branch, and three research reports built from eleven web-research fact sheets (sources dated,
+TinyFish and web search): [PR landing](../notes/agent-ops-research-2026-10-27/pr-landing.md),
+[skill design](../notes/agent-ops-research-2026-10-27/skill-design.md) and
+[hooks, models and cleanup](../notes/agent-ops-research-2026-10-27/hooks-models-cleanup.md).
 
 ## 1. What is wrong (measured 2026-10-27, ~16:30)
 
@@ -45,7 +46,7 @@ committed under `docs/notes/` when the last one lands.
 | #4051 | dispatcher: a PR is owned by the live worker its hand-off or closed issue names | `land` |
 | #4053 | ratchets: a fragment re-snap drops a stale negative tree delta | `land` |
 | #4058 | merge-gate: show the real gen/conflict refusal; no distance row for PRs that touch no game path | draft |
-| worker | `land.yml`: throttled auto-sync (update-branch, ≤ 3 per run, `priority` first) for distance-only refusals; `post` refuses success when the tip moved since the gate measured it | draft |
+| #4060 | `land.yml`: throttled auto-sync (update-branch, ≤ 3 per run, `priority` first) for distance-only refusals; `post` refuses success when the tip moved since the gate measured it | draft |
 | #4057 | dispatcher: no new issue workers while ≥ 15 PRs wait to land (takeovers and deploy-red fixers still run) | draft |
 
 ## 3. Phase 1 — next, within today's rules
@@ -57,9 +58,13 @@ committed under `docs/notes/` when the last one lands.
    attribution, `Closes #n` and "live = ancestor of `apex-sha`" are untouched, and the tip after the last member is
    the tree the batch tested (shunt's "release by status" design). On red, split the batch in half and retry
    (bors/Mergify bisection); a PR that fails alone goes back to its owner. Start with N = 4, docs/tools-only first.
-   Sizing (a model, not data): at a 2–5 % chance that a PR green alone fails in a batch, 2–3 parallel batches of 3–6
-   land 7–15 PRs/h at 0.3–0.5 full CI runs per merge, inside the free plan's 20 concurrent jobs; at 10 % or worse no
-   batching keeps up, so step 2 (full tier green before `land`, flakes quarantined) matters more than N.
+   Sizing (a toy model, not data): at a 2–5 % chance p that a PR green alone fails in a batch, two lanes of four land
+   6–9 PRs/h at under half a full-tier run per merge; at 10 % or worse no batching keeps up. The account has 40
+   concurrent jobs (Pro) and one full tier fans out to ~20, so two batch lanes is the ceiling and per-PR CI should be
+   slimmed so the slots go to batches. The repo's own proxy for p: trains went red 13.3 % of the time when a merge
+   landed after a PR's green run vs 4.3 % otherwise (`tools/ci/merge-gate.mjs` header). Measure p first.
+   A cheaper first step under the same rules: merge-commit rollup PRs of low-risk (docs/tools/tests-only) PRs through
+   the normal `gate`, Rust-style; GitHub marks each original merged when the rollup lands.
 2. **Only full-tier-green PRs enter a batch.** A batch member must already have the full tier green on its own head
    and no quarantine-worthy flake; this keeps the in-batch failure rate low enough for batching to pay.
 3. **Producer caps, not just a queue cap.** Beyond the dispatcher pause: a per-lane cap on open PRs and on new PRs per
@@ -73,21 +78,25 @@ committed under `docs/notes/` when the last one lands.
 5. **Generated files that do not churn.** Replace order-dependent fields (agent-index `order`) with a stable key or
    derive position at read time; audit every `npm run gen` output for the same insertion churn.
 6. **`land.yml` fetch.** `trusted-rows` and `land-gate` fetch only the deploy branch and the PR head, not every ref.
-7. **Stale and duplicate PRs.** Close a draft with no push or comment for 48 h and no live owner (branch archived as a
-   tag, the existing prune pattern); when two open PRs close the same issue, keep the newer and close the older as
-   superseded with a `superseded-by #n` comment the dispatcher follows.
-8. **Skill routing.** Turn the keyword hint hook into the generic "check the skill list, or pick none" form (or off),
-   chosen by an A/B of its existing modes on real prompts with false positives counted; mark operator workflows
-   (`ship`, `check`, `handoff`) `disable-model-invocation`; scope subsystem skills with `paths:`; gate skill changes
-   on a trigger eval (`claude plugin eval`). Detail: the skill-design report.
+7. **Duplicate and superseded PRs, not idle ones.** No PR was idle more than 6.4 h on 2026-10-27 (the dispatcher
+   re-owns a PR silent for 2 h), so an idle-based stale bot would do nothing. Report two open PRs that close the same
+   issue, and lint an agent's `Closes #n` against the issue its lane claimed (it closes real issues here: the default
+   branch is the deploy branch).
+8. **Skill routing, eval first.** Add should-match-nothing queries and queries taken from real session transcripts
+   to the routing set (none of its 341 queries expects "no skill", so false positives are invisible); A/B the hint
+   hook's `targeted` / `generic` / `off` modes on that set and keep the winner; make the routing A/B a required check
+   for any PR that edits a description or folds a skill. The last description trim (12,586 → 10,213 chars) shipped
+   with no eval, and routing then measured 84 % vs 99 % earlier (different samples). Not recommended here:
+   `paths:` scoping (measured worse in this repo, 182/216 vs 214/216) and `disable-model-invocation` on `ship`/`check`
+   (Bryce triggers them by typing). Detail: [skill-design report](../notes/agent-ops-research-2026-10-27/skill-design.md).
 
 ## 4. Phase 2 — options that change a rule (Bryce decides)
 
 | Option | Gains | Costs | Recommendation |
 |---|---|---|---|
-| A. Generate derived files at build/deploy time instead of committing them (Pages from an Actions artifact) | Removes gen drift on the tip and most gen-only syncs | A checkout needs `npm run gen` before it runs; served files differ from committed ones, so `version.json` must name the source commit; rule 11 changes | Yes, in stages: served files first, `package.json` test scripts via one runner, changelog at release |
+| A. Generate derived files at build/deploy time instead of committing them (`pages.yml` already publishes an Actions artifact) | Removes gen drift on the tip and most gen-only syncs | A checkout needs `npm run gen` before it runs; served files differ from committed ones, so `version.json` must name the source commit; rule 11 changes | Yes, in stages: served files first, `package.json` test scripts via one runner, changelog at release |
 | B. Bot fast-forward landing (bors-style): a bot builds merge(tip, batch), gates it, then fast-forwards the deploy branch to that exact commit | The commit that ships is the commit CI tested | The bot needs a ruleset bypass; "only PRs land" changes | After the rollup (Phase 1.1) if the rollup still leaves tip reds |
-| C. Move the repo into a free GitHub organization | GitHub's native merge queue (batches, `merge_group`), team review rules | GitHub does not redirect Pages after a transfer: the site URL, the installed iPhone PWA, the service-worker scope and on-device saves would all reset; CI must also run on `merge_group` | Not now. If ever, put Pages on a custom domain first |
+| C. Move the repo into a free GitHub organization | GitHub's native merge queue (batches, `merge_group`), team review rules | GitHub does not redirect Pages after a transfer: the site URL, the installed iPhone PWA, the service-worker scope and on-device saves would all reset (`js/career/career-backup.js` exports and imports saves, but each player must do it by hand); a free org has 20 concurrent jobs, half of today's 40, and the native queue runs one full build per PR | No |
 | D. Squash merges | One commit per PR | Breaks "live = ancestor of `apex-sha`"; originals close as unmerged; no help with semantic conflicts | No |
 | E. Stacked PRs (GitHub stacks, Graphite) | Smaller review units for layered work | No auto-merge on stacks; needs rebase/force-push; does not fit independent agents | No |
 | F. A separate GitHub App identity for agents | Makes a required human/CODEOWNERS approval possible (an author can never approve their own PR) | Setup, token rotation | Only if Bryce wants a human review step on high-risk paths |
@@ -99,18 +108,22 @@ committed under `docs/notes/` when the last one lands.
 - A hook is for a rule with no exceptions; a preference belongs in a skill or nowhere. A pattern ban belongs in
   `permissions.deny`, which cannot crash. Claude Code hooks fail OPEN on a crash, a missing script or a timeout unless
   the handler sets `onFailure: "block"` (v2.1.295) or the script turns its own errors into exit 2.
-- `bash-guard.sh` starts on every Bash call and runs the ~50 s guards inside the hook before each commit. Split it: a
-  fast fail-closed refusal guard (force push, PID kill, run cancel, deploy-branch push) gated by the handler `if`
-  filter, and the guards as a marker file the test script writes ("block at submit") or git's own pre-commit hook.
+- `bash-guard.sh` starts on every Bash call and runs `test:guards` (50–110 s) inside the hook before each commit,
+  under a 360 s timeout. The same suite already lives in `.githooks/pre-commit` (it skips itself when `CLAUDECODE=1`)
+  and shares the verdict file `artifacts/pre-commit-guards.ok`. Make the git hook the one owner for every host and
+  shrink `bash-guard.sh` to fast fail-closed refusals (force push, PID kill, run cancel, deploy-branch push,
+  `--no-verify`) with a ≤ 30 s timeout. `launch-gate.py` fails open today: make it, and every guard, turn its own
+  errors into exit 2, with a fixture test per guard.
 - Keep `protect-files`, the refusal half of `bash-guard`, and the merge/MCP guards. Put every other hook to the test
   "name a decision it changed this week": `lsp-hint`, `context-cap` (runs on every tool call), `ui-fixer-uncommitted`,
   `launch-page`, `memory-sync` and the two Stop hooks.
 - On Codex the hooks are guardrails, not a boundary (unsupported fields fail open, no `ask`, hosted tools unhooked).
 
 **Models** (fact sheet in; prices and IDs checked against Anthropic's docs 2026-10-27).
-- Keep Opus 5.5 as the default for workers and the orchestrator: on an independent Terminal-Bench run it cost less
-  per task than Sonnet 5.5 ($13.20 vs $16.51; Sonnet spent about twice the tokens), and Anthropic's own guidance is
-  to tune effort before switching models.
+- Dispatcher workers already launch on Sonnet 5.5 (`tools/ci/dispatch.json`); hand-launched sessions, the
+  orchestrator and `model: inherit` subagents run on Opus 5.5. Benchmarks disagree on which is cheaper per task (an
+  independent Terminal-Bench run: Opus $13.20 vs Sonnet $16.51, Sonnet spending about twice the tokens), so A/B the
+  two on cost per merged PR, after checking each session's served model, before changing policy.
 - Effort, not model, is the main dial: implement at `medium`, verify and review at `high`; avoid `max` (it drifts out
   of scope). A global `CLAUDE_CODE_EFFORT_LEVEL` overrides every subagent's `effort:`, so do not set one fleet-wide.
 - Exploration currently bills at the parent's model: Claude Code's built-in Explore subagent inherits it. Define a
@@ -119,8 +132,23 @@ committed under `docs/notes/` when the last one lands.
 - Cost per merged PR tracks PR size more than model: keep agent PRs small (> 1,000-line PRs were flagged in review
   36 points more often than < 300-line ones).
 
-**Cleanup** (fact sheet running; filled in when it lands): sessions, worktrees, branches, PRs, labels and artifacts
-cleaned by scheduled, dry-run-first automation instead of manual sweeps.
+**Cleanup** (fact sheet in). Cleanup as code, the Kubernetes triage-robot shape: scheduled jobs, each a query plus
+an idle threshold, at most ~10 items per run, dry-run unless `--confirm`, and an opt-out label.
+- Branches: "automatically delete head branches" is on but only covers merged PRs. Add a nightly cron to
+  `prune-branches.yml` that applies only its zero-loss verdicts (merged, absorbed) and reports the rest, and archive +
+  delete a branch when its agent PR closes unmerged. A ruleset over `cursor/*` would silently block both ("Restrict
+  deletions" is ticked by default).
+- PRs: no idle-based stale bot (see Phase 1.7); REPORT, do not auto-close, two open PRs that close the same issue
+  (no tool closes duplicates safely); lint agent PR bodies for closing keywords that name the wrong issue.
+- Branches today: 358 on the remote, 282 with no open PR, 71 `archive/*` tags; `prune-branches.yml` runs only by
+  hand. Protect `archive/*` tags with a ruleset.
+- Sessions: the platform does not archive cloud sessions on its own, so the dispatcher's archive pass stays; finished
+  children are archived by their parent at hand-back.
+- Worktrees: Claude Code's sweep removes only clean, pushed subagent worktrees older than 30 days; add a per-container
+  reaper that removes a worktree whose branch is merged or closed (saving a patch first when it is dirty).
+- Actions: delete a PR's caches when it closes (GitHub's documented workflow). Since 2026-10-01 run retention also
+  expires checks and statuses, so tools reading old runs must expect gaps. Sessions cannot reach the Actions API
+  (403), so this cleanup runs inside Actions.
 
 ## 6. How we will know it worked
 
