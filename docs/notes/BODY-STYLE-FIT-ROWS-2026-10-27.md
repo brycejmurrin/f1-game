@@ -97,3 +97,40 @@ body over 11 cars: needle 127, brick 71, anteater 323, arched 181, wedge 332, ba
 the cover foot and the pod top share a plane). Needle (near-factory) fails too, so the fix is in the shared
 `coverLoft`/pod seam (`js/car/car-shade.js`, `car-body-geom.js`), which moves factory cars; needs its own change with a
 factory-wide baseline.
+
+## Row 3 diagnosis (#3959), NOT landed
+Cause found: the `engineCover~sidepods` pair is NOT the cover loft. The engineCover section (car3d `part("engineCover")`)
+also emits the pod flank decals (`addPodFlankSpan(0.46,-0.34, …)`: the PANEL sponsor board 0.32-0.80 and the c2 band
+0.08-0.30). On `podSculpt` pods each quad vertex is `podFlank(z,f)` shifted 2 mm in x, which slides ALONG the near-horizontal
+lower facet (normal about -0.6,-0.8), so the band's underside is coplanar with the pod skin; a second, smaller strip
+(brick/arched/needle, z 0.38-0.41, upper facet) comes from the first segment starting at z 0.46, mid-quad (not a pod
+station), where the decal chord twists off the pod's diagonal.
+Tried (six-body `--baseline`, written from the tip before the change; `artifacts/` only, not committed):
+```
+variant                                              engineCover~sidepods rows        elsewhere
+2 mm shift along the facet NORMAL                    brick/wedge/anteater ok, 45 rows  28 WORSE / 14 NEW (OPEN, engineCover~livery)
+4 mm normal                                          0 on six bodies (ZFIGHT-only run) not checked with GAP
+6 mm normal                                          0                                 GAP engineCover~sidepods NEW 30 (> 3 mm), OPEN
+skip quads whose facet is shallow (|dx| > 0.4 run)   needle 68, brick 60, arched 72    PASS on brick/wedge/anteater; six-body: 1 WORSE
+                                                                                       (wheels OPEN on mclaren needle, 82101 vs 81970 mm,
+                                                                                       a part the change never touches)
++ y drop 2.5 mm x downward normal                    worse                             56 WORSE / 18 NEW (welds with the adjacent quads break)
+first segment lifted 3.5 mm (per vertex)             2 rows left on brick              livery OPEN WORSE x11 (car-mesh podDecal sits 4 mm proud)
+```
+Lessons: the OPEN row is a weld/SEALED metric (rim within ATTACH 3 mm of another surface), so any change of a decal vertex
+must move the SAME vertex in every quad that shares it (board, band, ERS strips, car-mesh `podDecal`'s livery quads at
++4 mm); and the GAP limit (3 mm) bounds the lift from above. Next step: author ONE shared `flankPoint(z,f,side,lift)`
+used by car3d `addPodFlankSpan` and car-mesh `podDecal`, with the lift taken along the facet normal and the first
+segment started at a pod station (0.50) with its UV range clipped, then re-run the six-body baseline.
+
+## Row 3: shared `flankPoint` tried, NOT landed (2026-10-27)
+Added `anchors.flankPoint(z,f,lift)` (podFlank lifted along the facet's outward normal) and used it in car3d
+`addPodFlankSpan` (4 mm) and car-mesh `podDecal` (6 mm). Six-body `--baseline` (from the pre-change tip, 76 s per run):
+```
+engineCover~sidepods ZFIGHT   rows kept, max cm2 down (anteater 299 -> 19; z 0.38 strip 60 -> 25-30), none reach 0
+elsewhere                     88 WORSE / 51 NEW: OPEN engineCover (3735 -> 4022 mm, 1308 -> 5969 mm), OPEN livery
+                              (542 -> 1297 mm, 258 -> 1534 mm, 36 NEW), GAP livery~engineCover 4.5 mm x4
+```
+Reverted. A uniform lift fixes the coplanar band but moves every decal rim off the weld distance the OPEN metric reads
+(and the z 0.38 strip needs the first segment on a pod station, which changes the board's UV). The fix needs the board,
+band, ERS strips and livery quads re-meshed together, not a vertex offset. #3959 stays open; this PR is `Refs`.

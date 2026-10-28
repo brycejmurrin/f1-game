@@ -4576,6 +4576,11 @@
         "tests/unit/verify-live.test.mjs"
       ]
     },
+    "js/circuits/hungaroring.js": {
+      "*": [
+        "tests/unit/circuit-corner-anchors.test.mjs"
+      ]
+    },
     "js/circuits/imola.js": {
       "*": [
         "tests/specs/imola-foundation.spec.js",
@@ -6937,7 +6942,6 @@
       ],
       "enableTilt": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/boot-input-shape.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
@@ -17998,6 +18002,12 @@
       "bootPick": [
         "tests/unit/xr-opts.test.mjs"
       ],
+      "caps": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
+      "detect": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
       "fallbacks": [
         "tests/unit/xr-opts.test.mjs"
       ],
@@ -18008,6 +18018,9 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "plan": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
+      "rendererMatchesPlan": [
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
@@ -18138,6 +18151,9 @@
       ],
       "stickToSteer": [
         "tests/unit/xr-phase0.test.mjs"
+      ],
+      "unionViewProjTo": [
+        "tests/unit/xr-cull-union.test.mjs"
       ],
       "worldFromAnchorTo": [
         "tests/unit/xr-phase0.test.mjs"
