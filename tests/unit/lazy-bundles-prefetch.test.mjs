@@ -102,6 +102,7 @@ test("ensureRaceSession: a partial failure is repaired by the next call, and the
     deps: { onRaceSessionReady() { hooks++; } },
   });
   vm.runInContext(read("js/core/mat4.js") + "\nthis.M4 = M4;", w.ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(read("js/race/session-phys.js"), w.ctx, { filename: absSrc("js/race/session-phys.js") });
   vm.runInContext(read("js/race/session-stub.js"), w.ctx, { filename: absSrc("js/race/session-stub.js") });
   const stub = (g) => vm.runInContext(`${g}._stub`, w.ctx);
   assert.equal(await w.lb.ensureRaceSession(), false, "engineer.js failed once");

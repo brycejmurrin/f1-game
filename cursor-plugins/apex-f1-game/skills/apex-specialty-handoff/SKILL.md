@@ -27,8 +27,8 @@ Refresh it at every push. A takeover starts from this block and the Plan and rea
 ## Messages
 - Comments on the issue or PR are the only messages between agents. There is no bus, no priority/FYI channel and no
   orchestrator or watcher lane to report to.
-- A question only Bryce can answer: `needs-decision` plus one comment with the options and your pick, then keep
-  working on everything that does not depend on it (WORKERS §7).
-- A Cursor run ends at ready. You cannot set labels: the dispatcher sets `run-ci` and `land` from the Hand-off
-  block, and a red after your run is a dispatcher follow-up turn (WORKERS §Per vendor).
+- A question only Bryce can answer goes in the Hand-off `next:` line, with the options and your pick. Do not add
+  `needs-decision` yourself and do not comment (WORKERS §Per vendor).
+- A Cursor run stops when the draft is pushed and this block is current. You cannot set labels: put `run-ci`,
+  `lane:cursor`, and `land` in `next:`. Do not subscribe. A red after your run is a later lane (WORKERS §Per vendor).
 - Never merge or arm; sync = merge origin's deploy branch via `sync-pr.mjs`, never rebase or force-push.
