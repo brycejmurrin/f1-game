@@ -990,9 +990,13 @@ corner-speed model showed no such gap. Dry pace is untouched by construction.
 ### Wheel state: torque-balanced lock-up and wheelspin (opt-in, #1628)
 
 `js/physics/wheel-state.js` gives the player's axles a rim speed (`vwF`/`vwR`)
-and slip ratio (`kappaF`/`kappaR`). It is **opt-in and default OFF**
-(`WheelState.setEnabled(true)` or `apex26.wheelState = "1"`): OFF never enters
-the branch, so `physics-characterization` stays bit-identical to its baseline.
+and slip ratio (`kappaF`/`kappaR`). It is **opt-in and default OFF by decision**
+(option B, 2026-10-27; turning it on by default is #3983)
+(`WheelState.setEnabled(true)` or `apex26.wheelState = "1"`; a session-only dev
+toggle is `__apex.setPhysics({wheelState})`, read back by `tuning().wheelState`):
+OFF never enters the branch, so `physics-characterization` stays bit-identical to
+its baseline. The rim fields are `EPISODE_TRANSIENTS` and CarFields-registered, so
+`__apex.reset()` clears them and `WheelState.ensure` re-seeds them from `c.speed`.
 
 ON, PlayerForces bills each axle's brake or drive demand against its tyre's
 longitudinal capacity on the same circle the legacy `axFracF`/`axFracR` charge
@@ -1179,7 +1183,7 @@ it lands.
 | `js/track/scenery/pits.js` | `ctx.curvature(box.s)` at the pit-box rows | **surface** | static dressing: each box's yaw follows the pit-lane arc, resolved once per circuit at build time and never read back by a car |
 | `js/race/real-race.js` | `dropSpeed()` at a mid-race JUMP IN | **AI-only** | the speed a car is DROPPED IN at without a real trace: the AI's own corner model and entry budget (`AiDrive.cornerSpeed`, `BRAKE`) over the next 220 m, read once at the drop for cars the AI drives — the seat car is handed to the AI (`setCarRole(me, false)`) BEFORE the drop and stays its for the 4 s hand-over, so no player-driven car ever takes the value; with the positions loaded the speed is the real car's instead |
 | `js/game.js` | `coast` | **broadcast-only** | runs only on `c.finished` cars — driving control is already disconnected. Any future reuse of `coast()` on a live car is a BLOCKER |
-| `js/race/pit-lane.js` | `entryRunM` (now the fallback for a track built without the engine's window; `js/track/core/pit.js` `straightRun`, same `PIT_K`, owns it) | **surface** | where the pit lane OPENS, walked back from the start/finish line once per circuit to find where the last corner lets go. The aero-zones row below is the precedent and this is the same shape: a fixed zone computed from the static arc, gating a driver-INITIATED action (calling a stop) identically for every car, no force path, nothing read per frame. Replaced a flat 320 m that landed Monza's entry inside Parabolica — where the commit gesture (hold the pit side) asks a driver to hold a line mid-corner. Threshold 0.0035 (r ~= 285 m) is deliberately looser than a DRS zone's 0.0014: an entry needs "not actively cornering", not a proper straight |
+| `js/race/pit-geom.js` | `entryRunM` (now the fallback for a track built without the engine's window; `js/track/core/pit.js` `straightRun`, same `PIT_K`, owns it) | **surface** | where the pit lane OPENS, walked back from the start/finish line once per circuit to find where the last corner lets go. The aero-zones row below is the precedent and this is the same shape: a fixed zone computed from the static arc, gating a driver-INITIATED action (calling a stop) identically for every car, no force path, nothing read per frame. Replaced a flat 320 m that landed Monza's entry inside Parabolica — where the commit gesture (hold the pit side) asks a driver to hold a line mid-corner. Threshold 0.0035 (r ~= 285 m) is deliberately looser than a DRS zone's 0.0014: an entry needs "not actively cornering", not a proper straight |
 | `js/physics/aero-zones.js` | `build` | **surface** | fixed FIA-style activation zones computed once per circuit; gates the driver-INITIATED X-mode button identically for all cars; no steer torque |
 | `js/physics/debris-world.js` | `registerFurniture` | **broadcast-only** | apex-kerb cones in the one-way cosmetic Rapier side-world |
 | `js/camera/vantage.js` | `vantage` | **broadcast-only** | heli/side/cinematic plus ExtraRigs drone (side sway); trackside uses corner poses (no curvature); cam-avoid uses prop boxes only; 0 in every driven mode |

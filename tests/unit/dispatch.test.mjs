@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import {
   planDispatch, DEFAULT_CONFIG, parseHandoff, liveLaunch, extractSessions, sessionRefs, activityAt, applyPlan, loadConfig,
   issuePrompt, continuePrompt, deployRedPrompt, waitingWhy, PROMPT_MAX_LINES, BOARD_MARKER, LAUNCH_RE,
-  titleNames, readSessionPages, childSessionIds, sessionsPage, readState, getAll, landProblem, recordToken, recordComment, main, claimedSessionIds,
+  titleNames, readSessionPages, childSessionIds, sessionsPage, readState, getAll, landProblem, distanceOnlyRefusal, recordToken, recordComment, main, claimedSessionIds,
   renderPlan,
 } from "../../tools/ci/dispatch.mjs";
 
@@ -116,11 +116,56 @@ test("rule 1: lane:cursor launches a CURSOR body only when hosts.cursor.enabled"
   const issues = [board(), issue(10, ["ready", "lane:cursor"])];
   const off = planDispatch(state({ issues }), cfg(), NOW);
   assert.deepEqual([off.launches.length, skips(off)], [0, ["issue #10: lane:cursor but hosts.cursor.enabled is false"]]);
-  const on = planDispatch(state({ issues }), cfg({ hosts: { cursor: { enabled: true, model: "composer-2.5" } } }), NOW);
+  const cursorCfg = cfg({ hosts: { cursor: { enabled: true, model: "composer-2.5" } } });
+  const on = planDispatch(state({ issues }), cursorCfg, NOW);
   const spec = on.launches[0].spec;
   assert.equal(on.launches[0].host, "cursor");
   assert.deepEqual({ ...spec, prompt: spec.prompt.text.split("\n")[0] }, { prompt: "Task: #10 — Task 10", model: { id: "composer-2.5" }, name: "[Worker] #10 Task 10",
     env: { type: "cloud" }, repos: [{ url: "https://github.com/brycejmurrin/f1-game", startingRef: DEFAULT_CONFIG.deployBranch }], autoCreatePR: false, workOnCurrentBranch: false });
+  assert.equal(spec.prompt.text, issuePrompt(issues[1], cursorCfg, "cursor"));
+});
+
+const CURSOR_TAIL = [
+  "Read docs/WORKERS.md §Per vendor (Cursor). Do not add labels, claim, post issue comments, or open issues.",
+  "Symbols: get_mcp_tools once for apex-lsp, then lsp_outline, lsp_definition (read the body), lsp_callers. Grep only comments, docs, and CSS. lsp_diagnostics once after the edit, before tests.",
+  "Do not spawn task_v2 scouts. Grep the defect ledger yourself (≤30 KNOWN rows).",
+  "Gate, in this order, once: edit; npm run gen; the one spec pick-tests names; tooling-fast --changed --jobs=3; commit; push. Repeat the gate only when GitHub says CONFLICTING.",
+  "Write the ```handoff fence yourself (branch, head, verified, not-run, next). Put run-ci, lane:cursor, and land in next:; do not apply them.",
+  "Do not call subscribe_pr_activity or subscribe_github_*. A CI notification is not a new task. Stop when the draft PR is pushed and the fence is current. Do not add land.",
+  "Lane: lane:cursor. Model: composer-2.5. Base: claude/f1-game-project-26h3ng (branch cursor/<topic>-<hash>; draft PR at the first commit).",
+  "STOP AT: 300k",
+  "At the STOP AT cap, the cost cap ($10 soft) or stuck: push, refresh the PR Plan and ```handoff block, name the blocker in next:, end.",
+];
+
+test("rule 1: a cursor prompt is at most 25 lines, ends with the cursor tail, and does not tell the agent to label, subscribe, or end at land", () => {
+  const c = cfg({ hosts: { cursor: { enabled: true, model: "composer-2.5" } } });
+  const long = issue(10, ["ready", "lane:cursor"], { body: Array.from({ length: 40 }, (_, i) => `line ${i} ${"x".repeat(200)}`).join("\n") });
+  const hand = "```handoff\n" + Array.from({ length: 20 }, (_, i) => `k${i}: v`).join("\n") + "\n```";
+  const text = issuePrompt(long, c, "cursor");
+  const lines = text.split("\n");
+  assert.ok(lines.length <= PROMPT_MAX_LINES, `${lines.length} lines`);
+  assert.deepEqual(lines.slice(-CURSOR_TAIL.length), CURSOR_TAIL);
+  assert.equal(lines.filter((l) => l === "STOP AT: 300k").length, 1);
+  for (const banned of ["call subscribe_pr_activity on your PR", "gh api", "End at `land`", "Claim first", "issue_write", "needs-owner"]) {
+    const hit = text.includes(banned);
+    assert.equal(hit, false, banned);
+  }
+  const cont = continuePrompt(pr(20, { body: hand }), c, "cursor");
+  const contLines = cont.split("\n");
+  assert.ok(contLines.length <= PROMPT_MAX_LINES, `${contLines.length} continue lines`);
+  assert.deepEqual(contLines.slice(-CURSOR_TAIL.length), CURSOR_TAIL);
+  const contAdopt = cont.includes("adopts PR");
+  const contLand = cont.includes("`land` when ready-gate");
+  assert.equal(contAdopt, false);
+  assert.equal(contLand, false);
+  const red = deployRedPrompt(c, "cursor");
+  const redLines = red.split("\n");
+  assert.ok(redLines.length <= PROMPT_MAX_LINES, `${redLines.length} deploy-red lines`);
+  assert.deepEqual(redLines.slice(-CURSOR_TAIL.length), CURSOR_TAIL);
+  const redClaim = red.includes("Claim first");
+  const redLabel = red.includes("labelled");
+  assert.equal(redClaim, false);
+  assert.equal(redLabel, false);
 });
 
 test("rule 2: a PR silent 2 h gets needs-owner and ONE CONTINUE takeover carrying the handoff block", () => {
@@ -363,6 +408,22 @@ test("WP-L7 F5: a `land` PR whose `gate` commit STATUS failed (or sat pending pa
   assert.equal(landProblem(newerGreen, NOW, 2), null, "the newest gate status decides");
 });
 
+test("a distance-only gate refusal waits for land.yml AUTO-SYNC; any other refusal is still re-owned", () => {
+  const refused = (description) => ({ context: "gate", state: "failure", updated_at: ago(4), description });
+  const land = (gate) => pr(92, { labels: ["land"], updated_at: ago(5), checks: [{ id: 1, name: "CI", status: "completed", conclusion: "success" }], statuses: [gate] });
+  const only = "= merge-gate refused — open=ok hold=ok plan=ok ci=ok distance=FAIL pr=#92 sha=5897ccfd tip=265cf15";
+  assert.equal(distanceOnlyRefusal(only), true);
+  assert.equal(landProblem(land(refused(only)), NOW, 2), null, "a distance-only refusal only waits");
+  assert.equal(planDispatch(state({ prs: [land(refused(only))] }), cfg(), NOW).launches.length, 0, "no takeover worker just to sync");
+  assert.equal(distanceOnlyRefusal("= merge-gate refused — open=ok hold=ok plan=ok ci=WAIT distance=FAIL pr=#92"), true, "CI still running only waits too");
+  for (const d of ["= merge-gate refused — open=ok hold=ok plan=ok ci=ok gen=FAIL distance=FAIL pr=#92", "= merge-gate refused — open=ok hold=FAIL plan=ok ci=ok distance=FAIL pr=#92",
+    "= merge-gate refused — open=ok hold=ok plan=ok ci=FAIL distance=FAIL pr=#92", "= merge-gate refused — open=ok hold=ok plan=ok ci=ok distance=ok pr=#92", "x", "", undefined]) {
+    assert.equal(distanceOnlyRefusal(d), false, String(d));
+  }
+  assert.equal(landProblem(land(refused("= merge-gate refused — open=ok hold=ok plan=ok ci=FAIL distance=FAIL pr=#92")), NOW, 2), "gate failure", "a failed ci row is still a problem");
+  assert.equal(landProblem(land({ context: "gate", state: "error", updated_at: ago(4), description: only }), NOW, 2), null, "an error state with a distance-only description waits as well");
+});
+
 test("WP-L7 F5: readState reads the `gate` commit status of a land PR", () => {
   const sha = "c".repeat(40);
   const api = (p) => {
@@ -375,7 +436,7 @@ test("WP-L7 F5: readState reads the `gate` commit status of a land PR", () => {
     return { json: [] };
   };
   const s = readState({ api, config: DEFAULT_CONFIG, quota: "allowed" });
-  assert.deepEqual(s.prs[0].statuses, [{ context: "gate", state: "failure", created_at: ago(4), updated_at: ago(4) }]);
+  assert.deepEqual(s.prs[0].statuses, [{ context: "gate", state: "failure", description: "x", created_at: ago(4), updated_at: ago(4) }]);
   assert.equal(landProblem(s.prs[0], NOW, 2), "gate failure");
 });
 
