@@ -2326,15 +2326,18 @@
         "tests/unit/results-cam.test.mjs"
       ],
       "create": [
+        "tests/unit/parc-ferme.test.mjs",
         "tests/unit/results-cam.test.mjs"
       ],
       "enabled": [
+        "tests/unit/parc-ferme.test.mjs",
         "tests/unit/results-cam.test.mjs"
       ],
       "highlightsReel": [
         "tests/unit/results-cam.test.mjs"
       ],
       "live": [
+        "tests/unit/parc-ferme.test.mjs",
         "tests/unit/results-cam.test.mjs"
       ],
       "onFlag": [
@@ -2344,6 +2347,7 @@
         "tests/unit/results-cam.test.mjs"
       ],
       "reset": [
+        "tests/unit/parc-ferme.test.mjs",
         "tests/unit/results-cam.test.mjs"
       ],
       "startHighlights": [
@@ -2353,9 +2357,11 @@
         "tests/unit/results-cam.test.mjs"
       ],
       "status": [
+        "tests/unit/parc-ferme.test.mjs",
         "tests/unit/results-cam.test.mjs"
       ],
       "tick": [
+        "tests/unit/parc-ferme.test.mjs",
         "tests/unit/results-cam.test.mjs"
       ]
     },
@@ -12327,6 +12333,41 @@
       ],
       "xVmaxGain": [
         "tests/unit/pace-math.test.mjs"
+      ]
+    },
+    "js/race/parc-ferme.js": {
+      "create": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "frozenPath": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "live": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "parkAnchor": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "parkPose": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "pitSubject": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "reset": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "skip": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "start": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "status": [
+        "tests/unit/parc-ferme.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/parc-ferme.test.mjs"
       ]
     },
     "js/race/pit-geom.js": {

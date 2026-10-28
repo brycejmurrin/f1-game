@@ -3925,6 +3925,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/parc-ferme.js",
+      "global": "ParcFerme",
+      "roster": "tag"
+    },
+    {
       "path": "js/race/pit-geom.js",
       "global": "PitGeom",
       "roster": "LAZY_RACE_SESSION"
