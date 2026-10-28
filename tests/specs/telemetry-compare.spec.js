@@ -21,6 +21,8 @@ async function dataReady(page) {
   await page.addScriptTag({ url: "/js/core/mat4.js" });
   // hub.js binds Dom.el at evaluation time, just as the app does.
   await page.addScriptTag({ url: "/js/ui/dom.js" });
+  // hub.js and schedule.js call I18n.t / I18n.date at render and init time.
+  await page.addScriptTag({ url: "/js/core/i18n.js" });
   // The manifest's LAZY_DATA in order — every tab module, then the hub, which
   // calls each Data*.create() at evaluation time (tools/manifest.cjs LAZY_DATA_EDGES).
   for (const file of LAZY_DATA) await page.addScriptTag({ url: "/" + file });

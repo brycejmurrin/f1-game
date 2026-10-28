@@ -603,6 +603,57 @@ test("a PONG for a ping we never sent, or with a forged t0, is not a clock sampl
 });
 
 // ── round 9: the PONG's hold is not path, and a local close() is "local" ─────
+test("a single low-RTT outlier PONG cannot steal the offset before a step run confirms", () => {
+  // clockStepRun exists so one disagreeing sample is not a step. Before the
+  // hold-out fix, that sample still entered `samples`, and lowest-RTT election
+  // made it `best` immediately — a hostile or post-suspend PONG with a tiny
+  // RTT and a wild offset poisoned every peer timestamp until it aged out.
+  const { near, far, T0 } = bareFarEnd();
+  // Fast cadence so every tPing pump emits a PING; the receive pump may emit
+  // another, which we leave unanswered (takePing only matches the one we echo).
+  const session = NetSession.create({
+    transport: near, pingEveryMs: 1, syncPingEveryMs: 1, clockStepRun: 3,
+  });
+  const pong = (id, t0, t1, t2) => {
+    const dv = new DataView(new ArrayBuffer(29));
+    dv.setUint8(0, NetSession.PONG); dv.setUint32(1, id >>> 0);
+    dv.setFloat64(5, t0); dv.setFloat64(13, t1); dv.setFloat64(21, t2);
+    return new Uint8Array(dv.buffer);
+  };
+  let lastPing = null;
+  const realSend = near.send.bind(near);
+  near.send = (channel, data) => {
+    const ok = realSend(channel, data);
+    if (channel === NetTransport.STATE && data && data.byteLength >= 13) {
+      const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+      if (dv.getUint8(0) === NetSession.PING) lastPing = { id: dv.getUint32(1), t0: dv.getFloat64(5) };
+    }
+    return ok;
+  };
+  const exchange = (tPing, skew, rtt) => {
+    lastPing = null;
+    session.pump(tPing);
+    far.pump(tPing);
+    assert.ok(lastPing, "pump must emit a PING");
+    const { id, t0 } = lastPing;
+    // Peer stamps chosen so offset≈skew and measured rtt≈rtt (hold 0).
+    far.send(NetTransport.STATE, pong(id, t0, t0 + skew + rtt / 2, t0 + skew + rtt / 2));
+    session.pump(tPing + rtt);
+  };
+  for (let i = 0; i < 3; i++) exchange(T0 + i * 200, 0, 100);
+  assert.equal(session.synced(), true);
+  assert.equal(session.offset(), 0, "precondition: offset 0");
+  assert.equal(session.rtt(), 100, "precondition: rtt 100");
+  // One disagreeing PONG: offset +5000, rtt 2 — would win lowest-RTT if admitted.
+  exchange(T0 + 800, 5000, 2);
+  assert.equal(session.offset(), 0, "one outlier must not become best");
+  // Two more matching outliers complete the step run → offset moves to +5000.
+  exchange(T0 + 1000, 5000, 2);
+  exchange(T0 + 1200, 5000, 2);
+  assert.ok(Math.abs(session.offset() - 5000) < 5,
+    `three agreeing outliers confirm the step, got ${session.offset()}`);
+});
+
 test("a reply held by the peer for a frame does not bias the clock offset", () => {
   // The PONG used to carry only t1 (the PING's arrival); the reply left at
   // the peer's next pump, and that hold was counted as path and split

@@ -269,6 +269,7 @@ const DATA_READY = {
   "js/data/telemetry.js": () => typeof DataTelemetry !== "undefined",
   "js/data/export.js": () => typeof DataExport !== "undefined",
   "js/data/schedule.js": () => typeof DataSchedule !== "undefined",
+  "js/data/ics.js": () => typeof DataIcs !== "undefined",
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",

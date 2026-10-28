@@ -9,7 +9,7 @@ import worker, { Room } from "../../worker/rendezvous.js";
 
 function roomHarness() {
   const records = new Map();
-  const calls = { get: 0, put: 0, alarm: 0, deleteAll: 0 };
+  const calls = { get: 0, put: 0, alarm: 0 };
   const state = {
     storage: {
       async get(key) { calls.get++; return records.get(key); },
@@ -19,7 +19,6 @@ function roomHarness() {
       async deleteAlarm() { calls.alarmAt = null; },
       // SQLite transactions use storage itself; the legacy txn object has no alarm methods.
       async transaction(fn) { return fn({}); },
-      async deleteAll() { calls.deleteAll++; records.clear(); },
     },
   };
   return { room: new Room(state), records, calls };
@@ -261,4 +260,28 @@ test("Worker accepts actual client envelopes including the minimum empty plainte
     assert.equal(res.status, 200, "valid client payload must retain compatibility");
     assert.equal(h.records.get("offer").payload, payload);
   }
+});
+
+test("Worker answers OPTIONS and non-GET/POST before naming a Durable Object", async () => {
+  let ids = 0;
+  const env = { ROOM: { idFromName() { ids++; }, get() { throw new Error("unreachable"); } } };
+  const opt = await worker.fetch(new Request(route, { method: "OPTIONS" }), env);
+  assert.equal(opt.status, 204);
+  assert.equal(opt.headers.get("access-control-allow-origin"), "*");
+  assert.equal(ids, 0);
+  for (const method of ["PUT", "DELETE", "HEAD", "PATCH"]) {
+    const res = await worker.fetch(new Request(route, { method }), env);
+    assert.equal(res.status, 405, method);
+    assert.equal(res.headers.get("allow"), "GET, POST, OPTIONS");
+    assert.equal(ids, 0, method + " must not name a Durable Object");
+  }
+});
+
+test("Room refuses an unknown slot without touching storage", async () => {
+  const h = roomHarness();
+  const res = await h.room.fetch(new Request("https://relay.test/?slot=nope"));
+  assert.equal(res.status, 400);
+  assert.equal((await res.json()).error, "bad_slot");
+  assert.equal(h.calls.get, 0);
+  assert.equal(h.calls.put, 0);
 });

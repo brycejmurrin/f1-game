@@ -21,9 +21,10 @@
 //   gen       the head merges clean onto the current base tip in a throw-away worktree, and `gen:check` passes there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
-//   distance  the PR's merge-base is at most N (default 2) GAME merges behind the base tip: a game merge is a
+//   distance  the PR's merge-base is at most N (default MAX_BEHIND) GAME merges behind the base tip: a game merge is a
 //             first-parent merge commit on the base whose diff touches js/ css/ assets/ index.html or sw.js
 //             (replaces GAME-SLOT pacing: red trains were 13.3 % when a merge landed after the PR's green vs 4.3 %)
+//             — applied only when the PR's own diff (merge-base..head) touches a game path; otherwise it passes
 //
 // `--trusted` evaluates only the rows that run no code from the PR (open, hold, plan, ci, distance): it fetches the
 // head's objects for the merge-base but never checks them out or runs them. land.yml's `trusted-rows` job runs it,
@@ -55,8 +56,15 @@ export const HOLD_LABEL = "hold";
 export const GAME_PATH = /^(js\/|css\/|assets\/|index\.html$|sw\.js$)/;
 export const isGamePath = (p) => GAME_PATH.test(String(p || "").replace(/^\.\//, ""));
 export const gameFiles = (files) => (files || []).filter(isGamePath);
-/** Default for --max-behind (plan §4.3: N = 2 to start). */
-export const MAX_BEHIND = 2;
+/** Whether a PR's own changed files touch a game path. Only such a PR is held to the distance row: a docs, tools,
+ *  tests or workflow PR gains nothing from it, and gen:check and the ratchets already run on the real merge
+ *  result (2026-10-27: #3920, #3957, #3980, #4001, #4021 were refused on distance alone). Pure. */
+export const touchesGame = (files) => gameFiles(files).length > 0;
+/** Default for --max-behind. Plan §4.3 started at an unmeasured N = 2; on 2026-10-27 the deploy branch took ~15 game
+ *  merges per ~40 min full CI tier, so game PRs went green and were refused on distance again and again (#3964, #3932,
+ *  #3886: 3 syncs each). 6 is safe because land-gate still runs gen:check and the ratchets on the real merge result
+ *  against the current tip, and the Pages train gates every deploy tip before it publishes. */
+export const MAX_BEHIND = 6;
 /** Row order, which is also print order. */
 export const ROWS = Object.freeze(["open", "hold", "plan", "ci", "gen", "ratchets", "distance"]);
 /** The rows `--trusted` evaluates: none of them runs code from the PR. */
@@ -159,11 +167,19 @@ export function baseHistory({ tip, mergeBase, cwd = ROOT, run = git } = {}) {
   return { commits };
 }
 
-/** The distance row for a real clone: merge-base of `head` and `tip`, then baseHistory. `{ row, error? }`. */
+/**
+ * The distance row for a real clone: merge-base of `head` and `tip`, then the PR's own changed files (merge-base..head,
+ * renames split so a file moved out of js/ still counts); a PR touching no game path passes without the walk, any
+ * other gets baseHistory. `{ row, mergeBase, error? }`.
+ */
 export function distanceFor({ head, tip, cwd = ROOT, max = MAX_BEHIND, run = git } = {}) {
   const mb = run(["merge-base", head, tip], cwd);
   if (mb.status !== 0) return { error: `merge-base of ${String(head).slice(0, 8)} and ${String(tip).slice(0, 8)} failed (shallow clone? fetch-depth: 0)` };
   const mergeBase = mb.stdout.trim();
+  const own = run(["diff", "--no-renames", "--name-only", mergeBase, head], cwd);
+  if (own.status !== 0) return { error: `diff ${mergeBase.slice(0, 8)}..${String(head).slice(0, 8)} failed: ${(own.stderr || "").trim().split("\n")[0]}` };
+  const files = own.stdout.split("\n").filter(Boolean);
+  if (!touchesGame(files)) return { row: row(true, `no game files in this PR's diff (${files.length} file(s)): distance not applied`), mergeBase };
   const h = baseHistory({ tip, mergeBase, cwd, run });
   if (h.error) return { error: h.error };
   return { row: distanceVerdict(h.commits, mergeBase, max), mergeBase };
@@ -243,10 +259,12 @@ export function fetchForGate({ pr, head, headRef, cwd = ROOT, base = DEPLOY } = 
 export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLOY, run = spawnSync, ratchets = ratchetsOnMerge } = {}) {
   const wt = path.join(cwd, "artifacts", "merge-gate", `wt-${pr}`);
   const cleanup = () => { git(["worktree", "remove", "--force", wt], cwd); git(["worktree", "prune"], cwd); fs.rmSync(wt, { recursive: true, force: true }); };
-  const fail = (why) => { cleanup(); return { ok: false, evidence: why, tip: "" }; };
   const fetched = fetchForGate({ pr, head, headRef, cwd, base });
   if (fetched.error) return { ok: false, evidence: fetched.error, tip: "", error: true };
   const tip = fetched.tip;
+  // A refusal carries the fetched tip: with `tip: ""` evaluate's distance row failed its merge-base and the gate
+  // reported an error ("will retry") in place of the real conflict or gen:check refusal (2026-10-27 23:20Z, #3964).
+  const fail = (why) => { cleanup(); return { ok: false, evidence: why, tip }; };
   cleanup();
   const add = git(["worktree", "add", "--detach", wt, tip], cwd);
   if (add.status !== 0) return { ok: false, evidence: `worktree add failed: ${(add.stderr || "").trim().split("\n")[0]}`, tip, error: true };
@@ -324,23 +342,28 @@ export function evaluate({ pr, sha = "", request = api, root = ROOT, maxBehind =
   if (ci.error) return { error: `${CI_WORKFLOW} runs on ${head.slice(0, 8)}: ${ci.error}` };
   rows.ci = ciVerdict(checks.list, REQUIRED_CHECK, CI_APP, ci.suites);
   let tip = "";
+  // No tip is a FAIL row, not an error: an error posts "will retry" and hides the row that actually refused.
+  const distanceRow = () => {
+    if (!tip) return { row: row(false, "not evaluated: no tip") };
+    return distance({ head, tip, cwd: root, max: maxBehind });
+  };
   if (!rows.open.ok) {
     for (const k of order.filter((r) => r === "gen" || r === "ratchets" || r === "distance")) rows[k] = row(false, "not evaluated: the PR is not open and ready");
   } else if (trusted) {
     // No merge and no PR script: the base tip and the head's objects only, for the merge-base.
     const f = fetchTip({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
     if (f.error) return { error: f.error };
-    tip = f.tip;
-    const d = distance({ head, tip, cwd: root, max: maxBehind });
+    tip = f.tip || "";
+    const d = distanceRow();
     if (d.error) return { error: d.error };
     rows.distance = d.row;
   } else {
     const g = localMerge({ pr, head, headRef: pull.head?.ref || "", cwd: root, base });
     if (g.error) return { error: g.evidence };
-    tip = g.tip;
+    tip = g.tip || "";
     rows.gen = row(g.ok, g.evidence);
     rows.ratchets = g.ratchets ? row(g.ratchets.ok, g.ratchets.evidence) : row(false, "not evaluated: the merge or gen:check refused first");
-    const d = distance({ head, tip, cwd: root, max: maxBehind });
+    const d = distanceRow();
     if (d.error) return { error: d.error };
     rows.distance = d.row;
   }
@@ -366,7 +389,8 @@ const USAGE = `usage: node tools/ci/merge-gate.mjs --pr <n> [--sha <head>] [--ch
   final \`= merge-gate passed|refused …\` line (the check title):
     open (open, not a draft, head = --sha when given), hold (no \`hold\` label), plan (Plan closed; \`land:\` items
     exempt), ci (\`CI\` success on the head), gen (clean merge onto the current base tip + gen:check),
-    ratchets (on that merge result), distance (merge-base at most N game merges behind the base tip; default ${MAX_BEHIND}).
+    ratchets (on that merge result), distance (merge-base at most N game merges behind the base tip; default ${MAX_BEHIND};
+    a PR whose own diff touches no game path passes it).
   --trusted: only the rows that run no PR code (open, hold, plan, ci, distance); land.yml's trusted-rows job.
   A row still waiting on CI prints WAIT. Exit 0 all rows ok, 2 a row failed, 3 waiting (every other row ok, CI not
   finished), 1 usage or API/git error. Writes nothing but an optional --json summary.`;
