@@ -11,11 +11,9 @@ const LiveryStations = (function () {
   const TOGGLES = Object.freeze({ noseTip: "decalNoseTip", cockpitSide: "decalCockpit", podTop: "decalPodTop", haloTop: "decalHalo" });
   const on = (colors, id) => !colors || colors[TOGGLES[id]] !== "off";
 
-  // Driver code for the car's race number (Teams.LIST), else the team's short name.
+  // Same lookup the fin and spine "code" badges use (Teams.LIST, else the team short name).
   function driverCode(teamId, num) {
-    const t = typeof Teams !== "undefined" && (Teams.LIST || []).find((x) => x.id === teamId);
-    const d = t && (t.drivers || []).find((x) => x.num === num);
-    return (d && d.code) || (t && t.short) || String(teamId || "").slice(0, 3).toUpperCase();
+    return LiveryTex.driverCode(teamId, num);
   }
 
   // Atlas art. `h` carries liverytex's own painters so ink rules stay in one place.

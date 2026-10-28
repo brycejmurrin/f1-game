@@ -11,7 +11,7 @@
         broadcastCompound, billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup, seat, terrainYAt,
         cameraTower, sponsorHoarding, signBoard,
-        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge } = api;
+        addBox, addCyl, addCone, addPrism, addFrustum, forestEdge, bakedModel } = api;
 
       const LEAF = [0.19, 0.44, 0.20], LEAF_D = [0.14, 0.35, 0.17];
       const POPLAR = [0.26, 0.48, 0.24], POPLAR_D = [0.20, 0.40, 0.20];
@@ -649,4 +649,10 @@
       forestEdge(0.38, 0.48, 1, 36, { density: 0.34, hMin: 9, hMax: 15, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.64, 0.88, -1, 34, { density: 0.36, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
       forestEdge(0.62, 0.88, 1, 36, { density: 0.34, hMin: 9, hMax: 16, pineFrac: 0.05, col: POPLAR_D, col2: LEAF });
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.145, 0.413, 0.605, 0.817]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

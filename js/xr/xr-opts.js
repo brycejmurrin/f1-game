@@ -143,7 +143,7 @@ const XROpts = (function () {
       ["off", "OFF"],
       ["on", "ON"],
     ]);
-    modeRow.row.title = "Arm VR mode. Reload after changing. On an immersive-vr headset the boot picks WebGL2 (GLX) or experimental WebGPU (TLX). Does not change your 2D RENDERER pick.";
+    modeRow.row.title = "Arm VR mode. Reload after changing. On an immersive-vr headset the boot picks TLX WebGL2 (forceGL) or experimental WebGPU XR. Does not change your 2D RENDERER pick.";
     SettingRow.wire(modeRow.row, {
       read: () => (xr() ? "on" : "off"),
       write: (v) => {
@@ -157,7 +157,7 @@ const XROpts = (function () {
       ["webgl2", "WEBGL2 (RECOMMENDED)"],
       ["webgpu", "WEBGPU (EXPERIMENTAL)"],
     ]);
-    backendRow.row.title = "WebGL2 is the shippable Quest path (GLX). WebGPU is experimental (TLX + three XRManager) and falls back to WebGL2 when navigator.gpu or XRGPUBinding is missing. Reload to apply.";
+    backendRow.row.title = "WebGL2 is the shippable Quest path (TLX + forceGL). WebGPU XR is experimental and falls back to that path when navigator.gpu or XRGPUBinding is missing. Reload to apply.";
     SettingRow.wire(backendRow.row, {
       read: () => xrBackend(),
       write: (v) => {
