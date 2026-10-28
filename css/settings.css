@@ -90,7 +90,6 @@
 #pmsettings-inner .pm-group button,
 #pmsettings-inner .pm-doors button {
   height: var(--tap);
-  min-height: var(--tap);
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
@@ -123,7 +122,6 @@
 #pmsettings-inner .pm-groups .as-tbtn {
   width: var(--chip-h);
   height: var(--chip-h);
-  min-height: var(--chip-h);
   padding: 0;
   margin: 0;
   justify-content: center;
@@ -237,7 +235,6 @@
   flex: 0 0 auto;
   width: max(var(--tap-min), calc(var(--chip-h) * 1.35));
   height: var(--chip-h);
-  min-height: var(--chip-h);
   padding: 0;
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
@@ -248,7 +245,6 @@
   width: 9.5ch;
   min-width: 9.5ch;
   height: var(--chip-h);
-  min-height: var(--chip-h);
   padding: 0 calc(var(--gap) * 0.5);
   border-radius: var(--r-sm);
   border: 1px solid var(--plate-line);
@@ -386,7 +382,6 @@
 .pm-group .tune-row input[type="range"] {
   width: 100%;
   height: var(--slider);
-  min-height: var(--slider);
   margin: 0;
   box-sizing: border-box;
 }

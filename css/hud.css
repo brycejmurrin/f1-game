@@ -1922,7 +1922,7 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 .pc-fovlab { display: flex; align-items: center; font-size: var(--fs-micro); font-weight: 700; color: var(--dim); }
 /* Free-cam FOV — same painted --slider hit as every menu range, so UI SIZE
    zoom does not shrink this one below the SETTINGS / tuner tracks. */
-.pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); height: var(--slider); min-height: var(--slider); }
+.pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); height: var(--slider); }
 #pc-exit, #pc-panel, #pc-hud {
   width: auto; margin: 0; padding: 7px 16px; border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;
