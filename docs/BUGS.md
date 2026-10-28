@@ -337,31 +337,36 @@ From the round-2 tooling hunt (`15-tooling-ci`, tip `0f8c88843`). F1-F11 are fix
   plus the two race files). The ADAPTED specs boot the WHOLE manifest in the VM, so a derived "files this spec reads" set would
   be the transitive closure of the manifest; a list is the honest cheap answer. A new ADAPTED spec must add its source to the list
   (`tests/unit/pick-unit-slices.test.mjs` pins the current set). `tools/ci/twinned-specs.mjs` still says the Pages gate runs
-  vm-page "UNCONDITIONALLY"; it runs it when the `page` slice is picked. Fix the sentence or the gate. · low
+  vm-page "UNCONDITIONALLY"; it runs it when the `page` slice is picked. Fix the sentence or the gate. · low — deferred: file
+  owned by open PR #3932 (vm-page balance); do not collide.
 - 15-F2 (narrowed) a selected shard now reds when it reached its run step and left no junit with testcases. A shard killed by its
   job cap AFTER `= run passed` but during the junit upload (the run 37493213168 shape) now reads red too instead of infra-retry;
   that is a rerun, by design, but if it recurs the shard should upload its junit from a step that cannot be cancelled by the cap.
-  The `selected-started-*` marker adds one tiny artifact per shard. · low
+  The `selected-started-*` marker adds one tiny artifact per shard. · low — workflow shape; not this tools/ci residual pass.
 - 15-F6 (residual) `cd X` inside a `( … )` subshell leaks its cwd to later commands in `shellparse.commands`; a worktree path
   containing a space breaks the `read -r C_RUN C_ALL C_GITDIR C_PATHS` split in `bash-guard.sh`. Both fail toward guarding the
-  wrong tree, not toward skipping the guard. · low
+  wrong tree, not toward skipping the guard. · low — hooks (`.claude/`), not tools/ci.
 - 15-F8 (residual) `Bash(curl http://127.0.0.1:*)` still matches `http://127.0.0.1:80@evil.example/` (userinfo form), because the
   permission glob is a prefix match. The push deny-list still only matches a command that STARTS with `git push`
   (`git -C . push origin HEAD:refs/heads/claude/f1-game-project-26h3ng` and a bare `git push` from a checkout whose upstream is the
   ship branch are not denied; only server-side protection, which is `non_admins`, stands in the way). Proposed: deny
   `Bash(git * push *claude/f1-game-project-26h3ng*)` and `Bash(git push)`. · medium, needs Bryce
 - 15-F10 (narrowed) `ratchets --base` now blocks a loosened explicit slack and a deleted entry whose file still exists. A NEW entry
-  with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low
+  with an inflated ceiling is still only caught by `--check`'s slack rule (the right place), not by `--base`. · low —
+  `tools/check/ratchets.mjs`, not tools/ci.
 - 15-F11 closed: the ready cap it described was retired 2026-10-16 and its tool deleted in #3013.
 - Observation, fixed 2026-10-21: `tools/ci/spec-timings.mjs` `parseJunit` fed the time of FAILED testcases into the rolling
   record, so a test that timed out at 180 s was billed at 180 s until the samples rolled off (a self-reinforcing drop from the
   selected gate). A failed or errored FINAL attempt (junit `<failure>`/`<error>`, live-log `x FAIL`) now records nothing;
   `tests/unit/spec-timings.test.mjs` pins it.
-- Observation: `pages-reuse-verdict.sh` can only reuse a PR run when a merge COMMIT's parent tree equals its tree; merges are
-  SQUASH-only, so the reuse path is effectively dead for PR merges (perf only, fails safe). · low
-- Observation: `git diff --name-only` is still used by `pick-tests.mjs:420-435`, `verify-change.mjs:83-87`, `change-kind.mjs:25`
-  and the sweeps/parts/ship/xr shell filters in ci.yml, so a `git mv` of a circuit file still hides the source side
-  from `pick-tests` and the fleet-sweep filter (#1288 converted only the three PR-gate selectors). · low
+- Observation, corrected 2026-10-27: `pages-reuse-verdict.sh` reuses a PR/Pages run when a merge COMMIT's parent tree equals
+  its tree. Landings are merge commits (not squash); reuse fires when the PR head was up to date (merge tree == parent 2) and
+  fails safe otherwise. Header note + `tests/unit/ci-pages-train.test.mjs` pin the up-to-date shape. · low, closed.
+- Observation, narrowed 2026-10-27: `pick-tests.mjs` and `verify-change.mjs` already use `tools/lib/changed-files.mjs`
+  (`--name-status -M`). `change-kind.mjs --since` now lists both rename ends the same way (local parse twin — importing
+  `changed-files.mjs` would rewrite `tests/data/impact-map.json`, owned by open CI PRs); `tests/unit/change-kind.test.mjs`
+  pins a `js/ui/hud.js` → `docs/` `git mv`. Still on `--name-only`: `tools/check/ratchets.mjs` and the sweeps/parts/ship/xr
+  shell filters in ci.yml (open CI PRs own workflow edits). · low
 - Observation: `conflict-cure.mjs` `resolveGenBlocks` understands only HTML `@gen-shell` spans, so an `sw.js`
   `// @gen-shell:sw-optional` conflict still stops the deploy (fail-safe friction); `deploy.mjs` `ratchetOverruns` skips a
   metric missing from one of its three stages, so a metric newly added on one side is not bounded by the "sum of deliberate

@@ -5,7 +5,13 @@
   "note": "A test is listed under a function when it names that js path and spells name(. The `narrow` key is hand-pinned in tests/data/impact-map.d/ for select-specs.",
   "map": {
     "js/agent/agentview-corners.js": {
+      "corners": [
+        "tests/unit/agentview-api-contract.test.mjs"
+      ],
       "create": [
+        "tests/unit/agentview-api-contract.test.mjs"
+      ],
+      "nextCorner": [
         "tests/unit/agentview-api-contract.test.mjs"
       ]
     },
@@ -3812,6 +3818,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/save-durability.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "deleteSlot": [
@@ -3838,6 +3845,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "eraSeasonsLeft": [
@@ -3923,6 +3931,7 @@
         "tests/unit/season-cal.test.mjs",
         "tests/unit/select-specs.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "makeOffers": [
@@ -3994,7 +4003,8 @@
         "tests/unit/career-legends.test.mjs",
         "tests/unit/career-round2.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
-        "tests/unit/career-settle.test.mjs"
+        "tests/unit/career-settle.test.mjs",
+        "tests/unit/share-card-data.test.mjs"
       ],
       "rolloverMarket": [
         "tests/unit/career-settle.test.mjs"
@@ -4088,6 +4098,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
       ],
       "state": [
@@ -4312,6 +4323,7 @@
         "tests/unit/career-seat-rollover.test.mjs",
         "tests/unit/career-settle.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -4350,6 +4362,7 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/season-cal.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
@@ -5154,6 +5167,7 @@
         "tests/unit/rival-passby-pool.test.mjs",
         "tests/unit/save-durability.test.mjs",
         "tests/unit/setup-tune.test.mjs",
+        "tests/unit/share-card-data.test.mjs",
         "tests/unit/share-code.test.mjs",
         "tests/unit/soundtrack-cache.test.mjs",
         "tests/unit/store-cross-tab.test.mjs",
@@ -9649,7 +9663,8 @@
       "encode": [
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
         "tests/unit/net-qr.test.mjs",
-        "tests/unit/share-card.test.mjs"
+        "tests/unit/share-card.test.mjs",
+        "tests/unit/share-code.test.mjs"
       ],
       "*": [
         "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -10084,11 +10099,15 @@
       ],
       "*": [
         "tests/specs/image-grade-visual.spec.js",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/tooling-fast-runner.test.mjs"
       ]
     },
     "js/perf/gpu-test-run.js": {
       "fillSlope": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
+      "hookCounts": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
       "phaseStats": [
@@ -10188,6 +10207,9 @@
         "tests/unit/metrics.test.mjs"
       ],
       "snapshot": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "stallRow": [
         "tests/unit/metrics.test.mjs"
       ],
       "toggle": [
@@ -15408,8 +15430,37 @@
         "tests/unit/three-inspector.test.mjs"
       ]
     },
+    "js/share/share-card-chips.js": {
+      "append": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "chip": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "slug": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "*": [
+        "tests/specs/race-cycle-memory.spec.js"
+      ]
+    },
     "js/share/share-card-data.js": {
+      "fromCareerYear": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
       "fromDaily": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "fromGhost": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "fromRace": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "fromSeason": [
+        "tests/unit/share-card-data.test.mjs"
+      ],
+      "lapTime": [
         "tests/unit/share-card-data.test.mjs"
       ],
       "text": [
@@ -16461,6 +16512,26 @@
         "tests/unit/hud-metrics-layout.test.mjs"
       ]
     },
+    "js/ui/hud-radio-lane.js": {
+      "announceLaneTick": [
+        "tests/unit/hud-feel.test.mjs"
+      ],
+      "create": [
+        "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-feel.test.mjs",
+        "tests/unit/hud-fit-idempotent.test.mjs",
+        "tests/unit/hud-pins.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs",
+        "tests/unit/hud-readouts.test.mjs",
+        "tests/unit/net-lobby-friend-quali.test.mjs"
+      ],
+      "radioPaintedCollapse": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ],
+      "radioTopSlot": [
+        "tests/unit/hud-metrics-layout.test.mjs"
+      ]
+    },
     "js/ui/hud-readouts.js": {
       "bbText": [
         "tests/unit/hud-readouts.test.mjs"
@@ -16630,9 +16701,6 @@
       ]
     },
     "js/ui/hud.js": {
-      "announceLaneTick": [
-        "tests/unit/hud-feel.test.mjs"
-      ],
       "create": [
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/ghost-share.test.mjs",
@@ -16694,12 +16762,6 @@
       ],
       "pickDocks": [
         "tests/unit/hud-fit-idempotent.test.mjs"
-      ],
-      "radioPaintedCollapse": [
-        "tests/unit/hud-metrics-layout.test.mjs"
-      ],
-      "radioTopSlot": [
-        "tests/unit/hud-metrics-layout.test.mjs"
       ],
       "resetRace": [
         "tests/unit/hud-feel.test.mjs",
@@ -17187,6 +17249,7 @@
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "*": [
+        "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"
       ]
@@ -17544,6 +17607,9 @@
         "tests/unit/share-code.test.mjs"
       ],
       "lastSession": [
+        "tests/unit/share-code.test.mjs"
+      ],
+      "messageFor": [
         "tests/unit/share-code.test.mjs"
       ],
       "recordSession": [
