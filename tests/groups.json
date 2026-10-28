@@ -1120,6 +1120,8 @@
     "tests/unit/track-randomise.test.mjs",
     "tests/unit/track-retained-state.test.mjs",
     "tests/unit/track-shot-survey.test.mjs",
+    "// TrackSpline.wallAt / postLimits: fallback hw, tighter-of-brackets, post inside/outside (track-core hunt). Synthetic, ~0.05 s.",
+    "tests/unit/track-spline-walls.test.mjs",
     "// D·DP5: previewCL only via adopt/{preview:true}; plain {line:false} must rebuild.",
     "tests/unit/tracks-preview-cache.test.mjs",
     "tests/unit/trackside.test.mjs",
