@@ -42,6 +42,7 @@ const { Car3D, CarShade, Parts, Teams } = load(true);
 const REAR_LIGHTS = (() => {
   const ctx = { Math, Object, Array, Float32Array, Map, Set, WeakMap, Log: { info() {}, warn() {}, error() {}, debug() {} } };
   vm.createContext(ctx);
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/cockpit-rig.js"), "utf8"), ctx, { filename: absSrc("js/car/cockpit-rig.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/car/car-mesh.js"), "utf8"), ctx, { filename: absSrc("js/car/car-mesh.js") });
   return vm.runInContext("CarMesh.REAR_LIGHTS", ctx);
 })();
