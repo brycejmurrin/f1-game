@@ -2,6 +2,7 @@
   "pause": false,
   "maxLaunchesPerRun": 4,
   "maxLiveWorkers": { "claude": 8, "cursor": 1 },
+  "landQueueMax": 15,
   "workerCostCapUsd": 10,
   "workerStopAtK": 300,
   "staleHours": { "default": 2, "codex": 6 },
