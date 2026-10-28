@@ -3105,6 +3105,11 @@
       "roster": "LAZY_DATA"
     },
     {
+      "path": "js/data/ics.js",
+      "global": "DataIcs",
+      "roster": "LAZY_DATA"
+    },
+    {
       "path": "js/data/legends.js",
       "global": "Legends",
       "roster": "tag"
