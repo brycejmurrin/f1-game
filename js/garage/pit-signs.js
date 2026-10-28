@@ -193,7 +193,8 @@ const PitSigns = (function () {
   /** `{drawn, calls}`: frames the signs were drawn, frames the draw was asked. */
   const stats = () => ({ drawn: _drawn, calls: _calls });
 
-  // supported / paintAtlas / cellRect stay module-local (upload paints the atlas).
-  return { upload, free, draw, stats };
+  // paintAtlas / cellRect stay module-local (upload paints the atlas).
+  // supported stays exported — pit-signs unit seam for the bare-VM gate.
+  return { supported, upload, free, draw, stats };
 })();
 Object.freeze(PitSigns);
