@@ -437,6 +437,26 @@ test("install icons have declared PNG dimensions and are seeded for offline use"
     assert.equal(png.readUInt32BE(20), expected.width);
     assert.match(SW_SOURCE, new RegExp(`["]${expected.src.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}["]`));
   }
+
+  // audit4 L7: every manifest shortcut icon must be in the optional seed, or an
+  // installed PWA that re-asks for it offline misses the OS shortcut artwork.
+  const shortcutIcons = [...new Set((manifest.shortcuts || []).flatMap((s) =>
+    (s.icons || []).map((i) => i.src).filter(Boolean)))];
+  assert.ok(shortcutIcons.length > 0, "manifest shortcuts declare at least one icon");
+  for (const src of shortcutIcons) {
+    const png = await readFile(new URL(src, root));
+    assert.equal(png.subarray(1, 4).toString("ascii"), "PNG");
+    assert.match(SW_SOURCE, new RegExp(`["]${src.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}["]`),
+      `${src} must be in sw.js optional seed (audit4 L7)`);
+  }
+});
+
+test("sw.js comments do not keep the audit4 L4 obsolete payload counts", () => {
+  // Live shell grew past "145 script tags / ~5.8 MB"; agents copying those
+  // figures plan the wrong install budget (docs/notes/system-audit-4/live-site.md L4).
+  assert.doesNotMatch(SW_SOURCE, /145 script tags/);
+  assert.doesNotMatch(SW_SOURCE, /~5\.8 MB/);
+  assert.doesNotMatch(SW_SOURCE, /These three are LAZY_AGENT/);
 });
 
 test("cache-first responses return promptly while waitUntil retains the runtime write", async () => {
