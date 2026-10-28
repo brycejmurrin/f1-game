@@ -293,7 +293,7 @@ const NEW = ["floorTint", "floorFinish", "suspTint", "suspFinish", "ductTint", "
   "cockpitTint", "cockpitFinish", "gripTint", "noseFinish", "boardTint", "boardFinish", "exhaustTint"];
 
 test("GRIPS: getCockpitWheel keys on gripTint only when it is set", () => {
-  const src = read("js/car/car-mesh.js");
+  const src = read("js/car/cockpit-rig.js");
   assert.match(src, /\(gt \? "\|g" \+ kc\(gt\) : ""\)/, "grip tint joins the key, unset adds nothing");
   assert.match(src, /RUB = gt \|\| \[0\.11, 0\.115, 0\.12\]/);
 });
