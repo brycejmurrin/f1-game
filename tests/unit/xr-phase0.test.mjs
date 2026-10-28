@@ -1,4 +1,4 @@
-/* XR Phase 0 — pure rig math + controller mapping (no WebXR runtime). */
+/* XR — pure rig math + controller mapping (no WebXR runtime). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
