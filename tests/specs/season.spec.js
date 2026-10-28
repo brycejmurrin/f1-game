@@ -129,6 +129,28 @@ test.describe("Season — standings panel", () => {
     await expect(rows.first()).toBeVisible();
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
+    // #1546: the championship SHARE CARD chip renders a real PNG (headless
+    // Chromium has no Web Share, so deliver() falls back to a download).
+    const chip = page.locator("#standings-card");
+    await chip.scrollIntoViewIfNeeded();
+    await expect(chip).toBeVisible();
+    const [file] = await Promise.all([page.waitForEvent("download", { timeout: 20_000 }), chip.click()]);
+    expect(file.suggestedFilename()).toMatch(/^apex26-standings-round-1\.png$/);
+    await expect(chip).toHaveText("DOWNLOADED");
+  });
+
+  test("race results carry a tappable SHARE CARD chip (#1546)", async ({ page }) => {
+    await startSeasonRace(page);
+    await page.evaluate(() => window.__apex.park(0));
+    await page.evaluate(() => window.__apex.finishRace());
+    await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
+    const chip = page.locator("#res-race-card");
+    await chip.scrollIntoViewIfNeeded();
+    await expect(chip).toBeVisible();
+    const box = await chip.boundingBox();
+    expect(box && box.height).toBeGreaterThanOrEqual(24);
+    const [file] = await Promise.all([page.waitForEvent("download", { timeout: 20_000 }), chip.click()]);
+    expect(file.suggestedFilename()).toMatch(/^apex26-race-[a-z0-9-]+\.png$/);
   });
 
   test("migrates legacy code points to a stable identity before a custom code edit", async ({ page }) => {

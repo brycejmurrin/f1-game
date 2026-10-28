@@ -22,14 +22,23 @@ const BrakeCue = (function () {
   }
   function labelOf(v) { return v <= 1 ? "OFF" : "CUE " + v; }
 
+  // The corner speed with the aero load the car carries at it: k·v² = lat·(1 + df·(v/vTop)²),
+  // the AI planner's envelope (AiDrive.cornerSpeed), flat past vTop. df 0 is the bare sqrt(lat·R).
+  function aeroCornerSpeed(radius, latMax, df, vTop) {
+    const L = Math.max(latMax, 1), R = Math.min(radius, 2000), den = 1 / R - L * df / (vTop * vTop);
+    if (den > 0) { const vc = Math.sqrt(L / den); if (vc <= vTop) return vc; }
+    return Math.sqrt(L * (1 + df) * R);
+  }
+
   // Pure: how hard you still need to slow for a corner of curvature k in `dist`
   // metres, given current speed and the braking you are already doing.
   // aNeed = (v² − vCorner²) / (2s); vCorner = sqrt(LAT * min(1/|k|, 2000)).
-  function urgencyOf(speed, k, dist, axEstSm, latMax, brake) {
+  function urgencyOf(speed, k, dist, axEstSm, latMax, brake, df, vTop) {
     const v = Math.abs(speed || 0);
     if (v < 8 || !(dist > 0)) return 0;
     const radius = 1 / Math.max(Math.abs(k || 0), 1e-5);
-    const vC = Math.sqrt(Math.max(latMax, 1) * Math.min(radius, 2000));
+    const vC = df > 0 && vTop > 0 ? aeroCornerSpeed(radius, latMax, df, vTop)
+      : Math.sqrt(Math.max(latMax, 1) * Math.min(radius, 2000));
     if (v <= vC + 0.8) return 0;
     const aNeed = (v * v - vC * vC) / (2 * Math.max(dist, 8));
     const already = Math.max(0, -(axEstSm || 0));
@@ -39,8 +48,11 @@ const BrakeCue = (function () {
 
   // Shared sensory-only estimate for the two predictive cue producers. The
   // live force model publishes condition scalars; no track sampling occurs
-  // here. Never predict extra grip from aero/banking or an upgraded setup.
-  // Opt-in until human timing calibration; the default path is unchanged.
+  // here. The condition scalars only ever LOWER grip (never banking, an
+  // upgraded setup or PLAYER_GRIP); `df` is the car's base aero load
+  // (PhysicsConsts.DOWNFORCE), which the corner-speed solve applies at the
+  // corner's own speed, so a corner the car takes flat stays quiet in the rain.
+  // Calibrated against AiDrive.brakeTarget: docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md.
   function conditionCapacity(player, pc, state, dt) {
     const bounded = (v) => Number.isFinite(v) ? clamp(v, 0.25, 1) : 1;
     const grip = bounded(player && player._cueConditionGrip);
@@ -49,7 +61,7 @@ const BrakeCue = (function () {
     const alpha = 1 - Math.exp(-clamp(dt || 0, 0, 0.1) / 0.6);
     state.lat = (state.lat == null ? 1 : state.lat) + (latTarget - (state.lat == null ? 1 : state.lat)) * alpha;
     state.brake = (state.brake == null ? 1 : state.brake) + (brakeTarget - (state.brake == null ? 1 : state.brake)) * alpha;
-    return { lat: (pc.LAT_MAX || 22) * state.lat, brake: (pc.BRAKE || 22) * state.brake };
+    return { lat: (pc.LAT_MAX || 22) * state.lat, brake: (pc.BRAKE || 22) * state.brake, df: clamp(pc.DOWNFORCE || 0, 0, 1) };
   }
 
   let inst = null;
@@ -60,7 +72,7 @@ const BrakeCue = (function () {
     let nextT = 0;
     let lastMs = 0;
     let lastU = 0;
-    let conditionAware = !!(G && G.store && G.store.get("conditionCues", false) === true);
+    let conditionAware = !(G && G.store && G.store.get("conditionCues", true) === false);   // default ON (#2177)
     const capacity = {};
     function setConditionAware(on) { conditionAware = on === true; delete capacity.lat; delete capacity.brake; }
 
@@ -79,7 +91,7 @@ const BrakeCue = (function () {
       }
       const PC = window.PhysicsConsts || {};
       const estimate = conditionAware ? conditionCapacity(p, PC, capacity, dt) : null;
-      const lat = estimate ? estimate.lat : PC.LAT_MAX || 22, brake = estimate ? estimate.brake : PC.BRAKE || 22;
+      const lat = estimate ? estimate.lat : PC.LAT_MAX || 22, brake = estimate ? estimate.brake : PC.BRAKE || 22, df = estimate ? estimate.df : 0;
       // The bounds are METRES, so they ride the OVERALL SPEED scale: ground
       // speed carries PACE while `brake` is absolute, which puts braking
       // distance on PACE². A bare 120 m ceiling stops the sample loop short of
@@ -89,7 +101,10 @@ const BrakeCue = (function () {
       const vt = (G.vTop ? G.vTop() : 0) || (PC.VMAX || 72);
       const lookLo = 28 * Math.max(vt / (PC.VMAX || 72), 0.05);
       const lookHi = Math.max(lookLo, vt * vt / (2 * Math.max(brake, 1)));
-      const look = clamp(Math.abs(p.speed) * cfg.lookSec, lookLo, lookHi);
+      // Condition-aware, the lookahead keeps its SECONDS of warning before the braking point: a
+      // wet stop is longer by BRAKE/brake, so the same lookSec would see the corner that much later.
+      const reach = estimate ? (PC.BRAKE || 22) / Math.max(brake, 1) : 1;
+      const look = clamp(Math.abs(p.speed) * cfg.lookSec * reach, lookLo, lookHi);
       const L = track.total || 1;
       // Sample DENSITY, not count: 4 fixed samples over a pace-2 lookahead are
       // 118 m apart and step straight over a corner. Hold the ~30 m spacing the
@@ -100,7 +115,7 @@ const BrakeCue = (function () {
         const dist = look * i / nS;
         const s = ((p.s + dist) % L + L) % L;
         const k = Tracks.curvature(track, s);
-        const ui = urgencyOf(p.speed, k, dist, p.axEstSm, lat, brake);
+        const ui = urgencyOf(p.speed, k, dist, p.axEstSm, lat, brake, df, vt);
         if (ui > u) u = ui;
       }
       lastU = u;
@@ -127,6 +142,7 @@ const BrakeCue = (function () {
   }
 
   return {
+    URGENCY_GATE,
     create,
     fromSlider,
     urgencyOf,

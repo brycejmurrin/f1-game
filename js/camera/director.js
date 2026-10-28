@@ -214,12 +214,13 @@ const Director = (function () {
       if (subject && (subject.retired || subject.finished) && running.length) {
         subject = null; onAirShot = null; lastCut = -1e9;
       }
-      // After the player is done, include them as a spectate subject via follow
-      // of the field only — still no force path.
+      // Empty field (solo retire / everyone flagged): fall back to the player so
+      // auto-spectate still has a subject. Finished players were already included
+      // (!retired); retired players were not — TV mode forced with no dbgCam (M38).
       const decision = decideCut({
         wall, lastCut, cuts, onAirShot, subject,
         vScale: G.vTop && typeof PhysicsConsts !== "undefined" ? G.vTop() / PhysicsConsts.VMAX : 1,   // sim speeds (never WATCH, above)
-        running: running.length ? running : (player && !player.retired ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
+        running: running.length ? running : (player ? [{ key: player, prog: player.prog || 0, speed: player.speed || 0 }] : []),
       });
       if (decision) {
         if (spectating) decision.shot = FINISH_SHOTS[cuts % FINISH_SHOTS.length];

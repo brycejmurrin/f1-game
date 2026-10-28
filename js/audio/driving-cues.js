@@ -30,13 +30,22 @@ var DrivingCues = (function () {
   }
   function labelOf(v) { return v <= 1 ? "OFF" : "CUES " + v; }
 
+  // The corner speed with the aero load the car carries at it: k·v² = lat·(1 + df·(v/vTop)²),
+  // the AI planner's envelope (AiDrive.cornerSpeed), flat past vTop. df 0 is the bare sqrt(lat·R).
+  function aeroCornerSpeed(radius, latMax, df, vTop) {
+    const L = Math.max(latMax, 1), R = Math.min(radius, 2000), den = 1 / R - L * df / (vTop * vTop);
+    if (den > 0) { const vc = Math.sqrt(L / den); if (vc <= vTop) return vc; }
+    return Math.sqrt(L * (1 + df) * R);
+  }
+
   // Pure: same aNeed shape as BrakeCue, kept here so the module can unit-test
   // without loading brake-cue.js. Output 0..1 only — never a brake command.
-  function urgencyOf(speed, k, dist, axEstSm, latMax, brake) {
+  function urgencyOf(speed, k, dist, axEstSm, latMax, brake, df, vTop) {
     const v = Math.abs(speed || 0);
     if (v < 8 || !(dist > 0)) return 0;
     const radius = 1 / Math.max(Math.abs(k || 0), 1e-5);
-    const vC = Math.sqrt(Math.max(latMax, 1) * Math.min(radius, 2000));
+    const vC = df > 0 && vTop > 0 ? aeroCornerSpeed(radius, latMax, df, vTop)
+      : Math.sqrt(Math.max(latMax, 1) * Math.min(radius, 2000));
     if (v <= vC + 0.8) return 0;
     const aNeed = (v * v - vC * vC) / (2 * Math.max(dist, 8));
     const already = Math.max(0, -(axEstSm || 0));
@@ -113,7 +122,7 @@ var DrivingCues = (function () {
     let lastCallS = null, lastCallSide = 0, callArmed = true, callExitM = 0;
     let lastCallMs = -Infinity;
     let brakeFired = 0, callFired = 0;
-    let conditionAware = !!(G && G.store && G.store.get("conditionCues", false) === true);
+    let conditionAware = !(G && G.store && G.store.get("conditionCues", true) === false);   // default ON (#2177)
     const capacity = {};
     function setConditionAware(on) { conditionAware = on === true; delete capacity.lat; delete capacity.brake; }
 
@@ -174,11 +183,14 @@ var DrivingCues = (function () {
       const PC = (typeof PhysicsConsts !== "undefined") ? PhysicsConsts : {};
       const estimate = conditionAware && typeof BrakeCue !== "undefined" && BrakeCue.conditionCapacity
         ? BrakeCue.conditionCapacity(p, PC, capacity, dt) : null;
-      const lat = estimate ? estimate.lat : PC.LAT_MAX || 22, brake = estimate ? estimate.brake : PC.BRAKE || 22;
+      const lat = estimate ? estimate.lat : PC.LAT_MAX || 22, brake = estimate ? estimate.brake : PC.BRAKE || 22, df = (estimate && estimate.df) || 0;
       const vt = (G.vTop ? G.vTop() : 0) || (PC.VMAX || 72);
       const lookLo = 28 * Math.max(vt / (PC.VMAX || 72), 0.05);
       const lookHi = Math.max(lookLo, vt * vt / (2 * Math.max(brake, 1)));
-      const look = clamp(Math.abs(p.speed) * cfg.lookSec, lookLo, lookHi);
+      // Condition-aware, the lookahead keeps its SECONDS of warning before the braking point: a
+      // wet stop is longer by BRAKE/brake, so the same lookSec would see the corner that much later.
+      const reach = estimate ? (PC.BRAKE || 22) / Math.max(brake, 1) : 1;
+      const look = clamp(Math.abs(p.speed) * cfg.lookSec * reach, lookLo, lookHi);
       const L = track.total || 1;
       const nS = clamp(Math.round(look / 30), 4, 16);
 
@@ -187,7 +199,7 @@ var DrivingCues = (function () {
         const dist = look * i / nS;
         const s = ((p.s + dist) % L + L) % L;
         const k = Tracks.curvature(track, s);
-        const ui = urgencyOf(p.speed, k, dist, p.axEstSm, lat, brake);
+        const ui = urgencyOf(p.speed, k, dist, p.axEstSm, lat, brake, df, vt);
         if (ui > u) u = ui;
       }
       lastU = u;

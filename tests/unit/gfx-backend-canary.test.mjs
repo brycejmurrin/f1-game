@@ -5892,7 +5892,7 @@ test("UPSCALE SettingRow + TLX spatial API markers", () => {
   const wgsl = read("js/render/webgpu/wgsl-post.js");
   for (const [file, re, why] of [
     ["index.html", /id="pm-upscale"/, "shell must ship the UPSCALE set-row"],
-    ["index.html", /id="pm-upscale-label">UPSCALE</, "label must be UPSCALE"],
+    ["index.html", /id="pm-upscale-label"[^>]*>UPSCALE</, "label must be UPSCALE"],
     ["js/ui/scale.js", /SettingRow\.wire\("pm-upscale"/, "scale.js must wire the row"],
     ["js/ui/scale.js", /setSpatialUpscale/, "row must call the backend API"],
     ["js/render/three/tlx.js", /setSpatialUpscale/, "TLX must export setSpatialUpscale"],
@@ -6972,7 +6972,7 @@ test("the mirror composite's flip reaches every backend: default flipped (the mi
   assert.match(read("js/render/three/tlx-post.js"), /_mirFlip = flip !== false;[\s\S]{0,1200}M\.U\.flip\.value = _mirFlip \? 1 : 0/);
   const tlx = read("js/render/three/tlx.js");
   assert.match(tlx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);
-  assert.match(tlx, /HalfFloatType, _mirFlip\);/, "TLX hands the flag to the post chain");
+  assert.match(tlx, /UnsignedByteType, _mirFlip\);/, "TLX hands the flag to the post chain");
   const wgx = read("js/render/webgpu/wgx.js");
   assert.match(wgx, /_mirData\[1\] = _mirFlip \? 1 : 0/, "WGX: the shader already branches on params.y");
   assert.match(wgx, /mirrorRect\(r, flip\) \{[^}]*_mirFlip = flip !== false;/);

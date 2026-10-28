@@ -1,4 +1,4 @@
-/* ShareCode: pasteable APX envelopes for setup / livery / daily (+ #share=).
+/* ShareCode: pasteable APX envelopes for setup / livery / daily / card lap (+ #share=).
    Ghosts stay on GhostShare (APXG1 / #ghost=). Deep links stage sheets only —
    never startRace / gridUp. A setup/livery code DOES write the team's stored
    sheet / livery pick, so apply() first saves what it replaces (UNDO_KEY) and
@@ -19,6 +19,9 @@ const ShareCode = (function () {
     setup: { magic: "APXS1", kind: "setup" },
     livery: { magic: "APXL1", kind: "livery" },
     daily: { magic: "APXD1", kind: "daily" },
+    // A share card's QR: circuit, day and a target time, in a short dotted form
+    // (`APXC1.l.<track>~<yyyymmdd|->~<ms|->`) so the whole link stays under 120 chars.
+    lap: { magic: "APXC1", kind: "lap" },
   });
   const MAGIC_OF = Object.freeze(Object.fromEntries(
     Object.values(KINDS).map((k) => [k.magic, k.kind]),
@@ -56,6 +59,14 @@ const ShareCode = (function () {
       Tracks.LIST.some((t) => t && t.id === id);
   }
 
+  function trackLabel(id) {
+    const t = typeof Tracks !== "undefined" && Array.isArray(Tracks.LIST) ? Tracks.LIST.find((x) => x && x.id === id) : null;
+    return String((t && t.name) || id).toUpperCase();
+  }
+  function clock(sec) {
+    const ms = Math.round(sec * 1000), m = Math.floor(ms / 60000);
+    return m + ":" + ((ms % 60000) / 1000).toFixed(3).padStart(6, "0");
+  }
   function rgb3(a) {
     return Array.isArray(a) && a.length >= 3 &&
       a.slice(0, 3).every((n) => typeof n === "number" && isFinite(n));
@@ -121,7 +132,25 @@ const ShareCode = (function () {
       if (typeof payload.class === "string") body.class = payload.class.slice(0, 32);
       return body;
     }
+    if (kind === "lap") {
+      if (!payload || !knownTrack(payload.track)) return null;
+      const body = { v: 1, kind: "lap", track: payload.track };
+      if (typeof payload.day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(payload.day)) body.day = payload.day;
+      if (typeof payload.time === "number" && isFinite(payload.time) && payload.time > 0 && payload.time < 3600) body.time = Math.round(payload.time * 1000) / 1000;
+      return body;
+    }
     return null;
+  }
+  function lapCode(body) {
+    return [body.track, body.day ? body.day.replace(/-/g, "") : "-", body.time ? Math.round(body.time * 1000) : "-"].join("~");
+  }
+  function lapBody(text) {
+    const m = /^([a-z0-9_-]{1,40})~(\d{8}|-)~(\d{1,7}|-)$/.exec(text);
+    if (!m) return null;
+    const body = { v: 1, kind: "lap", track: m[1] };
+    if (m[2] !== "-") body.day = m[2].slice(0, 4) + "-" + m[2].slice(4, 6) + "-" + m[2].slice(6);
+    if (m[3] !== "-") body.time = Number(m[3]) / 1000;
+    return body;
   }
 
   function shareUrl(code) {
@@ -137,14 +166,14 @@ const ShareCode = (function () {
     const text = JSON.stringify(body);
     const plain = enc().encode(text);
     if (plain.byteLength > MAX_DECODED_BYTES) return { ok: false, reason: "too-large" };
-    const code = meta.magic + ".p." + bytesToB64url(plain);
+    const code = kind === "lap" ? meta.magic + ".l." + lapCode(body) : meta.magic + ".p." + bytesToB64url(plain);
     if (code.length > MAX_CODE_CHARS) return { ok: false, reason: "too-large" };
     return { ok: true, code, url: shareUrl(code), kind, envelope: body };
   }
 
   function codeFrom(value) {
     let input = String(value || "").trim();
-    if (/^APX[SLD]1\./.test(input)) return input.replace(/\s+/g, "");
+    if (/^APX[SLDC]1\./.test(input)) return input.replace(/\s+/g, "");
     const match = input.match(/(?:^|[#&])share=([^&]+)/);
     if (!match) return null;
     try { input = decodeURIComponent(match[1]); }
@@ -165,9 +194,9 @@ const ShareCode = (function () {
       if (!env) return CORRUPT;
       return { ok: true, kind: "livery", team: env.team, id: env.id, livery: env.livery || null };
     }
-    if (body.kind === "daily") {
+    if (body.kind === "daily" || body.kind === "lap") {
       if (!knownTrack(body.track)) return { ok: false, reason: "unknown-track" };
-      const env = envelope("daily", body);
+      const env = envelope(body.kind, body);
       if (!env) return CORRUPT;
       return Object.assign({ ok: true }, env);
     }
@@ -184,7 +213,9 @@ const ShareCode = (function () {
     const code = codeFrom(value);
     if (!code || code.length > MAX_CODE_CHARS) return CORRUPT;
     const parts = code.split(".");
-    if (parts.length !== 3 || !MAGIC_OF[parts[0]] || parts[1] !== "p") return CORRUPT;
+    if (parts.length !== 3 || !MAGIC_OF[parts[0]]) return CORRUPT;
+    if (parts[1] === "l") return MAGIC_OF[parts[0]] === "lap" ? fromBody(lapBody(parts[2])) : CORRUPT;
+    if (parts[1] !== "p") return CORRUPT;
     try {
       const packed = b64urlToBytes(parts[2]);
       if (packed.byteLength > MAX_DECODED_BYTES) return CORRUPT;
@@ -201,6 +232,7 @@ const ShareCode = (function () {
       if (result.kind === "livery") return "Livery loaded — " + result.team.toUpperCase() + "." + undo;
       if (result.kind === "undo") return "Share code undone — your previous setup / livery is back.";
       if (result.kind === "daily") return "Daily challenge — " + (result.trackName || result.track).toUpperCase() + ".";
+      if (result.kind === "lap") return "Lap challenge — " + trackLabel(result.track) + (result.time ? " · BEAT " + clock(result.time) : "") + ".";
     }
     if (result && result.reason === "unknown-team") return "That share code names a team this version does not know.";
     if (result && result.reason === "unknown-track") return "That share code names a circuit this version does not know.";
@@ -274,6 +306,13 @@ const ShareCode = (function () {
       if (typeof h.selectTeam === "function") h.selectTeam(decoded.team);
       if (typeof h.openGarage === "function") h.openGarage("share");
       return { ok: true, kind: "livery", team: decoded.team };
+    }
+    if (decoded.kind === "lap") {
+      // Stage only: today's Daily when the card was today's, else the circuit in
+      // free play. A past day is never re-selected (record() would reset the streak).
+      if (decoded.day && decoded.day === h.today) { if (typeof h.openDaily === "function") h.openDaily(decoded); }
+      else if (typeof h.openTrack === "function") h.openTrack(decoded);
+      return { ok: true, kind: "lap", track: decoded.track, day: decoded.day || null, time: decoded.time || null };
     }
     if (decoded.kind === "daily") {
       if (typeof h.openDaily === "function") h.openDaily(decoded);

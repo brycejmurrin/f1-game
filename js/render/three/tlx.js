@@ -1500,15 +1500,22 @@ const TLX = (function () {
       const _mirMrt = () => !!(mirRT && mirRT.textures && mirRT.textures.length > 1);
       const _mirMrtWant = () => _mirMrtKnob && !!(post && post.tagOn && post.tagOn() && TSL.mrt && renderer.setMRT);
       function _mirTarget(type, w, h, mrt) {
+        // apex26.tlxMir11 / tlxTag8 (tlx-post.js PHONE FORMAT TRIMS): the scene's attachment formats, so the
+        // two passes keep one pipeline key. The tag is built half-float first (a clone of attachment 0).
+        const tf = post && post.targetFormats ? post.targetFormats() : null;
+        const c11 = !!(tf && tf.mir11) && type !== THREE.UnsignedByteType;
+        if (type === THREE.UnsignedInt101111Type) type = THREE.HalfFloatType;
         const rt = new THREE.RenderTarget(w, h, {
           type, format: THREE.RGBAFormat, depthBuffer: true, count: mrt ? 2 : 1,
           generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
         });
         rt.texture.colorSpace = THREE.NoColorSpace;
+        if (c11) { rt.texture.type = THREE.UnsignedInt101111Type; rt.texture.format = THREE.RGBFormat; }
         if (mrt && rt.textures && rt.textures[1]) {
           const bk = renderer.backend || {};
           rt.texture.name = "output";
           if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) rt.textures[1].format = THREE.RedFormat;
+          if (tf && tf.tag8) rt.textures[1].type = THREE.UnsignedByteType;
           rt.textures[1].name = "ssrTag";
           rt.textures[1].generateMipmaps = false;
           rt.textures[1].minFilter = THREE.NearestFilter; rt.textures[1].magFilter = THREE.NearestFilter;
@@ -5553,7 +5560,7 @@ const TLX = (function () {
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
-            hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
+            hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders,
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
         },
@@ -6276,7 +6283,7 @@ const TLX = (function () {
               if (post.setMirror) {
                 // Pixels of the present target (the SGSR output size when upscaling).
                 const up = wantSpatialUpscale(), ok = !!(_mirRect && mirRT && _mirRenders > 0 && !_mirDead);
-                post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type === THREE.HalfFloatType, _mirFlip);
+                post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type !== THREE.UnsignedByteType, _mirFlip);
               }
               try {
                 renderer.setRenderTarget(post.sceneTarget());

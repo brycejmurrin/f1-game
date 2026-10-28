@@ -162,6 +162,19 @@
       const k = localStorage.getItem("apex26.tlxScene11");
       if (k === "0") scene11 = false; else if (k === "1") scene11 = _r11Blendable;
     } catch (_) { /* no storage: the default above */ }
+    // PHONE FORMAT TRIMS (#2649, docs/notes/TLX-WEBGPU-PASS-AUDIT-2026-10-27.md). WebGPU leg only, each OFF
+    // until a device A/B (they change stored precision; the arms are listed on #3954), latched for the chain:
+    //   apex26.tlxMir11=1 (scene11 only): the mirror's colour takes the scene's rg11b10, so three's pipeline
+    //     key (it holds attachment 0's format) matches the scene's again and the mirror reuses its pipelines
+    //     (A·W14), which an rgba16float mirror under an rg11b10 scene cannot; also 4 B/px instead of 8.
+    //   apex26.tlxTag8=1: ssrTag r8unorm (1 B/px) on scene AND mirror (three keys on attachment 0 only, so
+    //     the two must agree). Tags are 0.35 / 0.75 / alpha / 1 against 0.42-0.55 / 0.85-0.95 steps.
+    //   apex26.tlxGodray11=1: the godray pair rg11b10 on frames whose alpha carries no folded AO (night).
+    const _isWgpu = !!(renderer.backend && renderer.backend.isWebGPUBackend);
+    const _fmtOn = (k) => { try { return localStorage.getItem(k) === "1"; } catch (_) { return false; } };
+    const mir11 = scene11 && _fmtOn("apex26.tlxMir11");
+    const tag8 = _isWgpu && _fmtOn("apex26.tlxTag8");
+    const gr11Knob = _r11Blendable && _fmtOn("apex26.tlxGodray11");
     // sceneHdr is fixed for the chain's life — hdr is decided once at factory time.
     let _sceneHdr = hdr ? 1 : 0;
 
@@ -280,6 +293,7 @@
     const bk = renderer.backend || {};
     if (tagOn && sceneRT.textures && sceneRT.textures[1]) {
       if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) sceneRT.textures[1].format = THREE.RedFormat;
+      if (tag8) sceneRT.textures[1].type = THREE.UnsignedByteType;
       sceneRT.textures[1].name = "ssrTag";
       sceneRT.textures[1].generateMipmaps = false;
       sceneRT.textures[1].colorSpace = THREE.NoColorSpace;
@@ -342,10 +356,13 @@
       }
       return true;
     }
-    function ensureGR() {
+    let _gr11 = false;   // the live godray pair is rg11b10 (apex26.tlxGodray11)
+    function ensureGR(r11) {
+      if (godrayRT && _gr11 !== r11) releaseGR();   // a fold arriving needs the alpha back
       if (!godrayRT) {
-        godrayRT = makeRT(1, 1, hdrType);
-        godrayBlurRT = makeRT(1, 1, hdrType);
+        _gr11 = r11;
+        godrayRT = r11 ? makeRT(1, 1, THREE.UnsignedInt101111Type, THREE.RGBFormat) : makeRT(1, 1, hdrType);
+        godrayBlurRT = r11 ? makeRT(1, 1, THREE.UnsignedInt101111Type, THREE.RGBFormat) : makeRT(1, 1, hdrType);
         layoutHalf();
         bindFixedGR();
       }
@@ -749,7 +766,7 @@
       }
 
       // 0b) Volumetric sun shafts + lamp beams (js/render/glx/shaders/glsl-post.js)
-      const haveGR = wantGR && ensureGR();
+      const haveGR = wantGR && ensureGR(gr11Knob && !aoFold);
       if (haveGR) {
         const U = P.godray.U;
         U.invVP.value.fromArray(F.invVP);
@@ -1250,6 +1267,7 @@
       hdrOk: () => hdr,
       sceneTarget: () => sceneRT,
       tagOn: () => tagOn,   // R3: false = one colour attachment, present() must not set the ssrTag MRT
+      targetFormats: () => ({ mir11, tag8 }),   // tlx.js _mirTarget: the mirror's attachments follow the scene's
       // UnsignedByte composite (FXAA input) — the screenshot / soft-present
       // source. three's readRenderTargetPixelsAsync → backend.copyTextureToBuffer
       // + mapAsync (WebGPU Fundamentals / Explainer). Never getCurrentTexture.
@@ -1277,6 +1295,15 @@
         hdr,
         attachments: tagOn ? 2 : 1,
         sceneFormat: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",   // phoneperf: the scene colour attachment
+        // Every post attachment's format (#2649 audit): what a phone readout should show on the WebGPU leg.
+        formats: {
+          scene: scene11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",
+          tag: !tagOn ? null : tag8 ? "r8" : (_isWgpu || bk.drawBuffersIndexedExt) ? (hdr ? "r16f" : "r8") : (hdr ? "rgba16f" : "rgba8"),
+          mirror11: mir11,
+          bloom: bloom11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",
+          godray: !godrayRT ? null : _gr11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",
+          ssao: "r8", ldr: "rgba8",
+        },
         ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
         tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2
