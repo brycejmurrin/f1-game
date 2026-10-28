@@ -141,7 +141,7 @@ function cacheBuild(name) {
 //
 // THE ORDER IS COMPUTED ONCE PER WORKER, not per request: `caches.keys()` plus
 // two marker lookups per generation ran on EVERY cache-first fetch — a boot's
-// ~150 script requests paid for ~150 identical sorts. The order changes only
+// ~300 script requests paid for ~300 identical sorts. The order changes only
 // when this worker changes the cache set or a marker (install, activate, the
 // sweep, a fetch opening a generation it has not seen) or learns the current
 // name, so `_cacheOrder` is keyed on `_cacheNameKnown` and dropped by
@@ -290,6 +290,10 @@ async function precacheAssetLists() {
     "icons/icon-192.png",
     "icons/icon-512.png",
     "icons/icon-maskable-512.png",
+    // Manifest shortcuts (Quick race / Daily / Next GP / Controller / Garage)
+    // all share this 96px icon. OS usually fetches it at install, but an
+    // offline re-open of the installed app still asks the SW for it (audit4 L7).
+    "icons/shortcut-96.png",
     // In-game APP ICON picker sets (appearance-opts.js).
     ...["A", "B", "C", "D", "E", "F"].flatMap((s) => ["icons/shortcuts/" + s + "/favicon-32.png", "icons/shortcuts/" + s + "/apple-touch-180.png"]),
     // The vendored three.js island TLX imports at runtime. Hand-authored
@@ -629,7 +633,7 @@ async function precacheAssetLists() {
     }
   }
   // Cache API put during install makes V8 build a "full" code cache of every
-  // script (v8.dev). These three are LAZY_AGENT (no <script> tag) — belt and
+  // script (v8.dev). LAZY_AGENT files have no <script> tag — belt and
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
@@ -649,10 +653,10 @@ async function precacheAssetLists() {
 // and the optionals are version-pinned by PATH (the content-named woff2s) — which is the exact condition the fetch handler below
 // already relies on when it says a cache hit is always correct without
 // revalidation. `cache: "no-store"` here contradicted that and made a cold
-// first visit download the whole app TWICE: ~5.8 MB for the page's own 145
-// script tags, then the same ~5.8 MB again for the install, in parallel, on one
-// connection. Nothing in the history justifies it — it arrived inside an
-// unrelated commit and no comment defends it.
+// first visit download the whole app TWICE: the page's own ~310 script tags
+// (~3.3 MB raw on a measured live shell) then the same bytes again for the
+// install, in parallel, on one connection. Nothing in the history justifies
+// it — it arrived inside an unrelated commit and no comment defends it.
 //
 // The application shell is still fetched with `no-store` (see
 // precacheAssetLists) because index.html is the one genuinely mutable document
