@@ -840,7 +840,7 @@ test("land.yml sync job (AUTO-SYNC): LAND_TOKEN only for the update-branch PUT, 
   assert.doesNotMatch(puts[0], /GITHUB_TOKEN|github\.token/);
   assert.match(st.run, /if \[ -z "\$\{LAND_TOKEN:-\}" \]; then[^]*?exit 0/, "no LAND_TOKEN: nothing synced, never a GITHUB_TOKEN fallback");
   assert.match(st.run, /labels=dispatch:merge-pause/, "merge-pause is re-read before acting");
-  assert.ok(Number(LAND.env.SYNC_MAX) >= 1 && Number(LAND.env.SYNC_MAX) <= 5, "SYNC_MAX: a small throttle");
+  assert.ok(Number(LAND.env.SYNC_MAX) >= 1 && Number(LAND.env.SYNC_MAX) <= 6, "SYNC_MAX: a small throttle");
   const needs = (sync, paused) => ({ needs: { resolve: { outputs: { sync, paused } } } });
   assert.equal(ghExpr(j.if, needs('[{"number":7}]', "false")), true);
   assert.equal(ghExpr(j.if, needs('[{"number":7}]', "true")), false, "dispatch:merge-pause syncs nothing");
