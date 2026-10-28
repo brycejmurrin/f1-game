@@ -66,6 +66,7 @@ function boot(opts = {}) {
   vm.runInNewContext(src("js/ui/live-region.js"), sb, { filename: absSrc("js/ui/live-region.js") });
   vm.runInNewContext(src("js/ui/hud-readouts.js"), sb, { filename: absSrc("js/ui/hud-readouts.js") });
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
   vm.runInNewContext(src("js/ui/hud.js"), sb, { filename: absSrc("js/ui/hud.js") });
   vm.runInNewContext(src("js/race/overtake-mode.js"), sb, { filename: absSrc("js/race/overtake-mode.js") });
 
@@ -160,7 +161,8 @@ function boot(opts = {}) {
 }
 
 test("source: lane memo buckets gaps empty/non-empty; caches rects; invalidateFit clears", () => {
-  const js = read("js/ui/hud.js");
+  const hud = read("js/ui/hud.js");
+  const js = read("js/ui/hud-radio-lane.js");   // the lane left hud.js whole (#3261)
   assert.match(js, /function invalidateLaneRects\b/, "invalidateLaneRects exists");
   assert.match(js, /function laneRect\b/, "laneRect caches getBoundingClientRect");
   assert.match(js, /gapBit/, "gap empty/non-empty bit is in the layout key");
@@ -169,7 +171,7 @@ test("source: lane memo buckets gaps empty/non-empty; caches rects; invalidateFi
     /els\.gapA\s*\?\s*\(els\.gapA\.textContent[^)]*\)\.length/,
     "gap textContent.length is no longer in the lane memo key",
   );
-  assert.match(js, /invalidateFit\([\s\S]*?invalidateLaneRects/, "invalidateFit drops the lane rect cache");
+  assert.match(hud, /invalidateFit\([\s\S]*?invalidateLaneRects/, "invalidateFit drops the lane rect cache");
 });
 
 test("PERF: steady ticks + gap digit rolloff → 0 announceLane getBoundingClientRect", () => {
