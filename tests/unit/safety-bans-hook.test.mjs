@@ -208,6 +208,46 @@ test("ban 3: a push over another author's commits is refused until the owner ack
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("ban 3: land.yml's AUTO-SYNC merge of the deploy branch is not foreign; a hand-resolved one still is", () => {
+  const dir = fixture("safety-autosync-");
+  const DEPLOY = "claude/f1-game-project-26h3ng";
+  try {
+    const origin = path.join(dir, "origin.git"), a = path.join(dir, "a"), b = path.join(dir, "b");
+    execFileSync("git", ["init", "-q", "--bare", "-b", DEPLOY, origin]);
+    execFileSync("git", ["clone", "-q", origin, a], { stdio: "ignore" });
+    const ga = gitAs(a, "alice");
+    ga("config", "user.email", "alice@t"); ga("config", "user.name", "alice");
+    fs.writeFileSync(path.join(a, "f.txt"), "base\n"); ga("add", "f.txt"); ga("commit", "-qm", "base");
+    ga("push", "-q", "origin", DEPLOY);
+    ga("checkout", "-q", "-b", "cursor/t-1"); ga("commit", "-q", "--allow-empty", "-m", "a1");
+    ga("push", "-q", "-u", "origin", "cursor/t-1");
+    // The deploy branch moves; the land bot (as bob, the token owner) merges it in the way update-branch does.
+    execFileSync("git", ["clone", "-q", origin, b], { stdio: "ignore" });
+    const gb = gitAs(b, "bob");
+    gb("checkout", "-q", DEPLOY); fs.writeFileSync(path.join(b, "g.txt"), "tip\n"); gb("add", "g.txt"); gb("commit", "-qm", "tip");
+    gb("push", "-q", "origin", DEPLOY);
+    gb("checkout", "-q", "cursor/t-1"); gb("merge", "-q", "--no-ff", "-m", `Merge branch '${DEPLOY}' into cursor/t-1`, DEPLOY);
+    gb("push", "-q", "origin", "cursor/t-1");
+    ga("pull", "-q", "--no-rebase", "--no-edit", "origin", "cursor/t-1"); ga("commit", "-q", "--allow-empty", "-m", "a2");
+    const ok = claudeBash("git push origin cursor/t-1", a);
+    assert.equal(ok.status, 0, `a clean AUTO-SYNC merge is not foreign\n${ok.stderr}`);
+    ga("push", "-q", "origin", "cursor/t-1");
+    // The same subject on a merge whose conflict was resolved by hand carries other work: still foreign.
+    // Alice's branch and the deploy branch both change f.txt, so the merge needs a hand resolution.
+    fs.writeFileSync(path.join(a, "f.txt"), "branch\n"); ga("commit", "-qam", "a-side"); ga("push", "-q", "origin", "cursor/t-1");
+    gb("checkout", "-q", DEPLOY); gb("pull", "-q", "--no-rebase", "--no-edit", "origin", DEPLOY);
+    fs.writeFileSync(path.join(b, "f.txt"), "deploy\n"); gb("commit", "-qam", "tip2"); gb("push", "-q", "origin", DEPLOY);
+    gb("checkout", "-q", "cursor/t-1"); gb("pull", "-q", "--no-rebase", "--no-edit", "origin", "cursor/t-1");
+    try { gb("merge", "-q", "--no-ff", "-m", `Merge branch '${DEPLOY}' into cursor/t-1`, DEPLOY); } catch { /* the conflict */ }
+    fs.writeFileSync(path.join(b, "f.txt"), "resolved by hand\n"); gb("add", "f.txt"); gb("commit", "-q", "--no-edit");
+    gb("push", "-q", "origin", "cursor/t-1");
+    ga("pull", "-q", "--no-rebase", "--no-edit", "origin", "cursor/t-1"); ga("commit", "-q", "--allow-empty", "-m", "a3");
+    const hand = claudeBash("git push origin cursor/t-1", a);
+    assert.equal(hand.status, 2, "a hand-resolved merge is someone's work");
+    assert.ok(hand.stderr.includes(`bob <bob@t> Merge branch '${DEPLOY}'`), hand.stderr);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("ban 4: pkill -f is refused in both doors, with the reason in Cursor's answer", () => {
   for (const cmd of ["pkill -f serve", "pkill -9 -f node", "timeout 5 pkill -f chrome"]) {
     assert.equal(claudeBash(cmd).status, 2, `claude: ${cmd}`);

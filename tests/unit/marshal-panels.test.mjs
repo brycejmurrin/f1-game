@@ -174,7 +174,7 @@ function buildPosts(ks) {
   const sb = { Math, Map, Set, Object, Array, JSON, Number, Float32Array, Float64Array };
   vm.createContext(sb);
   seedLog(sb);
-  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/scenery/data.js", "js/track/scenery/structures.js"])
+  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/scenery/data.js", "js/track/scenery/stands.js", "js/track/scenery/structures.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   const TG = sb.TrackGeom, n = 100;
   const out = { pos: [], nrm: [], col: [], idx: [], mat: [] }, notes = [];

@@ -13,10 +13,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 seedLogGlobal();
 const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");
+globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 globalThis.NetSession = eval(src("js/net/session.js") + ";NetSession");
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 globalThis.NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 globalThis.NetBytes = eval(src("js/net/bytes.js") + ";NetBytes");
+const NetIce = eval(src("js/net/ice.js") + ";NetIce");
 const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetTransport = NetTransport;
 globalThis.NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");

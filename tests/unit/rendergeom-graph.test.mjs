@@ -8,7 +8,7 @@ const sandbox = vm.createContext({
   Log: { info() {} }, TrackSceneryData: {},
   M4: { clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)) },
 });
-for (const p of ["js/track/core/geom.js", "js/track/scenery/graph.js", "js/track/scenery/structures.js"]) {
+for (const p of ["js/track/core/geom.js", "js/track/scenery/graph.js", "js/track/scenery/stands.js", "js/track/scenery/structures.js"]) {
   vm.runInContext(fs.readFileSync(new URL("../../" + p, import.meta.url), "utf8"), sandbox, { filename: absSrc(p) });
 }
 const { raw, graph, structures } = vm.runInContext("({raw: TrackGeom, graph: TrackGraph, structures: SceneryStructures})", sandbox);

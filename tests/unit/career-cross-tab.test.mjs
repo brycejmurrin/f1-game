@@ -1,4 +1,5 @@
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -82,7 +83,7 @@ function load(options = {}) {
     queueMicrotask(() => { request.result = mirrorDb; if (request.onsuccess) request.onsuccess(); });
     return request;
   } } : undefined;
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Math, JSON, Object, Array, String, Number, Date, Set, Map, Promise,
     isNaN, isFinite, parseInt, console, setTimeout, clearTimeout, queueMicrotask, indexedDB,
     navigator: options.navigator,

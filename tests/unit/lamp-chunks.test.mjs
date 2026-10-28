@@ -559,6 +559,13 @@ test("ChunkBins.bin: centroid cells, vertex AABBs, emission order, absolute indi
   assert.deepEqual([e.mn, e.mx], [[60, -1, 0], [110, 2, 5]], "the AABB is the vertices', so it may leave its own cell");
 });
 
+test("the rear-view inset has its own lamp cap, and the phone budget stays the measured floor", () => {
+  const LightBudget = new Function(readFileSync(join(ROOT, "js/render/shared/light-budget.js"), "utf8") + "\nreturn LightBudget;")();
+  assert.equal(LightBudget.MIRROR, 8);
+  assert.equal(LightBudget.MOBILE, 24);
+  assert.ok(LightBudget.MIRROR < LightBudget.MOBILE);
+});
+
 test("the GLX and TLX chunked builders bin through ChunkBins (no private copy of the key)", () => {
   const COPY = /\*\s*4096\s*\+\s*gz|\)\s*\/\s*cell\)\s*\+\s*1024/;
   const allowed = new Set(["js/render/webgpu/wgx-chunked.js"]);   // WGX lane: migrate, then delete this entry
