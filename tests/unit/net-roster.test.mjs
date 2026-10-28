@@ -33,10 +33,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 seedLogGlobal();
 const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");
+globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 // poseRemote samples the track for yawVis; a straight is enough here.
 globalThis.Tracks = { sample: (_t, _s, out) => { out.t[0] = 0; out.t[2] = 1; return out; } };
