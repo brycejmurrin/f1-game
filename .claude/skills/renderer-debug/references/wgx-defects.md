@@ -3,7 +3,7 @@
 Load this when the world is missing, the road is NaN-white, bloom dropped, or
 a real device shows a black screen.
 
-## Three shipped defect classes (2026-08-17)
+## Three shipped defect classes
 
 1. **Late sky erased the world.** Sky pipelines must use
    `depthCompare: "less-equal"` with `depthWriteEnabled: false` (GLX LEQUAL
