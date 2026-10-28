@@ -377,8 +377,10 @@ test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once p
   assert.doesNotMatch(cull, /_visList\.length\s*=/, "length = 0 / = n frees V8's backing store; the returned n is the contract");
   assert.match(cull, /_visList\[n\+\+\] = ch;/);
   assert.match(fnSource(CH, "function free(mesh) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");
-  for (const site of [/const n = chunkedSys\.cull\([^;]+;\s*const vis = chunkedSys\.visList;\s*for \(let (\w) = 0; \1 < n; \1\+\+\)/g])
-    assert.ok((TLX.match(site) || []).length >= 2, "every visList reader loops to the returned n");
+  // Present and the mirror both draw through _drawChunked. Its fallback walks
+  // visList to the returned n; mergeVisible does the same on the shared list.
+  // The shadow caster is the other reader and still loops i < n.
+  assert.equal((TLX.match(/_drawChunked\(rec, i,/g) || []).length, 2, "present and the mirror both draw through the one reader");
   const present = TLX.indexOf("        present(opts) {");
   const rt = TLX.indexOf("const refuseTab = () => {");
   assert.ok(rt > 0 && rt < present, "refuseTab is hoisted out of present()");
