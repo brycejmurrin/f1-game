@@ -330,7 +330,7 @@ var RivalAudio = (() => {
       }
     }
 
-    return { collect, emitFieldSfx, attach, tick: collect, detach, silence, passByState, passByVoices };
+    return { collect, emitFieldSfx, attach, detach, silence, passByState, passByVoices };
   }
 
   /** Wet-spray wake: nearest rival ahead within 40 m → 0..1 (1 = on your gearbox).
@@ -355,5 +355,5 @@ var RivalAudio = (() => {
     try { if (pending.mix != null) setMix(pending.mix); attach(pending.ctx, pending.dest); } catch (e) { /* stub dest already gone */ }
   }
 
-  return { create, attach, detach, silence, setMix, sprayAhead, passByGain, passByDoppler, passByPan, passByVoices, SLOTS };
+  return { create, attach, detach, silence, setMix, sprayAhead, passByVoices };
 })();
