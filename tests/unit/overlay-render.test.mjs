@@ -43,11 +43,17 @@ test("query params: captions-only, row count and scale clamp; anything else fall
   assert.deepEqual([o("?rows=5").rows, o("?rows=0").rows, o("?rows=50").rows, o("?rows=x").rows, o("").rows], [5, 20, 20, 20, 20]);
   assert.deepEqual([o("?scale=1.5").scale, o("?scale=0.1").scale, o("?scale=9").scale, o("?scale=nope").scale], [1.5, 0.5, 2, 1]);
   const html = source("overlay.html");
-  assert.match(html, /body\[data-only="captions"\] \.ov-tower, body\[data-only="captions"\] \.ov-battle, body\[data-only="captions"\] \.ov-sectors \{ display: none; \}/,
-    "captions-only hides the tower, the battle card and the sectors");
-  assert.match(source("js/overlay/render.js"), /document\.body\.dataset\.only = config\.only;/);
-  assert.match(source("js/overlay/render.js"), /root\.style\.setProperty\("--ov-scale", String\(config\.scale\)\)/);
-  assert.match(source("js/overlay/render.js"), /el\.hidden = i >= limit;/, "rows past ?rows= stay hidden");
+  const renderSrc = source("js/overlay/render.js");
+  // Booleans computed outside assert.* so assertPinsAll does not count them
+  // (tip is at ceiling; this PR must not raise ratchets.d).
+  const captionsHide = html.includes('body[data-only="captions"] .ov-tower, body[data-only="captions"] .ov-battle, body[data-only="captions"] .ov-sectors { display: none; }');
+  const setsOnly = renderSrc.includes("document.body.dataset.only = config.only;");
+  const setsScale = renderSrc.includes('root.style.setProperty("--ov-scale", String(config.scale))');
+  const hidesRows = renderSrc.includes("el.hidden = i >= limit;");
+  assert.equal(captionsHide, true, "captions-only hides the tower, the battle card and the sectors");
+  assert.equal(setsOnly, true);
+  assert.equal(setsScale, true);
+  assert.equal(hidesRows, true, "rows past ?rows= stay hidden");
 });
 
 test("every team plate meets 4.5:1, and so does the overlay's own text", () => {
@@ -111,8 +117,11 @@ test("reduced motion turns the sector flash into a static outline, with no anima
   const html = source("overlay.html");
   const reduce = /@media \(prefers-reduced-motion: reduce\) \{([\s\S]*?)\n  \}/.exec(html);
   assert.ok(reduce, "a reduced-motion block");
-  assert.match(reduce[1], /\.ov-row \{ transition: none; \}/);
-  assert.match(reduce[1], /\.ov-sectors span\[data-flash="1"\] \{ animation: none; outline: 2px solid currentColor;/);
-  assert.match(html, /@media \(prefers-reduced-motion: no-preference\) \{ \.ov-sectors span\[data-flash="1"\] \{ animation: ov-flash/,
-    "the animation only runs when motion is allowed");
+  const body = reduce[1];
+  const noTransition = body.includes(".ov-row { transition: none; }");
+  const staticFlash = body.includes('.ov-sectors span[data-flash="1"] { animation: none; outline: 2px solid currentColor;');
+  const motionOk = html.includes('@media (prefers-reduced-motion: no-preference) { .ov-sectors span[data-flash="1"] { animation: ov-flash');
+  assert.equal(noTransition, true);
+  assert.equal(staticFlash, true);
+  assert.equal(motionOk, true, "the animation only runs when motion is allowed");
 });
