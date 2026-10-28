@@ -324,6 +324,7 @@ const FULL = [
   "js/ui/flags.js",
   "js/ui/save-health.js",
   "js/ui/select-screen.js",
+  "js/ui/loading-card.js",   // LoadingCard: pure fly budget, card geometry, grid graphic
   "js/ui/loading-screen.js",
   "js/ui/survey-hud.js",   // APEX_SURVEY_HUD=1: cockpit HUD fixture without race/scenery warm
   "js/ui/scroll-fade.js",
@@ -667,6 +668,7 @@ const HARD_EDGES = [
   ["js/career/save-migrate.js", "js/career/restore-points.js"],
   ["js/core/store.js", "js/ui/save-health.js"],
   ["js/career/restore-points.js", "js/ui/save-health.js"],
+  ["js/ui/loading-card.js", "js/ui/loading-screen.js"], // LoadingScreen destructures LoadingCard at eval
   ["js/ui/save-health.js", "js/ui/select-screen.js"],
   ["js/core/script-loader.js", "js/game.js"],
   ["js/core/menu-sheet-gate.js", "js/game.js"],
