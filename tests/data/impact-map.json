@@ -11475,6 +11475,9 @@
         "tests/unit/player-forces.test.mjs",
         "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
+      "recoverBlocked": [
+        "tests/unit/player-forces.test.mjs"
+      ],
       "step": [
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
