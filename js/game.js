@@ -4256,9 +4256,6 @@ function armConfirm(btn, armedText, action) {
 function closeRaceSheets() {
   SettingsNav.invalidate();
   if (keyBinds) keyBinds.disarmAll();   // closeSettings()' non-DOM half: an armed key/pad capture or the wheel wizard
-  // endRace rebuilds this sheet before showing it. Left in the hidden document,
-  // its share chip kept the finished circuit reachable after the next build.
-  if (els.resultsTable && els.resultsTable.replaceChildren) els.resultsTable.replaceChildren();
   for (const el of document.querySelectorAll(".screen")) if (el.id !== "loading") el.hidden = true;
   for (const id of ["pm-settings-index", "advanced", "audioset", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }
   setupCam.cancelArrival(); setupPreviewOn = false; pitWorkSpec = null; garageReturn = "select";   // the garage turntable draws over what comes next, and a "pit" DONE runs closePitWork()

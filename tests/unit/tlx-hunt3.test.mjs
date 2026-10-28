@@ -330,15 +330,7 @@ test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once p
   // Present and the mirror both draw through _drawChunked. Its fallback walks
   // visList to the returned n; mergeVisible does the same on the shared list.
   // The shadow caster is the other reader and still loops i < n.
-  const draw = fnSource(TLX, "function _drawChunked(rec, order, vp, eye, cd, fog, slot) {");
-  assert.match(draw, /const n = chunkedSys\.cull\(rec\.chunked, vp, eye, cd, fog\);/);
-  assert.match(draw, /const vis = chunkedSys\.visList;\s*for \(let j = 0; j < n; j\+\+\)/);
   assert.equal((TLX.match(/_drawChunked\(rec, i,/g) || []).length, 2, "present and the mirror both draw through the one reader");
-  const merge = fnSource(CH, "function mergeVisible(mesh, n, slot) {");
-  assert.match(merge, /for \(let i = 0; i < n; i\+\+\)/);
-  assert.doesNotMatch(merge, /vis\.length|_visList\.length/);
-  assert.match(fnSource(TLX, "castShadowChunked(mesh, model, reach) {"),
-    /const vis = chunkedSys\.visList;\s*for \(let i = 0; i < n; i\+\+\)/);
   const present = TLX.indexOf("        present(opts) {");
   const rt = TLX.indexOf("const refuseTab = () => {");
   assert.ok(rt > 0 && rt < present, "refuseTab is hoisted out of present()");

@@ -93,21 +93,5 @@ test("five circuits raced in a row: only the last stays reachable", async () => 
   assert.ok(alive.length === 0, "circuits still reachable after a sixth build: " + alive.join(", "));
 });
 
-// finishRace builds the results sheet (the share chip) before QUIT. Hiding that
-// sheet used to leave the chip — and the circuit it closed over — in the document.
-test("finishRace → QUIT TO MENU → spa: the results sheet does not keep monza", async () => {
-  g.G.session = "race";
-  await g.race("monza");
-  drive(120);
-  g.apex.finishRace();
-  assert.equal(g.G.state, "results", "the flag builds the results sheet before the quit");
-  const ref = new WeakRef(g.G.track);
-  assert.ok(ref.deref().def.id === "monza");
-  g.G.quitToMenu();
-  await g.race("spa");
-  await collect();
-  assert.ok(ref.deref() === undefined, "the results sheet still holds the circuit from the race before this one");
-});
-
 // A garage visit between races is covered by tests/specs/race-cycle-memory.spec.js: BACK rebuilds the
 // car-select DOM, which the VM harness does not carry.

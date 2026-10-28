@@ -10107,6 +10107,9 @@
       "fillSlope": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
+      "hookCounts": [
+        "tests/unit/gpu-test-run.test.mjs"
+      ],
       "phaseStats": [
         "tests/unit/gpu-test-run.test.mjs"
       ],
@@ -10204,6 +10207,9 @@
         "tests/unit/metrics.test.mjs"
       ],
       "snapshot": [
+        "tests/unit/metrics.test.mjs"
+      ],
+      "stallRow": [
         "tests/unit/metrics.test.mjs"
       ],
       "toggle": [
@@ -14237,8 +14243,7 @@
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "mergeVisible": [
-        "tests/unit/tlx-chunked-lifecycle.test.mjs",
-        "tests/unit/tlx-hunt3.test.mjs"
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "packAttr": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -14488,9 +14493,6 @@
       ],
       "_decalAppend": [
         "tests/unit/tlx-hunt4.test.mjs"
-      ],
-      "_drawChunked": [
-        "tests/unit/tlx-hunt3.test.mjs"
       ],
       "_fail": [
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -15442,7 +15444,7 @@
         "tests/unit/share-card.test.mjs"
       ],
       "*": [
-        "tests/unit/ui-sheets-audit.test.mjs"
+        "tests/specs/race-cycle-memory.spec.js"
       ]
     },
     "js/share/share-card-data.js": {
@@ -15465,8 +15467,7 @@
         "tests/unit/share-card-data.test.mjs"
       ],
       "text": [
-        "tests/unit/share-card-data.test.mjs",
-        "tests/unit/ui-sheets-audit.test.mjs"
+        "tests/unit/share-card-data.test.mjs"
       ]
     },
     "js/share/share-card-layout.js": {
@@ -17251,6 +17252,7 @@
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "*": [
+        "tests/specs/race-cycle-memory.spec.js",
         "tests/unit/lap-format-rollover.test.mjs",
         "tests/unit/mobile-native-download.test.mjs"
       ]

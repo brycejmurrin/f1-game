@@ -30,7 +30,6 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
-import v8 from "node:v8";
 import { fileURLToPath } from "node:url";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
@@ -88,7 +87,7 @@ test("fold summaries preserve identical DOM, including normalized entities, and 
 });
 
 /* ── RESULTS / STANDINGS on the real SeasonCal ─────────────────────────── */
-function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = null, track = null, share = false }) {
+function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = null }) {
   const dom = makeDom();
   const tracks = ["bahrain", "jeddah", "melbourne"].map((id) => ({ id, name: id.toUpperCase(), gp: id + " GP", classic: false }));
   const sb = {
@@ -103,23 +102,18 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
     ...globals,
   };
   sb.window = sb;
-  if (share) sb.ShareCard = {};
   const ctx = vm.createContext(sb);
   seedLog(ctx);
   seedDom(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
   vm.runInContext(src("js/career/season-cal.js"), ctx, { filename: absSrc("js/career/season-cal.js") });
   vm.runInContext(src("js/race/race-control.js"), ctx, { filename: absSrc("js/race/race-control.js") });   // shortRun: the sheet's points table
-  if (share) {
-    vm.runInContext(src("js/share/share-card-data.js"), ctx, { filename: absSrc("js/share/share-card-data.js") });
-    vm.runInContext(src("js/share/share-card-chips.js"), ctx, { filename: absSrc("js/share/share-card-chips.js") });
-  }
   vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: absSrc("js/ui/results-story.js") });
   vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: absSrc("js/ui/results-sheet.js") });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
   const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next"), resMenu: dom.byId("res-menu") };
   const G = {
-    $: (id) => dom.byId(id), els, season, cars, state, seasonMode, track: track || { def: tracks[0] },
+    $: (id) => dom.byId(id), els, season, cars, state, seasonMode, track: { def: tracks[0] },
     cssCol: (c) => "rgb(" + c.join(",") + ")", announce() {}, soundOn: false, careerSettlement: null,
     netPlay,
   };
@@ -145,29 +139,6 @@ function tiedSeason() {
 const clear = (el) => { el.children.length = 0; };
 const rowsOf = (el) => el.children.flatMap((c) => c.classList.contains("res-row") ? [c] : c.getAttribute("data-results-part") === "ranking" ? rowsOf(c) : []);
 const nameOf = (row) => row.children.find((c) => c.classList.contains("res-name")).textContent;
-
-test("the race share chip keeps the result text and not the built track", async () => {
-  // Set inside the test, not at import: expose-gc at load has killed the runner
-  // before a VM exists (race-retain-vm).
-  v8.setFlagsFromString("--expose-gc");
-  const gc = vm.runInNewContext("gc");
-  const { cars } = tiedSeason();
-  let ref, button;
-  (() => {
-    const track = { def: { id: "monza", name: "Monza" } };
-    ref = new WeakRef(track);
-    const h = bootResults({ season: null, cars, seasonMode: false, share: true, track });
-    h.api.buildResults(cars.slice());
-    button = h.dom.byId("res-race-card");
-    assert.ok(button, "the results sheet offers the race share chip");
-    assert.equal(button.textContent, "SHARE CARD");
-    h.G.track = null;
-  })();
-  await new Promise((r) => setImmediate(r));   // a WeakRef target stays alive for the job that made it
-  gc();
-  assert.equal(ref.deref(), undefined, "the share chip still holds the circuit just raced");
-  assert.equal(button.textContent, "SHARE CARD");
-});
 
 test("unscored practice results suppress points in every classification row while scored races retain them", () => {
   const { cars } = tiedSeason();

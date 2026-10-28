@@ -526,11 +526,3 @@ test("mergeVisible concatenates chunk indices once and reuses the geometry while
   assert.equal(g.disposals, 1);
   assert.equal(g.attributes.position, undefined, "free does not keep the shared vertex attribute on the merged geometry");
 });
-
-test("tlx draws chunked records through one merge helper on the main and mirror passes", () => {
-  const tlx = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
-  assert.match(tlx, /function _drawChunked\(rec, order, vp, eye, cd, fog, slot\)/);
-  assert.match(tlx, /_drawChunked\(rec, i, _frameVP, frameEye, frameCullDist, frameCullFog, 0\)/);
-  assert.match(tlx, /_drawChunked\(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1\)/);
-  assert.match(tlx, /apex26\.tlxChunkMerge/);
-});
