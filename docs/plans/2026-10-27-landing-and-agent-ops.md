@@ -166,3 +166,44 @@ an idle threshold, at most ~10 items per run, dry-run unless `--confirm`, and an
 Tracked on the Board issue each dispatcher cycle: open PRs and `land` queue depth (target ≤ 20), merges per hour,
 median open→merge time for a `land` PR, `gate` refusals by row, minutes the tip fails `gen:check` or Pages, and CI
 minutes per merged PR (rollups should lower it).
+
+## 7. Status and hand-off (live; updated 2026-10-28 ~00:45 UTC)
+
+Owner: Claude Code session `session_01Ap97PUkoACNwXY4fpfa4ya`. Bryce ended every other agent session on 2026-10-28,
+so this session owns every open PR. Both dispatcher scheduled wake-ups are paused (the :23 one by this session, the
+:53 one by Bryce); re-enable both to bring the dispatcher back once #4051 and #4057 are on the tip.
+
+Merged from this plan: #4046 (distance 6), #4017 (land re-gate), #4054 (tip agent-index regen), #4053 (ratchet tree
+delta), #4058 (gate: real refusal; no distance row for non-game PRs), #4057 (dispatcher land-queue pause).
+
+In flight (this session's):
+- #4051 dispatcher owner match: `land`, re-gating. #4059 this plan: draft. #4060 land.yml stale-tip guard +
+  throttled auto-sync: draft, CI, then ready + `land`. #4061 agent-index without `order` + Explore on Haiku: draft, CI.
+- Commit-hook split (`cursor/commit-hook-split-4a9c`) and deploy-time generation stage 1
+  (`cursor/deploy-time-gen-7e3b`): worker subagents wrapping up; each opens a draft PR. Review gate row: starts after
+  #4058 (merged), not begun.
+
+Queue (75 open on 2026-10-28 00:25): 9 non-game `land` PRs re-gated by a `land` label flip after #4058 (#3872 #3957
+#3969 #3994 #4001 #4006 #4016 #4021 #4051); 27 game `land` PRs need a deploy-tip sync, three at a time with
+`sync-pr.mjs --push --force-clean-behind` from a scratch worktree (batch 1: #3920 #3950 #3962) until #4060's auto-sync
+takes over; 39 drafts and un-landed PRs under a read-only triage (LAND / FINISH / DECIDE / CLOSE per PR).
+
+Waiting on Bryce: the ratchet raise on #3970, #3981, #3985 (merge the tip, then `APEX_RATCHET_RAISE_OK=1 node
+tools/check/ratchets.mjs --update --fragment --reason=…` per branch; with #4053's tool it drops the stale tree rows).
+The #3985 branch holds a local, unpushed merge of the tip in this container only.
+
+Red: the deploy tip. Pages runs 4282 (merge of #4013) and 4284 (3defcc1a) fail `race-cycle-memory`
+(tests/specs/race-cycle-memory.spec.js:109, "cycle 1, spa built: built tracks still reachable after GC") in its own
+shard and in the macOS Metal solo; deterministic across retries and runners. #4013 is probably NOT the cause (its own
+PR CI ran the spec green on the same js). Prime suspect, from code reading only: #3982 share-card-ghost. In
+`js/ui/results-sheet.js` `buildResults`, the results share chip's `btn.onclick` closure
+(`ShareCardChips.append(..., () => ShareCardData.fromRace(order, { trackId: track.def.id, … }))`) captures `order` and
+`G.track`, and the results table is cleared only at the next `buildResults`, so the finished race's built track stays
+reachable when the next circuit is built. The spec never ran on #3982's PR because `tests/data/impact-map.json` maps no
+share/results file to it. Fix: let the chip capture plain data (or clear the table on leaving results), and map
+`js/ui/results-sheet.js` + `js/share/share-card*.js` to the spec; fallback revert #3982. Live site: expected to be the
+last green train (4281, 2699ab13), unconfirmed. Run 4280 was the agent-index drift fixed by #4054.
+
+Next, in order: green the Pages trains (the results-sheet fix above, verified by the race-cycle-memory spec); land #4060 and #4061; the remaining game-PR syncs; act on
+the triage table; the review gate row; then Phase 1 batch landing. Research reports for everything above:
+[docs/notes/agent-ops-research-2026-10-27/](../notes/agent-ops-research-2026-10-27/pr-landing.md).
