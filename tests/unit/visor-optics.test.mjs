@@ -324,6 +324,19 @@ test("visor tint: the lens colour is the resolved --visor-lens token (css/tokens
   assert.deepEqual([...load({ color: "rose" }).V.tintRGB("rose")], [76, 45, 60], "an unresolved token falls back to the table");
 });
 
+test("visor tint: the lens colour is read once per port build, never per repaint (a forced style recalc)", () => {
+  const { V, ctx, listeners } = load({ visor: "smoke", color: "amber", apex: { visorScene: () => DAY } });
+  let reads = 0;
+  const gcs = ctx.getComputedStyle;
+  ctx.getComputedStyle = (el) => { reads++; return gcs(el); };
+  for (let i = 0; i < 60; i++) V.tick(1 / 15, true, 0, false);
+  assert.ok(V.stats().paints >= 30, "the light layer repainted all along");
+  assert.equal(reads, 1, "one --visor-lens read for the port build, none per paint");
+  for (const fn of listeners) fn("visorColor", "ice");
+  V.tick(1 / 15, true, 0, false);
+  assert.equal(reads, 2, "a lens colour change re-reads it with the port rebuild");
+});
+
 test("visor clear (audit4 R1): Droplets.clear() at race exit takes the light layer down with the water", () => {
   // render() stops ticking Droplets (and so VisorOptics) in menu/results, so the last paint stayed over Home.
   const { V, calls, ctx } = load({ apex: { visorScene: () => DAY } });

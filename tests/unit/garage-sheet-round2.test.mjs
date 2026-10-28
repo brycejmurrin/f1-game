@@ -168,11 +168,17 @@ function sceneBoard({ unlimited = false, owned = false, tdev = 0 } = {}) {
   const document = { createElement: () => ({ width: 0, height: 0, getContext: () => g2d }) };
   const gfx = { createMesh: () => ({}), createTexMesh: () => ({}), freeMesh() {}, freeTexture() {}, createTexture: () => ({}),
     updateTexture() {}, draw() {}, drawDecal() {}, drawGlow() {} };
-  const ctx = vm.createContext({
+  const tuneStore = new Map();
+  const ctx = {
     console, Math, Object, Array, Number, String, JSON, Float32Array, Uint16Array, Uint32Array, Map, Set, isFinite, parseFloat, parseInt, Date,
     document, LiveryTex: {}, Log: { info() {}, warn() {}, error() {}, debug() {}, enabled: () => false },
-  });
-  for (const f of ["js/core/mat4.js", "js/data/teams.js", "js/car/parts.js", "js/track/core/geom.js", "js/track/core/pit.js",
+    GameStore: { store: { get: (k, f) => tuneStore.has(k) ? tuneStore.get(k) : f,
+      set: (k, v) => { if (v === undefined) tuneStore.delete(k); else tuneStore.set(k, v); }, rev: 0 } },
+  };
+  ctx.window = ctx;
+  vm.createContext(ctx);
+  for (const f of ["js/core/mat4.js", "js/physics/consts.js", "js/data/teams.js", "js/car/parts.js", "js/track/core/geom.js", "js/track/core/pit.js",
+                   "js/garage/setup-tune.js",
                    "js/garage/scene-prims.js", "js/garage/scene-equipment.js", "js/garage/scene-live.js", "js/garage/scene-dress.js",
                    "js/garage/experience.js", "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
@@ -189,7 +195,7 @@ function sceneBoard({ unlimited = false, owned = false, tdev = 0 } = {}) {
   const getParts = () => ({});
   const c = { track: { id: "monza" }, weather: "dry", tod: "default", night: false, unlimited };
   GarageScene.prepare(team, LIV, getParts, 0, c);
-  return { texts, GarageScene, team, LIV, getParts, c, ctx };
+  return { texts, GarageScene, team, LIV, getParts, c, ctx, tuneStore };
 }
 
 test("G4: the wall BUDGET board reads FREE BUILD when the budget is unlimited", () => {
@@ -220,6 +226,25 @@ test("G5: the wall stat board reads Career.teamStats", () => {
   const num = (h) => h.texts.filter((t) => /^\d+$/.test(t)).map(Number);
   assert.ok(num(dev).includes(Math.round(P.displayStat((dev.team.stats.speed + 6) * mods.speed))), "developed speed on the board");
   assert.notDeepEqual([...num(dev)], [...num(flat)]);
+});
+
+test("G5: the wall stat board folds SetupTune.mods the same way the DOM bars do", () => {
+  const flat = sceneBoard();
+  const P = vm.runInContext("Parts", flat.ctx), S = vm.runInContext("SetupTune", flat.ctx);
+  const Dress = vm.runInContext("GarageDress", flat.ctx);
+  const works = Dress.boardInfo(flat.team, flat.getParts, 0, flat.c);
+  S.set(flat.team.id, { arbF: 11, arbR: 1 });   // max front / soft rear → cornering/braking move
+  flat.ctx.GameStore.store.rev++;
+  Dress.releaseDress();
+  const tuned = Dress.boardInfo(flat.team, flat.getParts, 0, flat.c);
+  const want = P.getMods({}, flat.team, S.mods(flat.team.id));
+  for (let i = 0; i < P.STAT_KEYS.length; i++) {
+    const key = P.STAT_KEYS[i].key, base = flat.team.stats[key] || 75;
+    assert.equal(tuned.stats[i].value, Math.round(P.displayStat(base * want[key])),
+      `${key}: wall matches Parts.getMods(..., SetupTune.mods)`);
+  }
+  assert.notDeepEqual(tuned.stats.map((s) => s.value), works.stats.map((s) => s.value),
+    "a mechanical set-up change moves the wall numbers");
 });
 
 test("the setup turntable gives the Legends slot its own helmet key and a per-legend mesh key", () => {

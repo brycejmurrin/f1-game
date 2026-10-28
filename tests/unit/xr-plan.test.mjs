@@ -1,4 +1,4 @@
-/* XRPlan — table-driven path selection (task 20). Pure; no DOM/navigator. */
+/* XRPlan — table-driven path selection. Pure; no DOM/navigator. */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -18,7 +18,7 @@ function bootPlan() {
   return ctx.XRPlan;
 }
 
-const CAPS_FULL = { xr: true, vr: true, gpu: true, xrgpu: true, layers: true, mobileQuest: false };
+const CAPS_FULL = { xr: true, vr: true, gpu: true, xrgpu: true, mobileQuest: false };
 const CAPS_NO_GPU = { xr: true, vr: true, gpu: false, xrgpu: false };
 const CAPS_NO_XRGPU = { xr: true, vr: true, gpu: true, xrgpu: false };
 const CAPS_NO_VR = { xr: true, vr: false, gpu: true, xrgpu: true };
