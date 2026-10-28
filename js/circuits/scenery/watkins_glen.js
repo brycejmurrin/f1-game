@@ -10,7 +10,7 @@
         pine, tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, waterBand, terrainYAt, foundation,
         indexSolid, fence, guardrail, tyreWall, groundPatch, modelGroup,
-        addBox, addCyl, addFrustum, forestEdge } = api;
+        addBox, addCyl, addFrustum, forestEdge, bakedModel } = api;
 
       // Sample the rendered ribbon under a footprint and lift the anchor so no
       // prim top sits under terrain (ground-audit bury). Same pattern as Vegas lots.
@@ -661,4 +661,10 @@
           stage._mat = 0;
         });
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.0645, 0.5255, 0.7335, 0.9255]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

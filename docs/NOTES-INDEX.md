@@ -21,6 +21,7 @@ below says superseded — `docs-integrity.test.mjs` holds the pair, so an agent 
 | Note | What it records |
 |---|---|
 | [notes/PROJECT-MAP-SALVAGE-2026-10-27.md](notes/PROJECT-MAP-SALVAGE-2026-10-27.md) | 2026-10-27: what the closed project-map PR #3922 held (a read-attestation ledger, no generator), 24 claims spot-checked, and its one durable product: ~125 comment-vs-code drifts plus the non-`js/` top-level directories |
+| [notes/RACE-ENTRY-ATTRIBUTION-2026-10-27.md](notes/RACE-ENTRY-ATTRIBUTION-2026-10-27.md) | Where the iPhone 14's 29.8 s TLX WebGPU race entry goes: api vs player path, stage split, race-path heap (#3110, #1650). |
 | [notes/review-2026-10-27/](notes/review-2026-10-27/README.md) | 2026-10-27: 36 Opus skill passes (all FIX), 8 Opus code hunts and the rulebook review behind the [review fix plan](plans/2026-10-27-review-fix-plan.md) |
 | [notes/orchestration-redesign-2026-10-27/](notes/orchestration-redesign-2026-10-27/README.md) | 2026-10-27: the eight read-only reviews (bus history, tooling, rulebook, measured outcomes, platform docs, Claude / Cursor / Codex transcripts) behind the [orchestration redesign plan](plans/2026-10-27-orchestration-redesign.md) |
 | [System audit, fourth pass](notes/SYSTEM-AUDIT-4-2026-10-26.md) | 2026-10-26: ~75 reviewers; re-verifies pass 3 (13 corrections), whole-population bus/PR/CI/session/Cursor/skill/card/docs/economics review; evidence in `notes/system-audit-4/` |
@@ -225,6 +226,7 @@ ledger lists.
 - [Loading-screen flyby improvements](plans/2026-09-24-flyby-improvements.md): the fleet audit of the pre-race flyby (52 circuits, headless), what the follow-up branch fixed (pops, cranes, landmark overshoot, grid sightlines, whip pans, corner roles) and the phased plan beyond it.
 - [Refactor readability plan](plans/2026-09-24-refactor-readability.md): ranked hotspots (game.js, tracks buildProps, WGX, presets, …), Phase 0–2 sequence, explicit non-goals; supersedes [CLEANUP-ROADMAP](plans/CLEANUP-ROADMAP.md) as the backlog.
 - [Feature roadmap, 2026-10-04](plans/2026-10-04-feature-roadmap.md): what is still missing after a six-angle brainstorm (competitors, web platform, engagement, F1 2026 content, presentation, inventory), ranked in three tiers, with the trademark and data-terms constraints and which sources to trust.
+- [Cooldown lap, parc fermé and podium flow](plans/2026-10-27-cooldown-podium.md): plan-only (#1584) — phases/triggers, ResultsCam reuse, ResultsStory podium, phone 844×390, `__apex.ceremony`, build slices 1–5.
 - [Share image cards](plans/2026-10-04-share-cards.md): one card renderer for race, daily-challenge, ghost-lap and career results, shared as a PNG with a download fallback.
 - [Stream overlay mode](plans/2026-10-04-stream-overlay.md): a transparent broadcast-graphics page for OBS that joins the game as a spectator, because an OBS source cannot see the player's browser tab.
 - [Highlight reel and clip export](plans/2026-10-04-highlight-reel-clip-export.md): scored race events stitched into a reel, exported as video with WebCodecs, with a MediaRecorder fallback.

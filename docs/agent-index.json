@@ -744,6 +744,7 @@
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -846,6 +847,7 @@
         "tests/unit/drift-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -924,6 +926,7 @@
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -2052,6 +2055,11 @@
       "roster": "LAZY_AUDIO"
     },
     {
+      "path": "js/audio/mix-duck.js",
+      "global": "GameAudioMix",
+      "roster": "LAZY_AUDIO"
+    },
+    {
       "path": "js/audio/music-lib.js",
       "global": "MusicLib",
       "roster": "LAZY_AUDIO"
@@ -2294,6 +2302,11 @@
     {
       "path": "js/car/car3d.js",
       "global": "Car3D",
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/cockpit-rig.js",
+      "global": "CockpitRig",
       "roster": "tag"
     },
     {
@@ -3089,6 +3102,11 @@
     {
       "path": "js/data/hub.js",
       "global": "DataHub",
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/ics.js",
+      "global": "DataIcs",
       "roster": "LAZY_DATA"
     },
     {
