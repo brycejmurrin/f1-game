@@ -1,6 +1,6 @@
 // New body vs the same team's factory car, keyed check|a|b: NEW = failing key the factory lacks
 // (past limit + NOISE), WORSE = past the factory value by the check's own threshold, or count up 25% and ≥3.
-// node scratch/d1d/fit-diff.mjs artifacts/logs/d1d-fit-new.json
+// node design-preview/concept-bodies/fit-diff.mjs artifacts/logs/d1d-fit-new.json
 import fs from "node:fs";
 const j = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 const BASE = process.env.BASE || "factory";   // e.g. BASE=body:probe0 with BASE_JSON=<its audit json>
