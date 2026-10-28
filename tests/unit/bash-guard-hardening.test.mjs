@@ -764,6 +764,36 @@ test("round 2 commit detection: wrapped commits and aliases still run the guards
   } finally { repo.rm(); }
 });
 
+// 2026-10-28 commit-hook split, step 1 (Bryce: "Yes, split it"): .githooks/pre-commit is the git commit gate, so the
+// two ways around it — `--no-verify`/`-n` and a core.hooksPath write — are refused in every shape the parser reads.
+test("2026-10-28: a commit that skips the git pre-commit hook is refused in every shape, and so is every core.hooksPath write form", () => {
+  const repo = scratchRepo("hook-noverify-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+  try {
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 4\n");
+    repo.g("add", "docs/PHYSICS.md");
+    for (const c of ["git commit --no-verify -m x", "git commit -nm x", "git commit -an -m x", "git commit -m x --no-veri",
+      "bash -c 'git commit -n -m x'", "git -c alias.ci='commit --no-verify' ci -m x", "if true; then git commit -n -m x; fi",
+      "APEX_SKIP_GUARDS=1 git commit --no-verify -m x"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `must refuse: ${c}\n${r.stderr}`);
+      assert.match(r.stderr, /--no-verify/, c);
+    }
+    for (const c of ["git config set core.hooksPath x", "git config --file .git/config core.hooksPath x",
+      "git config --remove-section core", "git config unset core.hooksPath", "git config --unset core.hooksPath"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `must refuse: ${c}\n${r.stderr}`);
+      assert.match(r.stderr, /core/, c);
+    }
+    // a message that says -n, a dry run, the -S/-u attached values and every read form stay open
+    for (const c of ["git commit -m -n", "git commit --dry-run -n -m x", "git commit -Sn -m x", "git commit -uno -m x",
+      "git config --get core.hooksPath", "git config get core.hooksPath", "git config --list", "git commit -m x"]) {
+      const r = run(c);
+      assert.equal(r.status, 0, `must pass: ${c}\n${r.stderr}`);
+    }
+  } finally { repo.rm(); }
+});
+
 test("round 2 gh: squash/rebase denied, merges denied outright, ready flips need the live-head receipt, API-by-id calls still ask", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-gh-gate-"));
   const head = "a".repeat(40);
