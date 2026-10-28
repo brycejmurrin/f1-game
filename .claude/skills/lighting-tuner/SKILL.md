@@ -9,13 +9,30 @@ description: "Use when night looks washed out or like day, dawn sun is too high,
 The `__apex` probes, `apex-eval`, `slider-effect --live` and capture commands boot
 Chromium: parent session only, never a subagent (AGENTS.md rule 10).
 
-**Reach for the tuner knobs FIRST.** Nearly every hand-tuned value is a live
-`TUNE_DEFS` knob (`js/lighting/knobs.js`) read via `LT.<id>` each frame.
+**Step 1, always: MEASURE before any knob.** Pin the report's condition — track, time of day,
+weather (a wet or rain report is a different row) and backend (the owner plays TLX WebGPU on an
+iPhone; a headless probe is a software backend, and layer 5 below depends on it) — then take a baseline:
 
-```js
-__apex.lightTune()
-__apex.lightTune({ lampLevel: 0.4 })
+```sh
+node tools/shot/apex-eval.mjs singapore "(a.setTimeOfDay('night'), a.lightState())" --raw   # parent only
 ```
+
+The condition key is `<track>|<tod>|<weather>` (`key()` in `js/lighting/profiles.js`: tod `default` →
+`def.night`, storm → rain). Read that key's row AND the shared `"*|<tod>|<wx>"` stamp in
+`js/lighting/presets.js`: a value the row does not pin is inherited — e.g. Singapore night gets
+`nightAmbLift: 1.45` (a LIFTED night) from the `"*|night|dry"` stamp, not the knob default. Then the
+symptom table ([references/symptoms.md](references/symptoms.md)). The two night rows:
+- **Night washed out** (milky, lifted blacks): resolved `nightAmbLift` (`lightTune()` reads it) first,
+  then `mistDensity`/`fogDensityMul`, `bloomMul`/`bloomKnee`, `cityGlowMul`, `exposureMul`.
+- **Floodlights not firing**: `numLights` counts only `G.frame.lights`; per-chunk lamps show in
+  `perChunkLights`, `bakedLights`, `perChunkHeld` and `tlxLampGrid` — read all of them before calling it off.
+
+**Which layer to edit:** a ONE-track complaint → that track's `"<id>|tod|wx"` row; editing the
+`"*|tod|wx"` stamp or `lightCopy()` changes EVERY circuit — do that only for a fleet complaint, and
+say so in the PR.
+
+Then the knobs: nearly every hand-tuned value is a live `TUNE_DEFS` knob (`js/lighting/knobs.js`)
+read via `LT.<id>` each frame — `__apex.lightTune()` reads them, `lightTune({ nightAmbLift: 1.1 })` sets one.
 
 Precedence, lowest → highest (a later layer wins):
 
@@ -53,9 +70,10 @@ before/after; don't guess from AGENTS.md.
 Verify a `js/lighting/` or `presets.js` edit in this order (AGENTS.md §Verification):
 
 ```sh
+mkdir -p artifacts/tmp
 git diff --name-only origin/claude/f1-game-project-26h3ng > artifacts/tmp/changed.txt
 node tools/ci/geometry-paths.mjs --targeted artifacts/tmp/changed.txt   # names the TARGETED node suites; run each with node --test
-npm test -- tests/specs/lighting-ab.spec.js   # the single spec; session only (a subagent reports it unverified)
+node tools/ci/test-bg.mjs --spec tests/specs/lighting-ab.spec.js   # the single spec, background; parent only (a subagent reports it unverified)
 ```
 
 The whole `gfx` browser group (lighting-ab + tuner-grade + probes + tlx) only when
@@ -74,7 +92,7 @@ see *what region* of the frame it changes.
 node tools/lighting/slider-effect.mjs --group LAMPS
 node tools/lighting/slider-effect.mjs --risk inert --json
 
-# A/B a single knob — Playwright, ~20 s
+# A/B a single knob — Playwright
 node tools/lighting/slider-effect.mjs --live saturation
 node tools/lighting/slider-effect.mjs --live lampLevel --from 0 --to 0.55
 

@@ -138,8 +138,8 @@ Already built, do not engage (this branch, in order):
 1. **Governor ladder §2u** — let the ladder reach rungs 2–4 on compute-bound phones via the
    `_pendingVerify` scale-response discriminator (§3). Largest lever.
 2. **SGSR1 spatial upscale default ON at phone MEDIUM/LOW** (#1652) — was blocked on a real-GPU
-   A/B. **Decision still pending** the real-device evidence; do not flip the default on this
-   branch.
+   A/B. **Decided 2026-10-27: stays OFF** (iPhone 14 A/B, PR #3708; UPSCALING-2026-09 §7.7).
+   Do not flip the default.
 3. **Thermal → render rate** — auto-engage the RenderRate 45 fps tier from ThermalDrift's due
    signal, only when the player's render-rate setting is "auto"; never override an explicit
    player choice.
