@@ -167,7 +167,7 @@ Tracked on the Board issue each dispatcher cycle: open PRs and `land` queue dept
 median open→merge time for a `land` PR, `gate` refusals by row, minutes the tip fails `gen:check` or Pages, and CI
 minutes per merged PR (rollups should lower it).
 
-## 7. Status and hand-off (live; updated 2026-10-28 ~00:45 UTC)
+## 7. Status and hand-off (live; updated 2026-10-28 ~01:00 UTC)
 
 Owner: Claude Code session `session_01Ap97PUkoACNwXY4fpfa4ya`. Bryce ended every other agent session on 2026-10-28,
 so this session owns every open PR. Both dispatcher scheduled wake-ups are paused (the :23 one by this session, the
@@ -179,16 +179,27 @@ delta), #4058 (gate: real refusal; no distance row for non-game PRs), #4057 (dis
 In flight (this session's):
 - #4051 dispatcher owner match: `land`, re-gating. #4059 this plan: draft. #4060 land.yml stale-tip guard +
   throttled auto-sync: draft, CI, then ready + `land`. #4061 agent-index without `order` + Explore on Haiku: draft, CI.
-- Commit-hook split (`cursor/commit-hook-split-4a9c`) and deploy-time generation stage 1
-  (`cursor/deploy-time-gen-7e3b`): worker subagents wrapping up; each opens a draft PR. Review gate row: starts after
-  #4058 (merged), not begun.
+- #4064 the red-tip fix (results share chips stop pinning the race; maps the files to race-cycle-memory): draft,
+  `priority`, CI must run race-cycle-memory green, then ready + `land`.
+- #4063 commit-hook split: only the `--no-verify` / `core.hooksPath` refusal is committed and verified; the split itself
+  is the COMMIT-HOOK-SPLIT wip patch under docs/notes on that branch (unverified; the Plan lists what remains, and the
+  real-commit proof needs a throwaway clone because hooks run from the main checkout).
+- #4062 deploy-time generation: the inventory and stage plan are the DEPLOY-TIME-GEN note under docs/notes on that branch; the
+  stage-1 code (move `js/track/circuit-meta.js` out of git) is its stage1 patch beside it
+  (unverified; `package.json` `prepare` and the `session-start.sh` edit need Bryce's yes).
+- Review gate row: not begun.
 
 Queue (75 open on 2026-10-28 00:25): 9 non-game `land` PRs re-gated by a `land` label flip after #4058 (#3872 #3957
 #3969 #3994 #4001 #4006 #4016 #4021 #4051); 27 game `land` PRs need a deploy-tip sync, three at a time with
 `sync-pr.mjs --push --force-clean-behind` from a scratch worktree (batch 1: #3920 #3950 #3962) until #4060's auto-sync
-takes over; 39 drafts and un-landed PRs under a read-only triage (LAND / FINISH / DECIDE / CLOSE per PR).
+takes over. Triage of the 32 drafts and un-landed PRs (2026-10-28 00:45): 25 LAND after a sync and a Plan tick
+(#3964 #3987 #3988 #4011 #4015 #4026 #4028 #4030 #4032 #4033 #4034 #4035 #4036 #4037 #4038 #4039 #4040 #4042 #4043
+#4044 #4048 #4049 #4052 #4055 #4056), 2 FINISH (#4045 after #3998/#4042 land; #4050 confirm the plugin keys), 5 DECIDE,
+0 CLOSE. Conflicting pairs to order: #3964×#3992, #3998 before #4042/#4045/#4039, #4043 before #4044, #4049×#4052;
+the refactor batch also conflicts on `docs/agent-index.json` until #4061 lands.
 
-Waiting on Bryce: the ratchet raise on #3970, #3981, #3985 (merge the tip, then `APEX_RATCHET_RAISE_OK=1 node
+Waiting on Bryce: the ratchet raise on #3970, #3981, #3985 and the five DECIDE rows #3992, #3998, #4027, #4041,
+#4047 (each carries a stale negative `assertPins` fragment from before #3996; merge the tip, then `APEX_RATCHET_RAISE_OK=1 node
 tools/check/ratchets.mjs --update --fragment --reason=…` per branch; with #4053's tool it drops the stale tree rows).
 The #3985 branch holds a local, unpushed merge of the tip in this container only.
 
