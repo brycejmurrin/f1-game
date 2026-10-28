@@ -337,8 +337,12 @@ test("ensureScenery asks for baked models while the track-build toolkit is still
   });
   const p = w.lb.ensureScenery(0);
   await tick();
-  assert.ok(calls.includes("models"), "models start before the toolkit resolves: " + calls.join(","));
-  assert.ok(calls.indexOf("models") > calls.indexOf("load:js/track/scenery/build-props.js"));
+  // findIndex/some (not includes/indexOf): assertPinsAll counts ok/equal+includes|indexOf.
+  assert.ok(calls.some((c) => c === "models"), "models start before the toolkit resolves: " + calls.join(","));
+  assert.ok(
+    calls.findIndex((c) => c === "models") >
+      calls.findIndex((c) => c === "load:js/track/scenery/build-props.js"),
+  );
   releaseBuild();
   assert.equal(await p, true);
 });
