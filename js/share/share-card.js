@@ -51,6 +51,11 @@ const ShareCard = (function () {
       } else if (op.op === "line") {
         ctx.beginPath(); ctx.strokeStyle = op.color; ctx.lineWidth = op.lineWidth || 1;
         ctx.moveTo(op.x, op.y); ctx.lineTo(op.x2, op.y2); ctx.stroke();
+      } else if (op.op === "path" && op.points.length >= 4) {
+        ctx.beginPath(); ctx.strokeStyle = op.color; ctx.lineWidth = op.lineWidth || 1;
+        ctx.lineJoin = "round"; ctx.moveTo(op.points[0], op.points[1]);
+        for (let i = 2; i < op.points.length; i += 2) ctx.lineTo(op.points[i], op.points[i + 1]);
+        ctx.stroke();
       } else if (op.op === "qr") paintQr(ctx, op);
     }
     ctx.restore();

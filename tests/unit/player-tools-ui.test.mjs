@@ -194,13 +194,13 @@ test("quiet card refreshes update one history card and preserve its actual initi
   assert.equal(history.delivered("Wrong speaker", { kind: "race", who: "Race control", quiet: true }), false);
   history.delivered("GO GO GO", { kind: "race", who: "Engineer" }); assert.equal(history.rows().length, 2);
 });
-test("condition-aware cues remain opt-in and change advice toggles only", () => {
+test("condition-aware cues default ON (#2177) and change advice toggles only", () => {
   const h = host(), state = storage(), calls = [];
   h.sb.BrakeCue = { setConditionAware: (v) => calls.push(["brake", v]) }; h.sb.DrivingCues = { setConditionAware: (v) => calls.push(["drive", v]) };
   const api = h.run("js/ui/condition-cue-controls.js", "ConditionCueControls"), panel = h.el("section", "driving");
-  api.create(state.store, panel); assert.deepEqual(calls, [["brake", false], ["drive", false]]);
-  const box = panel.querySelector("input"); box.checked = true; box.onchange();
-  assert.equal(state.store.get("conditionCues"), true); assert.deepEqual(state.changes, ["conditionCues"]); assert.deepEqual(calls.slice(-2), [["brake", true], ["drive", true]]);
+  api.create(state.store, panel); assert.deepEqual(calls, [["brake", true], ["drive", true]]);
+  const box = panel.querySelector("input"); box.checked = false; box.onchange();
+  assert.equal(state.store.get("conditionCues"), false); assert.deepEqual(state.changes, ["conditionCues"]); assert.deepEqual(calls.slice(-2), [["brake", false], ["drive", false]]);
 });
 test("SettingsNav page lifecycle fires after lazy audio settles for programmatic routes without selection sounds", async () => {
   const h = host(), settings = h.el("section", "pmsettings"), index = h.el("div", "pm-settings-index", settings), panel = h.el("section", "audioset", settings);

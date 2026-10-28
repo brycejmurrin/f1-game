@@ -304,11 +304,11 @@ After `await __apex.race("monza")`, `#pausebtn` opens `#pausemenu`.
 | Control | ID | Result |
 |---|---|---|
 | Resume | `#pm-resume` | Return to the race |
-| Restart Race | `#pm-restart` | Restart the current race (with Confirm Quit ON, the first press arms: "RESTART — TAP AGAIN") |
+| Restart Race | `#pm-restart` | Restart the current race (with Confirm Quit ON, the first press arms: "TAP AGAIN") |
 | Settings… | `#pm-settings` | Open the same Settings index used from title |
 | How to Play… | `#pm-howto` | Open the help sheet |
 | Standings | `#pm-standings` | Open championship standings; hidden outside a championship |
-| Quit to Menu | `#pm-quit` | Leave the race for the title (with Confirm Quit ON, the first press arms: "QUIT TO MENU — TAP AGAIN") |
+| Quit to Menu | `#pm-quit` | Leave the race for the title (with Confirm Quit ON, the first press arms: "TAP AGAIN") |
 
 The pause card also has Previous, Pause and Next track controls in its music
 strip. Pause Settings exposes the same Controls, Driving, Display, Steering &

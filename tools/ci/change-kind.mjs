@@ -21,9 +21,32 @@ export function changeKind(files) {
   return "code";
 }
 
-function changedSince(ref) {
-  return execFileSync("git", ["diff", "--name-only", ref], { cwd: ROOT, encoding: "utf8" })
-    .split("\n").filter(Boolean);
+/** Parse `git diff --name-status -z` into unique paths, rename/copy sources
+ *  included (ledger M36). Local twin of tools/lib/changed-files.mjs
+ *  parseNameStatusZ — kept here so this module does not import that helper
+ *  (importing it rewrites tests/data/impact-map.json, owned by open CI PRs). */
+function parseNameStatusZ(out) {
+  const f = String(out || "").split("\0");
+  if (f[f.length - 1] === "") f.pop();
+  const paths = [];
+  for (let i = 0; i < f.length;) {
+    const status = f[i++];
+    const two = /^[RC]/.test(status);
+    const a = f[i++];
+    if (a !== undefined && a !== "") paths.push(a);
+    if (two) { const b = f[i++]; if (b !== undefined && b !== "") paths.push(b); }
+  }
+  return [...new Set(paths)];
+}
+
+/** Paths changed since `ref`, rename/copy sources included (ledger M36).
+ *  `--name-only` would list only the destination of a `git mv` and mis-classify
+ *  a moved circuit as docs-only. */
+export function changedSince(ref, { cwd = ROOT, run = execFileSync } = {}) {
+  const out = run("git", ["diff", "--name-status", "-z", "-M", ref], {
+    cwd, encoding: "utf8", maxBuffer: 64 * 1024 * 1024,
+  });
+  return parseNameStatusZ(out);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

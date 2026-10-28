@@ -57,10 +57,9 @@ terms still read raw numbers where the rule above would scale them; each was
 reviewed and left as tuning. (1) `DEPLOY_A` (3.0 m/s², `js/physics/consts.js`) is
 not scaled by `PACE`, so the ERS boost is stronger relative to the engine's accel
 at low OVERALL SPEED (about +86 % at pace 0.5, +43 % at 1). (2) After #1266 moved
-the front tyre peak to `CURVE_PEAK_X_F`, `pastF` and `frontUtil`
+the front tyre peak to `CURVE_PEAK_X_F`, `pastF` / `frontUtil`
 (`js/physics/player-forces.js`) and GripSteer's `alphaPk` (`js/physics/grip-steer.js`)
-still use `CURVE_PEAK_X` (π/2), so `frontUtil` reads about 0.83 at the true peak;
-the scrub SFX, the coach tip and the rear haptic cue all reference it. (3) The AI
+read `CURVE_PEAK_X_F` (M42); `frontUtil` is 1.0 at the true front peak. (3) The AI
 closing-speed margins of 1/2/3 m/s and the 72 m mirror cap in
 `js/physics/ai-drive.js` are raw, where `queueBrake`, `otFireRate` and `passReach`
 are pace-scaled. (4) The speed-scaled yaw damp (`SPEED_YAW_LO`/`HI`, 50/65 m/s in
@@ -89,7 +88,8 @@ rising with aero load as it should. Never negative, never oscillating (a Magic
 Formula with a sharpening E goes negative at spin-sized slips, which this model
 reaches). The front-saturation haptic fires at `x > 1.15`, i.e. before the
 peak; a rear haptic fires past the rear's peak. `c.frontUtil` / `c.rearUtil`
-(the coach, `obs()`) are `x / (π/2)` — 1.0 at the peak, above it past — because
+(the coach, `obs()`) are `x / peak` — front peak `CURVE_PEAK_X_F`, rear
+`CURVE_PEAK_X` (π/2) — 1.0 at that axle's peak, above it past — because
 `|Fy| / mu` is not monotonic any more. Measured shapes and the
 literature: `docs/notes/PLAYER-PHYSICS-RESEARCH-2026-09.md`; the shape is
 locked by `tests/unit/player-dynamics-vm.test.mjs`.
@@ -1185,7 +1185,7 @@ it lands.
 | `js/camera/vantage.js` | `vantage` | **broadcast-only** | heli/side/cinematic plus ExtraRigs drone (side sway); trackside uses corner poses (no curvature); cam-avoid uses prop boxes only; 0 in every driven mode |
 | `js/camera/extra-rigs.js` | `droneFollow` | **broadcast-only** | optional `Tracks.curvature` read for drone side sway only; never reaches the car |
 | `js/race/quali-model.js` | `lapTime` | **AI-only** | offline lap-time model for the simulated field; a player-driven lap always overrides it |
-| `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue |
+| `js/physics/brake-cue.js` | `tick` | **assist-gated** | behind the BRAKE CUE slider (notch 1 = OFF); audio/haptic pulse only, no force path. NOTE: ships defaulted ON (notch 6) — sensory-only, but a fresh install does hear a curvature-derived cue. Its condition-aware estimate (`conditionCues`, default ON since #2177) scales the cue's grip by weather/tread and solves the corner speed with the car's aero load; still no force path (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md) |
 | `js/audio/driving-cues.js` | `tick` / `cornerSide` | **assist-gated** | behind the AUDIO DRIVING CUES slider (`audioCues`, notch 1 = OFF, STANDARD/PRO stay OFF; ROOKIE/RELAX bundle mid notches); braking tone + L/R corner calls via `GameAudio.driveBrakeTone` / `cornerCall` — audio-only, no force/steer path, never `G.announce` / race radio. Early-returns before any `Tracks.curvature` read when OFF |
 | `js/agent/apex.js` | probe/scan/cinematic/tourShots/corners/obs/trackShape/trackProfile | **broadcast-only** | `__apex` dev/telemetry reads; nothing writes into the driving model |
 | `js/agent/agentview.js` | state dump, corner table | **broadcast-only** | agent telemetry output |

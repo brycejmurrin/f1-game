@@ -116,6 +116,7 @@ test("the HUD hides eligible garage work during a friend race and restores it wh
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 } };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
   const hud = vm.runInNewContext(src("js/ui/hud.js") + ";GameHud", sb, { filename: absSrc("js/ui/hud.js") }).create(G);
   const tick = () => hud.updateHud(true);
   tick();

@@ -68,6 +68,13 @@ const NIGHT = { ...DAY, sunDir: [0, -0.4, 0.9], sunColor: [0.02, 0.02, 0.03], am
 // The colour is the fixture's energy (track-lights.js ePhys sizes a flood in the thousands).
 const lamp = (x, z, rgb = [12000, 11500, 10000]) => [x, 10, z, ...rgb, 40, 0, -1, 0, 0.9, 0.5, 0.1, 0, 1];
 
+test("visor public surface drops the unused _reset test hook", () => {
+  const { V } = load();
+  assert.equal(V._reset, undefined, "VisorOptics._reset had zero callers — removed from the export");
+  assert.equal(typeof V.sceneFromG, "function");
+  assert.equal(typeof V.stats, "function");
+});
+
 test("visor port: a wide aperture with a clear centre on the phone, the desktop and a tall phone", () => {
   const { V } = load();
   for (const [w, h] of [[844, 390], [1920, 1080], [390, 844], [1280, 720]]) {

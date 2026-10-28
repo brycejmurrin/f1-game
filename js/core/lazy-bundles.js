@@ -240,11 +240,16 @@ async function ensureScenery(idx) {
       return false;
     }
   }
+  // Model bytes need the closure's source and nothing from the toolkit. Ask
+  // now so their fetch overlaps the rest of the toolkit's download and eval
+  // instead of starting after both have finished.
+  const modelsP = sceneryModels(def);
   if (!(await buildP)) {
+    await modelsP;
     Log.warn("track", "track-build toolkit missing — Tracks.build cannot dress the world");
     return false;
   }
-  await sceneryModels(def);
+  await modelsP;
   return true;
 }
 // LAZY_DATA (tools/manifest.cjs). The Jolpica/OpenF1 hub — 154 KB behind ONE
@@ -269,6 +274,7 @@ const DATA_READY = {
   "js/data/telemetry.js": () => typeof DataTelemetry !== "undefined",
   "js/data/export.js": () => typeof DataExport !== "undefined",
   "js/data/schedule.js": () => typeof DataSchedule !== "undefined",
+  "js/data/ics.js": () => typeof DataIcs !== "undefined",
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",

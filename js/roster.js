@@ -298,6 +298,7 @@
     "js/audio/radio-fx.js",
     "js/audio/tone-model.js",
     "js/audio/ers-layer.js",
+    "js/audio/mix-duck.js",
     "js/audio/engine.js",
     "js/audio/music-lib.js",
     "js/audio/spotify.js",
@@ -331,6 +332,10 @@
     ],
     [
       "js/audio/ers-layer.js",
+      "js/audio/engine.js"
+    ],
+    [
+      "js/audio/mix-duck.js",
       "js/audio/engine.js"
     ],
     [
@@ -385,6 +390,7 @@
     "js/data/telemetry.js",
     "js/data/export.js",
     "js/data/schedule.js",
+    "js/data/ics.js",
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
@@ -430,6 +436,10 @@
     ],
     [
       "js/data/schedule.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/ics.js",
       "js/data/hub.js"
     ],
     [

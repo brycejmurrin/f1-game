@@ -497,6 +497,28 @@ test("post-finish coverage opens on the car, rotates external shots, and respect
   assert.equal(api.status().shot, "chase", "re-entry establishes the subject again");
 });
 
+test("solo retire still frames the player on TV and lets CAM leave without force-back (M38)", () => {
+  // Fail-before: empty runningList + `player && !player.retired` fallback skipped a
+  // retired solo car, so ensureTvMode left camMode on tv with dbgCam null.
+  const { G, car, api } = cameraScene();
+  G.camMode = 0;
+  car.retired = true;
+  const switches = [];
+  G.setCamMode = (i, opts) => { G.camMode = i; switches.push({ i, persist: opts && opts.persist }); };
+  api.tick(1);
+  assert.deepEqual(switches, [{ i: 1, persist: false }], "auto-spectate forces TV once");
+  api.tick(15);
+  assert.ok(G.dbgCam, "solo retire still publishes a TV shot");
+  assert.equal(api.status().subject, "VER", "empty field falls back to the retired player");
+  assert.ok(["chase", "side", "heli", "cinematic"].includes(api.status().shot));
+  G.camMode = 0;
+  api.tick(1);
+  assert.equal(G.dbgCam, null, "manual CAM releases TV");
+  api.tick(20);
+  assert.equal(G.camMode, 0, "the next frames must not force TV back on");
+  assert.equal(switches.length, 1, "leaving TV must not call setCamMode again");
+});
+
 test("manual TV handoff snaps to the player's camera once, including paused and post-finish handoffs", () => {
   for (const state of [{}, { paused: true }, { finished: true }]) {
     const { G, car, api } = cameraScene();
