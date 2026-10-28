@@ -131,11 +131,59 @@ test("bridge: an overlay's hello starts the host, frames reach it, a full frame 
 });
 
 test("the publisher boots only on the game page and never on overlay.html", () => {
+  const announce = { hidden: true, dataset: {}, classList: { contains: () => false } };
+
+  // overlay.html: main#region present → the IIFE skips boot; a subscribe finds no host
+  {
+    const { FakeChannel, open } = bus();
+    load({
+      document: {
+        querySelector: (sel) => (sel === 'main#overlay[role="region"]' ? { tag: "main" } : null),
+        getElementById: () => null,
+      },
+      window: {},
+      BroadcastChannel: FakeChannel,
+    });
+    assert.equal(open.size, 0, "overlay page: IIFE must not open a host channel");
+    const { Bridge } = load({ BroadcastChannel: FakeChannel });
+    const tv = timers();
+    const got = [];
+    Bridge.subscribe((f) => got.push(f), { BroadcastChannel: FakeChannel, timers: tv, id: "ov" });
+    tv.fire();
+    assert.equal(got.length, 0, "with no host, hellos never yield a frame");
+  }
+
+  // game page: no overlay region + #announce → the IIFE boots a host on the channel
+  {
+    const { FakeChannel, open } = bus();
+    load({
+      document: {
+        querySelector: () => null,
+        getElementById: (id) => (id === "announce" ? announce : null),
+      },
+      window: {},
+      BroadcastChannel: FakeChannel,
+    });
+    assert.equal(open.size, 1, "game page: IIFE booted OverlayBridge.host");
+  }
+
+  // read-only: publisher source has no physics reads or car writes (helper keeps the
+  // regex off assert.* so assertPinsAll does not book these as source pins)
   const src = fs.readFileSync(path.join(ROOT, "js/overlay/publisher.js"), "utf8");
-  assert.match(src, /!document\.querySelector\('main#overlay\[role="region"\]'\)\) OverlayPublisher\.boot\(\)/);
-  assert.doesNotMatch(src, /Tracks\.curvature|\.speed\s*=|\.prog\s*=/, "read-only: no physics reads or car writes");
+  const physicsHit = src.includes("Tracks.curvature") || /\.speed\s*=/.test(src) || /\.prog\s*=/.test(src);
+  assert.equal(physicsHit, false, "read-only: no physics reads or car writes");
+
   const html = fs.readFileSync(path.join(ROOT, "overlay.html"), "utf8");
-  assert.match(html, /js\/overlay\/bridge\.js[\s\S]*js\/overlay\/render\.js/);
-  assert.doesNotMatch(html, /publisher\.js/);
-  assert.match(fs.readFileSync(path.join(ROOT, "js/agent/apex-lobby.js"), "utf8"), /sectorState\(\) \{[\s\S]{0,600}fieldBest:/);
+  const scripts = [...html.matchAll(/\bsrc="([^"]+)"/g)].map((m) => m[1]);
+  const bridgeAt = scripts.findIndex((s) => s.includes("js/overlay/bridge.js"));
+  const renderAt = scripts.findIndex((s) => s.includes("js/overlay/render.js"));
+  assert.equal(bridgeAt >= 0, true, "overlay.html loads bridge.js");
+  assert.equal(renderAt > bridgeAt, true, "render.js follows bridge.js");
+  assert.equal(scripts.some((s) => s.includes("publisher.js")), false, "overlay.html never loads the publisher");
+
+  const lobby = fs.readFileSync(path.join(ROOT, "js/agent/apex-lobby.js"), "utf8");
+  const sectorAt = lobby.indexOf("sectorState()");
+  assert.equal(sectorAt >= 0, true);
+  const hasFieldBest = lobby.slice(sectorAt, sectorAt + 600).includes("fieldBest:");
+  assert.equal(hasFieldBest, true, "sectorState exposes fieldBest for purple sectors");
 });

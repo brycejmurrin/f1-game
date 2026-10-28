@@ -10048,7 +10048,8 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "text": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-publisher.test.mjs"
       ]
     },
     "js/perf/bench-capture.js": {
