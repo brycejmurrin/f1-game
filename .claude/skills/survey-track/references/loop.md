@@ -97,7 +97,9 @@ confirmed defect, intended slope or probe artifact rather than forcing zero flag
 
 ### 6 · PARENT test & ship
 
-- Geometry: `node tools/track/verify-track.cjs <id>` (default). Optional fleet: `node tools/ci/test-bg.mjs circuits`.
+- Geometry: `node tools/track/verify-track.cjs <id>` (default), then that circuit's foundation spec ALONE:
+  `node tools/ci/test-bg.mjs --spec tests/specs/<id>-foundation.spec.js`. A whole group (`circuits`) runs on the
+  pushed branch: `node tools/ci/remote-group.mjs circuits` (AGENTS.md verification table).
 - Pixel-diff suite is PARKED under `tests/manual/tracks-visual.spec.js` (no
   baselines). Do not treat it as a gate. Intentional goldens:
   `npm test -- tests/manual/tracks-visual.spec.js --update-snapshots`.

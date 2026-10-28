@@ -227,6 +227,21 @@ var RadioVoice = (function () {
     catch (e) { return false; }
   }
 
+  /** The language the voices are filtered by: the SPOKEN-LANGUAGE setting ("auto" follows the
+   *  UI language). Separate from the captions' language, and never part of any replay seed. */
+  function spokenLang(pref, uiLang) {
+    const p = String(pref || "auto");
+    const base = (l) => String(l || "en").slice(0, 2).toLowerCase();
+    return p === "auto" ? base(uiLang) : base(p);
+  }
+  /** False only when the platform lists voices and none speaks `lang`. An EMPTY list is Safari
+   *  (it picks a voice itself), so "unknown" speaks; a populated list without the language is the
+   *  caption-only path. */
+  function hasVoiceFor(all, lang) {
+    if (!all || !all.length) return true;
+    return all.some((v) => v && String(v.lang || "").toLowerCase().startsWith(lang));
+  }
+
   /**
    * THE WHOLE POLICY, as a pure function: no DOM, no speechSynthesis, no clock.
    * Every refusal carries a `reason`, which is what the node tests assert on.
@@ -237,6 +252,7 @@ var RadioVoice = (function () {
     if (!o.enabled) { out.reason = "off"; return out; }
     if (!o.soundOn) { out.reason = "master-off"; return out; }
     if (!o.api) { out.reason = "no-api"; return out; }
+    if (o.noVoice) { out.reason = "no-voice"; return out; }   // spoken language has no system voice: the card stays written
     // The radio is about something happening NOW at 300 km/h. The title
     // screen's "SAVE CONFLICT — reload career" card is not radio and must not
     // be read aloud at somebody browsing menus.
@@ -532,20 +548,32 @@ var RadioVoice = (function () {
       const t = G.store.get("voiceTune", null);
       return t && typeof t === "object" ? t : {};
     }
+    let allVoices = [], voicesLang = "";
+    /** The SPOKEN language ("spokenLang" setting; "auto" = the UI language). */
+    function spoken() {
+      let pref = "auto";
+      try { pref = G.store.get("spokenLang", "auto"); } catch (e) { pref = "auto"; }
+      return spokenLang(pref, typeof document !== "undefined" && document.documentElement ? document.documentElement.lang : "en");
+    }
+    // The recorded packs are English: any other spoken language goes through the system voices.
+    const recordedOk = () => spoken() === "en";
+    function noVoice() { voicesFor(false); return !hasVoiceFor(allVoices, spoken()); }
     // NEVER called from create(): boot must not wait on a voice list, and on
     // Chrome the first read is empty anyway.
     function voicesFor(remoteOk) {
       if (!api) return [];
+      const lang = spoken();
+      if (voicesLang !== lang) { voices = voicesAny = null; voicesLang = lang; }
       const cached = remoteOk ? voicesAny : voices;
       if (cached) return cached;
       let all = [];
       try { all = timed("getVoices", () => synth.getVoices()) || []; } catch (e) { all = []; }   // a synth mid-teardown throws
-      const lang = (typeof document !== "undefined" && document.documentElement.lang) || "en";
+      allVoices = all;
       // ONE read of the platform, TWO lists: everything in this language, and
       // the local-only subset. See REMOTE_OK above for which channel gets which
       // — the local filter is the race radio's correctness rule and the
       // announcer's handicap, so it is applied per channel and not here.
-      voicesAny = all.filter((v) => v && String(v.lang || "").startsWith(lang.slice(0, 2)))
+      voicesAny = all.filter((v) => v && String(v.lang || "").toLowerCase().startsWith(lang))
         .sort((a, b) => String(a.name).localeCompare(String(b.name)));
       voices = voicesAny.filter((v) => v.localService);
       return remoteOk ? voicesAny : voices;
@@ -661,7 +689,7 @@ var RadioVoice = (function () {
       // dropped as "too-long" with no retry.
       const hold = pack ? pack.remaining("spotter") : 0;
       if (hold > 0) lead = Math.max(+lead || 0, Number.isFinite(hold) ? hold + 0.08 : SPOTTER_DECODE_LEAD_S);
-      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune });
+      const p = plan({ msg, life, kind, lead, enabled: on, soundOn: !!G.soundOn, state: G.state, preRace: !!preRace, api: true, volume, tune, noVoice: !!api && !recordedOk() && noVoice() });
       last = { text: p.text, reason: p.reason || "spoke", rate: p.rate, budgetMs: p.budgetMs, leadMs: p.leadMs, secs: p.secs || 0 };
       // A card that will not be spoken still REPLACES the one on screen: its
       // words stop with it (and its deadline, which would later cut this card's
@@ -672,10 +700,10 @@ var RadioVoice = (function () {
       ensureVoices();
       stop();
       activeKind = kind || "race";
-      if (speakPack(p)) return true;
+      if (recordedOk() && speakPack(p)) return true;
       // RECORDED: the card carries a line its pack cannot say (or is still
       // fetching) — never speech synthesis in a race (PACK_VOICE above).
-      if (pack && packOn && PACK_VOICE[p.speaker]) {
+      if (recordedOk() && pack && packOn && PACK_VOICE[p.speaker]) {
         activeKind = "";
         last.reason = pack.ready && !pack.ready(recordedPack(p.speaker)) ? "pack-loading" : "not-recorded";
         return false;
@@ -996,7 +1024,7 @@ var RadioVoice = (function () {
     };
   }
 
-  return { create, inert, plan, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
+  return { create, inert, plan, spokenLang, hasVoiceFor, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
            PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S,
            ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S, PACK_STOP_TAIL_S,
            radioBand, squelchPlan, hashSeed, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
