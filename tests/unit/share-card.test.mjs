@@ -75,7 +75,7 @@ test("deliver treats AbortError as choice and falls back on other share failures
 test("results-sheet exposes SHARE CARD beside the daily copy chip", () => {
   const src = fs.readFileSync(path.join(ROOT, "js/ui/results-sheet.js"), "utf8");
   assert.match(src, /res-card-share/);
-  assert.match(src, /G\.daily\.shareCard/);
+  assert.match(src, /G\.daily\.card\(\)/);
 });
 
 test("deliver reports native sharing, cancellation and real failures", async () => {
@@ -245,33 +245,95 @@ test("the painted share-card QR decodes without inversion on every spec", async 
   }
 });
 
-function loadChips(card) {
+// A DOM just deep enough for the chip and its preview <dialog>.
+function fakeDom() {
+  const byId = new Map();
+  class Node {
+    constructor(tag) { this.tag = tag; this.children = []; this.attrs = {}; this.dataset = {}; this.style = { setProperty() {} }; this.parent = null; this.listeners = {}; }
+    set id(v) { this._id = v; byId.set(v, this); } get id() { return this._id; }
+    append(...nodes) { for (const n of nodes) this.appendChild(n); }
+    appendChild(n) { n.parent = this; this.children.push(n); return n; }
+    setAttribute(k, v) { this.attrs[k] = String(v); } getAttribute(k) { return this.attrs[k]; }
+    addEventListener(type, fn) { this.listeners[type] = fn; }
+    remove() { if (this.parent) this.parent.children = this.parent.children.filter((c) => c !== this); this.parent = null; }
+    get isConnected() { let n = this; while (n.parent) n = n.parent; return n === body; }
+    focus() { document.activeElement = this; }
+    showModal() { this.open = true; } close() { this.open = false; }
+  }
+  const body = new Node("body");
+  const document = { body, activeElement: null, createElement: (tag) => new Node(tag) };
+  return { document, byId, body };
+}
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+function loadChips(card, dom = fakeDom()) {
   const warned = [];
-  const ctx = vm.createContext({ Object, Array, String, Promise,
-    document: { createElement: (tag) => ({ tag, appended: [] }) },
+  const ctx = vm.createContext({ Object, Array, String, Promise, Math, setTimeout,
+    document: dom.document, URL: { createObjectURL: () => "blob:x", revokeObjectURL() {} },
     ShareCardData: {}, ShareCard: card, Log: { warn: (...a) => warned.push(a) } });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/share/share-card-chips.js"), "utf8"), ctx, { filename: absSrc("js/share/share-card-chips.js") });
-  return { chips: vm.runInContext("ShareCardChips", ctx), warned };
+  return { chips: vm.runInContext("ShareCardChips", ctx), warned, dom };
+}
+function fakeCard(seen, outcomes) {
+  return {
+    canShareFiles: () => true,
+    extension: (blob) => blob.type === "image/jpeg" ? ".jpg" : ".png",
+    render: async (model, spec) => { seen.push(["render", model.title, spec]); return { type: "image/png", size: 90 * 1024 }; },
+    deliver: async (blob, name, share) => { seen.push(["deliver", name, share.retry]); return outcomes.shift(); },
+    download: async (blob, name) => { seen.push(["download", name]); },
+  };
 }
 
-test("ShareCardChips: a tap renders at tap time, names the file safely and reports the outcome", async () => {
+test("SHARE CARD opens a preview sheet: alt text, polite status, size redraw, second-tap share", async () => {
   const seen = [];
-  const { chips } = loadChips({
-    render: async (model, spec) => { seen.push(["render", model.title, spec]); return { type: "image/png" }; },
-    deliver: async (blob, name, share) => { seen.push(["deliver", name, share.title]); return "downloaded"; },
-  });
-  const parent = { children: [], appendChild(n) { this.children.push(n); } };
+  const { chips, dom } = loadChips(fakeCard(seen, ["blocked", "shared"]));
+  const parent = dom.body.appendChild(dom.document.createElement("div"));
   let built = 0;
-  const btn = chips.append(parent, "res-race-card", () => ({ title: "RACE RESULT " + ++built, link: null }), "Race / Spa-Francorchamps!");
-  assert.equal(parent.children[0], btn);
+  const btn = chips.append(parent, "res-race-card", () => ({ title: "RACE RESULT", trackName: "SPA", subtitle: "", link: null,
+    hero: null, rows: [{ pos: 1, code: "AAA", name: "A Driver", value: "+25 PTS" }], n: ++built }), "Race / Spa-Francorchamps!");
   assert.equal(btn.className, "sel-chip");
-  assert.equal(btn.textContent, "SHARE CARD");
   assert.equal(built, 0, "the model is built on tap, not when the screen draws");
-  await btn.onclick();
-  assert.deepEqual(seen, [["render", "RACE RESULT 1", "portrait"], ["deliver", "apex26-race-spa-francorchamps.png", "APEX 26"]]);
-  assert.equal(btn.textContent, "DOWNLOADED");
-  assert.equal(btn.disabled, false);
+  const done = btn.onclick();
+  await tick();
+  const dlg = dom.byId.get("share-card-preview");
+  assert.ok(dlg && dlg.open && dlg.isConnected, "a modal dialog opens");
+  assert.equal(dlg.className, "screen dim");
+  assert.equal(dom.byId.get("scp-img").alt, "RACE RESULT. SPA. P1 AAA A Driver +25 PTS. Unofficial fan game card.");
+  const status = dom.byId.get("scp-status");
+  assert.equal(status.getAttribute("aria-live"), "polite");
+  assert.equal(status.textContent, "Card ready — portrait, 90 KB.");
+  assert.equal(dom.byId.get("scp-size-portrait").getAttribute("aria-pressed"), "true");
+  dom.byId.get("scp-size-landscape").onclick();
+  await tick();
+  assert.equal(dom.byId.get("scp-size-landscape").getAttribute("aria-pressed"), "true");
+  await dom.byId.get("scp-save").onclick();
+  await dom.byId.get("scp-share").onclick();
+  assert.equal(status.textContent, "Tap SHARE again to open the share sheet.");
+  assert.ok(dlg.isConnected, "NotAllowedError keeps the sheet open for a second tap");
+  await dom.byId.get("scp-share").onclick();
+  await done;
+  assert.equal(dlg.isConnected, false);
+  assert.equal(btn.textContent, "SHARED");
+  assert.deepEqual(JSON.parse(JSON.stringify(seen)), [
+    ["render", "RACE RESULT", "portrait"], ["render", "RACE RESULT", "landscape"],
+    ["download", "apex26-race-spa-francorchamps-landscape.png"],
+    ["deliver", "apex26-race-spa-francorchamps-landscape.png", true], ["deliver", "apex26-race-spa-francorchamps-landscape.png", true]]);
+  assert.equal(built, 1);
   assert.equal(chips.slug(""), "card");
+});
+
+test("the preview says so when a card is over the byte budget, and CLOSE resolves cancelled", async () => {
+  const card = fakeCard([], []);
+  card.canShareFiles = () => false;
+  card.render = async () => { throw Object.assign(new Error("big"), { code: "too-large" }); };
+  const { chips, dom } = loadChips(card);
+  const done = chips.preview(() => ({ title: "X", rows: [] }), "x");
+  await tick();
+  assert.equal(dom.byId.get("scp-status").textContent, "This card is too large to share. Try another size.");
+  assert.equal(dom.byId.get("scp-share").hidden, true, "no SHARE where nothing can share files");
+  dom.byId.get("scp-close").onclick();
+  assert.equal(await done, "cancelled");
+  assert.equal(dom.byId.get("share-card-preview").isConnected, false);
 });
 
 test("ShareCardChips: a failed draw says UNAVAILABLE and logs; a cancel restores the label", async () => {
@@ -297,4 +359,46 @@ test("paint strokes a path op as one polyline", () => {
   const names = ctx.calls.map((c) => c[0]);
   assert.deepEqual(names.filter((n) => n === "moveTo" || n === "lineTo"), ["moveTo", "lineTo", "lineTo"]);
   assert.ok(names.includes("stroke"));
+});
+
+test("deliver: canShare false downloads, AbortError is silent, NotAllowedError asks the preview for a second tap", async () => {
+  const File = class File { constructor(parts, name, opts) { this.name = name; this.type = opts.type; } };
+  const blob = { size: 4, type: "image/png" };
+  const notAllowed = () => { throw Object.assign(new Error("activation"), { name: "NotAllowedError" }); };
+  const run = async (nav, share) => {
+    const downloaded = [];
+    const result = await load({ File }).deliver(blob, "x.png", share, { navigator: nav, download: async (...a) => downloaded.push(a) });
+    return [result, downloaded.length];
+  };
+  assert.deepEqual(await run({ canShare: () => false, share: async () => assert.fail("never shares") }, {}), ["downloaded", 1]);
+  assert.deepEqual(await run({ canShare: () => true, share: async () => { throw Object.assign(new Error("x"), { name: "AbortError" }); } }, {}), ["cancelled", 0]);
+  assert.deepEqual(await run({ canShare: () => true, share: async () => notAllowed() }, { retry: true }), ["blocked", 0]);
+  assert.deepEqual(await run({ canShare: () => true, share: async () => notAllowed() }, {}), ["downloaded", 1], "no preview: still a file");
+  const card = load({ File });
+  assert.equal(card.canShareFiles({ navigator: { canShare() {}, share() {} }, File }), true);
+  assert.equal(card.canShareFiles({ navigator: {}, File }), false);
+  assert.equal(card.extension({ type: "image/jpeg" }), ".jpg");
+  assert.equal(card.extension({ type: "image/png" }), ".png");
+});
+
+test("render keeps a card under the 1.5 MB budget: JPEG once, then a refusal", async () => {
+  const layoutCtx = vm.createContext({ Object, Array, String, Number, Math });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/share/share-card-layout.js"), "utf8"), layoutCtx, { filename: absSrc("js/share/share-card-layout.js") });
+  const sizes = { png: 0, jpeg: 0 }, asked = [];
+  class OffscreenCanvas {
+    constructor(w, h) { this.width = w; this.height = h; }
+    getContext() { return Object.assign(recordingContext(), { measureText: (t) => ({ width: String(t).length * 10 }) }); }
+    async convertToBlob(opts) { asked.push(opts); const jpeg = opts.type === "image/jpeg"; return { type: opts.type, size: jpeg ? sizes.jpeg : sizes.png }; }
+  }
+  const card = load({ OffscreenCanvas, ShareCardLayout: vm.runInContext("ShareCardLayout", layoutCtx) });
+  const model = { title: "T", subtitle: "", trackName: "X", rows: [], hero: { label: "L", value: "1:00.000" }, link: null };
+  assert.equal(card.MAX_BYTES, 1.5 * 1024 * 1024);
+  sizes.png = 200 * 1024;
+  assert.equal((await card.render(model, "square")).type, "image/png");
+  sizes.png = 2 * 1024 * 1024; sizes.jpeg = 600 * 1024;
+  const jpeg = await card.render(model, "square");
+  assert.equal(jpeg.type, "image/jpeg");
+  assert.deepEqual(JSON.parse(JSON.stringify(asked.at(-1))), { type: "image/jpeg", quality: 0.85 });
+  sizes.jpeg = 1.6 * 1024 * 1024;
+  await assert.rejects(card.render(model, "landscape"), (error) => error.code === "too-large");
 });
