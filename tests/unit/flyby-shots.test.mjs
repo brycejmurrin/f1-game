@@ -669,9 +669,9 @@ test("fleet rules on monza: no pop, no crane, no eye underground, grid sightline
 });
 
 test("the pan budget's clock is the loading screen's", () => {
-  const src = fs.readFileSync(path.join(ROOT, "js/ui/loading-screen.js"), "utf8");
+  const src = fs.readFileSync(path.join(ROOT, "js/ui/loading-card.js"), "utf8");
   const m = /const FLY_MS = (\d+);/.exec(src);
-  assert.ok(m, "FLY_MS not found in js/ui/loading-screen.js");
+  assert.ok(m, "FLY_MS not found in js/ui/loading-card.js");
   const seq = fs.readFileSync(path.join(ROOT, "js/camera/flyby-seq.js"), "utf8");
   const r = /REF_S = (\d+(?:\.\d+)?)/.exec(seq);
   assert.ok(r, "REF_S not found in js/camera/flyby-seq.js");
