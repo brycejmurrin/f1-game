@@ -5350,6 +5350,9 @@
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
       ],
+      "warm": [
+        "tests/unit/script-loader-preload.test.mjs"
+      ],
       "*": [
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/global-registry.test.mjs"
@@ -11472,6 +11475,9 @@
         "tests/unit/player-forces.test.mjs",
         "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
+      "recoverBlocked": [
+        "tests/unit/player-forces.test.mjs"
+      ],
       "step": [
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
@@ -13736,7 +13742,8 @@
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/track-graph.test.mjs",
         "tests/unit/vertex-pack.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-post.js": {
@@ -13747,7 +13754,8 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-sky.js": {
@@ -13756,7 +13764,8 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
-        "tests/unit/surface-id-parity.test.mjs"
+        "tests/unit/surface-id-parity.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shadow.js": {
@@ -14242,7 +14251,8 @@
     "js/render/shared/shadow-pass.js": {
       "beginFrame": [
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-shadow-pick.test.mjs"
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -14260,7 +14270,8 @@
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "pushCaster": [
-        "tests/unit/field-lod.test.mjs"
+        "tests/unit/field-lod.test.mjs",
+        "tests/unit/lamp-shadow-pick.test.mjs"
       ],
       "reset": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -15017,8 +15028,14 @@
       "fxMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "mirrorGlassMaterial": [
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "releaseTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
+      ],
+      "setSsrMrt": [
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "updateFrame": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -15052,6 +15069,7 @@
       ],
       "setSsrMrt": [
         "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs"
       ],
       "updateFrame": [
@@ -15248,6 +15266,9 @@
       ],
       "shadowEnd": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "*": [
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/webgpu/wgx.js": {
@@ -15503,7 +15524,8 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/puddles.test.mjs",
-        "tests/unit/validation-cli.test.mjs"
+        "tests/unit/validation-cli.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/roster.js": {
@@ -15791,6 +15813,12 @@
       ]
     },
     "js/track/core/spline.js": {
+      "postLimits": [
+        "tests/unit/track-spline-walls.test.mjs"
+      ],
+      "wallAt": [
+        "tests/unit/track-spline-walls.test.mjs"
+      ],
       "*": [
         "tests/unit/pick-unit-slices.test.mjs"
       ]
@@ -15802,6 +15830,7 @@
       ],
       "build": [
         "tests/unit/baked-model-instancing.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
