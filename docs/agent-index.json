@@ -14,7 +14,7 @@
       "name": "awaitPresent",
       "group": "perceive",
       "signature": "awaitPresent(timeoutMs)?",
-      "summary": "WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot taken before this resolves can read a stale or black canvas under HeadlessChrome"
+      "summary": "WAIT FOR THE PIXELS — resolves once a real frame is on screen; screenshot after it (before: stale or black canvas)"
     },
     {
       "name": "field",
@@ -86,13 +86,13 @@
       "name": "ersPlan",
       "group": "act",
       "signature": "ersPlan(plan?)",
-      "summary": "THE SECTOR ERS PLAN — ['manual'|'deploy'|'save'] × 3; at each sector start DEPLOY switches BOOST on, SAVE off. Read it, or set it for this session"
+      "summary": "sector ERS plan: 3× manual|deploy|save; read or set"
     },
     {
       "name": "objective",
       "group": "act",
       "signature": "objective()",
-      "summary": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once"
+      "summary": "WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once"
     },
     {
       "name": "rollout",
