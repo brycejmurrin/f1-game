@@ -1,4 +1,4 @@
-/* Apex 26 — ENTER VR button (Phase 0).
+/* Apex 26 — ENTER VR button.
  *
  * Shown only after navigator.xr.isSessionSupported('immersive-vr') resolves
  * true. A visible button always either starts VR, switches the renderer to the
