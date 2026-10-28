@@ -3450,6 +3450,9 @@
         "tests/unit/factory-ai-setup.test.mjs",
         "tests/unit/setup-tune.test.mjs"
       ],
+      "catLabel": [
+        "tests/unit/i18n-parts-career.test.mjs"
+      ],
       "displayStat": [
         "tests/unit/garage-sheet-round2.test.mjs"
       ],
@@ -3513,6 +3516,9 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs"
+      ],
+      "optLabel": [
+        "tests/unit/i18n-parts-career.test.mjs"
       ],
       "resolveSetup": [
         "tests/unit/aero-defaults-2026.test.mjs",
@@ -3783,6 +3789,7 @@
         "tests/unit/setup-screens-state.test.mjs"
       ],
       "*": [
+        "tests/unit/i18n-parts-career.test.mjs",
         "tests/unit/mobile-native-download.test.mjs",
         "tests/unit/select-specs.test.mjs"
       ]
@@ -4912,6 +4919,11 @@
       ],
       "pluralCategories": [
         "tests/unit/i18n.test.mjs"
+      ],
+      "*": [
+        "tests/specs/browser-ui-hunt.spec.js",
+        "tests/specs/data-lifecycle.spec.js",
+        "tests/specs/telemetry-compare.spec.js"
       ]
     },
     "js/core/lazy-bundles.js": {
@@ -5338,6 +5350,9 @@
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
       ],
+      "warm": [
+        "tests/unit/script-loader-preload.test.mjs"
+      ],
       "*": [
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/global-registry.test.mjs"
@@ -5593,6 +5608,7 @@
       "*": [
         "tests/unit/data-standings.test.mjs",
         "tests/unit/docs-integrity.test.mjs",
+        "tests/unit/i18n-parts-career.test.mjs",
         "tests/unit/load-order.test.mjs"
       ]
     },
@@ -5830,7 +5846,8 @@
         "tests/unit/data-schedule-tz.test.mjs"
       ],
       "*": [
-        "tests/unit/data-ics.test.mjs"
+        "tests/unit/data-ics.test.mjs",
+        "tests/unit/i18n-parts-career.test.mjs"
       ]
     },
     "js/data/settings-defaults.js": {
@@ -6942,7 +6959,6 @@
       ],
       "enableTilt": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/boot-input-shape.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/throttle-latch.test.mjs"
       ],
@@ -14228,7 +14244,8 @@
     "js/render/shared/shadow-pass.js": {
       "beginFrame": [
         "tests/unit/field-lod.test.mjs",
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/lamp-shadow-pick.test.mjs"
       ],
       "create": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -14246,7 +14263,8 @@
         "tests/unit/shadow-pass-depth.test.mjs"
       ],
       "pushCaster": [
-        "tests/unit/field-lod.test.mjs"
+        "tests/unit/field-lod.test.mjs",
+        "tests/unit/lamp-shadow-pick.test.mjs"
       ],
       "reset": [
         "tests/unit/car-presentation-vm.test.mjs",
@@ -15003,8 +15021,14 @@
       "fxMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "mirrorGlassMaterial": [
+        "tests/unit/tlx-hunt4c.test.mjs"
+      ],
       "releaseTexture": [
         "tests/unit/tlx-texture-release.test.mjs"
+      ],
+      "setSsrMrt": [
+        "tests/unit/tlx-hunt4c.test.mjs"
       ],
       "updateFrame": [
         "tests/unit/tlx-hunt4c.test.mjs"
@@ -15038,6 +15062,7 @@
       ],
       "setSsrMrt": [
         "tests/unit/tlx-hunt3.test.mjs",
+        "tests/unit/tlx-hunt4c.test.mjs",
         "tests/unit/tlx-recovery-lifecycle.test.mjs"
       ],
       "updateFrame": [
@@ -15777,6 +15802,12 @@
       ]
     },
     "js/track/core/spline.js": {
+      "postLimits": [
+        "tests/unit/track-spline-walls.test.mjs"
+      ],
+      "wallAt": [
+        "tests/unit/track-spline-walls.test.mjs"
+      ],
       "*": [
         "tests/unit/pick-unit-slices.test.mjs"
       ]
@@ -15788,6 +15819,7 @@
       ],
       "build": [
         "tests/unit/baked-model-instancing.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
@@ -17997,6 +18029,12 @@
       "bootPick": [
         "tests/unit/xr-opts.test.mjs"
       ],
+      "caps": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
+      "detect": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
       "fallbacks": [
         "tests/unit/xr-opts.test.mjs"
       ],
@@ -18007,6 +18045,9 @@
         "tests/unit/xr-opts.test.mjs"
       ],
       "plan": [
+        "tests/unit/xr-opts.test.mjs"
+      ],
+      "rendererMatchesPlan": [
         "tests/unit/xr-opts.test.mjs"
       ],
       "*": [
@@ -18137,6 +18178,9 @@
       ],
       "stickToSteer": [
         "tests/unit/xr-phase0.test.mjs"
+      ],
+      "unionViewProjTo": [
+        "tests/unit/xr-cull-union.test.mjs"
       ],
       "worldFromAnchorTo": [
         "tests/unit/xr-phase0.test.mjs"
