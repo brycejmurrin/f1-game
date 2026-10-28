@@ -2716,27 +2716,14 @@
         "tests/unit/cockpit-pale-surfaces.test.mjs",
         "tests/unit/cockpit-wheel-finish.test.mjs",
         "tests/unit/cockpit-wheels.test.mjs",
-        "tests/unit/livery-paint-zones.test.mjs",
         "tests/unit/livery-stations.test.mjs"
       ],
       "carDecalData": [
         "tests/specs/parts-physics.spec.js",
         "tests/unit/livery-stations.test.mjs"
       ],
-      "cockpitWheelOpts": [
-        "tests/unit/cockpit-wheel-finish.test.mjs"
-      ],
-      "cockpitWheelRoll": [
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
       "drawAeroEdge": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
-      ],
-      "drawClassicTelemetry": [
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
-      "drawForearms": [
-        "tests/unit/cockpit-wheels.test.mjs"
       ],
       "drawMirrorLights": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
@@ -2760,12 +2747,6 @@
       "flushTailGlows": [
         "tests/unit/frame-hotpath-alloc.test.mjs"
       ],
-      "forearmEnds": [
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
-      "forearmMatrix": [
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
       "getAeroFlap": [
         "tests/unit/aero-flap-travel.test.mjs",
         "tests/unit/car-mesh-crew-cache.test.mjs"
@@ -2779,22 +2760,6 @@
         "tests/specs/parts-physics.spec.js",
         "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
-      "getCockpitCabin": [
-        "tests/unit/car-mesh-crew-cache.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
-      "getCockpitDash": [
-        "tests/unit/camera-ride.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
-      "getCockpitGlass": [
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
-      "getCockpitWheel": [
-        "tests/unit/car-mesh-crew-cache.test.mjs",
-        "tests/unit/cockpit-wheel-finish.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
       "getCompoundRing": [
         "tests/unit/car-mesh-crew-cache.test.mjs"
       ],
@@ -2807,16 +2772,8 @@
       "getErsLight": [
         "tests/unit/tlx-prune-pin.test.mjs"
       ],
-      "getForearm": [
-        "tests/unit/cockpit-pale-surfaces.test.mjs",
-        "tests/unit/cockpit-wheels.test.mjs"
-      ],
       "getGearDigit": [
         "tests/unit/cockpit-wheels.test.mjs"
-      ],
-      "getLedStrip": [
-        "tests/unit/cockpit-wheels.test.mjs",
-        "tests/unit/retro-shift-lights.test.mjs"
       ],
       "getMirrorFallback": [
         "tests/unit/cockpit-wheels.test.mjs",
@@ -2847,9 +2804,6 @@
       ],
       "stationCtx": [
         "tests/unit/livery-stations.test.mjs"
-      ],
-      "wheelFinish": [
-        "tests/unit/cockpit-wheel-finish.test.mjs"
       ],
       "*": [
         "tests/unit/hud-speed-parity.test.mjs",
@@ -2992,6 +2946,68 @@
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/tlx-car-shadow-cpu.test.mjs",
         "tests/unit/vertex-pack.test.mjs"
+      ]
+    },
+    "js/car/cockpit-rig.js": {
+      "cockpitWheelOpts": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "cockpitWheelRoll": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "drawClassicTelemetry": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "drawForearms": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "forearmEnds": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "forearmMatrix": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "getCockpitCabin": [
+        "tests/unit/car-mesh-crew-cache.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "getCockpitDash": [
+        "tests/unit/camera-ride.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "getCockpitGlass": [
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "getCockpitWheel": [
+        "tests/unit/car-mesh-crew-cache.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "getForearm": [
+        "tests/unit/cockpit-pale-surfaces.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs"
+      ],
+      "getLedStrip": [
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs"
+      ],
+      "init": [
+        "tests/unit/camera-ride.test.mjs",
+        "tests/unit/car-mesh-crew-cache.test.mjs",
+        "tests/unit/cockpit-pale-surfaces.test.mjs",
+        "tests/unit/cockpit-wheel-finish.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/frame-hotpath-alloc.test.mjs",
+        "tests/unit/mirror-glass-night.test.mjs",
+        "tests/unit/retro-shift-lights.test.mjs"
+      ],
+      "wheelFinish": [
+        "tests/unit/cockpit-wheel-finish.test.mjs"
+      ],
+      "*": [
+        "tests/unit/car-shade.test.mjs",
+        "tests/unit/livery-paint-zones.test.mjs",
+        "tests/unit/livery-stations.test.mjs"
       ]
     },
     "js/car/crest-draw.js": {
@@ -7398,6 +7414,7 @@
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
+        "tests/unit/game-m33-m35-m42.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/global-registry.test.mjs",

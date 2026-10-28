@@ -424,6 +424,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `ghost.js` | `Ghost` | tag | Ghost: records the player's lap and replays the best one as a translucent "ghost" car to race against — the core time-attack loop. |
 | `ghost-share.js` | `GhostShare` | tag | GhostShare: portable APXG1 ghost envelopes and one in-memory guest rival. |
 | `input-ghost.js` | `InputGhost` | tag | InputGhost: local deterministic ghosts — record player inputs + seed + physics/build version at the fixed physics timestep, and replay them as a ghost car. |
+| `cockpit-rig.js` | `CockpitRig` | tag | CockpitRig: the steering wheel, dash, cabin, glass and shift-light builders. |
 | `car-mesh.js` | `CarMesh` | tag | car mesh/decal/cockpit-instrument geometry builders for js/game.js: the shared decal-quad meshes (logo/sponsor UVs into the LiveryTex atlas), the effe… |
 | `surface-outline.js` | `GarageSurfaceOutline` | tag | A transient contour of the cover pixels controlled by one livery tint. |
 | `field-lod.js` | `FieldLod` | tag | FieldLod: distance level-of-detail for the RIVAL cars, draw-side only (nothing here reads or writes physics). |
@@ -1425,15 +1426,22 @@ The lighting-tuner core, split by lifecycle (Phase 2a of
 Profile persistence and the (track, time-of-day, weather) resolution live in
 `js/lighting/profiles.js` — they read live session state.
 
+## js/car/cockpit-rig.js — `CockpitRig`
+
+Steering wheel, dash, cabin, glass and shift-light builders, moved out of
+`car-mesh.js` with the same memo caches. `CarMesh.init` forwards the renderer
+handle. Callers stay on `CarMesh.*`: the `CarMesh` return reads these keys at
+eval (`HARD_EDGES`).
+
 ## js/car/car-mesh.js — `CarMesh`
 
 Car decal-quad geometry (`carDecalData` + the shared decal meshes), the effect
 quads (brake-glow ring, rain light, exhaust/boost flames, ERS strip) and the
-cockpit-rig instrument builders (wheel, LED strip, gear/speed digits, ERS and
-pedal bars, OT lamp), with their memo caches. Only dependency is the renderer
-handle, injected once at boot: `CarMesh.init(gfx)`. State-coupled car drawing
-(teamMesh, playerBodyMesh, cockpitBodyMesh, drawCockpitRig, decal textures)
-stays in game.js.
+gear/speed digits, ERS and pedal bars, and OT lamp, with their memo caches.
+The wheel, dash, cabin, glass and shift lights are `CockpitRig`, re-exported
+here. Only dependency is the renderer handle, injected once at boot:
+`CarMesh.init(gfx)`. State-coupled car drawing (teamMesh, playerBodyMesh,
+cockpitBodyMesh, drawCockpitRig, decal textures) stays in game.js.
 
 ## js/fx/particles.js — `Particles`
 
