@@ -530,8 +530,8 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
     DECAL,
     PARTICLE,
     // uniform block byte sizes (JS-side writers in wgx.js MUST agree)
-    BLOB_SHADOW_UNIFORM_BYTES: 144,   // ShadowU: mat4 64 + mat4 64 + vec4 16
-    MARK_UNIFORM_BYTES:        144,   // MarkU:   mat4 64 + mat4 64 + vec4 16
+    BLOB_SHADOW_UNIFORM_BYTES: 144,   // ShadowU + MarkU (shared quad UBO): mat4 64 + mat4 64 + vec4 16
+    // MARK_UNIFORM_BYTES dropped: mark pipelines reuse BLOB_SHADOW_UNIFORM_BYTES (same layout)
     SKID_UNIFORM_BYTES:         64,   // SkidU:   mat4 64
     LINE_UNIFORM_BYTES:         96,   // LineU:   mat4 64 + vec4 16 + vec4 16
     GLOW_UNIFORM_BYTES:         80,   // GlowU:   mat4 64 + vec4 16
