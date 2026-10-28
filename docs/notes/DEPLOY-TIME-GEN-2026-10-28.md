@@ -83,12 +83,12 @@ reader is either the browser or a node reader inside the repo that the build hoo
 deterministic, ~0.1 s, and uses node builtins only. The alternative was `js/roster.js`, which has ~40 reader files
 and shares `gen-shell.mjs` with `index.html`/`sw.js`. `index.html`/`sw.js` blocks were excluded by the brief.
 
-### Stage 1 status (2026-10-28): designed and coded, NOT verified, NOT committed
+### Stage 1 status (2026-10-28): patch preserved, implementation NOT applied or fully verified
 
-The worker ran out of turns before the verification ladder finished. The code was saved as a patch and is not in
-this PR; this PR carries only this note. The patch lives in the worker's worktree at
-`.claude/worktrees/agent-ab9745618b17dce6b/artifacts/deploy-time-gen/stage1-code.patch` (851 lines, plus a copy in
-that session's scratchpad). Container-local: it is lost if the container is reclaimed.
+The worker ran out of turns before the verification ladder finished. This PR preserves the unapplied code in
+[the stage-1 patch](DEPLOY-TIME-GEN-2026-10-28.stage1.patch) (851 lines), committed at `9c5654f4f`. The patch
+is durable in Git; the original container-local copy is not needed. The implementation is not applied to the
+source tree, and the remaining checks below are still required before this PR is ready.
 
 What the patch does (27 files):
 
