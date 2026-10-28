@@ -5,6 +5,7 @@ var GameAudio = (function () {
   let ctx = null;
   let master = null;
   let sfxBus = null;
+  let focusBus = null;          // the selective-focus bus; GameAudioMix creates the node
   let limiter = null;              // DynamicsCompressor between master and the destination
   // 0..1 mixer levels, restored by the caller from storage on boot.
   let sfxVol = 1;
@@ -358,120 +359,16 @@ var GameAudio = (function () {
     sfxOk, clamp01, now, resumeRejected,
   });
   const { startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck: soundtrackRadioDuck } = soundtrack;
-  /* TWO HOLDS, ONE DUCK. The engineer (radio-voice.js) and the spotter
-   * (radioVoice clips) each latch independently: say()/stopVoice always pairs
-   * setRadioDuck(false) on a card replace, and that must not lift the music
-   * under a spotter call still finishing its remaining() lead — nor the reverse
-   * when a spotter clip ends while an engineer line is still on air.
-   * THE RADIO HOLD IS PER SOURCE TOO: the engineer, every WATCH clip and the
-   * real-replay fallback pass their own id (default "radio" = the engineer), so
-   * one of them letting go cannot lift the music under another still on air.
-   *
-   * MIX DUCK (Job 5). Radio already emits via setRadioDuck(on, src) — this
-   * block only SUBSCRIBES. Music still dips through soundtrack.setRadioDuck
-   * (0.35 ≈ −9 dB). The SFX bus dips here (−8 dB, 80 ms attack / 400 ms
-   * release via setTargetAtTime). Overlapping holds do not re-ramp (no pump).
-   * Engine stays on sfxBus at ~0.4 — audible, not muted. Zero new nodes. */
-  const radioDuckHolds = new Set();
-  let spotterDuckHold = false;
-  const MIX_DUCK_LIN = 10 ** (-8 / 20);   // ≈ 0.3981, mid of −6…−10 dB
-  const MIX_DUCK_ATTACK_TAU = 0.08;
-  const MIX_DUCK_RELEASE_TAU = 0.4;
-  let mixDuckOn = false;
-  // Optional selective focus. STANDARD (0) keeps the legacy whole-SFX mix.
-  let radioFocusDb = 0, focusBus = null;
-  const focusVoices = new Map();
-  let focusCurve = { at: 0, value: 1, events: [] }, sfxCurve = { at: 0, value: 1, events: [] };
-  function curveValue(curve, time) {
-    let value = curve.value, at = curve.at, target = value, tau = 1;
-    for (const e of curve.events) {
-      if (e.at > time) break;
-      value = target + (value - target) * Math.exp(-(e.at - at) / tau);
-      at = e.at; target = e.target; tau = e.tau;
-    }
-    return target + (value - target) * Math.exp(-Math.max(0, time - at) / tau);
-  }
-  function writeCurve(param, curve, events) {
-    const t = ctx.currentTime, value = curveValue(curve, t);
-    if (param.cancelAndHoldAtTime) param.cancelAndHoldAtTime(t);
-    else { param.cancelScheduledValues(t); param.setValueAtTime(value, t); }
-    curve.at = t; curve.value = value; curve.events = events;
-    for (const e of events) param.setTargetAtTime(e.target, e.at, e.tau);
-  }
-  function sfxBusTarget() {
-    if (!sfxEnabled) return 0;
-    return sfxVol * (!radioFocusDb && mixDuckOn ? MIX_DUCK_LIN : 1);
-  }
-  function writeSfx(tau) {
-    if (sfxBus && ctx) writeCurve(sfxBus.gain, sfxCurve,
-      [{ at: ctx.currentTime, target: sfxBusTarget(), tau }]);
-  }
-  function refreshFocus(tau) {
-    if (!focusBus || !ctx) return;
-    const t = ctx.currentTime, spans = [], base = sfxEnabled ? sfxVol : 0;
-    if (!radioFocusDb) {
-      const target = sfxBusTarget();
-      if (focusCurve.events.length === 1 && focusCurve.events[0].target === target) return;
-      writeCurve(focusBus.gain, focusCurve, [{ at: t, target, tau: tau || (target < curveValue(focusCurve, t) ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU) }]);
-      return;
-    }
-    for (const [owner, v] of focusVoices) {
-      if (v.context !== ctx || v.end <= t) { focusVoices.delete(owner); continue; }
-      if (radioFocusDb) spans.push([Math.max(t, v.start), v.end]);
-    }
-    spans.sort((a, b) => a[0] - b[0]);
-    const merged = [];
-    for (const span of spans) {
-      const prev = merged[merged.length - 1];
-      if (prev && span[0] <= prev[1]) prev[1] = Math.max(prev[1], span[1]);
-      else merged.push(span.slice());
-    }
-    const lin = base * 10 ** (-radioFocusDb / 20), events = [];
-    if (!merged.length || merged[0][0] > t) events.push({ at: t, target: base, tau: tau || MIX_DUCK_RELEASE_TAU });
-    for (const span of merged) {
-      events.push({ at: span[0], target: lin, tau: span[0] === t ? (tau || (lin < curveValue(focusCurve, t) ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU)) : MIX_DUCK_ATTACK_TAU });
-      if (Number.isFinite(span[1])) events.push({ at: span[1], target: base, tau: MIX_DUCK_RELEASE_TAU });
-    }
-    writeCurve(focusBus.gain, focusCurve, events);
-  }
-  function setVoiceFocusSpan(owner, start, end, context) {
-    if (context !== ctx || !ctx || !Number.isFinite(start) || !Number.isFinite(end) || !(end > start)) return false;
-    focusVoices.set(owner, { context, start, end }); refreshFocus(); return true;
-  }
-  function setVoiceFocusHold(on, owner) {
-    if (!owner) return false;
-    if (on && ctx) focusVoices.set(owner, { context: ctx, start: ctx.currentTime, end: Infinity });
-    else focusVoices.delete(owner);
-    refreshFocus(); return !!on && !!ctx;
-  }
-  function setRadioFocusDb(value) {
-    const db = [0, 4, 8, 12].indexOf(value) >= 0 ? value : 0;
-    if (db === radioFocusDb) return radioFocusDb;   // repeated lazy/panel restore is inert
-    radioFocusDb = db;
-    const lowering = ctx && sfxBusTarget() < curveValue(sfxCurve, ctx.currentTime);
-    writeSfx(lowering ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU);
-    refreshFocus(); return radioFocusDb;
-  }
-  function applySfxDuck(on) {
-    const want = !!on, changed = want !== mixDuckOn;
-    mixDuckOn = want;
-    if (changed) { writeSfx(want ? MIX_DUCK_ATTACK_TAU : MIX_DUCK_RELEASE_TAU); refreshFocus(); }
-    return mixDuckOn;
-  }
-  function applyMusicDuck() {
-    const on = radioDuckHolds.size > 0 || spotterDuckHold;
-    applySfxDuck(on);
-    return soundtrackRadioDuck(on);
-  }
-  function setRadioDuck(on, src) {
-    const id = src == null ? "radio" : String(src);
-    if (on) radioDuckHolds.add(id); else radioDuckHolds.delete(id);
-    return applyMusicDuck();
-  }
-  function setSpotterDuck(on) {
-    spotterDuckHold = !!on;
-    return applyMusicDuck();
-  }
+  // Duck holds, the −8 dB SFX dip and the selective focus bus: js/audio/mix-duck.js.
+  // GameAudio keeps the public methods; the host is the live context and buses.
+  const mix = GameAudioMix.create({
+    context: () => ctx, sfxBus: () => sfxBus, sfxEnabled: () => sfxEnabled, sfxVol: () => sfxVol,
+    soundtrackRadioDuck,
+  });
+  const {
+    setRadioDuck, setSpotterDuck, setVoiceFocusHold, setVoiceFocusSpan, setRadioFocusDb, getRadioFocusDb,
+    applySfxDuck, applyMusicDuck, writeSfx, refreshFocus, primeBuses, releaseBuses, dropHolds,
+  } = mix;
   const radio = GameAudioRadioFx.create({
     context: () => ctx, master: () => master, bus: () => sfxBus, enabled, sfxOk, now,
     setSpotterDuck, setVoiceFocusHold, setVoiceFocusSpan,
@@ -495,12 +392,9 @@ var GameAudio = (function () {
     limiter.attack.value = 0.003; limiter.release.value = 0.15;
     master.connect(limiter).connect(ctx.destination);
     sfxBus = ctx.createGain();
-    mixDuckOn = radioDuckHolds.size > 0 || spotterDuckHold;
-    sfxBus.gain.value = sfxBusTarget();
+    focusBus = primeBuses(sfxBus);
     sfxBus.connect(master);
-    focusBus = ctx.createGain(); focusBus.gain.value = sfxBusTarget(); focusBus.connect(master);
-    focusCurve = { at: ctx.currentTime, value: sfxBusTarget(), events: [] };
-    sfxCurve = { at: ctx.currentTime, value: sfxBusTarget(), events: [] };
+    focusBus.connect(master);
     attachRivalPassBy();
     attachErsLayer();
   }
@@ -901,7 +795,7 @@ var GameAudio = (function () {
     }
     ctx = null;
     master = null;
-    sfxBus = null; focusBus = null; focusVoices.clear();
+    sfxBus = null; focusBus = null; releaseBuses();
     limiter = null;
     rainStopping = false;
     rainPending = null;
@@ -912,9 +806,7 @@ var GameAudio = (function () {
     radio.resetContext();
     // Old radioVoice onended/stop never fire on a closed context — drop both
     // holds so a mid-clip rebuild cannot leave the music stuck under a ghost.
-    radioDuckHolds.clear();
-    spotterDuckHold = false;
-    mixDuckOn = false;
+    dropHolds();
     // Timestamps from the closed context's clock: revFlare's decay would read a
     // dt against the new (near-0) clock, and limSince would hold the cut open.
     revFlare = 0; revFlareT = 0; limSince = null;
@@ -3089,7 +2981,7 @@ var GameAudio = (function () {
   return {
     onInterrupted,
     init,
-    setRadioDuck, setRadioFocusDb, getRadioFocusDb: () => radioFocusDb, setVoiceFocusHold,
+    setRadioDuck, setRadioFocusDb, getRadioFocusDb, setVoiceFocusHold,
     decodeClip,
     now,
     radioVoice,
@@ -3105,7 +2997,6 @@ var GameAudio = (function () {
     radioFxLevel: radio.radioFxLevel,
     radioLeadS: radio.radioLeadS,
     radioFxMax: radio.radioFxMax,
-    radioChannels: radio.radioChannels,
     // The live context and SFX bus, for leaf modules that schedule their own
     // nodes (radio-voice squelch, #2189). null before init / after teardown.
     context: () => ctx,
@@ -3223,7 +3114,6 @@ var GameAudio = (function () {
     setMusicBackend,
     musicBackend,
     setSessionType,
-    sessionType() { return sessionType; },
     setMusicSource,
     musicSource,
     sourceCounts,
@@ -3231,19 +3121,7 @@ var GameAudio = (function () {
     setSfxEnabled,
     // Test hook: mix-duck latch under announcer/radio (Job 5). sfx is the
     // composed bus target; lin / attackTau / releaseTau are the ramp contract.
-    mixDuck() {
-      return {
-        on: mixDuckOn,
-        focusDb: radioFocusDb, focusHolds: focusVoices.size,
-        focusValue: ctx ? curveValue(focusCurve, ctx.currentTime) : 1,
-        focusEvents: focusCurve.events.map((e) => ({ ...e })),
-        holds: radioDuckHolds.size + (spotterDuckHold ? 1 : 0),
-        lin: MIX_DUCK_LIN,
-        attackTau: MIX_DUCK_ATTACK_TAU,
-        releaseTau: MIX_DUCK_RELEASE_TAU,
-        sfx: sfxBus ? +sfxBus.gain.value : 0,
-      };
-    },
+    mixDuck() { return mix.snapshot(); },
     setMusicVolume,
     volumes,
     // Test hook: the airflow layer's live gain. It sits on sfxBus, so
@@ -3308,8 +3186,6 @@ var GameAudio = (function () {
     subHz() { return subOctOsc ? +subOctOsc.frequency.value : 0; },
     // The DETUNE trim as it lands on the sample source, in cents.
     detuneCents() { return engSrcIdle && engSrcIdle.detune ? +engSrcIdle.detune.value.toFixed(4) : 0; },
-    // The rev-compensating shelf, in dB. Rises as the engine pitches down.
-    tiltDb() { return tiltEq ? +tiltEq.gain.value.toFixed(2) : 0; },
     rate() { return (engSrcIdle && engSrcIdle.playbackRate) ? +engSrcIdle.playbackRate.value : 0; },   // exact: tools/check/audio-test.cjs and the tune tests take ratios of it
     // Last scheduled engine fundamental (Hz): sample-core from rate/period,
     // synth-core from engA's aim target. OfflineAudioContext pitch tests use

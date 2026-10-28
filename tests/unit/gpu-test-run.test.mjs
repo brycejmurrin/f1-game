@@ -34,6 +34,31 @@ test("gpu-test-run phaseStats: nearest-rank percentiles, fps, share over 50 ms, 
   assert.equal(G.phaseStats([], [], { links: 0, pipes: 0 }).gpu, null);
 });
 
+test("hookCounts tallies createRenderPipelineAsync on the same pipes count as the sync call", () => {
+  class GPUDevice {
+    createRenderPipeline() { return { sync: true }; }
+    createRenderPipelineAsync() { return Promise.resolve({ async: true }); }
+  }
+  const ctx = vm.createContext({ performance: { now: () => 0 }, GPUDevice, Promise });
+  vm.runInContext(SRC, ctx, { filename: absSrc("js/perf/gpu-test-run.js") });
+  const out = vm.runInContext(`
+    const c = { links: 0, pipes: 0 };
+    const undo = GpuTestRun.hookCounts(c);
+    const dev = new GPUDevice();
+    dev.createRenderPipeline();
+    const pending = dev.createRenderPipelineAsync();
+    const during = c.pipes;
+    const stillPromise = pending && typeof pending.then === "function";
+    undo();
+    dev.createRenderPipeline();
+    dev.createRenderPipelineAsync();
+    ({ during, after: c.pipes, stillPromise });
+  `, ctx);
+  assert.equal(out.during, 2, "three compileAsync and WGX warm both use the async create");
+  assert.equal(out.stillPromise, true, "the wrap returns the pipeline promise");
+  assert.equal(out.after, 2, "unhook restores both prototype methods");
+});
+
 test("gpu-test-run fillSlope: frame p50 against scale squared; flat when the frame is not fill-bound", () => {
   const G = load();
   // 10 ms of fixed cost + 20 ms per full-resolution frame of pixels.

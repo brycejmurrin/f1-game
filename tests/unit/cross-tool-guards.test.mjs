@@ -36,16 +36,18 @@ function adapterFixture(adapter, delegate, script, payload = {}) {
 }
 
 test("MCP adapters deny delegated failures and malformed decisions", () => {
+  const payload = { tool_name: "mcp__github__merge_pull_request", tool_input: {} };
   for (const adapter of [".codex/hooks/mcp-guard.sh", ".cursor/hooks/mcp-guard.sh"]) {
     for (const script of ["exit 1", "exit 2", "printf 'not json'", "printf '{}'", "printf '[]'",
       `printf '%s' '{"hookSpecificOutput":{"permissionDecision":"unexpected"}}'`]) {
-      const r = adapterFixture(adapter, ".claude/hooks/github-mcp-guard.sh", script);
+      const r = adapterFixture(adapter, ".claude/hooks/github-mcp-guard.sh", script, payload);
       const out = r.stdout.trim() ? JSON.parse(r.stdout) : null;
       const permission = out?.permission || out?.hookSpecificOutput?.permissionDecision;
       assert.equal(permission, "deny", `${adapter}: ${script}\n${r.stderr}`);
     }
-    const r = adapterFixture(adapter, ".claude/hooks/github-mcp-guard.sh", "exit 0");
+    const r = adapterFixture(adapter, ".claude/hooks/github-mcp-guard.sh", "exit 0", payload);
     assert.equal(r.status, 0, `${adapter} preserves a successful silent pass`);
+    if (adapter.startsWith(".codex/")) assert.equal(r.stdout.trim(), "");
   }
 });
 
@@ -130,7 +132,7 @@ test("Cursor's MCP door: a run cancel is denied (exit 2), every merge is denied,
 // Codex had only a Bash hook, so an MCP merge skipped the gate (fleet redesign §8; Bryce approved the
 // hook 2026-10-19). Codex reads Claude's hookSpecificOutput JSON but cannot "ask" (it fails the hook
 // and continues the call: https://learn.chatgpt.com/docs/hooks), so the wrapper turns every ask into a deny.
-test("Codex's MCP door: the GitHub guard runs, an ask becomes a deny, every merge is denied", () => {
+test("Codex's MCP door guards legacy and hosted GitHub operations: an ask becomes a deny, every merge is denied", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "codex-mcp-"));
   const mcp = (tool_name, input, env = {}) => {
     const r = spawnSync("bash", [path.join(ROOT, ".codex/hooks/mcp-guard.sh")],
@@ -144,19 +146,51 @@ test("Codex's MCP door: the GitHub guard runs, an ask becomes a deny, every merg
     const g = hooks.find((x) => x.hooks.some((h) => h.command.includes(".codex/hooks/mcp-guard.sh")));
     assert.ok(g, ".codex/hooks.json wires the MCP guard");
     const re = new RegExp(g.matcher);
-    for (const n of ["mcp__github__merge_pull_request", "mcp__gh__enable_pr_auto_merge", "mcp__github__update_pull_request", "mcp__github__actions_run_trigger"]) assert.ok(re.test(n), n);
-    for (const n of ["mcp__github__pull_request_read", "Bash", "mcp__github__update_pull_request_branch"]) assert.ok(!re.test(n), `matcher must not catch ${n}`);
+    const prefixes = ["mcp__github__", "mcp__gh__", "mcp__custom_github__", "mcp__codex_apps__github_"];
+    const writes = ["push_files", "create_or_update_file", "create_branch", "delete_file"];
+    for (const prefix of prefixes)
+      for (const op of ["merge_pull_request", "enable_pr_auto_merge", "update_pull_request", "actions_run_trigger", ...writes])
+        assert.ok(re.test(prefix + op), prefix + op);
+    for (const n of ["mcp__github__pull_request_read", "Bash", "mcp__github__update_pull_request_branch",
+      "mcp__codex_apps__gitlab_merge_pull_request", "mcp__codex_apps__github_merge_pull_request_extra"])
+      assert.ok(!re.test(n), `matcher must not catch ${n}`);
     const head = "a".repeat(40);
-    assert.equal(mcp("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "squash" }), "deny");
-    assert.equal(mcp("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), "deny", "no merge-gate receipt");
-    assert.equal(mcp("mcp__github__enable_pr_auto_merge", { pullNumber: 1 }), "deny", "the guard's ask (no MERGE method) becomes a deny");
-    assert.equal(mcp("mcp__github__actions_run_trigger", { method: "rerun_failed_jobs", run_id: 1 }), "deny", "a re-run ask becomes a deny");
-    assert.equal(mcp("mcp__github__actions_run_trigger", { method: "cancel_workflow_run", run_id: 1 }), "deny");
+    for (const prefix of prefixes) {
+      for (const merge_method of ["squash", "rebase"])
+        assert.equal(mcp(prefix + "merge_pull_request", { pullNumber: 1, merge_method }), "deny", prefix + merge_method);
+      assert.equal(mcp(prefix + "merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), "deny", prefix + "no merge-gate receipt");
+      assert.equal(mcp(prefix + "enable_pr_auto_merge", { pullNumber: 1 }), "deny", prefix + "auto-merge ask becomes a deny");
+      assert.equal(mcp(prefix + "actions_run_trigger", { method: "rerun_failed_jobs", run_id: 1 }), "deny", prefix + "re-run ask becomes a deny");
+      assert.equal(mcp(prefix + "actions_run_trigger", { method: "cancel_workflow_run", run_id: 1 }), "deny", prefix + "cancel");
+      for (const op of writes) assert.equal(mcp(prefix + op, {}), "deny", prefix + op);
+      assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, draft: false }), "deny", prefix + "no ready-gate receipt");
+      assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, state: "closed" }), "deny", prefix + "close ask becomes a deny");
+      assert.equal(mcp(prefix + "update_pull_request", { pullNumber: 1, body: "x" }), null, prefix + "body edit passes");
+      for (const input of [undefined, null, [], false, 1, "not JSON", "[]"])
+        assert.equal(mcp(prefix + "update_pull_request", input), "deny", prefix + "malformed input " + JSON.stringify(input));
+    }
     fs.mkdirSync(path.join(dir, "artifacts/merge-gate"), { recursive: true });
     fs.writeFileSync(path.join(dir, "artifacts/merge-gate/1.json"), JSON.stringify({ kind: "merge", pr: 1, head, ok: true, at: new Date().toISOString(), gateRoot: dir, gateFiles: committedGate(dir) }));
-    assert.equal(mcp("mcp__github__merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), "deny", "a hand-written merge receipt opens nothing (WP-L4)");
-    assert.equal(mcp("mcp__github__update_pull_request", { pullNumber: 1, body: "x" }), null, "a body edit passes");
+    for (const prefix of prefixes) {
+      assert.equal(mcp(prefix + "merge_pull_request", { pullNumber: 1, merge_method: "merge", expectedHeadSha: head }), "deny", prefix + "a hand-written merge receipt opens nothing (WP-L4)");
+      assert.equal(mcp(prefix + "update_pull_request", JSON.stringify({ pullNumber: 1, body: "x" })), null, prefix + "a JSON-object string body edit passes");
+    }
+    // the hosted connector names the PR `pr_number`: the ready door must see it as #1, not "no PR number"
+    const r = spawnSync("bash", [path.join(ROOT, ".codex/hooks/mcp-guard.sh")],
+      { input: JSON.stringify({ tool_name: "mcp__codex_apps__github_update_pull_request", tool_input: { pr_number: 1, draft: false } }),
+        encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: dir } });
+    const why = JSON.parse(r.stdout).hookSpecificOutput.permissionDecisionReason;
+    assert.match(why, /#1/, why);
+    assert.doesNotMatch(why, /no PR number/, why);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("Codex MCP adapter leaves unrelated hosted providers and read operations outside the shared GitHub policy", () => {
+  for (const tool_name of ["mcp__codex_apps__gitlab_merge_pull_request", "mcp__github__pull_request_read"]) {
+    const r = adapterFixture(".codex/hooks/mcp-guard.sh", ".claude/hooks/github-mcp-guard.sh", "exit 1", { tool_name, tool_input: {} });
+    assert.equal(r.status, 0, tool_name + ": " + r.stderr);
+    assert.equal(r.stdout.trim(), "", tool_name + " must not reach the refusing delegate");
+  }
 });
 
 test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-forward and a new branch", () => {

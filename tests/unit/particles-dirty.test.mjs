@@ -34,6 +34,12 @@ function make(uploads, wind, opts = {}) {
   return P;
 }
 
+test("Particles no longer exports the unused markDirty latch poke", () => {
+  const uploads = [], P = make(uploads);
+  assert.equal(typeof P.markDirty, "undefined", "markDirty had zero callers; dirty is set in-module");
+  assert.equal(typeof P.resetStats, "function", "resetStats stays for the expand/skip pins");
+});
+
 test("continuous rainfall scales the bounded particle field and clears stale geometry at zero", () => {
   const uploads = [], P = make(uploads), eye = [100, 5, -30];
   P.rainSeed(false); P.rainShow(true);

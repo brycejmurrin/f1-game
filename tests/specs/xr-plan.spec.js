@@ -1,6 +1,6 @@
 /**
- * Task 20 — XRPlan boot path (IWER). Asserts armed webgl2 ⇒ GLX xrCompatible
- * and ApexXR.stats().path; armed webgpu without XRGPUBinding falls back.
+ * Task 20 — XRPlan boot path (IWER). Asserts armed webgl2 ⇒ TLX bootPick +
+ * path webgl2; armed webgpu without XRGPUBinding falls back to that path.
  * Spec-level only — not Quest GPU evidence.
  */
 import { test, expect } from "@playwright/test";
@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
   await installIwer(page, { stereo: true });
 });
 
-test("armed webgl2: ApexXR path is webgl2; GLX requested xrCompatible if navigator.xr", async ({ page }) => {
+test("armed webgl2: ApexXR path is webgl2; bootPick is TLX (three)", async ({ page }) => {
   test.setTimeout(120_000);
   await page.addInitScript(() => {
     try {
@@ -49,13 +49,14 @@ test("armed webgl2: ApexXR path is webgl2; GLX requested xrCompatible if navigat
     };
   });
 
-  expect(info.pick, JSON.stringify(info)).toBe("webgl2");
+  expect(info.pick, JSON.stringify(info)).toBe("three");
   expect(info.stats && info.stats.path, JSON.stringify(info)).toBe("webgl2");
+  expect(info.stats && info.stats.backendPref, JSON.stringify(info)).toBe("three");
   expect(info.gfxBackend).toBe("webgl2");
   expect(info.hasXr).toBe(true);
-  // GLX passes xrCompatible:true when navigator.xr exists (source-pinned in
-  // xr-plan.test.mjs). IWER + SwiftShader still report the attribute as false
-  // (task 20 unknown) — record it; do not fail the path-selection gate.
+  // GLX still passes xrCompatible:true when navigator.xr exists (source-pinned
+  // in xr-plan.test.mjs) for any flat WebGL2 context; IWER + SwiftShader may
+  // report the attribute as false — record it; do not fail the path gate.
   test.info().annotations.push({
     type: "xrCompatible",
     description: JSON.stringify({

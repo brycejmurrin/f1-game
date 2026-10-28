@@ -1608,7 +1608,7 @@ const CarBodyGeom = (function () {
       noseMount(side) {
         const z = Math.min(2.40, CHASSIS.nose[0].z + style.noseTipZ - 0.065), n = anchors.noseAt(z);
         const w = Math.min(anchors.noseAt(z - 0.060).side, anchors.noseAt(z + 0.060).side);
-        const seat = style.podSculpt ? Math.min(0.035, (n.top - n.bottom) * 0.35) : 0.012;
+        const seat = style.noseSeat != null ? style.noseSeat : style.podSculpt ? -0.012 : 0.012;
         return [side * Math.min(0.09, Math.max(0, w * 0.40 - 0.020)), n.bottom + seat, z];
       },
       coverStripe(out, color) {

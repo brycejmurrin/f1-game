@@ -1457,3 +1457,83 @@ test("engineer chatter changes preserve accepted WATCH commentary and valid non-
   r.radio.setChat("chatty"); assert.equal(engineer.still(), true);
   assert.equal(r.radio.setChat("bogus"), "chatty"); assert.equal(engineer.still(), true);
 });
+
+// ── localisation (#1606): pools in locales/, per-locale card fit, language never in the seed ──
+
+import { existsSync } from "node:fs";
+const readJson = (rel) => JSON.parse(readFileSync(join(ROOT, rel), "utf8"));
+// TTS runs slower in some languages: a locale's text may take this many times English's estimate before
+// the card refuses it. A locale not listed gets the default. (Owner may tune; en is the baseline.)
+const LOCALE_BUDGET = { en: 1, es: 1.25, pt: 1.25, it: 1.2, de: 1.3, fr: 1.2, nl: 1.2, ja: 1 };
+const DEFAULT_BUDGET = 1.3;
+
+test("locales/en.json radio.* is the phrasebook, byte for byte", () => {
+  const en = readJson("locales/en.json");
+  for (const [k, pool] of Object.entries(RL.POOLS)) assert.deepEqual(en["radio." + k], [...pool], k);
+  for (const [k, w] of Object.entries(RL.WHY)) assert.equal(en["radio.why." + k], w, k);
+  assert.equal(Object.keys(en).filter((k) => k.startsWith("radio.") && !k.startsWith("radio.why.")).length, Object.keys(RL.POOLS).length);
+});
+
+test("every locale's radio pool fits its card inside that language's budget", () => {
+  const manifest = readJson("locales/manifest.json");
+  const refused = [];
+  let n = 0;
+  for (const lang of Object.keys(manifest)) {
+    const table = readJson(`locales/${lang}.json`);
+    const factor = LOCALE_BUDGET[lang.slice(0, 2)] || DEFAULT_BUDGET;
+    for (const [fullKey, pool] of Object.entries(table)) {
+      if (!fullKey.startsWith("radio.") || fullKey.startsWith("radio.why.") || !Array.isArray(pool)) continue;
+      const key = fullKey.slice(6);
+      const tv = key.startsWith("tv.");
+      for (const tpl of pool) {
+        const msg = RL.fill(tpl, LONG);
+        assert.ok(msg, `${lang} ${key}: "${tpl}" has a slot this test does not fill`);
+        const kind = tv ? "comm" : "info";
+        const life = Math.max(RV.ANN_CARD_MIN_S, RR.durFor(msg, kind) + RV.ANN_CARD_PAD_S);
+        const p = RV.plan({ msg, life: life / factor, kind, lead: tv ? 0 : RV.RADIO_LEAD_S,
+          enabled: true, soundOn: true, api: true, state: "race" });
+        n++;
+        if (!p.speak) refused.push(`${lang} ${key}: "${msg}" (${p.reason})`);
+      }
+    }
+  }
+  assert.ok(n > 100, `expected the English phrasebook at least, spoke ${n}`);
+  assert.deepEqual(refused, []);
+});
+
+test("a locale pool replaces English by key, and the replay stream does not depend on the language", () => {
+  vm.runInContext(readFileSync(join(ROOT, "js/core/i18n.js"), "utf8"), ctx, { filename: absSrc("js/core/i18n.js") });
+  const I18n = vm.runInContext("I18n", ctx);
+  const draw = (seed) => {
+    const d = RL.create(seed);
+    const out = [];
+    for (let i = 0; i < 40; i++) out.push(d.pick("eng.gain", { pos: 3, passed: "X" }));
+    return out;
+  };
+  const EN = RL.POOLS["eng.gain"];
+  const idxOf = (lines, pool) => lines.map((l) => pool.findIndex((t) => RL.fill(t, { pos: 3, passed: "X" }) === l));
+  I18n._installCatalog("en", {});
+  const english = draw(4242);
+  assert.deepEqual(english.slice(0, 3), idxOf(english.slice(0, 3), EN).map((i) => RL.fill(EN[i], { pos: 3, passed: "X" })));
+  // Same number of variants, other words: the SAME variant indices come out for the same seed.
+  const xx = EN.map((t, i) => `XX${i} P{pos} {passed}`);
+  I18n._installCatalog("xx", { "radio.eng.gain": xx });
+  const other = draw(4242);
+  assert.deepEqual(idxOf(other, xx), idxOf(english, EN), "the language must not enter the replay stream");
+  assert.ok(other[0].startsWith("XX"), "the locale pool is used");
+  // A key the locale lacks falls back to English.
+  assert.ok(RL.create(1).pick("eng.lead", {}).length > 0);
+  I18n._installCatalog("xx", { "radio.why.engine": "MOTORSCHADEN" });
+  assert.equal(RL.why("engine"), "MOTORSCHADEN");
+  assert.equal(RL.why("gearbox"), RL.WHY.gearbox);
+  I18n._resetForTest();
+});
+
+test("the radio seed is built from the race seed and round only — no language", () => {
+  for (const f of ["js/race/race-radio.js", "js/race/radio-lines.js"]) {
+    const src = readFileSync(join(ROOT, f), "utf8");
+    for (const m of src.matchAll(/RadioLines\.create\([^\n]*|function create\(seed[^\n]*|const rand = rng\([^\n]*/g)) {
+      assert.ok(!/I18n|lang/i.test(m[0]), `${f}: "${m[0]}" must not read the language`);
+    }
+  }
+});
