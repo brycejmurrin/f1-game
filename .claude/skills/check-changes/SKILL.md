@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use before pushing or when asked \"did I break anything?\": pick the minimum tests, verify a track edit, check cache-bust rules, or triage a Playwright timeout. Not for: red Actions → ci-red-triage; driving a PR → steward; landing → ship."
+description: "Use when about to push or asked \"did I break anything?\": pick the minimum tests, verify a track edit, check cache-bust rules, or triage a Playwright timeout. Not for: red Actions → ci-red-triage; driving a PR → steward; landing → ship."
 ---
 
 # Validate changes before committing/pushing

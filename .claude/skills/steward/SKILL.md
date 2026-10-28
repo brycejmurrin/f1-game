@@ -1,6 +1,6 @@
 ---
 name: steward
-description: "Use when you own or pick up a PR, or a PR or the deploy branch is red, cancelled or conflicting: keep the Plan live, fix the failure, sync, push once per green cycle. Not for: status only → check; opening or landing → ship; picking tests → check-changes."
+description: "Use when you own, pick up or are handed a PR, or a PR or the deploy branch is red, cancelled or conflicting: keep the Plan live, fix the failure, sync, push once per green cycle. Not for: status only → check; opening or landing → ship; picking tests → check-changes."
 ---
 
 # Driving a PR to green in Apex 26
