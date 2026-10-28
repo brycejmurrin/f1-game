@@ -614,7 +614,6 @@ var GameAudioRadioFx = (function () {
         return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
       },
       radioFxMax: () => RADIO_FX_MAX,
-      radioChannels: () => Object.keys(RADIO_CH),
       resetContext() {
         radioStingStop();
         for (const w of _watchClips) w.teardown();
