@@ -237,8 +237,8 @@ Recommended UI: **one `SettingRow` labelled `UPSCALE`**, values ON/OFF, default 
 
 1. **Settings first (small, shippable alone):** ON/OFF `SettingRow` next to RESOLUTION, same `apex26.spatialUpscale` key, default OFF. Works for GLX immediately; WGX/TLX keep `available` until ported.
 2. **Backend port: strategy A (shared SGSR1)** for WGX then TLX — one kernel, fail closed without letterboxing, soft-present at present size only when the flag is active. Do **not** introduce FSR1's second pass.
-3. **Optional follow-up (landed 2026-09-09):** WGX-only `textureGather` fast path (`SGSR_GATHER`) preferred when the module links; `apex26.spatialUpscaleGather=0` forces 4-tap. Soft-present cost bench: `node docs/archive/tools/gfx/soft-present-bench.mjs`. Real-GPU A/B via `gpu-census.yml` with `apex26.resMode=med` ± `apex26.spatialUpscale=1` — still required before default ON.
-4. **Still required before default ON:** device A/B at RESOLUTION MED/LOW — SwiftShader cannot judge (§6). Default remains **OFF**.
+3. **Optional follow-up (landed 2026-09-09):** WGX-only `textureGather` fast path (`SGSR_GATHER`) preferred when the module links; `apex26.spatialUpscaleGather=0` forces 4-tap. Soft-present cost bench: `node docs/archive/tools/gfx/soft-present-bench.mjs`. Real-GPU A/B: done, see §7.6–7.7.
+4. **Decision (2026-10-27, #1652):** `apex26.spatialUpscale` stays **OFF** at every RESOLUTION mode, MED/LOW included (§7.7). No further A/B is pending.
 
 ### 7.5 Out of scope (unchanged)
 
@@ -256,7 +256,21 @@ macos-latest Metal, `resMode="med"` (scale 0.75) ± `spatialUpscale=1`:
 | upscale | 79.3 | ~60 | 0 | yes |
 
 Windows `anyHardware=false` (no player-GPU signal). Headless soft-present path — not headed sharpness.
-**Default stays OFF.** Headed visual A/B still required before ON.
+**Default stays OFF.** (The headed visual A/B this line once required was superseded by the device A/B in §7.7.)
+
+### 7.7 Decision: keep OFF (2026-10-27, #1652)
+
+The dispatcher decided under Bryce's delegation (Bryce can reverse it by commenting on #1652): keep `apex26.spatialUpscale` OFF by default, including at RESOLUTION MED/LOW. Evidence is the iPhone 14 (iOS 27.0, Safari 27) WebGL2 fill-lever A/B, live build 21276, Monza day, 15 s per arm, one pass per arm (PR #3708, `docs/notes/DEVICE-FARM-LEDGER-2026-10-23.md` row 24). fps / p95 ms / frames over 50 ms at render scale 0.5 | 0.75:
+
+| arm | 0.5 | 0.75 |
+|---|---|---|
+| off | 52.4 / 30 / 0 | 46.5 / 34 / 0 |
+| fixed targets | 48.1 / 33 / 1 | 44.2 / 36 / 2 |
+| SGSR | 52.5 / 30 / 1 | 46.3 / 35 / 1 |
+| both | 50.0 / 31 / 1 | 47.7 / 33 / 0 |
+| off again | 49.6 / 33 / 5 | 45.4 / 34 / 0 |
+
+The two `off` arms differ by 1–3 fps, so no lever separates from noise: SGSR shows no measurable gain, and an always-on extra full-resolution pass has no payoff to justify it. The flag stays opt-in (Settings UPSCALE row, `?upscale=1`, `__apex.spatialUpscale(1)`).
 
 ## Sources
 
