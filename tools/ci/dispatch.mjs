@@ -277,7 +277,19 @@ const excerpt = (body, lines = 6, width = 160) => String(body || "").replace(/<!
 export const LABEL_LINE = (repo) => `Labels: add with \`gh api -X POST repos/${repo}/issues/<n>/labels -f 'labels[]=<name>'\`, remove with \`gh api -X DELETE repos/${repo}/issues/<n>/labels/<name>\`; never MCP issue_write \`labels\` (it REPLACES the whole list).`;
 export const NOBODY_LINE = "Nobody reads this chat. Never end a turn with a question or a request to the user/Bryce: decide and record it in the PR body, or add `needs-decision` (gh api POST labels) with one comment and keep going, or send_message session_id `@parent`.";
 export const SUBSCRIBE_LINE = "Before ending a turn while CI runs on your head, call subscribe_pr_activity on your PR.";
-const commonLines = (config, host, n) => [
+/** Cursor cloud agents cannot label, claim, comment, or subscribe. The Claude tail stays the lines above. */
+const cursorLines = (config) => [
+  "Read docs/WORKERS.md §Per vendor (Cursor). Do not add labels, claim, post issue comments, or open issues.",
+  "Symbols: get_mcp_tools once for apex-lsp, then lsp_outline, lsp_definition (read the body), lsp_callers. Grep only comments, docs, and CSS. lsp_diagnostics once after the edit, before tests.",
+  "Do not spawn task_v2 scouts. Grep the defect ledger yourself (≤30 KNOWN rows).",
+  "Gate, in this order, once: edit; npm run gen; the one spec pick-tests names; tooling-fast --changed --jobs=3; commit; push. Repeat the gate only when GitHub says CONFLICTING.",
+  "Write the ```handoff fence yourself (branch, head, verified, not-run, next). Put run-ci, lane:cursor, and land in next:; do not apply them.",
+  "Do not call subscribe_pr_activity or subscribe_github_*. A CI notification is not a new task. Stop when the draft PR is pushed and the fence is current. Do not add land.",
+  `Lane: lane:cursor. Model: ${config.hosts.cursor.model}. Base: ${config.deployBranch} (branch cursor/<topic>-<hash>; draft PR at the first commit).`,
+  `STOP AT: ${config.workerStopAtK}k`,
+  `At the STOP AT cap, the cost cap ($${config.workerCostCapUsd} soft) or stuck: push, refresh the PR Plan and \`\`\`handoff block, name the blocker in next:, end.`,
+];
+const commonLines = (config, host, n) => host === "cursor" ? cursorLines(config) : [
   "Read docs/WORKERS.md and follow it.",
   NOBODY_LINE, SUBSCRIBE_LINE, LABEL_LINE(config.repo),
   `Lane label: lane:${host}. Model: ${host === "claude" ? config.model : config.hosts.cursor.model}. Base: ${config.deployBranch} (branch cursor/<topic>-<hash> from it; draft PR into it at the first commit).`,
@@ -286,7 +298,13 @@ const commonLines = (config, host, n) => [
   `End at \`land\`: when ready-gate passes flip ready, add \`land\`, refresh the handoff block; GitHub merges ${n ? `#${n}` : "it"}, not you.`,
 ];
 export function issuePrompt(issue, config, host) {
-  return [`Task: #${issue.number} — ${issue.title}`, ...excerpt(issue.body),
+  const head = [`Task: #${issue.number} — ${issue.title}`, ...excerpt(issue.body)];
+  if (host === "cursor") {
+    return [...head,
+      `Already fixed on the tip: record the commit sha in the PR body. Do not comment on or close #${issue.number}.`,
+      ...commonLines(config, host)].join("\n");
+  }
+  return [...head,
     `Claim first: comment "claims #${issue.number} — ${host}:<your session id>" on the issue; stand down if an older claim comment exists. Put \`Closes #${issue.number}\` in the PR body.`,
     `Add \`claimed\` ONLY with \`gh api -X POST repos/${config.repo}/issues/${issue.number}/labels -f 'labels[]=claimed'\` — never MCP issue_write \`labels\` (it REPLACES the whole list).`,
     `Already fixed on the tip: comment the evidence (commit sha + repro) on #${issue.number} and close it as completed; no PR.`,
@@ -296,12 +314,23 @@ export function continuePrompt(pr, config, host) {
   const h = parseHandoff(pr.body);
   const hand = h ? ["Hand-off block from the PR body:", ...Object.entries(h).slice(0, 8).map(([k, v]) => `  ${k}: ${v}`)]
     : ["No handoff block in the body: read its Plan, Status and Verified sections first."];
-  return [`CONTINUE PR #${pr.number} — ${pr.title || ""}`, ...hand,
+  const open = [`CONTINUE PR #${pr.number} — ${pr.title || ""}`, ...hand];
+  if (host === "cursor") {
+    return [...open,
+      `Check out its branch (${pr.head_ref || "the PR head"}); fix the red or the conflict (merge origin via sync-pr.mjs, never rebase); push. Do not comment, label, or add land.`,
+      ...commonLines(config, host, pr.number)].join("\n");
+  }
+  return [...open,
     `Adopt: comment "adopts PR #${pr.number} — ${host}:<your session id>" on the PR and remove \`needs-owner\` (\`gh api -X DELETE repos/${config.repo}/issues/${pr.number}/labels/needs-owner\`, never MCP issue_write \`labels\`); stand down if a newer adoption comment exists.`,
     `Check out its branch (${pr.head_ref || "the PR head"}); fix the red or the conflict (merge origin via sync-pr.mjs, never rebase); push; \`land\` when ready-gate passes.`,
     ...commonLines(config, host, pr.number)].join("\n");
 }
 export function deployRedPrompt(config, host) {
+  if (host === "cursor") {
+    return [`Deploy red: the latest pages.yml run on ${config.deployBranch} failed.`,
+      "Read the failing job (Actions logs via the GitHub MCP) and fix it on a branch. Open a draft PR. Do not add labels or comment on the Board issue.",
+      ...commonLines(config, host)].join("\n");
+  }
   return [`Deploy red: the latest pages.yml run on ${config.deployBranch} failed.`,
     "Read the failing job (Actions logs via the GitHub MCP), fix it on a branch, draft PR labelled `deploy:red` and `run-ci`; the gate's base-behind row holds other merges meanwhile.",
     "Claim first: comment \"claims deploy:red — " + host + ":<your session id>\" on the Board issue; stand down if an older claim comment exists.",
