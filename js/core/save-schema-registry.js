@@ -191,6 +191,8 @@ const SaveSchemaRegistry = (function () {
     carSmooth: entry("js/car/car-shade.js", "raw", 1, "rawScalar"),
     freecamMarks: entry("js/camera/photo-kit.js", "json", 1, "json"),
     gfxBootBound: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
+    // Last pack's content-addressed model files. A return visit starts those fetches before the manifest returns; RESET RENDERER drops the hint.
+    packIndex: entry("js/render/shared/assets.js", "raw", 1, "string"),
     gfxProbeStrikes: entry("js/render/renderer-boot.js", "raw", 1, "rawScalar"),
     "inputGhost.v1": entry("js/car/input-ghost.js", "json", 1, "json"),
     lastSession: entry("js/ui/share-code.js", "json", 1, "json"),
