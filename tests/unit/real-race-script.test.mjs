@@ -16,6 +16,7 @@
  * Run: node --test tests/unit/real-race-script.test.mjs   (npm run test:tooling-fast)
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
@@ -448,7 +449,7 @@ test("cancel/reopen and session replacement discard stale WATCH completions", as
 test("the hub cancels pending WATCH immediately when year or Grand Prix changes", () => {
   const dom = makeDom();
   let deps, cancellations = 0, repaints = 0;
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el: (...args) => { const node = dom.el(...args); node.classList = { toggle() {} }; return node; } },
     F1API: { meetings: () => new Promise(() => {}), sessionsForMeeting: () => new Promise(() => {}) },
     DataSchedule: { create: () => ({}) }, DataStandings: { create: () => ({}) },
@@ -492,7 +493,7 @@ function hubWatchHarness() {
     return node;
   }
   const schedule = el("div", "schedule-result"), root = el("div");
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el }, navigator: { onLine: true }, queueMicrotask,
     document: { activeElement: null, getElementById: () => null, addEventListener() {} },
     DataSchedule: { create: () => ({ loadSchedule: () => { scheduleLoads++; return Promise.resolve(schedule); } }) },
@@ -898,7 +899,7 @@ test("reading an old trace cache refreshes recency before capacity eviction", as
 
 test("session picker cancels owned WATCH requests before selecting and repainting", async () => {
   const dom = makeDom(), order = []; let deps;
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Dom: { el: (...args) => { const node = dom.el(...args); node.classList = { toggle() {} }; return node; } },
     F1API: { meetings: async () => [{ meetingKey: 42 }], sessionsForMeeting: async () => [{ sessionKey: 1, type: "race" }, { sessionKey: 2, type: "practice" }] },
     DataSchedule: { create: () => ({}) }, DataStandings: { create: () => ({}) }, DataResults: { create: () => ({}) },
