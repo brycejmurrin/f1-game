@@ -14338,6 +14338,9 @@
       "mergeRuns": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
+      "mergeVisible": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
       "packAttr": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs"
