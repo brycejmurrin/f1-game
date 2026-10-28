@@ -1,4 +1,4 @@
-/* XR Phase 0 — pure rig math + controller mapping (no WebXR runtime). */
+/* XR — pure rig math + controller mapping (no WebXR runtime). */
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -370,6 +370,7 @@ test("CamModes.setCamMode({persist:false}) skips store.write", () => {
   ctx.window = ctx;
   ctx.CamTunerPanel = { refresh() {} };
   ctx.GameAudio = undefined;
+  vm.runInContext(read("js/camera/cam-picker.js"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInContext(read("js/camera/mode-switch.js").replace(/^window\.CamModes/, "var CamModes").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   // mode-switch assigns window.CamModes — pull it off the sandbox.
   const CamModes = ctx.CamModes || ctx.window.CamModes;
@@ -806,6 +807,68 @@ test('XR public recenter queues outside a frame, survives tracking loss, and app
   await xr.end();
 });
 
+test('in-frame recenter with a null pose stays pending and applies on the next valid frame', async () => {
+  const h = xrHarness(), xr = h.ctx.XrSession;
+  h.physical(h.pose(.5, 1.7, -.2));
+  await xr.start(); h.fire();
+  const before = xr.getRefSpace();
+  h.tracking(false);
+  assert.equal(xr.recenter(h.frame()), true, 'null pose queues rather than swallowing the edge');
+  assert.equal(xr.getRefSpace(), before);
+  h.tracking(true); h.fire();
+  const after = h.frame().getViewerPose(xr.getRefSpace()).transform.matrix;
+  near(after[12], 0); near(after[13], 0); near(after[14], 0);
+  await xr.end();
+});
+
+test('WebGPU requestSession rejection latches webgl2 and does not chain a second request', async () => {
+  const ss = new Map();
+  let requests = 0, activation = true;
+  const h = xrHarness({
+    request: () => {
+      requests++;
+      assert.equal(activation, true, 'only the gesture-backed request may run');
+      activation = false;
+      return Promise.reject(new Error('webgpu session unavailable'));
+    },
+  });
+  h.ctx.sessionStorage = {
+    getItem: (k) => (ss.has(k) ? ss.get(k) : null),
+    setItem: (k, v) => ss.set(k, String(v)),
+    removeItem: (k) => ss.delete(k),
+  };
+  h.ctx.localStorage = {
+    getItem: (k) => (k === 'apex26.xrBackend' ? 'webgpu' : null),
+    setItem() {}, removeItem() {},
+  };
+  h.ctx.ApexXR = {
+    noteFallback(from, to, reason) {
+      ss.set('apex26.xrFallback', to);
+      return { from, to, reason };
+    },
+  };
+  assert.equal(await h.ctx.XrSession.start(), null);
+  assert.equal(requests, 1, 'must not chain a second requestSession in the same tap');
+  assert.equal(ss.get('apex26.xrFallback'), 'webgl2');
+
+  const h2 = xrHarness();
+  h2.ctx.sessionStorage = {
+    getItem: (k) => (ss.has(k) ? ss.get(k) : null),
+    setItem: (k, v) => ss.set(k, String(v)),
+    removeItem: (k) => ss.delete(k),
+  };
+  h2.ctx.localStorage = h.ctx.localStorage;
+  let sawWebgpu = false;
+  const origReq = h2.ctx.navigator.xr.requestSession.bind(h2.ctx.navigator.xr);
+  h2.ctx.navigator.xr.requestSession = (mode, init) => {
+    if ((init.optionalFeatures || []).includes('webgpu')) sawWebgpu = true;
+    return origReq(mode, init);
+  };
+  assert.ok(await h2.ctx.XrSession.start());
+  assert.equal(sawWebgpu, false, 'xrFallback latch suppresses webgpu on the next enter');
+  await h2.ctx.XrSession.end();
+});
+
 
 test('pinned IWER offset adapter restores standard rigid-transform viewer and stereo poses', () => {
   const ctx = bootXr();
@@ -981,6 +1044,29 @@ test("XrInput prefers only a usable left stick and otherwise accepts the right c
   for (const sources of [[left, right], [right, left]]) assert.ok(XrInput.mapFrame(sources).sample.roll < -0.7);
   left.gamepad.axes[2] = 0;
   assert.equal(XrInput.mapFrame([right, left]).sample.roll, 0, "a centered usable left stick retains preference");
+  // Centered right must not be overwritten by a later handedness:"none" (0 is falsy).
+  const none = { handedness: "none", gamepad: { axes: [0, 0, 0.9, 0], buttons: [] } };
+  const centeredRight = { handedness: "right", gamepad: { axes: [0, 0, 0, 0], buttons: [] } };
+  assert.equal(XrInput.mapFrame([centeredRight, none]).sample.roll, 0, "centered right keeps steer over a later none");
+});
+
+test("XrRig.worldFromAnchorTo stays orthonormal when fwd is zero or parallel to up", () => {
+  const { XrRig } = bootXr();
+  const check = (fwd, up) => {
+    const m = Array.from({ length: 16 }, () => 0);
+    XrRig.worldFromAnchorTo(m, [1, 2, 3], fwd, up);
+    const col = (i) => [m[i * 4], m[i * 4 + 1], m[i * 4 + 2]];
+    const [r, u, z] = [col(0), col(1), col(2)];
+    for (const c of [r, u, z]) {
+      assert.ok(c.every(Number.isFinite), "finite column");
+      assert.ok(Math.abs(Math.hypot(...c) - 1) < 1e-5, "unit column");
+    }
+    const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    assert.ok(Math.abs(dot(r, u)) < 1e-5 && Math.abs(dot(r, z)) < 1e-5 && Math.abs(dot(u, z)) < 1e-5);
+  };
+  check([0, 1, 0], [0, 1, 0]);
+  check([0, 0, 0], [0, 1, 0]);
+  check([0, -1, 0], [0, 1, 0]);
 });
 
 
@@ -1069,6 +1155,7 @@ test('immersive cockpit blocks keyboard and latched look-back while flat cockpit
     sample(_, s, out) { out.p[0] = 0; out.p[1] = 0; out.p[2] = s; out.t[0] = 0; out.t[1] = 0; out.t[2] = 1; out.r[0] = 1; out.r[1] = 0; out.r[2] = 0; return out; },
     banking: (_, __, ___, out) => { out.dy = 0; out.roll = 0; return out; },
   };
+  vm.runInContext(read('js/camera/vantage-ride.js'), ctx, { filename: absSrc("js/camera/vantage-ride.js") });
   vm.runInContext(read('js/camera/vantage.js').replace(/^const\b/gm, 'var'), ctx, { filename: absSrc("js/camera/vantage.js") });
   const track = { total: 100, n: 4, py: [0, 0, 0, 0], def: {} };
   const direction = () => { const v = ctx.GameCams.vantage(track, 'cockpit', 10, 0, 0, 0, { att: {}, carPos: [0, 10], carHead: 0 }); return v.tgt[2] - v.eye[2]; };

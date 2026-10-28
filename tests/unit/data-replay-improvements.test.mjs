@@ -9,7 +9,7 @@ const read = (p) => fs.readFileSync(path.join(root, p), 'utf8');
 const copy = (v) => JSON.parse(JSON.stringify(v));
 function dataHarness(request = () => Promise.reject(new Error('offline'))) {
   const disk = new Map(); const ctx = vm.createContext({ Log: { info() {}, warn() {} }, F1API: { request, cancelAll() {} }, localStorage: { getItem: (k) => disk.get(k) || null, setItem: (k, v) => disk.set(k, v), removeItem: (k) => disk.delete(k) } });
-  for (const f of ['js/core/mat4.js', 'js/race/real-race.js', 'js/race/real-replay.js', 'js/data/real-race-tab.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  for (const f of ['js/core/mat4.js', 'js/race/real-race-pace.js', 'js/race/real-race.js', 'js/race/real-replay.js', 'js/data/real-race-script.js', 'js/data/real-race-fetch.js', 'js/data/real-race-tab.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   return { D: vm.runInContext('DataRealRace', ctx), R: vm.runInContext('RealReplay', ctx), ctx, disk };
 }
 function rawStatus(flag) { return { session: { session_key: 1, date_start: '2026-01-01T00:00:00Z' }, drivers: [{ driver_number: 44, name_acronym: 'HAM' }], laps: [1, 2].map((n) => ({ driver_number: 44, lap_number: n, lap_duration: 90, date_start: new Date(Date.UTC(2026, 0, 1) + (n - 1) * 90000).toISOString() })), result: [{ driver_number: 44, position: flag ? null : 1, number_of_laps: 2, [flag || 'fin']: true }] }; }

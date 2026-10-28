@@ -429,3 +429,42 @@ test("export tries the next driver after a partial trace, independent of coordin
     assert.equal(circuit.nLoc, rows.length);
   }
 });
+
+test("export keeps one Sakhir trace: skips a second Testing weekend and prefers a later GP", async () => {
+  // Live 2026 OpenF1: two Pre-Season Testing meetings share circuit_short_name
+  // "Sakhir". 2025 pairs Testing with the Bahrain Grand Prix on the same key.
+  // Without a preference the second write silently overwrote the first, and a
+  // Testing→Testing pair burned a full OpenF1 gather for nothing.
+  const meetings = [
+    { meeting_key: 1304, meeting_name: "Pre-Season Testing", country_name: "Bahrain",
+      circuit_short_name: "Sakhir", date_start: "2026-02-11T10:00:00Z" },
+    { meeting_key: 1305, meeting_name: "Pre-Season Testing", country_name: "Bahrain",
+      circuit_short_name: "Sakhir", date_start: "2026-02-18T10:00:00Z" },
+    { meeting_key: 1308, meeting_name: "Bahrain Grand Prix", country_name: "Bahrain",
+      circuit_short_name: "Sakhir", date_start: "2026-04-12T10:00:00Z" },
+  ];
+  const sessionFetches = [];
+  const out = await runExport(openF1Fetch((url) => {
+    if (url.includes("/meetings")) return { body: meetings };
+    if (url.includes("/sessions") && url.includes("meeting_key=")) {
+      const mk = Number(new URL(url).searchParams.get("meeting_key"));
+      sessionFetches.push(mk);
+      return {
+        body: [{
+          session_key: 9000 + mk, meeting_key: mk, year: 2026,
+          session_name: "Qualifying", session_type: "Qualifying",
+          circuit_short_name: "Sakhir", country_name: "Bahrain",
+          date_start: "2026-02-12T10:00:00Z"
+        }]
+      };
+    }
+  }));
+  // equal(+.test) avoids the source-pin shapes that raise assertPinsAll.
+  assert.equal(/already have Sakhir/.test(out.status), true);
+  assert.deepEqual(sessionFetches, [1304, 1308],
+    "second Testing weekend skipped; Bahrain GP still fetched to replace Testing");
+  const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
+  assert.deepEqual(Object.keys(parsed.circuits), ["Sakhir"]);
+  assert.equal(parsed.circuits.Sakhir.circuit, "Sakhir");
+  assert.equal(/fromTesting|testingKeys/.test(JSON.stringify(parsed.circuits.Sakhir)), false);
+});

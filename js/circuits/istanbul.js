@@ -53,7 +53,7 @@
     ],
     hwZones: [
       { s0: 0.135, s1: 0.180, hw: 6.4, ease: 0.012 },  // Turn 3-4 complex
-      { s0: 0.7125, s1: 0.7742, hw: 6.4, ease: 0.012 },  // Turn 9-10 (index; arc 0.590-0.640)
+      { s0: 0.7125, s1: 0.7742, hw: 6.4, ease: 0.012 },  // post-T10 climb (index; racing ≈0.663-0.721)
       { s0: 0.880, s1: 0.930, hw: 6.3, ease: 0.012 },  // Turn 13-14
     ],
     // Turn 8 is the famous one: a long, banked, quadruple-apex left taken flat.

@@ -53,14 +53,14 @@ oriented footprint** covers tarmac at **any** node it rises above, the
   does not prove the full footprint is clear. If a bespoke shape vanishes
   or clips, check for a single `onTrack()` vs `rejBox(...)` over the widest
   section.
-- **New composite emitters** must use `rejBox(centre, [w,h,d], basis)` over
+- **New composite emitters** (engine, `js/track/scenery/*.js`, only — `rejBox` is not on the circuit `api`) must use `rejBox(centre, [w,h,d], basis)` over
   the widest section — not one `onTrack()` point. The "props over the racing
   line" bug was `building()`/`neonTower`/masts testing an inner-face point
   on a curving street.
-- **`RAW.*` bypasses the guard.** Crowd spectators via `RAW.addBox` are not
+- **`RAW.*` (engine-internal, not on the circuit `api`) bypasses the guard.** Crowd spectators via `RAW.addBox` are not
   footprint-tested; only place them behind a shell.
 - **Regression:** `tests/specs/props-over-road.spec.js` (in `test:circuits`).
-  One track: `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots`.
+  One track: `TRACK=<id> PORT=<p> node tools/track/measure-props-over-road.mjs --shots` (boots a browser: parent only).
 
 ## Terrain anchoring
 
@@ -79,6 +79,16 @@ Per-circuit prop size: `node tools/track/props-tris.cjs <id>` (`--all`); `tests/
 `every(20)` for sparse features, `every(5)` only for hero sections; jitter
 with `hash()`; double-place at two distances instead of doubling density.
 
+## Denser vegetation
+
+Levers in order (then `clip-audit.cjs <id> --why`, `props-tris.cjs <id>`):
+1. `forestEdge(s0, s1, side, gap, opts)` `opts.density` (clamped 0.05-1; above ~0.6 the engine adds a
+   staggered back row — the comment above Spa's belts) and `gap`; `opts.pineFrac`/`hMin`/`hMax` for the look.
+2. Deeper ranks: an `along()` loop that consults the circuit's own exclusion map before each tree (Spa's
+   `OPEN` windows + `plantPine` → `forestRank`), never a bare `every()` pine loop — Spa's early `every()`
+   pines ignored `OPEN` and caused the severe pine×motorhome / pine×crowd clips (the comment above `OPEN`).
+3. Fleet-wide kinds (`foliage`, `city`, `lamps`): the def's `dressingExclusions` per lap window (SCENERY-API.md).
+
 ## Overhead landmarks
 
 Bridges/flyovers need clearance — a low `place()`/`building()` can hit the
@@ -86,5 +96,5 @@ deck from below.
 
 ## Trees/lamps
 
-Must never call `blockAt`/`markBarrier` — they would shrink the driving
-boundary. Keep furniture clear of the collision edge.
+Must never book a barrier — `recordBarrier` (on the `api`) and the engine's own `blockAt`
+(`js/track/scenery/*.js` only) shrink the driving boundary. Keep furniture clear of the collision edge.

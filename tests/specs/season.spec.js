@@ -2,6 +2,7 @@
 // Season mode: round progression, points accumulation, standings panel visibility.
 import { test, expect } from "@playwright/test";
 import { BOOT_MS } from "../helpers/fixtures.js";
+import { saveSharedCard } from "../helpers/share-card.js";
 
 const LANDSCAPE = { width: 844, height: 390 };
 
@@ -129,6 +130,19 @@ test.describe("Season — standings panel", () => {
     await expect(rows.first()).toBeVisible();
     const count = await rows.count();
     expect(count).toBeGreaterThan(0);
+    // #1546/#1548: the championship SHARE CARD chip opens the preview sheet;
+    // SAVE IMAGE downloads the real PNG (headless Chromium has no Web Share).
+    await saveSharedCard(page, "#standings-card", /^apex26-standings-round-1\.png$/);
+  });
+
+  test("race results carry a tappable SHARE CARD chip (#1546)", async ({ page }) => {
+    await startSeasonRace(page);
+    await page.evaluate(() => window.__apex.park(0));
+    await page.evaluate(() => window.__apex.finishRace());
+    await expect(page.locator("#results")).toBeVisible({ timeout: 5000 });
+    const box = await page.locator("#res-race-card").boundingBox();
+    expect(box && box.height).toBeGreaterThanOrEqual(24);
+    await saveSharedCard(page, "#res-race-card", /^apex26-race-[a-z0-9-]+\.png$/);
   });
 
   test("migrates legacy code points to a stable identity before a custom code edit", async ({ page }) => {

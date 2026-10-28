@@ -23,7 +23,7 @@ Destructure `out` from `api` first; `verify-track` catches a `scenery()` throw.
 `K(s)` is AUTHORED-frame: pass it straight through, never pre-shift it. Frames, `along()`
 and the `_sceneryShift` print command: [references/rules.md](references/rules.md) §Frames (one
 home; the rule itself: `.claude/rules/game-code.md`). A non-zero shift means dropping
-`sceneryStartFrac` re-bases every authored frac literal at once — `audit-circuit` baseline
+`sceneryStartFrac` re-bases every authored frac literal at once — a `tools/track/audit-circuit.cjs` baseline
 before and after, never a one-line edit.
 
 ## Helper families
@@ -37,7 +37,13 @@ before and after, never a one-line edit.
   `tyreWall`.
 - **Terrain/raw:** `mountain`, `addBox`/`addCyl`/`addCone`/`addPrism`/
   `addPyramid`/`addFrustum`.
-- **Utilities:** `every`, `hash`, `anchor`, `groundYAt`, `onTrack`.
+- **Utilities:** `every`, `along` (walk nodes `s0→s1` every ~`stepM` — the per-tree loop), `hash`,
+  `K`, `anchor`, `onTrack`.
+- **Ground and reservation** (`docs/SCENERY-API.md` §Reserving ground, §Grounding): `groundYAt(k, …)` is a
+  NODE query; `terrainYAt(x, z)` is the WORLD-XZ ground (null off the ribbon) — use it the moment a
+  placement walks away from the centreline; `groundUnder` (ribbon-aware world-XZ); `seat` / `foundation`
+  (seat a model, fill under it); `indexSolid` reserves a footprint BEFORE you plant around it;
+  `recordBarrier` books a barrier line.
 - Argument kinds: `grandstand` / `grandstandEx` take a lap fraction `(s,side,...)`; range
   helpers take fraction endpoints; raw primitives take world coordinates.
 - **Floodlight masts/lamps:** the generic mast pass owns ordinary lamps; a hand-modelled
@@ -46,10 +52,10 @@ before and after, never a one-line edit.
 
 ```sh
 node tools/track/verify-track.cjs <id>     # must print OK; catches scenery() THROW
-node tools/track/float-audit.cjs <id>       # node-VM, ~1 s: floating props; `--why` names the emitting source line
-node tools/track/ground-audit.cjs <id> --why  # ~12 s: buried / unsupported prims (--all --gate = ratchet)
-node tools/track/clip-audit.cjs <id> --why    # ~3 s: prop-vs-prop clipping; `--all --gate` = tools/track/clip-baseline.json
-node tools/track/props-tris.cjs <id>          # ~3 s: post-strip props tris; tests/unit/props-tri-ratchet.test.mjs fails past +0.5 %
+node tools/track/float-audit.cjs <id>       # node-VM, seconds: floating props; `--why` names the emitting source line
+node tools/track/ground-audit.cjs <id> --why  # buried / unsupported prims (--all --gate = ratchet)
+node tools/track/clip-audit.cjs <id> --why    # prop-vs-prop clipping; `--all --gate` = tools/track/clip-baseline.json
+node tools/track/props-tris.cjs <id>          # post-strip props tris; the margin lives in tests/unit/props-tri-ratchet.test.mjs
 ```
 
 Grounded = float-audit clean and ground-audit no worse than `tests/data/scenery-audit-baseline.json`;
@@ -60,13 +66,16 @@ added props must also stay inside the clip and props-tris baselines (a denser ci
 (`tools/lib/generated-paths.mjs`). It is NOT part of `npm run gen`.
 
 Visual: **playwright-probe** `shot.mjs` (browser: parent only; a subagent reports it not run).
-Picture-driven accuracy / floating-tree survey → **survey-track** (Montreal already ships `flatTerrain`).
+A floating or sunk prop is fixed HERE ([float-fix.md](references/float-fix.md)); picture-driven realism vs the real
+place → **survey-track**.
 
 ## Load on demand
 
-- Floating/sunk prop fix (find the emitter, footing, engine-fix gates) →
+- Floating/sunk prop fix (find the emitter, footing, a floating `forestEdge` treeline, engine-fix gates) →
   [references/float-fix.md](references/float-fix.md).
-- Rejection / `rejBox` / `RAW.*` / vertex budget / trees vs `blockAt` →
+- Denser vegetation (forestEdge `density`, `dressingExclusions`, an exclusion-aware `along()` rank) →
+  [references/rules.md](references/rules.md) §Denser vegetation.
+- Rejection / engine-only `rejBox` / `RAW.*` / vertex budget / trees vs barriers →
   [references/rules.md](references/rules.md).
 - `TrackGraph.instance` migration, `apex_graph_parity` / `BASE=` parity,
   `batches()` / `bakeOnly`, `__apex.trackGraph()` stats →

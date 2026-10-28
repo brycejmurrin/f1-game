@@ -16,13 +16,17 @@ const CHUNK_BINS = fs.readFileSync(new URL("../../js/render/shared/chunk-bins.js
 class BufferAttribute {
   constructor(array, itemSize, normalized) {
     this.array = array; this.itemSize = itemSize; this.normalized = !!normalized;
+    this.count = array ? array.length / itemSize : 0;
+    this.updateRanges = [];
+    this.needsUpdate = false;
   }
 }
 class Float16BufferAttribute extends BufferAttribute {}
 class BufferGeometry {
-  constructor() { this.attributes = {}; this.index = null; this.disposals = 0; }
+  constructor() { this.attributes = {}; this.index = null; this.disposals = 0; this.drawRange = null; }
   setAttribute(name, value) { this.attributes[name] = value; }
   setIndex(value) { this.index = value; }
+  setDrawRange(start, count) { this.drawRange = { start, count }; }
   dispose() { this.disposals++; }
 }
 class Vector3 { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } }
@@ -483,4 +487,42 @@ test("failed synchronous preparation clears refused payload and follows legacy p
     assert.equal(data.pos,original.pos,"failed binning has not reached the position-release point");
     assert.equal(data.idx,original.idx);
   }
+});
+
+function visChunk(idx, min, max) {
+  return {
+    min, max,
+    geo: {
+      attributes: { position: { array: new Float32Array(9), itemSize: 3 } },
+      index: { array: idx, count: idx.length, itemSize: 1 },
+      dispose() {},
+    },
+  };
+}
+
+test("mergeVisible concatenates chunk indices once and reuses the geometry while the set holds", () => {
+  const sys = factory([]);
+  const a = visChunk(new Uint16Array([0, 1, 2]), [0, 0, 0], [1, 1, 1]);
+  const b = visChunk(new Uint16Array([3, 4, 5]), [10, 0, 0], [12, 2, 2]);
+  const mesh = { chunks: [a, b] };
+  sys.visList[0] = a; sys.visList[1] = b;
+  const g = sys.mergeVisible(mesh, 2, 0);
+  assert.ok(g, "two visible chunks become one geometry");
+  assert.deepEqual(Array.from(g.index.array.subarray(0, g.drawRange.count)), [0, 1, 2, 3, 4, 5]);
+  assert.equal(g.drawRange.count, 6);
+  assert.equal(g.index.needsUpdate, true);
+  assert.equal(g.index.updateRanges.length, 1);
+  assert.equal(g.index.updateRanges[0].count, 6);
+  assert.ok(g.boundingSphere.radius > 5, "the sphere covers both chunk boxes");
+  assert.equal(g.attributes.position, a.geo.attributes.position, "vertex attributes stay shared");
+  g.index.needsUpdate = false;
+  assert.equal(sys.mergeVisible(mesh, 2, 0), g, "the same visible set returns the cached geometry");
+  assert.equal(g.index.needsUpdate, false, "a cache hit does not re-upload the index");
+  const other = sys.mergeVisible(mesh, 2, 1);
+  assert.notEqual(other, g, "the mirror pass keeps its own geometry");
+  assert.equal(sys.mergeVisible(mesh, 2, 0), g, "the main slot is unchanged by the mirror merge");
+  assert.equal(sys.mergeVisible(mesh, 1, 0), null, "a single chunk stays on its own geometry");
+  sys.free(mesh);
+  assert.equal(g.disposals, 1);
+  assert.equal(g.attributes.position, undefined, "free does not keep the shared vertex attribute on the merged geometry");
 });

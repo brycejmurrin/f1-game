@@ -313,9 +313,10 @@ test("every custom subagent declares name, description, and model", () => {
   // does not silently pick a different model; readonly / is_background optional.
   const files = fs.readdirSync(AGENTS).filter((f) => f.endsWith(".md") && f !== "README.md");
   assert.deepEqual(files.sort(), [
+    "Explore.md",
     "agent-surface-reviewer.md", "bloat-auditor.md", "ci-red-triage.md", "code-hunter.md", "deploy-research.md", "finding-verifier.md",
     "physics-contract-auditor.md", "prior-art-scout.md", "track-surveyor.md", "verify-agent.md", "worker.md",
-  ], "eleven agents since 2026-10-26 (ci-watcher and merge-desk deleted with the retired Merge Desk; release-auditor → deploy-research; worker 2026-10-15; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
+  ], "twelve agents since 2026-10-28 (Explore overrides the built-in; ci-watcher and merge-desk deleted 2026-10-26 with the retired Merge Desk; release-auditor → deploy-research; worker 2026-10-15; agent-surface-reviewer, code-hunter, finding-verifier, prior-art-scout 2026-10-14; ci-red-triage 2026-09-22; worktree-regression-check → verify-agent --base; doc-drift-auditor → total-audit)");
   // Model tiering (2026-09-22): a scan-and-report agent runs on a cheaper
   // tier; judgement stays on the session's model. Anything else is a typo.
   const TIER = {
@@ -330,6 +331,10 @@ test("every custom subagent declares name, description, and model", () => {
     // 2026-10-15: the all-tools implementation worker runs on the session's
     // model, like track-surveyor — it writes code, so no cheaper tier.
     "worker.md": "inherit",
+    // 2026-10-28: a project agent named Explore overrides Claude Code's built-in,
+    // which runs on the session's model (Opus in an Opus session); this one is
+    // pinned to the cheap tier (https://code.claude.com/docs/en/sub-agents).
+    "Explore.md": "haiku",
   };
   const ONE_LINE = "Flat prohibitions: AGENTS.md §Verification 10, 5 and 4 (no Playwright/test-bg/test-solo/chrome-start, no --wait); the js/css/index.html write ban is hook-enforced.";
   for (const f of files) {
@@ -422,7 +427,7 @@ test("coverage skills exist for input, season, data-hub, and AI", () => {
 
 test("readonly review agents stay --fast and never start Playwright", () => {
   for (const id of ["physics-contract-auditor", "bloat-auditor", "verify-agent", "deploy-research", "ci-red-triage",
-    "code-hunter", "finding-verifier", "prior-art-scout"]) {
+    "code-hunter", "finding-verifier", "prior-art-scout", "Explore"]) {
     const file = path.join(AGENTS, `${id}.md`);
     assert.ok(fs.existsSync(file), `missing .claude/agents/${id}.md`);
     const text = fs.readFileSync(file, "utf8");
@@ -437,6 +442,10 @@ test("readonly review agents stay --fast and never start Playwright", () => {
     assert.doesNotMatch(text, /test-solo\.mjs/);
     assert.doesNotMatch(text, /npx playwright test/);
   }
+  // Explore keeps the built-in's start (no CLAUDE.md) and pins medium effort on haiku.
+  const explore = frontmatter(fs.readFileSync(path.join(AGENTS, "Explore.md"), "utf8"));
+  assert.equal(explore.effort, "medium", "Explore: effort: medium");
+  assert.equal(explore.omitClaudeMd, true, "Explore: the built-in starts without CLAUDE.md, so the override does too");
   const phys = fs.readFileSync(path.join(AGENTS, "physics-contract-auditor.md"), "utf8");
   assert.match(phys, /vstd-lint/);
   assert.match(phys, /AI-only/);

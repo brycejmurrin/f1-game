@@ -82,7 +82,8 @@ test("a bottoming floor at speed throws embers from its lowest point, carried wi
   assert.ok(y > 0 && y < 0.05, `at the road: ${y}`);
   assert.equal(vx, 0);
   assert.equal(vz, 70, "the ember inherits the car's ground velocity (Particles.scrape scales it)");
-  assert.ok(Math.abs(count - DT * 110 * 0.8) < 1e-9, `rate·dt × scrape at full speed: ${count}`);
+  assert.equal(CarFx.SPARK_RATE, 110, "exported so pins track the live rate, not a stale literal");
+  assert.ok(Math.abs(count - DT * CarFx.SPARK_RATE * 0.8) < 1e-9, `rate·dt × scrape at full speed: ${count}`);
   // A squat sparks at the tail, a level compression at the middle.
   calls.length = 0;
   fx.emit({ speed: 70, baScrape: 0.5, baPitch: -0.01 }, g, DT, "race");
@@ -97,7 +98,7 @@ test("a bottoming floor at speed throws embers from its lowest point, carried wi
   assert.equal(calls.length, 0, "no scrape, a slow car or a reversing one throws nothing");
   // Partway up the ramp the rate is partway.
   fx.emit({ speed: (CarFx.SPARK_V0 + CarFx.SPARK_V1) / 2, baScrape: 1, baPitch: 0 }, g, DT, "race");
-  assert.ok(Math.abs(calls[0][5] - DT * 110 * 0.5) < 1e-9, `half-way up the speed ramp: ${calls[0][5]}`);
+  assert.ok(Math.abs(calls[0][5] - DT * CarFx.SPARK_RATE * 0.5) < 1e-9, `half-way up the speed ramp: ${calls[0][5]}`);
 });
 
 test("the spark gate is a share of the car's envelope: same fraction of top speed, same shower, at any PACE", () => {
@@ -172,10 +173,26 @@ test("embers and spray leave pool headroom; the plume lingers; a flare is drawn 
   assert.equal(draws.length, 0, "and not drawn again: no trail of copies behind a moving car");
   let ok = 0;
   for (let i = 0; i < 100; i++) if (P.flare(0, 0, 0, 0.2, 1, 1, 1, 1)) ok++;
-  assert.equal(ok, 48, "the desktop frame holds 48 flares");
+  assert.equal(ok, 48, "the desktop frame holds 48 non-lamp flares (LAMP_RESERVE held back)");
   assert.equal(P.flare(0, 0, 0, 0.2, 1, 1, 1, 0), false, "an invisible flare is refused");
+  // Race lamps (start gantry / marshal panels) still draw from the reserved slots.
+  let lamps = 0;
+  for (let i = 0; i < 40; i++) if (P.flare(0, 0, 0, 0.2, 1, 1, 1, 1, true)) lamps++;
+  assert.equal(lamps, 24, "LAMP_RESERVE keeps 24 slots for race lamps after cars fill the rest");
+  assert.equal(P.flareCount(), 72, "desktop FLARE_MAX = 48 effect + 24 lamp");
   P.clear();
   assert.equal(P.flareCount(), 0, "clear() drops pending flares");
+});
+
+test("collision sparks share the BURST_MAX hitch ceiling with scrape/smoke (nOf, not Math.round)", () => {
+  // sparks used Math.round and skipped BURST_MAX: count 100 dumped 100 embers in
+  // one call (and at particleMul 2 a hard collision's ~20 became 40). nOf caps at 24.
+  const { P } = load({ random: () => 0 });
+  P.sparks(0, 0, 0, 0, 1, 10, 100);
+  assert.equal(P.count(), 24, "sparks clamps through nOf/BURST_MAX (was Math.round → 100)");
+  P.clear();
+  P.scrape(0, 0, 0, 0, 70, 100);
+  assert.equal(P.count(), 24, "scrape still shares the same ceiling");
 });
 
 test("the mobile tier keeps a smaller pool, a shorter plume and fewer flares", () => {
@@ -393,18 +410,19 @@ test("a full pool recycles its oldest particle: the newest emission is never the
 });
 
 test("emission follows the requested rate at any frame rate: plank embers at 10, 20 and 60 fps", () => {
+  const want = load().CarFx.SPARK_RATE;
   for (const hz of [10, 20, 60]) {
     const { P } = load();
     const dt = 1 / hz, frames = 20 * hz;
     let spawned = 0;
     for (let f = 0; f < frames; f++) {
       const n0 = P.count();
-      P.scrape(0, 0, 0, 0, 70, dt * 110);   // car-fx.js: dt × SPARK_RATE × k, k = 1
+      P.scrape(0, 0, 0, 0, 70, dt * want);   // car-fx.js: dt × SPARK_RATE × k, k = 1
       spawned += P.count() - n0;
       P.clear();
     }
     const rate = spawned / 20;
-    assert.ok(Math.abs(rate / 110 - 1) <= 0.03, `${hz} fps: ${rate.toFixed(1)} embers/s, want 110 (the 4-per-call clamp gave ${Math.min(110, 4 * hz)})`);
+    assert.ok(Math.abs(rate / want - 1) <= 0.03, `${hz} fps: ${rate.toFixed(1)} embers/s, want ${want} (the 4-per-call clamp gave ${Math.min(want, 4 * hz)})`);
   }
 });
 

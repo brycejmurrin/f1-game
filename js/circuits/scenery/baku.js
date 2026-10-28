@@ -13,6 +13,7 @@
         palm, anchor, along, every, onTrack, addBox, addCyl, addCone, addPrism,
         addFrustum, ferrisWheel, vadd, hash, cityFront,
         circuitKit, plane, cypress, terrace, terrainYAt,
+        bakedModel,
       } = api;
 
       const SAND        = [0.62, 0.50, 0.34];        // Old-City sandstone
@@ -867,4 +868,10 @@
                  s % 2 ? [0.90, 0.55, 0.20] : WIN_WARM, b);
         }
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.088, 0.2705, 0.434, 0.663]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

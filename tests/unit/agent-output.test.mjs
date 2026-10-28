@@ -415,16 +415,28 @@ function pidAlive(pid) {
   catch { try { process.kill(pid, 0); return true; } catch { return false; } }
 }
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+// #4022: writeFileSync creates the file EMPTY and then writes it, so "exists" is not "ready" — a poll that
+// landed in between parsed '' ("Unexpected end of JSON input", Pages 4261). Ready means it parses.
 async function waitFile(file) {
   const until = Date.now() + 3000;
-  while (!fs.existsSync(file) && Date.now() < until) await wait(20);
-  assert.ok(fs.existsSync(file), 'child tree reported readiness');
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
+  let last;
+  while (Date.now() < until) {
+    try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (error) { last = error; }
+    await wait(20);
+  }
+  assert.fail(`child tree never reported readiness: ${last && last.message}`);
 }
 function treeCode(file, { ignore = true, naturalExit = false } = {}) {
   const grandchild = `${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}setInterval(()=>{},1000)`;
-  return `const fs=require('node:fs');const {spawn}=require('node:child_process');${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}const c=spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{detached:true,stdio:'ignore'});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(file)},JSON.stringify([process.pid,c.pid]));${naturalExit ? 'process.exit(7)' : ''}},160);setInterval(()=>{},1000);`;
+  return `const fs=require('node:fs');const {spawn}=require('node:child_process');${ignore ? "process.on('SIGTERM',()=>{});process.on('SIGINT',()=>{});" : ''}const c=spawn(process.execPath,['-e',${JSON.stringify(grandchild)}],{detached:true,stdio:'ignore'});setTimeout(()=>{fs.writeFileSync(${JSON.stringify(file + '.tmp')},JSON.stringify([process.pid,c.pid]));fs.renameSync(${JSON.stringify(file + '.tmp')},${JSON.stringify(file)});${naturalExit ? 'process.exit(7)' : ''}},160);setInterval(()=>{},1000);`;
 }
+test('readiness waits for a parseable file, not for the file to exist (#4022)', async (t) => {
+  const root = fixture(t), ready = path.join(root, 'pids.json');
+  fs.writeFileSync(ready, '');   // the instant writeFileSync has created the file but not yet written it
+  const late = wait(60).then(() => fs.writeFileSync(ready, JSON.stringify([1, 2])));
+  assert.deepEqual(await waitFile(ready), [1, 2]);
+  await late;
+});
 test('explicit timeout escalates ignored signals and removes detached descendants', async (t) => {
   const root = fixture(t), ready = path.join(root, 'pids.json');
   const run = spawnAgentProcess(process.execPath, ['-e', treeCode(ready)], { cwd: root, stdio: 'ignore', timeoutMs: 400, killGraceMs: 100 });
@@ -451,7 +463,14 @@ test('CLI cancellation forwards original signal and finishes descendant cleanup 
   child.stdout.on('data', (chunk) => { stdout += chunk; });
   child.stderr.on('data', (chunk) => { stderr += chunk; });
   const finished = new Promise((resolve) => child.on('close', (exitCode, signal) => resolve({ exitCode, signal })));
-  const pids = await waitFile(ready);
+  // A failure before child.kill() below left the CLI and its signal-ignoring tree running, and the CLI's
+  // stdout pipe kept this file alive to the 540 s timeout (#4022). Reap them whatever happens first.
+  let pids = [];
+  t.after(() => {
+    if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    for (const pid of pids) if (pidAlive(pid)) { try { process.kill(pid, 'SIGKILL'); } catch { /* Owned test process exited. */ } }
+  });
+  pids = await waitFile(ready);
   child.kill('SIGINT');
   const outcome = await finished;
   assert.equal(outcome.signal, 'SIGINT', stderr);
