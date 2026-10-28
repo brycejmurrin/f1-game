@@ -29,12 +29,12 @@
     // bumps left ~59% of the lap dead-flat between the T1 plunge and mid-sector
     // crest — stair-step basin. hasRealElevation(id) ignores elevations keys.
     bankZones: [
-      { frac: 0.1888, angleDeg: 3.0, widthM: 100 },   // T1 downhill right
-      { frac: 0.2961, angleDeg: 3.5, widthM: 150 },   // T2
+      { frac: 0.1888, angleDeg: 3.0, widthM: 100 },   // T2 downhill right
+      { frac: 0.2961, angleDeg: 3.5, widthM: 150 },   // T3 exit / T4 approach
       { frac: 0.3474, angleDeg: 6.0, widthM: 90 },    // T4 — the banked left
-      { frac: 0.5197, angleDeg: 3.0, widthM: 170 },   // hilltop sweep
-      { frac: 0.8506, angleDeg: 3.0, widthM: 70 },    // T11
-      { frac: 0.9624, angleDeg: 3.5, widthM: 190 },   // final long right
+      { frac: 0.5197, angleDeg: 3.0, widthM: 170 },   // hilltop sweep (near T7)
+      { frac: 0.8506, angleDeg: 3.0, widthM: 70 },    // T13
+      { frac: 0.9624, angleDeg: 3.5, widthM: 190 },   // final long right (after T14)
     ],
 
     // ── Per-circuit data (this def is its single home; the engine reads it off the built def) ──

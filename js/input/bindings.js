@@ -211,7 +211,7 @@ const InputBindings = (function () {
       { id: "camera",    label: "CAMERA",      def: [8, null] },
       { id: "lookBack",  label: "LOOK BACK",   def: [11, null] },
       { id: "recover",   label: "RECOVER",     def: [10, null] },
-      { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down; d-pad up is ACTIVE AERO
+      { id: "radio",     label: "RADIO CHECK", def: [13, null] },   // d-pad down (13); ACTIVE AERO is its own row (12)
       { id: "mirror",    label: "MIRROR",      def: [null, null] },   // every standard button is taken; bind one on CONTROLS
       { id: "pause",     label: "PAUSE",       def: [9, null] },
     ];

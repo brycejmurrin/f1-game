@@ -42,7 +42,7 @@ import { fileURLToPath } from "node:url";
 // reimplemented: it is unit-tested both ways in
 // tests/unit/frame-hitch-analyse.test.mjs, and a second copy of a periodicity
 // test is a second copy of its bugs.
-import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
+import { analyse, analysePasses, analysePassKinds, analyseCpu, analyseSpikeCpu, analyseSpikeWork, analyseSpikePassKinds, analysePassOps, analyseWindow, analyseGapWork, analyseRaceEntrySpans, analyseRaceEntryLoaf, analyseDepthDiscard } from "./frame-hitch.mjs";
 import { gpuObjectCounter, memCyclesVerdict } from "./mem-cycles-lib.mjs";
 import { ENTRIES, parseEntry, parseCam, switchBeat, menuPrepReady, raceGate, prepTimelineStart, prepTimelineRead } from "../lib/census-entry.mjs";
 
@@ -243,8 +243,8 @@ try {
     const _hCAP = 40000;
     const _hT = new Float64Array(_hCAP), _hD = new Float64Array(_hCAP);
     const _hP = new Int16Array(_hCAP);
-    let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [];
-    const _hSig = [];
+    let _hN = 0, _hArmed = false, _hPass = 0, _hSigCur = [], _hSub = 0, _hOpsCur = [];
+    const _hSig = [], _hOps = [], _hSubs = [];   // store inventory (frame-hitch analysePassOps): first 600 frames
     // THE PASS CENSUS, and the reason it belongs HERE rather than only in the
     // container. tlx-shadow.js sizes its maps by `softwareGL`: SUN_SIZE is 512
     // on a software adapter and 2048 on a real desktop, CAR_SIZE 256 against
@@ -377,6 +377,10 @@ try {
         };
       }
       wrapCall(GQ, "submit", "gpu.submit");
+      if (GQ && typeof GQ.submit === "function") {
+        const origSub = GQ.submit;
+        GQ.submit = function () { if (_hArmed) _hSub++; return origSub.apply(this, arguments); };
+      }
       wrapCall(GQ, "writeTexture", "gpu.writeTexture");
       wrapCall(GQ, "copyExternalImageToTexture", "gpu.copyExternalImageToTexture");
       wrapCall(GD, "createTexture", "gpu.createTexture");
@@ -474,6 +478,15 @@ try {
                 if (lo) sig += ":" + lo;
               } catch (_) { sig = "?"; }
               _hSigCur.push(sig);
+              try {
+                const parts = [], ca = (desc && desc.colorAttachments) || [], ds = desc && desc.depthStencilAttachment;
+                for (let i = 0; i < ca.length; i++) {
+                  const v = ca[i] && (ca[i].view || ca[i].resolveTarget);
+                  if (ca[i]) parts.push(((v && v.__sig) || "?") + ":" + ca[i].loadOp + ">" + ca[i].storeOp);
+                }
+                if (ds) parts.push("d:" + ds.depthLoadOp + ">" + ds.depthStoreOp);
+                _hOpsCur.push(parts.join("+") || "empty");
+              } catch (_) { _hOpsCur.push("?"); }
             }
           }
           const _t1 = performance.now();
@@ -587,17 +600,18 @@ try {
               _hT[_hN] = a; _hD[_hN] = performance.now() - a;
               _hP[_hN] = _hPass > 32767 ? 32767 : _hPass;
               if (_hN < 4000) _hSig.push(_hSigCur);
+              if (_hN < 600) { _hOps.push(_hOpsCur); _hSubs.push(_hSub); }
               if (_hWorkCur !== null && _hWorkFrames.length < 4000) _hWorkFrames.push([_hN, _hWorkCur]);
               _hN++;
               const lf = _lhFrames();
               if (lf >= 0 && lf !== _lhLast && _gfN < _hCAP) { _gfT[_gfN++] = performance.now(); _lhLast = lf; }
             }
-            _hPass = 0; _hSigCur = []; _hWorkCur = null;
+            _hPass = 0; _hSigCur = []; _hOpsCur = []; _hSub = 0; _hWorkCur = null;
           }
         });
       };
       window.__gcHitch = {
-        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
+        arm() { _hArmed = true; _hN = 0; _hSig.length = 0; _hOps.length = 0; _hSubs.length = 0; _hWork.clear(); _hStacks.clear(); _hStackBudget = 200; _hWorkFrames.length = 0; _hWorkCur = null;
           _gfN = 0; _lhLast = _lhFrames(); _win.t0 = performance.now(); _win.f0 = _lhLast; _win.t1 = _win.f1 = null; },
         // Close the window where the DRIVING stops, so the A/B phases that
         // follow never enter the per-frame series or the spike analysis.
@@ -606,7 +620,7 @@ try {
                        gaps: _gGaps, marks: window.__apexMarks || {}, longTasks: window.__apexLongTasks || [],
                        loaf: window.__apexLoaf || [], loafObserver: window.__apexLoafObserver,
                        t0: Array.from(_hT.subarray(0, _hN)), dur: Array.from(_hD.subarray(0, _hN)),
-                       passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig,
+                       passes: Array.from(_hP.subarray(0, _hN)), passSig: _hSig, opsSig: _hOps, submits: _hSubs,
                        work: [..._hWork.entries()].sort((a, b) => b[1] - a[1]),
                        workFrames: _hWorkFrames,
                        stacks: [..._hStacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 30) }),
@@ -1176,6 +1190,7 @@ try {
       : { note: "no resource calls observed — wrapping failed, or this leg creates none" };
     out.compileStacks = d.stacks || [];
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
+    out.passOps = analysePassOps(d.opsSig || [], d.submits || []);
     // WHAT IS INSIDE THE SPIKES: the profile joined to the frames at or over
     // 100 ms (the ones a player feels), and the resource calls those frames
     // made against the rest.
