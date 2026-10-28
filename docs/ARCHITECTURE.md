@@ -556,11 +556,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.camTune),… |
 | `extra-rigs.js` | `ExtraRigs` | tag | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
 | `flyby-sight.js` | `FlybySight` | tag | FLYBY SIGHTLINES: what a flyby eye can actually SEE. |
+| `flyby-clear.js` | `FlybyClear` | tag | flyby eye clearance: which props are solid, the lift over a roof, and the ground floor under a crane shot. |
 | `flyby-seq.js` | `FlybySeq` | tag | FLYBY SHOT SEQUENCER: the pre-race loading screen's camera. |
 | `cam-avoid.js` | `CamAvoid` | tag | broadcast-camera wall / building avoidance for open circuits. |
 | `trackside.js` | `TracksideCams` | tag | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
 | `director.js` | `Director` | tag | LIVE TV DIRECTOR (Director.create(G)): a broadcast-style camera brain for the race the player is driving. |
+| `photo-looks.js` | `PhotoLooks` | tag | photo-mode look presets: a transient grade applied while the free camera is open, restored when the visit ends. |
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
@@ -570,14 +572,15 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `cockpit-finishes.js` | `CockpitFinishes` | tag | first-person finish preferences. |
 | `cockpit-preview.js` | `CockpitPreview` | tag | isolated cockpit option preview. |
-| `drive-chase.js` | `DriveChase` | tag | lens only for the chase family. vantage.js owns the pose: distance, corner lead, the brake tuck, the drift swing. |
-| `drive-broadcast.js` | `DriveBroadcast` | tag | lens only for the broadcast cameras. |
-| `drive-onboard.js` | `DriveOnboard` | tag | lens only for cameras bolted to the car. |
+| `fov-mode.js` | `CamFov` | tag | one speed-FOV curve for every player camera. vantage.js asks CamFeel.modeFov, which forwards here, so the recipe is not buried in look-back and shake. |
+| `drive-lens.js` | `DriveLens` | tag | lens-only FOV delta for every live camera family. |
 | `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
 | `cam-groups.js` | `CamGroups` | tag | CamGroups: the ONE table of which player cameras count as "onboard" and which take the cockpit HUD layout, by CamModes id. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `fov-fit.js` | `CamFovFit` | tag | aspect-aware vertical FOV fit. camFov / vantage FOVs are VERTICAL. |
+| `vantage-ride.js` | `VantageRide` | tag | chase-rig ride height: one smoothed centreline height and grade, plus the C1 ground-floor blend. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
+| `cam-picker.js` | `CamPicker` | tag | CAM button picker: hold or right-click opens the view grid, arrow keys move it, AUTO appears only while a WATCH runs. |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
 | `tuner-panel.js` | `CamTunerEditor` | LAZY_CAM_EDITOR | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `flyby-editor.js` | `FlybyEditor` | LAZY_CAM_EDITOR | FLYBY SHOT EDITOR DOM panel (LAZY_CAM_EDITOR). |
@@ -594,13 +597,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `xr-opts.js` | `XROpts` | tag | XROpts: SETTINGS › DISPLAY rows for VR MODE + VR RENDERER. |
-| `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring (Phase 0). |
+| `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring. |
 | `xr-plan.js` | `XRPlan` | LAZY_XR | XRPlan: pure boot-time VR renderer path selection. |
 | `xr-rig.js` | `XrRig` | LAZY_XR | XR seated-rig math (pure). |
 | `xr-input.js` | `XrInput` | LAZY_XR | XR controller → Input.remoteSample / remoteEvent. |
 | `xr-session.js` | `XrSession` | LAZY_XR | WebXR immersive-vr session owner. |
 | `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
-| `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button (Phase 0). |
+| `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button. |
 
 **`js/share/`**
 
@@ -609,7 +612,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
 | `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
-| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip: one button shape for every result screen. |
+| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
 
 **`js/render/glx/shaders/`**
 
