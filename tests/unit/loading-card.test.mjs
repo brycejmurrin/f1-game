@@ -38,19 +38,38 @@ const ruleDecls = (css, sel) => {
 };
 const phaseCard = (phase) => ruleDecls(readCssSource("css/overlays.css"), `#loading[data-phase="${phase}"] #ld-card`);
 
-/** LoadingScreen's module surface, evaluated on its own — the same `const` ->
- *  `var` rewrite tests/unit/flyby-panel.test.mjs uses for the other UI modules. */
+/** LoadingCard + LoadingScreen, evaluated alone — the same `const` → `var`
+ *  rewrite tests/unit/flyby-panel.test.mjs uses for the other UI modules. */
 function load() {
   const sb = { Math, JSON, Object, Array, Number, String, isFinite, Date, console };
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb,
+    { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
+  assert.ok(sb.LoadingCard, "js/ui/loading-card.js assigns the LoadingCard global");
   assert.ok(sb.LoadingScreen, "js/ui/loading-screen.js assigns the LoadingScreen global");
-  return sb.LoadingScreen;
+  return sb;
 }
 
-const LS = load();
+const { LoadingCard: LC, LoadingScreen: LS } = load();
 const { CARD, CARD_KEYS, clampCard, cardPristine, cardVars } = LS;
+
+/** Pure keys LoadingScreen must keep as the same references LoadingCard exports. */
+const PURE_KEYS = [
+  "FLY_MS", "isAutomation", "CARD_MS", "SHORT_FLY_MS", "SKIP_GRACE_MS", "SKIP_STREAK", "FLY_MAX_MS",
+  "flyMsFor", "packSettled", "warmPresentReady", "metaRows", "nextSkips",
+  "CARD", "CARD_KEYS", "clampCard", "cardPristine", "cardVars",
+  "isGridShot", "gridField", "gridLayout", "gridColour", "gridInk", "GRID_ROW_MIN",
+];
+
+test("LoadingScreen re-exports LoadingCard's pure helpers by reference", () => {
+  for (const k of PURE_KEYS) {
+    assert.ok(Object.prototype.hasOwnProperty.call(LC, k), `LoadingCard missing ${k}`);
+    assert.ok(Object.prototype.hasOwnProperty.call(LS, k), `LoadingScreen missing re-export ${k}`);
+    assert.equal(LS[k], LC[k], `${k} must be the same reference on LoadingScreen`);
+  }
+});
 
 test("the registry is complete: every key has a range, a step, a label and a default inside it", () => {
   assert.ok(CARD_KEYS.length >= 3, "size and both axes, at least");
@@ -242,6 +261,8 @@ function harness(stored = {}, storeOverride = null, docEl = null, nav = undefine
   };
   if (nav !== undefined) sb.navigator = nav;
   sb.window = sb;
+  vm.runInNewContext(read("js/ui/loading-card.js").replace(/^const\b/gm, "var"), sb,
+    { filename: absSrc("js/ui/loading-card.js") });
   vm.runInNewContext(read("js/ui/loading-screen.js").replace(/^const\b/gm, "var"), sb,
     { filename: absSrc("js/ui/loading-screen.js") });
   const races = [];
@@ -666,7 +687,7 @@ function gridHarness({ grid = field(22, 11), speaking = () => false, radioOn = t
     GameAudio: { radioLeadS: () => 0.43, radioSting: (ch, life) => stings.push(life) },
   };
   sb.window = sb;
-  for (const f of ["js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-screen.js"]) {
+  for (const f of ["js/camera/flyby-clear.js", "js/camera/flyby-seq.js", "js/race/radio-lines.js", "js/ui/loading-card.js", "js/ui/loading-screen.js"]) {
     vm.runInNewContext(read(f).replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   }
   const screen = sb.LoadingScreen.create({
@@ -746,7 +767,7 @@ test("the turn on camera is tagged on the map, and only redrawn when it changes"
 });
 
 test("FlybySeq.airCorner: 0 until a corner shot is solved, and reset() clears it", () => {
-  const sb = modules(["js/camera/flyby-seq.js"]);
+  const sb = modules(["js/camera/flyby-clear.js", "js/camera/flyby-seq.js"]);
   assert.equal(sb.FlybySeq.airCorner(), 0);
   sb.FlybySeq.reset();
   assert.equal(sb.FlybySeq.airCorner(), 0);
@@ -852,7 +873,7 @@ test("stop() and a skip cut a radio check that is on air", () => {
 });
 
 test("FlybySeq.shotAt names the shot solve() cuts to, without planning it", () => {
-  const F = modules(["js/camera/flyby-seq.js"]).FlybySeq;
+  const F = modules(["js/camera/flyby-clear.js", "js/camera/flyby-seq.js"]).FlybySeq;
   assert.equal(F.shotAt(0).id, F.DEFAULT[0].id);
   assert.equal(F.shotAt(1).id, "grid-mine");
   assert.equal(F.shotAt(0.87).id, "grid-front");

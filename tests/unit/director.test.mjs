@@ -265,8 +265,8 @@ function realCamScene() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/mat4.js", "js/camera/drive-chase.js", "js/camera/drive-broadcast.js", "js/camera/drive-onboard.js",
-    "js/camera/feel.js", "js/camera/vantage.js", "js/camera/director.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/mat4.js", "js/camera/fov-mode.js", "js/camera/drive-lens.js",
+    "js/camera/feel.js", "js/camera/vantage-ride.js", "js/camera/vantage.js", "js/camera/director.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const [Director, GameCams, CamFeel] = ["Director", "GameCams", "CamFeel"].map((g) => vm.runInContext(g, ctx));
   // A parked subject: nothing moves but the bend under it.
   const car = { code: "VER", prog: 100, s: 1000, x: 0, speed: 50, px: 0, pz: 1000, head: 0 };

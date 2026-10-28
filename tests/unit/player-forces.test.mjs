@@ -70,6 +70,17 @@ test("PlayerForces.create exposes step and tyreSat", () => {
   assert.equal(typeof api.tyreSat, "function");
 });
 
+test("recoverBlocked refuses RECOVER in the pit lane or box (M42, #3978)", () => {
+  const { PlayerForces } = load();
+  const api = PlayerForces.create({});
+  assert.equal(typeof PlayerForces.recoverBlocked, "function");
+  assert.equal(api.recoverBlocked({ pitState: null }, true), true, "in the lane");
+  assert.equal(api.recoverBlocked({ pitState: "box" }, false), true, "serving a stop in the box");
+  assert.equal(api.recoverBlocked({ pitState: "lane" }, true), true);
+  assert.equal(api.recoverBlocked({ pitState: null }, false), false, "on the road: allowed");
+  assert.equal(api.recoverBlocked({}, false), false);
+});
+
 test("tyreSat opposes slip (negative of mu · lateralCurve)", () => {
   const { PlayerForces } = load();
   const mu = 20, cs = 12, a = 0.1;

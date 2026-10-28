@@ -13,7 +13,7 @@
     night: false,
     theme: "green",
     lengthKm: 4.6,
-    tyreSeverity: 0.72,  // Long straights, low tyre energy — permanent low-deg band (below Monza 0.55 floor approach)
+    tyreSeverity: 0.72,  // Long straights, low tyre energy — permanent low-deg band (above Monza's 0.55 floor)
     baseHW: 7.5,
     sceneryCoordinates: "racing",
     terrainOuter: 110,
@@ -39,7 +39,7 @@
       { s: 0.70, halfM: 420, rise: 4.0 },   // climb back toward the Motodrom
     ],
     hwZones: [
-      { s0: 0.3624, s1: 0.4169, hw: 6.2, ease: 0.012 },  // Spitzkehre hairpin (index; arc 0.435-0.480)
+      { s0: 0.3624, s1: 0.4169, hw: 6.2, ease: 0.012 },  // Spitzkehre hairpin approach (index; racing ≈0.349-0.402)
       { s0: 0.815, s1: 0.960, hw: 6.6, ease: 0.015 },  // Motodrom stadium loop
     ],
     bankZones: [

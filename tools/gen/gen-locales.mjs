@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import vm from "node:vm";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { argGate } from "./gen-lib.mjs";
+import { loadParts } from "../car/parts-sweep.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const EN_REL = "locales/en.json";
@@ -32,7 +33,7 @@ function walkJs(dir, out = []) {
   return out;
 }
 
-function scanCallSites() {
+function scanCallSites(root) {
   const keys = new Map();
   const jsRoot = path.join(ROOT, "js");
   if (fs.existsSync(jsRoot)) {
@@ -42,6 +43,10 @@ function scanCallSites() {
       let m;
       while ((m = re.exec(text))) keys.set(m[1], m[2]);
     }
+  }
+  for (const cat of loadParts().Parts.CATALOG) {
+    keys.set(`parts.${cat.id}.label`, cat.label);
+    for (const o of cat.options) keys.set(`parts.${cat.id}.${o.id}.label`, o.label);
   }
   if (fs.existsSync(INDEX)) {
     const html = fs.readFileSync(INDEX, "utf8");
@@ -70,7 +75,7 @@ function radioPools() {
 }
 
 export function generate(root = ROOT) {
-  const keys = scanCallSites();
+  const keys = scanCallSites(root);
   for (const [k, v] of Object.entries(radioPools())) keys.set(k, v);
   const sorted = [...keys.keys()].sort();
   const en = {};

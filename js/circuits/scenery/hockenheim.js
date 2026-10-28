@@ -11,7 +11,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         sponsorHoarding, cameraTower, seat, forestEdge, terrace, bleacher,
-        addBox, addCyl, addPrism, addCone } = api;
+        addBox, addCyl, addPrism, addCone, bakedModel } = api;
 
       const tiltBasis = (a, ang) => {
         const c = Math.cos(ang), s = Math.sin(ang);
@@ -494,4 +494,10 @@
       cameraTower(K(0.838), 1, 8, { h: 17 });
       cameraTower(K(0.918), -1, 8, { h: 15 });
       cameraTower(K(0.470), 1, 10, { h: 14 });   // Spitzkehre, the other TV vantage
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.965, 0.985, 0.01]) bakedModel("k_tentlong", K(s), -1, 95, { scale: 2.4 });
+      for (const s of [0.1875, 0.4635, 0.657, 0.883]) bakedModel("k_camera_exclusive", K(s), 1, 13, { scale: 3 });
     };

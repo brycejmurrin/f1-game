@@ -750,6 +750,7 @@
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/elevation-tracks-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -852,6 +853,7 @@
         "tests/unit/drift-vm.test.mjs",
         "tests/unit/driving-line-pace.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -930,6 +932,7 @@
         "tests/unit/collisions-deep-vm.test.mjs",
         "tests/unit/collisions-vm.test.mjs",
         "tests/unit/episode-transients.test.mjs",
+        "tests/unit/game-m35-race-index-vm.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/game-vm-pool.test.mjs",
         "tests/unit/game-vm.test.mjs",
@@ -2058,6 +2061,11 @@
       "roster": "LAZY_AUDIO"
     },
     {
+      "path": "js/audio/mix-duck.js",
+      "global": "GameAudioMix",
+      "roster": "LAZY_AUDIO"
+    },
+    {
       "path": "js/audio/music-lib.js",
       "global": "MusicLib",
       "roster": "LAZY_AUDIO"
@@ -2133,6 +2141,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/camera/cam-picker.js",
+      "global": "CamPicker",
+      "roster": "tag"
+    },
+    {
       "path": "js/camera/cam-tuner-boot.js",
       "global": "CamTunerPanel",
       "roster": "tag"
@@ -2158,18 +2171,8 @@
       "roster": "tag"
     },
     {
-      "path": "js/camera/drive-broadcast.js",
-      "global": "DriveBroadcast",
-      "roster": "tag"
-    },
-    {
-      "path": "js/camera/drive-chase.js",
-      "global": "DriveChase",
-      "roster": "tag"
-    },
-    {
-      "path": "js/camera/drive-onboard.js",
-      "global": "DriveOnboard",
+      "path": "js/camera/drive-lens.js",
+      "global": "DriveLens",
       "roster": "tag"
     },
     {
@@ -2180,6 +2183,11 @@
     {
       "path": "js/camera/feel.js",
       "global": "CamFeel",
+      "roster": "tag"
+    },
+    {
+      "path": "js/camera/flyby-clear.js",
+      "global": "FlybyClear",
       "roster": "tag"
     },
     {
@@ -2208,6 +2216,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/camera/fov-mode.js",
+      "global": "CamFov",
+      "roster": "tag"
+    },
+    {
       "path": "js/camera/free-cam.js",
       "global": "FreeCam",
       "roster": "tag"
@@ -2233,6 +2246,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/camera/photo-looks.js",
+      "global": "PhotoLooks",
+      "roster": "tag"
+    },
+    {
       "path": "js/camera/replay-buf.js",
       "global": "ReplayBuf",
       "roster": "tag"
@@ -2251,6 +2269,11 @@
       "path": "js/camera/tuner-panel.js",
       "global": "CamTunerEditor",
       "roster": "LAZY_CAM_EDITOR"
+    },
+    {
+      "path": "js/camera/vantage-ride.js",
+      "global": "VantageRide",
+      "roster": "tag"
     },
     {
       "path": "js/camera/vantage.js",
@@ -2300,6 +2323,11 @@
     {
       "path": "js/car/car3d.js",
       "global": "Car3D",
+      "roster": "tag"
+    },
+    {
+      "path": "js/car/cockpit-rig.js",
+      "global": "CockpitRig",
       "roster": "tag"
     },
     {
@@ -3098,6 +3126,11 @@
       "roster": "LAZY_DATA"
     },
     {
+      "path": "js/data/ics.js",
+      "global": "DataIcs",
+      "roster": "LAZY_DATA"
+    },
+    {
       "path": "js/data/legends.js",
       "global": "Legends",
       "roster": "tag"
@@ -3265,6 +3298,11 @@
     {
       "path": "js/editor/workspace.js",
       "global": "DesignerWorkspace",
+      "roster": "LAZY_EDITOR"
+    },
+    {
+      "path": "js/editor/zones.js",
+      "global": "TrackZones",
       "roster": "LAZY_EDITOR"
     },
     {
@@ -3513,6 +3551,16 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/net/ice.js",
+      "global": "NetIce",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/interp.js",
+      "global": "NetInterp",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/net/lobby-codes.js",
       "global": "LobbyCodes",
       "roster": "LAZY_NET"
@@ -3548,6 +3596,11 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/net/quali-wire.js",
+      "global": "QualiWire",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/net/rendezvous.js",
       "global": "NetRendezvous",
       "roster": "LAZY_NET"
@@ -3575,6 +3628,11 @@
     {
       "path": "js/net/spectate.js",
       "global": "NetSpectate",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/net/strategy-wire.js",
+      "global": "StrategyWire",
       "roster": "LAZY_NET"
     },
     {
@@ -3878,6 +3936,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/pit-geom.js",
+      "global": "PitGeom",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/pit-lane.js",
       "global": "PitLane",
       "roster": "LAZY_RACE_SESSION"
@@ -3928,6 +3991,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/real-race-pace.js",
+      "global": "RealRacePace",
+      "roster": "tag"
+    },
+    {
       "path": "js/race/real-race.js",
       "global": "RealRace",
       "roster": "tag"
@@ -3945,6 +4013,11 @@
     {
       "path": "js/race/session-entry.js",
       "global": "SessionEntry",
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/session-phys.js",
+      "global": "SessionPhys",
       "roster": "tag"
     },
     {
@@ -4000,6 +4073,11 @@
     {
       "path": "js/race/wind.js",
       "global": "Wind",
+      "roster": "tag"
+    },
+    {
+      "path": "js/race/wx-hash.js",
+      "global": "WxHash",
       "roster": "tag"
     },
     {
@@ -4323,6 +4401,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/track/scenery/api-wrap.js",
+      "global": "SceneryApiWrap",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
       "path": "js/track/scenery/build-props.js",
       "global": "TrackBuildProps",
       "roster": "LAZY_TRACK_BUILD"
@@ -4343,6 +4426,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/track/scenery/facade.js",
+      "global": "SceneryFacade",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
       "path": "js/track/scenery/graph.js",
       "global": "TrackGraph",
       "roster": "tag"
@@ -4355,6 +4443,11 @@
     {
       "path": "js/track/scenery/identity.js",
       "global": "SceneryIdentity",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/landforms.js",
+      "global": "SceneryLandforms",
       "roster": "LAZY_TRACK_BUILD"
     },
     {
@@ -4375,6 +4468,11 @@
     {
       "path": "js/track/scenery/pits.js",
       "global": "SceneryPits",
+      "roster": "LAZY_TRACK_BUILD"
+    },
+    {
+      "path": "js/track/scenery/stands.js",
+      "global": "SceneryStands",
       "roster": "LAZY_TRACK_BUILD"
     },
     {
@@ -4565,6 +4663,11 @@
     {
       "path": "js/ui/live-region.js",
       "global": "LiveRegion",
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/loading-card.js",
+      "global": "LoadingCard",
       "roster": "tag"
     },
     {
