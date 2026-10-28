@@ -12,6 +12,7 @@
  * Run: node --test tests/unit/career-round2.test.mjs
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -27,7 +28,7 @@ const IDS = ["albert_park", "shanghai", "suzuka", "miami", "montreal", "monaco",
 
 function load(n = 24, realParts = false) {
   const stored = new Map();
-  const ctx = vm.createContext({ Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console, Set, Map, WeakSet, Infinity, Error });
+  const ctx = vm.createContext({ I18n: i18nStub(),  Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console, Set, Map, WeakSet, Infinity, Error });
   ctx.window = ctx;
   ctx.GameStore = {
     CAREER_V: 1,

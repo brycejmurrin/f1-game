@@ -2400,7 +2400,9 @@ function snapGameCam(paint) {
 // the same two cars forever, because the reliability draw deliberately consumes
 // nothing from the stream that would otherwise have moved on. Starting from zero
 // on every load is what keeps a seeded run reproducible across reloads.
-let raceIndex = 0;
+// raceDrawRound: frozen at arm time for one-off GPs (M35) so mistake hashes still
+// match gridUp/arm after raceIndex++.
+let raceIndex = 0, raceDrawRound = 0;
 // Draw the field's retirements for the race about to start (or the round about to
 // be simulated). The seed is the CAREER's inside a career and the SIM seed
 // outside one — the two places a run's reproducibility is already anchored.
@@ -2409,6 +2411,9 @@ let raceIndex = 0;
 const luckSeed = () => (Career.inCareer() ? Career.seasonSeed() : flow === "season" && season ? SeasonCal.luckSeed(season, simSeed()) : simSeed());
 function armReliability(field) {
   const team = player ? player.team : Teams.LIST[teamIdx];
+  // Freeze the one-off draw round for mistake hashes (M35). Championship weekends
+  // keep using drawRound() at each call site instead.
+  if (!isChampionship()) raceDrawRound = raceIndex;
   Reliability.arm(field, {
     level: raceReliability,
     seed: luckSeed(),   // per season, not per career
@@ -2613,10 +2618,10 @@ async function startRaceBody() {
       `c${playerMods.cornering.toFixed(2)}/b${playerMods.braking.toFixed(2)}` : "none"} ` +
     `aeroLoad=${(playerAeroLoad ?? 0.5).toFixed(2)} assists=` +
     `help${driveTune.ROAD_FOLLOW.toFixed(2)}/line${raceLineAssist.toFixed(2)}`);
-  // Only a RACE can retire a car. A time trial is you against the clock and
-  // qualifying is one flying lap — losing the car to a gearbox there would end
-  // the session with nothing to show and no race to have lost it in.
-  if (session === "race") { raceIndex++; armReliability(cars); }
+  // M35/B6: arm on the SAME raceIndex gridUp just hashed (launch/tyre/phase), THEN
+  // bump. Bumping first changed AI draws and broke quali-pace-parity at PACE 1.34.
+  // armReliability freezes raceDrawRound for the in-race mistake hash after the bump.
+  if (session === "race") { armReliability(cars); raceIndex++; }
   resultT = 0; postFinish.since = -1;
   feel.camRoll = 0; camSlipSm = 0;
   feel.shake = 0; feel.hitStop = 0; stormFx._thunderT = -1; announce._waitAt = NaN;   // a crash's shake, a queued thunder or the WAITING card's quiet window from the last session must not reach this grid
@@ -5753,7 +5758,7 @@ function updateCarLateral(c, dt, ranked, S) {
       const zk = Math.round(wrapS(c.s + _atk.toTurnIn));
       if (zk !== c.zoneKey) {
         c.zoneKey = zk;
-        if (!c.errT && !alongO && DriverRatings.hash32(luckSeed() + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceIndex) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
+        if (!c.errT && !alongO && DriverRatings.hash32(luckSeed() + ":" + (isChampionship() ? SeasonCal.drawRound(season) : raceDrawRound) + ":" + c.gridPos + ":" + c.lap + ":" + zk) / 4294967296 < AiDrive.mistakeChance(aiT, c.pressT / 6, dd.err)) { c.errT = AiDrive.mistakeTotal(); c.errCount = (c.errCount || 0) + 1; }
       }
     } else c.zoneKey = -1;
     c.wheelLock = AiDrive.mistakePhase(c.errT) === 1 && braking ? 1 : 0;   // the render freezes the fronts

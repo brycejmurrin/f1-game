@@ -1031,8 +1031,17 @@ const Parts = (function () {
     return out;
   }
 
+  // Display name of an option / category: English from CATALOG unless a locale overrides it. Ids never change.
+  function optLabel(catId, opt) {
+    return typeof I18n === "undefined" ? opt.label : I18n.t("parts." + catId + "." + opt.id + ".label", null, opt.label);
+  }
+  function catLabel(cat) {
+    return typeof I18n === "undefined" ? cat.label : I18n.t("parts." + cat.id + ".label", null, cat.label);
+  }
+
   Log.info("car", `parts catalog n=${CATALOG.length}`);
   return {
+    optLabel, catLabel,
     CATALOG, DEFAULTS, FACTORY_PRESETS, VISUAL_FIELD_REGISTRY, BUDGET,
     resolveSetup, isOptionAvailable,
     getFactorySetup, factoryKey,
