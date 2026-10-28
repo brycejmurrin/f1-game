@@ -271,6 +271,7 @@ const FULL = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
+  "js/garage/crew-draw.js",             // GarageCrewDraw: shared crew batch, ease, yaw placement, parent multiply
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
   "js/garage/crew-choreo.js",           // GarageCrewChoreo: Blender-authored crew clips (tools/gen/blender/crew-choreo.py)
@@ -647,6 +648,7 @@ const TRACK_VM = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
+  "js/garage/crew-draw.js",
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
   "js/garage/crew-choreo.js",
@@ -794,6 +796,10 @@ const HARD_EDGES = [
   ["js/garage/scene-prims.js", "js/garage/scene.js"],             // the bay destructures GaragePrims at eval
   ["js/garage/scene-equipment.js", "js/garage/scene.js"],         // ...GarageEquipment (the fan and screen anchors)
   ["js/garage/scene-live.js", "js/garage/scene.js"],              // ...and GarageLive (the atlas size and painters)
+  ["js/garage/crew-draw.js", "js/garage/crew-motion.js"],   // binds GarageCrewDraw.acc at eval
+  ["js/garage/crew-draw.js", "js/garage/crew-service.js"],  // binds GarageCrewDraw.acc/ease/place at eval
+  ["js/garage/crew-draw.js", "js/garage/crew-choreo.js"],   // binds GarageCrewDraw.acc/place/mul at eval
+  ["js/garage/crew-draw.js", "js/garage/arrival.js"],       // binds GarageCrewDraw.ease at eval
   ["js/garage/scene-prims.js", "js/garage/crew-motion.js"],
   ["js/garage/crew-motion.js", "js/garage/scene-crew.js"],
   ["js/garage/scene-prims.js", "js/garage/crew-service.js"],

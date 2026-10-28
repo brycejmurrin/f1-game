@@ -8,8 +8,9 @@
  * shell (304 tags, 7.80 MB raw on 2026-10-24): ordinary growth fits, a whole lazy group does not. Raising one is
  * a decision — say why in the commit, the way a ratchet raise does.
  *
- * 2026-10-28 (#4056): tip sat at 320; OverlayBridge + OverlayPublisher add two eager tags (~9.5 KB) so the
- * game page can hear overlay.html heartbeats without growing game.js. Bytes stay under the 8.2 MB ceiling.
+ * 2026-10-28: tip 320 → 321 (GarageCrewDraw / js/garage/crew-draw.js) → 323 with #4056's OverlayBridge +
+ * OverlayPublisher (~9.5 KB) so the game page can hear overlay.html heartbeats without growing game.js.
+ * Bytes stay under the 8.2 MB ceiling.
  *
  * Run: node --test tests/unit/boot-load-budget.test.mjs
  */
@@ -24,7 +25,8 @@ const ROOT = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
-const MAX_EAGER_SCRIPTS = 322;
+// 323: tip's crew-draw (321) + OverlayBridge + OverlayPublisher (#4056).
+const MAX_EAGER_SCRIPTS = 323;
 const MAX_EAGER_BYTES = 8_200_000;
 
 function eagerScripts() {

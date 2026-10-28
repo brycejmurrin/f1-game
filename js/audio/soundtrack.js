@@ -110,7 +110,8 @@ var GameAudioSoundtrack = (function () {
     }
 
     // musicResumeBuf is the resume KEY: the decoded AudioBuffer on the decode
-    // path, the url on the stream path (offset in musicResumeOff, At unused).
+    // path, the url on the stream path. musicResumeAt is context.currentTime at
+    // the last start (NaN while streaming — only musicResumeOff matters then).
     let musicResumeBuf = null, musicResumeAt = NaN, musicResumeOff = 0;
     // A TRACK THAT CANNOT LOAD MOVES THE LIST ON. Only a source's onended
     // advanced the playlist, and a failed fetch/decode (an upload in a format
