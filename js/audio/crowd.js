@@ -445,11 +445,10 @@ var CrowdAudio = (function () {
   return {
     bindHost, bind, attach, detach, silence, update, swell, fireCheer,
     inspect, liveOk,
-    // test hooks
+    // test hooks (inspect().bedGain already exposes the GainNode)
     _resetEvents() { lastPos = 0; sawFinish = false; swellUntil = 0; swellAmt = 0; lastCheerT = -1e9; },
     _setPos(p) { lastPos = p | 0; },
     _cheerPool() { return cheers ? cheers.length : 0; },
-    _bedGain() { return bedGain; },
   };
 })();
 Object.freeze(CrowdAudio);
