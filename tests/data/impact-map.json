@@ -1375,6 +1375,18 @@
         "tests/unit/hud-layout.test.mjs"
       ]
     },
+    "js/camera/cam-picker.js": {
+      "attach": [
+        "tests/unit/xr-phase0.test.mjs"
+      ],
+      "*": [
+        "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
+        "tests/unit/camera-ride.test.mjs",
+        "tests/unit/real-replay-transport.test.mjs",
+        "tests/unit/ui-improve-pass.test.mjs"
+      ]
+    },
     "js/camera/cam-tuner-boot.js": {
       "create": [
         "tests/unit/flyby-panel.test.mjs",
@@ -1540,17 +1552,7 @@
         "tests/unit/director.test.mjs"
       ]
     },
-    "js/camera/drive-broadcast.js": {
-      "apply": [
-        "tests/unit/director.test.mjs"
-      ]
-    },
-    "js/camera/drive-chase.js": {
-      "apply": [
-        "tests/unit/director.test.mjs"
-      ]
-    },
-    "js/camera/drive-onboard.js": {
+    "js/camera/drive-lens.js": {
       "apply": [
         "tests/unit/director.test.mjs"
       ]
@@ -1648,6 +1650,27 @@
       "tickRace": [
         "tests/unit/camera-feel.test.mjs",
         "tests/unit/phone-pad.test.mjs"
+      ]
+    },
+    "js/camera/flyby-clear.js": {
+      "blockers": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "clearEye": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "insideProp": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "isSolid": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "onRoadPose": [
+        "tests/unit/flyby-shots.test.mjs"
+      ],
+      "*": [
+        "tests/unit/free-cam.test.mjs",
+        "tests/unit/loading-card.test.mjs"
       ]
     },
     "js/camera/flyby-editor.js": {
@@ -1911,6 +1934,11 @@
         "tests/unit/fov-fit.test.mjs"
       ]
     },
+    "js/camera/fov-mode.js": {
+      "*": [
+        "tests/unit/director.test.mjs"
+      ]
+    },
     "js/camera/free-cam.js": {
       "carPose": [
         "tests/unit/free-cam.test.mjs"
@@ -2165,13 +2193,7 @@
       ]
     },
     "js/camera/photo-kit.js": {
-      "apply": [
-        "tests/unit/photo-kit.test.mjs"
-      ],
       "applyDof": [
-        "tests/unit/photo-kit.test.mjs"
-      ],
-      "createLookSession": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "deleteMark": [
@@ -2180,13 +2202,24 @@
       "marksFor": [
         "tests/unit/photo-kit.test.mjs"
       ],
-      "mountLookControls": [
-        "tests/unit/photo-kit.test.mjs"
-      ],
       "nextGrid": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "saveMark": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "*": [
+        "tests/unit/free-cam.test.mjs"
+      ]
+    },
+    "js/camera/photo-looks.js": {
+      "apply": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "createLookSession": [
+        "tests/unit/photo-kit.test.mjs"
+      ],
+      "mountLookControls": [
         "tests/unit/photo-kit.test.mjs"
       ],
       "*": [
@@ -2359,6 +2392,17 @@
       ],
       "*": [
         "tests/specs/camera-tuner.spec.js"
+      ]
+    },
+    "js/camera/vantage-ride.js": {
+      "*": [
+        "tests/unit/camera-feel.test.mjs",
+        "tests/unit/camera-ride.test.mjs",
+        "tests/unit/car-presentation-vm.test.mjs",
+        "tests/unit/cockpit-wheels.test.mjs",
+        "tests/unit/director.test.mjs",
+        "tests/unit/rival-audio.test.mjs",
+        "tests/unit/xr-phase0.test.mjs"
       ]
     },
     "js/camera/vantage.js": {
@@ -7204,16 +7248,12 @@
         "tests/unit/lighting-reapply.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/mirror-pass-carbuild.test.mjs",
-        "tests/unit/render-lighting-prep.test.mjs",
         "tests/unit/repo-size.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/session-transcript.test.mjs",
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
-      ],
-      "renderLightingPrep": [
-        "tests/unit/render-lighting-prep.test.mjs"
       ],
       "renderPosOf": [
         "tests/unit/field-lod.test.mjs"
@@ -7461,7 +7501,6 @@
         "tests/unit/episode-transients.test.mjs",
         "tests/unit/frustum-buckets.test.mjs",
         "tests/unit/game-ctx-surface.test.mjs",
-        "tests/unit/game-m33-m35-m42.test.mjs",
         "tests/unit/garage-before.test.mjs",
         "tests/unit/gen-arch-table.test.mjs",
         "tests/unit/global-registry.test.mjs",
@@ -11480,6 +11519,9 @@
         "tests/unit/player-forces.test.mjs",
         "tests/unit/vehicle-tick-alloc.test.mjs"
       ],
+      "recoverBlocked": [
+        "tests/unit/player-forces.test.mjs"
+      ],
       "step": [
         "tests/unit/physics-rows-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
@@ -13744,7 +13786,8 @@
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/track-graph.test.mjs",
         "tests/unit/vertex-pack.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-post.js": {
@@ -13755,7 +13798,8 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/puddles.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
-        "tests/unit/webgpu-lifecycle.test.mjs"
+        "tests/unit/webgpu-lifecycle.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shaders/glsl-sky.js": {
@@ -13764,7 +13808,8 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-try.test.mjs",
-        "tests/unit/surface-id-parity.test.mjs"
+        "tests/unit/surface-id-parity.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/glx/shadow.js": {
@@ -14335,6 +14380,9 @@
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
       "mergeRuns": [
+        "tests/unit/tlx-chunked-lifecycle.test.mjs"
+      ],
+      "mergeVisible": [
         "tests/unit/tlx-chunked-lifecycle.test.mjs"
       ],
       "packAttr": [
@@ -15264,6 +15312,9 @@
       ],
       "shadowEnd": [
         "tests/unit/gfx-backend-canary.test.mjs"
+      ],
+      "*": [
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/render/webgpu/wgx.js": {
@@ -15519,7 +15570,8 @@
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/puddles.test.mjs",
-        "tests/unit/validation-cli.test.mjs"
+        "tests/unit/validation-cli.test.mjs",
+        "tests/unit/wgx-shadow-size-source.test.mjs"
       ]
     },
     "js/roster.js": {
