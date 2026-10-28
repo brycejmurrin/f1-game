@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import {
   REQUIRED_CHECK, CI_APP, HOLD_LABEL, MAX_BEHIND, ROWS, openVerdict, holdVerdict, planRow, ciVerdict, isGamePath, gameFiles,
   gameMergesBehind, distanceVerdict, baseHistory, distanceFor, ratchetsOnMerge, localMergeGenCheck, evaluate, rowLines, main,
-  untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor,
+  untrustedEnv, CI_WORKFLOW, TRUSTED_ROWS, ciSuitesFor, touchesGame,
 } from "../../tools/ci/merge-gate.mjs";
 import { parse as parseYAML } from "yaml";
 import { receiptVerdict, writeReceipt, readReceipt, receiptPath, mainCheckout, MAX_AGE_MIN, GATE_FILES, gateFileHashes, gateFilesVerdict, gateClosure, staticImports, MAX_FUTURE_S, headPinProblem } from "../../tools/lib/gate-receipt.mjs";
@@ -62,6 +62,9 @@ test("game paths: js/ css/ assets/ index.html sw.js", () => {
   for (const p of ["js/game.js", "css/career.css", "assets/pack/manifest.json", "index.html", "sw.js", "./js/x.js"]) assert.equal(isGamePath(p), true, p);
   for (const p of ["tests/unit/ready-gate.test.mjs", "tools/ci/merge-gate.mjs", "docs/TESTING.md", "index.html.bak", "jsx/x"]) assert.equal(isGamePath(p), false, p);
   assert.deepEqual(gameFiles(["tools/ci/ready-gate.mjs", "js/core/log.js"]), ["js/core/log.js"]);
+  assert.equal(touchesGame(["docs/WORKERS.md", "tools/ci/merge-gate.mjs", ".github/workflows/land.yml", "index.html.bak"]), false);
+  assert.equal(touchesGame(["docs/a.md", "sw.js"]), true);
+  assert.equal(touchesGame([]), false, "an empty diff touches nothing");
 });
 
 // A base's first-parent history, newest first: merges are counted only when their diff touches a game path.
@@ -97,10 +100,15 @@ test("baseHistory / distanceFor over a real repo: first-parent merges with their
   const write = (rel, text) => { fs.mkdirSync(path.dirname(path.join(T, rel)), { recursive: true }); fs.writeFileSync(path.join(T, rel), text); };
   const land = (name, rel) => { g(T, "checkout", "-q", "-b", name, "base"); write(rel, name + "\n"); g(T, "add", "-A"); g(T, "commit", "-qm", name); g(T, "checkout", "-q", "base"); g(T, "merge", "-q", "--no-ff", "-m", `merge ${name}`, name); };
   try {
-    g(T, "init", "-q", "-b", "base"); write("README", "0\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "root");
+    // Fixture paths reuse the names docs-integrity's SOURCE_EXEMPT already allows for this file.
+    g(T, "init", "-q", "-b", "base"); write("README", "0\n"); write("js/b.js", "old\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "root");
     const fork = g(T, "rev-parse", "HEAD");
-    g(T, "checkout", "-q", "-b", "pr", "base"); write("tools/x.mjs", "pr\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "the PR");
+    g(T, "checkout", "-q", "-b", "pr", "base"); write("tools/x.mjs", "pr\n"); write("js/b.js", "pr\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "the PR");
     const head = g(T, "rev-parse", "HEAD");
+    g(T, "checkout", "-q", "-b", "docs-pr", "base"); write("docs/a.md", "pr\n"); write("tools/x.mjs", "pr\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "a docs and tools PR");
+    const docsHead = g(T, "rev-parse", "HEAD");
+    g(T, "checkout", "-q", "-b", "mover", "base"); write("tools/y.mjs", "old\n"); g(T, "rm", "-q", "js/b.js"); g(T, "add", "-A"); g(T, "commit", "-qm", "move a game file out of js/");
+    const moverHead = g(T, "rev-parse", "HEAD");
     land("game-1", "js/a.js"); land("docs-1", "docs/a.md"); land("game-2", "css/a.css");
     write("tools/y.mjs", "direct\n"); g(T, "add", "-A"); g(T, "commit", "-qm", "direct commit");   // not a merge: never counts
     const tip = g(T, "rev-parse", "base");
@@ -114,8 +122,38 @@ test("baseHistory / distanceFor over a real repo: first-parent merges with their
     assert.equal(d.row.ok, true, d.row.evidence);
     assert.ok(d.row.evidence.startsWith("2 game merge(s)"), d.row.evidence);
     assert.equal(distanceFor({ head, tip, cwd: T, max: 1 }).row.ok, false);
+    const docs = distanceFor({ head: docsHead, tip, cwd: T, max: 0 });
+    assert.equal(docs.mergeBase, fork);
+    assert.deepEqual(docs.row, { ok: true, evidence: "no game files in this PR's diff (2 file(s)): distance not applied" }, "a PR touching no game path is not held to the distance");
+    assert.equal(g(T, "-c", "diff.renames=true", "diff", "--name-only", fork, moverHead), "tools/y.mjs", "with rename detection git names only the destination");
+    assert.equal(distanceFor({ head: moverHead, tip, cwd: T, max: 1 }).row.ok, false, "a rename out of js/ still touches js/ (--no-renames)");
     assert.ok(/failed/.test(distanceFor({ head: "0".repeat(40), tip, cwd: T }).error), "an unknown head is an error, not a row");
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
+test("distanceFor: 20 game merges behind refuses a game PR and passes a PR whose own diff touches no game path (fake git)", () => {
+  const id = (i) => "f" + i.toString(16).padStart(39, "0");   // distinct fake shas
+  const MB = id(999), TIP20 = id(0);
+  const fakeGit = (prFiles, calls) => (args) => {
+    calls.push(args[0]);
+    const ok = (lines) => ({ status: 0, stdout: lines.join("\n") + "\n", stderr: "" });
+    if (args[0] === "merge-base") return ok([MB]);
+    if (args[0] === "diff") { assert.deepEqual(args, ["diff", "--no-renames", "--name-only", MB, HEAD], "the PR's own diff: merge-base..head, renames split"); return ok(prFiles); }
+    if (args[0] === "rev-list") return ok([...Array.from({ length: 20 }, (_, i) => `${id(i)} ${i === 19 ? MB : id(i + 1)} ${id(500 + i)}`), `${MB} ${id(1000)}`]);
+    if (args[0] === "diff-tree") return ok(["css/a.css"]);
+    return { status: 1, stdout: "", stderr: `unexpected git ${args[0]}` };
+  };
+  const calls = [];
+  const game = distanceFor({ head: HEAD, tip: TIP20, run: fakeGit(["docs/a.md", "js/a.js"], calls) });
+  assert.equal(game.row.ok, false);
+  assert.ok(game.row.evidence.startsWith("base is 20 game merge(s) ahead of the merge-base (max 6)"), game.row.evidence);
+  assert.ok(calls.includes("rev-list"));
+  calls.length = 0;
+  const docs = distanceFor({ head: HEAD, tip: TIP20, run: fakeGit(["docs/WORKERS.md", "tools/ci/merge-gate.mjs", "tests/unit/merge-gate.test.mjs", ".github/workflows/land.yml"], calls) });
+  assert.deepEqual(docs, { row: { ok: true, evidence: "no game files in this PR's diff (4 file(s)): distance not applied" }, mergeBase: MB });
+  assert.deepEqual(calls, ["merge-base", "diff"], "no base walk for a PR that touches no game path");
+  const broken = distanceFor({ head: HEAD, tip: TIP20, run: (a) => (a[0] === "merge-base" ? { status: 0, stdout: MB + "\n" } : { status: 128, stdout: "", stderr: "fatal: bad object" }) });
+  assert.equal(broken.error, `diff ${MB.slice(0, 8)}..${HEAD.slice(0, 8)} failed: fatal: bad object`, "a failed diff is an error, never a pass");
 });
 
 // The assert-match ratchet counts the literal text of the pin, so the fixtures spell it from parts.
@@ -166,6 +204,31 @@ test("two PRs each at the assert-match ceiling alone are over it on the merge re
   } finally { fs.rmSync(T, { recursive: true, force: true }); }
 });
 
+test("localMergeGenCheck: a gen:check failure and a conflict each return the fetched tip with the refusal (2026-10-27 23:20Z)", () => {
+  const T = scratch("merge-gate-tip-");
+  const git = (cwd, ...a) => { const r = spawnSync("git", ["-c", "user.email=t@t", "-c", "user.name=t", ...a], { cwd, encoding: "utf8" }); assert.equal(r.status, 0, `${a.join(" ")}: ${r.stderr}`); return r.stdout.trim(); };
+  const write = (root, rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  try {
+    const remote = path.join(T, "remote.git"), W = path.join(T, "w");
+    git(T, "init", "-q", "--bare", remote); git(T, "clone", "-q", remote, W); git(W, "checkout", "-q", "-b", "deploy-x");
+    write(W, "docs/a.md", "base\n"); git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base"); git(W, "push", "-q", "origin", "deploy-x");
+    git(W, "checkout", "-q", "-b", "pr", "deploy-x"); write(W, "docs/a.md", "pr\n"); git(W, "add", "-A"); git(W, "commit", "-q", "-m", "the PR"); git(W, "push", "-q", "origin", "pr");
+    const head = git(W, "rev-parse", "pr"), tip = git(W, "rev-parse", "deploy-x");
+    const gate = (run) => localMergeGenCheck({ pr: 3, head, headRef: "pr", cwd: W, base: "deploy-x", run, ratchets: () => assert.fail("no ratchets after a refusal") });
+    const gen = gate((cmd) => (cmd === "npm" ? { status: 1, stdout: "docs/agent-index.json is stale: run npm run gen", stderr: "" } : assert.fail(`unexpected ${cmd}`)));
+    assert.equal(gen.ok, false);
+    assert.equal(gen.error, undefined, "a refusal, not a git error");
+    assert.equal(gen.tip, tip, "the tip is known once fetched: distance still evaluates on it");
+    assert.ok(gen.evidence.startsWith(`gen:check fails on the merge onto ${tip.slice(0, 8)}: docs/agent-index.json is stale`), gen.evidence);
+    git(W, "checkout", "-q", "deploy-x"); write(W, "docs/a.md", "tip\n"); git(W, "add", "docs/a.md"); git(W, "commit", "-q", "-m", "tip edits the same line"); git(W, "push", "-q", "origin", "deploy-x");
+    const moved = git(W, "rev-parse", "deploy-x");
+    const conflict = gate(() => assert.fail("gen:check never runs on a conflict"));
+    assert.equal(conflict.ok, false);
+    assert.equal(conflict.tip, moved);
+    assert.ok(conflict.evidence.startsWith(`conflicts with the current tip ${moved.slice(0, 8)}: docs/a.md`), conflict.evidence);
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});
+
 /** A fake GitHub plus fake merge and distance for the evaluator; `pull` and `checks` are mutable per case. */
 function fakes() {
   const pull = { state: "open", draft: false, labels: [], head: { sha: HEAD, ref: "cursor/x" }, base: { ref: "deploy-x" }, body: "## Plan\n- [x] done\n- [ ] land: flip + label\n" };
@@ -210,6 +273,30 @@ test("evaluate: all rows in order; each failing row refuses on its own; the loca
   assert.equal(evaluate({ pr: 7, sha: HEAD.slice(0, 12), ...f.deps }).ok, true, "a prefix of the head is the head");
   assert.ok(/HTTP 500/.test(evaluate({ pr: 7, ...f.deps, request: () => ({ error: "HTTP 500" }) }).error));
   assert.ok(/fetch failed/.test(evaluate({ pr: 7, ...f.deps, localMerge: () => ({ ok: false, evidence: "fetch failed", error: true }) }).error));
+});
+
+test("evaluate: a gen:check or conflict refusal refuses on its own row, never masked as an error; no tip is a distance FAIL row (#3964, 2026-10-27)", () => {
+  const f = fakes();
+  // distanceFor's real shape: an empty tip fails its merge-base, which evaluate used to return as { error }.
+  const strict = ({ tip, max }) => (tip ? { row: { ok: true, evidence: `0 game merge(s) (max ${max})` }, mergeBase: sha(5) } : { error: `merge-base of ${HEAD.slice(0, 8)} and  failed (shallow clone? fetch-depth: 0)` });
+  const GEN_TIP = "abc" + "0".repeat(37);
+  const genFail = () => ({ ok: false, evidence: `gen:check fails on the merge onto ${GEN_TIP.slice(0, 8)}: docs/agent-index.json drift`, tip: GEN_TIP });
+  const v = evaluate({ pr: 7, ...f.deps, distance: strict, localMerge: genFail });
+  assert.equal(v.error, undefined, v.error);
+  assert.deepEqual([v.ok, v.waiting, v.tip], [false, false, GEN_TIP]);
+  assert.deepEqual(ROWS.filter((k) => !v.rows[k].ok), ["gen", "ratchets"], "distance still evaluates on the refusal's tip");
+  assert.ok(v.rows.gen.evidence.startsWith("gen:check fails"), v.rows.gen.evidence);
+  const logs = [];
+  assert.equal(main(["--pr", "7", "--sha", HEAD, "--check"], { ...f.deps, distance: strict, localMerge: genFail, log: (l) => logs.push(l) }), 2, "a refusal (exit 2), not an error (exit 1)");
+  assert.ok(logs.some((l) => l.startsWith("= gate gen: FAIL gen:check fails")), logs.join("\n"));
+  assert.equal(logs.at(-1), `= merge-gate refused — open=ok hold=ok plan=ok ci=ok gen=FAIL ratchets=FAIL distance=ok pr=#7 sha=${HEAD} tip=${GEN_TIP}`);
+  const noTip = evaluate({ pr: 7, ...f.deps, distance: strict, localMerge: () => ({ ok: false, evidence: "conflicts with the current tip", tip: "" }) });
+  assert.equal(noTip.error, undefined, noTip.error);
+  assert.deepEqual(ROWS.filter((k) => !noTip.rows[k].ok), ["gen", "ratchets", "distance"]);
+  assert.equal(noTip.rows.distance.evidence, "not evaluated: no tip");
+  const trustedNoTip = evaluate({ pr: 7, ...f.deps, distance: strict, trusted: true, fetchTip: () => ({ tip: "" }) });
+  assert.equal(trustedNoTip.error, undefined, trustedNoTip.error);
+  assert.deepEqual(TRUSTED_ROWS.filter((k) => !trustedNoTip.rows[k].ok), ["distance"]);
 });
 
 test("main: one `= gate <row>:` line per row and a summary; exit 0 all ok, 2 a row failed, 1 usage/API error; --json writes the summary", () => {
