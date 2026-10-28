@@ -369,7 +369,8 @@ function buildEquipment(g, liv, ctx) {
 }
 
 
-  // COMPOUND / starterCart / tyreTrolley / rearJack stay module-local (buildEquipment).
-  return { RUBBER, FAN, SCREEN, noseTrolley, wheelGunDock, radioRack, toolChest, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, wheelDolly, build: buildEquipment };
+  // HOSE stays module-local (hoseReel / serviceRig paint). COMPOUND + starterCart /
+  // tyreTrolley / rearJack stay exported — garage-mesh unit seams.
+  return { RUBBER, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, wheelDolly, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;
