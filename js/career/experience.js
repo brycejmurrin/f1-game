@@ -88,6 +88,21 @@ const CareerExperience = (function () {
   // brief reads the full points table (a shortened race pays SeasonCal's).
   // objectiveFor(round) is the pure draw (no save write), and "" outside a
   // career race, quali reading the brief alone.
+  //
+  // Mid-race G.ranked drops retirements (game.js). Settlement uses
+  // RaceControl.classify, which keeps classified DNFs in the order by laps.
+  // When anyone has retired, sort the full field by progress (frozen at park)
+  // so a DNF mate ahead of the player is not "last by absence" (beatMate would
+  // read ON TARGET the moment they park). With no retirements keep G.ranked's
+  // stable insertion order.
+  function raceOrder(G) {
+    const ranked = G.ranked || [], cars = G.cars || [];
+    if (!cars.length) return ranked.slice();
+    let anyRetired = false;
+    for (let i = 0; i < cars.length; i++) if (cars[i] && cars[i].retired) { anyRetired = true; break; }
+    if (!anyRetired && ranked.length) return ranked.slice();
+    return cars.slice().sort((a, b) => (b.prog || 0) - (a.prog || 0) || (b.lap || 0) - (a.lap || 0));
+  }
   function objectiveStatus(G) {
     if (typeof Career === "undefined" || !Career.inCareer() || !Career.objectiveMet) return "";
     const c = Career.data(), p = G.player;
@@ -95,9 +110,18 @@ const CareerExperience = (function () {
     const o = Career.objectiveFor(c.season.round), label = o ? Career.objectiveLabel(o).toUpperCase() : "";
     if (!label) return "";
     if (G.session !== "race") return "OBJECTIVE · " + label;
-    const ranked = G.ranked || [], at = (car) => ranked.indexOf(car) + 1 || ranked.length + 1;
+    const order = raceOrder(G), at = (car) => order.indexOf(car) + 1 || order.length + 1;
     const pos = at(p), mate = (G.cars || []).find((car) => car !== p && car.team && car.team.id === c.team);
-    const pts = (typeof Teams !== "undefined" && Teams.POINTS[pos - 1]) || 0;
+    // Same scored gate as settleRound: a stamped classified DNF keeps points;
+    // mid-race (classified unset) a retirement scores nothing. Shortened races
+    // use SeasonCal.payTable the way scoreRound does.
+    const scored = (car) => (car.classified != null ? !!car.classified : !car.retired);
+    const run = (typeof RaceControl !== "undefined" && RaceControl.shortRun && G.lapsTarget)
+      ? RaceControl.shortRun(G.cars || [], G.lapsTarget) : null;
+    const base = (typeof Teams !== "undefined" && Teams.POINTS) || [];
+    const table = (typeof SeasonCal !== "undefined" && SeasonCal.payTable)
+      ? SeasonCal.payTable(base, "race", run) : base;
+    const pts = scored(p) ? (table[pos - 1] || 0) : 0;
     const met = Career.objectiveMet(o, { pos, pts, player: p, mate, matePos: mate ? at(mate) : 0 });
     if (o.type === "finish") return "OBJECTIVE · TARGET P" + o.value + " · NOW P" + pos + (met ? " ✓" : "");
     if (o.type === "clean") return "OBJECTIVE · " + label + (met ? " · CLEAN SO FAR" : " · MISSED");

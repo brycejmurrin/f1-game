@@ -17,6 +17,7 @@ function load() {
   const ctx = vm.createContext({ Math, console, Object, Array, Number, isFinite });
   seedLog(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-strategy.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-strategy.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx,
     { filename: absSrc("js/physics/ai-drive.js") });
   return vm.runInContext("AiDrive", ctx);
