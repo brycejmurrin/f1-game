@@ -5350,6 +5350,9 @@
       "preload": [
         "tests/unit/script-loader-preload.test.mjs"
       ],
+      "warm": [
+        "tests/unit/script-loader-preload.test.mjs"
+      ],
       "*": [
         "tests/unit/build-client-drop.test.mjs",
         "tests/unit/global-registry.test.mjs"
@@ -15810,6 +15813,7 @@
       ],
       "build": [
         "tests/unit/baked-model-instancing.test.mjs",
+        "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/scenery-api-contract.test.mjs",
         "tests/unit/scenery-guards.test.mjs",
