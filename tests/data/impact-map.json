@@ -10253,6 +10253,12 @@
       ]
     },
     "js/perf/menu-quit-tail.js": {
+      "afterOverlay": [
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
+      "wire": [
+        "tests/unit/menu-quit-tail.test.mjs"
+      ],
       "*": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ]
@@ -10454,13 +10460,16 @@
         "tests/unit/race-entry-profile.test.mjs",
         "tests/unit/webgpu-menu-warm.test.mjs"
       ],
+      "clearMenuEntrySession": [
+        "tests/unit/race-entry-profile.test.mjs"
+      ],
       "continueWindow": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "diffStages": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
-      "introBudgetExpired": [
+      "introBudgetLeft": [
         "tests/unit/race-entry-profile.test.mjs"
       ],
       "mark": [
