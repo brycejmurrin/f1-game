@@ -82,6 +82,33 @@ function assetLoader(overrides = {}) {
   return sandbox.Assets;
 }
 
+test("a remembered pack index starts the named model fetch before the manifest returns", async () => {
+  const urls = [];
+  let releaseManifest;
+  const manifestGate = new Promise((resolve) => { releaseManifest = resolve; });
+  const md5 = "a".repeat(32);
+  const store = { "apex26.packIndex": JSON.stringify({ models: { box: { file: "models/box.bin", md5 } } }) };
+  const assets = assetLoader({
+    localStorage: {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+    },
+    fetch(url) {
+      urls.push(String(url));
+      if (String(url).endsWith("manifest.json")) {
+        return manifestGate.then(() => ({ ok: true, json: async () => ({ models: { box: { file: "models/box.bin", md5 } } }) }));
+      }
+      return Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    },
+  });
+  const pending = assets.loadModelsFor('bakedModel("box")');
+  await new Promise((r) => setImmediate(r));
+  assert.ok(urls.some((u) => u.includes("models/box.bin?h=" + md5)), "model bytes are requested while the manifest is still in flight: " + urls.join(" "));
+  releaseManifest();
+  assert.equal(await pending, 0, "a body that is not an AX26 model resolves as a miss, not a throw");
+  assert.equal(urls.filter((u) => u.includes("models/box.bin")).length, 1, "a matching md5 reuses the early body");
+});
+
 test("asset loader shares an in-flight manifest across boot consumers", async () => {
   let requests = 0, resolveFetch;
   const assets = assetLoader({ fetch() {
@@ -2162,10 +2189,10 @@ test("glTF supplied normals match transformed triangle normals for rotations, no
     const c20 = (b * f - c * e) * id, c21 = (c * d - a * f) * id, c22 = (a * e - b * d) * id;
     return [c00 * n[0] + c10 * n[1] + c20 * n[2], c01 * n[0] + c11 * n[1] + c21 * n[2], c02 * n[0] + c12 * n[1] + c22 * n[2]];
   }
-  const oracleSource = source.replace(/const nx = normals\[i \* 3\][\s\S]*?nrmOut\.push\(x \/ l, y \/ l, z \/ l\);/, `
+  const oracleSource = source.replace(/const nx = normals\[i \* 3\], ny = normals\[i \* 3 \+ 1\], nz = normals\[i \* 3 \+ 2\];[\s\S]*?nrm\[o\] = x \/ l; nrm\[o \+ 1\] = y \/ l; nrm\[o \+ 2\] = z \/ l;/, `
     const n = normalOracle(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
     const l = (Math.hypot(n[0], n[1], n[2]) || 1) * nSign;
-    nrmOut.push(n[0] / l, n[1] / l, n[2] / l);`);
+    nrm[o] = n[0] / l; nrm[o + 1] = n[1] / l; nrm[o + 2] = n[2] / l;`);
   assert.notEqual(oracleSource, source, "oracle substitution must reach the supplied-normal emission");
   const oracle = vm.runInNewContext(oracleSource + ";GLTF", { ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, normalOracle, Log: { enabled: () => false } }, { filename: absSrc("js/render/shared/gltf.js") });
   const glb = (nodes, supplied) => {

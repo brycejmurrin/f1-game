@@ -1434,6 +1434,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
@@ -3135,6 +3136,16 @@
       "roster": "LAZY_DATA"
     },
     {
+      "path": "js/data/real-race-fetch.js",
+      "global": "DataRealRaceFetch",
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/real-race-script.js",
+      "global": "DataRealRaceScript",
+      "roster": "LAZY_DATA"
+    },
+    {
       "path": "js/data/real-race-tab.js",
       "global": "DataRealRace",
       "roster": "LAZY_DATA"
@@ -3480,6 +3491,21 @@
       "roster": "tag"
     },
     {
+      "path": "js/input/pedal-travel.js",
+      "global": "PedalTravel",
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/phone-pad-codec.js",
+      "global": "PhonePadCodec",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/input/phone-pad-page.js",
+      "global": "PhonePadPage",
+      "roster": "LAZY_NET"
+    },
+    {
       "path": "js/input/phone-pad.js",
       "global": "PhonePad",
       "roster": "LAZY_NET"
@@ -3767,6 +3793,11 @@
     {
       "path": "js/physics/ai-drive.js",
       "global": "AiDrive",
+      "roster": "tag"
+    },
+    {
+      "path": "js/physics/ai-strategy.js",
+      "global": "AiStrategy",
       "roster": "tag"
     },
     {

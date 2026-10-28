@@ -399,6 +399,8 @@
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-script.js",
+    "js/data/real-race-fetch.js",
     "js/data/real-race-tab.js",
     "js/data/hub.js"
   ],
@@ -460,6 +462,14 @@
       "js/data/hub.js"
     ],
     [
+      "js/data/real-race-script.js",
+      "js/data/hub.js"
+    ],
+    [
+      "js/data/real-race-fetch.js",
+      "js/data/hub.js"
+    ],
+    [
       "js/data/real-race-tab.js",
       "js/data/hub.js"
     ],
@@ -518,6 +528,18 @@
     [
       "js/data/telemetry-view.js",
       "js/data/telemetry.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/real-race-fetch.js"
+    ],
+    [
+      "js/data/real-race-script.js",
+      "js/data/real-race-tab.js"
+    ],
+    [
+      "js/data/real-race-fetch.js",
+      "js/data/real-race-tab.js"
     ]
   ],
     LAZY_NET: [
@@ -541,6 +563,8 @@
     "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
+    "js/input/phone-pad-codec.js",
+    "js/input/phone-pad-page.js",
     "js/input/phone-pad.js"
   ],
     LAZY_NET_EDGES: [
@@ -611,6 +635,14 @@
     [
       "js/net/lobby-settings.js",
       "js/net/lobby.js"
+    ],
+    [
+      "js/input/phone-pad-codec.js",
+      "js/input/phone-pad.js"
+    ],
+    [
+      "js/input/phone-pad-page.js",
+      "js/input/phone-pad.js"
     ]
   ],
     LAZY_WORKER: [
