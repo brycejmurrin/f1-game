@@ -4483,7 +4483,7 @@ function update(dt) {
     // No banner: rescuePlayer() is the one place a recovery is reported, so one
     // keypress never gets the same word from two speakers (COACH and RADIO).
     // Pit lane / box: x = 0 would strand the car on the racing surface, still pitState lane/box (as the auto-rescue refuses).
-    if (!coach.retry() && !(pits.inLane(player) || player.pitState === "box")) rescuePlayer(player);
+    if (!coach.retry() && !playerForces.recoverBlocked(player, pits.inLane(player))) rescuePlayer(player);
     Log.info("game", "manual recover");
   }
   if (state === "count") {
@@ -6452,7 +6452,7 @@ function updateCarAdvance(c, dt, ranked, S) {
     // throttle down (touch auto-gas holds it for you), and creep-in plus the
     // 2.4 s hold crossed the 3 s gate — the rescue teleported it to x = 0
     // mid-stop, and the box then held it stationary on the racing line.
-    const stuck = !(pits.inLane(c) || c.pitState === "box") &&
+    const stuck = !playerForces.recoverBlocked(c, pits.inLane(c)) &&
       (beached || c.wrongWay || (c.speed < 4 && (c.wallT || 0) > 0) || stoppedOnTrack);
     // 4-second grace period AFTER a rescue prevents rapid re-rescue on marginal
     // stuck conditions. Only applies once a rescue has actually happened —
