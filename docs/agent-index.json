@@ -3935,6 +3935,11 @@
       "roster": "LAZY_RACE_SESSION"
     },
     {
+      "path": "js/race/podium-beat.js",
+      "global": "RacePodium",
+      "roster": "tag"
+    },
+    {
       "path": "js/race/quali-model.js",
       "global": "Quali",
       "roster": "tag"
@@ -4692,6 +4697,11 @@
     {
       "path": "js/ui/platform-session.js",
       "global": "PlatformSession",
+      "roster": "tag"
+    },
+    {
+      "path": "js/ui/podium-beat.js",
+      "global": "PodiumBeat",
       "roster": "tag"
     },
     {

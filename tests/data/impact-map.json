@@ -12517,6 +12517,26 @@
         "tests/unit/ratchets.test.mjs"
       ]
     },
+    "js/race/podium-beat.js": {
+      "create": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "eligible": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "finish": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "start": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "status": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/podium-beat.test.mjs"
+      ]
+    },
     "js/race/quali-model.js": {
       "begin": [
         "tests/unit/quali-persist.test.mjs"
@@ -16598,6 +16618,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
+        "tests/unit/podium-beat.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
@@ -17544,6 +17565,23 @@
         "tests/unit/pause-key-tools.test.mjs"
       ]
     },
+    "js/ui/podium-beat.js": {
+      "dismount": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "eligible": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "mount": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "phaseAttr": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "visible": [
+        "tests/unit/podium-beat.test.mjs"
+      ]
+    },
     "js/ui/post-fx-opts.js": {
       "applyLookShed": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
@@ -17637,6 +17675,7 @@
         "tests/unit/career-experience.test.mjs"
       ],
       "*": [
+        "tests/unit/podium-beat.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ]
     },

@@ -732,6 +732,8 @@
     "tests/unit/platform-session-install.test.mjs",
     "// PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.",
     "tests/unit/player-forces.test.mjs",
+    "// #4070 podium beat: PodiumBeat overlay + RacePodium CONTINUE/timer → #results. ~0.05 s.",
+    "tests/unit/podium-beat.test.mjs",
     "tests/unit/poll-live-shell.test.mjs",
     "// CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.",
     "tests/unit/pr-board.test.mjs",
