@@ -6,7 +6,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch } from "../../tools/check/ratchets.mjs";
+import { load, measure, relativize, verdict, looseAdvisory, METRICS, TREE_METRICS, SLACK_MIN, SLACK_PCT, looseLine, diffRatchets, compareToBase, loadAt, applyFragments, EXCLUDED_FILES, scopeToBranch, mergeFragment } from "../../tools/check/ratchets.mjs";
 
 // ONE TREE WALK PER METRIC PER PROCESS (pass-3 T1 / audit4 E1, 2026-10-26). This
 // file called measure() three times in full, the TREE_METRICS loop once more, and
@@ -411,3 +411,14 @@ test("scopeToBranch: a topic fragment never lowers a loose tree-wide ceiling, bu
     "no merge-base: every file row as before, still no loose tree row");
 });
 
+
+test("mergeFragment: a re-snap drops a stale negative tree delta instead of pinning it at zero slack", () => {
+  const frag = { files: { "js/agent/apex.js": { lines: 5 } }, tree: { assertPins: -50, assertPinsAll: -52, shellNodes: 3 } };
+  const out = mergeFragment(frag, [
+    { tree: true, metric: "assertPins", value: 8178, ceiling: 8174 },       // over by 4 on the merge result
+    { tree: true, metric: "assertPinsAll", value: 10288, ceiling: 10283 },
+    { tree: true, metric: "shellNodes", value: 2236, ceiling: 2229 },        // a real raise stays
+    { tree: false, file: "js/agent/apex.js", metric: "lines", value: 90, ceiling: 93 },   // a file lowering stays
+  ]);
+  assert.deepEqual(out, { files: { "js/agent/apex.js": { lines: 2 } }, tree: { shellNodes: 10 } });
+});

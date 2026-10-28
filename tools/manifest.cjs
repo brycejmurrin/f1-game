@@ -263,6 +263,7 @@ const FULL = [
   "js/lighting/lamp-bake.js",           // LampBake: every lamp's diffuse pool baked into a ground light map (TLX/GLX read it)
   "js/lighting/lighting.js",
   "js/lighting/profiles.js",
+  "js/car/cockpit-rig.js", // CockpitRig: wheel, dash, cabin, glass, shift lights (CarMesh re-exports the keys)
   "js/car/car-mesh.js",
   "js/garage/experience.js",
   "js/garage/scene-prims.js",
@@ -436,6 +437,7 @@ const FULL = [
   "js/xr/xr-opts.js",   // SETTINGS › VR rows; call-time GameStore / SettingRow
   "js/xr/xr-boot.js",
   "js/ui/hud-minimap.js",    // HudMinimap: the #minimap track map GameHud draws each HUD tick (#1656)
+  "js/ui/hud-radio-lane.js", // HudRadioLane: the radio card's top slot, corner and dock lane GameHud places (#3261)
   "js/ui/hud.js",
   "js/ui/results-story.js",
   "js/ui/results-sheet.js",
@@ -443,6 +445,7 @@ const FULL = [
   "js/share/share-card-data.js",
   "js/share/share-card-layout.js",
   "js/share/share-card.js",
+  "js/share/share-card-chips.js", // ShareCardChips: the SHARE CARD chip on results, standings, champion and THE YEAR
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",
@@ -584,6 +587,7 @@ const CARVIEW = [
   "js/car/crest-draw.js",
   "js/car/liverytex.js",
   "js/physics/consts.js",
+  "js/car/cockpit-rig.js",
   "js/car/car-mesh.js",
   "js/camera/cockpit-preview.js",
 ];
@@ -713,6 +717,7 @@ const HARD_EDGES = [
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
   ["js/ui/hud-skin.js", "js/ui/hud.js"],            // updateHud calls HudSkin.skinAccent (call time; ordered with its peers)
   ["js/ui/hud-minimap.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its HudMinimap
+  ["js/ui/hud-radio-lane.js", "js/ui/hud.js"],   // GameHud.create (game.js eval) builds its HudRadioLane
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
@@ -839,6 +844,7 @@ const HARD_EDGES = [
   // load-order guard exists to prevent.
   ["js/car/crest-paths.js", "js/car/liverytex.js"],
   ["js/car/crest-draw.js", "js/car/liverytex.js"],   // liverytex destructures LiveryCrests.create(...) at eval
+  ["js/car/cockpit-rig.js", "js/car/car-mesh.js"], // CarMesh return reads CockpitRig at eval
   ["js/core/store.js", "js/camera/offsets.js"],  // cam-tune destructures GameStore at eval
   ["js/core/store.js", "js/career/career.js"],    // career destructures GameStore at eval
   ["js/core/store.js", "js/career/season-cal.js"], // season-cal destructures GameStore at eval

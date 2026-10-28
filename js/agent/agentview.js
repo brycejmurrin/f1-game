@@ -302,20 +302,22 @@ const AgentView = (function () {
     // object (colour float-arrays, both drivers, stats, _cssColor) — across
     // every rival, ~45 lines of noise each. A rival needs a name, a gap, a side
     // and a closing rate; nothing else is actionable at 200 km/h.
+    // Road gap (not standings): prog minus lap×L so a lapped car 10 m ahead
+    // stays ahead (agent-hooks-vm). describe("car:N") shares this with rivals().
+    function roadGap(c) {
+      const p = G.player, L = G.track.total;
+      const raw = (c.prog || 0) - (p.prog || 0);
+      const lapsAhead = (c.lap || 0) - (p.lap || 0);
+      let gap = raw - lapsAhead * L;  // + = ahead of us on the road
+      if (lapsAhead !== 0) gap -= Math.round(gap / L) * L; // finish-line phase
+      return { gap, lapsAhead };
+    }
+
     function rivals(limit) {
-      const p = G.player, out = [], L = G.track.total;
+      const p = G.player, out = [];
       for (const c of G.cars) {
         if (c.isPlayer) continue;
-        // ON THE ROAD, not in the standings: prog is cumulative. Standing is the
-        // lap counter (a first-lap pack can sit |prog| > L/2 apart while every
-        // car still reads lap:0 — nearest-wrap then invented lapsAhead:1 with
-        // rel:"behind"). Road gap is prog minus that standing, so a lapped car
-        // 10 m ahead stays ahead with lapsAhead:-1 (agent-hooks-vm).
-        const raw = c.prog - p.prog, lapsAhead = (c.lap || 0) - (p.lap || 0);
-        let gap = raw - lapsAhead * L;  // + = ahead of us on the road
-        // prog phases may differ across the finish line. Only wrap differing
-        // standings; same-lap wide packs retain their cumulative order.
-        if (lapsAhead !== 0) gap -= Math.round(gap / L) * L;
+        const { gap, lapsAhead } = roadGap(c);
         const ahead = gap >= 0, gapM = Math.abs(gap);
         const lateralM = (c.x || 0) - (p.x || 0);
         // + closing = the gap is shrinking, whichever side the rival is on
@@ -431,10 +433,10 @@ const AgentView = (function () {
 
       if (p.xArmed) {
         can.push({ id: "active_aero_x_mode",
-                   why: "straight road ahead; X-mode trades downforce for ~+7.5% top speed" });
+                   why: "inside an X-mode zone; X-mode trades downforce for ~+10.5% top speed" });
       } else {
         cannot.push({ id: "active_aero_x_mode",
-                      why: "not armed here — needs ~3 s of straight road ahead and no braking" });
+                      why: "not armed here — needs an X-mode zone, crawl speed, and no braking" });
       }
 
       const wallR = Tracks.wallAt(G.track, p.s, 1), wallL = -Tracks.wallAt(G.track, p.s, -1);
@@ -614,8 +616,8 @@ const AgentView = (function () {
           flap: r2(p.aeroX || 0),
           requested: !!p.xOn,
           armed: !!p.xArmed,
-          note: "X-mode = low drag, ~+7.5% top speed, ~45% less aero downforce. "
-              + "Arms only with ~3 s of straight road ahead and shuts under braking",
+          note: "X-mode = low drag, ~+10.5% top / ~60% less aero DF at mid wing; "
+              + "arms inside an X-mode zone (not a live look-ahead), shuts under braking",
         },
         grip: {
           slipFactor: r2(slipFactor),
@@ -1200,15 +1202,14 @@ const AgentView = (function () {
           return fail("NotFoundError", "no car " + ref,
                       "call field() for the grid and its car ids");
         }
-        const p = G.player;
-        const gap = (car.prog || 0) - (p.prog || 0);
+        const gap = car.isPlayer ? 0 : roadGap(car).gap;
         return {
           apiVersion: API_VERSION, id: "car:" + idx, type: "car",
           code: car.code || null, name: car.name || null, team: teamIdOf(car),
           isPlayer: !!car.isPlayer,
           lap: car.lap || 0, frac: +((car.s || 0) / total).toFixed(4), s: r1(car.s || 0),
           speedKph: r1((car.speed || 0) * 3.6), lateralM: r2(car.x || 0),
-          onKerb: !!car.onKerb, gapToPlayerM: car.isPlayer ? 0 : r1(gap),
+          onKerb: !!car.onKerb, gapToPlayerM: car.isPlayer ? 0 : r1(Math.abs(gap)),
           rel: car.isPlayer ? "self" : gap >= 0 ? "ahead" : "behind",
           finished: !!car.finished,
         };
@@ -1834,8 +1835,7 @@ const AgentView = (function () {
           "ERS: charge drains ~0.20/s deploying and regenerates ~0.115/s, so "
           + "deployment costs roughly 2 s of recharge per 1 s spent. Spend it "
           + "where speed converts to distance — long straights, not corners.",
-          "OVERTAKE BOOST: arms only within ~1 s of the car ahead; 4 s of boost "
-          + "then 16 s of cooldown, so firing it early wastes the window.",
+          "OVERTAKE BOOST: under 1 s behind at the detection line (~90% lap) earns 0.5 MJ next lap (~3–5 s push); no cooldown.",
           "PARTS: a 780-credit budget across 12 categories. Every credit in "
           + "engine/aero is a credit not in brakes/tyres — see carView().",
         ],
@@ -1976,7 +1976,7 @@ const AgentView = (function () {
         cli: "node tools/shot/agent.mjs <track> <help|world|field|scene|atmosphere|"
              + "objective|model|describe|query|render|track|car|survey|rollout> [flags]",
         notes: [
-          "no agent hook returns null — failures are {ok:false, error, message, fix}",
+          "agent-view fails as {ok:false}; obs/physState/probe null until armed",
           "an LLM cannot decide at 60 Hz: rollout runs your policy at policyHz "
             + "(default 10) while physics runs every tick",
           "render({what}) and scene({visible:true}) reflect the LAST RENDERED "
