@@ -3355,6 +3355,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/garage/crew-draw.js",
+      "global": "GarageCrewDraw",
+      "roster": "tag"
+    },
+    {
       "path": "js/garage/crew-motion.js",
       "global": "GarageCrewMotion",
       "roster": "tag"

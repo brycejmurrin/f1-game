@@ -5218,6 +5218,8 @@
         "tests/unit/forecast.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/fuzz-untrusted-inputs.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-crew.test.mjs",
         "tests/unit/garage-defaults.test.mjs",
         "tests/unit/garage-followups.test.mjs",
         "tests/unit/garage-sheet-round2.test.mjs",
@@ -7577,6 +7579,17 @@
       ],
       "value": [
         "tests/unit/garage-crew-choreo.test.mjs"
+      ]
+    },
+    "js/garage/crew-draw.js": {
+      "place": [
+        "tests/unit/boot-load-budget.test.mjs",
+        "tests/unit/garage-crew-choreo.test.mjs",
+        "tests/unit/garage-personality.test.mjs"
+      ],
+      "*": [
+        "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-crew.test.mjs"
       ]
     },
     "js/garage/crew-motion.js": {
@@ -15297,7 +15310,8 @@
         "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "drawChunked": [
-        "tests/unit/gfx-backend-canary.test.mjs"
+        "tests/unit/gfx-backend-canary.test.mjs",
+        "tests/unit/wgx-chunked-fallback.test.mjs"
       ],
       "freeChunkedMesh": [
         "tests/unit/gfx-backend-canary.test.mjs",
