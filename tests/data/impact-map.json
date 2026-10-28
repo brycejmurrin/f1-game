@@ -5986,6 +5986,7 @@
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
@@ -10130,7 +10131,8 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "frame": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
@@ -10144,19 +10146,27 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "clear": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
+      ],
+      "contrast": [
+        "tests/unit/overlay-render.test.mjs"
       ],
       "create": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "options": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "paint": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "text": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ]
     },
     "js/perf/bench-capture.js": {
@@ -11901,6 +11911,7 @@
       "create": [
         "tests/unit/director.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],

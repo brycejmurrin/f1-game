@@ -3,6 +3,7 @@ const OverlayRender = (function () {
   "use strict";
 
   const MAX_ROWS = 20;
+  const FLASH_MS = 1200;
 
   function options(search) {
     const q = new URLSearchParams(search || "");
@@ -11,6 +12,34 @@ const OverlayRender = (function () {
     const side = q.get("side") === "right" ? "right" : "left";
     const chroma = ["green", "blue", "magenta"].includes(q.get("chroma")) ? q.get("chroma") : "";
     return { scale, rows, side, chroma, demo: q.get("demo") === "1", only: q.get("only") === "captions" ? "captions" : "" };
+  }
+
+  // WCAG 2 relative luminance / contrast of "#rgb", "#rrggbb" or "rgb(r,g,b)".
+  function rgbOf(colour) {
+    const c = String(colour || "").trim();
+    let m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(c);
+    if (m) {
+      const h = m[1].length === 3 ? m[1].replace(/./g, "$&$&") : m[1];
+      return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+    }
+    m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i.exec(c);
+    return m ? [m[1], m[2], m[3]].map((v) => Math.max(0, Math.min(255, Number(v)))) : null;
+  }
+  function luminance(rgb) {
+    const lin = rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  }
+  function contrast(a, b) {
+    const la = luminance(rgbOf(a)), lb = luminance(rgbOf(b));
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+  }
+  // THE TEAM PLATE: the position number sits on the team colour, in whichever ink
+  // reads better. Pure black or white always clears 4.5:1 on one of them (the
+  // worst case, a mid-luminance colour, is ~4.58:1), so every team's plate meets WCAG AA.
+  const INK_DARK = "#000000", INK_LIGHT = "#ffffff";   // pure black: #0b0c10 drops the worst case to 4.4:1
+  function ink(colour) {
+    if (!rgbOf(colour)) return "";
+    return contrast(colour, INK_DARK) >= contrast(colour, INK_LIGHT) ? INK_DARK : INK_LIGHT;
   }
 
   function node(tag, cls) {
@@ -91,6 +120,9 @@ const OverlayRender = (function () {
         text(out.gap, row.pos === 1 ? "LEADER" : row.pit ? "PIT" : row.interval == null ? "" : "+" + Number(row.interval).toFixed(2));
         text(out.tyre, row.tyre || "");
         out.team.style.background = row.team || "";
+        const plate = rgbOf(row.team) ? row.team : "";
+        out.pos.style.background = plate;
+        out.pos.style.color = plate ? ink(plate) : "";
         out.el.dataset.you = row.you ? "1" : "";
       }
       // Battles are race/count only — hide once the session leaves those states
@@ -108,7 +140,11 @@ const OverlayRender = (function () {
       if (view.sectors && view.sectors.last) {
         for (let i = 0; i < sec.length; i++) {
           const s = view.sectors.last[i] || {};
-          text(sec[i], s.value == null ? "S" + (i + 1) : s.glyph + Number(s.value).toFixed(3));
+          const label = s.value == null ? "S" + (i + 1) : s.glyph + Number(s.value).toFixed(3);
+          // SECTOR FLASH: a new time flashes its cell for FLASH_MS (overlay.html
+          // animates it; under prefers-reduced-motion it is a static outline).
+          if (s.value != null && sec[i].textContent !== label) flash(sec[i]);
+          text(sec[i], label);
           sec[i].dataset.tone = s.tone || "";
         }
       }
@@ -123,6 +159,12 @@ const OverlayRender = (function () {
       return true;
     }
 
+    const flashTimers = new Map();
+    function flash(el) {
+      el.dataset.flash = "1";
+      clearTimeout(flashTimers.get(el));
+      flashTimers.set(el, setTimeout(() => { el.dataset.flash = ""; flashTimers.delete(el); }, FLASH_MS));
+    }
     // Dispose the painted chrome (feed stopped, race quit). Mirrors createDiffer.reset.
     function clear() {
       current = null;
@@ -136,6 +178,7 @@ const OverlayRender = (function () {
       for (let i = 0; i < sec.length; i++) {
         text(sec[i], "S" + (i + 1));
         sec[i].dataset.tone = "";
+        sec[i].dataset.flash = "";
       }
     }
 
@@ -196,7 +239,7 @@ const OverlayRender = (function () {
     return painter;
   }
 
-  return { MAX_ROWS, options, create, demoFrame, boot };
+  return { MAX_ROWS, FLASH_MS, options, create, demoFrame, boot, contrast, ink };
 })();
 Object.freeze(OverlayRender);
 if (typeof document !== "undefined" && document.querySelector('main#overlay[role="region"]')) OverlayRender.boot();

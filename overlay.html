@@ -53,7 +53,16 @@
   body[data-only="captions"] .ov-tower, body[data-only="captions"] .ov-battle, body[data-only="captions"] .ov-sectors { display: none; }
   html[data-chroma] .ov-row, html[data-chroma] .ov-battle, html[data-chroma] .ov-caption {
     box-shadow: none; text-shadow: -1px -1px #000, 1px -1px #000, -1px 1px #000, 1px 1px #000; }
-  @media (prefers-reduced-motion: reduce) { .ov-row { transition: none; } }
+  /* The team plate is opaque, so it cannot fringe under a key; an outline would smudge its black digits. */
+  html[data-chroma] .ov-pos { text-shadow: none; }
+  /* Sector flash (render.js sets data-flash for FLASH_MS on a new time); reduced
+     motion keeps the cue as a static outline, no animation. */
+  @media (prefers-reduced-motion: no-preference) { .ov-sectors span[data-flash="1"] { animation: ov-flash 1.2s ease-out; } }
+  @keyframes ov-flash { from { background: rgba(255,255,255,.28); outline: 2px solid currentColor; outline-offset: 2px; } }
+  @media (prefers-reduced-motion: reduce) {
+    .ov-row { transition: none; }
+    .ov-sectors span[data-flash="1"] { animation: none; outline: 2px solid currentColor; outline-offset: -2px; }
+  }
   @media (max-width: 700px) { .ov-tower { top: 12px; left: 12px; } .ov-sectors { top: 12px; right: 12px; }
     .ov-caption { bottom: 12px; } .ov-battle { top: 12px; } }
 </style>
