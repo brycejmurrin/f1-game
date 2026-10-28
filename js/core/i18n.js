@@ -122,6 +122,12 @@ const I18n = (function () {
     return raw;
   }
 
+  /** The loaded catalogue's raw value (string or pool array), or null: no random pick, no English fallback. */
+  function raw(key) {
+    const v = catalog[key];
+    return v == null ? null : v;
+  }
+
   function t(key, vars, englishDefault) {
     const raw = lookup(key, englishDefault);
     const resolved = formatMessage(String(raw), vars, activeLang);
@@ -290,7 +296,7 @@ const I18n = (function () {
   }
 
   return {
-    t, n, date, rel, list, country, compare,
+    t, raw, n, date, rel, list, country, compare,
     lang, set, ready, onChange, dir, boot,
     pluralCategories,
     _installCatalog, _resetForTest, _detect: resolveDetectOrder,

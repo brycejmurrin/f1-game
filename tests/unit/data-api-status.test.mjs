@@ -8,6 +8,7 @@ import test from "node:test";
 import vm from "node:vm";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const apiSource = (await Promise.all(["api-transport", "api"].map((name) =>
   readFile(new URL(`../../js/data/${name}.js`, import.meta.url), "utf8")))).join("\n");
@@ -1268,8 +1269,7 @@ test("RACE IT caches bulk positions without serializing them and fresh bypasses 
     if (value && Array.isArray(value.data) && value.data.length === big.length) serialized.push(value);
     return JSON.stringify(value);
   } };
-  vm.runInContext(await readFile(new URL("../../js/data/real-race-tab.js", import.meta.url), "utf8") +
-    ";globalThis.realRace=DataRealRace", h.context, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(h.context, ";globalThis.realRace=DataRealRace");
   const first = await h.context.realRace.fetchRaw(123, false);
   assert.equal(first.positions.length, big.length);
   assert.equal(serialized.length, 0, "the bulk history never reaches JSON.stringify");
@@ -1367,4 +1367,78 @@ test("a finite Retry-After seconds value that overflows milliseconds cannot inst
   const reopened = rawRequest(h, 3); await h.flush(); await h.advance(400); await reopened;
   assert.equal(h.calls.length, 3, "invalid header cannot leave a permanent provider pause");
   assert.equal(h.timers.size, 0);
+});
+
+test("driverStandings refuses a body whose StandingsLists season disagrees with the asked year", async () => {
+  const body = {
+    MRData: {
+      StandingsTable: {
+        StandingsLists: [{
+          season: "2025",
+          round: "24",
+          DriverStandings: [{
+            position: "1", points: "99", wins: "3",
+            Driver: { givenName: "Max", familyName: "Verstappen", code: "VER", permanentNumber: "1" },
+            Constructors: [{ name: "Red Bull Racing" }]
+          }]
+        }]
+      }
+    }
+  };
+  const warns = [];
+  const context = vm.createContext({
+    fetch: async () => ({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => body, text: async () => JSON.stringify(body)
+    }),
+    AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} }
+  });
+  seedLog(context);
+  context.Log.warn = function (ch, msg) { warns.push([ch, msg]); };
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  const mismatched = await context.api.driverStandings(2026);
+  // Length pin (not deepEqual []): VM-realm arrays fail host deepStrictEqual.
+  assert.equal(mismatched.length, 0, "wrong-season body must not paint as this year's table");
+  assert.ok(warns.some((w) => /standings season mismatch/.test(String(w[1]))));
+  body.MRData.StandingsTable.StandingsLists[0].season = "2026";
+  // Same URL was cached with the mismatched body — drop it so the OK season is fetched.
+  const driverUrl = "https://api.jolpi.ca/ergast/f1/2026/driverstandings.json";
+  context.api.forget(driverUrl);
+  const ok = await context.api.driverStandings(2026);
+  assert.equal(ok.length, 1);
+  assert.equal(ok[0].code, "VER");
+  // A list with no season field stays accepted (legacy / truncated bodies).
+  delete body.MRData.StandingsTable.StandingsLists[0].season;
+  context.api.forget(driverUrl);
+  const legacy = await context.api.driverStandings(2026);
+  assert.equal(legacy.length, 1);
+});
+
+test("constructorStandings also refuses a mismatched StandingsLists season", async () => {
+  const body = {
+    MRData: {
+      StandingsTable: {
+        StandingsLists: [{
+          season: "2024",
+          ConstructorStandings: [{ position: "1", points: "860", wins: "9", Constructor: { name: "McLaren" } }]
+        }]
+      }
+    }
+  };
+  const context = vm.createContext({
+    fetch: async () => ({
+      ok: true, status: 200, headers: { get: () => null },
+      json: async () => body, text: async () => JSON.stringify(body)
+    }),
+    AbortController, Date, setTimeout, clearTimeout,
+    localStorage: { length: 0, getItem: () => null, setItem() {}, key: () => null, removeItem() {} }
+  });
+  seedLog(context);
+  vm.runInContext(apiSource + ";globalThis.api=F1API", context, { filename: absSrc("js/data/api.js") });
+  assert.equal((await context.api.constructorStandings(2026)).length, 0);
+  body.MRData.StandingsTable.StandingsLists[0].season = "2026";
+  context.api.forget("https://api.jolpi.ca/ergast/f1/2026/constructorstandings.json");
+  const ok = await context.api.constructorStandings(2026);
+  assert.equal(ok[0].name, "McLaren");
 });

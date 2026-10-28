@@ -89,8 +89,12 @@ const HudInputs = (function () {
     if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
   }
 
-  const C_THR = "#2ecc71", C_BRK = "#ff3b3b", C_STR = "#ffffff", C_MID = "rgba(255,255,255,0.28)";
+  // Throttle / brake read CvdPalette at paint time, so a COLOUR VISION change
+  // reaches the next frame (#1595); steering stays white in every mode.
+  const C_STR = "#ffffff", C_MID = "rgba(255,255,255,0.28)";
+  const ink = (key) => (typeof CvdPalette !== "undefined" ? CvdPalette.hex(key) : "") || C_STR;
   function draw(c) {
+    const C_THR = ink("thr"), C_BRK = ink("brk");
     const w = cssW, h = cssH, pad = 2, lx = w - 9;   // the legend's column at the right
     c.setTransform(ratio, 0, 0, ratio, 0, 0);
     c.clearRect(0, 0, w, h);
@@ -110,10 +114,10 @@ const HudInputs = (function () {
     } else if (n > 1) {
       const dx = (lx - 2) / (trace.n - 1), x0 = (lx - 2) - (n - 1) * dx;
       // BRAKE: a translucent fill under the line, then the line.
-      c.fillStyle = "rgba(255,59,59,0.25)";
+      c.fillStyle = C_BRK; c.globalAlpha = 0.25;
       c.beginPath(); c.moveTo(x0, h - pad);
       for (let i = 0; i < n; i++) c.lineTo(x0 + i * dx, levelY(trace.get(trace.brk, i), h, pad));
-      c.lineTo(x0 + (n - 1) * dx, h - pad); c.closePath(); c.fill();
+      c.lineTo(x0 + (n - 1) * dx, h - pad); c.closePath(); c.fill(); c.globalAlpha = 1;
       line(c, trace.brk, n, x0, dx, h, pad, C_BRK, false);
       line(c, trace.thr, n, x0, dx, h, pad, C_THR, false);
       line(c, trace.str, n, x0, dx, h, pad, C_STR, true);
@@ -164,7 +168,7 @@ const HudInputs = (function () {
     c.clearRect(0, 0, w, h); c.fillStyle = "#10131b"; c.fillRect(0, 0, w, h);
     c.font = "16px sans-serif"; c.textBaseline = "middle";
     const y = (v, channel) => channel === "steering" ? (top + bottom) / 2 - Math.max(-1, Math.min(1,v)) * (bottom-top)/2 : bottom - clamp01(v) * (bottom-top);
-    for (const [channel,label,color,legendY] of [["throttle","T",C_THR,top],["brake","B",C_BRK,top+24],["steering","S",C_STR,top+48]]) {
+    for (const [channel,label,color,legendY] of [["throttle","T",ink("thr"),top],["brake","B",ink("brk"),top+24],["steering","S",C_STR,top+48]]) {
       c.strokeStyle = color; c.lineWidth = 2; c.beginPath();
       samples.forEach((sample,i) => { const x = right + sample.seconds / WINDOW_S * (right-left), py = y(sample[channel],channel); if(i)c.lineTo(x,py);else c.moveTo(x,py); }); c.stroke();
       c.fillStyle = color; c.fillText(label,right+12,legendY);

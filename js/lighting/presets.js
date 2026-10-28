@@ -129,7 +129,29 @@ window.LightPresets = {
   // a sky as bright as a clear day's. Wet surfaces deepen colour: one stamp lifts
   // saturation and contrast and trims exposure (Monza sat 0.27 -> 0.35, sky third
   // 111 -> 100). Storm resolves the rain presets, so it inherits this grade.
-  "*|day|rain": { "saturation": 1.05, "contrast": 1.12, "exposureMul": 0.92 },
+  // Lamp trio matches *|day|dry / *|day|wet (M37 presets): without it, rain /
+  // overcast / fog fell through to TUNE_DEFS lampLevel 0.26 + floodEmitMul 1.0
+  // (Monaco tunnel always-on at 0.26 instead of the 0.13 alwaysLampFloor).
+  "*|day|rain": {
+    "saturation": 1.05,
+    "contrast": 1.12,
+    "exposureMul": 0.92,
+    "lampLevel": 0,
+    "alwaysLampFloor": 0.13,
+    "floodEmitMul": 0.08
+  },
+  // Shared day overcast/fog lamps (M37 presets): weather does not turn street
+  // masts on in daylight. Same trio as *|day|dry / *|day|wet; fog/mist knobs
+  // stay per-track + atmosphere FOG BOOST / OVERCAST FOG BOOST.
+  "*|day|overcast": { "lampLevel": 0, "alwaysLampFloor": 0.13, "floodEmitMul": 0.08 },
+  "*|day|fog": { "lampLevel": 0, "alwaysLampFloor": 0.13, "floodEmitMul": 0.08 },
+  // Shared dawn rain/overcast/fog lamps (M37 presets evidence: 47+ circuits
+  // resolved dawn|rain lampLevel to the 0.26 knob default). Rain inherits the
+  // wet-dawn pool; overcast/fog inherit the dry-dawn pool (weather does not
+  // brighten a street lamp — parallel to *|night|overcast / *|night|fog).
+  "*|dawn|rain": { "lampLevel": 0.13, "floodEmitMul": 0.22 },
+  "*|dawn|overcast": { "lampLevel": 0.093, "floodEmitMul": 0.18 },
+  "*|dawn|fog": { "lampLevel": 0.093, "floodEmitMul": 0.18 },
   // Shared dusk|dry authenticity: fleet COPY-ALL stamped lampLevel 0.24 /
   // floodEmitMul 0.5 with default floodEmit 1.0 on unpinned tracks, sunElev -8
   // burying the sun (Spa #1136 class). One stamp lifts twilight ambient/key fill,

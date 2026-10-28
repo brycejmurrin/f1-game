@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: "Use when inspecting baked PBR materials/MAT layers, assets/pack, matTexMix, __apex.assets(), or validating local glTF/GLB and authoring zero-spend procedural room drafts. Covers assets.js, tools/gen/assets.mjs, GLX/TLX/WGX material mismatches. Exposure/shine → lighting-tuner; car liveries → garage-parts-livery; rendering defects → renderer-debug."
+description: "Use when tarmac or grass textures look garbled or wrong-layer, PBR materials/MAT layers, assets/pack, matTexMix, __apex.assets(), GLX/TLX/WGX material mismatches, validating glTF/GLB or authoring procedural room drafts. Exposure/shine → lighting-tuner; car liveries → garage-parts-livery; rendering defects → renderer-debug."
 ---
 
 # Baked asset pack
@@ -34,7 +34,7 @@ write the exact command into the PR body for Bryce, or ask him for a grant (in a
 - Validate local glTF/GLB assets or create zero-spend procedural Blender room drafts.
 - Licence/hash/size guards (`verify`).
 - Invisible / wrong / not-loading baked materials.
-- Tuning `matTexMix` / `__apex.matTex` or tier (`low`/`high`).
+- Tuning `matTexMix` / `__apex.matTex` or tier (`high`/`low`; `off` = the pack failed or the backend is unsupported, read `error`; `browser-bake` = layers baked in the browser by `adopt()` in `assets.js`, not the shipped PNGs).
 - Aligning MAT ids across `TrackGeom.MAT`, `tools/gen/assets.mjs`, and shaders.
 
 ## When NOT to Use
@@ -47,7 +47,7 @@ write the exact command into the PR body for Bryce, or ask him for a grant (in a
 
 | Command / hook | Role |
 |---|---|
-| `node tools/gen/assets.mjs bake-synthetic` | Regenerate pack, no network (denied to agents: Bryce runs it) |
+| `node tools/gen/assets.mjs bake-synthetic` | Regenerate pack, no network (Bryce runs it) |
 | `node tools/gen/assets.mjs verify` | Licence allow-list, md5, 8 MB budget; read-only, prints `verify: OK` |
 | `__apex.assets()` (browser-only) | `{ supported, pack, uploaded, tier, layers, error, … }` |
 | `__apex.matTex(v?)` (browser-only) | Blend 0..1; same as `lightTune({ matTexMix })` |

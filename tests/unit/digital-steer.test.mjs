@@ -77,7 +77,7 @@ function boot(count) {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
-  for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   const canvasL = {};
@@ -316,7 +316,7 @@ function bootButtons() {
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
-  for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init(el());
@@ -405,6 +405,20 @@ test("re-entering TILT zeroes on a fresh reading, not the lean the player left t
     assert.ok(worst < 1e-9, "level is centre (a stale zero at 25° steered hard left): " + worst);
     assert.equal(st.steerMode, "tilt");
   });
+});
+
+test("Input.setSteerMode maps unknown values to BUTTONS (M40; matches game.js STEER_MODES)", () => {
+  const { Input } = boot();
+  Input.setSteerMode("tilt");
+  assert.equal(Input.debugState().steerMode, "tilt");
+  Input.setSteerMode("touch");
+  assert.equal(Input.debugState().steerMode, "touch");
+  for (const bad of ["foo", "", null, undefined, "Tilt", 0]) {
+    Input.setSteerMode(bad);
+    assert.equal(Input.debugState().steerMode, "buttons", "unknown → buttons, not tilt: " + String(bad));
+  }
+  Input.setSteerMode("buttons");
+  assert.equal(Input.debugState().steerMode, "buttons");
 });
 
 test("one non-finite orientation reading does not poison the TILT filter for the session", () => {

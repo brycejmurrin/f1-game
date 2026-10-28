@@ -1500,15 +1500,22 @@ const TLX = (function () {
       const _mirMrt = () => !!(mirRT && mirRT.textures && mirRT.textures.length > 1);
       const _mirMrtWant = () => _mirMrtKnob && !!(post && post.tagOn && post.tagOn() && TSL.mrt && renderer.setMRT);
       function _mirTarget(type, w, h, mrt) {
+        // apex26.tlxMir11 / tlxTag8 (tlx-post.js PHONE FORMAT TRIMS): the scene's attachment formats, so the
+        // two passes keep one pipeline key. The tag is built half-float first (a clone of attachment 0).
+        const tf = post && post.targetFormats ? post.targetFormats() : null;
+        const c11 = !!(tf && tf.mir11) && type !== THREE.UnsignedByteType;
+        if (type === THREE.UnsignedInt101111Type) type = THREE.HalfFloatType;
         const rt = new THREE.RenderTarget(w, h, {
           type, format: THREE.RGBAFormat, depthBuffer: true, count: mrt ? 2 : 1,
           generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter,
         });
         rt.texture.colorSpace = THREE.NoColorSpace;
+        if (c11) { rt.texture.type = THREE.UnsignedInt101111Type; rt.texture.format = THREE.RGBFormat; }
         if (mrt && rt.textures && rt.textures[1]) {
           const bk = renderer.backend || {};
           rt.texture.name = "output";
           if (bk.isWebGPUBackend || bk.drawBuffersIndexedExt) rt.textures[1].format = THREE.RedFormat;
+          if (tf && tf.tag8) rt.textures[1].type = THREE.UnsignedByteType;
           rt.textures[1].name = "ssrTag";
           rt.textures[1].generateMipmaps = false;
           rt.textures[1].minFilter = THREE.NearestFilter; rt.textures[1].magFilter = THREE.NearestFilter;
@@ -2056,6 +2063,27 @@ const TLX = (function () {
       const SPLIT_TRIS = 1024, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
       // apex26.tlxRoadSplit=0 pins the whole-lap draw; __tlx.roadSplit(on) flips it live and writes the pin.
       let _roadSplitOn = (function () { try { return localStorage.getItem("apex26.tlxRoadSplit") !== "0"; } catch (_) { return true; } })();
+      // Visible chunks of one record share attributes and one material. One
+      // concatenated index draws the same triangles (opaque depth test). The
+      // mirror keeps its own slot so the two passes do not rebuild each other.
+      // apex26.tlxChunkMerge=0 restores a draw per chunk. Values 1–4 stay the
+      // build-time merge in tlx-chunked.js and leave this draw path on.
+      let _chunkMerge = true;
+      try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
+      function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
+        if (!chunkedSys) return 0;
+        const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
+        const mat = rec.mat;
+        if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
+            && !(mat && (mat.transparent || mat.depthWrite === false))
+            && !(rec.al < 1)) {
+          const g = chunkedSys.mergeVisible(rec.chunked, n, slot);
+          if (g) { acquireMesh(g, rec.m, rec.mat, rec).renderOrder = order; return n; }
+        }
+        const vis = chunkedSys.visList;
+        for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = order;
+        return n;
+      }
       function _drawSplit(rec, i, vp, eye, cd, fog) {
         const sp = rec.split;
         if (!chunkedSys || !TLXShaders.mergeRuns || sp.batch === _poolBatch) return false;
@@ -5515,13 +5543,7 @@ const TLX = (function () {
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
-              if (rec.chunked) {
-                if (!chunkedSys) continue;
-                const n = chunkedSys.cull(rec.chunked, _mirVP, _mirEye, _mirCull, _mirFog);
-                const vis = chunkedSys.visList;
-                for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
-                continue;
-              }
+              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1); continue; }
               if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
@@ -5553,7 +5575,7 @@ const TLX = (function () {
         mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? _mirRectScratch : null; if (_mirRect) for (let i = 0; i < 4; i++) _mirRect[i] = +r[i] || 0; _mirFlip = flip !== false; },
         mirrorState() {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
-            hdr: !!(mirRT && mirRT.texture.type === THREE.HalfFloatType), renders: _mirRenders,
+            hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders,
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
         },
@@ -6188,9 +6210,7 @@ const TLX = (function () {
               // what made the feature inert: the grid is a SINGLE shared
               // uniform set, so each chunked record overwrote the previous
               // one's grid and only the last survived.
-              const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist, frameCullFog);
-              const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
+              const n = _drawChunked(rec, i, _frameVP, frameEye, frameCullDist, frameCullFog, 0);
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
               // Hold the release until the env probe has LATCHED.
@@ -6276,7 +6296,7 @@ const TLX = (function () {
               if (post.setMirror) {
                 // Pixels of the present target (the SGSR output size when upscaling).
                 const up = wantSpatialUpscale(), ok = !!(_mirRect && mirRT && _mirRenders > 0 && !_mirDead);
-                post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type === THREE.HalfFloatType, _mirFlip);
+                post.setMirror(ok ? mirRT.texture : null, ok ? _mirPx(up ? presentW : W, up ? presentH : H) : null, ok && mirRT.texture.type !== THREE.UnsignedByteType, _mirFlip);
               }
               try {
                 renderer.setRenderTarget(post.sceneTarget());

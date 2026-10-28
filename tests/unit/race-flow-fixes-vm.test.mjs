@@ -48,6 +48,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -488,7 +489,7 @@ test("3.2 a real race (Data Hub JUMP IN) is never diverted into a qualifying she
     const G = g.G;
     G.daily.stop(); G.timeTrial = false; G.practice = false;
     G.raceGrid = "quali";
-    vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+    evalRealRace(g.ctx);
     const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
     const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
     const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -756,7 +757,7 @@ test("launch: Data Hub JUMP IN (opts.intro) plays the garage drive-out before th
       g.sandbox.GLX.makeFrustumPlanes = () => null;   // the VM's stub returns [] (no planes): the menu grid's rivals would index into it
       G.daily.stop(); G.timeTrial = false; G.practice = false;
       G.quitToMenu();   // the hub is opened from the menu (createGame leaves a race running)
-      vm.runInContext(readFileSync(join(ROOT, "js/data/real-race-tab.js"), "utf8"), g.ctx, { filename: absSrc("js/data/real-race-tab.js") });
+      evalRealRace(g.ctx);
       const Data = vm.runInContext("DataRealRace", g.ctx), Teams = vm.runInContext("Teams", g.ctx);
       const Tracks = vm.runInContext("Tracks", g.ctx), Real = vm.runInContext("RealRace", g.ctx);
       const fixture = JSON.parse(readFileSync(join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
