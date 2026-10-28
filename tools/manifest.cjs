@@ -436,6 +436,7 @@ const FULL = [
   "js/xr/xr-opts.js",   // SETTINGS › VR rows; call-time GameStore / SettingRow
   "js/xr/xr-boot.js",
   "js/ui/hud-minimap.js",    // HudMinimap: the #minimap track map GameHud draws each HUD tick (#1656)
+  "js/ui/hud-radio-lane.js", // HudRadioLane: the radio card's top slot, corner and dock lane GameHud places (#3261)
   "js/ui/hud.js",
   "js/ui/results-story.js",
   "js/ui/results-sheet.js",
@@ -443,6 +444,7 @@ const FULL = [
   "js/share/share-card-data.js",
   "js/share/share-card-layout.js",
   "js/share/share-card.js",
+  "js/share/share-card-chips.js", // ShareCardChips: the SHARE CARD chip on results, standings, champion and THE YEAR
   "js/race/daily-challenge.js",
   "js/ui/appearance-studio.js",
   "js/ui/home-world.js",
@@ -713,6 +715,7 @@ const HARD_EDGES = [
   ["js/ui/hud-tyres.js", "js/ui/hud.js"],
   ["js/ui/hud-skin.js", "js/ui/hud.js"],            // updateHud calls HudSkin.skinAccent (call time; ordered with its peers)
   ["js/ui/hud-minimap.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its HudMinimap
+  ["js/ui/hud-radio-lane.js", "js/ui/hud.js"],   // GameHud.create (game.js eval) builds its HudRadioLane
   ["js/ui/hud-readouts.js", "js/ui/hud.js"],      // GameHud.create (game.js eval) builds its lapTrace / speaker
   // js/data/hub.js (LAZY_DATA) binds Dom.el at eval too; dom.js is FULL, so the order holds without an edge.
   ["js/ui/dom.js", "js/career/season-ui.js"],    // season-ui binds Dom.el at eval
