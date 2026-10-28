@@ -51,7 +51,7 @@ test("it claims pm-ssao and pm-godrays, and the shell declares both rows with th
   for (const [id, label] of [["pm-ssao", "AMBIENT OCCLUSION"], ["pm-godrays", "GOD-RAYS"]]) {
     assert.ok(SHELL.includes(`id="${id}"`), id + " must exist in index.html");
     assert.ok(SHELL.includes(`id="${id}-sel"`), id + "-sel must exist — SettingRow needs the select");
-    assert.ok(SHELL.includes(`id="${id}-label">${label}<`), id + " must be labelled " + label);
+    assert.ok(new RegExp(`id="${id}-label"[^>]*>${label}<`).test(SHELL), id + " must be labelled " + label);
   }
   // Both live in GRAPHICS, beside the other renderer levers.
   const gfx = SHELL.slice(SHELL.indexOf('id="pm-panel-graphics"'));

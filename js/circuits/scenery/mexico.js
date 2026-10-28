@@ -14,7 +14,7 @@
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit, terrainYAt,
-              indexSolid, seat, floodMast, lampPost: apiLampPost } = api;
+              indexSolid, seat, floodMast, lampPost: apiLampPost, bakedModel } = api;
       const cityBand = (s) => (s > 0.14 && s < 0.60) || s > 0.94 || s < 0.02;
       // Pit straight sides. The engine's pit complex (garages, pit wall) takes
       // pit.side +1, the RIGHT: the infield of this clockwise lap, where the
@@ -1094,4 +1094,11 @@
               lit: true, windowCol: [0.94, 0.84, 0.54], floor: 7 });
         }
       }
+      // ── Racing Kit paddock furniture (CC0 k_ models, assets/pack; #1618) ──
+      // bakedModel is a pure enhancement (false when the pack lacks the id) and
+      // carries its own road guard; ids stay string literals so ensureScenery
+      // fetches them. Tents behind the paddock, TV camera pods at the big corners.
+      for (const s of [0.975, 0.0, 0.025]) bakedModel("k_tentlong", K(s), 1, 80, { scale: 2.4 });
+      for (const [s, side] of [[0.2571, -1], [0.4531, -1], [0.6721, -1], [0.8261, -1], [0.9496, -1]])
+        bakedModel("k_camera_exclusive", K(s), side, 13, { scale: 3 });
     };

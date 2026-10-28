@@ -56,8 +56,6 @@ const Particles = (function () {
   const RAIN_CELL_M = 2;
   let _statUpload = 0, _statExpand = 0, _statSkip = 0, _statAlphaExpand = 0, _statAddExpand = 0;
 
-  function markDirty() { _dirty = true; }
-
   function init(gfx) {
     Log.info("game", "Particles.init");
     _gfx = gfx;
@@ -75,8 +73,8 @@ const Particles = (function () {
     _a0 = new Float32Array(MAX);
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
     _add = new Uint8Array(MAX);
-    // The alpha batch also carries the rain shower (rainFill): size for both.
-    _vertA = new Float32Array((MAX + _rainN) * FLOATS_PER);
+    // Pool only at init — rainSeed grows _vertA to MAX + wetCap once a shower arms.
+    _vertA = new Float32Array(MAX * FLOATS_PER);
     _vertB = new Float32Array((MAX + FLARE_MAX) * FLOATS_PER);
     _n = 0;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;
@@ -688,6 +686,6 @@ const Particles = (function () {
   }
 
   return { init, clear, count, capacity, update, draw, tyreSmoke, sparks, scrape, kickup, spray, sprayStr, sprayRate, sprayAdmit, sprayCars,
-           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats, markDirty };
+           flare, flareCount, rainShow, rainSeed, rainUpdate, rainActive, rainIntensity, stats, resetStats };
 })();
 Object.freeze(Particles);

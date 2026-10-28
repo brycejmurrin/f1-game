@@ -68,6 +68,13 @@ const NIGHT = { ...DAY, sunDir: [0, -0.4, 0.9], sunColor: [0.02, 0.02, 0.03], am
 // The colour is the fixture's energy (track-lights.js ePhys sizes a flood in the thousands).
 const lamp = (x, z, rgb = [12000, 11500, 10000]) => [x, 10, z, ...rgb, 40, 0, -1, 0, 0.9, 0.5, 0.1, 0, 1];
 
+test("visor public surface drops the unused _reset test hook", () => {
+  const { V } = load();
+  assert.equal(V._reset, undefined, "VisorOptics._reset had zero callers — removed from the export");
+  assert.equal(typeof V.sceneFromG, "function");
+  assert.equal(typeof V.stats, "function");
+});
+
 test("visor port: a wide aperture with a clear centre on the phone, the desktop and a tall phone", () => {
   const { V } = load();
   for (const [w, h] of [[844, 390], [1920, 1080], [390, 844], [1280, 720]]) {
@@ -315,6 +322,19 @@ test("visor tint: the lens colour is the resolved --visor-lens token (css/tokens
   assert.deepEqual([...load({ color: "neutral" }).V.tintRGB("neutral")], [12, 12, 20], "rgb()");
   assert.deepEqual([...load({ color: "ice" }).V.tintRGB("ice")], [35, 59, 80], "whitespace around the token");
   assert.deepEqual([...load({ color: "rose" }).V.tintRGB("rose")], [76, 45, 60], "an unresolved token falls back to the table");
+});
+
+test("visor tint: the lens colour is read once per port build, never per repaint (a forced style recalc)", () => {
+  const { V, ctx, listeners } = load({ visor: "smoke", color: "amber", apex: { visorScene: () => DAY } });
+  let reads = 0;
+  const gcs = ctx.getComputedStyle;
+  ctx.getComputedStyle = (el) => { reads++; return gcs(el); };
+  for (let i = 0; i < 60; i++) V.tick(1 / 15, true, 0, false);
+  assert.ok(V.stats().paints >= 30, "the light layer repainted all along");
+  assert.equal(reads, 1, "one --visor-lens read for the port build, none per paint");
+  for (const fn of listeners) fn("visorColor", "ice");
+  V.tick(1 / 15, true, 0, false);
+  assert.equal(reads, 2, "a lens colour change re-reads it with the port rebuild");
 });
 
 test("visor clear (audit4 R1): Droplets.clear() at race exit takes the light layer down with the water", () => {

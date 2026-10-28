@@ -910,7 +910,7 @@
       <div class="pm-groups">
         <section id="pm-panel-progress" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
           <details open id="pm-badges-panel">
-            <summary class="adv-more-btn">LICENCE BADGES</summary>
+            <summary class="adv-more-btn" data-i18n="pause.badges">LICENCE BADGES</summary>
             <p id="pm-badges-summary" class="adv-help" data-help="keep">No badges yet.</p>
             <ol id="pm-badges-list"></ol>
           </details>
@@ -918,12 +918,12 @@
 
         <section id="pm-panel-review" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
           <details open id="pm-session-review">
-            <summary class="adv-more-btn">SESSION REVIEW</summary>
+            <summary class="adv-more-btn" data-i18n="pause.review">SESSION REVIEW</summary>
             <p id="pm-coach-summary" class="adv-help" data-help="keep">No coaching tips recorded this session.</p>
             <p id="pm-connection" class="adv-help" data-help="keep" hidden></p>
             <ol id="pm-incident-log"></ol>
             <details id="pm-technical-data">
-              <summary class="adv-more-btn">TECHNICAL DATA</summary>
+              <summary class="adv-more-btn" data-i18n="pause.techdata">TECHNICAL DATA</summary>
               <p class="adv-help">Optional JSON download: recent driving samples, race events and estimates. Driving samples are recorded while coach or practice is active.</p>
               <button id="pm-driving-trace" type="button" disabled>DOWNLOAD SESSION DATA</button>
               <p class="adv-help">AI passing decisions: each rival’s latest choice. An earlier commitment may still be active.</p>
@@ -934,9 +934,9 @@
 
         <section id="pm-panel-strategy" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
           <details open id="pm-pit-panel">
-            <summary class="adv-more-btn">PIT STRATEGY</summary>
+            <summary class="adv-more-btn" data-i18n="pause.pit">PIT STRATEGY</summary>
             <div id="pm-pit-choice" class="set-row" role="group" aria-labelledby="pm-pit-choice-label">
-              <span class="tune-label" id="pm-pit-choice-label">NEXT TYRES</span>
+              <span class="tune-label" id="pm-pit-choice-label" data-i18n="pause.nexttyres">NEXT TYRES</span>
               <div>
                 <button id="pm-pit-choice-prev" type="button" data-step="-1" aria-label="Previous tyre choice">&lsaquo;</button>
                 <select id="pm-pit-choice-sel" aria-labelledby="pm-pit-choice-label" aria-describedby="pm-pit-help"></select>
@@ -952,11 +952,11 @@
 
         <section id="pm-panel-practice" class="pm-group" role="region" aria-labelledby="dlg-settings" hidden>
           <details open id="pm-practice-panel">
-            <summary class="adv-more-btn">PRACTICE A SECTION</summary>
+            <summary class="adv-more-btn" data-i18n="pause.practice">PRACTICE A SECTION</summary>
             <p id="pm-practice-help" class="adv-help">Choose a goal, save your starting point, then resume. TRY AGAIN restores that point and goal. REWIND 10s steps the car back without one. A Time Trial is always practice; in a race or qualifying, ARM PRACTICE first — that makes the session unscored and cannot be undone.</p>
             <button id="pm-practice-arm" type="button" aria-describedby="pm-practice-state" hidden>ARM PRACTICE (UNSCORED)</button>
             <div id="pm-drill" class="set-row" role="group" aria-labelledby="pm-drill-label">
-              <span class="tune-label" id="pm-drill-label">PRACTICE GOAL</span>
+              <span class="tune-label" id="pm-drill-label" data-i18n="pause.goal">PRACTICE GOAL</span>
               <div>
                 <button id="pm-drill-prev" type="button" data-step="-1" aria-label="Previous practice goal">&lsaquo;</button>
                 <select id="pm-drill-sel" aria-labelledby="pm-drill-label" aria-describedby="pm-drill-status"></select>
@@ -989,7 +989,7 @@
             <summary class="adv-more-btn" id="pm-renderer-details-sum">RENDERER · WEBGL2</summary>
             <div id="pm-display-adv-body" role="group" aria-label="Renderer">
               <div id="pm-res" class="set-row" role="group" aria-labelledby="pm-res-label">
-                <span class="tune-label" id="pm-res-label">RESOLUTION</span>
+                <span class="tune-label" id="pm-res-label" data-i18n="pause.resolution">RESOLUTION</span>
                 <div>
                   <button id="pm-res-prev" type="button" data-step="-1" aria-label="Previous resolution">&lsaquo;</button>
                   <select id="pm-res-sel" aria-labelledby="pm-res-label"></select>
@@ -998,7 +998,7 @@
               </div>
               <p class="adv-help">How sharp the 3D scene is drawn. LOW and MED draw fewer pixels for a smoother, cooler-running phone; HIGH is full sharpness; AUTO lowers it only when the frame rate drops. Menus and the HUD always stay sharp.</p>
               <div id="pm-fullscreen" class="set-row" role="group" aria-labelledby="pm-fullscreen-label">
-                <span class="tune-label" id="pm-fullscreen-label">FULLSCREEN</span>
+                <span class="tune-label" id="pm-fullscreen-label" data-i18n="pause.fullscreen">FULLSCREEN</span>
                 <div>
                   <button id="pm-fullscreen-prev" type="button" data-step="-1" aria-label="Previous fullscreen">&lsaquo;</button>
                   <select id="pm-fullscreen-sel" aria-labelledby="pm-fullscreen-label"></select>
@@ -1008,7 +1008,7 @@
               <p id="pm-fullscreen-note" class="adv-help">Fills the screen and, where the browser allows it, keeps Esc as your pause key instead of spending it on leaving fullscreen.</p>
               <button id="pm-install" type="button" hidden>INSTALL APP</button>
               <div id="pm-upscale" class="set-row" role="group" aria-labelledby="pm-upscale-label">
-                <span class="tune-label" id="pm-upscale-label">UPSCALE</span>
+                <span class="tune-label" id="pm-upscale-label" data-i18n="pause.upscale">UPSCALE</span>
                 <div>
                   <button id="pm-upscale-prev" type="button" data-step="-1" aria-label="Previous upscale">&lsaquo;</button>
                   <select id="pm-upscale-sel" aria-labelledby="pm-upscale-label"></select>
@@ -1021,7 +1021,7 @@
                    backend that cannot do it (js/ui/scale.js), because a row
                    that sits there doing nothing is worse than no row. -->
               <div id="pm-occlusion" class="set-row" role="group" aria-labelledby="pm-occlusion-label">
-                <span class="tune-label" id="pm-occlusion-label">OCCLUSION</span>
+                <span class="tune-label" id="pm-occlusion-label" data-i18n="pause.occlusion">OCCLUSION</span>
                 <div>
                   <button id="pm-occlusion-prev" type="button" data-step="-1" aria-label="Previous occlusion setting">&lsaquo;</button>
                   <select id="pm-occlusion-sel" aria-labelledby="pm-occlusion-label"></select>
@@ -1034,7 +1034,7 @@
                    spall, marbles and trackside furniture. OFF costs no lap
                    time, no penalty and nothing on the car. -->
               <div id="pm-debris" class="set-row" role="group" aria-labelledby="pm-debris-label">
-                <span class="tune-label" id="pm-debris-label">DEBRIS</span>
+                <span class="tune-label" id="pm-debris-label" data-i18n="pause.debris">DEBRIS</span>
                 <div>
                   <button id="pm-debris-prev" type="button" data-step="-1" aria-label="Previous debris setting">&lsaquo;</button>
                   <select id="pm-debris-sel" aria-labelledby="pm-debris-label"></select>
@@ -1043,7 +1043,7 @@
               </div>
               <p class="adv-help">Carbon fragments, tyre marbles and knocked-over trackside furniture. OFF saves work on a phone and never changes lap time, penalties or damage.</p>
               <div id="pm-ssao" class="set-row" role="group" aria-labelledby="pm-ssao-label">
-                <span class="tune-label" id="pm-ssao-label">AMBIENT OCCLUSION</span>
+                <span class="tune-label" id="pm-ssao-label" data-i18n="pause.ssao">AMBIENT OCCLUSION</span>
                 <div>
                   <button id="pm-ssao-prev" type="button" data-step="-1" aria-label="Previous ambient occlusion setting">&lsaquo;</button>
                   <select id="pm-ssao-sel" aria-labelledby="pm-ssao-label"></select>
@@ -1052,7 +1052,7 @@
               </div>
               <p class="adv-help">Soft shading in creases and the contact shadows under cars and kerbs. It shares one graphics pass with GOD-RAYS: turn both OFF to skip it for a cooler-running phone.</p>
               <div id="pm-godrays" class="set-row" role="group" aria-labelledby="pm-godrays-label">
-                <span class="tune-label" id="pm-godrays-label">GOD-RAYS</span>
+                <span class="tune-label" id="pm-godrays-label" data-i18n="pause.godrays">GOD-RAYS</span>
                 <div>
                   <button id="pm-godrays-prev" type="button" data-step="-1" aria-label="Previous god-rays setting">&lsaquo;</button>
                   <select id="pm-godrays-sel" aria-labelledby="pm-godrays-label"></select>
@@ -1061,7 +1061,7 @@
               </div>
               <p class="adv-help">Shafts of light through the haze, and floodlight beams at night. It shares one graphics pass with AMBIENT OCCLUSION: turn both OFF to skip it for a cooler-running phone.</p>
               <div id="pm-buildworker" class="set-row" role="group" aria-labelledby="pm-buildworker-label">
-                <span class="tune-label" id="pm-buildworker-label">BUILD IN BACKGROUND</span>
+                <span class="tune-label" id="pm-buildworker-label" data-i18n="pause.buildworker">BUILD IN BACKGROUND</span>
                 <div>
                   <button id="pm-buildworker-prev" type="button" data-step="-1" aria-label="Previous background build setting">&lsaquo;</button>
                   <select id="pm-buildworker-sel" aria-labelledby="pm-buildworker-label"></select>
@@ -1090,7 +1090,7 @@
     </div>
     <div class="adv-item">
       <div id="pm-feel" class="set-row" role="group" aria-labelledby="pm-feel-label">
-        <span class="tune-label" id="pm-feel-label">STEERING</span>
+        <span class="tune-label" id="pm-feel-label" data-i18n="pause.steering">STEERING</span>
         <div>
           <button id="pm-feel-prev" type="button" data-step="-1" aria-label="Previous steering">&lsaquo;</button>
           <select id="pm-feel-sel" aria-labelledby="pm-feel-label"></select>
@@ -2280,7 +2280,7 @@
          carries the live save (team, year, round) so CONTINUE says what it is
          continuing; refreshCareerButton() fills both it and the label. -->
     <div id="menu-hero">
-    <button id="mb-career" class="bigbtn" data-menu-default aria-label="Career modes — Driver Career · My Team"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19A3 3 0 1 0 3 19A3 3 0 1 0 9 19Z M21 5A3 3 0 1 0 15 5A3 3 0 1 0 21 5Z"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/></svg><span><span class="mb-label">CAREER MODES</span> <span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
+    <button id="mb-career" class="bigbtn" data-menu-default aria-label="Career modes — Driver Career · My Team"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 19A3 3 0 1 0 3 19A3 3 0 1 0 9 19Z M21 5A3 3 0 1 0 15 5A3 3 0 1 0 21 5Z"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/></svg><span><span class="mb-label" data-i18n="title.career">CAREER MODES</span> <span id="mb-career-sub" class="mb-sub">DRIVER CAREER  ·  MY TEAM</span></span></button>
     <div id="menu-retention" class="balanced-row">
       <button id="mb-continue" class="bigbtn" hidden><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M10 8L16 12L10 16L10 8Z"/></svg><span>CONTINUE <span id="mb-continue-sub" class="mb-sub"></span></span></button>
       <button id="mb-daily" class="bigbtn" aria-label="Daily time trial — Today's challenge"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2v4 M16 2v4 M3 10h18"/><rect width="18" height="18" x="3" y="4" rx="2"/></svg><span>DAILY TIME TRIAL <span id="mb-daily-sub" class="mb-sub">TODAY'S CHALLENGE</span></span></button>
@@ -2290,17 +2290,17 @@
          rather than four. Dark plates with a red leading edge: the hero is the
          only solid red on the screen. -->
     <div id="menu-primary" class="balanced-row">
-    <button id="mb-race" class="bigbtn" aria-label="Race — One Grand Prix"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg><span>RACE <span class="mb-sub">ONE GRAND PRIX</span></span></button>
-    <button id="mb-tt" class="bigbtn" aria-label="Time Trial — You against the clock"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2L14 2 M12 14L15 11 M20 14A8 8 0 1 0 4 14A8 8 0 1 0 20 14Z"/></svg><span>TIME TRIAL <span class="mb-sub">YOU AGAINST THE CLOCK</span></span></button>
+    <button id="mb-race" class="bigbtn" aria-label="Race — One Grand Prix"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/></svg><span>RACE <span class="mb-sub" data-i18n="title.race.sub">ONE GRAND PRIX</span></span></button>
+    <button id="mb-tt" class="bigbtn" aria-label="Time Trial — You against the clock"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 2L14 2 M12 14L15 11 M20 14A8 8 0 1 0 4 14A8 8 0 1 0 20 14Z"/></svg><span>TIME TRIAL <span class="mb-sub" data-i18n="title.tt.sub">YOU AGAINST THE CLOCK</span></span></button>
     <button id="mb-vs" class="bigbtn" aria-label="Race a Friend — Private 2–4 player race"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2 M22 21v-2a4 4 0 0 0-3-3.87 M16 3.13a4 4 0 0 1 0 7.75"/><circle cx="9" cy="7" r="4"/></svg><span>RACE A FRIEND <span class="mb-sub">PRIVATE 2&ndash;4 PLAYER RACE</span></span></button>
-    <button id="mb-season" class="bigbtn" aria-label="Season — A championship, your rules"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2 M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2 M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3 M4 22h16 M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg><span>SEASON <span class="mb-sub">A CHAMPIONSHIP, YOUR RULES</span></span></button>
+    <button id="mb-season" class="bigbtn" aria-label="Season — A championship, your rules"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2 M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2 M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3 M4 22h16 M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3"/></svg><span>SEASON <span class="mb-sub" data-i18n="title.season.sub">A CHAMPIONSHIP, YOUR RULES</span></span></button>
     </div>
     <!-- EXPLORE: Watch / Practice / Photo Studio / Garage — the H3 Home
          rooms plus the car workshop. Forced 2x2 so Photo is not a leftover
          banner and Garage is not a leftover utility chip. SECONDARY stays
          the chrome rooms (standings + controller when shown). -->
     <div id="menu-explore" class="balanced-row">
-    <button id="mb-watch" class="bigbtn" type="button" aria-label="Watch — Broadcast / real races"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="3" rx="2" ry="2"/><polyline points="8 21 12 17 16 21"/></svg><span>WATCH <span class="mb-sub">BROADCAST / REAL RACES</span></span></button>
+    <button id="mb-watch" class="bigbtn" type="button" aria-label="Watch — Broadcast / real races"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="3" rx="2" ry="2"/><polyline points="8 21 12 17 16 21"/></svg><span>WATCH <span class="mb-sub" data-i18n="title.watch.sub">BROADCAST / REAL RACES</span></span></button>
     <button id="mb-practice" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M18 12A6 6 0 1 0 6 12A6 6 0 1 0 18 12Z M14 12A2 2 0 1 0 10 12A2 2 0 1 0 14 12Z"/></svg><span>PRACTICE <span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
     <button id="mb-photo" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z M15 13a3 3 0 1 0-6 0a3 3 0 1 0 6 0z"/></svg><span>PHOTO STUDIO <span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
     <button id="mb-garage" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>GARAGE <span class="mb-sub">SETUP &amp; LIVERY</span></span></button>
@@ -2451,7 +2451,7 @@
     <div class="sheet-foot">
       <button id="sel-back" class="bigbtn alt">BACK</button>
       <button id="sel-car" class="bigbtn alt"><span>CHANGE CAR</span><small id="sel-car-current">CURRENT CAR</small></button>
-      <button id="sel-go" class="bigbtn">RACE SETUP</button>
+      <button id="sel-go" autofocus class="bigbtn">RACE SETUP</button>
     </div>
   </div>
 </div>
@@ -2900,8 +2900,8 @@
       </details>
     </div>
     <div class="sheet-foot">
-      <button id="rs-cancel" autofocus class="bigbtn alt">BACK</button>
-      <button id="rs-go" class="bigbtn">START RACE</button>
+      <button id="rs-cancel" class="bigbtn alt">BACK</button>
+      <button id="rs-go" autofocus class="bigbtn">START RACE</button>
     </div>
   </div>
 </dialog>
@@ -3713,6 +3713,7 @@
 <script defer crossorigin="anonymous" src="js/track/circuit-meta.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-entry.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/session-phys.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/build-client.js?v=dev"></script>
@@ -3760,12 +3761,14 @@
 <script defer crossorigin="anonymous" src="js/lighting/lamp-bake.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/lighting.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/profiles.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/cockpit-rig.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-mesh.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-prims.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-dress.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/crew-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-motion.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-service.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-choreo.js?v=dev"></script>
@@ -3800,6 +3803,7 @@
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/extra-rigs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-sight.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/flyby-clear.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-avoid.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/trackside.js?v=dev"></script>
@@ -3817,6 +3821,7 @@
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/save-health.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/loading-card.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/survey-hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
@@ -3837,6 +3842,7 @@
 <script defer crossorigin="anonymous" src="js/fx/grade-tint.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/car-fx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/wx-hash.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/storm.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/wind.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
@@ -3856,10 +3862,12 @@
 <script defer crossorigin="anonymous" src="js/camera/director.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/real-race-pace.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/rain-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/forecast.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/photo-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
@@ -3888,9 +3896,8 @@
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-finishes.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-preview.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-chase.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-broadcast.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-onboard.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/fov-mode.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-lens.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/cvd-palette.js?v=dev"></script>
@@ -3921,11 +3928,14 @@
 <script defer crossorigin="anonymous" src="js/perf/bench-run.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/fov-fit.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/vantage-ride.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/cam-picker.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/mode-switch.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-boot.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud-minimap.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/hud-radio-lane.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-story.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/results-sheet.js?v=dev"></script>
@@ -3933,6 +3943,7 @@
 <script defer crossorigin="anonymous" src="js/share/share-card-data.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/share/share-card-layout.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/share/share-card.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/share/share-card-chips.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/daily-challenge.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/appearance-studio.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/home-world.js?v=dev"></script>

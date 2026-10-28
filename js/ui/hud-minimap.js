@@ -18,7 +18,9 @@ let minimapBgKey = "";        // cssW|cssH|ratio it was rendered for — NOT the
                               // bitmap size but need different path transforms
 let _mmKey = null, _mmCssW = 140, _mmCssH = 140, _mmRatio = 1;  // measure cache
 let _mmBgKey = "140|140|1";   // cssW|cssH|ratio of that cache, rebuilt only when it re-measures
-let _mmPitP = null, _mmYou = "#aeea00";   // the "P"'s local px + map node, and the resolved --you; set with the bg
+let _mmPitP = null, _mmYou = "";   // the "P"'s local px + map node, and the resolved --you; set with the bg
+// --you before the bg has resolved it: CvdPalette's row for the current mode (#1595).
+const mmYou = () => _mmYou || (typeof CvdPalette !== "undefined" && CvdPalette.hex("you")) || "#fff";
 
 function drawMinimap() {
   const player = G.player, cars = G.cars, track = G.track, timeTrial = G.timeTrial;
@@ -148,7 +150,7 @@ function drawMinimap() {
       // The map's own "--you" (the token the cue and the tyre chip carry the
       // stop in), read once per rebuild: a resolved colour is not a hot read.
       _mmYou = (typeof getComputedStyle === "function"
-        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "#aeea00";
+        && getComputedStyle(document.documentElement).getPropertyValue("--you").trim()) || "";
     }
   }
   // Canvas resize resets 2D context state, so the transform is set every
@@ -221,15 +223,15 @@ function drawMinimap() {
   if (_mmPitP && pits && pits.worthStopping && !inPit && pits.worthStopping(player)) {
     const d = pits.toEntry(player), ip = Math.floor(player.s / track.total * n) % n;
     if (d > 0 && d < pits.cueM && Number.isFinite(ip)) {
-      mm.strokeStyle = _mmYou; mm.lineWidth = 2;
+      mm.strokeStyle = mmYou(); mm.lineWidth = 2;
       mmRun(mm, map, n, (ip + n) % n, ((_mmPitP[2] - ip) % n + n) % n, cssW, cssH);
       mm.stroke();
     }
     if (player.pitArmed && !motionReduced()) mm.globalAlpha = 0.55 + 0.45 * Math.sin(performance.now() / 160);
-    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, _mmYou);
+    mmPitMark(mm, _mmPitP[0], _mmPitP[1], 7, mmYou());
     mm.globalAlpha = 1;
   }
-  mm.fillStyle = inPit ? _mmYou : "#fff";
+  mm.fillStyle = inPit ? mmYou() : "#fff";
   mm.beginPath();
   mm.arc(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16), 4, 0, 7);
   mm.fill();

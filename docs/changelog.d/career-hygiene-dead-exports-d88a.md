@@ -1,0 +1,1 @@
+Removed: Unused public career exports — `Badges.KEY` / `STREAK_DAYS`, `SaveMigrate.tallyOf`, and `CareerBackup.slotKey` / `IDENTITY_KEYS` / `otherFlavourPending` stay module-local (no behaviour change).

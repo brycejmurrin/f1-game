@@ -1,0 +1,1 @@
+Fixed: WebGPU night chunked draws no longer spend a draw-uniform slot and a setBindGroup that no triangle samples, and a road run stays one draw when the next chunk's lamp mask matches. The SSAO and god-ray blur pipelines compile that shader once.

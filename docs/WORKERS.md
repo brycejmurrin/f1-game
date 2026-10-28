@@ -42,9 +42,13 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
    progress ("waiting") and re-evaluates when CI ends. Going back to draft or removing `land` turns `gate` red. A
    red or a conflict after that is a fresh launch (`CONTINUE PR #<n>`), not you.
 
-   How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation (the next
-   event re-gates it); `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
-   progress ("error, will retry"), never red.
+   How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation; its `retry`
+   job then dispatches an immediate re-gate of that PR (at most 3 per head, then the next train or CI run re-gates);
+   `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
+   progress ("error, will retry"), never red. `gate` turns green only while the deploy tip is still the one it
+   measured (else in progress "re-gating", through the same retry), and any other `gate` disarms an armed PR.
+   `land.yml` may merge the deploy tip into a `land` PR whose `gate` refused only on distance (update-branch, its
+   AUTO-SYNC, at most `SYNC_MAX` waiting on CI at once); pull before pushing to such a branch.
 6. **Stop at the cap.** The brief's caps are its `STOP AT` line (context) and $10 soft (cost). At either, or when
    stuck: finish the current unit, push, refresh the Plan and the Hand-off block, add `needs-owner`, send_message
    `@parent` one line naming the PR, and end. The dispatcher launches the takeover on its next cycle. The $15 hard-cap archive is NOT built (`dispatch.mjs`
@@ -127,7 +131,9 @@ archive scope are its own; one account cannot archive or message the other's ses
 
 1. A `ready` issue with no `claimed`, `blocked` or `needs-decision` gets one worker (`priority` first), up to the
    caps, when the account's quota allows. The script reads one page of 100 open issues (a known gap; a hand
-   search with `search_issues` sees them all).
+   search with `search_issues` sees them all). Landing backpressure: while `landQueueMax` (tools/ci/dispatch.json,
+   15) or more open non-draft PRs carry `land`, it starts no issue worker and records one skip line ("issue
+   launches paused: N PRs waiting to land"); rules 2 and 3 still launch, since they drain the queue.
 2. An open PR whose `updated_at` is older than 2 h (6 h for `lane:codex`), or that already carries `needs-owner`
    (its worker stopped at the cap: no 2 h wait), with no `hold` or `needs-decision`, gets `needs-owner` and ONE
    takeover worker launched with `CONTINUE PR #<n>` (contract step 8). Never re-owned: a
@@ -142,7 +148,7 @@ archive scope are its own; one account cannot archive or message the other's ses
    `needs-owner`, `hold` or `needs-decision`, gets one `NUDGE_SESSION` ("Continue …: subscribe to the PR, finish
    the Plan; questions go to @parent or `needs-decision`, never the user"), at most once an hour.
 6. It rewrites the Board comment: open PRs, state, age, owner, launches, waiting children, nudges (the hourly
-   record), quota per host, caps.
+   record), quota per host, caps and the land queue depth.
 
 `node tools/ci/pr-board.mjs` suggests LAND (the `land` label) for a PR that is ready to go, never ARM: no session
 arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and binds nothing.
@@ -152,9 +158,15 @@ arms. The veto is the `hold` label; a `MERGE-HOLD:` body line is retired and bin
 - **Claude cloud session** (the default, `lane:claude`): the whole contract above. `subscribe_pr_activity` on your
   PR while CI runs on your head; no `send_later`, no bus. The parent is the dispatcher session: send_message
   session_id `@parent` to coordinate.
-- **Cursor cloud agent** (`lane:cursor`, self-contained issues only; `hosts.cursor.enabled` is false today): one
-  run that ends at ready, with the Hand-off block current. NOT BUILT: the dispatcher sets neither `run-ci` nor
-  `land` for a Cursor PR and sends no follow-up turn, so until it does Bryce adds them by hand. No bus, no timers.
+- **Cursor cloud agent** (`lane:cursor`, self-contained issues only; `hosts.cursor.enabled` is false today, so
+  Bryce or the Grok launcher starts it): one run that stops when the draft PR is pushed and the Hand-off block is
+  current. The Cursor token does not add labels, claim, post issue comments, or open issues. Put `run-ci`,
+  `lane:cursor`, and `land` in the block's `next:` line; Bryce or a later Claude lane applies them. Do not call
+  `subscribe_pr_activity` or `subscribe_github_*`. A CI notification is not a new task. Symbols go through apex-lsp
+  (`lsp_outline`, `lsp_definition`, `lsp_callers`, then `lsp_diagnostics` once after the edit); grep is for
+  comments, docs, and CSS. Do not spawn task_v2 scouts. Gate order: edit, `npm run gen`, the one spec `pick-tests`
+  names, `tooling-fast --changed` once, commit, push. One more gate only when GitHub says CONFLICTING. NOT BUILT:
+  the dispatcher sets neither `run-ci` nor `land` and sends no follow-up turn. No bus, no timers.
 - **Codex thread** (`lane:codex`, Bryce's own tool, pull-only): write the Hand-off block at the first push and add
   `lane:codex`; the same `land` label lands you. A draft silent for 6 h is re-owned without asking. AGENTS.md stays
   under 32 KiB because it is all a Codex thread loads; where it names a Claude-only tool (`Monitor`,
