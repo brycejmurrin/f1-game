@@ -6677,10 +6677,8 @@
     },
     "js/fx/grade-tint.js": {
       "carPaint": [
+        "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/surface-id-parity.test.mjs"
-      ],
-      "*": [
-        "tests/unit/carve-a-modules.test.mjs"
       ]
     },
     "js/fx/particles.js": {
