@@ -202,6 +202,7 @@ function snapshot() {
     logLvl: logLvl(),
     fps: null, ms: null, budget: null, scale: null, tier: null, backend: "",
     auto: null, strikes: null, tierFloor: null, gpuMs: null, loopStopped: null, loopFrames: null,
+    stallSlow: null, stallWorst: null, stallAct: "",
     // What the BOUND backend says about the device: which API three/WGX
     // actually took, how many GPU/shader errors it has raised, and the first
     // one. A phone screenshot of this panel is the evidence a "see-through
@@ -235,6 +236,11 @@ function snapshot() {
     if (wantGov && typeof LoopHealth !== "undefined") {
       const h = LoopHealth.state();
       out.loopStopped = h.stopped; out.loopFrames = h.frames;
+      if (h.stall) {
+        out.stallSlow = h.stall.slowRun | 0;
+        out.stallWorst = h.stall.worstMs | 0;
+        out.stallAct = h.stall.act || "";
+      }
     }
   } catch (_) { /* loop health not booted */ }
   try {
@@ -495,6 +501,15 @@ function fmtTime(t) {
 // Two-column row: label (padded to L chars) then value.
 const L = 8;
 function row(label, value) { return (label + ":").padEnd(L) + " " + value; }
+// A slow WebGPU present does not throw, so the loop row stays "frames N".
+// The stall watchdog's own counters are the visible signal. Quiet when nothing
+// has been slow: a healthy phone does not spend a line on zeros.
+function stallRow(s, narrow) {
+  if (!(s.stallSlow > 0) && !(s.stallWorst > 0) && !s.stallAct) return "";
+  const slow = s.stallSlow | 0, worst = s.stallWorst | 0, act = s.stallAct || "";
+  if (narrow) return "stall " + slow + "  " + worst + (act ? " " + act : "");
+  return row("stall", "slow " + slow + "  worst " + worst + (act ? "  " + act : ""));
+}
 // CAN THE BOX ACTUALLY HOLD THE WIDE LAYOUT? A VIEWPORT proxy
 // (`metricsRatio() < 480`) disagrees with the width's vw cap in css/hud.css,
 // so it picks the wide layout for boxes that cannot hold it and the tail is
@@ -655,6 +670,7 @@ function paintOverlay() {
         hdr,
         pair("fps", s.loopStopped ? "STOPPED" : fmt(s.fps), "ms", fmt(s.ms)),
         pair("loop", s.loopStopped ? "STOPPED" : "frames", "n", fmt(s.loopFrames)),
+        stallRow(s, true),
         pair("tier", fmt(s.tier), "auto", fmt(s.auto)),
         pair("gfx", fmt(s.backend || null) + (s.gfxApi ? "/" + s.gfxApi : ""), "err", fmt(s.gpuErr)),
         (s.track || "menu") + "  " + (s.caution || "GREEN"),
@@ -666,6 +682,7 @@ function paintOverlay() {
         row("fps",    (s.loopStopped ? "STOPPED" : fmt(s.fps)) + "   frame " + fmt(s.ms) + " ms" +
                       (s.gpuMs != null ? "   gpu " + s.gpuMs + " ms" : "")),
         row("loop", (s.loopStopped ? "STOPPED" : "frames") + " " + fmt(s.loopFrames)),
+        stallRow(s, false),
         row("budget", fmt(s.budget) + " ms   tier " + fmt(s.tier) +
                       (s.tierFloor != null ? " (fl " + s.tierFloor + ")" : "") +
                       "   auto " + fmt(s.auto)),

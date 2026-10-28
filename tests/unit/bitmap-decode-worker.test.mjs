@@ -348,3 +348,67 @@ test("client strip deadline retires its worker and lets a later strip respawn", 
   workers[1].onmessage({ data: { type: "strip", seq: workers[1].request.seq, pix: new Uint8Array([1,2,3,4]), stride: 4 } });
   assert.deepEqual(Array.from((await next)[0]), [1,2,3,4]);
 });
+
+test("BitmapDecode prefers ScriptLoader.url for the worker cache key (audit4 I3 B6)", async () => {
+  let keyed = null;
+  const bmp = { width: 1, height: 1, close() {} };
+  const main = vm.createContext({
+    createImageBitmap: async () => { throw new Error("must use worker"); },
+    location: { href: "http://x/" },
+    window: { __APEX_BUILD: 99 },
+    ScriptLoader: { url: (f) => { keyed = f + "?v=abcdef123456"; return keyed; } },
+    URL, setTimeout, clearTimeout,
+    Worker: class {
+      constructor(src) { this.src = src; this.onmessage = null; }
+      postMessage(m) {
+        queueMicrotask(() => {
+          if (this.onmessage) this.onmessage({ data: { type: "decoded", seq: m.seq, bmp } });
+        });
+      }
+      terminate() {}
+    },
+  });
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), main, { filename: absSrc("js/workers/bitmap-decode-client.js") });
+  assert.equal(await main.BitmapDecode.decode({ size: 1 }), bmp);
+  assert.equal(keyed, "js/workers/bitmap-decode-worker.js?v=abcdef123456");
+});
+
+test("crossed strip/decode replies do not settle the wrong request shape", async () => {
+  let worker;
+  const ctx = vm.createContext({
+    URL, location: { href: "http://x/" }, window: {},
+    localStorage: { getItem: () => "1" },
+    setTimeout: () => 1, clearTimeout() {}, Uint8Array,
+    createImageBitmap: async () => ({ width: 2, height: 2, close() {} }),
+    Worker: class {
+      constructor() { worker = this; this.onmessage = null; }
+      postMessage(m) { this.request = m; }
+      terminate() {}
+    },
+  });
+  ctx.window = ctx;
+  vm.runInContext(read("js/workers/bitmap-decode-client.js").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/workers/bitmap-decode-client.js") });
+
+  // A strip reply must not resolve a decode as {pix,stride} — fall back instead.
+  const decodePending = ctx.BitmapDecode.decode({ size: 1 });
+  const decodeSeq = worker.request.seq;
+  worker.onmessage({ data: { type: "strip", seq: decodeSeq, pix: new Uint8Array(4), stride: 4 } });
+  const decodeOut = await decodePending;
+  assert.equal(decodeOut.width, 2, "decode falls back to main-thread bitmap");
+  assert.equal(decodeOut.pix, undefined);
+
+  // A decoded reply for a strip request must close the bitmap and answer null.
+  let closed = 0;
+  const stripPending = ctx.BitmapDecode.strip(new Blob([new Uint8Array(4)]), 1, [1]);
+  const stripSeq = worker.request.seq;
+  worker.onmessage({
+    data: { type: "decoded", seq: stripSeq, bmp: { width: 1, height: 1, close() { closed++; } } },
+  });
+  assert.equal(await stripPending, null);
+  assert.equal(closed, 1, "crossed ImageBitmap is closed, not leaked");
+
+  // A strip lane error reply answers null (no throw out of strip()).
+  const errPending = ctx.BitmapDecode.strip(new Blob([new Uint8Array(4)]), 1, [1]);
+  worker.onmessage({ data: { type: "error", seq: worker.request.seq, message: "boom" } });
+  assert.equal(await errPending, null);
+});

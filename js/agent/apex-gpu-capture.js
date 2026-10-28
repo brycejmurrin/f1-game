@@ -17,6 +17,7 @@ const ApexGpuCapture = (function () {
   let loadPromise = null;
   let loadGeneration = 0;
   let scriptErrHook = null;
+  let captureToken = null;  // current captureOnce identity; late events ignore a stale token
 
   function say(msg) {
     try { Log.info("apex", "[gpuCapture] " + msg); } catch (_) { /* Log may not be up */ }
@@ -187,20 +188,37 @@ const ApexGpuCapture = (function () {
     if (!canvas) return Promise.resolve({ ok: false, reason: "no_canvas", status: status() });
     return new Promise(function (resolve) {
       let settled = false;
+      const token = {};
+      const onCap = function (cap) {
+        if (captureToken !== token) return;
+        done(summarizeCapture(cap));
+      };
+      const onErr = function (err) {
+        if (captureToken !== token) return;
+        done({ ok: false, reason: "spector_error", message: String(err && err.message || err) });
+      };
       const done = function (summary) {
         if (settled) return;
         settled = true;
+        if (captureToken === token) captureToken = null;
+        try {
+          if (spector.onCapture && typeof spector.onCapture.remove === "function") {
+            spector.onCapture.remove(onCap);
+          }
+          if (spector.onError && typeof spector.onError.remove === "function") {
+            spector.onError.remove(onErr);
+          }
+        } catch (_) { /* Spector stub */ }
         lastSummary = summary;
         resolve(summary);
       };
+      captureToken = token;
       try {
         if (spector.onCapture && typeof spector.onCapture.add === "function") {
-          spector.onCapture.add(function (cap) { done(summarizeCapture(cap)); });
+          spector.onCapture.add(onCap);
         }
         if (spector.onError && typeof spector.onError.add === "function") {
-          spector.onError.add(function (err) {
-            done({ ok: false, reason: "spector_error", message: String(err && err.message || err) });
-          });
+          spector.onError.add(onErr);
         }
         // quickCapture=true skips thumbnails — fine for JSON summary / SwiftShader.
         if (typeof spector.captureCanvas === "function") {
@@ -225,11 +243,21 @@ const ApexGpuCapture = (function () {
     const findings = lintFindings.slice();
     let redundant = null;
     try {
-      const canvas = gameCanvas();
+      // Same trap as __apex.diag: only sniff #game when the bound api is already
+      // WebGL2; otherwise a throwaway canvas for the GMAN helper.
+      const api = (typeof GLX !== "undefined" && GLX.backendState)
+        ? GLX.backendState().api : null;
+      const live = api === "webgl2" ? gameCanvas() : null;
+      const canvas = live || (typeof document !== "undefined"
+        ? document.createElement("canvas") : null);
       const gl = canvas && (canvas.getContext("webgl2") || canvas.getContext("webgl"));
       const ext = gl && gl.getExtension && gl.getExtension("GMAN_debug_helper");
       if (ext && typeof ext.getAndResetRedundantCallInfo === "function") {
         redundant = ext.getAndResetRedundantCallInfo();
+      }
+      if (!live && gl) {
+        const lose = gl.getExtension("WEBGL_lose_context");
+        if (lose) setTimeout(function () { lose.loseContext(); }, 0);
       }
     } catch (_) { /* context may be lost or TLX-owned */ }
     return {
