@@ -361,8 +361,6 @@ const DesignerProfile = (function () {
         liveH = null;
         render();
       },
-      /** @deprecated cosine hills — ignored; kept so older harnesses do not throw. */
-      setBumps() { /* no-op: elevation is per-node heights */ },
       setCursor(sM) { cursor = Number.isFinite(sM) ? sM : null; render(); },
       setIssues(list) {
         issues = (Array.isArray(list) ? list : []).filter((it) => it && Number.isFinite(it.s) && /^(grade|fia-grade|fia-crest|fia-sag)$/.test(it.code));
@@ -395,8 +393,6 @@ const DesignerProfile = (function () {
     return api;
   }
 
-  // hill / ADD kept as no-op shims for older unit harnesses that import them.
-  const hill = (b) => (typeof ElevPresets !== "undefined" ? { s: 0, halfM: 160, rise: ElevPresets.clampH(b && b.rise) } : { s: 0, halfM: 160, rise: 0 });
-  return { create, hill, ADD: Object.freeze({ halfM: 160, rise: 6 }), KEY, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS };
+  return { create, KEY, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS };
 })();
 Object.freeze(DesignerProfile);
