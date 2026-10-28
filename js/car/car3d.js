@@ -526,6 +526,17 @@ const Car3D = (function () {
       }
     }
 
+    // Sculpt sponsor-board seals only — stay in part("sidepods") so liv.pod
+    // reaches them (livery-zone-finish.test.mjs). Factory PANEL/c2 stays below
+    // in engineCover (unchanged path).
+    // PANEL + c2 z-fight the loft (#3959). Re-emit both in pod paint so
+    // sameLook skips the fight; visual stripe is lost on concept bodies only.
+    if (anchors.podSculpt) {
+      const seal = podC || c1;
+      if (!ckpt) addPodFlankSpan(0.46, -0.34, 0.56, 0.48, seal, SURFACES.paint, 0.008, true);
+      addPodFlankSpan(0.46, -0.34, 0.19, 0.22, seal, SURFACES.paint, 0.008, true);
+    }
+
     part("engineCover");
     let coverGeom = null, finTail = null;   // finTail: the fin's rear stations, for the sail into the rear wing
     if (!ckpt) {
@@ -845,29 +856,10 @@ const Car3D = (function () {
       }
     }
 
-    // SPONSOR BOARD. The titleA wordmark is podDecal(R.titleA, 0.32, 0.80), so
-    // the board must cover yFrac 0.32..0.80 — centre 0.56, height 0.48 x pod
-    // height (the fracH=true call below). A board shorter than its decal spills
-    // the glyph tops and tails onto the body paint, forcing one ink to serve a
-    // pale board and the paint at once — which is why 70% of liveries once fell
-    // back to a halo; the fractional sizing keeps the mark WHOLLY on the board
-    // at every station so liverytex can ink it for that one colour.
-    // Sized in POD FRACTIONS so each band tracks the taper and nothing overlaps:
-    // the accent band holds the strip (yFrac 0.08..0.30), the board holds titleA
-    // (0.32..0.80), and the accentC flash below sits at 0.88 with its lower edge
-    // no deeper than 0.8195 at any station. Clean gaps at every station.
-    // PANEL is a fixed pale grey and in cockpit the board carries NO decal
-    // (drawCarDecals swaps in the nose-number quad), so it is a bare light
-    // panel on the near plane. Its sibling flash is !ckpt-gated; this was not.
-    // External keeps it — it is the substrate titleA is inked on.
-    // Sculpt: PANEL + c2 z-fight the loft (#3959). Re-emit both in pod paint
-    // so sameLook skips the fight while face count (and OPEN sealing) matches
-    // factory; visual stripe is lost on concept bodies only.
-    if (anchors.podSculpt) {
-      const seal = podC || c1;
-      if (!ckpt) addPodFlankSpan(0.46, -0.34, 0.56, 0.48, seal, SURFACES.paint, 0.008, true);
-      addPodFlankSpan(0.46, -0.34, 0.19, 0.22, seal, SURFACES.paint, 0.008, true);
-    } else {
+    // SPONSOR BOARD (factory shells only — sculpt seals above in sidepods).
+    // titleA is podDecal(R.titleA, 0.32, 0.80): board yFrac 0.32..0.80, height
+    // 0.48 x pod height (fracH). PANEL is pale grey substrate; accent flash at 0.19.
+    if (!anchors.podSculpt) {
       if (!ckpt) addPodFlankSpan(0.46, -0.34, 0.56, 0.48, PANEL, null, 0.008, true);
       addPodFlankSpan(0.46, -0.34, 0.19, 0.22, c2, null, 0.008, true);
     }
