@@ -167,54 +167,40 @@ Tracked on the Board issue each dispatcher cycle: open PRs and `land` queue dept
 median open→merge time for a `land` PR, `gate` refusals by row, minutes the tip fails `gen:check` or Pages, and CI
 minutes per merged PR (rollups should lower it).
 
-## 7. Status and hand-off (live; updated 2026-10-28 ~01:00 UTC)
+## 7. Status and hand-off (live; updated 2026-10-28 ~04:40 UTC)
 
 Owner: Claude Code session `session_01Ap97PUkoACNwXY4fpfa4ya`. Bryce ended every other agent session on 2026-10-28,
-so this session owns every open PR. Both dispatcher scheduled wake-ups are paused (the :23 one by this session, the
-:53 one by Bryce); re-enable both to bring the dispatcher back once #4051 and #4057 are on the tip.
+but Cursor agents kept pushing (#4033 #4037 #4041 #4048 #4073 #4074 #4075, new #4066): a PR whose Hand-off names a
+`cursor:` owner or that a Cursor agent pushed within the hour is theirs; this session stays off it. Both dispatcher
+scheduled wake-ups stay paused.
 
-Merged from this plan: #4046 (distance 6), #4017 (land re-gate), #4054 (tip agent-index regen), #4053 (ratchet tree
-delta), #4058 (gate: real refusal; no distance row for non-game PRs), #4057 (dispatcher land-queue pause).
+Merged from this plan: #4046, #4017, #4054, #4053, #4058, #4057, #4051, #4060 (stale-tip guard + throttled AUTO-SYNC),
+#4061, #4064 (the red-tip fix). Pages trains are green again from 4294 (first train with #4064) on.
 
-In flight (this session's):
-- #4051 dispatcher owner match: `land`, re-gating. #4059 this plan: draft. #4060 land.yml stale-tip guard +
-  throttled auto-sync: draft, CI, then ready + `land`. #4061 agent-index without `order` + Explore on Haiku: draft, CI.
-- #4064 the red-tip fix (results share chips stop pinning the race; maps the files to race-cycle-memory): draft,
-  `priority`, CI must run race-cycle-memory green, then ready + `land`.
-- #4063 commit-hook split: only the `--no-verify` / `core.hooksPath` refusal is committed and verified; the split itself
-  is the COMMIT-HOOK-SPLIT wip patch under docs/notes on that branch (unverified; the Plan lists what remains, and the
-  real-commit proof needs a throwaway clone because hooks run from the main checkout).
-- #4062 deploy-time generation: the inventory and stage plan are the DEPLOY-TIME-GEN note under docs/notes on that branch; the
-  stage-1 code (move `js/track/circuit-meta.js` out of git) is its stage1 patch beside it
-  (unverified; `package.json` `prepare` and the `session-start.sh` edit need Bryce's yes).
-- Review gate row: not begun.
+Decided by Bryce on 2026-10-28 (in this session):
+- `priority` is a queue jump, not a speed-up: at most ~3 PRs at once, added only after the current ones merge (the
+  tie-break is oldest-first, so a new `priority` on an older PR jumps the fixes in flight).
+- Tree ratchet raises: stale negative tree deltas were re-based on eight branches (granted "Raise size ceiling");
+  genuine `assertPinsAll` growth is raised per PR by its exact size, quoting the grant ("Raise per PR, you grant").
+- The 12 refactor drafts (#4038–#4056, #4055, #4056) wait until the land queue drains, then go one at a time,
+  oldest first, each synced onto a fresh tip.
+- Push guard: `land.yml`'s AUTO-SYNC merge commits as Bryce (LAND_TOKEN), so `foreign_push.py` flags every
+  auto-synced branch; Bryce approved `APEX_FOREIGN_PUSH_OK=1` for #3993 and #3964 only. Open: teach the hook that an
+  AUTO-SYNC merge of the deploy branch is not foreign (a hook edit; needs Bryce's yes).
 
-Queue (75 open on 2026-10-28 00:25): 9 non-game `land` PRs re-gated by a `land` label flip after #4058 (#3872 #3957
-#3969 #3994 #4001 #4006 #4016 #4021 #4051); 27 game `land` PRs need a deploy-tip sync, three at a time with
-`sync-pr.mjs --push --force-clean-behind` from a scratch worktree (batch 1: #3920 #3950 #3962) until #4060's auto-sync
-takes over. Triage of the 32 drafts and un-landed PRs (2026-10-28 00:45): 25 LAND after a sync and a Plan tick
-(#3964 #3987 #3988 #4011 #4015 #4026 #4028 #4030 #4032 #4033 #4034 #4035 #4036 #4037 #4038 #4039 #4040 #4042 #4043
-#4044 #4048 #4049 #4052 #4055 #4056), 2 FINISH (#4045 after #3998/#4042 land; #4050 confirm the plugin keys), 5 DECIDE,
-0 CLOSE. Conflicting pairs to order: #3964×#3992, #3998 before #4042/#4045/#4039, #4043 before #4044, #4049×#4052;
-the refactor batch also conflicts on `docs/agent-index.json` until #4061 lands.
+Measured: AUTO-SYNC works (land run 40628425236 listed every distance-only refusal) but syncs at most SYNC_MAX=3
+while others wait on CI, so ~15 `land` PRs refused on `distance` drain a few per train. Gate rows that read `plan=FAIL`
+were stale Plan items (`now:` lines for finished work); tick them with evidence and the next re-gate clears.
 
-Waiting on Bryce: the ratchet raise on #3970, #3981, #3985 and the five DECIDE rows #3992, #3998, #4027, #4041,
-#4047 (each carries a stale negative `assertPins` fragment from before #3996; merge the tip, then `APEX_RATCHET_RAISE_OK=1 node
-tools/check/ratchets.mjs --update --fragment --reason=…` per branch; with #4053's tool it drops the stale tree rows).
-The #3985 branch holds a local, unpushed merge of the tip in this container only.
+Queue (2026-10-28 04:40): 54 open. Merged this round: #3963 #3989 #3969 #3992 #4047 #4003 #3967 #3950. Re-synced or
+fixed and waiting on CI/gate: #3962 #3964 #3970 #3981 #3985 #3987 #3988 #3993 #3998 #4010 #4011 #4027; `land` added
+to #4028 #4035 #4036 (real-GPU Metal job green or no render files). Needs GPU evidence before `land`: #4030 #4032
+(js/render, no Metal job ran). #4045 waits on #3998/#4042; #4050 confirm the plugin keys.
 
-Red: the deploy tip. Pages runs 4282 (merge of #4013) and 4284 (3defcc1a) fail `race-cycle-memory`
-(tests/specs/race-cycle-memory.spec.js:109, "cycle 1, spa built: built tracks still reachable after GC") in its own
-shard and in the macOS Metal solo; deterministic across retries and runners. #4013 is probably NOT the cause (its own
-PR CI ran the spec green on the same js). Prime suspect, from code reading only: #3982 share-card-ghost. In
-`js/ui/results-sheet.js` `buildResults`, the results share chip's `btn.onclick` closure
-(`ShareCardChips.append(..., () => ShareCardData.fromRace(order, { trackId: track.def.id, … }))`) captures `order` and
-`G.track`, and the results table is cleared only at the next `buildResults`, so the finished race's built track stays
-reachable when the next circuit is built. The spec never ran on #3982's PR because `tests/data/impact-map.json` maps no
-share/results file to it. Fix: let the chip capture plain data (or clear the table on leaving results), and map
-`js/ui/results-sheet.js` + `js/share/share-card*.js` to the spec; fallback revert #3982. Live site: expected to be the
-last green train (4281, 2699ab13), unconfirmed. Run 4280 was the agent-index drift fixed by #4054.
+Process drafts of this session: #4063 commit-hook split and #4062 deploy-time generation (both partial; their wip
+patches and Plans say what remains; #4062 needs Bryce's yes on `package.json` `prepare` and `session-start.sh`).
+Review gate row: not begun.
 
-Next, in order: green the Pages trains (the results-sheet fix above, verified by the race-cycle-memory spec); land #4060 and #4061; the remaining game-PR syncs; act on
-the triage table; the review gate row; then Phase 1 batch landing. Research reports for everything above:
-[docs/notes/agent-ops-research-2026-10-27/](../notes/agent-ops-research-2026-10-27/pr-landing.md).
+Next, in order: keep the land queue moving (tick stale Plan items, sync conflicts, per-PR raises); #4030/#4032 GPU
+evidence; the foreign-push hook fix if Bryce says yes; then the refactor drafts one at a time; then the review gate
+row and Phase 1 batch landing. Research reports: [docs/notes/agent-ops-research-2026-10-27/](../notes/agent-ops-research-2026-10-27/pr-landing.md).
