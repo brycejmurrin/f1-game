@@ -10,6 +10,14 @@
 # a parent's tree, the same bytes were already gated — same workflow file,
 # same tests, same result — and the gate can be reused instead of re-run.
 #
+# Landings are MERGE COMMITS (never squash/rebase; AGENTS.md §Coordination).
+# Parent-tree reuse therefore fires when the PR head was already up to date
+# with the deploy tip (merge tree == parent 2). A behind PR whose merge tree
+# matches neither parent fails safe into a full gate — that is the common
+# case when the tip moved under the PR, not a dead path. (A squash merge
+# would leave a single parent whose tree almost never equals the result; the
+# hooks refuse squash, so that shape is not how this repo lands.)
+#
 # Candidates, in order: the commit itself, then each parent whose tree hash
 # equals this commit's. A candidate counts when GitHub holds a COMPLETED,
 # SUCCESSFUL run for its exact head_sha of either ci.yml (a pull_request run,
