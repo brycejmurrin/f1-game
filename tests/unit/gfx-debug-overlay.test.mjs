@@ -140,6 +140,26 @@ test("gpu-game-check reports heap, three memory and an opt-in A-B-A switch (#164
   assert.match(ggc, /\[game-check\] mem heap=/);
 });
 
+test("gfx-debug pastes the stall watchdog, which a throw-only loop line hides", () => {
+  const store = { getItem: () => null };
+  const sandbox = {
+    document: { getElementById: (id) => id === "game" ? { id: "game", getAttribute: () => "three", getContext: () => null } : null, querySelector: () => null },
+    location: { search: "" }, localStorage: store, sessionStorage: store,
+    performance: { now: () => 5000 },
+    GLX: { gpuErrors: () => 0 },
+    LoopHealth: { state: () => ({
+      frames: 4, faults: 0, run: 0, cap: 8, totalCap: 240, stopped: false, lastFault: "", staleMs: 40,
+      stall: { watching: true, slowRun: 4, slowFrames: 4, worstMs: 1800, sheds: 1, reloads: 0, act: "shed" },
+    }) },
+  };
+  sandbox.window = sandbox;
+  const ctx = vm.createContext(sandbox);
+  vm.runInContext(SRC.replace(/^const GfxDebug\b/m, "var GfxDebug"), ctx, { filename: path.join(ROOT, "js/perf/gfx-debug-overlay.js") });
+  const text = vm.runInContext("GfxDebug.text()", ctx, { filename: "vm-page:gfx-debug-stall" });
+  assert.match(text, /faults=0\/240/, "a slow present is not a throw");
+  assert.match(text, /stall: watch=on slow=4 worst=1800ms act=shed sheds=1 reloads=0/);
+});
+
 test("gfx-debug can hand the reporter the text", () => {
   assert.match(SRC, /ApexClipboard\.write/, "one-click copy goes through ApexClipboard");
   const clip = read("js/core/clipboard.js");
