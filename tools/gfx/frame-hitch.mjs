@@ -751,6 +751,36 @@ export function analysePassKinds(passSig, passes) {
   };
 }
 
+// THE STORE INVENTORY of a steady frame: each attachment signature with its
+// load>store ops, averaged over the frames that encoded a pass, plus the median
+// queue.submit count. "WxH/format:load>store" names what a tile GPU writes
+// back; ">discard" is an attachment patch 17 (or MSAA) kept on chip.
+export function analysePassOps(opsSig, submits) {
+  const frames = (opsSig || []).filter((f) => Array.isArray(f) && f.length);
+  if (frames.length < 10) return { note: "no per-frame store inventory recorded" };
+  const m = new Map();
+  let stored = 0, discarded = 0;
+  for (const f of frames) {
+    for (const pass of f) {
+      m.set(pass, (m.get(pass) || 0) + 1);
+      for (const a of pass.split("+")) {
+        if (a.endsWith(">store")) stored++;
+        else if (a.endsWith(">discard")) discarded++;
+      }
+    }
+  }
+  const rows = [...m.entries()].map(([pass, c]) => ({ pass, perFrame: +(c / frames.length).toFixed(2) }))
+    .sort((a, b) => b.perFrame - a.perFrame);
+  const subs = (submits || []).filter((v) => v > 0).sort((a, b) => a - b);
+  return {
+    frames: frames.length,
+    medianSubmits: subs.length ? subs[Math.floor(subs.length / 2)] : null,
+    storedPerFrame: +(stored / frames.length).toFixed(2),
+    discardedPerFrame: +(discarded / frames.length).toFixed(2),
+    rows: rows.slice(0, 24),
+  };
+}
+
 // WHAT SURVIVES, by call stack — and NOT where the garbage comes from.
 //
 // This function was built to answer "who allocates the 255 KB a frame", and it
@@ -1145,8 +1175,10 @@ async function main() {
                 // Bounded: only the first 4,000 frames keep their composition,
                 // which is ~35 s of racing and plenty of both kinds of frame.
                 if (n < 4000) passSig.push(sigCur);
+                if (n < 600) opsSig.push(opsCur);
+                subPerFrame[n] = subCur > 32767 ? 32767 : subCur;
               }
-              passCur = 0; sigCur = [];
+              passCur = 0; sigCur = []; opsCur = []; subCur = 0;
               n++;
             }
           }
@@ -1297,14 +1329,44 @@ async function main() {
           return out;
         } catch (_) { return "?"; }
       }
+      // THE STORE INVENTORY (#2649 / #3681 audit): every attachment's load>store op, and the queue.submit
+      // count per frame (three r186 submits once per renderer.render()). A tile GPU pays per stored byte,
+      // so "which attachments does a steady frame store" is the bandwidth question a pass count cannot answer.
+      const SUB_CAP = 60000;
+      const subPerFrame = new Int16Array(SUB_CAP);
+      let subCur = 0;
+      const opsSig = [];             // parallel to passSig, first 600 frames
+      let opsCur = [];
+      function opsOf(desc) {
+        try {
+          const ca = (desc && desc.colorAttachments) || [];
+          const parts = [];
+          for (let i = 0; i < ca.length; i++) {
+            const c = ca[i]; if (!c) continue;
+            const v = c.view || c.resolveTarget;
+            parts.push(((v && v.__sig) || "?") + ":" + c.loadOp + ">" + c.storeOp);
+          }
+          const ds = desc && desc.depthStencilAttachment;
+          if (ds) parts.push("d:" + ds.depthLoadOp + ">" + ds.depthStoreOp);
+          return parts.join("+") || "empty";
+        } catch (_) { return "?"; }
+      }
       try {
         const CE = window.GPUCommandEncoder && window.GPUCommandEncoder.prototype;
         if (CE && typeof CE.beginRenderPass === "function") {
           const origBRP = CE.beginRenderPass;
           CE.beginRenderPass = function (desc) {
-            if (armed) { passCur++; if (sigCur.length < 64) sigCur.push(sigOf(desc)); }
+            if (armed) {
+              passCur++; if (sigCur.length < 64) sigCur.push(sigOf(desc));
+              if (opsCur.length < 64) opsCur.push(opsOf(desc));
+            }
             return origBRP.apply(this, arguments);
           };
+        }
+        const QP = window.GPUQueue && window.GPUQueue.prototype;
+        if (QP && typeof QP.submit === "function") {
+          const origSub = QP.submit;
+          QP.submit = function () { if (armed) subCur++; return origSub.apply(this, arguments); };
         }
       } catch (_) { /* no WebGPU in this context: the pass series stays empty */ }
 
@@ -1427,6 +1489,8 @@ async function main() {
           stacks: [...stacks.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25),
           passes: Array.from(passPerFrame.subarray(0, Math.min(n, PASS_CAP))),
           passSig,
+          opsSig,
+          submits: Array.from(subPerFrame.subarray(0, Math.min(n, SUB_CAP))),
           backend: (() => {
             // eslint-disable-next-line no-undef
             try { const t = (typeof GLX !== "undefined") && GLX && GLX.__tlx; return t && t.backendState ? t.backendState() : null; }
@@ -1517,6 +1581,7 @@ async function main() {
     out.backend = d.backend;
     out.passes = analysePasses(d.passes || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.passKinds = analysePassKinds(d.passSig || [], d.passes || []);
+    out.passOps = analysePassOps(d.opsSig || [], d.submits || []);
     out.layout = analyseLayout(d.layoutMs || [], d.layoutN || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.heap = analyseHeap(d.heap || [], d.t0 || [], d.dur || [], out.spikeThresholdMs);
     out.alloc = allocProfile

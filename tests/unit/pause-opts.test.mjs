@@ -251,7 +251,7 @@ test("CONFIRM QUIT: the first press arms, the second runs the game's handler", (
   const first = press(quit);
   assert.ok(first.stopped, "unarmed press never reaches js/game.js");
   assert.deepEqual(handled, []);
-  assert.equal(quit.textContent, "QUIT TO MENU — TAP AGAIN");
+  assert.equal(quit.textContent, "TAP AGAIN");
   assert.ok(quit.classList.contains("armed"));
   assert.equal(quit.getAttribute("aria-label"), "Confirm: quit to menu");
   assert.ok(M.isArmed("pm-quit"));
@@ -267,7 +267,7 @@ test("RESTART arms the same way; arming one button disarms the other", () => {
   const { press, handled, quit, restart } = load();
   press(quit);
   press(restart);
-  assert.equal(restart.textContent, "RESTART — TAP AGAIN");
+  assert.equal(restart.textContent, "TAP AGAIN");
   assert.equal(restart.getAttribute("aria-label"), "Confirm: restart race");
   assert.equal(quit.textContent, "QUIT TO MENU", "QUIT disarmed");
   assert.ok(!quit.classList.contains("armed"));
