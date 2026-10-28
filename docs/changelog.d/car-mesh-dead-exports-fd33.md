@@ -1,0 +1,1 @@
+Removed: Unused public car mesh/shade exports — `CarMesh.MIRROR_GLASS_V` and CarShade internals (`RING_N`, `EXP`, `EXP_TOP`, `LOWER`, `RAMP`, `pref`, `loftRings`, `heightZone`, `skin`, `sect`, `pipe`, `rquad`) stay module-local (no behaviour change).
