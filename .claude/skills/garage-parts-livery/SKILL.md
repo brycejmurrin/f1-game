@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: "Use when editing the GARAGE parts catalog, livery/finish/fin data or paint code, paint legibility for numbers/crests/sponsors, SIGNATURE/FACTORY_PRESETS, ersProfile/aeroLoad, career owned-part UI, car mesh/geometry modules. Livery screenshots and studio captures → playwright-probe."
+description: "Use when editing the GARAGE: parts catalogue, liveries, paint, number and sponsor legibility, factory presets, career-owned parts, or car meshes. Not for: livery screenshots or CAR STUDIO captures → playwright-probe; handling → tune-physics; menu layout → ui-menu-a11y."
 ---
 
 # Garage — parts, livery, and car mesh

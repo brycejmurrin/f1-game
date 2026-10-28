@@ -1,6 +1,6 @@
 ---
 name: tune-physics
-description: "Use when the car understeers/oversteers, runs wide, won't turn in, turn-in is lazy or snappy, front slip/yaw, grip, trail braking, road-follow (ROAD_FOLLOW), GRIP STEER maths or pace feels wrong, or a physics A/B or sweep (skidpad/step-steer/player-dyn VM). Shake/juice → game-feel; camera lag → playwright-probe; steer sliders → input-controls (CAR WEIGHT's yaw maths is here); AI → ai-racecraft."
+description: "Use when the car handles wrong: understeer, oversteer, running wide, lazy or snappy turn-in, grip, braking, pace, GRIP STEER maths, or a physics A/B. Not for: shake → game-feel; steering sliders → input-controls; camera lag → playwright-probe; AI → ai-racecraft."
 ---
 
 # Tune the physics

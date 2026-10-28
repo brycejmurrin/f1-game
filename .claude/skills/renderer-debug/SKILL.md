@@ -1,6 +1,6 @@
 ---
 name: renderer-debug
-description: "Use when TLX/GLX/WGX/WebGPU looks wrong: black/NaN canvas, WGSL validation, shaders, shadows, bloom, HDR, GL errors, device lost, silent WebGL2 fallback, iPhone/Safari/Metal, a ghost visor overlay, WebXR/VR/Quest black frame. Night washout → lighting-tuner; MAT garble → asset-pack; driving shimmer → playwright-probe."
+description: "Use when the 3D view renders wrong: a black or blank canvas, shader or WGSL errors, shadows, bloom, device lost, a silent WebGL2 fallback, iPhone or Safari problems, or VR black frames. Not for: washed-out night → lighting-tuner; garbled textures → asset-pack; driving shimmer → playwright-probe."
 ---
 
 # Debug the renderer — TLX, GLX or WGX

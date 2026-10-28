@@ -1,6 +1,6 @@
 ---
 name: input-controls
-description: "Use when steering, touch steer or stuck on-screen buttons on iPhone, touch that won't release or keeps steering after lift, the phone controller, gamepad (stick dead zone, saturation, drift, calibrate centre, axis map), tilt/gyro, keyboard leaks into menus, driving-help/racing-line assists, the GRIP STEER slider, or input.js / steer-tuning.js change. Handling forces (understeer/grip/pace) → tune-physics; menu Escape/focus → ui-menu-a11y."
+description: "Use when steering or controls misbehave: stuck touch steering or buttons on iPhone, phone-as-controller, gamepad dead zone or drift, tilt, keys leaking into menus, assists or the GRIP STEER slider. Not for: grip or understeer → tune-physics; menu focus → ui-menu-a11y; screenshots → playwright-probe."
 ---
 
 # Driving input — devices, not forces

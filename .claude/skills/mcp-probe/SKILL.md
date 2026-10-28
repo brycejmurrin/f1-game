@@ -1,6 +1,6 @@
 ---
 name: mcp-probe
-description: "Use when driving the LIVE working-tree canvas with the Chrome DevTools MCP or probe-mcp.py daemon (poke __apex, heap/perf/console, memory census), or fixing private chat MCP startup, Session terminated recovery, readiness and catalog contracts. Breakpoints → js-debugger. Deployed site → deploy-research. Batch shots → playwright-probe. Scripted hooks → agent-view."
+description: "Use when poking the live game in Chrome through the DevTools MCP (__apex, console, network, heap, performance), or recovering the private chat MCP tunnel or gateway. Not for: breakpoints → js-debugger; the deployed site → deploy-research; batch screenshots → playwright-probe; scripted hooks → agent-view."
 ---
 
 # Probing the live game with the Chrome MCP

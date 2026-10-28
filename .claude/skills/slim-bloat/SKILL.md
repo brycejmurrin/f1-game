@@ -1,6 +1,6 @@
 ---
 name: slim-bloat
-description: "Use when files, docs or the tree grow too large — saturated or OVER size ratchet (commit blocked), dead or duplicate code, dead CSS selectors, repeated docs rules, stale comments, extract/split candidates, too much context. CSS restructure → css-play; fat skill → agent-config."
+description: "Use when files or docs are too big: a full size ratchet blocks a commit, dead or duplicate code, unused CSS, repeated doc rules, stale comments, or a file to split. Not for: CSS restructure → css-play; a fat SKILL.md → agent-config."
 ---
 
 # Cut bloat — shrink, split, dedupe, prove dead

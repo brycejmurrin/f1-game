@@ -1,6 +1,6 @@
 ---
 name: agent-config
-description: "Use when adding or editing a skill (new skill, SKILL.md, fat body, description), AGENTS.md/CLAUDE.md, .claude/rules, subagents, hooks, skill-routing queries or eval, or a description budget fails. Code or docs bloat → slim-bloat."
+description: "Use when adding or editing a skill, subagent, hook, rule, AGENTS.md or CLAUDE.md, or a skill's description, routing queries or budget. Not for: code or docs bloat → slim-bloat; picking tests → check-changes."
 ---
 
 # Edit the agent surface — instructions, skills, subagents, hooks

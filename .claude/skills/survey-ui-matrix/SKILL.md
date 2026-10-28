@@ -1,6 +1,6 @@
 ---
 name: survey-ui-matrix
-description: "Use when reviewing the whole UI (every screen) across phone landscape 844x390, orientations, viewport shapes, UI scale and pointer type: clipping, truncation, tap targets, overflow, screenshots — before a restructure or to prove a CSS change regressed nothing. One cramped screen → ui-menu-a11y; restructure → css-play."
+description: "Use when reviewing every screen across phone landscape (844x390), orientations, viewport sizes, UI scale and touch vs mouse, or proving a CSS change broke nothing. Not for: one cramped screen → ui-menu-a11y; restructuring → css-play; game screenshots → playwright-probe."
 ---
 
 # Surveying the whole UI across the whole matrix

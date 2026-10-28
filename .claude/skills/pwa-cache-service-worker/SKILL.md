@@ -1,6 +1,6 @@
 ---
 name: pwa-cache-service-worker
-description: "Use when editing sw.js, version.json or PWA manifest: an installed PWA on an old build (UpdateCheck), offline play, stale shell, shell version guard, DEFERRED precache, or Playwright reloads on a mid-run version.json bump."
+description: "Use when editing the service worker (sw.js), version.json or the PWA manifest: an installed app stuck on an old build, offline play, stale shell, or precache lists. Not for: audio → audio-debug; textures → asset-pack; picking tests → check-changes."
 ---
 
 # PWA cache and service worker

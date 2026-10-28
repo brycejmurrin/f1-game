@@ -1,6 +1,6 @@
 ---
 name: data-hub
-description: "Use when Data Hub tabs (schedule/standings/last race/live/telemetry/export), F1API / Jolpica / OpenF1 wiring, js/data/*, or data-lifecycle / telemetry-compare specs change, a tab is empty/stale/wrong year, or WATCH/HIGHLIGHTS loads the wrong driver/race after a picker change. Not Season setup (season-mode), hub menu layout (ui-menu-a11y) or in-race telemetry (agent-view)."
+description: "Use when a Data Hub tab is empty, stale or the wrong year, the F1 data feeds (Jolpica, OpenF1) change, or WATCH/HIGHLIGHTS loads the wrong race. Not for: season setup → season-mode; menu layout → ui-menu-a11y; in-race telemetry → agent-view."
 ---
 
 # Data Hub / F1API

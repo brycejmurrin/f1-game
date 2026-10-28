@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, pick the minimum tests, validate/pre-push, verify track edits, js/css shell/cache policy, or Playwright timeout triage. Red Actions → ci-red-triage; landing on the deploy branch → ship."
+description: "Use before pushing or when asked \"did I break anything?\": pick the minimum tests, verify a track edit, check cache-bust rules, or triage a Playwright timeout. Not for: red Actions → ci-red-triage; driving a PR → steward; landing → ship."
 ---
 
 # Validate changes before committing/pushing

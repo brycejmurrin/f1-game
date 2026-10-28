@@ -1,6 +1,6 @@
 ---
 name: css-play
-description: "Use when tweaking one menu/HUD element (padding, font-size, safe area, tap target, chip) with screenshots, or restructuring screens/DOM/tokens (BEM/CUBE/ITCSS). Cramped screen → ui-menu-a11y; full matrix → survey-ui-matrix; dead CSS → slim-bloat."
+description: "Use when tweaking one menu or HUD element (padding, font size, safe area, tap target) with screenshots, or restructuring screens, DOM or design tokens. Not for: a cramped screen → ui-menu-a11y; the whole-UI review → survey-ui-matrix; dead CSS → slim-bloat."
 ---
 
 # Playing with menu / HUD CSS

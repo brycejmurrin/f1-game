@@ -1,6 +1,6 @@
 ---
 name: code-nav
-description: "Use when finding where a JS symbol is defined (go to definition), who uses or calls it (callers, find usages, rename impact), its exports or type, an edit's new type errors: apex-lsp, not grep. Dead code → slim-bloat."
+description: "Use when finding where a JS symbol is defined, who calls it, what a rename touches, or which type errors an edit added (apex-lsp, not grep). Not for: dead code → slim-bloat; breakpoints → js-debugger; live game state → agent-view."
 ---
 
 # Code navigation with apex-lsp (instead of grep)
