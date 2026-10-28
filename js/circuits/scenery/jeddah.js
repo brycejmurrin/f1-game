@@ -6,10 +6,10 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["jeddah"] =
   function (api) {
-      const { K, out, MAT, n, pyMin, place, backdrop,
-        addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, anchor, vadd, building, tower, billboard,
+      const { K, out, MAT, pyMin, place, backdrop,
+        addBox, addCyl, addCone, addFrustum, addPrism, anchor, vadd, building, tower, billboard,
         grandstand, grandstandEx, scaffoldStand, gantry, marshalPost, guardrail, tyreWall, wall, palm,
-        cityFront, modelGroup, waterSurface, waterBand, onTrack, hash, every, circuitKit,
+        cityFront, modelGroup, waterBand, onTrack, hash, every, circuitKit,
         lampPost, seat, along } = api;
 
       // sl(f) lands at RACING frac f (brands_hatch idiom): authored s = 0 is the

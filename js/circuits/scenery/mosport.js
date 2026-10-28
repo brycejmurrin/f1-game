@@ -51,7 +51,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mosport"] =
   function (api) {
-      const { mountain, n, hash, every, anchor, onTrack, out, terrainYAt,
+      const { mountain, n, hash, every, anchor, onTrack, terrainYAt,
         tree, bush, hedge, forestEdge, vadd, MAT, modelGroup, seat,
         grandstandEx, spectatorHill, indexSolid,
         guardrail, fence, tyreWall, marshalPost, cameraTower, broadcastCompound,

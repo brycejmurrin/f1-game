@@ -32,7 +32,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["fuji"] =
   function (api) {
-      const { out, n, hash, every, anchor, onTrack, K, lapBounds, pyMin,
+      const { n, hash, every, anchor, onTrack, K, lapBounds, pyMin,
         tree, pine, bush, hedge, forestEdge,
         building, tower, motorhome, broadcastCompound, cameraTower,
         grandstandEx, terrace, bleacher, spectatorHill, scaffoldStand,

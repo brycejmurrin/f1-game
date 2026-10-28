@@ -11,7 +11,7 @@
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup, waterBand,
         sponsorHoarding, cameraTower, seat, terrainYAt, indexSolid,
-        addBox, addCyl, addCone, addPrism, addFrustum, circuitKit } = api;
+        addBox, addCyl, addCone, addPrism, circuitKit } = api;
 
       const PALM_F = [0.16, 0.42, 0.18], PALM_FD = [0.12, 0.34, 0.15];
       const JUNGLE = [0.11, 0.34, 0.14], JUNGLE_L = [0.20, 0.46, 0.20];
