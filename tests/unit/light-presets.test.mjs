@@ -284,14 +284,82 @@ test("shared *|night|dry stamp supplies the fleet night authenticity knobs", () 
 
 test("day rain resolves the shared wet grade on every track (storm inherits it)", () => {
   // Bryce 2026-10-21: per-track saturation 0.80-0.92 washed rain out paler than dry.
+  // M37 presets: lamp trio matches *|day|dry / *|day|wet (no mast wash / tunnel floor).
   const P = presets(), stamp = P["*|day|rain"], drift = [];
-  assert.deepEqual({ ...stamp }, { saturation: 1.05, contrast: 1.12, exposureMul: 0.92 });
+  assert.deepEqual({ ...stamp }, {
+    saturation: 1.05, contrast: 1.12, exposureMul: 0.92,
+    lampLevel: 0, alwaysLampFloor: 0.13, floodEmitMul: 0.08,
+  });
   const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
     .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
   assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
   for (const track of circuits) {
     const { LT } = resolveLive(track, "day", "rain");
     for (const [id, want] of Object.entries(stamp)) if (LT[id] !== want) drift.push(`${track}|day|rain.${id}=${LT[id]} want ${want}`);
+  }
+  assert.deepEqual(drift, []);
+});
+
+test("M37: day rain/overcast/fog share the dry/wet day lamp floor on every track", () => {
+  // Without *|day|{rain,overcast,fog} lamp stamps, LightStore fell through to
+  // TUNE_DEFS lampLevel 0.26 / floodEmitMul 1.0 / alwaysLampFloor 0 — Monaco
+  // tunnel always-on at 0.26 instead of the 0.13 day floor (docs/BUGS.md M37).
+  const P = presets();
+  const DAY_LAMP = { lampLevel: 0, alwaysLampFloor: 0.13, floodEmitMul: 0.08 };
+  for (const wx of ["dry", "wet", "rain", "overcast", "fog"]) {
+    const stamp = P[`*|day|${wx}`];
+    assert.ok(stamp, `expected LightPresets['*|day|${wx}']`);
+    for (const [id, want] of Object.entries(DAY_LAMP)) {
+      assert.equal(stamp[id], want, `*|day|${wx}.${id}`);
+    }
+  }
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
+  const drift = [];
+  for (const wx of ["rain", "overcast", "fog"]) {
+    for (const track of circuits) {
+      const { LT } = resolveLive(track, "day", wx);
+      for (const [id, want] of Object.entries(DAY_LAMP)) {
+        if (LT[id] !== want) drift.push(`${track}|day|${wx}.${id}=${LT[id]} want ${want}`);
+      }
+    }
+  }
+  assert.deepEqual(drift, []);
+});
+
+test("M37: dawn rain/overcast/fog share dawn lamp pools (47+ rain fallthrough)", () => {
+  // dawn|rain had no shared stamp: 47 circuits resolved lampLevel to the 0.26
+  // knob default while dawn|wet ships 0.13. Rain inherits wet-dawn pools;
+  // overcast/fog inherit dry-dawn pools (weather does not brighten lamps).
+  const P = presets();
+  const wet = P["*|dawn|wet"], dry = P["*|dawn|dry"];
+  assert.equal(P["*|dawn|rain"].lampLevel, wet.lampLevel);
+  assert.equal(P["*|dawn|rain"].floodEmitMul, wet.floodEmitMul);
+  for (const wx of ["overcast", "fog"]) {
+    assert.equal(P[`*|dawn|${wx}`].lampLevel, dry.lampLevel);
+    assert.equal(P[`*|dawn|${wx}`].floodEmitMul, dry.floodEmitMul);
+  }
+  const circuits = fs.readdirSync(path.join(ROOT, "js/circuits"))
+    .filter((f) => f.endsWith(".js")).map((f) => f.slice(0, -3));
+  assert.ok(circuits.length >= 52, `only ${circuits.length} circuit files`);
+  const drift = [];
+  for (const track of circuits) {
+    const rain = resolveLive(track, "dawn", "rain").LT;
+    // Per-track dawn|rain lamp pins (abudhabi/jeddah/qatar/singapore/vegas) win.
+    if (!P[`${track}|dawn|rain`] || typeof P[`${track}|dawn|rain`].lampLevel !== "number") {
+      if (rain.lampLevel !== wet.lampLevel) drift.push(`${track}|dawn|rain.lampLevel=${rain.lampLevel}`);
+      if (rain.floodEmitMul !== wet.floodEmitMul) drift.push(`${track}|dawn|rain.floodEmitMul=${rain.floodEmitMul}`);
+    }
+    for (const wx of ["overcast", "fog"]) {
+      const LT = resolveLive(track, "dawn", wx).LT;
+      const pin = P[`${track}|dawn|${wx}`];
+      if (pin && typeof pin.lampLevel === "number") continue;
+      if (LT.lampLevel !== dry.lampLevel) drift.push(`${track}|dawn|${wx}.lampLevel=${LT.lampLevel}`);
+      if (!(pin && typeof pin.floodEmitMul === "number") && LT.floodEmitMul !== dry.floodEmitMul) {
+        drift.push(`${track}|dawn|${wx}.floodEmitMul=${LT.floodEmitMul}`);
+      }
+    }
   }
   assert.deepEqual(drift, []);
 });
