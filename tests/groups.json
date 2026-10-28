@@ -253,6 +253,7 @@
     "tests/unit/css-token-adoption.test.mjs",
     "tests/unit/css-tokens.test.mjs",
     "tests/unit/ctx-lost-menu-restore.test.mjs",
+    "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
     "// Context-loss menu notice + reload budget cleared at lights-out.",
     "tests/unit/ctx-lost-notice.test.mjs",
     "tests/unit/cursor-agents.test.mjs",

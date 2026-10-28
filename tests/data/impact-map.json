@@ -17531,6 +17531,7 @@
       ],
       "create": [
         "tests/unit/async-lifecycle.test.mjs",
+        "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",
