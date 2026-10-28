@@ -24,6 +24,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { evalRealRace } from "../helpers/eval-real-race.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const FIXTURE = JSON.parse(fs.readFileSync(path.join(ROOT, "tests/fixtures/openf1-baku-2026-race.json"), "utf8"));
@@ -47,7 +48,7 @@ function load({ realTyres = false } = {}) {
   vm.runInContext("var window = globalThis;", ctx);   // consts.js publishes on window
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/consts.js"), "utf8"), ctx, { filename: absSrc("js/physics/consts.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/ai-drive.js"), "utf8"), ctx, { filename: absSrc("js/physics/ai-drive.js") });
-  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/data/real-race-tab.js"), "utf8"), ctx, { filename: absSrc("js/data/real-race-tab.js") });
+  evalRealRace(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race-pace.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race-pace.js") });
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/race/real-race.js"), "utf8"), ctx, { filename: absSrc("js/race/real-race.js") });
   if (realTyres) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/physics/tyre-model.js"), "utf8"), ctx, { filename: absSrc("js/physics/tyre-model.js") });
