@@ -248,6 +248,53 @@ const DataSchedule = (function () {
       return row;
     }
 
+    // ADD TO CALENDAR: one .ics for the NEXT weekend or the whole season, built from the list already
+    // on screen (no fetch). The reminder lives for the tab only; VALARM is best-effort per client.
+    function saveIcs(races, whole, alarmMin) {
+      const text = DataIcs.build(races, { alarmMin, name: whole ? "F1 " + new Date().getFullYear() + " · Apex 26" : (races[0].name || "Grand Prix") });
+      const blob = new Blob([text], { type: "text/calendar;charset=utf-8" });
+      const name = DataIcs.fileName(races, whole);
+      if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) return NativeDownload.saveBlob(blob, name);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 10000);
+    }
+
+    function icsBar(items, next) {
+      const bar = el("div");
+      bar.setAttribute("data-ics", "bar");
+      const pick = el("select", "dh-pick-select");
+      pick.setAttribute("data-ics", "alarm");
+      pick.setAttribute("aria-label", "Reminder before each session");
+      for (const [min, label] of [[0, "No reminder"], [15, "15 min before"], [30, "30 min before"], [60, "1 h before"], [1440, "1 day before"]]) {
+        const opt = el("option", null, label);
+        opt.value = String(min);
+        if (min === 30) opt.selected = true;
+        pick.appendChild(opt);
+      }
+      function button(label, kind, races, whole) {
+        const b = el("button", null, label);
+        b.type = "button";
+        b.setAttribute("data-ics", kind);
+        if (!races.length) b.disabled = true;
+        b.addEventListener("click", function () {
+          Promise.resolve(saveIcs(races, whole, Number(pick.value))).catch(function (e) { Log.warn("data", "apex26: ics export failed", e); });
+        });
+        return b;
+      }
+      bar.appendChild(button("ADD RACE WEEKEND", "weekend", next ? [next] : [], false));
+      bar.appendChild(button("ADD WHOLE SEASON", "season", items, true));
+      bar.appendChild(pick);
+      const note = el("div", null, "Times: Jolpica F1, unofficial. Reminders depend on your calendar app.");
+      note.setAttribute("data-ics", "note");
+      bar.appendChild(note);
+      return bar;
+    }
+
     function loadSchedule() {
       return F1API.schedule().then((items) => {
         const wrap = el("div", "dh-tabbody");
@@ -259,6 +306,7 @@ const DataSchedule = (function () {
         const next = nextRace(items, now);
         let nextMarked = false;
         if (next) wrap.appendChild(nextTile(next, wrap));
+        wrap.appendChild(icsBar(items, next));
         wrap.appendChild(el("h3", "dh-section", `${new Date().getFullYear()} CALENDAR`));
         const grid = el("div", "dh-race-grid");
         for (const r of items) {

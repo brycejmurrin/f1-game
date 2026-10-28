@@ -59,6 +59,7 @@ test("schedule venue lines do not stamp a native title (scroll leaves it hung)",
     const n = {
       tag, cls, text: text || "", attrs: {}, listeners: {}, children: [],
       addEventListener(t, f) { (n.listeners[t] = n.listeners[t] || []).push(f); },
+      setAttribute(k, v) { n.attrs[k] = v; },
       removeAttribute(k) { delete n.attrs[k]; },
       set title(v) { n.attrs.title = v; },
       get title() { return n.attrs.title; },
