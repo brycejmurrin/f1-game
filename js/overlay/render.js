@@ -173,6 +173,8 @@ const OverlayRender = (function () {
         seq: 0, state: "waiting", ranked: [],
         caption: { id: "waiting", who: "APEX 26", text: "Waiting for a broadcast feed", kind: "status" },
       }));
+      // Same-browser feed: a game tab of this origin publishes once it hears us.
+      if (typeof OverlayBridge !== "undefined") OverlayBridge.subscribe((frame) => painter.paint(frame));
       return painter;
     }
     const started = performance.now();

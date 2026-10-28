@@ -2,6 +2,12 @@
 "use strict";
 
 const InputHoldButtons = (function () {
+  // Eval-time: a harness that loads this file without PedalTravel fails here,
+  // not on the first analog slide.
+  const PEDAL_DEAD_PX = PedalTravel.DEAD_PX;
+  const PEDAL_TRAVEL_PX = PedalTravel.TRAVEL_PX;
+  const PEDAL_MIN = PedalTravel.MIN;
+
   function create({ clamp, beforeReleaseAll }) {
     // Every wireHold button registers here so its private pressed-pointer set can
     // be cleared from OUTSIDE the closure. Nets that hang off this list:
@@ -93,9 +99,7 @@ const InputHoldButtons = (function () {
     // taps and never discovers this. Sliding the thumb UP the screen, away from
     // the pedal, lifts it — the direction a foot comes off a real one. Pointer
     // capture (below) is what makes it work past the edge of a 72 px button.
-    const PEDAL_TRAVEL_PX = 90;   // finger travel from full press to the light end
-    const PEDAL_DEAD_PX = 12;     // slop first, so a thumb tremor is not a lift
-    const PEDAL_MIN = 0.12;       // never quite zero: sliding off is not releasing
+    // The 12 / 90 / 0.12 numbers live in js/input/pedal-travel.js.
 
     // Hold semantics, multi-pointer safe: the button stays "held" until
     // every pointer that pressed it has been released/cancelled/left.
@@ -157,8 +161,9 @@ const InputHoldButtons = (function () {
           paintLevel();
           return;
         }
-        const up = Math.max(0, a - e.clientY - PEDAL_DEAD_PX);
-        levels.set(e.pointerId, clamp(1 - up / PEDAL_TRAVEL_PX, PEDAL_MIN, 1));
+        // Vertical ease is PedalTravel.ease: same clamp as M4.clamp for finite
+        // numbers (v < lo ? lo : v > hi ? hi : v).
+        levels.set(e.pointerId, PedalTravel.ease(a, e.clientY));
         paintLevel();
       });
       el.addEventListener("pointerup", (e) => release(e.pointerId));
