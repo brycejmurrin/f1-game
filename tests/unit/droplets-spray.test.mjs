@@ -65,6 +65,15 @@ test("droplets: spawn rate follows rain — none below falling rain, storm heavi
   assert.ok(D.rate(1, false, true) < full, "reduced motion spawns fewer");
 });
 
+test("droplets: drizzle does not open an empty lens overlay; public surface has no dead _reset/RAIN_MIN", () => {
+  const { D, el } = makeDroplets();
+  D.tick(1 / 60, true, 0.35, false, 10, false);
+  assert.equal(el.hidden, true, "drizzle (0.35) must not unhide an empty overlay");
+  assert.equal(D.stats().n, 0);
+  assert.equal(D._reset, undefined, "Droplets._reset was never called — dropped from the export");
+  assert.equal(D.RAIN_MIN, undefined, "RAIN_MIN stays module-private; rate() is the gate pin");
+});
+
 test("droplets: onboard-only — any other camera hides the overlay and drops every drop", () => {
   const { D, el } = makeDroplets();
   run(D, 2, true, 1, false, 10, false);

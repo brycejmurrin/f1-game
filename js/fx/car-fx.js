@@ -149,6 +149,6 @@ const CarFx = (function () {
     return { emit, status, haze };
   }
 
-  return { create, heatHaze, SPARK_V0, SPARK_V1, LOCK_MIN, HAZE_RANGE, HAZE_TAU };
+  return { create, heatHaze, SPARK_V0, SPARK_V1, SPARK_RATE, LOCK_MIN, HAZE_RANGE, HAZE_TAU };
 })();
 Object.freeze(CarFx);

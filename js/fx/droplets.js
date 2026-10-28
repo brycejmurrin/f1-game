@@ -218,7 +218,9 @@ const Droplets = (function () {
     const helmet = _helmet();
     const amount = helmet ? CockpitOpts.visorRain() : "normal";
     const runoff = helmet ? (CockpitOpts.visorRunoff() === "slow" ? 0.45 : CockpitOpts.visorRunoff() === "fast" ? 2.1 : 1) : 1;
-    if (!(on && !_low() && amount !== "off" && (rain >= RAIN_MIN * 0.5 || (helmet && _n > 0)))) { _show(false); return; }
+    // Spawn only at RAIN_MIN+ (drizzle 0.35 wets the road, not the lens). Keep the
+    // overlay while live drops remain so a stopping shower drains instead of wiping.
+    if (!(on && !_low() && amount !== "off" && (rain >= RAIN_MIN || _n > 0))) { _show(false); return; }
     if (!_lookup()) return;
     _show(true);
     const resized = _resize();
@@ -233,15 +235,13 @@ const Droplets = (function () {
     _acc += rate(rain, storm, !!reduced) * dt * (amount === "light" ? 0.4 : amount === "heavy" ? 1.8 : 1);
     while (_acc >= 1) { _acc -= 1; if (_n < c) _spawn(!!reduced, helmet); }
     _draw(!!reduced);
-    if (!_n && rain < RAIN_MIN * 0.5) _show(false);
+    if (!_n && rain < RAIN_MIN) _show(false);
   }
 
   // Race exit / results entry: the visor's light layer goes down with the water (render() stops ticking it off-race).
   function clear() { if (typeof VisorOptics !== "undefined") VisorOptics.clear(); _show(false); }
   function stats() { return { n: _n, shown: _shown, cap: cap(_mob(), false), w: _w, h: _h, first: _n ? { x: _x[0], y: _y[0], radius: _r[0], age: _age[0], vx: _vx[0], vy: _vy[0] } : null }; }
-  /** Tests: forget the cached canvas / device class (a new stub DOM). */
-  function _reset() { _looked = false; _spriteReflection = 1; _cv = _ctx = _sprite = null; _mobile = null; _n = 0; _acc = 0; _shown = false; _w = _h = 0; }
 
-  return { tick, clear, stats, rate, cap, RAIN_MIN, _reset };
+  return { tick, clear, stats, rate, cap };
 })();
 Object.freeze(Droplets);
