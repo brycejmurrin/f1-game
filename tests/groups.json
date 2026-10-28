@@ -763,6 +763,8 @@
     "// Push hold: queued + running Actions JOBS by OS vs the 40 Linux / 5 macOS slots, never runs. Fixtures.",
     "tests/unit/queue-depth.test.mjs",
     "tests/unit/quick-validate.test.mjs",
+    "// RaceCeremony SM (js/race/ceremony.js): eligibility, seek/skip, data-ceremony-phase (#4067). ~0.05 s.",
+    "tests/unit/race-ceremony.test.mjs",
     "tests/unit/race-control.test.mjs",
     "tests/unit/race-entry-profile.test.mjs",
     "tests/unit/race-insights.test.mjs",

@@ -191,6 +191,7 @@
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
+        "tests/unit/race-ceremony.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
@@ -11965,6 +11966,38 @@
       ],
       "warmShape": [
         "tests/unit/car-fields-vm.test.mjs"
+      ]
+    },
+    "js/race/ceremony.js": {
+      "afterClassify": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "create": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "eligible": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "resetLive": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "seek": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "skip": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "start": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "status": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "want": [
+        "tests/unit/race-ceremony.test.mjs"
       ]
     },
     "js/race/daily-challenge.js": {

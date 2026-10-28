@@ -93,14 +93,15 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 |---|---|---|
 | `act` | `act({steer,throttle,brake},dt,n)` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
 | `aiPlace` | `aiPlace(i,frac,v,x)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
+| `ceremony` | `ceremony(phase\|skip)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase\|skip) |
 | `clearInput` | `clearInput()` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
-| `finishRace` | `finishRace()` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `go` | `go()` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
+| `finishRace` | `finishRace({ceremony?})` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase\|skip) |
+| `go` | `go()` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase\|skip) |
 | `headless` | `headless(bool)` | weather('wet') setTimeOfDay('night') setPhysics(o) headless(bool) |
-| `jump` | `jump(frac,speed,x)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `park` | `park(f)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `race` | `race(id)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
-| `reset` | `reset(f,v,x,seed)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace() |
+| `jump` | `jump(frac,speed,x)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase\|skip) |
+| `park` | `park(f)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase\|skip) |
+| `race` | `race(id)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase\|skip) |
+| `reset` | `reset(f,v,x,seed)` | race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase\|skip) |
 | `seed` | `seed(n)` | seed(n) sets the sim seed; same seed + same inputs => same result. Pin it before any A/B or the comparison is noise |
 | `setEnergy` | `setEnergy(v)` | aiPlace(i,frac,v,x) setEnergy(v) setLap(n) |
 | `setInput` | `setInput(o)` | act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput() |
