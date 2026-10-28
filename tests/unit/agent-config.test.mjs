@@ -1042,13 +1042,30 @@ test("stop-guard.sh lets a stop through when Claude is already continuing, and o
 
 
 // Claude Code's own skill validator (Claude Academy, "Troubleshooting skills"; needs Claude Code
-// v2.1.233+). It catches a SKILL.md whose frontmatter does not parse, which the budget tests above
+// v2.1.233+; https://code.claude.com/docs/en/plugins/cli-reference#validate-a-directory,
+// checked 2026-10-28). It catches a SKILL.md whose frontmatter does not parse, which the budget tests above
 // only see through our own parser. It skips where the CLI is absent or too old (CI runners).
-test("claude plugin validate accepts every project skill", { timeout: 90000 }, (t) => {
+test("claude plugin validate accepts project skills and rejects malformed skill frontmatter", { timeout: 100000 }, (t) => {
   const r = spawnSync("claude", ["plugin", "validate", ".claude/skills"], { cwd: ROOT, encoding: "utf8", timeout: 80000 });
   if (r.error && r.error.code === "ENOENT") return t.skip("claude CLI not on PATH");
   const out = `${r.stdout}${r.stderr}`;
   if (/unknown command|not a (known|valid) command|unknown option/i.test(out)) return t.skip("claude CLI too old for `plugin validate`");
   assert.equal(r.status, 0, `claude plugin validate .claude/skills failed:\n${out}`);
-  assert.match(out, /Validation passed/);
+  // Exercise the validator's decision rather than its success-message wording.
+  // The valid control ensures a nonzero result is about the malformed YAML,
+  // not an unsupported fixture layout or path.
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "skill-validator-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const skills = path.join(dir, "skills"), skill = path.join(skills, "example"); fs.mkdirSync(skill, { recursive: true });
+  const file = path.join(skill, "SKILL.md");
+  fs.writeFileSync(file, '---\nname: example\ndescription: "Use when testing skill validation."\n---\n# Example\n');
+  const validate = () => spawnSync("claude", ["plugin", "validate", skills], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
+  const valid = validate();
+  assert.equal(valid.status, 0, `valid fixture refused: ${valid.error || valid.stdout + valid.stderr}`);
+  fs.writeFileSync(file, '---\nname: example\ndescription: [unterminated\n---\n# Example\n');
+  const invalid = validate();
+  assert.equal(invalid.error, undefined, `validator must execute, not fail to launch: ${invalid.error}`);
+  assert.equal(invalid.signal, null, "malformed frontmatter must return a verdict, not time out");
+  assert.equal(invalid.status, 1, "malformed frontmatter must fail validation (not an unexpected validator error)");
 });
