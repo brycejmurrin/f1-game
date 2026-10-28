@@ -444,7 +444,7 @@ var CrowdAudio = (function () {
 
   return {
     bindHost, bind, attach, detach, silence, update, swell, fireCheer,
-    inspect, liveOk, pitStraightBoost, grandstandBoost,
+    inspect, liveOk,
     // test hooks
     _resetEvents() { lastPos = 0; sawFinish = false; swellUntil = 0; swellAmt = 0; lastCheerT = -1e9; },
     _setPos(p) { lastPos = p | 0; },
