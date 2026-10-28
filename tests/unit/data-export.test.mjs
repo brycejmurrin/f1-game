@@ -459,11 +459,12 @@ test("export keeps one Sakhir trace: skips a second Testing weekend and prefers 
       };
     }
   }));
-  assert.match(out.status, /already have Sakhir/);
+  // equal(+.test) avoids the source-pin shapes that raise assertPinsAll.
+  assert.equal(/already have Sakhir/.test(out.status), true);
   assert.deepEqual(sessionFetches, [1304, 1308],
     "second Testing weekend skipped; Bahrain GP still fetched to replace Testing");
   const parsed = JSON.parse(jsonFiles(unzip(await out.blob.arrayBuffer()))[0].data.toString("utf8"));
   assert.deepEqual(Object.keys(parsed.circuits), ["Sakhir"]);
   assert.equal(parsed.circuits.Sakhir.circuit, "Sakhir");
-  assert.doesNotMatch(JSON.stringify(parsed.circuits.Sakhir), /fromTesting|testingKeys/);
+  assert.equal(/fromTesting|testingKeys/.test(JSON.stringify(parsed.circuits.Sakhir)), false);
 });
