@@ -600,13 +600,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `xr-opts.js` | `XROpts` | tag | XROpts: SETTINGS › DISPLAY rows for VR MODE + VR RENDERER. |
-| `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring (Phase 0). |
+| `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring. |
 | `xr-plan.js` | `XRPlan` | LAZY_XR | XRPlan: pure boot-time VR renderer path selection. |
 | `xr-rig.js` | `XrRig` | LAZY_XR | XR seated-rig math (pure). |
 | `xr-input.js` | `XrInput` | LAZY_XR | XR controller → Input.remoteSample / remoteEvent. |
 | `xr-session.js` | `XrSession` | LAZY_XR | WebXR immersive-vr session owner. |
 | `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
-| `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button (Phase 0). |
+| `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button. |
 
 **`js/share/`**
 
@@ -615,7 +615,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
 | `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
-| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip: one button shape for every result screen. |
+| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
 
 **`js/render/glx/shaders/`**
 

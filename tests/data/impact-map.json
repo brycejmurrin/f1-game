@@ -15608,11 +15608,18 @@
       "chip": [
         "tests/unit/share-card.test.mjs"
       ],
+      "close": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "preview": [
+        "tests/unit/share-card.test.mjs"
+      ],
       "slug": [
         "tests/unit/share-card.test.mjs"
       ],
       "*": [
-        "tests/specs/race-cycle-memory.spec.js"
+        "tests/specs/race-cycle-memory.spec.js",
+        "tests/unit/css-has-scope.test.mjs"
       ]
     },
     "js/share/share-card-data.js": {
@@ -15645,7 +15652,16 @@
       ]
     },
     "js/share/share-card.js": {
+      "canShareFiles": [
+        "tests/unit/share-card.test.mjs"
+      ],
       "deliver": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "encode": [
+        "tests/unit/share-card.test.mjs"
+      ],
+      "extension": [
         "tests/unit/share-card.test.mjs"
       ],
       "paint": [
