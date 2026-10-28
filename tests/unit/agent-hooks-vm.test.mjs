@@ -69,6 +69,32 @@ test("a lapped rival a few metres ahead on the road is ahead, not a lap away", a
   lt(r.gapM, 15);
   assert.equal(r.lapsAhead, -1);
   assert.notEqual(r.threat, "clear");
+  // describe("car:N") must use the same road-gap wrap as rivals() — raw prog
+  // used to report "behind" by nearly a lap for this same car.
+  const d = g.apex.describe("car:" + id);
+  assert.equal(d.rel, "ahead");
+  lt(d.gapToPlayerM, 15);
+});
+
+test("objective and world() agree on overtake / X-mode (no stale cooldown or 3 s look-ahead)", async () => {
+  await load("monza", 0.1, 50);
+  const trade = g.apex.objective().tradeoffs.join("\n");
+  assert.doesNotMatch(trade, /16 s of cooldown|4 s of boost then/i);
+  assert.match(trade, /detection line/i);
+  assert.match(trade, /0\.5 MJ/);
+  const note = g.apex.world({ detail: "full" }).ego.aero.note;
+  assert.doesNotMatch(note, /3 s of straight/);
+  assert.doesNotMatch(note, /\+7\.5%/);
+  assert.match(note, /X-mode zone|activation zone/i);
+  const help = g.apex.agentHelp();
+  const notes = (help.notes || []).join("\n");
+  assert.doesNotMatch(notes, /no agent hook returns null/i);
+  assert.match(notes, /obs|physState|probe/i);
+  // Cold car: these read hooks return null (the note must not claim otherwise).
+  const px = g.G.player.px;
+  g.G.player.px = undefined;
+  assert.equal(g.apex.obs(), null);
+  g.G.player.px = px;
 });
 
 test("same-lap rivals do not invent lapsAhead from nearest-prog wrap", async () => {

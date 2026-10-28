@@ -13,10 +13,14 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 seedLogGlobal();
 const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");
+globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 globalThis.NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 globalThis.NetSession = eval(src("js/net/session.js") + ";NetSession");
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 globalThis.NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
 globalThis.NetBytes = eval(src("js/net/bytes.js") + ";NetBytes");
+const NetIce = eval(src("js/net/ice.js") + ";NetIce");
 const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetTransport = NetTransport;
 globalThis.NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");
@@ -116,6 +120,7 @@ test("the HUD hides eligible garage work during a friend race and restores it wh
     PhysicsConsts: { IDLE_RPM: 5000, MAX_RPM: 15000 } };
   sb.window = sb;
   vm.runInNewContext(src("js/ui/hud-minimap.js"), sb, { filename: absSrc("js/ui/hud-minimap.js") });   // GameHud.create builds its HudMinimap (#1656)
+  vm.runInNewContext(src("js/ui/hud-radio-lane.js"), sb, { filename: absSrc("js/ui/hud-radio-lane.js") });   // …and its HudRadioLane (#3261)
   const hud = vm.runInNewContext(src("js/ui/hud.js") + ";GameHud", sb, { filename: absSrc("js/ui/hud.js") }).create(G);
   const tick = () => hud.updateHud(true);
   tick();

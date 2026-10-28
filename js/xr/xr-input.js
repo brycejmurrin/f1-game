@@ -12,8 +12,8 @@
 
 const XrInput = (function () {
   const BTN_TRIGGER = 0;
-  const BTN_SQUEEZE = 1;
-  const BTN_STICK = 3;
+  // BTN_SQUEEZE (1) is intentionally unmapped — squeeze must not snap the seated gaze.
+  const BTN_STICK = 3;      // thumbstick click: exported for diagnostics, not mapped
   const BTN_PRIMARY = 4;    // A (right) / X (left)
   const BTN_SECONDARY = 5;  // B (right) / Y (left)
   const AXIS_STICK_X = 2;
@@ -46,11 +46,11 @@ const XrInput = (function () {
   function mapFrame(sources, prev, options) {
     const menuOpen = !!(options && options.menuOpen);
     const menuNav = menuOpen && !!options.overlay;
-    let thr = 0, brk = 0, stickX = 0, stickY = 0, held = 0;
+    let thr = 0, brk = 0, stickX = 0, stickY = 0;
     let primaryDown = false, secondaryDown = false;
     const list = sources || [];
     // XRInputSourceArray is indexed/iterable, but has no Array.prototype.some.
-    let hasLeft = false, hasStick = false, hasGamepad = false;
+    let hasLeft = false, hasStick = false, hasGamepad = false, stickChosen = false;
     for (let i = 0; i < list.length; i++)
       if (usableStick(list[i]) && list[i].handedness === "left") hasLeft = true;
     for (let i = 0; i < list.length; i++) {
@@ -64,21 +64,21 @@ const XrInput = (function () {
       if (hand === "right") thr = Math.max(thr, t);
       else if (hand === "left") brk = Math.max(brk, t);
       else {
-        // Ambiguous / none: treat first stick as steer, average pedals later.
+        // Ambiguous / none handedness: fold the trigger into throttle (no brake pair).
         thr = Math.max(thr, t);
       }
       const sx = axis(gp, AXIS_STICK_X);
-      // Prefer left stick for steer when both present; else any.
+      // Prefer left stick for steer when both present; else any. Do not use
+      // !stickX — a centered axis is 0 and would let a later "none" overwrite.
       if (usableStick(src)) {
         hasStick = true;
-        if (hand === "left" || (!hasLeft && hand !== "right" && !stickX) || (hand === "right" && !hasLeft)) {
+        if (hand === "left" || (!hasLeft && hand !== "right" && !stickChosen) || (hand === "right" && !hasLeft)) {
           stickX = sx; stickY = axis(gp, AXIS_STICK_Y);
+          stickChosen = true;
         }
       }
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
-      // Squeeze never turns the seated XR anchor; look behind physically.
-      void BTN_STICK; void AXIS_STICK_Y;
     }
     const latch = prev || { primary: false, secondary: false };
     const events = [];
@@ -98,7 +98,8 @@ const XrInput = (function () {
 
     const steer = XrRig.stickToSteer(stickX);
     return {
-      sample: { roll: hasStick ? steer : null, thr: thr, brk: brk, held: held },
+      // held stays 0: XR has no clutch/hand-brake remoteSample bit.
+      sample: { roll: hasStick ? steer : null, thr: thr, brk: brk, held: 0 },
       driving: hasGamepad && !(options && options.driving === false),
       events,
       recenter,
@@ -128,7 +129,7 @@ const XrInput = (function () {
 
   return {
     mapFrame, inject,
-    BTN_TRIGGER, BTN_SQUEEZE, BTN_STICK, BTN_PRIMARY, BTN_SECONDARY,
+    BTN_TRIGGER, BTN_STICK, BTN_PRIMARY, BTN_SECONDARY,
     AXIS_STICK_X, AXIS_STICK_Y,
   };
 })();

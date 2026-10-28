@@ -73,8 +73,8 @@ const Particles = (function () {
     _a0 = new Float32Array(MAX);
     _drg = new Float32Array(MAX); _grv = new Float32Array(MAX);
     _add = new Uint8Array(MAX);
-    // The alpha batch also carries the rain shower (rainFill): size for both.
-    _vertA = new Float32Array((MAX + _rainN) * FLOATS_PER);
+    // Pool only at init — rainSeed grows _vertA to MAX + wetCap once a shower arms.
+    _vertA = new Float32Array(MAX * FLOATS_PER);
     _vertB = new Float32Array((MAX + FLARE_MAX) * FLOATS_PER);
     _n = 0;
     _dirty = true; _flareDirty = false; _lastPa = _lastPb = 0;

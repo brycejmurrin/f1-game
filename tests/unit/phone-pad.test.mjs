@@ -27,6 +27,7 @@ seedLogGlobal();
 // The modules under test, as globals — each is a "use strict" IIFE assigning one.
 const load = (rel, name) => eval(read(rel) + ";" + name);
 globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");
+const NetIce = load("js/net/ice.js", "NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = globalThis.NetTransport = load("js/net/transport.js", "NetTransport");
 const TiltRoll = globalThis.TiltRoll = load("js/input/tilt-roll.js", "TiltRoll");
 const PhonePad = globalThis.PhonePad = load("js/input/phone-pad.js", "PhonePad");

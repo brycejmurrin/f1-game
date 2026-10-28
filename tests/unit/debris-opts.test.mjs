@@ -58,7 +58,7 @@ test("it claims pm-debris, and the shell declares that row with its select", () 
   assert.deepEqual([...rows.keys()], ["pm-debris"]);
   assert.ok(SHELL.includes('id="pm-debris"'), "pm-debris must exist in index.html");
   assert.ok(SHELL.includes('id="pm-debris-sel"'), "pm-debris-sel must exist — SettingRow needs the select");
-  assert.ok(SHELL.includes('id="pm-debris-label">DEBRIS<'), "the row must be labelled DEBRIS");
+  assert.ok(SHELL.includes('id="pm-debris-label" data-i18n="pause.debris">DEBRIS<'), "the row must be labelled DEBRIS");
 });
 
 test("an unset key reads OFF from the shipped SettingsDefaults value", () => {

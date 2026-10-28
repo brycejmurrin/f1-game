@@ -96,7 +96,7 @@ test("ensureRaceSession reinjects real PitLane and calls onRaceSessionReady", as
 
 // #2625: a never-resolving file makes ScriptLoader call onSlow; the loading card's line changes.
 test("ensureRaceSession slow load shows SLOW CONNECTION on the loading card", async () => {
-  const loader = src("js/core/script-loader.js"), bundles = src("js/core/lazy-bundles.js"), screen = src("js/ui/loading-screen.js");
+  const loader = src("js/core/script-loader.js"), bundles = src("js/core/lazy-bundles.js"), card = src("js/ui/loading-card.js"), screen = src("js/ui/loading-screen.js");
   const gp = { textContent: "Please wait" }, root = { hidden: false };
   const ctx = vm.createContext({
     ApexRoster: { DEFERRED: {}, DEFERRED_EDGES: [], LAZY_AGENT: [], LAZY_EDGES: [], LAZY_RACE: [],
@@ -113,7 +113,7 @@ test("ensureRaceSession slow load shows SLOW CONNECTION on the loading card", as
       head: { appendChild() { /* never loads */ } },
     },
   });
-  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;\n" + screen + "\nthis.LoadingScreen = LoadingScreen;", ctx);
+  vm.runInContext(loader + "\nthis.ScriptLoader = ScriptLoader;\n" + card + "\n" + screen + "\nthis.LoadingScreen = LoadingScreen;", ctx);
   vm.runInContext(bundles + `
     const lb = LazyBundles.create({ els, loadBackendScripts: (f, e, o) => ScriptLoader.create().load(f, e, Object.assign({ slowMs: 30, deadlineMs: 5000 }, o)), getContext() {}, onRaceSessionReady() {} });
     globalThis.__ensure = lb.ensureRaceSession;`, ctx);
@@ -124,7 +124,7 @@ test("ensureRaceSession slow load shows SLOW CONNECTION on the loading card", as
 
 // #2625: on failure the card offers Retry and Back to menu.
 test("LoadingScreen.failed shows Retry + Back to menu and resolves the choice", async () => {
-  const screen = src("js/ui/loading-screen.js");
+  const screen = src("js/ui/loading-card.js") + "\n" + src("js/ui/loading-screen.js");
   const mk = () => {
     const els = {}, mkEl = () => { const e = { children: [], listeners: {}, textContent: "", appendChild(c) { e.children.push(c); }, remove() { e.removed = true; }, addEventListener(t, f) { e.listeners[t] = f; } }; return e; };
     els.loading = { hidden: false }; els["ld-gp"] = mkEl(); els["ld-text"] = mkEl();

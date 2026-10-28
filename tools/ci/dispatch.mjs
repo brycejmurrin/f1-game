@@ -57,9 +57,11 @@
 // label launches nothing (as does `pause` in tools/ci/dispatch.json); `dispatch:merge-pause` arms nothing — land.yml
 // reads that label, this tool only reports it (the base-behind limit lives in merge-gate.mjs, not here).
 // Rules, in order (plan §4.4): (1) `ready` issues without `claimed` → one worker each, `priority` first, newest next,
-// within maxLaunchesPerRun and maxLiveWorkers, none when the quota is not `allowed`; (2) an open PR with no push and no
-// comment for staleHours (6 for lane:codex), or one already labelled `needs-owner` (its worker stopped at the cap and
-// asked for a takeover: no 2 h wait), no `hold`/`needs-decision` → `needs-owner` + ONE `CONTINUE PR #n` worker
+// within maxLaunchesPerRun and maxLiveWorkers, none when the quota is not `allowed`, and none at all while landQueueMax
+// or more open non-draft PRs carry `land` (LANDING BACKPRESSURE, 2026-10-27: 42 of 70 open PRs waited to land, merges
+// ran ~3.5/h against ~7/h opened; one skip line says so; rules 2 and 3 drain the queue and are never paused);
+// (2) an open PR with no push and no comment for staleHours (6 for lane:codex), or one already labelled `needs-owner`
+// (its worker stopped at the cap and asked for a takeover: no 2 h wait), no `hold`/`needs-decision` → `needs-owner` + ONE `CONTINUE PR #n` worker
 // carrying the body's ```handoff block; (3) deploy red and no open PR labelled `deploy:red` → label the Board, launch one
 // fixer; (4) a child whose every PR merged/closed > archiveAfterMinutes (10) ago → archive (stops the post-land wakes), only a `role:worker` session
 // named in a claim/adoption comment, never one tagged `no-archive` or `role:dispatcher`, never RUNNING/WORKING/BLOCKED;
@@ -96,7 +98,7 @@ export const SESSION_PLACEHOLDER = "{SESSION_ID}";
 /** Rows per list page; a page shorter than this is the last one (GitHub REST pagination). */
 export const PAGE_SIZE = 100;
 export const DEFAULT_CONFIG = {
-  pause: false, maxLaunchesPerRun: 4, maxLiveWorkers: { claude: 8, cursor: 4 }, workerCostCapUsd: 10, workerStopAtK: 300,
+  pause: false, maxLaunchesPerRun: 4, maxLiveWorkers: { claude: 8, cursor: 4 }, landQueueMax: 15, workerCostCapUsd: 10, workerStopAtK: 300,
   staleHours: { default: 2, codex: 6 }, launchClaimHours: 2, archiveAfterMinutes: 60, nudgeIdleMinutes: 20, nudgeEveryMinutes: 60,
   model: "claude-sonnet-5-5", deployBranch: "claude/f1-game-project-26h3ng", repo: "brycejmurrin/f1-game",
   boardIssueTitle: "Board", dispatchIssueTitle: "Dispatch", hosts: { cursor: { enabled: false, model: "composer-2.5" } },
@@ -237,6 +239,16 @@ export function sessionRefs(s) {
   const issues = [...new Set([...tag(/^issue:(\d+)$/), ...[...title.matchAll(/#(\d{1,6})\b/g)].map((m) => Number(m[1])).filter((n) => !prs.includes(n))])];
   return { prs, issues };
 }
+/** Does session `s` name PR `p`: by its pr field, a `pr:<n>` tag or a `PR #n` title, by the PR's ```handoff `owner:`
+ *  line, or by an issue the PR body closes (`Closes #n`; batch workers tag `issue:<n>` and name the PR only in the
+ *  hand-off — dispatcher report 2026-10-27, #4016–#4021 planned as orphans). Pure. */
+export function ownsPr(s, p) {
+  const refs = sessionRefs(s);
+  if (refs.prs.includes(Number(p.number))) return true;
+  if (String(parseHandoff(p.body)?.owner || "").includes(s.id)) return true;
+  const closes = [...String(p.body || "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d{1,6})\b/gi)].map((m) => Number(m[1]));
+  return closes.some((n) => refs.issues.includes(n));
+}
 /** A PR's last activity: its updated_at (push, comment, edit, label) or its newest comment, the dispatcher's own launch
  *  comments excluded (header: why not the head commit's committer date). Pure. */
 export const activityAt = (p) => Math.max(t(p.updated_at), t(p.last_comment_at),
@@ -244,13 +256,22 @@ export const activityAt = (p) => Math.max(t(p.updated_at), t(p.last_comment_at),
 /** A fold bot's PR (changelog-fold.yml / ratchets-fold.yml push `bot/<name>`; any `*[bot]` author): never re-owned. Pure. */
 export const isBotPr = (p) => /^bot\//.test(String(p.head_ref || "")) || /\[bot\]$/.test(String(p.author || ""));
 const RED = new Set(["failure", "timed_out", "startup_failure", "action_required"]);
+/** A `gate` refusal whose description names the `distance` row as the ONLY row not ok (merge-gate prints
+ *  `open=ok hold=ok plan=ok ci=ok distance=FAIL`; `ci=WAIT` is a CI run still going, which only waits too). land.yml's
+ *  AUTO-SYNC owns that case (update-branch, throttled), so it is not a problem for a takeover worker to hand-sync
+ *  (2026-10-28: ~28 of 39 `land` PRs, a takeover launch each). A row the description does not name never counts as ok. Pure. */
+export function distanceOnlyRefusal(description) {
+  const rows = [...String(description || "").matchAll(/\b(open|hold|plan|ci|gen|ratchets|distance)=(\S+)/g)];
+  return rows.some((m) => m[1] === "distance") && rows.every((m) => (m[1] === "distance" ? m[2] === "FAIL" : m[2] === "ok" || (m[1] === "ci" && m[2] === "WAIT")));
+}
 /** Has the head of a `land` PR a failed check (the newest run of each check name), a failed `gate` COMMIT STATUS
  *  (land.yml posts `gate` as a status, not a check run — review 2026-10-27 F5), a `gate` pending longer than
- *  `staleH` hours (not while `mergePaused`: land.yml parks it on purpose) or a conflict? null when it only waits. Pure. */
+ *  `staleH` hours (not while `mergePaused`: land.yml parks it on purpose) or a conflict? null when it only waits.
+ *  A distance-only refusal waits for AUTO-SYNC (see distanceOnlyRefusal). Pure. */
 export function landProblem(p, now = Date.now(), staleH = Infinity, mergePaused = false) {
   if (p.mergeable_state === "dirty") return "merge conflict";
   const gate = (p.statuses || []).filter((x) => x.context === "gate").sort((a, b) => t(b.updated_at || b.created_at) - t(a.updated_at || a.created_at))[0];
-  if (gate && (gate.state === "failure" || gate.state === "error")) return `gate ${gate.state}`;
+  if (gate && (gate.state === "failure" || gate.state === "error") && !distanceOnlyRefusal(gate.description)) return `gate ${gate.state}`;
   if (gate && gate.state === "pending" && !mergePaused && hoursAgo(gate.updated_at || gate.created_at, now) >= staleH)
     return `gate pending ${Math.round(hoursAgo(gate.updated_at || gate.created_at, now))}h`;
   const newest = new Map();
@@ -265,7 +286,19 @@ const excerpt = (body, lines = 6, width = 160) => String(body || "").replace(/<!
 export const LABEL_LINE = (repo) => `Labels: add with \`gh api -X POST repos/${repo}/issues/<n>/labels -f 'labels[]=<name>'\`, remove with \`gh api -X DELETE repos/${repo}/issues/<n>/labels/<name>\`; never MCP issue_write \`labels\` (it REPLACES the whole list).`;
 export const NOBODY_LINE = "Nobody reads this chat. Never end a turn with a question or a request to the user/Bryce: decide and record it in the PR body, or add `needs-decision` (gh api POST labels) with one comment and keep going, or send_message session_id `@parent`.";
 export const SUBSCRIBE_LINE = "Before ending a turn while CI runs on your head, call subscribe_pr_activity on your PR.";
-const commonLines = (config, host, n) => [
+/** Cursor cloud agents cannot label, claim, comment, or subscribe. The Claude tail stays the lines above. */
+const cursorLines = (config) => [
+  "Read docs/WORKERS.md §Per vendor (Cursor). Do not add labels, claim, post issue comments, or open issues.",
+  "Symbols: get_mcp_tools once for apex-lsp, then lsp_outline, lsp_definition (read the body), lsp_callers. Grep only comments, docs, and CSS. lsp_diagnostics once after the edit, before tests.",
+  "Do not spawn task_v2 scouts. Grep the defect ledger yourself (≤30 KNOWN rows).",
+  "Gate, in this order, once: edit; npm run gen; the one spec pick-tests names; tooling-fast --changed --jobs=3; commit; push. Repeat the gate only when GitHub says CONFLICTING.",
+  "Write the ```handoff fence yourself (branch, head, verified, not-run, next). Put run-ci, lane:cursor, and land in next:; do not apply them.",
+  "Do not call subscribe_pr_activity or subscribe_github_*. A CI notification is not a new task. Stop when the draft PR is pushed and the fence is current. Do not add land.",
+  `Lane: lane:cursor. Model: ${config.hosts.cursor.model}. Base: ${config.deployBranch} (branch cursor/<topic>-<hash>; draft PR at the first commit).`,
+  `STOP AT: ${config.workerStopAtK}k`,
+  `At the STOP AT cap, the cost cap ($${config.workerCostCapUsd} soft) or stuck: push, refresh the PR Plan and \`\`\`handoff block, name the blocker in next:, end.`,
+];
+const commonLines = (config, host, n) => host === "cursor" ? cursorLines(config) : [
   "Read docs/WORKERS.md and follow it.",
   NOBODY_LINE, SUBSCRIBE_LINE, LABEL_LINE(config.repo),
   `Lane label: lane:${host}. Model: ${host === "claude" ? config.model : config.hosts.cursor.model}. Base: ${config.deployBranch} (branch cursor/<topic>-<hash> from it; draft PR into it at the first commit).`,
@@ -274,7 +307,13 @@ const commonLines = (config, host, n) => [
   `End at \`land\`: when ready-gate passes flip ready, add \`land\`, refresh the handoff block; GitHub merges ${n ? `#${n}` : "it"}, not you.`,
 ];
 export function issuePrompt(issue, config, host) {
-  return [`Task: #${issue.number} — ${issue.title}`, ...excerpt(issue.body),
+  const head = [`Task: #${issue.number} — ${issue.title}`, ...excerpt(issue.body)];
+  if (host === "cursor") {
+    return [...head,
+      `Already fixed on the tip: record the commit sha in the PR body. Do not comment on or close #${issue.number}.`,
+      ...commonLines(config, host)].join("\n");
+  }
+  return [...head,
     `Claim first: comment "claims #${issue.number} — ${host}:<your session id>" on the issue; stand down if an older claim comment exists. Put \`Closes #${issue.number}\` in the PR body.`,
     `Add \`claimed\` ONLY with \`gh api -X POST repos/${config.repo}/issues/${issue.number}/labels -f 'labels[]=claimed'\` — never MCP issue_write \`labels\` (it REPLACES the whole list).`,
     `Already fixed on the tip: comment the evidence (commit sha + repro) on #${issue.number} and close it as completed; no PR.`,
@@ -284,14 +323,25 @@ export function continuePrompt(pr, config, host) {
   const h = parseHandoff(pr.body);
   const hand = h ? ["Hand-off block from the PR body:", ...Object.entries(h).slice(0, 8).map(([k, v]) => `  ${k}: ${v}`)]
     : ["No handoff block in the body: read its Plan, Status and Verified sections first."];
-  return [`CONTINUE PR #${pr.number} — ${pr.title || ""}`, ...hand,
+  const open = [`CONTINUE PR #${pr.number} — ${pr.title || ""}`, ...hand];
+  if (host === "cursor") {
+    return [...open,
+      `Check out its branch (${pr.head_ref || "the PR head"}); fix the red or the conflict (merge origin via sync-pr.mjs, never rebase); push. Do not comment, label, or add land.`,
+      ...commonLines(config, host, pr.number)].join("\n");
+  }
+  return [...open,
     `Adopt: comment "adopts PR #${pr.number} — ${host}:<your session id>" on the PR and remove \`needs-owner\` (\`gh api -X DELETE repos/${config.repo}/issues/${pr.number}/labels/needs-owner\`, never MCP issue_write \`labels\`); stand down if a newer adoption comment exists.`,
     `Check out its branch (${pr.head_ref || "the PR head"}); fix the red or the conflict (merge origin via sync-pr.mjs, never rebase); push; \`land\` when ready-gate passes.`,
     ...commonLines(config, host, pr.number)].join("\n");
 }
 export function deployRedPrompt(config, host) {
+  if (host === "cursor") {
+    return [`Deploy red: the latest pages.yml run on ${config.deployBranch} failed.`,
+      "Read the failing job (Actions logs via the GitHub MCP) and fix it on a branch. Open a draft PR. Do not add labels or comment on the Board issue.",
+      ...commonLines(config, host)].join("\n");
+  }
   return [`Deploy red: the latest pages.yml run on ${config.deployBranch} failed.`,
-    "Read the failing job (Actions logs via the GitHub MCP), fix it on a branch, draft PR labelled `deploy:red` and `run-ci`; the gate's base-behind row holds other merges meanwhile.",
+    "Read the failing job (Actions logs via the GitHub MCP), fix it on a branch, draft PR labelled `deploy:red` and `run-ci`; the gate's distance row holds other merges meanwhile.",
     "Claim first: comment \"claims deploy:red — " + host + ":<your session id>\" on the Board issue; stand down if an older claim comment exists.",
     ...commonLines(config, host)].join("\n");
 }
@@ -341,10 +391,13 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     live[host]++;
     launches.push({ kind, host, number, title, spec, comment: { on, body: `dispatch: launched ${host}:${title} for ${number ? `#${number}` : "deploy:red"} at ${new Date(now).toISOString()}` } });
   };
-  // (1) ready issues without a claim.
+  // (1) ready issues without a claim; none at all while the landing queue is full (backpressure: rules 2 and 3 still run).
+  const landQueue = prs.filter((p) => !p.draft && has(p, "land")).length;
+  const queueFull = Number.isFinite(config.landQueueMax) && landQueue >= config.landQueueMax;
+  if (queueFull) skip("issue launches paused", `${landQueue} PRs waiting to land (max ${config.landQueueMax}) — land before starting more`);
   const ready = issues.filter((i) => !i.pull_request && has(i, "ready") && !has(i, "claimed") && !has(i, "blocked") && !has(i, "needs-decision"))
     .sort((a, b) => (has(b, "priority") - has(a, "priority")) || (t(b.updated_at) - t(a.updated_at)));
-  for (const i of ready) {
+  for (const i of queueFull ? [] : ready) {
     const l = liveLaunch(i.comments, now, claimH, sessions);
     if (l) { skip(`issue #${i.number}`, `launched ${l.host} ${ageLabel(l.at, now)} ago (live claim)`); continue; }
     const cursor = has(i, "lane:cursor");
@@ -362,7 +415,7 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     if (isBotPr(p)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but a fold bot's PR (never re-owned)`); continue; }
     if (has(p, "land") && !landProblem(p, now, limit, flags.mergePause)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but labelled land and waiting on CI/gate/train`); continue; }
     if (has(p, "hold") || has(p, "needs-decision")) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but ${has(p, "hold") ? "hold" : "needs-decision"}`); continue; }
-    const owner = sessions.find((s) => isLiveWorker(s) && sessionRefs(s).prs.includes(Number(p.number)));
+    const owner = sessions.find((s) => isLiveWorker(s) && ownsPr(s, p));
     if (owner) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but live worker ${owner.id} names it`); continue; }
     const l = liveLaunch(p.comments, now, claimH, sessions);
     if (l) { skip(`PR #${p.number}`, `takeover launched ${ageLabel(l.at, now)} ago (live claim)`); continue; }
@@ -423,12 +476,12 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     nudges.push({ id: s.id, target, message: `Continue ${target}: subscribe to the PR, finish the Plan; questions go to @parent or \`needs-decision\`, never the user.` });
   }
   const recentNudges = [...lastNudge].filter(([id]) => !nudges.some((n) => n.id === id)).map(([id, at]) => ({ id, at }));
-  const plan = { launches, labels, archives, nudges, waiting, recentNudges, skipped, flags, boardIssue: board?.number || null, dispatchIssue: dispatch?.number || null, live };
+  const plan = { launches, labels, archives, nudges, waiting, recentNudges, skipped, flags, boardIssue: board?.number || null, dispatchIssue: dispatch?.number || null, live, landQueue };
   plan.board = renderBoard(state, plan, config, now);
   return plan;
 }
 
-/** (5) The Board comment: open PRs, this run's launches and archives, quota, caps, pause flags. Pure. */
+/** (5) The Board comment: open PRs, this run's launches and archives, quota, caps and the land queue, pause flags. Pure. */
 export function renderBoard(state, plan, config, now) {
   const rows = (state.prs || []).map((p) => {
     const h = parseHandoff(p.body) || {};
@@ -437,7 +490,7 @@ export function renderBoard(state, plan, config, now) {
   const caps = `launches/run ${config.maxLaunchesPerRun}; live workers claude ${plan.live.claude}/${config.maxLiveWorkers.claude}, cursor ${plan.live.cursor}/${config.maxLiveWorkers.cursor}; cost cap $${config.workerCostCapUsd}`;
   return [BOARD_MARKER, `## Board — ${new Date(now).toISOString()}`, "",
     `quota: **${plan.flags.quota}** · pause: ${plan.flags.pause} · merge-pause: ${plan.flags.mergePause} · deploy: ${state.deployRed ? "**RED**" : "green"}`,
-    `caps: ${caps}`, "", "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
+    `caps: ${caps} · land queue ${plan.landQueue ?? 0}/${config.landQueueMax}`, "", "| PR | title | state | age | owner | last activity | labels |", "|---|---|---|---|---|---|---|",
     ...(rows.length ? rows : ["| - | no open PRs | | | | | |"]), "",
     `### Launches this run (${plan.launches.length})`, ...(plan.launches.map((l) => `- ${l.host}: ${l.title}`) || []),
     ...(plan.launches.length ? [] : ["- none"]),
@@ -484,7 +537,7 @@ export function readState({ api = githubApi, config, sessionTexts = [], quota = 
         .map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion }));
       // `gate` is a commit STATUS (land.yml), invisible to check-runs; the combined endpoint gives the newest per context.
       out.statuses = (get(api, `commits/${p.head.sha}/status`)?.statuses || [])
-        .map((x) => ({ context: x.context, state: x.state, created_at: x.created_at, updated_at: x.updated_at }));
+        .map((x) => ({ context: x.context, state: x.state, description: x.description, created_at: x.created_at, updated_at: x.updated_at }));
     }
     return out;
   });

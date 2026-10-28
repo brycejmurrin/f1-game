@@ -89,6 +89,10 @@ test("GradeTint keeps a neutral tint neutral and LightTuneEdit clears the chunk 
   });
   const neutral = GradeTint.hue([1, 1, 1], 40);
   assert.ok(neutral.every((c) => Math.abs(c - 1) < 1e-9), JSON.stringify(neutral));
+  // CSS hue-rotate can go out of gamut; the grade path must not hand the post a negative channel.
+  const spun = GradeTint.hue([1, 0, 0], 90);
+  assert.ok(spun.every((c) => c >= 0), "hue clamps out-of-gamut channels: " + JSON.stringify(spun));
+  assert.ok(spun[1] > spun[0] && spun[1] > spun[2], "90° on red leans toward green");
   const sat = GradeTint.sat([1, 0, 0], 0);
   assert.ok(sat[0] > 0 && sat[1] > 0 && sat[2] > 0);
   // Paint presets are frozen shared bases; carPaint copies into one scratch per call.
