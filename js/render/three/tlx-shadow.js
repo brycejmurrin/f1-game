@@ -90,13 +90,15 @@
       lampCarOnly: 0,            // L1: car-only rebuilds served from the copy
     };
 
-    /** Depth target: a compare-mode DepthTexture the lit pass samples, plus the
-     * colour attachment three's RenderTarget cannot omit (r186 sizes a target
-     * from textures[0]). Only the desktop-WebGL2 sun's R32F PCSS copy
-     * (hdrColor) is ever read, so every other map carries R8 — the smallest
-     * format both backends render to (r8unorm / R8), 1/4 of RGBA8's clear,
-     * store and VRAM. LinearFilter + LessEqualCompare = guaranteed hardware 2x2 PCF
-     * per tap on ES 3.0, exactly GLX's setup (js/render/glx/shadow.js). */
+    /** Depth target: a compare-mode DepthTexture the lit pass samples.
+     * r186 sizes a RenderTarget from textures[0], so every non-PCSS map still
+     * carries an R8 colour attachment (1 B/px; discardColor / apexDiscardColor
+     * drop its store). three r187 (#34782) adds `count: 0` for a depth-only
+     * target — gated below so a vendor bump enables it without a second edit
+     * (docs/notes/TLX-SHADOW-DEPTHONLY-R187-2026-10-28.md, #2649). Only the
+     * desktop-WebGL2 sun's R32F PCSS copy (hdrColor) is ever read as colour.
+     * LinearFilter + LessEqualCompare = hardware 2x2 PCF per tap on ES 3.0,
+     * exactly GLX's setup (js/render/glx/shadow.js). */
     function makeDepthTarget(size, name, hdrColor, floatDepth) {
       const depthTexture = new THREE.DepthTexture(size, size);
       // depth32float: the one depth format WebGPU can copyTextureToTexture
@@ -107,6 +109,11 @@
       depthTexture.minFilter = THREE.LinearFilter;
       depthTexture.magFilter = THREE.LinearFilter;
       // wrap defaults to ClampToEdge — matches GLX
+      // r187 (#34782): depth-only when count:0 is real. REVISION is "186" today;
+      // do not construct count:0 on 0.186.1 (undefined). PCSS still needs colour.
+      if (!hdrColor && +(THREE.REVISION || 0) >= 187) {
+        return new THREE.RenderTarget(size, size, { depthTexture, count: 0 });
+      }
       const opts = { depthTexture };
       if (hdrColor) {
         // R32F: the blocker reads this copy of the depth, and a half float
@@ -176,6 +183,10 @@
     S.enabled = !!sunRT;
     S.carEnabled = !!carRT;
     S.lampEnabled = !!lampRT;
+    // #2649 counted oracle: colour attachment bytes of the phone sun map.
+    // r186: R8 at SUN_SIZE² (1 B/px). r187 depth-only: 0. PCSS (desktop) keeps R32F.
+    S.depthOnly = !!(sunRT && +(THREE.REVISION || 0) >= 187 && !colorPcss);
+    S.sunColorBytes = !sunRT ? 0 : S.depthOnly ? 0 : SUN_SIZE * SUN_SIZE * (colorPcss ? 4 : 1);
 
     // PCSS blocker map (header note): 512² R32F, the MIN over each dest
     // texel's whole k x k source footprint (k = SUN_SIZE / 512: 16 texels at
@@ -914,7 +925,7 @@
         try {
           for (const rt of [sunRT, carRT, lampRT, lampStaticRT]) {
             if (!rt) continue;
-            const hdr = rt.texture.type === THREE.FloatType, fd = !!(rt.depthTexture && rt.depthTexture.type === THREE.FloatType);
+            const hdr = !!(rt.texture && rt.texture.type === THREE.FloatType), fd = !!(rt.depthTexture && rt.depthTexture.type === THREE.FloatType);
             const key = hdr + "|" + fd;
             if (seen.has(key)) continue;
             seen.add(key);

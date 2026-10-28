@@ -848,3 +848,83 @@ test("scene11: the probe is read before the bloom knob, and no post reader sampl
   const tslPost = read("js/render/three/tsl-post.js");
   assert.ok(!/sceneT\.sample\([^)]*\)\)?\.[aw]\b/.test(tslPost) && !/\bscn\.[aw]\b/.test(tslPost), "scene alpha is never read: RGB-only storage is lossless for the composite");
 });
+
+// ── #2649 phone bandwidth trims: godray11 counted oracle, shadow r187 gate, FB-invalidate canaries ─────────────
+// Godray present needs a shadow stub with S.enabled (sun shafts) and aoFold off so rg11b10 is allowed.
+async function godrayRig(t, { ls = {}, wgpu = true, aoFold = "0" } = {}) {
+  const store = { "apex26.tlxAoFold": aoFold, ...ls };
+  const fg = makeFakeGL(320, 180);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  if (wgpu) renderer.backend.isWebGPUBackend = true;
+  const identity = new THREE.Matrix4().elements;
+  const shadow = { sunTex: new THREE.DepthTexture(1, 1),
+    S: { enabled: true, lightVP: identity, lampLightVP: identity, lampArmed: false, lampIdx: -1 } };
+  const post = withStore(store, () => globalThis.TLXShaders.postChain(THREE, TSL, { renderer, isMobile: true,
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow, viz: null, ssrTag: false, softDest: () => null,
+    wantSpatialUpscale: () => false, getPresentSize: () => [320, 180], sceneSamples: 0 }));
+  post.resize(320, 180);
+  t.after(() => { post.dispose(); renderer.dispose(); });
+  const frame = { invProj: identity, proj: identity, invVP: identity, viewProj: identity,
+    eye: [0, 0, 0], sunDir: [0, 1, 0], sunColor: [1, 1, 1], time: 0, cloud: 0 };
+  return { post, frame, present: (opts) => post.present(opts, frame) };
+}
+
+test("godray11: default stays rgba16f; knob halves pair bytes on unfolded WebGPU frames", async (t) => {
+  const off = await godrayRig(t);
+  off.present({ ssao: 0, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 });
+  const s0 = off.post.state();
+  assert.equal(s0.formats.godray, "rgba16f", "default: RGBA16F (AO fold may need alpha)");
+  assert.equal(s0.godray11, false);
+  assert.equal(s0.godrayPairBytes, 160 * 90 * 8 * 2, "half of 320×180, 8 B/px, two targets");
+
+  const on = await godrayRig(t, { ls: { "apex26.tlxGodray11": "1" }, aoFold: "0" });
+  on.present({ ssao: 0, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 });
+  const s1 = on.post.state();
+  assert.equal(s1.formats.godray, "rg11b10", "knob + unfolded + WebGPU renderable → rg11b10");
+  assert.equal(s1.godray11, true);
+  assert.equal(s1.godrayPairBytes, 160 * 90 * 4 * 2, "counted oracle: half the colour bytes");
+  assert.equal(s1.godrayPairBytes * 2, s0.godrayPairBytes, "4 B/px is half of RGBA16F's 8");
+});
+
+test("godray11: a folded AO frame keeps RGBA16F even with the knob (alpha carries AO)", async (t) => {
+  const h = await godrayRig(t, { ls: { "apex26.tlxGodray11": "1" }, aoFold: "1" });
+  // Both AO and godray live → D7 fold writes AO into godray alpha; ensureGR(false).
+  h.present({ ssao: 0.5, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 });
+  const s = h.post.state();
+  assert.equal(s.formats.godray, "rgba16f");
+  assert.equal(s.godray11, false);
+  assert.equal(s.godrayPairBytes, 160 * 90 * 8 * 2);
+});
+
+test("godray11: WebGL2 leg never takes rg11b10 (scene11 / bloom11 WebGPU-only gate)", async (t) => {
+  const h = await godrayRig(t, { ls: { "apex26.tlxGodray11": "1" }, wgpu: false, aoFold: "0" });
+  h.present({ ssao: 0, contact: 0, godray: 0.8, bloom: 0, reflect: 0, carReflect: 0, mist: 0 });
+  assert.equal(h.post.state().formats.godray, "rgba16f");
+  assert.equal(h.post.state().godray11, false);
+});
+
+test("shadow depth-only: r186 keeps R8 colour bytes; r187 gate stays closed on tip", async (t) => {
+  assert.equal(+(THREE.REVISION || 0) < 187, true, "vendored tip is still pre-r187");
+  const fg = makeFakeGL(64, 64);
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  await renderer.init();
+  t.after(() => renderer.dispose());
+  const phone = globalThis.TLXShaders.shadowSys(THREE, TSL, { renderer, isMobile: true, softwareGL: false, isWarming: () => false });
+  assert.equal(phone.S.depthOnly, false);
+  assert.equal(phone.S.sunColorBytes, 1024 * 1024, "phone 1024² R8 colour attachment");
+  assert.equal(!!phone.sunTex, true);
+});
+
+test("FB-invalidate audit: depthEnd / discardAttachments / discardHint stay on the live post chain", async (t) => {
+  const { post } = await postRig(t, { ssrTag: true });
+  assert.equal(typeof post.depthEnd, "function");
+  assert.equal(typeof post.depthBegin, "function");
+  assert.equal(typeof post.discardAttachments, "function");
+  assert.equal(typeof post.discardHint, "function");
+  assert.equal(typeof post.needsDepth, "function");
+  // Dry night frame: depth discarded (A-P1 already covers the invalidate path).
+  const r = (await postRig(t)).scenePass(OFF, NIGHT);
+  assert.equal(r.keep, false);
+  assert.equal(r.dropped, true);
+});
