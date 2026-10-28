@@ -15802,6 +15802,12 @@
       ]
     },
     "js/track/core/spline.js": {
+      "postLimits": [
+        "tests/unit/track-spline-walls.test.mjs"
+      ],
+      "wallAt": [
+        "tests/unit/track-spline-walls.test.mjs"
+      ],
       "*": [
         "tests/unit/pick-unit-slices.test.mjs"
       ]
