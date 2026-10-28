@@ -32,7 +32,9 @@ loss are reproducible rather than wall-clock. No TURN credential ships in the
 client: browser-visible provider keys are reusable by anyone who downloads the
 game. Configure a player-owned, short-lived credentials endpoint through
 `apex26.turnApi` when relay service is needed; the default is honest STUN-only
-operation. `prefetchIce()` must be AWAITED BEFORE a connection is built
+operation. The server list itself is `js/net/ice.js` (`NetIce.create()`, one
+cache per `NetTransport` evaluation); `prefetchIce`, `iceServers`, `hasRelay`
+and `STUN` stay on `NetTransport`. `prefetchIce()` must be AWAITED BEFORE a connection is built
 (lobby's `readyIce()`): `iceServers` are fixed at construction, so a fetch that
 lands 200 ms later gathers STUN-only.
 
@@ -215,7 +217,9 @@ invite"), and the room-code host keeps such a repost seen and silent
 ### `js/net/snapshot.js` — `NetSnapshot`
 
 the wire format (13 B/car: s/x/head/speed/gear/ lap, quantised to 1 cm and 1
-cm/s) + the interpolation buffer. Remote cars draw ~100 ms in the past between
+cm/s) plus the interpolation buffer, which lives in `js/net/interp.js`
+(`NetInterp`). `NetSnapshot.createInterp` forwards and passes the shared drop
+counter. Remote cars draw ~100 ms in the past between
 two packets; a late packet EXTRAPOLATES ALONG s, which follows the road by
 construction and so cannot dead-reckon a rival into a barrier. s and head both
 wrap the short way — getting that wrong sends a car backwards down the lap
@@ -271,7 +275,10 @@ clamp, `NetPlay.clampWire` — s to the lap, x/speed to ±200, head wrapped, lap
 to target+1. The QUALI/QLIVE receivers and senders are NetPlay's too
 (`bindQuali` / `qualiReporters`): the lobby registers the same handlers during
 qualifying, so a peer's `t` is coerced and bounded (20 s .. 1 h) at ONE site in
-both phases and stored as a number. tick() also runs
+both phases and stored as a number. That site is `js/net/quali-wire.js`
+(`QualiWire.create(EV)` while NetPlay evaluates). The tyre/pit codec is
+`js/net/strategy-wire.js`; `strategyState`, `applyStrategy` and
+`STRATEGY_VERSION` stay on NetPlay. tick() also runs
 through the paused gate: one player opening a menu cannot stop a shared world.
 AI retirements use the existing reliable LAP event, bound to the receiving
 race's epoch. The host repeats terminal AI state with its one-second strategy
