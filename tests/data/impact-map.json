@@ -4576,6 +4576,11 @@
         "tests/unit/verify-live.test.mjs"
       ]
     },
+    "js/circuits/hungaroring.js": {
+      "*": [
+        "tests/unit/circuit-corner-anchors.test.mjs"
+      ]
+    },
     "js/circuits/imola.js": {
       "*": [
         "tests/specs/imola-foundation.spec.js",

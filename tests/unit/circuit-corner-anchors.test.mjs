@@ -44,6 +44,31 @@ test("Hungaroring names its chicane and physical T5 exit consistently", () => {
   for (let i = 1; i < def.turns.length; i++) assert.ok(def.turns[i] > def.turns[i - 1]);
 });
 
+test("Hungaroring bankZone TN trailers name the nearest curated apex", () => {
+  // Comment-only drift: frac 0.1888 said T1 while sitting on T2; 0.8506 said T11
+  // while sitting on T13. Keep TN trailers honest against def.turns.
+  const src = readFileSync(new URL("../../js/circuits/hungaroring.js", import.meta.url), "utf8");
+  const { def } = circuit("hungaroring");
+  const wrap = (d) => { d = Math.abs(d); return d > 0.5 ? 1 - d : d; };
+  const nearest = (f) => {
+    let best = 1, idx = -1;
+    for (let i = 0; i < def.turns.length; i++) {
+      const d = wrap(f - def.turns[i]);
+      if (d < best) { best = d; idx = i; }
+    }
+    return { turn: idx + 1, d: best };
+  };
+  const bad = [];
+  for (const line of src.split("\n")) {
+    const m = line.match(/\{\s*frac:\s*([0-9.]+)[^}]*\}\s*,?\s*\/\/\s*T(\d+)\b/);
+    if (!m) continue;
+    const f = Number(m[1]), claimed = Number(m[2]);
+    const n = nearest(f);
+    if (n.turn !== claimed) bad.push(`frac ${f} trailer T${claimed} but nearest T${n.turn} (Δlap ${n.d.toFixed(4)})`);
+  }
+  assert.deepEqual(bad, []);
+});
+
 test("Monaco bank zones peak on Massenet and Mirabeau, not Ste Devote", () => {
   // As fracs 0.1286 / 0.2961 the _sceneryShift (~0.938) compensation centred
   // the "Massenet" zone on T1 Ste Devote and the "Mirabeau" zone on T4.
