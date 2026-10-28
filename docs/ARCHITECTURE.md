@@ -186,7 +186,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
 | `results.js` | `DataResults` | LAZY_DATA | the data hub's RESULTS tab: classification for ANY session of any 2023+ weekend (practice, qualifying, sprint, race), not just the latest Grand Prix. |
 | `live.js` | `DataLive` | LAZY_DATA | the data hub's LIVE tab: polls OpenF1 for the running session's positions/gaps/weather. mergePositionBatch/mergeIntervalBatch fold a delta batch onto… |
-| `real-race-tab.js` | `DataRealRace` | LAZY_DATA | DATA HUB RACE IT tab (DataRealRace.create(deps)) Turns one real Grand Prix's OpenF1 timing (drivers, laps, stints, pits, overtakes, race control, weather,… |
+| `real-race-script.js` | `DataRealRaceScript` | LAZY_DATA | pure OpenF1 race-script builder. |
+| `real-race-fetch.js` | `DataRealRaceFetch` | LAZY_DATA | real-race session cache and position traces. |
+| `real-race-tab.js` | `DataRealRace` | LAZY_DATA | DATA HUB RACE IT tab. |
 | `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
 
 **`js/career/`**

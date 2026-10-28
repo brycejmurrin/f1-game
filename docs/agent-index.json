@@ -3135,6 +3135,16 @@
       "roster": "LAZY_DATA"
     },
     {
+      "path": "js/data/real-race-fetch.js",
+      "global": "DataRealRaceFetch",
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/real-race-script.js",
+      "global": "DataRealRaceScript",
+      "roster": "LAZY_DATA"
+    },
+    {
       "path": "js/data/real-race-tab.js",
       "global": "DataRealRace",
       "roster": "LAZY_DATA"

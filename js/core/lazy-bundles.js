@@ -279,6 +279,8 @@ const DATA_READY = {
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/real-race-script.js": () => typeof DataRealRaceScript !== "undefined",
+  "js/data/real-race-fetch.js": () => typeof DataRealRaceFetch !== "undefined",
   "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };

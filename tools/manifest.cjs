@@ -1160,6 +1160,8 @@ const LAZY_DATA = [
   "js/data/standings.js",
   "js/data/results.js",
   "js/data/live.js",
+  "js/data/real-race-script.js",
+  "js/data/real-race-fetch.js",
   "js/data/real-race-tab.js",
   "js/data/hub.js",
 ];
@@ -1185,6 +1187,9 @@ const LAZY_DATA_EDGES = LAZY_DATA.filter((f) => f !== "js/data/hub.js")
     ["js/data/telemetry-render.js", "js/data/telemetry.js"],
     ["js/data/telemetry-player.js", "js/data/telemetry.js"],
     ["js/data/telemetry-view.js", "js/data/telemetry.js"],
+    ["js/data/real-race-script.js", "js/data/real-race-fetch.js"],
+    ["js/data/real-race-script.js", "js/data/real-race-tab.js"],
+    ["js/data/real-race-fetch.js", "js/data/real-race-tab.js"],
   ]);
 
 // THE TRACK DESIGNER (js/editor/*, the part behind the TRACK DESIGNER door).

@@ -5728,63 +5728,33 @@
         "tests/unit/data-hub-picker.test.mjs"
       ]
     },
-    "js/data/real-race-tab.js": {
+    "js/data/real-race-fetch.js": {
+      "remember": [
+        "tests/unit/data-replay-improvements.test.mjs"
+      ]
+    },
+    "js/data/real-race-script.js": {
       "build": [
-        "tests/unit/collision-contact-vm.test.mjs",
-        "tests/unit/data-replay-improvements.test.mjs",
-        "tests/unit/engine-revs-replay-vm.test.mjs",
-        "tests/unit/f1-dev-tools.test.mjs",
-        "tests/unit/fuzz-untrusted-inputs.test.mjs",
-        "tests/unit/game-vm.test.mjs",
-        "tests/unit/race-flow-fixes-vm.test.mjs",
-        "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-race.test.mjs"
+        "tests/unit/data-replay-improvements.test.mjs"
       ],
-      "cached": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
+      "lapBoard": [
+        "tests/unit/data-replay-improvements.test.mjs"
+      ]
+    },
+    "js/data/real-race-tab.js": {
       "cancel": [
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
-      "cautionsFor": [
-        "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-race.test.mjs"
-      ],
       "create": [
-        "tests/unit/collision-contact-vm.test.mjs",
-        "tests/unit/data-api-status.test.mjs",
         "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/data-results.test.mjs",
         "tests/unit/loading-card.test.mjs",
-        "tests/unit/race-flow-fixes-vm.test.mjs",
         "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-race-tab-gap-refresh.test.mjs",
         "tests/unit/real-race.test.mjs",
         "tests/unit/real-replay-frame-fit.test.mjs"
       ],
-      "fetchRaw": [
-        "tests/unit/data-api-status.test.mjs"
-      ],
-      "fetchTraces": [
-        "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-race-tab-gap-refresh.test.mjs",
-        "tests/unit/real-race.test.mjs"
-      ],
-      "fmtLap": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
-      "forgetRaw": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
-      "gridFor": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
       "jumpIn": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
-      "lapBoard": [
-        "tests/unit/data-replay-improvements.test.mjs",
         "tests/unit/real-race-script.test.mjs"
       ],
       "launchRace": [
@@ -5792,53 +5762,16 @@
       ],
       "loadRealRace": [
         "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-race-tab-gap-refresh.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
       "loadTraces": [
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race.test.mjs"
       ],
-      "packTrace": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
-      "pitDuel": [
-        "tests/unit/data-results.test.mjs"
-      ],
-      "raceBook": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
-      "rainByLap": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
-      "remember": [
-        "tests/unit/data-replay-improvements.test.mjs",
-        "tests/unit/real-race-script.test.mjs",
-        "tests/unit/real-race-tab-gap-refresh.test.mjs"
-      ],
       "scriptFor": [
         "tests/unit/data-replay-improvements.test.mjs"
       ],
-      "todFor": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
-      "traceDetails": [
-        "tests/unit/data-results.test.mjs",
-        "tests/unit/real-race-tab-gap-refresh.test.mjs"
-      ],
-      "traceGet": [
-        "tests/unit/real-race.test.mjs"
-      ],
-      "tracePut": [
-        "tests/unit/real-race.test.mjs"
-      ],
-      "trackIdFor": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
       "watch": [
-        "tests/unit/real-race-script.test.mjs"
-      ],
-      "weatherFor": [
         "tests/unit/real-race-script.test.mjs"
       ],
       "*": [
@@ -5932,6 +5865,7 @@
       "*": [
         "tests/unit/data-hub-picker.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/data-results.test.mjs",
         "tests/unit/telemetry-trace.test.mjs",
         "tests/unit/telemetry-view-resize.test.mjs"
       ]

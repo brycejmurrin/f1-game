@@ -42,7 +42,7 @@ const SaveSchemaRegistry = (function () {
     { re: /^ttlb\./, owner: "js/core/store.js", lane: "json", v: 2, validate: validators.ttlb },
     { re: /^career\.(driver|myteam)\.[0-2]$/, owner: "js/career/career.js", lane: "json", v: 1, validate: validators.career },
     { re: /^api\./, owner: "js/data/api-transport.js", lane: "json", v: 1, validate: validators.disposable },
-    { re: /^realrace\./, owner: "js/data/real-race-tab.js", lane: "json", v: 1, validate: validators.disposable },
+    { re: /^realrace\./, owner: "js/data/real-race-fetch.js", lane: "json", v: 1, validate: validators.disposable },
     { re: /^ghost\./, owner: "js/car/ghost.js", lane: "json", v: 1, validate: validators.json },
     { re: /^pitPlan\./, owner: "js/race/pit-lane.js", lane: "json", v: 1, validate: validators.json },
     { re: /^spotify\./, owner: "js/audio/spotify.js", lane: "raw", v: 1, validate: validators.rawScalar },
