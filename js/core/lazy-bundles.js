@@ -4,6 +4,10 @@ const LazyBundles = (function () {
 "use strict";
 function create(deps) {
 const { els, loadBackendScripts: loadScripts } = deps;
+const ctxOrNull = () => {
+  try { return typeof deps.getContext === "function" ? deps.getContext() : null; }
+  catch (_) { return null; }
+};
 // LAZY_AGENT. Not SW-optional (V8 full-compiles install puts). Players on
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
@@ -545,9 +549,9 @@ function prefetchAudio() {
 }
 function restoreOnEngine() {
   if (audioRestored || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return true;
-  audioRestored = true;
-  const G = deps.getContext(), store = G && G.store;
+  const G = ctxOrNull(), store = G && G.store;
   if (!store) return true;
+  audioRestored = true;
   try {
     GameAudio.setEnabled(!!G.soundOn);
     GameAudio.setMusicVolume(store.get("volMusic"));
@@ -588,7 +592,7 @@ function audioGestureUnlock(e) {
   if (e && (e.isTrusted === false || (e.type === "keydown" && e.key === "Escape"))) return;
   if (!audioHooked) ensureAudio();   // memoised; after a failed load or ready hook this is the retry
   if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return;
-  const G = deps.getContext();
+  const G = ctxOrNull();
   if (!G || !G.soundOn) return;
   const ctx = GameAudio.context ? GameAudio.context() : null;
   try { if (!ctx || ctx.state !== "running") GameAudio.init(); } catch (err) { Log.warn("audio", "gesture unlock failed: " + (err && err.message)); }
@@ -661,7 +665,7 @@ function ensureAudio() {
     // Crowd ambience (Radio r9): bind the live G façade without touching game.js.
     try {
       if (typeof CrowdAudio !== "undefined" && CrowdAudio && CrowdAudio.bind) {
-        CrowdAudio.bind(typeof deps.getContext === "function" ? deps.getContext() : null);
+        CrowdAudio.bind(ctxOrNull());
       }
     } catch (e) { Log.warn("audio", "CrowdAudio.bind failed: " + (e && e.message)); }
     audioHooked = true;
@@ -798,7 +802,8 @@ function raceAssets() {
     // Best-effort: ensureCircuit REJECTS when the payload cannot load (offline,
     // a CDN 404, a stale tab), and an unguarded rejection here paints the red
     // overlay on the title. startRace / openQuali re-ask and handle their own.
-    ensureScenery(deps.getContext().trackIdx).catch((e) => {
+    const bootCtx = ctxOrNull();
+    if (bootCtx) ensureScenery(bootCtx.trackIdx).catch((e) => {
       Log.warn("track", "scenery prefetch failed: " + (e && e.message));
     });
     // Build worker: warmed at the title for the AGENT SURFACE only (its
@@ -832,7 +837,7 @@ function bootDesktopAudio() {
   const bind = () => {
     ensureAudio().then((ok) => {
       if (!ok) return;
-      const G = deps.getContext();
+      const G = ctxOrNull();
       if (!G || !G.soundOn) return;
       try {
         GameAudio.init();

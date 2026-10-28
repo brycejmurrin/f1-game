@@ -471,6 +471,7 @@
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
@@ -520,6 +521,7 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
@@ -578,6 +580,7 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
@@ -813,6 +816,7 @@
         "tests/unit/audio-panel-settings-ui.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -825,6 +829,7 @@
         "tests/unit/audio-panel-settings-ui.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -4986,6 +4991,7 @@
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
@@ -4994,6 +5000,7 @@
       ],
       "ensureAudio": [
         "tests/unit/global-registry.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
       ],
@@ -5033,6 +5040,7 @@
       "raceAssets": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "wantAgentSurface": [
@@ -5385,6 +5393,7 @@
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
