@@ -38,7 +38,9 @@ live speeds are queue-levelled. Streets ignore every knob above. Unit pins:
 
 ## Lap-1 / Turn-1 melee (cars racing each other into contact)
 Merely aggressive dives into contact are here; launches, debris and the `c1Pileup` takeover are
-race-incidents-control. Knobs, in the order a dive is decided:
+race-incidents-control. "Dive-bombs" (late lunges into a corner, esp. turn 1) are NOT
+`otFireRate`: it never reads calm. Find the lunge rule via `lsp_references` on
+`AiDrive.sideLevel`. Knobs, in the order a dive is decided:
 1. `attackOK` quality ≥ 0.32 — `startCalm` cuts it via `ctx.calm` toward `START_ATTACK`
    (it does NOT touch `otFireRate`), plus `passReach` (half alongside by the turn-in?).
 2. game.js's lunge rule abandons a move still not half alongside at `toTurnIn < 6`.
@@ -48,4 +50,5 @@ race-incidents-control. Knobs, in the order a dive is decided:
 Measure BEFORE and after, same seeds:
 `node tools/check/ai-race.mjs tactics --track monza --laps 3 --runs 5` — compare `byLap` lap 1
 against later laps (a lap-1-only excess is calm/startGapT; every lap is attackOK/late-brake)
-and the swap-back count. Confirm on a second circuit; no per-track constant.
+and the swap-back count. Confirm on a second circuit; no per-track constant: these are field-wide rules, so a
+Monza-only fix is wrong.
