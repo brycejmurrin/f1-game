@@ -1455,8 +1455,9 @@ window.SpotifyMusic = (function () {
     init();
   }
 
-  // activate / setShuffle / backend stay module-local: wire handlers and the
-  // music BACKEND call them by name; no outside SpotifyMusic.* site exists.
+  // activate / setShuffle / backend / contextUri / setContext stay module-local:
+  // wire handlers and the music BACKEND call them by name; no outside
+  // SpotifyMusic.* site exists for those.
   return {
     available, configured, setClientId,
     connect, disconnect, status, onChange, debug, check,
@@ -1465,7 +1466,7 @@ window.SpotifyMusic = (function () {
         .then((r) => (r && r.ok ? readJson(r).then((j) => { if (j === null) Log.warn("audio", "Spotify devices response unreadable"); return j; }) : { httpStatus: r && r.status }));
     },
     lastPlayError() { return lastPlayError; },
-    context: contextUri, setContext, play() { return playChosen(); },
+    play() { return playChosen(); },
     mode, setMode, setDevice, deviceList() { return devices.slice(); },
     openPanel() {
       const settings = el("pmsettings");
