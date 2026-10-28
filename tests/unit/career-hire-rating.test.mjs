@@ -9,6 +9,7 @@
  * Run: node --test tests/unit/career-hire-rating.test.mjs   (npm run test:tooling-fast)
  */
 import { test } from "node:test";
+import { i18nStub } from "../helpers/i18n-stub.mjs";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -30,7 +31,7 @@ const realIsReal = (() => {
 })();
 
 function load() {
-  const ctx = vm.createContext({
+  const ctx = vm.createContext({ I18n: i18nStub(),
     Math, JSON, Object, Array, String, Number, Date, isNaN, isFinite, console,
     GameStore: { CAREER_V: 1, store: { get: (k, d) => d, set() {} },
       seasonDriverId: (t, i) => t + ":" + i, migrateCareer: (c) => c },
@@ -82,7 +83,7 @@ test("the tile asks the way the race asks: with the custom team's tier, not the 
   const TEAMS = [{ id: "custom", name: "My Team", short: "YOU", tier: customTier, custom: true, engine: "Custom",
     color: [1, 0, 0], color2: [0, 0, 1], stats: { speed: 70, accel: 70, cornering: 70, braking: 70 },
     drivers: [{ name: "You", code: "YOU", num: 99 }] }];
-  const sb = {
+  const sb = { I18n: i18nStub(),
     Math, console, Object, Array, Number, String, JSON, Map, Set, Date, parseFloat, parseInt, isFinite,
     Log: { info() {}, warn() {}, debug() {}, error() {}, enabled: () => false },
     document: dom.document, addEventListener() {}, removeEventListener() {},

@@ -337,7 +337,7 @@ const CHASE_PAN_FIXTURES = [
   { lat: -2, arc: 50, pan: 0.85 * (-2 / 53) },
 ];
 
-const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"]
+const ENGINE_SRC = ["js/audio/tone-model.js", "js/audio/signal.js", "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"]
   .map((f) => fs.readFileSync(path.join(ROOT, f), "utf8")).join("\n").replace(/^const\b/gm, "var");
 
 function bootRivalPanEngine(basisRef) {

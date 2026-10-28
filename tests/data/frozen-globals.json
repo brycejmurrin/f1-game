@@ -72,6 +72,7 @@
     "FlybySeq",
     "FrameLights",
     "Frustum",
+    "GameAudioMix",
     "GameAudioRadioFx",
     "GameAudioSignal",
     "GameAudioSoundtrack",
