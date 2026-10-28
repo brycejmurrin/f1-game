@@ -45,7 +45,10 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
    How `land.yml` arms: one PR per run, skipped when the deploy tip moved since its `gate` evaluation; its `retry`
    job then dispatches an immediate re-gate of that PR (at most 3 per head, then the next train or CI run re-gates);
    `gh pr merge --auto` on a CLEAN PR merges at once. An API or git error leaves `gate` in
-   progress ("error, will retry"), never red.
+   progress ("error, will retry"), never red. `gate` turns green only while the deploy tip is still the one it
+   measured (else in progress "re-gating", through the same retry), and any other `gate` disarms an armed PR.
+   `land.yml` may merge the deploy tip into a `land` PR whose `gate` refused only on distance (update-branch, its
+   AUTO-SYNC, at most `SYNC_MAX` waiting on CI at once); pull before pushing to such a branch.
 6. **Stop at the cap.** The brief's caps are its `STOP AT` line (context) and $10 soft (cost). At either, or when
    stuck: finish the current unit, push, refresh the Plan and the Hand-off block, add `needs-owner`, send_message
    `@parent` one line naming the PR, and end. The dispatcher launches the takeover on its next cycle. The $15 hard-cap archive is NOT built (`dispatch.mjs`

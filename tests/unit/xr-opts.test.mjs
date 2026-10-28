@@ -83,7 +83,8 @@ test("arming VR does not modify apex26.gfxBackend (bootPick override only)", () 
   // Seed caps so sync bootPick sees vr.
   ctx.ApexXR.invalidate();
   const pick = ctx.ApexXR.bootPick();
-  assert.equal(pick, "webgl2", "armed + vr caps ⇒ GLX override");
+  assert.equal(pick, "three", "armed + vr caps ⇒ TLX override (GLX cannot attach XR)");
+  assert.equal(ctx.ApexXR.plan().forceGL, true, "shippable path needs forceWebGL");
   assert.equal(ls.getItem("apex26.gfxBackend"), "three", "2D pick untouched");
 });
 
@@ -98,6 +99,37 @@ test("ApexXR.noteFallback latches sessionStorage and logs", () => {
   assert.equal(entry.to, "webgl2");
   assert.equal(ss.getItem("apex26.xrFallback"), "webgl2");
   assert.ok(ctx.ApexXR.fallbacks().some((f) => f.reason.includes("enabledFeatures")));
+});
+
+test("ApexXR.detect throw keeps a positive xrCaps latch for bootPick", async () => {
+  const { ctx, ls } = bootOpts({
+    "apex26.xr": "1",
+    "apex26.xrCaps": "1",
+    "apex26.xrBackend": "webgl2",
+  });
+  ctx.navigator.xr.isSessionSupported = async () => { throw new Error("SecurityError"); };
+  const caps = await ctx.ApexXR.detect();
+  assert.equal(ls.getItem("apex26.xrCaps"), "1", "throw must not wipe the last positive detect");
+  assert.equal(caps.vr, true);
+  assert.equal(ctx.ApexXR.bootPick(), "three");
+});
+
+test("ApexXR.rendererMatchesPlan: canAttach only satisfies the shippable webgl2 path", () => {
+  const { ctx } = bootOpts({
+    "apex26.xr": "1",
+    "apex26.xrCaps": "1",
+    "apex26.xrBackend": "webgpu",
+  });
+  ctx.XRGPUBinding = function XRGPUBinding() {};
+  ctx.XrBoot = { canAttach: () => true };
+  // Force caps so the plan cannot miss XRGPUBinding via a stale cache.
+  const caps = ctx.ApexXR.caps();
+  caps.xrgpu = true; caps.gpu = true; caps.vr = true; caps.xr = true;
+  assert.equal(ctx.ApexXR.plan(true).path, "webgpu");
+  assert.equal(ctx.ApexXR.rendererMatchesPlan(), false, "TLX+GL attach ≠ experimental webgpu plan");
+  ctx.XROpts.setXrBackend("webgl2");
+  assert.equal(ctx.ApexXR.plan(true).path, "webgl2");
+  assert.equal(ctx.ApexXR.rendererMatchesPlan(), true);
 });
 
 test("ApexXR.plan records webgpu→webgl2 when XRGPUBinding missing", () => {
