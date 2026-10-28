@@ -256,13 +256,22 @@ export const activityAt = (p) => Math.max(t(p.updated_at), t(p.last_comment_at),
 /** A fold bot's PR (changelog-fold.yml / ratchets-fold.yml push `bot/<name>`; any `*[bot]` author): never re-owned. Pure. */
 export const isBotPr = (p) => /^bot\//.test(String(p.head_ref || "")) || /\[bot\]$/.test(String(p.author || ""));
 const RED = new Set(["failure", "timed_out", "startup_failure", "action_required"]);
+/** A `gate` refusal whose description names the `distance` row as the ONLY row not ok (merge-gate prints
+ *  `open=ok hold=ok plan=ok ci=ok distance=FAIL`; `ci=WAIT` is a CI run still going, which only waits too). land.yml's
+ *  AUTO-SYNC owns that case (update-branch, throttled), so it is not a problem for a takeover worker to hand-sync
+ *  (2026-10-28: ~28 of 39 `land` PRs, a takeover launch each). A row the description does not name never counts as ok. Pure. */
+export function distanceOnlyRefusal(description) {
+  const rows = [...String(description || "").matchAll(/\b(open|hold|plan|ci|gen|ratchets|distance)=(\S+)/g)];
+  return rows.some((m) => m[1] === "distance") && rows.every((m) => (m[1] === "distance" ? m[2] === "FAIL" : m[2] === "ok" || (m[1] === "ci" && m[2] === "WAIT")));
+}
 /** Has the head of a `land` PR a failed check (the newest run of each check name), a failed `gate` COMMIT STATUS
  *  (land.yml posts `gate` as a status, not a check run — review 2026-10-27 F5), a `gate` pending longer than
- *  `staleH` hours (not while `mergePaused`: land.yml parks it on purpose) or a conflict? null when it only waits. Pure. */
+ *  `staleH` hours (not while `mergePaused`: land.yml parks it on purpose) or a conflict? null when it only waits.
+ *  A distance-only refusal waits for AUTO-SYNC (see distanceOnlyRefusal). Pure. */
 export function landProblem(p, now = Date.now(), staleH = Infinity, mergePaused = false) {
   if (p.mergeable_state === "dirty") return "merge conflict";
   const gate = (p.statuses || []).filter((x) => x.context === "gate").sort((a, b) => t(b.updated_at || b.created_at) - t(a.updated_at || a.created_at))[0];
-  if (gate && (gate.state === "failure" || gate.state === "error")) return `gate ${gate.state}`;
+  if (gate && (gate.state === "failure" || gate.state === "error") && !distanceOnlyRefusal(gate.description)) return `gate ${gate.state}`;
   if (gate && gate.state === "pending" && !mergePaused && hoursAgo(gate.updated_at || gate.created_at, now) >= staleH)
     return `gate pending ${Math.round(hoursAgo(gate.updated_at || gate.created_at, now))}h`;
   const newest = new Map();
@@ -332,7 +341,7 @@ export function deployRedPrompt(config, host) {
       ...commonLines(config, host)].join("\n");
   }
   return [`Deploy red: the latest pages.yml run on ${config.deployBranch} failed.`,
-    "Read the failing job (Actions logs via the GitHub MCP), fix it on a branch, draft PR labelled `deploy:red` and `run-ci`; the gate's base-behind row holds other merges meanwhile.",
+    "Read the failing job (Actions logs via the GitHub MCP), fix it on a branch, draft PR labelled `deploy:red` and `run-ci`; the gate's distance row holds other merges meanwhile.",
     "Claim first: comment \"claims deploy:red — " + host + ":<your session id>\" on the Board issue; stand down if an older claim comment exists.",
     ...commonLines(config, host)].join("\n");
 }
@@ -528,7 +537,7 @@ export function readState({ api = githubApi, config, sessionTexts = [], quota = 
         .map((c) => ({ id: c.id, name: c.name, status: c.status, conclusion: c.conclusion }));
       // `gate` is a commit STATUS (land.yml), invisible to check-runs; the combined endpoint gives the newest per context.
       out.statuses = (get(api, `commits/${p.head.sha}/status`)?.statuses || [])
-        .map((x) => ({ context: x.context, state: x.state, created_at: x.created_at, updated_at: x.updated_at }));
+        .map((x) => ({ context: x.context, state: x.state, description: x.description, created_at: x.created_at, updated_at: x.updated_at }));
     }
     return out;
   });
