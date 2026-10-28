@@ -108,15 +108,38 @@ test("a second start while active is refused", async () => {
 
 test("the law brakes for a corner it has not reached and flat-outs a straight", () => {
   const straight = rig();
+  straight.G.raceWeather = "wet";
   straight.G.player.speed = 30;
   const a = straight.SoakRun.control(straight.G, { hold: 94, stalled: 0, lastS: null }, 1 / 60);
   assert.equal(a.throttle, true);
   assert.equal(a.brake, false);
   const corner = rig({ curveAt: 160, k: 0.05 });
+  corner.G.raceWeather = "wet";
   corner.G.player.speed = 80;
   const b = corner.SoakRun.control(corner.G, { hold: 94, stalled: 0, lastS: null }, 1 / 60);
   assert.equal(b.brake, true, "80 m/s into a 50 m radius corner 60 m ahead");
   assert.equal(b.throttle, false);
+});
+
+test("dry weather uses the dry envelope: same corner allows a higher target than wet", () => {
+  // k=0.02 → wet vCorner=√(9/0.02)≈21.2, dry √(13/0.02)≈25.5; hold starts at 20 so both climb toward vT.
+  const wet = rig({ curveAt: 100, k: 0.02 });
+  wet.G.raceWeather = "wet";
+  wet.G.player.speed = 20;
+  const wetIn = wet.SoakRun.control(wet.G, { hold: 20, stalled: 0, lastS: null }, 1 / 60);
+  const dry = rig({ curveAt: 100, k: 0.02 });
+  dry.G.raceWeather = "dry";
+  dry.G.player.speed = 20;
+  const dryIn = dry.SoakRun.control(dry.G, { hold: 20, stalled: 0, lastS: null }, 1 / 60);
+  // At 20 m/s both still throttle; raise speed into the wet gap between envelopes.
+  wet.G.player.speed = 23;
+  const wetFast = wet.SoakRun.control(wet.G, { hold: 23, stalled: 0, lastS: null }, 1 / 60);
+  dry.G.player.speed = 23;
+  const dryFast = dry.SoakRun.control(dry.G, { hold: 23, stalled: 0, lastS: null }, 1 / 60);
+  assert.equal(wetFast.brake, true, "23 m/s is over the wet corner target");
+  assert.equal(dryFast.brake, false, "23 m/s is still under the dry corner target");
+  assert.equal(wetIn.throttle, true);
+  assert.equal(dryIn.throttle, true);
 });
 
 test("it steers back toward the road: right of centre steers one way, left the other", () => {

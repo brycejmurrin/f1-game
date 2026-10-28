@@ -154,28 +154,11 @@ const WGX = (function () {
   const CHUNK_IDX_CAP = 16384;                          // u32 indices (65536 B)
   const BLIT_BYTES = _CH.BLIT_UNIFORM_BYTES | 0;        // 48
 
-  // Keyed on the DEVICE (IS_MOBILE), not the memory tier — the same key
-  // js/render/glx/shadow.js uses, and for its reason: GRAPHICS: HIGH on a phone
-  // must not 4x the snap-cache redraw cost (terrain+road+whole city re-rasterised
-  // into the map every ~10 m of travel). This read MOBILE_TIER, which handed a
-  // HIGH-tier phone a 2048² map GLX would never give it — 12 MB of jetsam-counted
-  // GPU memory plus the redraw stall, on the least-ready backend.
-  const SHADOW_SIZE = WGX_LITE ? 1024 : 2048;          // sun depth-map resolution
-  const CAR_SHADOW_SIZE = 1024;                         // dynamic car-only shadow map (matches GLX)
-  // The dynamic CAR shadow map is DESKTOP-ONLY in GLX (js/render/glx/shadow.js
-  // creates carTex only `if (ok && !core.IS_MOBILE)` — "a per-frame pass is the
-  // HIGH-tier lag, not a memory cap"). WGX allocated the full 1024² depth texture
-  // on EVERY tier and only gated the PASS, and gated it on MOBILE_TIER — so a
-  // phone paid 4 MB for a texture nothing ever rendered into, and a HIGH-tier
-  // phone additionally ran a whole-car depth pass per frame that GLX refuses on
-  // any phone. Shrink the texture to 1×1 on phones: binding 8 stays a valid
-  // depth texture (the layout demands one), and the shader never samples it
-  // because params6.y (SHD.carArmed) stays 0 with the pass gated off below.
-  const CAR_SHADOW_ALLOC = WGX_LITE ? 1 : CAR_SHADOW_SIZE;
-  // Static graph batches set the high-water mark; dense circuits exceed 40.
+  // Sun / car / lamp map sizes live in WGXShadow.init (wgx-shadow.js). The
+  // frame UBO's PCF texel (d[74]) reads SHD.SHADOW_SIZE so it cannot drift
+  // from the depth texture. Static graph batches set the high-water mark;
+  // dense circuits exceed 40.
   const SHADOW_SLOTS = MAX_DRAWS;
-  const SHADOW_MODEL_STRIDE = 256;                      // dynamic-offset alignment
-  const SHADOW_MODEL_F32_STRIDE = SHADOW_MODEL_STRIDE >> 2; // 64 — pad to minUniformBufferOffsetAlignment
 
   // A 4th attr on the ribbon VBO zeroed (and broke pos fetch) on
   // SwiftShader-Dawn — including 4095-vert pieces. mat+trk live in the
@@ -237,7 +220,6 @@ const WGX = (function () {
     ],
   };
   const MAT_TEX_LAYERS = 17;
-  const LAMP_SHADOW_SIZE = WGX_LITE ? 1 : 512;
   // WebGPU allows sampleCount 1 or 4 — ONLY. (w3.org/TR/webgpu: "sampleCount
   // must be either 1 or 4"; Dawn agrees, 4 being the one portable MSAA level.)
   // Desktop GRAPHICS: ULTRA keeps 4×; every other preset (and unset = the
@@ -3245,7 +3227,7 @@ const WGX = (function () {
       const _mSh = (T && T.moonShadow != null ? T.moonShadow : 0.25) * (f.moonGate || 0);
       if (_mSh > _hf) _hf = _mSh;
       d[73] = ((T && T.shadowStr != null) ? T.shadowStr : 1.15) * _hf;
-      d[74] = 1 / SHADOW_SIZE;    // texel size for PCF
+      d[74] = 1 / SHD.SHADOW_SIZE;    // texel size for PCF — same source as the depth map
       d[75] = (T && T.shadowBias != null) ? T.shadowBias : 0.001;   // SHADOW BIAS knob (same 0.001 fallback as GLX)
       // params3 (floats 76..79): live tuner knobs the LIT material blocks consume.
       d[76] = (T && T.bounceK     != null) ? T.bounceK     : 0.04;  // BOUNCE (per-lamp bounce-fill strength, == GLX uBounceK; NOT ambient)
