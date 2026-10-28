@@ -565,7 +565,7 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
   assert.equal(on.pull_request, undefined, "plain pull_request runs the PR's own copy of land.yml with its secrets");
   assert.deepEqual(on.pull_request_target, { types: ["labeled", "unlabeled", "ready_for_review", "converted_to_draft", "synchronize", "reopened"], branches: [DEPLOY_BRANCH] });
   assert.deepEqual(on.workflow_run, { workflows: ["CI", "Deploy to GitHub Pages"], types: ["completed"] }, "the CI / train re-gate stays");
-  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt"], "the immediate re-gate: one PR, the head its budget counts against, the attempt");
+  assert.deepEqual(Object.keys(on.workflow_dispatch.inputs), ["pr", "head", "attempt", "sync"], "the immediate re-gate: one PR, the head its budget counts against, the attempt; or an AUTO-SYNC sweep");
   assert.equal(on.repository_dispatch, undefined);
   assert.equal(on.check_suite, undefined, "check_suite never fires for Actions-made suites (0 runs in 14 days)");
   assert.deepEqual(LAND.permissions, {}, "the workflow-level token has no permissions; each job states its own");
@@ -573,7 +573,7 @@ test("land.yml triggers: pull_request_target (never pull_request), workflow_run 
 
 test("land.yml: no job holding a write permission or a secret checks out or runs code; the PR-code legs are read-only", () => {
   assert.deepEqual(jobsWhere(writes), ["post", "arm", "retry"]);
-  assert.deepEqual(jobsWhere(usesSecret), ["post", "arm"]);
+  assert.deepEqual(jobsWhere(usesSecret), ["post", "arm", "sync"]);
   assert.deepEqual(jobsWhere(runsRepoCode), ["trusted-rows", "land-gate"], "only the read-only legs check out or run code");
   const readOnly = { contents: "read", "pull-requests": "read", checks: "read", actions: "read" };
   assert.deepEqual(LAND.jobs["land-gate"].permissions, readOnly);
@@ -631,23 +631,49 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
 
 // ---- the immediate re-gate: a gate passed on a tip that moved is re-dispatched at once, bounded per head ---------
 
-/** Runs one land.yml step script under bash with `gh` stubbed: GH_LOG records each call; FAKE_PR answers pulls/<n>. */
-function runStep(script, env) {
+/**
+ * Runs one land.yml step script under bash with `gh` stubbed. GH_LOG records each call, a POSTed body as `body <json>`
+ * and the token a PUT ran with as `token=<GH_TOKEN>`. Answers: FAKE_PR (or FAKE_PRS by number) for pulls/<n>,
+ * FAKE_STATUSES (an array, or an object by sha) for commits/<sha>/statuses, FAKE_RUNS for …/runs?…, FAKE_CHECKS for
+ * check-runs, FAKE_LANDS for `gh pr list`, PAUSED for the Dispatch issue, NOW_TIP for the deploy branch; GH_POST_RC
+ * fails a POST and GH_PUT_FAIL (PR numbers) fails an update-branch with a 422. `files` are written under the cwd.
+ */
+function runStep(script, env, files = {}) {
   const stub = [
-    `gh() { echo "gh $*" >> "$GH_LOG"; local q="" a args=("$@");`,
+    `gh() { echo "gh $*" >> "$GH_LOG"; local q="" a data args=("$@");`,
     `  while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --jq) q=$1; shift ;; esac; done;`,
-    `  case " \${args[*]} " in *" --method POST "*) return "\${GH_POST_RC:-0}" ;; *"/issues"*) echo "\${PAUSED:-false}"; return 0 ;; *"/branches/"*) echo "$NOW_TIP"; return 0 ;; *" pr merge "*) return 0 ;; esac;`,
-    `  if [ -n "$q" ]; then jq -r "$q" <<<"$FAKE_PR"; else echo "$FAKE_PR"; fi; }`,
+    `  case " \${args[*]} " in`,
+    `    *" --method POST "*) case " \${args[*]} " in *" --input "*) echo "body $(jq -c .)" >> "$GH_LOG" ;; esac; return "\${GH_POST_RC:-0}" ;;`,
+    `    *" --method PUT "*) echo "token=\${GH_TOKEN:-}" >> "$GH_LOG"`,
+    `      case " \${GH_PUT_FAIL:-} " in *" $(sed -n 's#.*/pulls/\\([0-9]*\\)/update-branch.*#\\1#p' <<<"\${args[*]}") "*) echo "gh: merge conflict (HTTP 422)" >&2; return 1 ;; esac`,
+    `      echo '{"message":"Updating pull request branch."}'; return 0 ;;`,
+    `    *"/issues"*) echo "\${PAUSED:-false}"; return 0 ;;`,
+    `    *"/branches/"*) echo "\${NOW_TIP:-}"; return 0 ;;`,
+    `    *" pr merge "*) return 0 ;;`,
+    `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
+    `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
+    `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
+    `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
+    `    *) data=\${FAKE_PR:-'{}'}`,
+    `       if [ -n "\${FAKE_PRS:-}" ]; then data=$(jq -c --arg n "$(sed -n 's#.*/pulls/\\([0-9]*\\).*#\\1#p' <<<"\${args[*]}")" '.[$n] // {}' <<<"$FAKE_PRS"); fi ;;`,
+    `  esac`,
+    `  if [ -n "$q" ]; then jq -r "$q" <<<"$data"; else echo "$data"; fi; }`,
   ].join("\n");
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "land-step-"));
-  const files = { GH_LOG: path.join(dir, "gh.log"), GITHUB_OUTPUT: path.join(dir, "out"), GITHUB_STEP_SUMMARY: path.join(dir, "summary") };
-  for (const f of Object.values(files)) fs.writeFileSync(f, "");
-  const r = spawnSync("bash", ["-c", `${stub}\n${script}`], { encoding: "utf8",
-    env: { ...process.env, GITHUB_REPOSITORY: "o/r", DEPLOY_BRANCH, RETRY_MAX: String(LAND.env.RETRY_MAX), ...files, ...env } });
-  const out = Object.fromEntries(fs.readFileSync(files.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
-  const calls = fs.readFileSync(files.GH_LOG, "utf8").split("\n").filter(Boolean);
+  const logs = { GH_LOG: path.join(dir, "gh.log"), GITHUB_OUTPUT: path.join(dir, "out"), GITHUB_STEP_SUMMARY: path.join(dir, "summary") };
+  for (const f of Object.values(logs)) fs.writeFileSync(f, "");
+  for (const [rel, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), text);
+  }
+  const r = spawnSync("bash", ["-c", `${stub}\n${script}`], { encoding: "utf8", cwd: dir,
+    env: { ...process.env, GITHUB_REPOSITORY: "o/r", GITHUB_SERVER_URL: "https://github.com", GITHUB_RUN_ID: "1", DEPLOY_BRANCH,
+      RETRY_MAX: String(LAND.env.RETRY_MAX), SYNC_MAX: String(LAND.env.SYNC_MAX), ...logs, ...env } });
+  const out = Object.fromEntries(fs.readFileSync(logs.GITHUB_OUTPUT, "utf8").split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+  const calls = fs.readFileSync(logs.GH_LOG, "utf8").split("\n").filter(Boolean);
+  const summary = fs.readFileSync(logs.GITHUB_STEP_SUMMARY, "utf8");
   fs.rmSync(dir, { recursive: true, force: true });
-  return { ...r, out, calls };
+  return { ...r, out, calls, summary };
 }
 fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
 const HEAD7 = "a".repeat(40), TIP_A = "b".repeat(40), TIP_B = "c".repeat(40);
@@ -693,12 +719,59 @@ test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other
   assert.ok(r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`)), "same tip: arms as before");
 });
 
-test("land.yml post: the trusted-rows/land-gate tip split is handed to retry; other errors are not", () => {
+test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs deploy tip) are handed to retry; other errors are not", () => {
   const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
-  assert.match(run, /the deploy tip moved between trusted-rows[^\n]*\n\s*#[^\n]*\n\s*retry=\$\(jq -c --argjson n "\$n" --arg h "\$head" '\. \+ \[\{number: \$n, head: \$h\}\]'/,
-    "the retry append sits in the tip-split branch only");
-  assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "no other branch asks for a re-gate");
+  assert.match(run, /the deploy tip moved between trusted-rows[^\n]*\n\s*#[^\n]*\n\s*want_retry "\$n" "\$head"/,
+    "the trusted-rows/land-gate tip split asks for a re-gate");
+  assert.match(run, /elif \[ "\$now" != "\$tip" \]; then\n[^\n]*deploy tip moved since the gate measured[^\n]*\n\s*want_retry "\$n" "\$head"/,
+    "a verdict whose tip is no longer the deploy tip asks for a re-gate");
+  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 2, "no other branch asks for a re-gate");
+  assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "one append, inside want_retry");
   assert.match(run, /echo "retry=\$retry"/);
+});
+
+test("land.yml post (STALE TIP): success only onto the tip the gate measured; a moved tip writes pending, re-gates and disarms", () => {
+  const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
+  const ok0 = run.indexOf("0) #");
+  assert.ok(ok0 > 0 && run.indexOf(`branches/$DEPLOY_BRANCH`, ok0) > ok0 && run.indexOf(`branches/$DEPLOY_BRANCH`, ok0) < run.indexOf("write_gate \"$head\" completed success", ok0),
+    "the deploy tip is read after the verdict and before the success write");
+  const line = `= merge-gate passed — open=ok hold=ok plan=ok ci=ok distance=ok pr=#7 sha=${HEAD7} tip=${TIP_A}`;
+  const verdict = (code = 0) => ({ "verdicts/7.json": JSON.stringify({ number: 7, head: HEAD7, code, line, tip: TIP_A, out: "rows" }) });
+  const env = (o = {}) => ({ GH_TOKEN: "t", DISARM_TOKEN: "lt", PRS: JSON.stringify([{ number: 7, head: HEAD7 }]), NOTASKED: "[]", DISARM: "[]",
+    PAUSED: "false", AT: "2026-10-27T10:00:05Z", TRUSTED: JSON.stringify([{ number: 7, head: HEAD7, code: 0, line, tip: TIP_A }]),
+    FAKE_PR: pr7(), FAKE_RUNS: JSON.stringify({ workflow_runs: [{ path: ".github/workflows/ci.yml", check_suite_id: 1 }] }),
+    FAKE_CHECKS: JSON.stringify({ check_runs: [{ id: 1, app: { slug: "github-actions" }, check_suite: { id: 1 }, conclusion: "success" }] }), ...o });
+  const bodies = (r) => r.calls.filter((c) => c.startsWith("body ")).map((c) => JSON.parse(c.slice(5)));
+  const disarmed = (r) => r.calls.some((c) => c === "gh pr merge 7 --repo o/r --disable-auto");
+  const armed = pr7({ auto_merge: { merge_method: "merge" } });
+
+  let r = runStep(run, env({ NOW_TIP: TIP_A }), verdict());
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(bodies(r).map((b) => b.state), ["success"], "the tip is unchanged: success");
+  assert.deepEqual(JSON.parse(r.out.arm), { number: 7, head: HEAD7, tip: TIP_A });
+  assert.equal(r.out.retry, "[]");
+  assert.equal(disarmed(r), false);
+
+  r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed }), verdict());
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(bodies(r).map((b) => b.state), ["pending"], "#3982: a success measured on an older tip is never written");
+  assert.match(bodies(r)[0].description, new RegExp(`deploy tip moved since the gate measured ${TIP_A.slice(0, 12)} \\(now ${TIP_B.slice(0, 12)}\\)`));
+  assert.equal(r.out.arm, "", "nothing armed onto an ungated tip");
+  assert.deepEqual(JSON.parse(r.out.retry), [{ number: 7, head: HEAD7 }], "re-gated at once through retry (RETRY_MAX per head)");
+  assert.equal(disarmed(r), true, "an auto-merge armed earlier would fire on the next success: disarmed");
+
+  r = runStep(run, env({ NOW_TIP: TIP_B }), verdict());
+  assert.deepEqual(JSON.parse(r.out.retry), [{ number: 7, head: HEAD7 }]);
+  assert.equal(disarmed(r), false, "not armed: nothing to disarm");
+
+  r = runStep(run, env({ NOW_TIP: TIP_A, FAKE_PR: armed, TRUSTED: JSON.stringify([{ number: 7, head: HEAD7, code: 3, line: "= merge-gate waiting", tip: TIP_A }]) }), verdict());
+  assert.deepEqual(bodies(r).map((b) => b.state), ["pending"]);
+  assert.equal(disarmed(r), true, "any non-success write disarms an armed PR");
+  assert.equal(r.out.retry, "[]", "CI still running is not a tip move");
+
+  r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_STATUSES: JSON.stringify([{ context: "gate", created_at: "2026-10-27T10:00:09Z" }]) }), verdict());
+  assert.deepEqual(bodies(r), [], "a newer verdict on the head is kept");
+  assert.equal(disarmed(r), false, "and its run owns the arm state");
 });
 
 test("land.yml retry: dispatches each PR once on the deploy branch with attempt+1, and stops at RETRY_MAX", () => {
@@ -738,4 +811,153 @@ test("land.yml resolve: a dispatched re-gate is one PR, validated, and its budge
   assert.notEqual(r.status, 0, "a non-numeric pr input is refused");
   r = go({ EVENT: "pull_request_target", PR_NUMBER: "7", IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "" });
   assert.equal(r.out.attempt, "0", "every other event starts at 0");
+});
+
+// ---- AUTO-SYNC: the deploy tip merged into `land` PRs whose gate refused on distance alone, throttled -------------
+
+const RESOLVE_RUN = LAND.jobs.resolve.steps.find((s) => s.id === "pick").run;
+const hx = (c) => c.repeat(40);
+const refusal = (rows, n = 7, h = HEAD7) => `= merge-gate refused — ${rows} pr=#${n} sha=${h} tip=${TIP_A}`;
+const TRUSTED_DIST = "open=ok hold=ok plan=ok ci=ok distance=FAIL";
+const FULL_DIST = "open=ok hold=ok plan=ok ci=ok gen=ok ratchets=ok distance=FAIL";
+
+test("land.yml sync job (AUTO-SYNC): LAND_TOKEN only for the update-branch PUT, no checkout or repo code, read-only GITHUB_TOKEN, off under merge-pause", () => {
+  const j = LAND.jobs.sync;
+  assert.ok(j, "the sync job exists");
+  assert.equal(j.needs, "resolve");
+  assert.deepEqual(j.permissions, { "pull-requests": "read", issues: "read", statuses: "read", actions: "read" }, "GITHUB_TOKEN only reads");
+  assert.equal(writes(j), false);
+  assert.equal(runsRepoCode(j), false, "gh and jq only");
+  assert.ok(!j.steps.some((st) => /actions\/checkout@/.test(st.uses || "")), "no actions/checkout");
+  assert.equal(j.steps.length, 1);
+  const st = j.steps[0];
+  assert.equal(st.env.LAND_TOKEN, "${{ secrets.LAND_TOKEN }}");
+  assert.equal((JSON.stringify(j).match(/secrets\./g) || []).length, 1, "LAND_TOKEN, in this one step's env, is the job's only secret");
+  const puts = st.run.split("\n").filter((l) => /update-branch/.test(l) && /--method PUT/.test(l));
+  assert.equal(puts.length, 1, "one update-branch call");
+  assert.match(puts[0], /GH_TOKEN="\$LAND_TOKEN" gh api --method PUT "repos\/\$R\/pulls\/\$n\/update-branch" -f expected_head_sha="\$head"/,
+    "LAND_TOKEN (a GITHUB_TOKEN push leaves the new head's CI awaiting approval), pinned to the head resolve read");
+  assert.doesNotMatch(puts[0], /GITHUB_TOKEN|github\.token/);
+  assert.match(st.run, /if \[ -z "\$\{LAND_TOKEN:-\}" \]; then[^]*?exit 0/, "no LAND_TOKEN: nothing synced, never a GITHUB_TOKEN fallback");
+  assert.match(st.run, /labels=dispatch:merge-pause/, "merge-pause is re-read before acting");
+  assert.ok(Number(LAND.env.SYNC_MAX) >= 1 && Number(LAND.env.SYNC_MAX) <= 5, "SYNC_MAX: a small throttle");
+  const needs = (sync, paused) => ({ needs: { resolve: { outputs: { sync, paused } } } });
+  assert.equal(ghExpr(j.if, needs('[{"number":7}]', "false")), true);
+  assert.equal(ghExpr(j.if, needs('[{"number":7}]', "true")), false, "dispatch:merge-pause syncs nothing");
+  assert.equal(ghExpr(j.if, needs("[]", "false")), false);
+  assert.equal(ghExpr(j.if, needs("", "false")), false, "resolve skipped");
+});
+
+test("land.yml resolve distance_only: every row ok but distance, trusted-only or full, cut at 140 characters; anything else is not a candidate", () => {
+  const start = RESOLVE_RUN.indexOf("distance_only() {");
+  const fn = RESOLVE_RUN.slice(start, RESOLVE_RUN.indexOf("\n}\n", start) + 3);
+  const ok = (d) => spawnSync("bash", ["-c", `${fn}\ndistance_only "$D"`], { encoding: "utf8", env: { ...process.env, D: d } }).status === 0;
+  assert.equal(ok(refusal(TRUSTED_DIST)), true, "a trusted-only verdict names no gen/ratchets rows");
+  assert.equal(ok(refusal(FULL_DIST)), true);
+  assert.equal(ok(refusal(FULL_DIST, 4017).slice(0, 140)), true, "post cuts the status description at 140 characters");
+  for (const rows of ["open=ok hold=ok plan=ok ci=ok gen=FAIL ratchets=ok distance=FAIL", "open=ok hold=ok plan=ok ci=ok ratchets=FAIL distance=FAIL",
+    "open=ok hold=ok plan=ok ci=WAIT distance=FAIL", "open=ok hold=ok plan=FAIL ci=ok distance=FAIL", "open=ok hold=ok plan=ok ci=ok distance=ok",
+    "open=ok hold=ok plan=ok distance=FAIL", "open=ok hold=ok plan=ok ci=ok newrow=ok distance=FAIL"]) {
+    assert.equal(ok(refusal(rows)), false, rows);
+  }
+  assert.equal(ok(`= merge-gate passed — open=ok hold=ok plan=ok ci=ok distance=ok pr=#7 sha=${HEAD7}`), false);
+  assert.equal(ok("= merge-gate not asked — the `hold` label is set"), false);
+  assert.equal(ok(`= merge-gate error, will retry — ${refusal(TRUSTED_DIST)}`), false);
+  assert.equal(ok(""), false);
+});
+
+test("land.yml resolve: a train or a sync=true dispatch lists the distance-only refusals (priority, then oldest); a dispatched sweep re-gates nothing", () => {
+  const H = { 7: HEAD7, 8: hx("8"), 9: hx("9"), 10: hx("e"), 11: hx("f"), 12: hx("d"), 13: hx("c") };
+  const pr = (n, o = {}) => ({ number: n, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: H[n], repo: { full_name: "o/r" } },
+    auto_merge: null, created_at: `2026-10-27T${String(n).padStart(2, "0")}:00:00Z`, labels: [{ name: "land" }], ...o });
+  const label = (...names) => ({ labels: names.map((name) => ({ name })) });
+  const prs = { 7: pr(7), 8: pr(8, label("land", "priority")), 9: pr(9), 10: pr(10, label("land", "needs-decision")), 11: pr(11),
+    12: pr(12, { head: { sha: H[12], repo: { full_name: "fork/r" } } }), 13: pr(13, label("land", "hold")) };
+  const gate = (n, state, description) => [{ id: 100 + n, context: "gate", state, description }];
+  const statuses = { [H[7]]: gate(7, "failure", refusal(TRUSTED_DIST, 7, H[7])), [H[8]]: gate(8, "failure", refusal(FULL_DIST, 8, H[8])),
+    [H[9]]: gate(9, "failure", refusal("open=ok hold=ok plan=ok ci=ok gen=FAIL ratchets=ok distance=FAIL", 9, H[9])),
+    [H[10]]: gate(10, "failure", refusal(TRUSTED_DIST, 10, H[10])), [H[11]]: gate(11, "pending", "= merge-gate waiting"),
+    [H[12]]: gate(12, "failure", refusal(TRUSTED_DIST, 12, H[12])), [H[13]]: gate(13, "failure", refusal(TRUSTED_DIST, 13, H[13])) };
+  const base = { EVENT: "workflow_run", RUN_BRANCH: DEPLOY_BRANCH, RUN_REPO: "o/r", RUN_CONCLUSION: "success", RUN_SHA: "", CANDIDATES: "null", PR_NUMBER: "",
+    IN_PR: "", IN_HEAD: "", IN_ATTEMPT: "", IN_SYNC: "", FAKE_LANDS: JSON.stringify(Object.keys(prs).map((n) => ({ number: Number(n) }))),
+    FAKE_PRS: JSON.stringify(prs), FAKE_STATUSES: JSON.stringify(statuses) };
+  const want = [{ number: 8, head: H[8], gate: 108 }, { number: 7, head: H[7], gate: 107 }];
+
+  let r = runStep(RESOLVE_RUN, base);
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.sync), want, "`priority` first, then oldest; gen=FAIL, needs-decision, a fork head and hold are not synced");
+  assert.deepEqual(JSON.parse(r.out.prs), [{ number: 11, head: H[11] }], "a head whose gate is not failure is re-gated by the train as before");
+  assert.match(r.stdout, /PR #9: gate is already failure/);
+  assert.equal(JSON.parse(r.out.notasked)[0].number, 13);
+
+  r = runStep(RESOLVE_RUN, { ...base, PAUSED: "true" });
+  assert.equal(r.out.sync, "[]", "dispatch:merge-pause syncs nothing");
+
+  r = runStep(RESOLVE_RUN, { ...base, EVENT: "workflow_dispatch", RUN_BRANCH: "", RUN_CONCLUSION: "", IN_SYNC: "true" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.sync), want, "a sweep by hand finds the same candidates");
+  assert.equal(r.out.landable, "false", "and re-gates nothing");
+
+  r = runStep(RESOLVE_RUN, { ...base, EVENT: "workflow_dispatch", RUN_BRANCH: "", RUN_CONCLUSION: "", IN_SYNC: "false" });
+  assert.notEqual(r.status, 0, "without sync=true an empty pr input is refused as before");
+
+  r = runStep(RESOLVE_RUN, { ...base, EVENT: "pull_request_target", PR_NUMBER: "7" });
+  assert.equal(r.out.sync, "[]", "a label or push event never syncs");
+
+  const disp = (inputs) => ({ event_name: "workflow_dispatch", ref: `refs/heads/${DEPLOY_BRANCH}`, run_id: 9, event: { inputs } });
+  assert.equal(ghExpr(LAND.concurrency.group, disp({ pr: "", sync: "true" })), "land-sync", "a sweep never replaces a pending train re-gate in land-tip");
+  assert.equal(ghExpr(LAND.concurrency.group, disp({ pr: "7", sync: "false" })), "land-7");
+});
+
+test("land.yml sync step: budget = SYNC_MAX minus the land PRs already in CI; LAND_TOKEN PUT pinned to the head; 422, busy, moved or re-gated heads skipped", () => {
+  const run = LAND.jobs.sync.steps.find((s) => s.id === "sync").run;
+  const H = { 7: HEAD7, 8: hx("8"), 9: hx("9"), 11: hx("f") };
+  const pr = (n, o = {}) => ({ number: n, state: "open", draft: false, base: { ref: DEPLOY_BRANCH }, head: { sha: H[n], repo: { full_name: "o/r" } }, labels: [{ name: "land" }], ...o });
+  const prs = (o = {}) => JSON.stringify({ 7: pr(7), 8: pr(8), 9: pr(9), ...o });
+  const statuses = (o = {}) => JSON.stringify({ [H[7]]: [{ id: 107, context: "gate", state: "failure" }], [H[8]]: [{ id: 108, context: "gate", state: "failure" }],
+    [H[9]]: [{ id: 109, context: "gate", state: "failure" }], ...o });
+  const runs = (...heads) => JSON.stringify({ workflow_runs: [...heads.map((h) => ({ head_sha: h, display_title: "fix: x" })),
+    { head_sha: H[9], display_title: "CI ignored: label priority" }] });
+  const env = (o = {}) => ({ GH_TOKEN: "ghtok", LAND_TOKEN: "landtok", SYNC_MAX: "3", PAUSED: "false",
+    SYNC: JSON.stringify([8, 7, 9].map((n) => ({ number: n, head: H[n], gate: 100 + n }))), FAKE_PRS: prs(), FAKE_STATUSES: statuses(),
+    FAKE_RUNS: runs(H[11]), FAKE_LANDS: JSON.stringify([7, 8, 9, 11].map((n) => ({ number: n, headRefOid: H[n] }))), ...o });
+  const tried = (r) => r.calls.filter((c) => / --method PUT /.test(c)).map((c) => Number(c.match(/pulls\/(\d+)\/update-branch/)[1]));
+
+  let r = runStep(run, env());
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(tried(r), [8, 7], "#11 already waits on CI: 3 - 1 = 2 syncs, in resolve's order (a `CI ignored` run is not counted)");
+  r.calls.forEach((c, i) => {
+    if (!/ --method PUT /.test(c)) return;
+    const n = Number(c.match(/pulls\/(\d+)\//)[1]);
+    assert.ok(c.endsWith(`-f expected_head_sha=${H[n]}`), "pinned to the head resolve read");
+    assert.equal(r.calls[i + 1], "token=landtok", "the PUT runs with LAND_TOKEN, never GITHUB_TOKEN");
+  });
+  assert.equal(r.out.synced, "2");
+  assert.match(r.summary, /budget spent/);
+
+  r = runStep(run, env({ GH_PUT_FAIL: "8" }));
+  assert.deepEqual(tried(r), [8, 7, 9], "a 422 (conflict, moved head) spends no budget");
+  assert.equal(r.out.synced, "2");
+  assert.match(r.summary, /#8: update-branch refused[^\n]*HTTP 422/, "logged in the step summary");
+
+  r = runStep(run, env({ FAKE_RUNS: runs(H[8]) }));
+  assert.deepEqual(tried(r), [7, 9], "a head whose own ci.yml run is still going is never synced (it counts as in flight)");
+  assert.match(r.summary, /#8: not synced: a ci\.yml run/);
+
+  r = runStep(run, env({ FAKE_PRS: prs({ 8: pr(8, { head: { sha: hx("a"), repo: { full_name: "o/r" } } }), 9: pr(9, { labels: [{ name: "land" }, { name: "hold" }] }) }),
+    FAKE_STATUSES: statuses({ [H[7]]: [{ id: 999, context: "gate", state: "pending" }] }) }));
+  assert.deepEqual(tried(r), [], "head moved (#8), gate re-posted since resolve (#7), hold set (#9)");
+  assert.match(r.summary, /#8: not synced: its head moved/);
+  assert.match(r.summary, /#7: not synced: its `gate` changed/);
+
+  r = runStep(run, env({ SYNC_MAX: "1" }));
+  assert.deepEqual(tried(r), [], "the land PRs already in CI fill the window");
+
+  r = runStep(run, env({ LAND_TOKEN: "" }));
+  assert.equal(r.status, 0);
+  assert.deepEqual(tried(r), [], "no LAND_TOKEN: nothing synced, no GITHUB_TOKEN fallback");
+  assert.match(r.summary, /LAND_TOKEN is not set/);
+
+  r = runStep(run, env({ PAUSED: "true" }));
+  assert.deepEqual(tried(r), [], "merge-pause re-read at the act");
 });
