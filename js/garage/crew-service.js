@@ -3,8 +3,9 @@
 const GarageCrewService = (function () {
   "use strict";
   const { block, tube } = GaragePrims;
-  const acc = () => ({ pos: [], nrm: [], col: [], mat: [], idx: [] });
-  const ease = x => { x = Math.max(0, Math.min(1, x)); return x*x*(3-2*x); };
+  const acc = GarageCrewDraw.acc;
+  const ease = GarageCrewDraw.ease;
+  const place = GarageCrewDraw.place;
   const phase = (t, a, b) => ease((t-a)/(b-a));
   const WHEELS = [[1, 1.7, .79], [-1, 1.7, .79], [1, -1.6, .76], [-1, -1.6, .76]];
   function actors() { return Array.from({ length: 7 }, () => ({ x:0, z:0, yaw:0, door:1, seconds:0, calm:true, crouch:0, lean:0, hipLean:0, handY:.85, reach:.03, walkDistance:0, feet:null, footYaw:null, stance:new Float32Array(6), stanceYaw:new Float32Array(2) })); }
@@ -111,11 +112,6 @@ const GarageCrewService = (function () {
     for(let row=0;row<4;row++)for(let key=0;key<10;key++)block(a,-4.98+row*.065,.935,.35+key*.055,.022,.005,.018,[.3,.32,.34]);
     return { base,handle,cover,plug,cable,station:gfx.createMesh(a),rootZ,pivotZ:rootZ-pivotZ,pivotY,actors:actors(),m:new Float32Array(16) };
   }
-  function matrix(m,x,y,z,yaw,rx=0) {
-    const c=Math.cos(yaw),s=Math.sin(yaw),cx=Math.cos(rx),sx=Math.sin(rx);
-    m[0]=c;m[1]=0;m[2]=-s;m[3]=0;m[4]=s*sx;m[5]=cx;m[6]=c*sx;m[7]=0;m[8]=s*cx;m[9]=-sx;m[10]=c*cx;m[11]=0;m[12]=x;m[13]=y;m[14]=z;m[15]=1;
-    return m;
-  }
   // Reuse one unit cylinder and matrix for the hanging hose's three spans.
   function cableSpan(rig,gfx,x,y,z,tx,ty,tz,opts) {
     const m=rig.m,dx=tx-x,dy=ty-y,dz=tz-z,d=Math.hypot(dx,dy,dz),h=Math.hypot(dx,dy);
@@ -128,21 +124,21 @@ const GarageCrewService = (function () {
     for(let i=0;i<4;i++) {
       const a=people[i]; GarageCrewMotion.draw(body,gfx,a.x,a.z,a.yaw,a,i,opts);
       const cx=a.coverAttached ? a.x+Math.sin(a.yaw)*a.coverReach : a.coverX;
-      gfx.draw(rig.cover,matrix(m,cx,a.coverAttached?a.coverY:.37,a.coverZ,a.yaw),opts);
+      gfx.draw(rig.cover,place(m,cx,a.coverAttached?a.coverY:.37,a.coverZ,a.yaw),opts);
     }
     const j=people[4], z=rig.rootZ+j.z, angle=-.16*j.pump, c=Math.cos(angle),s=Math.sin(angle), dy=.92-rig.pivotY;
     j.handY=rig.pivotY+dy*c+1.06*s; j.reach=rig.pivotZ+dy*s-1.06*c; j.crouch=.08+.12*j.pump;
     GarageCrewMotion.draw(body,gfx,j.x,z,j.yaw,j,4,opts);
-    gfx.draw(rig.base,matrix(m,j.x,0,z,j.yaw),opts);
-    gfx.draw(rig.handle,matrix(m,j.x+Math.sin(j.yaw)*rig.pivotZ,rig.pivotY,z+Math.cos(j.yaw)*rig.pivotZ,j.yaw,angle),opts);
+    gfx.draw(rig.base,place(m,j.x,0,z,j.yaw),opts);
+    gfx.draw(rig.handle,place(m,j.x+Math.sin(j.yaw)*rig.pivotZ,rig.pivotY,z+Math.cos(j.yaw)*rig.pivotZ,j.yaw,angle),opts);
     const a=people[5],px=a.x-a.reach;
     GarageCrewMotion.draw(body,gfx,a.x,a.z,a.yaw,a,5,opts);
-    gfx.draw(rig.plug,matrix(m,px,a.handY,a.z,a.yaw),opts);
+    gfx.draw(rig.plug,place(m,px,a.handY,a.z,a.yaw),opts);
     cableSpan(rig,gfx,3.72,.48,-.3,3.4,.06,-.65,opts);
     cableSpan(rig,gfx,3.4,.06,-.65,px+.30,.06,-.65,opts);
     cableSpan(rig,gfx,px+.30,.06,-.65,px+.08,a.handY,a.z,opts);
     const e=people[6];GarageCrewMotion.draw(body,gfx,e.x,e.z,e.yaw,e,6,opts);
-    gfx.draw(rig.station,matrix(m,0,0,0,0),opts);
+    gfx.draw(rig.station,place(m,0,0,0,0),opts);
   }
   function free(rig,gfx) { if(!rig)return 0;for(const mesh of [rig.base,rig.handle,rig.cover,rig.plug,rig.cable,rig.station])gfx.freeMesh(mesh);return 6; }
   return Object.freeze({ create,draw,free,layout });

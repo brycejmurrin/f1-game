@@ -61,6 +61,9 @@ test("lit receiver metadata survives translucent/noAlphaWrite overlays without c
   });
   const rows = [];
   for (const variant of [{}, { chunked: true }, { instanced: true }]) {
+    // A material created while MRT is already on is born on the MRT key.
+    // This loop's "before" row has to be the single-target program.
+    lit.setSsrMrt(false);
     const opaque = lit.makeMaterial(variant);
     const glass = lit.makeMaterial({ ...variant, alpha: 0.4 });
     const noAW = lit.makeMaterial({ ...variant, noAlphaWrite: true });
@@ -107,6 +110,53 @@ test("lit receiver metadata survives translucent/noAlphaWrite overlays without c
       assert.equal(r.opaque.mrtNode, r.write);
       assert.equal(r.glass.mrtNode, r.keep, "repeated frame toggles reuse node identity");
     }
+  }
+});
+
+test("a lit material created while scene MRT is on is born on that program key", () => {
+  const lit = globalThis.TLXShaders.lit(THREE, TSL, {
+    chunks: globalThis.TLXShaders.chunks(THREE, TSL), ssrTag: true, maxLights: 16,
+  });
+  const early = lit.makeMaterial({});
+  assert.equal(early.customProgramCacheKey(), "tlx-lit");
+  assert.equal(early.mrtNode, null);
+  lit.setSsrMrt(true);
+  assert.equal(early.customProgramCacheKey(), "tlx-lit-mrt", "materials that already exist still move onto the MRT key");
+  const born = lit.makeMaterial({});
+  const glass = lit.makeMaterial({ alpha: 0.4 });
+  const chunk = lit.makeMaterial({ chunked: true });
+  assert.equal(born.customProgramCacheKey(), "tlx-lit-mrt");
+  assert.equal(born.mrtNode, early.mrtNode, "born opaque shares the memoized write node");
+  assert.equal(glass.customProgramCacheKey(), "tlx-lit-mrt-keep");
+  const blend = glass.mrtNode.getBlendMode("ssrTag");
+  assert.equal(blend.blendSrc, THREE.ZeroFactor);
+  assert.equal(blend.blendDst, THREE.OneFactor);
+  assert.equal(chunk.customProgramCacheKey(), "tlx-lit-ch-mrt");
+  lit.setSsrMrt(false);
+  const off = lit.makeMaterial({});
+  assert.equal(off.customProgramCacheKey(), "tlx-lit");
+  assert.equal(off.mrtNode, null);
+  assert.equal(born.mrtNode, null, "turning MRT off clears materials born while it was on");
+});
+
+test("GGX, Smith and Schlick compile once per lit program", async () => {
+  const count = (src, name, ret) => ({
+    decl: (src.match(new RegExp(`\\b${ret}\\s+${name}\\s*\\(`, "g")) || []).length,
+    uses: (src.match(new RegExp(`\\b${name}\\s*\\(`, "g")) || []).length,
+  });
+  // uses counts the declaration too: one function plus the lobe calls
+  // (GGX 4, Smith 4, Schlick 6 — lamp, lamp coat, sun, sun coat, and both env Fresnels).
+  const want = { apexGgx: 5, apexSmithGGX: 5, apexSchlick: 7 };
+  const expectOnce = (src, label) => {
+    for (const [name, ret] of [["apexGgx", "float"], ["apexSmithGGX", "float"], ["apexSchlick", "vec3"]]) {
+      const c = count(src, name, ret);
+      assert.equal(c.decl, 1, `${label} ${name} declarations`);
+      assert.equal(c.uses, want[name], `${label} ${name} mentions`);
+    }
+  };
+  for (const opts of [{ clearcoat: 0.8, carPaint: 1 }, { clearcoat: 0.8, carPaint: 1, finishX: 1 }]) {
+    const { src } = await litGLSL({}, opts);
+    expectOnce(src, opts.finishX ? "fx" : "base");
   }
 });
 
@@ -327,8 +377,10 @@ test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once p
   assert.doesNotMatch(cull, /_visList\.length\s*=/, "length = 0 / = n frees V8's backing store; the returned n is the contract");
   assert.match(cull, /_visList\[n\+\+\] = ch;/);
   assert.match(fnSource(CH, "function free(mesh) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");
-  for (const site of [/const n = chunkedSys\.cull\([^;]+;\s*const vis = chunkedSys\.visList;\s*for \(let (\w) = 0; \1 < n; \1\+\+\)/g])
-    assert.ok((TLX.match(site) || []).length >= 2, "every visList reader loops to the returned n");
+  // Present and the mirror both draw through _drawChunked. Its fallback walks
+  // visList to the returned n; mergeVisible does the same on the shared list.
+  // The shadow caster is the other reader and still loops i < n.
+  assert.equal((TLX.match(/_drawChunked\(rec, i,/g) || []).length, 2, "present and the mirror both draw through the one reader");
   const present = TLX.indexOf("        present(opts) {");
   const rt = TLX.indexOf("const refuseTab = () => {");
   assert.ok(rt > 0 && rt < present, "refuseTab is hoisted out of present()");

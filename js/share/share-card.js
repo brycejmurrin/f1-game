@@ -75,13 +75,25 @@ const ShareCard = (function () {
     ]);
     return fontsReady;
   }
-  function blobOf(canvas) {
-    if (canvas && typeof canvas.convertToBlob === "function") return canvas.convertToBlob({ type: "image/png" });
+  function blobOf(canvas, type, quality) {
+    type = type || "image/png";
+    if (canvas && typeof canvas.convertToBlob === "function") return canvas.convertToBlob(quality ? { type, quality } : { type });
     return new Promise((resolve, reject) => {
       if (!canvas || typeof canvas.toBlob !== "function") { reject(new Error("PNG encoding is unavailable")); return; }
-      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("The share card could not be encoded")), "image/png");
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("The share card could not be encoded")), type, quality);
     });
   }
+  // BYTE BUDGET: a card over MAX_BYTES is re-encoded once as JPEG (a photo
+  // backdrop is what grows a PNG); still over, it is refused with a message.
+  const MAX_BYTES = 1.5 * 1024 * 1024;
+  async function encode(canvas, maxBytes) {
+    const png = await blobOf(canvas);
+    if (!(png.size > maxBytes)) return png;
+    const jpeg = await blobOf(canvas, "image/jpeg", 0.85);
+    if (jpeg && jpeg.size <= maxBytes && /jpeg/.test(jpeg.type || "")) return jpeg;
+    throw Object.assign(new Error("The card image is too large to share"), { code: "too-large" });
+  }
+  function extension(blob) { return blob && /jpeg/.test(blob.type || "") ? ".jpg" : ".png"; }
   async function render(model, specName, opts) {
     opts = opts || {};
     const doc = opts.document || (typeof document !== "undefined" ? document : null);
@@ -101,7 +113,7 @@ const ShareCard = (function () {
         return ctx.measureText(String(text)).width;
       };
       paint(ctx, ShareCardLayout.layout(model, specName || "portrait", measure));
-      return await blobOf(canvas);
+      return await encode(canvas, opts.maxBytes > 0 ? opts.maxBytes : MAX_BYTES);
     } finally { canvas.width = 0; canvas.height = 0; }
   }
 
@@ -122,7 +134,12 @@ const ShareCard = (function () {
       if (share.url) payload.url = share.url;
       if (nav.canShare(payload)) {
         try { await nav.share(payload); return "shared"; }
-        catch (error) { if (error && error.name === "AbortError") return "cancelled"; }
+        catch (error) {
+          if (error && error.name === "AbortError") return "cancelled";
+          // share() needs a fresh tap: the render outlived it. A caller with a
+          // preview sheet (share.retry) asks for a second tap instead of a download.
+          if (error && error.name === "NotAllowedError" && share.retry) return "blocked";
+        }
       }
     }
     if (!env.download && typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
@@ -136,6 +153,15 @@ const ShareCard = (function () {
     return "downloaded";
   }
 
-  return Object.freeze({ paint, render, deliver, ensureFonts });
+  // Whether SHARE can reach a share sheet (Web Share with files, or the app's native bridge).
+  function canShareFiles(env) {
+    env = env || {};
+    const nav = env.navigator || (typeof navigator !== "undefined" ? navigator : null);
+    const FileCtor = env.File || (typeof File === "function" ? File : null);
+    if (nav && FileCtor && typeof nav.canShare === "function" && typeof nav.share === "function") return true;
+    return !env.navigator && typeof NativeDownload !== "undefined" && NativeDownload.viable();
+  }
+
+  return Object.freeze({ MAX_BYTES, paint, render, deliver, ensureFonts, extension, canShareFiles, download: browserDownload });
 })();
 Object.freeze(ShareCard);

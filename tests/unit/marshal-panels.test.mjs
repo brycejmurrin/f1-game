@@ -144,6 +144,26 @@ test("only the nearest posts to the eye light under a full-course caution, and n
   assert.doesNotThrow(() => MP.create({ state: "race", track: null, cautionLevel: () => 3 }, { Particles: stub() }).update(0.1));
 });
 
+test("a lookup before the props list exists is not memoised: the panels appear once the build fills it", () => {
+  // Same class as StartLights.lampsFor: an eager null memo left the panels dark
+  // for the whole session when update() ran before scenery populated props.list.
+  const MP = load();
+  const mp = MP.create(G(3, -1), { Particles: stub() });
+  const t = track([0.3, 0.6]);
+  const list = t.props.list;
+  t.props = null;
+  assert.equal(mp.postsFor(t), null, "nothing to hang the panels on yet");
+  t.props = { list };
+  const posts = mp.postsFor(t);
+  assert.ok(posts && posts.length === 9, "the same track object lights up after the build");
+  // A genuine miss (list present, no marshal posts) IS remembered.
+  const bare = track([0.3, 0.6]);
+  bare.props.list = [{ kind: "gantry", k: 0, side: 0, x: 0, y: 4, z: 0, w: 16, h: 9, d: 1 }];
+  assert.equal(mp.postsFor(bare), null);
+  bare.props.list.push({ kind: "marshalPost", k: 10, side: 1, x: 10, y: 1.2, z: 0, w: 1.2, h: 2.4, d: 1.2 });
+  assert.equal(mp.postsFor(bare), null, "a searched, empty list stays a memoised miss");
+});
+
 // The post itself, built by the real js/track/scenery/structures.js marshalPost
 // over a straight stub road (the post at +x of a road running along +z), so
 // the board it carries and the point this module lights can be checked
@@ -154,7 +174,7 @@ function buildPosts(ks) {
   const sb = { Math, Map, Set, Object, Array, JSON, Number, Float32Array, Float64Array };
   vm.createContext(sb);
   seedLog(sb);
-  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/scenery/data.js", "js/track/scenery/structures.js"])
+  for (const f of ["js/core/mat4.js", "js/track/core/geom.js", "js/track/scenery/data.js", "js/track/scenery/stands.js", "js/track/scenery/structures.js"])
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8").replace(/^const\b/gm, "var"), sb, { filename: absSrc(f) });
   const TG = sb.TrackGeom, n = 100;
   const out = { pos: [], nrm: [], col: [], idx: [], mat: [] }, notes = [];
