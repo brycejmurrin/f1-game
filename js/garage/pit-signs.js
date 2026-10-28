@@ -129,14 +129,6 @@ const PitSigns = (function () {
     return { x: (i % S.crestCols) * S.crestPx, y: S.crestY + Math.floor(i / S.crestCols) * S.crestPx, w: S.crestPx, h: S.crestPx };
   }
 
-  /** UV rect of cell `i`, V flipped as createTexture uploads with FLIP_Y
-   *  (the garage's uvOf does the same; U is NOT flipped — these quads are
-   *  world-space on the identity, a U flip would mirror every crest). */
-  function uvRect(i) {
-    const S = TrackPit.SIGN, r = cellRect(i);
-    return { uL: r.x / S.w, uR: (r.x + r.w) / S.w, vT: 1 - r.y / S.h, vB: 1 - (r.y + r.h) / S.h };
-  }
-
   // ── Runtime: the mesh, the texture and the draw (game.js calls these) ──
   let _drawn = 0, _calls = 0;           // frames drawn / frames asked (agent probe)
   const _opts = { glow: 0 };
@@ -201,6 +193,7 @@ const PitSigns = (function () {
   /** `{drawn, calls}`: frames the signs were drawn, frames the draw was asked. */
   const stats = () => ({ drawn: _drawn, calls: _calls });
 
-  return { supported, paintAtlas, cellRect, uvRect, upload, free, draw, stats };
+  // supported / paintAtlas / cellRect stay module-local (upload paints the atlas).
+  return { upload, free, draw, stats };
 })();
 Object.freeze(PitSigns);

@@ -1,0 +1,1 @@
+Improved: Garage modules drop unused public exports (SetupTune.BASE/DEFAULTS, PitSigns paint/atlas helpers + dead uvRect, GaragePrebuild plan/blockers/timers, GarageLive atlas rects, GarageEquipment build-local props, GaragePrims.mix). Garage UI unchanged.
