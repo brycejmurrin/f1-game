@@ -63,7 +63,7 @@ var PitLane = (function () {
 
   const clamp = M4.clamp;
   const {
-    ENTRY_M, ENTRY_MIN, EXIT_M, BOX_M, PIT_K, entryRunM, LIMIT_FRAC, STRAIGHT_V, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC, BOX_TOL, BOX_BRAKE, PIT_SIDE, LANE_W, LANE_MIN, MIN_RACING, laneWidth, laneWidthOn, teamRow, BOX_LAT, BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M, pitch, GRID_POLE_M, COMMIT_M, CUE_M, CUE_WEAR, COMMIT_CLEAR, GRID_CLEAR, COMMIT_S, COMMIT_V, COMMIT_IN, ABORT_S, CRAWL_V, APPROACH_M, ENTRY_BRAKE, ROAD_IN, WORK_IN_M, EXIT_WALL_W, zoneOf, inWindow, inSpan, throughM,
+    ENTRY_M, ENTRY_MIN, EXIT_M, PIT_K, entryRunM, LIMIT_FRAC, STRAIGHT_V, LIMIT_FRAC_STREET, BOX_SPEED_FRAC, BOX_TOL, BOX_BRAKE, PIT_SIDE, LANE_W, LANE_MIN, MIN_RACING, laneWidth, laneWidthOn, teamRow, BOX_LAT, BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M, pitch, GRID_POLE_M, COMMIT_M, CUE_M, CUE_WEAR, COMMIT_CLEAR, GRID_CLEAR, COMMIT_S, COMMIT_V, COMMIT_IN, ABORT_S, CRAWL_V, APPROACH_M, ENTRY_BRAKE, ROAD_IN, WORK_IN_M, EXIT_WALL_W, zoneOf, inWindow, inSpan, throughM,
   } = PitGeom;
 
 
@@ -1745,12 +1745,15 @@ var PitLane = (function () {
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }
 
+  // Module surface kept to what tests / always-loaded call sites actually read.
+  // BOX_BRAKE, COMMIT_V, CUE_WEAR, BOX_SQUARE_*, SQUARE_BY_M stay destructured for
+  // create() internals (and instance fields like squareByM); they are not frozen
+  // here. BOX_M / BOX_S never had an external reader on PitLane.
   return { create, zoneOf, inWindow, throughM,
-           ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
+           ENTRY_M, EXIT_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_SPEED_FRAC,
+           BOX_TOL, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_CLEAR,
            GRID_POLE_M,
-           CUE_M, CUE_WEAR, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
-           BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M,
+           CUE_M, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
            get BOX_PITCH() { return pitch(); }, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();
 Object.freeze(PitLane);

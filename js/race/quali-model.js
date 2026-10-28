@@ -458,6 +458,8 @@ const Quali = (function () {
     return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor, carLap, referencePole };
   }
 
-  return { create, STEP, QUALI_TRIM, EXEC_SPREAD, MEDALS, MEDAL_RANK, medalFor };
+  // STEP / QUALI_TRIM / EXEC_SPREAD stay module-local — only create() and the
+  // medal helpers are read outside this file.
+  return { create, MEDALS, MEDAL_RANK, medalFor };
 })();
 Object.freeze(Quali);
