@@ -365,8 +365,11 @@ function _fillAllLights(frame, src, sr, sg, sb, fl, tNow) {
   const out = _allLightsBuf;
   const n = src.length;
   const fresh = _alSrc !== src || _alLen !== n;
-  if (!fresh && tNow != null && fl === _alFl && sr === _alR && sg === _alG && sb === _alB
-      && out.length === n && tNow - _alT >= 0 && tNow - _alT < _AL_MIN_DT) {
+  // DIRTY-ONLY (R2-2, #3104): the steady factor (flicker 0 and warm-up done; 52 preset
+  // rows ship lampFlicker 0) is a constant, so the same source and scale
+  // mean nothing moved: skip the whole-set re-tint outright, not every 50 ms.
+  if (!fresh && fl === _alFl && sr === _alR && sg === _alG && sb === _alB && out.length === n
+      && (fl === _flSteadyFn || (tNow != null && tNow - _alT >= 0 && tNow - _alT < _AL_MIN_DT))) {
     frame.allLights = out;
     frame.allLightsGen = _allLightsGen;
     return;
@@ -424,11 +427,13 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
   const dist2 = edx * edx + edy * edy + edz * edz;
   const ageMs = (tNow - S.rankT) * 1000;
   // Distance OR time budget: reuse while inside both. Standstill skips age so a
-  // parked viewpoint does not rebuild on the clock alone.
+  // parked viewpoint does not rebuild on the clock alone. LAMP CULL FADE is no
+  // key: membership never reads it (only _cullBand below does, every call), and
+  // a weather blend walks it every frame for 25 s (R2-4, #3104).
   const withinDist = dist2 < _RANK_EYE_EPS2;
   const withinAge = dist2 < _RANK_STILL2 || ageMs < _RANK_MAX_MS;
   const reuseRank = S.rankSrc === src && S.rankCap === CAP && S.rankCount === count
-    && S.rankReach === reach && S.rankBias === bias && S.rankFade === fade
+    && S.rankReach === reach && S.rankBias === bias
     && heap.length > 0
     && withinDist && withinAge
     && (fdx * fdx + fdz * fdz) < _RANK_FWD_EPS2;
@@ -552,7 +557,7 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
     S.rankEyeX = eye[0]; S.rankEyeY = eye[1]; S.rankEyeZ = eye[2];
     S.rankFwdX = ux; S.rankFwdZ = uz;
     S.rankGRef = gRef; S.rankDEdge = dEdge; S.rankTrunc = truncated;
-    S.rankReach = reach; S.rankBias = bias; S.rankFade = fade;
+    S.rankReach = reach; S.rankBias = bias;
     S.rankT = tNow;
   }
   const _cullBand = gRef * fade;
@@ -600,7 +605,7 @@ function _rankSet(S, src, count, CAP, eye, fwd, sr, sg, sb, fl, tNow, out) {
 function _rankState() {
   return { heap: [], buf: [], lum: [], rankSrc: null, rankCap: -1, rankCount: -1,
     rankEyeX: NaN, rankEyeY: NaN, rankEyeZ: NaN, rankFwdX: NaN, rankFwdZ: NaN,
-    rankGRef: 1, rankDEdge: 1, rankTrunc: false, rankReach: NaN, rankBias: NaN, rankFade: NaN,
+    rankGRef: 1, rankDEdge: 1, rankTrunc: false, rankReach: NaN, rankBias: NaN,
     rankT: -1e9,
     entrySrc: null, entryLvl: new Float32Array(0), entryStamp: new Uint32Array(0), entryFrame: 1, entryT: 0 };
 }
