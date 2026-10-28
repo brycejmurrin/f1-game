@@ -182,6 +182,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `telemetry.js` | `DataTelemetry` | LAZY_DATA | telemetry tab controller: selection, async lap loading and popup lifecycle. |
 | `export.js` | `DataExport` | LAZY_DATA | the data hub's EXPORT tab (dev tool): gathers one fast-lap GPS trace per circuit from OpenF1 and downloads a ZIP (traces JSON + labelled map PNG per c… |
 | `schedule.js` | `DataSchedule` | LAZY_DATA | — (no header comment) |
+| `ics.js` | `DataIcs` | LAZY_DATA | the Schedule tab's calendar export: an RFC 5545 VCALENDAR string built from the cached Jolpica schedule. |
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
 | `results.js` | `DataResults` | LAZY_DATA | the data hub's RESULTS tab: classification for ANY session of any 2023+ weekend (practice, qualifying, sprint, race), not just the latest Grand Prix. |
 | `live.js` | `DataLive` | LAZY_DATA | the data hub's LIVE tab: polls OpenF1 for the running session's positions/gaps/weather. mergePositionBatch/mergeIntervalBatch fold a delta batch onto… |
@@ -441,7 +442,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hold-buttons.js` | `InputHoldButtons` | tag | InputHoldButtons: multi-pointer hold/tap buttons, analog travel and teardown safety nets. |
 | `controller-profiles.js` | `ControllerProfiles` | tag | ControllerProfiles — bounded physical-device maps; legacy maps seed only the first device. |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
-| `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for js/game.js (the ADVANCED pause-menu page). |
+| `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for the ADVANCED pause-menu page. |
 | `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |
 
 **`js/audio/`**
@@ -455,6 +456,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `radio-fx.js` | `GameAudioRadioFx` | LAZY_AUDIO | GameAudioRadioFx: courtesy cues, hiss beds and decoded speech graphs. create(host, signal) reads live context/master/bus/enabled/sfxOk/now services; FX use… |
 | `tone-model.js` | `GameAudioToneModel` | LAZY_AUDIO | GameAudioToneModel: constant manufacturer timbre, player presets and positive pitch ranges. patchTune mutates the supplied tune using recognized finite… |
 | `ers-layer.js` | `ErsLayer` | LAZY_AUDIO | ErsLayer — player-car MGU-K electric layer and overtake/boost cue. |
+| `mix-duck.js` | `GameAudioMix` | LAZY_AUDIO | GameAudioMix: radio and spotter duck holds, the SFX-bus dip, and the selective focus bus. create(host) reads live context, sfx bus, sfx level and the… |
 | `engine.js` | `GameAudio` | LAZY_AUDIO | GameAudio: WebAudio for Apex 26 — a synthesized/sample-based engine voice and race SFX, plus a streamed-MP3 soundtrack. init() must be called from a user… |
 | `music-lib.js` | `MusicLib` | LAZY_AUDIO | MusicLib — bring your own music. |
 | `spotify.js` | `SpotifyMusic` | LAZY_AUDIO | SpotifyMusic — OPTIONAL, PERSONAL-USE Spotify Premium soundtrack for Apex 26. |
@@ -595,7 +597,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `xr-plan.js` | `XRPlan` | LAZY_XR | XRPlan: pure boot-time VR renderer path selection. |
 | `xr-rig.js` | `XrRig` | LAZY_XR | XR seated-rig math (pure). |
 | `xr-input.js` | `XrInput` | LAZY_XR | XR controller → Input.remoteSample / remoteEvent. |
-| `xr-session.js` | `XrSession` | LAZY_XR | WebXR immersive-vr session owner (Phase 0 spike). |
+| `xr-session.js` | `XrSession` | LAZY_XR | WebXR immersive-vr session owner. |
 | `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
 | `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button (Phase 0). |
 
@@ -1270,8 +1272,10 @@ left/right steer halves on the lower screen when tilt off; `#btn-boost`,
 engine graph. `GameAudioToneModel` owns manufacturer/tune/profile definitions;
 `GameAudioSignal` owns loop analysis and noise/envelope primitives.
 `GameAudioSoundtrack` owns playlist/cache/playback state and
-`GameAudioRadioFx` owns radio decode/effect nodes. Factories receive live
-context/bus/service callbacks; context-bound state resets with the engine.
+`GameAudioRadioFx` owns radio decode/effect nodes. `GameAudioMix` owns the
+radio and spotter duck holds, the SFX-bus dip and the selective focus bus.
+Factories receive live context/bus/service callbacks; context-bound state
+resets with the engine.
 
 Engine = a looping recorded drone pitched by revs (assets/sfx/f1_engine.mp3),
 with a saw+square synth pair ~90–700 Hz as the fallback when decode fails.

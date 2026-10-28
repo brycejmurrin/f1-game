@@ -261,9 +261,11 @@ const InputPadMenu = (function () {
       } else {
         padNavDir = null;   // released the instant input returns to neutral
       }
-      if (btnEdge(pad, 6)) padDispatchKey("PageUp");
-      if (btnEdge(pad, 7)) padDispatchKey("PageDown");
-      if (pad.mapping == null || pad.mapping === "standard") {   // a wheel's 4/5 are its paddles: they navigate above
+      if (pad.mapping == null || pad.mapping === "standard") {
+        // Triggers page long panes; LB/RB step left/right. A wheel's mapping ""
+        // puts paddles/pedals on vendor indices — those already navigate above.
+        if (btnEdge(pad, 6)) padDispatchKey("PageUp");
+        if (btnEdge(pad, 7)) padDispatchKey("PageDown");
         if (btnEdge(pad, 4)) padDispatchKey("ArrowLeft");
         if (btnEdge(pad, 5)) padDispatchKey("ArrowRight");
       }

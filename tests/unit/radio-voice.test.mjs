@@ -1265,7 +1265,7 @@ test("race mix audition stops only the preview generation it started", () => {
 // hide-time suspend). Every other squelch test injects window.RadioSquelchCtx
 // and so never took that path; these load the REAL engine.js beside it.
 const ENGINE_FILES = ["js/core/mat4.js", "js/audio/tone-model.js", "js/audio/signal.js",
-  "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/engine.js"];
+  "js/audio/soundtrack.js", "js/audio/radio-fx.js", "js/audio/mix-duck.js", "js/audio/engine.js"];
 async function loadWithEngine({ mobile = false } = {}) {
   const { createRequire } = await import("node:module");
   const fakeAudio = createRequire(import.meta.url)("./fake-audio-vm.cjs");
