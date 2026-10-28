@@ -3295,6 +3295,11 @@
       "roster": "LAZY_EDITOR"
     },
     {
+      "path": "js/editor/zones.js",
+      "global": "TrackZones",
+      "roster": "LAZY_EDITOR"
+    },
+    {
       "path": "js/fx/car-fx.js",
       "global": "CarFx",
       "roster": "tag"

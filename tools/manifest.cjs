@@ -1199,6 +1199,7 @@ const LAZY_EDITOR = [
   "js/editor/scenery-preview.js", // DesignerSceneryPreview: live overhead footprints from theme recipes
   "js/editor/canvas.js",      // DesignerCanvas: the 2D drawing surface (pointer / wheel / keys → callbacks)
   "js/editor/elev-presets.js", // ElevPresets: Flat / Rolling / Hilly → per-node heights[] (no DOM)
+  "js/editor/zones.js",       // TrackZones: zone lists follow the control polygon (no DOM)
   "js/editor/profile.js",     // DesignerProfile: the elevation strip under the canvas (per-node height grips → callbacks)
   "js/editor/selection-panel.js", // DesignerSelection: shared point/range controls
   "js/editor/followup-tools.js", // review proposals, scenery recipes and learning cards

@@ -401,6 +401,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `scenery-preview.js` | `DesignerSceneryPreview` | LAZY_EDITOR | Live overhead illustration for the designer. |
 | `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
 | `elev-presets.js` | `ElevPresets` | LAZY_EDITOR | ElevPresets: Flat / Rolling / Hilly node-height profiles for the track designer. |
+| `zones.js` | `TrackZones` | LAZY_EDITOR | TrackZones: zone lists follow the control polygon when the loop is edited. hwZones, bankZones, elevations, bridges and props are keyed by arc fraction of the… |
 | `profile.js` | `DesignerProfile` | LAZY_EDITOR | DesignerProfile: the track designer's elevation strip under the main canvas. |
 | `selection-panel.js` | `DesignerSelection` | LAZY_EDITOR | shared point/range selection controls for the map and profile. |
 | `followup-tools.js` | `DesignerFollowup` | LAZY_EDITOR | small designer review tools. |

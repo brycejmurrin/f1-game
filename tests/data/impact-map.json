@@ -6617,7 +6617,8 @@
         "tests/unit/track-editor-geometry.test.mjs"
       ],
       "rotate": [
-        "tests/unit/track-editor-geometry.test.mjs"
+        "tests/unit/track-editor-geometry.test.mjs",
+        "tests/unit/track-zones.test.mjs"
       ],
       "segIntersect": [
         "tests/unit/track-editor-geometry.test.mjs"
@@ -6675,6 +6676,20 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "review": [
+        "tests/unit/track-designer-dom.test.mjs"
+      ]
+    },
+    "js/editor/zones.js": {
+      "cumArc": [
+        "tests/unit/track-zones.test.mjs"
+      ],
+      "remapZones": [
+        "tests/unit/track-zones.test.mjs"
+      ],
+      "withZones": [
+        "tests/unit/track-zones.test.mjs"
+      ],
+      "*": [
         "tests/unit/track-designer-dom.test.mjs"
       ]
     },
