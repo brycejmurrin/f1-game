@@ -1211,7 +1211,7 @@ return {
   pos, setPos, nextPos, resolvePos,
   size, setSize, nextSize,
   logNs, setLogNs, nextLogNs, logLvl, setLogLvl, nextLogLvl,
-  snapshot, setTelemetryLoader, ensureTelemetry,
+  snapshot, setTelemetryLoader, ensureTelemetry, agentLoader: () => _telemetryLoad,   // OverlayPublisher asks for __apex the same way
   frametimeBenchReset, frametimeBenchSnapshot,
 };
 })();
