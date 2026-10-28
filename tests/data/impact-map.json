@@ -14547,6 +14547,9 @@
       "drawWarm": [
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
+      "ensureGR": [
+        "tests/unit/tlx-hunt4b.test.mjs"
+      ],
       "layoutHalf": [
         "tests/unit/tlx-post-fixed-mats.test.mjs",
         "tests/unit/tlx-post-phone-res.test.mjs"
