@@ -173,10 +173,26 @@ test("embers and spray leave pool headroom; the plume lingers; a flare is drawn 
   assert.equal(draws.length, 0, "and not drawn again: no trail of copies behind a moving car");
   let ok = 0;
   for (let i = 0; i < 100; i++) if (P.flare(0, 0, 0, 0.2, 1, 1, 1, 1)) ok++;
-  assert.equal(ok, 48, "the desktop frame holds 48 flares");
+  assert.equal(ok, 48, "the desktop frame holds 48 non-lamp flares (LAMP_RESERVE held back)");
   assert.equal(P.flare(0, 0, 0, 0.2, 1, 1, 1, 0), false, "an invisible flare is refused");
+  // Race lamps (start gantry / marshal panels) still draw from the reserved slots.
+  let lamps = 0;
+  for (let i = 0; i < 40; i++) if (P.flare(0, 0, 0, 0.2, 1, 1, 1, 1, true)) lamps++;
+  assert.equal(lamps, 24, "LAMP_RESERVE keeps 24 slots for race lamps after cars fill the rest");
+  assert.equal(P.flareCount(), 72, "desktop FLARE_MAX = 48 effect + 24 lamp");
   P.clear();
   assert.equal(P.flareCount(), 0, "clear() drops pending flares");
+});
+
+test("collision sparks share the BURST_MAX hitch ceiling with scrape/smoke (nOf, not Math.round)", () => {
+  // sparks used Math.round and skipped BURST_MAX: count 100 dumped 100 embers in
+  // one call (and at particleMul 2 a hard collision's ~20 became 40). nOf caps at 24.
+  const { P } = load({ random: () => 0 });
+  P.sparks(0, 0, 0, 0, 1, 10, 100);
+  assert.equal(P.count(), 24, "sparks clamps through nOf/BURST_MAX (was Math.round → 100)");
+  P.clear();
+  P.scrape(0, 0, 0, 0, 70, 100);
+  assert.equal(P.count(), 24, "scrape still shares the same ceiling");
 });
 
 test("the mobile tier keeps a smaller pool, a shorter plume and fewer flares", () => {
