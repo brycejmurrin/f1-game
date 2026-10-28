@@ -196,8 +196,13 @@ const OverlayFeed = (function () {
           }
           if (f.caption && f.caption.id !== captionId) out.caption = f.caption;
           else if (!f.caption && previous.caption) out.caption = null;
-          if (leftRace && out.battle === undefined) out.battle = null;
-        } else if (leftRace && out.battle == null) {
+          // Always overwrite — an unchanged fight is omitted above, and a
+          // changed gap would otherwise ship a live battle on a results/idle
+          // patch (the old `=== undefined` guard only covered the omit case).
+          if (leftRace) out.battle = null;
+        } else if (leftRace) {
+          // Full frame spreads f.battle from the still-ranked field; force null
+          // so a full tick that coincides with the flag cannot re-arm BATTLE.
           out.battle = null;
         }
         if (full) lastFull = at;
