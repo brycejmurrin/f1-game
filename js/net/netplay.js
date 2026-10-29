@@ -1338,8 +1338,10 @@ const NetPlay = (function () {
     };
   }
 
-  return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS, strategyState, applyStrategy, STRATEGY_VERSION,
-    clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S,
-    QUALI_RATE, EVENT_WINDOW_MS, rateGate };
+  // PUBLISH_HZ / INTERP_DELAY_MS / STRATEGY_VERSION / validQualiLive / QUALI_MIN_S /
+  // QUALI_MAX_S / rateGate stay module-local (QualiWire / StrategyWire still own them).
+  return { create, EV, strategyState, applyStrategy,
+    clampWire, validQuali, bindQuali, qualiReporters,
+    QUALI_RATE, EVENT_WINDOW_MS };
 })();
 Object.freeze(NetPlay);

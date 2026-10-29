@@ -251,8 +251,10 @@ if (typeof document !== "undefined") {
   else init();
 }
 
+// PRESETS / label stay module-local (UI + current() use them).
+// cycle / PHONE_MAX_ID stay exported — unit seams (quality-preset-phone).
 return {
-  PRESETS, init, set, cycle, current: () => current().id, label, defaultId,
+  init, set, cycle, current: () => current().id, defaultId,
   maxId, capId, isWeakPhone, PHONE_MAX_ID, PHONE_ULTRA_NOTE,
 };
 })();

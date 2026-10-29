@@ -1,0 +1,1 @@
+Removed: unused public net exports (`NetHandshake.INVISIBLE`, `NetSdp.verify`/`VERSION`, `NetScan.VENDOR`, `NetQr.byteCapacity`/`MAX_VERSION`, LobbySettings weather/grid sets, NetPlay publish/quali internals, `NetNostr.exchange` alias + local helpers, rendezvous private-code consts). No protocol or wire change.
