@@ -1701,6 +1701,11 @@
       "presentation": "native",
       "preserve": "planOnly/withinBudget/limitation and argv"
     },
+    "tools/mcp/ios-console.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "console lines and tab list as printed by the phone"
+    },
     "tools/mcp/job-admission.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

@@ -1202,6 +1202,7 @@
         "tests/unit/debug-chrome.test.mjs",
         "tests/unit/environment-json.test.mjs",
         "tests/unit/hud-survey.test.mjs",
+        "tests/unit/ios-console.test.mjs",
         "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
