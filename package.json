@@ -74,6 +74,7 @@
     "wgx:capture": "node tools/gfx/gfx-probe.mjs --backend webgpu",
     "prepare": "git config core.hooksPath .githooks || true",
     "test:perf-race-entry": "node tools/ci/run-playwright.mjs tests/specs/perf-race-entry.spec.js",
+    "test:perf-session": "node tools/ci/run-playwright.mjs tests/specs/perf-session-budgets.spec.js",
     "debug:unit": "node tools/ci/debug-unit.mjs",
     "memory:list": "node tools/env/apex-memory.mjs list",
     "memory:show": "node tools/env/apex-memory.mjs show",
