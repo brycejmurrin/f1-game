@@ -773,6 +773,10 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
       // click. Geometry probing does not need the state machine to agree, only
       // the buttons to be hittable.
       await page.evaluate((ids) => {
+        // DataHub keeps its own open flag: hiding #datahub alone left it set, so
+        // the next #mb-data click only switched tabs and every later data* cell
+        // timed out (UI hunt 2026-10-29). Close it through its own door first.
+        if (typeof DataHub !== "undefined" && DataHub.isOpen && DataHub.isOpen()) DataHub.close();
         for (const id of ids) { const el = document.getElementById(id); if (el) el.hidden = true; }
         const ov = document.getElementById("overlay");
         if (ov) { ov.hidden = false; ov.style.removeProperty("display"); }
