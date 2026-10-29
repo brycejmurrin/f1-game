@@ -255,13 +255,13 @@ const Captions = (function () {
     } else initAppearanceRows();
   }
 
+  // Store keys, option tables, WHO, restore/applyDom, and mode getters stay
+  // module-local — only the live/test surface is public.
   return {
-    K_MODE, K_SIZE, K_POS, K_BG, K_SPEAKER_INK,
-    MODES, SIZES, POSITIONS, SPEAKER_INK, WHO, RING_MAX, TEXT_CH_MAX,
+    RING_MAX, TEXT_CH_MAX,
     radioWho, push, ring: () => ring.slice(),
     onRadio, onSpotter, onAnnouncerLine, announcerDone,
-    setMode, setSize, setPos, setBg, setSpeakerInk, restore, applyDom,
-    mode: () => mode, size: () => size, pos: () => pos, bg: () => bg,
+    setMode, setSize, setPos, setBg, setSpeakerInk,
     initAppearanceRows,
   };
 })();

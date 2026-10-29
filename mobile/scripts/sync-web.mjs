@@ -175,4 +175,4 @@ if (isMain) {
   }
 }
 
-export { hasDevTags, copyTree, WWW, prepareSrc, resolveSrc };
+export { copyTree, prepareSrc, resolveSrc };

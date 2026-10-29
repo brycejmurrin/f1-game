@@ -300,7 +300,8 @@ const HudReadouts = (function () {
     } else if (el.dataset.flagCue != null) delete el.dataset.flagCue;
   }
 
-  return { lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap, GAP_FINE_LT,
+  // GAP_FINE_LT stays module-local (gapDecimals only).
+  return { lapsApart, lapGapText, gapDecimals, fmtGapSec, fmtGap,
     ersState, energy, bbText, blueFlag, lapTrace, speaker, BLUE_S,
     spdUnits, spdUnit, spdDigits, spdPlate, KPH_PER_MPH,
     sectorTimingKind, flagCueKind, paintSectorRow, paintFlag };
