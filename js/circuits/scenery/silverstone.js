@@ -6,16 +6,15 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["silverstone"] =
   function (api) {
-      const { lapBounds, out, MAT, n, ds, px, pz, pyMin, place, every, onTrack, hash, pal,
+      const { lapBounds, out, MAT, n, ds, pyMin, every, onTrack, hash, pal,
               indexSolid,
-              grandstandEx, building, motorhome, hedge: hedgeApi, billboard, mountain, anchor, vadd, addBox,
-              pine, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
+              grandstandEx, building, motorhome, hedge: hedgeApi, billboard, mountain, anchor, vadd, addBox, marshalPost, fence, guardrail, tyreWall, addCyl, addCone, addPrism, addFrustum,
               forestEdge, ATM, modelGroup, overheadSpan, groundPatch,
               bleacher, broadleafFall, plane,
               groundedSegments, recordBarrier, circuitKit,
               signBoard, seat, bankedKerbStrip,
               spectatorHill, cameraTower, sponsorHoarding, bakedModel, along, terrainYAt,
-              bush, drapeRun } = api;
+              bush } = api;
       // backdrop() seats green hills on groundYAt (road-extrapolated floor at
       // large dist). Silverstone's mountain rings raise real terrain well above
       // that floor, so engine backdrop tops buried up to 6.8 m (ground-audit

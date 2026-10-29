@@ -32,15 +32,15 @@ import { extractPage } from "./session-transcript.mjs";
 export const REPO = "brycejmurrin/f1-game";
 /** Roles the dispatcher may archive once their PR is done. */
 export const ARCHIVABLE_ROLES = ["worker", "owner", "pr-owner", "sync", "review", "reviewer", "hunter", "survey", "research", "probe"];
-export const IDLE_MIN = 60;
+const IDLE_MIN = 60;
 /** A tag that pins a session: never ARCHIVE (Bryce is still using it). */
-export const NO_ARCHIVE_TAG = "no-archive";
+const NO_ARCHIVE_TAG = "no-archive";
 /** Work the session says is still in flight (audit finding 18: W56 "census still running", O3 "gate running" were archived). */
-export const IN_FLIGHT = /\b(running|gate|census)\b/i;
+const IN_FLIGHT = /\b(running|gate|census)\b/i;
 /** No session whose last push is younger than this is archived; `--idle-min` never goes below it (X7). */
 export const PUSH_FLOOR_MIN = 15;
 /** A last-turn summary that says the work is not on the remote yet (X7). */
-export const UNPUSHED = /\b(uncommitted|unpushed|not (?:yet )?pushed|dirty (?:tree|worktree)|WIP)\b/i;
+const UNPUSHED = /\b(uncommitted|unpushed|not (?:yet )?pushed|dirty (?:tree|worktree)|WIP)\b/i;
 
 const bodyOf = (ev, k) => (ev[k] && ev[k].internal_anthropic_catchall) || ev[k] || {};
 const textOf = (c) => (typeof c === "string" ? c : Array.isArray(c) ? c.map((x) => (typeof x === "string" ? x : x?.text || "")).join(" ") : "");
@@ -80,7 +80,7 @@ export function workState(rawEvents) {
 }
 
 /** The session's last-turn summary as text: a string, or an object with a text/summary field. Pure. */
-export const summaryOf = (session) => {
+const summaryOf = (session) => {
   const p = session.post_turn_summary;
   if (!p) return "";
   if (typeof p === "string") return p;
@@ -145,7 +145,7 @@ export function decide(session, { now = Date.now(), idleMin = IDLE_MIN, prState 
 }
 
 /** gh api pulls/<n> -> merged | closed | open | unknown. */
-export function prStateViaGh(n, run = spawnSync) {
+function prStateViaGh(n, run = spawnSync) {
   const r = run("gh", ["api", `repos/${REPO}/pulls/${n}`, "--jq", ".state + \" \" + (.merged|tostring)"], { encoding: "utf8", timeout: 20_000 });
   if (r.status !== 0) return "unknown";
   const [state, merged] = String(r.stdout || "").trim().split(/\s+/);

@@ -53,7 +53,9 @@
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-garage { grid-row: 2; align-self: end; justify-self: end; width: calc(50% - var(--home-g)/2); }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-explore { grid-row: 3; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-create { grid-row: 4; }
-:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { grid-column: 2; grid-row: 5; align-self: start; width: 100%; min-height: 0; }
+/* grid-column/row + align-self for this sel already live in menus.css
+   (title-home-scene-prepaint pin); restating them here was cascade-dead. */
+:where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary { width: 100%; min-height: 0; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-retention .mb-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; display: block; }
 :where(body[data-shape="wide"][data-density="compact"]) #overlay #menu-secondary > .bigbtn {
   display: inline-flex; justify-content: center; align-items: center; gap: calc(var(--gap)/8);

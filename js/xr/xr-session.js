@@ -481,12 +481,10 @@ const XrSession = (function () {
   }
 
   return {
-    MODE, LS_XR_BACKEND,
     probe, isSupported, isProbed, isPresenting, isVisible,
     start, end, bind, on, recenter, setAnchor, getAnchor, eyeFrames,
     getFrame, getSession, getRefSpace, backend, lastError,
-    frameCount, enabledFeatures, featureGranted, listEnabledFeatures,
-    webgpuXrAvailable, xrBackendPref, sessionInit,
+    frameCount, enabledFeatures, featureGranted, sessionInit,
   };
 })();
 Object.freeze(XrSession);

@@ -1,6 +1,6 @@
 /* Apex 26 — LiveRegion: the ONE writer of #announce-live, the always-present
    polite region screen readers hear the race through. Four voices used to
-   write it on their own handles — the radio card (js/game.js showAnnounce),
+   write it on their own handles — the radio card (js/race/announce-banner.js),
    the flag (js/ui/hud.js sayFlag), the spoken HUD (js/ui/hud-readouts.js
    speaker) and the SESSION ONLY warning (js/ui/select-screen.js) — each as
    "clear, then write 60 ms later". Two in one tick landed ~1 ms apart, so the
@@ -94,10 +94,14 @@ const LiveRegion = (function () {
     return false;
   }
 
-  /** A new session: nothing queued from the last one is read into this one. */
+  /** A new session: nothing queued from the last one is read into this one,
+   *  and the polite region itself is cleared so browse mode does not keep a
+   *  race call on the title after resetRace(). */
   function reset() {
     clearTimeout(timer);
     timer = 0; phase = "idle"; current = null; queue.length = 0;
+    const r = region();
+    if (r) r.textContent = "";
   }
 
   /** Test / debug view of the announcer (never a source of game state). */

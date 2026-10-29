@@ -24,6 +24,10 @@ function build(id) {
 }
 // The offset curve's curvature, exactly — the expression the bake minimises.
 const lineCurv = (t) => Tracks._vmContext.TrackLine.lineCurvature(t);
+// The centreline in the SAME frame: the node geometry the line is relaxed
+// against (track.lineRoadK, line.js roadK), not track.curv's ±12 m smoothing,
+// which reads every hairpin gentler than the road and so flattered the road.
+const roadCurv = (t) => t.lineRoadK || t.curv;
 const cornerTime = (k, n, ds) => {
   let s = 0;
   for (let i = 0; i < n; i++) s += ds / Math.min(VMAX, Math.sqrt(LAT / Math.max(Math.abs(k[i]), 1e-5)));
@@ -61,7 +65,7 @@ for (const id of ["monza", "spa", "silverstone"]) {
     // 0.5 m/m across a 4 m node: Monza's first chicane measures 0.46 (the road
     // itself turns 90° there); the knot bake's overlap lurches were 0.58–0.68.
     assert.ok(maxStep <= 0.5 * ds + 1e-6, `${id}: a ${maxStep.toFixed(2)} m step between nodes (${(maxStep / ds).toFixed(2)} m/m)`);
-    const tLine = cornerTime(lineCurv(t), n, ds), tRoad = cornerTime(t.curv, n, ds);
+    const tLine = cornerTime(lineCurv(t), n, ds), tRoad = cornerTime(roadCurv(t), n, ds);
     assert.ok(tLine <= tRoad, `${id}: the line's own curvature costs ${tLine.toFixed(1)} s of corner time against the centreline's ${tRoad.toFixed(1)} s`);
   });
 }
@@ -74,7 +78,7 @@ for (const id of ["monza", "spa", "silverstone", "monaco", "baku", "singapore", 
   test(`${id}: under a brake/accel budget the line is at least 5 % faster than the centreline`, () => {
     const t = build(id);
     const n = t.n, ds = t.total / n;
-    const lLine = lapTime(lineCurv(t), n, ds), lRoad = lapTime(t.curv, n, ds);
+    const lLine = lapTime(lineCurv(t), n, ds), lRoad = lapTime(roadCurv(t), n, ds);
     assert.ok(lLine <= 0.95 * lRoad, `${id}: ${lLine.toFixed(1)} s on the line against ${lRoad.toFixed(1)} s on the centreline (${(100 * (1 - lLine / lRoad)).toFixed(2)} %)`);
   });
 }

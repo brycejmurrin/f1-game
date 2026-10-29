@@ -289,6 +289,7 @@ test("nintendo label mode confirms on the physical A (standard index 1) and back
 
 test("I-09: a right/middle mouse button neither presses a hold button nor fires a tap; touch and left mouse do", () => {
   const ctx = vm.createContext({ Math, Set, Map, Object, Array, document: null });
+  vm.runInContext(read("js/input/pedal-travel.js"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
   vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
   const InputHoldButtons = vm.runInContext("InputHoldButtons", ctx);
   const els = {};
@@ -320,7 +321,8 @@ test("hold teardown detects hidden ancestors while visible capture steals keep t
       addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
     const ctx = vm.createContext({ document: { getElementById: () => button },
       getComputedStyle: (el) => ({ display: el.display || "block", visibility: el.visibility || "visible" }) });
-    vm.runInContext(read("js/input/hold-buttons.js"), ctx);
+    vm.runInContext(read("js/input/pedal-travel.js"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
+    vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
     const hb = vm.runInContext("InputHoldButtons", ctx).create({
       clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll() {} });
     let held = false;
@@ -348,7 +350,8 @@ test("analog hold buttons preserve the strongest remaining touch across release 
       addEventListener(t, fn) { this.l[t] = fn; }, setPointerCapture() {} };
     const ctx = vm.createContext({ document: { getElementById: () => button },
       getComputedStyle: () => ({ display: "block", visibility: "visible" }) });
-    vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
+    vm.runInContext(read("js/input/pedal-travel.js"), ctx, { filename: absSrc("js/input/pedal-travel.js") });
+  vm.runInContext(read("js/input/hold-buttons.js"), ctx, { filename: absSrc("js/input/hold-buttons.js") });
     const api = vm.runInContext("InputHoldButtons", ctx);
     const resetArgs = [], edges = [], values = [];
     const hb = api.create({ clamp: (v, a, b) => Math.min(b, Math.max(a, v)), beforeReleaseAll: (v) => resetArgs.push(v) });

@@ -7,19 +7,16 @@
 - CRITICAL — `bake.mjs` is a FULL REPLACE
 - Capture, review, ship
 - Read-only preflight receipts
+
 | paste starts with | what it is | tool |
 |---|---|---|
 | `window.LightEdits = {…}` | a DELTA — only the player's own overrides, what COPY VALUES emits | `merge-proposals.mjs` (merge) |
 | `window.LightPresets = {…}` | a full SNAPSHOT of every profile | `bake.mjs` (full replace) |
 
-The **LIGHTING TUNER** COPY VALUES button used to export the file+local merge —
-805 conditions, 182,569 characters, which no one could select out of a phone
-textarea or paste into a message. It now exports only the local overrides, as
-`window.LightEdits`, current condition first. That is a DELTA: feeding it to
-`bake.mjs` would write those few keys and delete ~1,000 others, so `bake.mjs`
-refuses it by name and points here. Either way this skill writes shipped
-`js/lighting/presets.js` and commits (no cache bump). localStorage still
-outranks the file until RESET.
+COPY VALUES exports only the local overrides, as `window.LightEdits`, current condition first.
+That is a DELTA: feeding it to `bake.mjs` would write those few keys and delete every other, so
+`bake.mjs` refuses it by name. Either way this skill writes shipped `js/lighting/presets.js` (no
+cache bump). localStorage still outranks the file until RESET.
 
 Live knob work without a paste → the lighting-tuner index (`SKILL.md`).
 
@@ -120,12 +117,8 @@ Values are partial `{knobId: number}` maps (only non-default knobs).
 
 4. **Smoke (optional):** `node tools/ci/test-bg.mjs smoke`
 
-5. **Commit + push** to the active feature branch (never `main`):
-   ```sh
-   git add js/lighting/presets.js
-   git commit -m "Bake lighting presets: <which tracks/conditions>"
-   git push -u origin <dev-branch>
-   ```
+5. **Commit** `js/lighting/presets.js` on the active feature branch (two calls, AGENTS.md rule 12),
+   message `Bake lighting presets: <which tracks/conditions>`.
 
 ### Dry run (no write into js/)
 

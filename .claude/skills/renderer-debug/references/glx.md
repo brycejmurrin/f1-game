@@ -2,7 +2,7 @@
 
 Load from SKILL.md when `env.backend` reads `webgl2`. Failure modes (shadow
 acne, bloom blow-out), the Playwright probe pattern and apex-eval one-liners
-are in [glx-failures.md](glx-failures.md).
+are in glx-failures.md (linked from SKILL.md).
 
 ## Contents
 - 1. Check HDR availability

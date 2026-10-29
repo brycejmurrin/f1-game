@@ -6,16 +6,14 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["mugello"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz, hw,
-        indexSolid, seat,
-        pine, tree, bush, hedge, ridge, mountain, building, grandstandEx,
-        spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
+      const { K, lapBounds, out, MAT, n, track, pyMin, hash, every, along, anchor, vadd, onTrack,
+        indexSolid, seat, tree, bush, mountain, building, grandstandEx,
+        spectatorHill, broadcastCompound, gantry, marshalPost,
         motorhome, fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard,
         addBox, addCyl, addCone, addPrism, addFrustum, forestEdge,
-        terrainYAt, groundYAt,
-        groundUnder,
-      } = api;
+        terrainYAt,
+        groundUnder } = api;
 
       // World-up horizontal basis — banked a.u digs hillside props into grade.
       const flatBasis = (a) => {

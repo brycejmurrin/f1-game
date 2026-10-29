@@ -14,9 +14,9 @@ In a worker, asking is `needs-decision` plus one comment with your pick (docs/WO
 
 1. Read repository and nested circuit guidance, current briefs and source.
    Pin the starting SHA; select circuit ids, target era and 3–5 observable
-   improvements per circuit. Read [the campaign procedure](campaign-workflow.md).
+   improvements per circuit. Read campaign-workflow.md (linked from SKILL.md).
 2. Create a per-circuit evidence packet from
-   [the template](evidence-template.json), under
+   the evidence template (`evidence-template.json`), under
    `scratch/survey-track/<id>/`. Research official maps, dated photographs,
    onboard footage and surveyed elevation where available (WebSearch/WebFetch; cite
    URLs). Inspect actual
@@ -24,7 +24,7 @@ In a worker, asking is `needs-decision` plus one comment with your pick (docs/WO
 3. Delegate each circuit's audit to its OWN **track-surveyor** subagent
    (one per circuit, [SKILL.md](../SKILL.md) loop). Assign each author exclusive
    ownership of the circuit definition and its scenery file, using the
-   [delegation prompt](delegation.md). AGENTS.md rule 10 applies.
+   delegation prompt (`delegation.md`). AGENTS.md rule 10 applies.
 4. Route geometry through [new-track](../../new-track/SKILL.md), placement and
    structural detail through [scenery-dress](../../scenery-dress/SKILL.md), and
    imports/materials through [asset-pack](../../asset-pack/SKILL.md). One named

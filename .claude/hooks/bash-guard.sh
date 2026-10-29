@@ -1,19 +1,20 @@
 #!/bin/bash
-# PreToolUse guard for Bash. AGENTS.md rules made deterministic (§Verification
-# 3, 6/7 and 10 below):
+# PreToolUse guard for Bash: FAST, FAIL-CLOSED refusals only. AGENTS.md rules
+# made deterministic (rule 12 and §Verification 6/7 and 10 below):
 #
-#  §Verification 3 — `git commit` runs `npm run test:guards` first (measured
-#    ~110 s for a code commit at loadavg 4–6 on 2026-10-26, 439 tests; the old
-#    "~5 s" dated from 2026-09-16) and a red result blocks the commit. Prefix the command with
-#    APEX_SKIP_GUARDS=1 only when the guards themselves are what you are fixing.
-#    Before the guards, `ratchets.mjs --auto-raise` absorbs ≤ 40 lines of growth
-#    in a ratcheted file into the commit (the raise is staged and printed).
-#    Every shape of commit is seen (shellparse.py: `git -c k=v`, `--no-pager`,
-#    `bash -c`, `env`/VAR= prefixes, an absolute git path), a pathspec counts as
-#    committed content, and a commit whose tracked files differ between the
-#    index and the working tree is refused — the guards read the working tree,
-#    so they must agree with what is committed. APEX_GUARD_PROBE=1 (hook env,
-#    tests only) stops after the classification.
+#  Rule 12 — the COMMIT GATE IS NOT HERE (2026-10-28, Bryce: "Yes, split it";
+#    docs/plans/2026-10-27-landing-and-agent-ops.md §4). `.githooks/pre-commit`
+#    is the one owner of `test:guards`, the docs-only path and the ratchet
+#    auto-raise for every host; this hook ran the same 50–110 s suite before
+#    `git commit` under a 360 s timeout and now answers in milliseconds
+#    (settings.json timeout 30 s). What stays here is what git cannot enforce on
+#    itself — keeping that hook reachable: `git commit --no-verify` / `-n` and
+#    any core.hooksPath write (`git config`, `-c`, GIT_CONFIG_KEY_n) are refused
+#    in every shell shape (shellparse.py guard), and a commit in this project's
+#    tree is refused when no executable pre-commit hook would run (fix:
+#    `npm run prepare`). Every shape of commit is seen (shellparse.py: `git -c
+#    k=v`, `--no-pager`, `bash -c`, `env`/VAR= prefixes, an absolute git path,
+#    compound syntax; unparseable text falls back to a broad regex).
 #  §Verification 6/7 — a test-bg run is stopped with `test-bg.mjs --stop`,
 #    never by PID; `pkill -f` / `killall` against chrome, node or playwright
 #    matches your own shell and orphans browsers. Kill orphan Chrome by a
@@ -36,7 +37,7 @@
 #  Shared safety bans (Fleet A + D, Bryce 2026-10-22; Cursor reaches this file
 #    through .cursor/hooks/shell-guard.sh): a `ratchets.mjs` run that can RAISE
 #    a ceiling (--update / --fragment / --absolute without --lower-only or
-#    --preview; the commit hook's own --auto-raise below is not a tool call and
+#    --preview; .githooks/pre-commit's own --auto-raise is not a tool call and
 #    stays; APEX_RATCHET_RAISE_OK=1 when Bryce typed the raise), and a push over
 #    a FOREIGN pusher: the branch gained another author's commits on the remote
 #    since this checkout last pushed it (foreign_push.py; APEX_FOREIGN_PUSH_OK=1
@@ -62,13 +63,68 @@
 #    watching CI, git, the API or the bus, or a `seq` loop that sleeps, is
 #    refused — subscribe and arm ONE Monitor instead (APEX_POLL_OK=1 for a
 #    bounded network retry).
-#  A commit whose staged paths are ALL prose (docs/, *.md, .claude/skills,
-#    .claude/agents, survey images/reports under artifacts/shots/{tracks,gallery}
-#    and artifacts/track-survey; never a generated doc) runs only
-#    docs-integrity — no ratchet raise, no test:guards.
+#
+# FAIL CLOSED ON ITS OWN ERRORS (2026-10-28). Claude Code lets a PreToolUse
+# call through when a hook exits with anything but 0 or 2 unless the handler
+# sets onFailure "block" (https://code.claude.com/docs/en/hooks §Block the action
+# when a hook fails, read 2026-10-28), and Cursor/Codex reach this script through
+# adapters with their own rules. So the script maps its own failures to exit 2:
+# an unreadable or malformed payload, a crashed helper (python3, shellparse.py),
+# any failing command outside a condition (ERR trap) and any other exit status
+# (EXIT trap). Not `pipefail`: `printf … | grep -q` would read a SIGPIPE'd
+# printf as a non-match and silently skip a rule.
 #
 # Exit 2 blocks with the reason on stderr; exit 0 lets the normal permission
-# flow decide.
+# flow decide (with any ask/deny JSON on stdout).
+
+set -uE
+GH_DECISION=""
+COMMIT_CTX=""
+# ONE JSON object on the way out (stdout is parsed as JSON only when it is a
+# single object): the gh ask/deny, and COMMIT_CTX — an advisory about the commit
+# gate. stderr is hidden on exit 0. Per https://code.claude.com/docs/en/hooks,
+# hookSpecificOutput.additionalContext reaches the model and systemMessage is
+# shown to the user; neither changes the allow. Printed only on exit 0, so an
+# exit-2 rule still wins over a gh ask.
+finish() {
+  rc=$?
+  trap - ERR
+  if [ "$rc" != 0 ] && [ "$rc" != 2 ]; then
+    echo "BLOCKED: bash-guard stopped with exit $rc before its rules finished, so this command is refused (fail closed). Report the hook error; do not work around it." >&2
+    exit 2
+  fi
+  [ "$rc" = 0 ] || exit 2
+  [ -n "$GH_DECISION$COMMIT_CTX" ] || exit 0
+  if ! GH_DECISION="$GH_DECISION" COMMIT_CTX="$COMMIT_CTX" python3 -c '
+import json, os
+raw = os.environ.get("GH_DECISION") or ""
+d = json.loads(raw) if raw else {}
+if raw:
+    h = d.get("hookSpecificOutput") if isinstance(d, dict) else None
+    if not isinstance(h, dict) or h.get("hookEventName") != "PreToolUse":
+        raise ValueError("malformed guard event")
+    for key in ("permissionDecisionReason", "additionalContext"):
+        if key in h and not isinstance(h[key], str):
+            raise ValueError("malformed guard " + key)
+    if "permissionDecision" in h:
+        if h["permissionDecision"] not in ("allow", "ask", "deny"):
+            raise ValueError("malformed guard decision")
+    elif not h.get("additionalContext"):
+        raise ValueError("guard advisory has no context")
+ctx = os.environ.get("COMMIT_CTX") or ""
+if ctx:
+    h = d.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})
+    h["additionalContext"] = "\n".join(x for x in (h.get("additionalContext"), ctx) if x)
+    d["systemMessage"] = ctx
+print(json.dumps(d))
+'; then
+    echo "BLOCKED: bash-guard could not write its decision JSON, so this command is refused (fail closed)." >&2
+    exit 2
+  fi
+  exit 0
+}
+trap finish EXIT
+trap 'echo "BLOCKED: bash-guard failed at line $LINENO (exit $?), so this command is refused (fail closed). Report the hook error; do not work around it." >&2; exit 2' ERR
 
 INPUT=$(cat)
 # pass-4 red-team R14: without python3 every rule below is skipped. The other gates fail closed
@@ -77,34 +133,32 @@ if ! command -v python3 >/dev/null 2>&1; then
   echo "BLOCKED: bash-guard needs python3 to read the command and run the push/commit/kill rules; none ran. Install python3 (tools/env/cloud-agent-install.sh) before continuing." >&2
   exit 2
 fi
+# A MALFORMED PAYLOAD IS A REFUSAL (2026-10-28; before that it was a loud pass,
+# 2026-09-22): not JSON, not an object, a non-object tool_input or a non-string
+# command means the rules below cannot read what will run. A missing or empty
+# command is an empty command.
+CMD_RC=0
 CMD=$(printf '%s' "$INPUT" | python3 -c '
-import json,sys
+import json, sys
 try:
-    print((json.load(sys.stdin).get("tool_input") or {}).get("command") or "")
+    d = json.load(sys.stdin)
+    ti = d.get("tool_input") if isinstance(d, dict) else None
+    ti = {} if ti is None else ti
+    c = ti.get("command") if isinstance(ti, dict) else None
+    if not isinstance(d, dict) or not isinstance(ti, dict) or not isinstance(c, (str, type(None))):
+        raise ValueError("unexpected payload shape")
 except Exception:
-    print("")
-' 2>/dev/null)
-# EXTRACTION FAILURE IS NOT AN EMPTY COMMAND (2026-09-22). Every rule in this
-# file sits below this line, so a missing python3, a renamed hook-input key or
-# an undecodable payload used to exit 0 SILENTLY: a git commit landed with no
-# guards run and a subagent could start a browser group, with nothing anywhere
-# saying the guard had not run. A hook that fails open must at least fail
-# LOUDLY, and where the raw payload still shows a rule's signature we block on
-# that rather than shrug.
-if [ -z "$CMD" ]; then
-  # A genuinely empty command is normal; a payload that plainly carries one is not.
-  if printf '%s' "$INPUT" | grep -q '"command"[[:space:]]*:[[:space:]]*"..'; then
-    echo "bash-guard: COULD NOT READ the command out of the hook payload (python3 missing, or the input shape changed)." >&2
-    echo "bash-guard: the kill/commit/subagent rules did NOT run. Fix the hook before trusting this session's guards." >&2
-    # Last-resort scan of the raw payload for the two rules that protect other
-    # processes; a false positive here is cheaper than an orphaned browser fleet.
-    if printf '%s' "$INPUT" | grep -qE '(pkill|killall)[[:space:]]+(-[A-Za-z]+[[:space:]]+)*(chrome|chromium|node|playwright)'; then
-      echo "bash-guard: BLOCKED — the raw payload matches the pkill/killall rule (AGENTS.md §Verification 7)." >&2
-      exit 2
-    fi
-  fi
-  exit 0
+    sys.exit(3)
+sys.stdout.write(c or "")
+' 2>/dev/null) || CMD_RC=$?
+if [ "$CMD_RC" = 3 ]; then
+  echo "BLOCKED: bash-guard could not read the command out of the hook payload (not JSON, or an unexpected shape), so none of its rules ran and the command is refused (fail closed)." >&2
+  exit 2
+elif [ "$CMD_RC" != 0 ]; then
+  echo "BLOCKED: bash-guard's payload reader (python3) failed with exit $CMD_RC, so none of its rules ran and the command is refused (fail closed)." >&2
+  exit 2
 fi
+[ -n "$CMD" ] || exit 0
 # settings.json deliberately invokes this one guard for every Bash call. Skip
 # SCAN and shellparse work for ordinary commands without relying on Claude
 # Code's non-portable per-hook `if` field (Cursor imports the file but does not
@@ -123,8 +177,7 @@ fi
 # the trusted shell:false output runner too. The parser emits only executable
 # wrapper leaves, quoted with shlex.join: literal ';' arguments stay prose.
 # Retain the original command so explicit exception assignments remain visible.
-AGENT_LEAVES=$(printf '%s' "$CMD" | python3 "$(dirname "$0")/shellparse.py" agent-run "$PWD"); AGENT_LEAVES_RC=$?
-if [ "$AGENT_LEAVES_RC" != 0 ]; then
+if ! AGENT_LEAVES=$(printf '%s' "$CMD" | python3 "$(dirname "$0")/shellparse.py" agent-run "$PWD"); then
   echo "bash-guard: BLOCKED — trusted wrapper normalization failed." >&2
   exit 2
 fi
@@ -265,7 +318,7 @@ fi
 if printf '%s' "$SCAN" | grep -Eq "(^|[;&|(][[:space:]]*)${PRE}kill([[:space:]]+-[A-Za-z0-9]+)*[[:space:]]+[0-9]"; then
   for pid in $(printf '%s' "$SCAN" | grep -Eo '(^|[[:space:]])[0-9]+' | tr -d ' '); do
     [ -r "/proc/$pid/cmdline" ] || continue
-    line=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)
+    line=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)   # the pid may exit meanwhile
     case "$line" in
       # The supervisor test-bg records is `sh -c "…; npm run --silent test:<g> …;
       # echo '[test-bg] END …'"` — `npm run test:` alone never matched it (the
@@ -312,18 +365,35 @@ HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
 for _h in allow-protected allow-context-cap allow-stop; do
   [ -e "$ROOT/.claude/$_h" ] && echo "bash-guard: hatch active: .claude/$_h — remove it when the assigned edit is done."
 done
-GUARD_OUT=$(printf '%s' "$INPUT" | python3 "$HOOKDIR/shellparse.py" guard "$ROOT"); GUARD_RC=$?
-[ "$GUARD_RC" = 2 ] && exit 2
+GUARD_RC=0
+GUARD_OUT=$(printf '%s' "$INPUT" | python3 "$HOOKDIR/shellparse.py" guard "$ROOT") || GUARD_RC=$?
+[ "$GUARD_RC" != 2 ] || exit 2
+# 2026-10-28: a parser that CRASHED (any exit but 0 or 2) is a refusal, not a
+# fall-through to the regexes below (those are for text it cannot tokenise).
+if [ "$GUARD_RC" != 0 ]; then
+  echo "BLOCKED: bash-guard's parser (shellparse.py guard) crashed with exit $GUARD_RC, so the push/commit/gh rules did not run and this command is refused (fail closed). Report the hook error; do not work around it." >&2
+  exit 2
+fi
 COMMIT_LINE=$(printf '%s\n' "$GUARD_OUT" | sed -n 1p)
 PARSE=$(printf '%s\n' "$GUARD_OUT" | sed -n 2p)
 GH_DECISION=$(printf '%s\n' "$GUARD_OUT" | sed -n '3,$p')
-if [ "$GUARD_RC" != 0 ] || [ "$PARSE" != "PARSE ok" ]; then
-  # Unparseable (or the parser crashed): the regex fallbacks, all fail-closed.
+# A `git … commit` at command position, reserved words allowed before the verb
+# (the broad reading the unparseable-text fallbacks use).
+COMMIT_RX="(^|[;&|({\`][[:space:]]*)((if|then|else|elif|while|until|do|time|!)[[:space:]]+)*${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|\$)"
+if [ "$PARSE" != "PARSE ok" ]; then
+  # Unparseable text (an unbalanced quote): the regex fallbacks, all fail-closed.
   if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+push([[:space:]]|\$)"; then
     echo "BLOCKED: this command contains a git push the guard cannot parse (an unbalanced quote?). Write the push as one plain command." >&2
     exit 2
   fi
-  SUBAGENT=$(printf '%s' "$INPUT" | grep -Eq '"(agent_id|agent_type)"[[:space:]]*:[[:space:]]*"[^"]|/subagents/' && echo 1)
+  # The two ways around .githooks/pre-commit (2026-10-28), read from text the parser could not tokenise.
+  if { printf '%s' "$SCAN" | grep -Eq "$COMMIT_RX" \
+       && printf '%s' "$SCAN" | grep -Eq -- "[[:space:]](--no-ver[a-z]*|-[A-Za-z]*n[A-Za-z]*)([[:space:]=;&|)]|\$)"; } \
+     || printf '%s' "$SCAN" | grep -Eiq 'core\.hookspath'; then
+    echo "BLOCKED: this command could not be parsed and looks like it skips the git pre-commit hook (\`git commit --no-verify\`/\`-n\`) or changes core.hooksPath. Write the commit as one plain command, without --no-verify." >&2
+    exit 2
+  fi
+  SUBAGENT=$(printf '%s' "$INPUT" | grep -Eq '"(agent_id|agent_type)"[[:space:]]*:[[:space:]]*"[^"]|/subagents/' && echo 1 || true)
   if [ "$SUBAGENT" = "1" ]; then
     P='(node[[:space:]]+)?([^[:space:];&|()]*/)?'
     BROWSER="${P}(test-bg\.mjs([[:space:]]+(?!--status|--tail)[^[:space:]]+)|test-solo\.mjs|run-playwright\.mjs|verify-change\.mjs(?![^;&|]*--(fast|plan)))|(python3?[[:space:]]+)?([^[:space:];&|()]*/)?probe-mcp\.py[[:space:]]+chrome-start|npx[[:space:]]+playwright[[:space:]]+test|playwright[[:space:]]+test([[:space:]]|$)|npm[[:space:]]+test([[:space:]]|$)"
@@ -357,35 +427,7 @@ except Exception:
     GH_DECISION='{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "ask", "permissionDecisionReason": "bash-guard could not parse this GitHub API write (curl/wget/node/python); confirm it by hand."}}'
   fi
 fi
-# ONE JSON object on the way out (stdout is parsed as JSON only when it is a
-# single object): the gh ask/deny, and COMMIT_CTX — which path a PASSING commit
-# took and how long it ran. stderr is hidden on exit 0, so a successful commit
-# used to leave the model unable to tell docs-integrity-only from test:guards.
-# Per https://code.claude.com/docs/en/hooks, hookSpecificOutput.additionalContext
-# reaches the model (a system reminder next to the tool result) and systemMessage
-# is shown to the user; neither changes the allow. Printed only on exit 0, so a
-# later exit-2 rule (the commit guards) still wins over a gh ask.
-COMMIT_CTX=""
-emit_on_exit() {
-  rc=$?
-  [ "$rc" = 0 ] || return
-  [ -n "$GH_DECISION$COMMIT_CTX" ] || return
-  GH_DECISION="$GH_DECISION" COMMIT_CTX="$COMMIT_CTX" python3 -c '
-import json, os
-d = {}
-try:
-    d = json.loads(os.environ.get("GH_DECISION") or "{}")
-except Exception:
-    d = {}
-ctx = os.environ.get("COMMIT_CTX") or ""
-if ctx:
-    h = d.setdefault("hookSpecificOutput", {"hookEventName": "PreToolUse"})
-    h["additionalContext"] = "\n".join(x for x in (h.get("additionalContext"), ctx) if x)
-    d["systemMessage"] = ctx
-print(json.dumps(d))
-'
-}
-trap emit_on_exit EXIT
+# The decision JSON (GH_DECISION + COMMIT_CTX) is printed by finish() on exit 0.
 if [ -n "$GH_DECISION" ] && printf '%s' "$GH_DECISION" | grep -q '"deny"'; then exit 0; fi
 
 # --- cancelling an Actions run ---------------------------------------------------
@@ -451,274 +493,58 @@ fi
 if printf '%s' "$SCAN" | grep -Eq "$PUSH_RX"; then
   LRC="${APEX_LIVE_RUN_CHECK:-$HOOKDIR/../../tools/ci/live-run-check.mjs}"
   if [ -f "$LRC" ] && command -v node >/dev/null 2>&1; then
-    LRC_OUT=$(cd "$ROOT" 2>/dev/null && timeout 5 node "$LRC" </dev/null 2>/dev/null | head -2 || true)
+    LRC_OUT=$(cd "$ROOT" 2>/dev/null && timeout 4 node "$LRC" </dev/null 2>/dev/null | head -2 || true)
     [ -z "$LRC_OUT" ] || echo "$LRC_OUT" >&2
   fi
 fi
 
-# --- guards before git commit ---------------------------------------------------
-# WHICH COMMANDS ARE COMMITS (2026-10-04). The regex this replaced matched
-# `git( -C dir)? commit` on the raw text, so `git -c k=v commit`, `git
-# --no-pager commit`, `bash -c "git commit"`, `env X=1 git commit`,
-# `GIT_AUTHOR_NAME=x git commit` and `/usr/bin/git commit` all committed with
-# no guard run. shellparse.py tokenises the command as the shell will
-# (quotes, heredoc bodies, wrappers, `sh -c` bodies, VAR=value prefixes) and
-# returns every `git … commit` with its -a / pathspec / --dry-run reading.
-# FAIL CLOSED (2026-10-09, L12): shellparse walks compound commands (if/then/
-# else/fi, while/for/do/done, { … }, subshells, lists) and prints `null` on text
-# it cannot tokenise; this block ran the regex fallback only for an empty or
-# `null` answer, but the parser answered `[]` for `if …; then git commit; fi`,
-# `{ git commit; }`, a line holding `$((1 << n))` and an unbalanced quote — all
-# real commits. Now the fallback also runs for `[]`: a broad regex on SCAN
-# (reserved words allowed before the verb) that, if it sees a commit the parser
-# did not, treats it as a real `-a` commit. A guard run on a false positive
-# costs one test:guards run (~110 s at load 4–6, 2026-10-26); a commit that
-# skips the guards is the failure being closed.
-# FOUND is how many `git … commit` the parser read (dry runs included); 0 or NULL
-# is where the broad fallback regex decides.
+# --- git commit: keep .githooks/pre-commit reachable ---------------------------
+# THE GATE MOVED (2026-10-28, Bryce: "Yes, split it"). Until then this block ran
+# `ratchets.mjs --auto-raise` and `npm run test:guards` (50–110 s) inside the
+# hook, under its own 160/300 s cap and settings.json's 360 s hook timeout, and
+# .githooks/pre-commit stood aside for Claude Code. git's own hook now does all
+# of it for every host (docs-only path, unstaged-tree refusal, ratchet raise,
+# verdict cache, linked-worktree node_modules); this hook only refuses the ways
+# around it: --no-verify / -n and core.hooksPath writes (shellparse.py guard,
+# above), and — here — a commit in this project's tree with no executable
+# pre-commit hook to run (core.hooksPath unset, or pointing elsewhere).
+# WHICH COMMANDS ARE COMMITS: shellparse.py reads every shape (2026-10-04); text
+# it cannot tokenise falls back to the broad COMMIT_RX (L12, 2026-10-09).
 case "$COMMIT_LINE" in "0 "*|NULL|"") C_FOUND=0 ;; *) C_FOUND=1 ;; esac
 if [ "$C_FOUND" = 0 ]; then
-  if printf '%s' "$SCAN" | grep -Eq "(^|[;&|({\`][[:space:]]*)((if|then|else|elif|while|until|do|time|!)[[:space:]]+)*${PRE}([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*(/[^[:space:]]*/)?git([[:space:]]+-[^[:space:]]+([[:space:]]+[^-[:space:]][^[:space:]]*)?)*[[:space:]]+commit([[:space:]]|\$)"; then
+  if printf '%s' "$SCAN" | grep -Eq "$COMMIT_RX" && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUARDS=1'; then
     COMMIT_LINE="1 1 1 -"
   else
     COMMIT_LINE="0 0 0 -"
   fi
 fi
 # One line: FOUND RUN ALL GITDIR PATHS… — RUN=1 when any commit is real (not
-# --dry-run, not APEX_SKIP_GUARDS=1), ALL=1 when any is -a/--all, PATHS the
-# union of pathspecs (shellparse.py guard prints it).
-read -r _C_N C_RUN C_ALL C_GITDIR C_PATHS <<EOF
+# --dry-run, not APEX_SKIP_GUARDS=1); GITDIR the tree a `-C`/`cd` names.
+read -r _C_N C_RUN _C_ALL C_GITDIR _C_PATHS <<EOF || true
 $COMMIT_LINE
 EOF
-# `git add X && git commit` IN ONE COMMAND (2026-10-15 blocker census: 7 blocks
-# in 7 sessions). This hook runs before the whole command, so X is still
-# unstaged when the unstaged rule below reads the tree. A `git add` in the same
-# command counts as staged: its paths join the unstaged cover and the docs-only
-# set (never C_PATHS, the commit's own pathspec, which the ratchet rule reads);
-# -A/--all/-u/--update/./:/ stage everything, so they read like `commit -a`.
-ADD_PATHS=""; ADD_ALL=0
-set -f   # a glob pathspec stays a word, not this cwd's matches
-for w in $(printf '%s\n' "$SCAN" | grep -oE "(^|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:];&|()]+)?[[:space:]]+add([[:space:]]+[^;&|()[:space:]]+)*" \
-           | sed -E 's/^[;&|([:space:]]*git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+add//'); do
-  case "$w" in
-    -A|--all|-u|--update|.|:/) ADD_ALL=1 ;;
-    -*) ;;
-    *) ADD_PATHS="$ADD_PATHS $w" ;;
-  esac
-done
-set +f
-[ "$ADD_ALL" = 1 ] && C_ALL=1
-# Another host's adapter (.cursor/hooks/shell-guard.sh, used by Cursor and
-# Codex) sets APEX_COMMIT_GATE=githook when core.hooksPath is .githooks: the
-# git pre-commit hook runs this same gate there, so it is not run twice.
-[ "${APEX_COMMIT_GATE:-}" = githook ] && C_RUN=0
-if [ "${C_RUN:-0}" = "1" ] && ! printf '%s' "$SCAN" | grep -Eq -- 'APEX_SKIP_GUARDS=1'; then
-  # `git -C <dir> commit` commits in <dir>'s tree, not the hook's cwd.
-  if [ -n "$C_GITDIR" ] && [ "$C_GITDIR" != "-" ]; then
+if [ "${C_RUN:-0}" = "1" ]; then
+  CTREE="$ROOT"
+  if [ -n "${C_GITDIR:-}" ] && [ "$C_GITDIR" != "-" ]; then
     R2="$(git -C "$C_GITDIR" rev-parse --show-toplevel 2>/dev/null || true)"
-    [ -n "$R2" ] && ROOT="$R2"
+    [ -z "$R2" ] || CTREE="$R2"
   fi
-  # A LINKED WORKTREE BORROWS THE MAIN CHECKOUT'S node_modules (2026-10-15).
-  # EnterWorktree, `isolation: worktree` subagents and `git worktree add` make
-  # a tree with no node_modules, so every worker commit used to block here
-  # (census session_01CgCjzTvy729SeWsHzuv8eh). The dependencies are the same
-  # package.json, the link is git-ignored (`node_modules` in .gitignore), and
-  # the main checkout's install is what SessionStart already verified.
-  if [ ! -e "$ROOT/node_modules" ]; then
-    WT_COMMON="$(git -C "$ROOT" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-    WT_MAIN="$([ -n "$WT_COMMON" ] && dirname "$WT_COMMON")"
-    if [ -n "$WT_MAIN" ] && [ "$WT_MAIN" != "$ROOT" ] && [ -d "$WT_MAIN/node_modules" ]; then
-      ln -s "$WT_MAIN/node_modules" "$ROOT/node_modules" 2>/dev/null || true
-    fi
-  fi
-  if [ -z "${APEX_GUARD_PROBE:-}" ] && [ ! -d "$ROOT/node_modules" ]; then
-    echo "BLOCKED: node_modules is missing, so 'npm run test:guards' cannot run before this commit. Run the SessionStart install (bash tools/env/cloud-agent-install.sh) first." >&2
-    exit 2
-  fi
-  mkdir -p "$ROOT/artifacts"
-  LOG="$ROOT/artifacts/pre-commit-guards.log"
-  # A GUARD RUN THAT OUTLIVES THE HOOK MUST BLOCK, NOT PASS (2026-10-14). The
-  # hook's own timeout is 360 s (settings.json); a hook killed there used to let
-  # the commit through unguarded on a loaded box. The inner runs are capped
-  # below it and rc 124 blocks with a reason; settings.json also sets
-  # onFailure "block". APEX_GUARD_TIMEOUT (seconds) exists for the tests.
-  # Budget order matches .githooks/pre-commit (#2889): git config apex.guardTimeout,
-  # then APEX_GUARD_TIMEOUT, then the 160 s default (load bump only when neither is set).
-  GUARD_T="${APEX_GUARD_TIMEOUT:-}"
-  EXPLICIT_GUARD_BUDGET=0
-  [ -n "${GUARD_T:-}" ] && EXPLICIT_GUARD_BUDGET=1
-  if [ -z "${GUARD_T:-}" ]; then
-    GUARD_T=$(cd "$ROOT" && git config --get apex.guardTimeout 2>/dev/null || true)
-    [ -n "${GUARD_T:-}" ] && EXPLICIT_GUARD_BUDGET=1
-  fi
-  if [ -z "${GUARD_T:-}" ]; then GUARD_T=160; fi
-  # H5 (retro 2026-10-17): at loadavg >= 3 the 160 s cap blocked a commit that was fine alone
-  # (gfx-backend-canary, #2647). A loaded box gets the longer cap; settings.json's hook
-  # timeout (360 s) sits above it. An explicit apex.guardTimeout / APEX_GUARD_TIMEOUT wins.
-  if [ "$EXPLICIT_GUARD_BUDGET" = "0" ] && awk '{exit !($1 >= 3)}' /proc/loadavg 2>/dev/null; then GUARD_T=300; fi
-  guard_timed_out() {
-    if [ "$1" = 124 ] || [ "$1" = 137 ]; then
-      echo "BLOCKED: $2 did not finish within ${GUARD_T} s (apex.guardTimeout / APEX_GUARD_TIMEOUT; the box may be loaded: check /proc/loadavg and any live playwright run), so this commit was NOT guarded. Retry when the box is idle, raise the budget with \`git config apex.guardTimeout <sec>\`, or APEX_SKIP_GUARDS=1 only when the guards themselves are the change." >&2
+  # Only this project's tree (it ships .githooks/pre-commit); a scratch repo is not gated here.
+  if [ -f "$CTREE/.githooks/pre-commit" ]; then
+    # `--git-path hooks` honours core.hooksPath; a relative value is relative to the worktree root.
+    HOOKS_DIR="$(cd "$CTREE" && git rev-parse --git-path hooks 2>/dev/null || true)"
+    case "$HOOKS_DIR" in /*|"") ;; *) HOOKS_DIR="$CTREE/$HOOKS_DIR" ;; esac
+    if [ -z "$HOOKS_DIR" ] || [ ! -x "$HOOKS_DIR/pre-commit" ]; then
+      HP="$(git -C "$CTREE" config --get core.hooksPath 2>/dev/null || true)"
+      echo "BLOCKED: no pre-commit hook would run for this commit (core.hooksPath=${HP:-unset}; git would look in ${HOOKS_DIR:-?}). .githooks/pre-commit is the one commit gate (test:guards, docs-integrity, the ratchet auto-raise; AGENTS.md rule 12). Run \`npm run prepare\` (it sets core.hooksPath=.githooks, as every npm install does), then commit again." >&2
       exit 2
     fi
-  }
-  # DOCS-ONLY COMMITS SKIP TO docs-integrity. The deploy branch takes a lot of
-  # note-only commits (one 2026-09-16 session made four), and the guards and
-  # the ratchets have nothing to say about prose — worse, --auto-raise can stage
-  # tests/data/ratchets.json into a commit that changed no code at all. The path
-  # set is deliberately narrow: docs/, any .md, skills and agents. A GENERATED
-  # doc is excluded — it is prose whose SOURCE is code, so generated-docs must
-  # still run — and so is an empty staged list (`git commit -a`, or a pathspec
-  # on the command line, stages at commit time, and nothing staged must never
-  # read as "nothing to check").
-  STAGED=$(cd "$ROOT" && git diff --cached --name-only --no-renames 2>/dev/null)   # --no-renames: a moved-out source file must show (M36)
-  # A PATHSPEC COMMITS WHAT IT NAMES (2026-10-04): `git commit docs/a.md
-  # js/game.js` with only docs/a.md staged used to take the docs-only path
-  # and commit js/game.js unguarded. The named paths join the set judged.
-  COMMITTED="$STAGED"
-  for p in $C_PATHS $ADD_PATHS; do COMMITTED="$COMMITTED
-$p"; done
-  GENERATED_DOCS=$(cd "$ROOT" && node tools/gen/targets.mjs 2>/dev/null | tr '\n' ' ')
-  [ -n "$GENERATED_DOCS" ] || GENERATED_DOCS="tools/README.md docs/DEBUG-HOOKS.md docs/ARCHITECTURE.md docs/LIGHTING-TUNER-SLIDERS.md docs/notes/PREPUSH-GATE-LADDER.md"
-  DOCS_ONLY=0
-  # `--all` / -a stage at commit time: the index is not what will be committed.
-  if [ -n "$STAGED$C_PATHS$ADD_PATHS" ] && [ "$C_ALL" != "1" ]; then
-    DOCS_ONLY=1
-    while IFS= read -r f; do
-      [ -z "$f" ] && continue
-      # The generated-doc list comes from the generators themselves
-      # (tools/gen/targets.mjs prints each gen-*.mjs TARGET); the literal
-      # list is the fallback for a box where node cannot run.
-      case " $GENERATED_DOCS " in
-        *" $f "*) DOCS_ONLY=0; break ;;
-      esac
-      # Survey assets count as prose (2026-10-15): image/report output in the
-      # track-survey-assets dirs only (docs/notes/SURVEY-ASSETS-BRANCH.md). That
-      # branch dropped ci.yml (#2234), so test:guards is red there by
-      # construction and every image commit needed APEX_SKIP_GUARDS=1.
-      printf '%s' "$f" | grep -Eq '^(docs/|\.claude/skills/|\.claude/agents/)|\.md$|^artifacts/(shots/(tracks|gallery)|track-survey)/.+\.(png|jpe?g|webp|json|html)$' || { DOCS_ONLY=0; break; }
-    done <<EOF
-$COMMITTED
-EOF
-  fi
-  if [ -n "${APEX_GUARD_PROBE:-}" ] && [ "$DOCS_ONLY" = 1 ]; then
-    echo "bash-guard probe: commit docs-only" >&2; exit 0
-  fi
-  # A TREE WITH NO tools/ (the track-survey-assets image branches) CANNOT RUN
-  # THE GUARDS: skip with a note instead of leaving the model to find
-  # APEX_SKIP_GUARDS=1 (#2428). Only when every committed path sits outside
-  # js/ css/ tools/ tests/ and the generated shell files; `commit -a` stages at
-  # commit time, so it never skips.
-  if [ ! -d "$ROOT/tools/ci" ] && [ ! -d "$ROOT/tools/check" ] && [ "$C_ALL" != "1" ] && [ -n "$(printf '%s' "$COMMITTED" | tr -d '[:space:]')" ] \
-     && ! printf '%s\n' "$COMMITTED" | grep -Eq '^(js/|css/|tools/|tests/)|^(index\.html|sw\.js|version\.json|package\.json|CHANGELOG\.md)$'; then
-    echo "guards skipped: no tools/ in this tree" >&2
-    exit 0
-  fi
-  if [ "$DOCS_ONLY" = 1 ]; then
-    T0=$(date +%s)
-    (cd "$ROOT" && timeout -k 5 "$GUARD_T" node --test tests/unit/docs-integrity.test.mjs >"$LOG" 2>&1); RC=$?
-    guard_timed_out "$RC" "docs-integrity"
-    if [ "$RC" != 0 ]; then
-      echo "BLOCKED: tests/unit/docs-integrity.test.mjs is red (links, index rows). Last lines of $LOG:" >&2
-      grep -E 'not ok|Error|expected|actual|✖' "$LOG" | tail -20 >&2
-      exit 2
-    fi
-    echo "docs-only commit: ran docs-integrity only (no ratchet raise, no test:guards)." >&2
-    COMMIT_CTX="bash-guard: docs-only commit — ran tests/unit/docs-integrity.test.mjs only (green, $(( $(date +%s) - T0 )) s); no ratchet raise, no test:guards."
-    exit 0
-  fi
-  # THE GUARDS MEASURE THE WORKING TREE; THE COMMIT IS THE INDEX (2026-10-04).
-  # A tracked file whose working copy differs from what is staged makes the
-  # verdict about content this commit does not carry — green on an unstaged
-  # fix while the staged half is red, or the reverse. Stash-free: the
-  # `git diff` (worktree vs index) names are compared with what is committed,
-  # and the commit is refused until they agree. `-a` stages everything, and a
-  # pathspec commits its paths from the working tree, so neither counts; the
-  # synced auto-memory under .claude/memory/ never reaches a guard.
-  if [ "$C_ALL" != "1" ]; then
-    UNSTAGED=$(cd "$ROOT" && git diff --name-only 2>/dev/null | while IFS= read -r f; do
-      [ -z "$f" ] && continue
-      case "$f" in .claude/memory/*) continue ;; esac
-      covered=0
-      for p in $C_PATHS $ADD_PATHS; do
-        p="${p%/}"; case "$f" in "$p"|"$p"/*) covered=1 ;; esac
-        [ "$p" = "." ] && covered=1
-      done
-      [ "$covered" = 1 ] || printf '%s\n' "$f"
-    done)
-    if [ -n "$UNSTAGED" ]; then
-      N=$(printf '%s\n' "$UNSTAGED" | grep -c .)
-      echo "BLOCKED: the guards measure the working tree, but $N tracked file(s) differ from what this commit holds (unstaged changes):" >&2
-      printf '%s\n' "$UNSTAGED" | head -10 | sed 's/^/  /' >&2
-      echo "Stage them (git add), commit with -a, or set them aside (git stash push -- <paths>), then commit again — so the guard verdict is about this commit. APEX_SKIP_GUARDS=1 bypasses when that is deliberate." >&2
+    # The hook that WILL run predates the split and still stands aside for Claude Code (a branch that has not merged
+    # the split, or an absolute core.hooksPath into an older checkout): refuse a known guardless commit.
+    if [ -n "${CLAUDECODE:-}" ] && grep -Fq '[ -n "${CLAUDECODE:-}" ] && exit 0' "$HOOKS_DIR/pre-commit" 2>/dev/null; then
+      echo "BLOCKED: the active pre-commit hook ($HOOKS_DIR/pre-commit) skips Claude Code, while this bash-guard no longer runs the suite. This commit would run NO guards. Update the worktree to the reviewed split pre-commit hook and run \`npm run prepare\` so its hook is reachable, then retry. Do not bypass the gate." >&2
       exit 2
     fi
   fi
-  if [ -n "${APEX_GUARD_PROBE:-}" ]; then
-    echo "bash-guard probe: commit code paths=${C_PATHS:-}" >&2; exit 0
-  fi
-  # Size ratchets first (tools/check/ratchets.mjs --auto-raise): growth of up
-  # to 40 lines in a ratcheted file raises its ceiling and STAGES it — on a
-  # topic branch as a delta in tests/data/ratchets.d/<branch>.json (only this
-  # branch touches it, so two PRs growing one module never conflict, #2291),
-  # else tests/data/ratchets.json — so the raise is in this commit's diff
-  # instead of a hand edit plus a second guard run. Bigger growth still blocks.
-  # ONE GUARD RUN PER COMMIT, NOT ONE PER MATCHING FILTER (2026-10-17).
-  # settings.json once registered this hook under 14 `if:` filters (one entry
-  # since; GUARD_TRIGGER above is the filter now), so a commit command that also
-  # said node/sh/npm/... started two or more copies at once: each ran the full suite, doubling the load and sharing $LOG, so one timed
-  # out (160/300 s) while its twin went green in 202 s — seven blocked
-  # commits in a row. Copies now queue on a lock, and a later copy reuses a
-  # GREEN verdict via tools/ci/guards-verdict.mjs check (same cache as
-  # .githooks/pre-commit and npm run test:guards). Red and timed-out runs are
-  # never reused.
-  if command -v flock >/dev/null 2>&1; then
-    exec 9>"$ROOT/artifacts/pre-commit-guards.lock"
-    flock -w $(( GUARD_T + 60 )) 9 || true
-  fi
-  RLOG="$ROOT/artifacts/pre-commit-ratchets.log"
-  if (cd "$ROOT" && node tools/check/ratchets.mjs --auto-raise >"$RLOG" 2>&1); then
-    if grep -q '^RAISED\|^LOWERED' "$RLOG"; then
-      (cd "$ROOT" && git add -A -- tests/data/ratchets.json tests/data/ratchets.d) || true
-      grep '^RAISED\|^LOWERED' "$RLOG" >&2
-      # A pathspec commit (--only, git's default with paths) commits ONLY the
-      # named paths, so the staged raise would be left behind.
-      if [ -n "$C_PATHS" ] && ! printf ' %s ' "$C_PATHS" | grep -q ' tests/data/ratchets.json \| tests/data/ratchets.d\(/[^ ]*\)\? \| tests/data/ \| tests/ \| \. '; then
-        echo "BLOCKED: the ratchet raise above is staged, but this pathspec commit carries only the paths it names. Add tests/data/ratchets.d (and tests/data/ratchets.json) to the command (or commit without a pathspec)." >&2
-        exit 2
-      fi
-    fi
-  else
-    echo "BLOCKED: a size ratchet is over its ceiling in a way the auto-raise may not absorb (only a per-file line count, by <= 40, is absorbed) ($RLOG):" >&2
-    grep '^OVER' "$RLOG" >&2
-    exit 2
-  fi
-  T0=$(date +%s)
-  RAISED=$(grep -c '^RAISED\|^LOWERED' "$RLOG" 2>/dev/null)
-  # The cache is keyed on the INDEX tree as it is now. A `git add`/`commit -a` in the same
-  # command commits a different tree, so a green cached verdict says nothing about it
-  # (2026-10-26 second pass, finding 3): run the guards instead.
-  if [ "$C_ALL" = 1 ] || [ -n "$ADD_PATHS" ]; then
-    CACHE_HIT=""
-  else
-    CACHE_HIT=$(cd "$ROOT" && node tools/ci/guards-verdict.mjs check 2>/dev/null) || true
-  fi
-  if [ -n "$CACHE_HIT" ]; then
-    printf '%s\n' "$CACHE_HIT" >&2
-    COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered); $CACHE_HIT (a concurrent copy of this hook or a foreground test:guards already certified this tree; log $LOG)."
-    exit 0
-  fi
-  # test:guards builds throwaway fixture repos; unset this hook's GIT_* selectors
-  # for the suite only (#1807, same idiom as .githooks/pre-commit).
-  ( cd "$ROOT" && unset $(git rev-parse --local-env-vars 2>/dev/null) && timeout -k 5 "$GUARD_T" npm run --silent test:guards ) >"$LOG" 2>&1
-  RC=$?
-  guard_timed_out "$RC" "npm run test:guards"
-  if [ "$RC" != 0 ]; then
-    echo "BLOCKED: npm run test:guards is red — AGENTS.md §Verification 3 forbids committing on a red guard. Last lines of $LOG:" >&2
-    grep -E 'not ok|Error|expected|actual|✖' "$LOG" | tail -20 >&2
-    echo "Fix the guard (or prefix with APEX_SKIP_GUARDS=1 when the guards themselves are the change under test)." >&2
-    exit 2
-  fi
-  COMMIT_CTX="bash-guard: code commit — ratchets --auto-raise (${RAISED:-0} raised/lowered) then npm run test:guards (green, $(( $(date +%s) - T0 )) s; log $LOG)."
 fi
 exit 0

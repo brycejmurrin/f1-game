@@ -168,6 +168,7 @@ const NativeDownload = (function () {
 
   try { install(); } catch (e) { /* document absent in Node VM tests */ }
 
-  return { viable, saveBlob, install, safeName, isCancelled };
+  // install() runs at module load; keep it private (viable/saveBlob/safeName/isCancelled are the public seams).
+  return { viable, saveBlob, safeName, isCancelled };
 })();
 Object.freeze(NativeDownload);

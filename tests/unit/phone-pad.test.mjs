@@ -30,6 +30,9 @@ globalThis.NetBytes = load("js/net/bytes.js", "NetBytes");
 const NetIce = load("js/net/ice.js", "NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = globalThis.NetTransport = load("js/net/transport.js", "NetTransport");
 const TiltRoll = globalThis.TiltRoll = load("js/input/tilt-roll.js", "TiltRoll");
+globalThis.PedalTravel = load("js/input/pedal-travel.js", "PedalTravel");
+globalThis.PhonePadCodec = load("js/input/phone-pad-codec.js", "PhonePadCodec");
+globalThis.PhonePadPage = load("js/input/phone-pad-page.js", "PhonePadPage");
 const PhonePad = globalThis.PhonePad = load("js/input/phone-pad.js", "PhonePad");
 
 // phonePadDash is the sampler the game paints the wheel from. It is nested in PlatformSession.create(G), so
@@ -85,7 +88,7 @@ function bootInput() {
   const src = (f) => read(f).replace(/^const\b/gm, "var");
   vm.runInContext(src("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
   vm.runInContext(src("js/input/tilt-roll.js"), ctx, { filename: absSrc("js/input/tilt-roll.js") });
-  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   let paused = 0;
@@ -1232,7 +1235,8 @@ test("controller.html carries exactly the manifest's CONTROLLER subset and both 
     if (spec.startsWith("three")) continue;
     assert.equal(padMap[spec], target, `controller.html's importmap must carry "${spec}" exactly as index.html does`);
   }
-  assert.doesNotMatch(read("js/input/phone-pad.js"), /getElementById|querySelector\(/, "the module never looks an id up — controller.html hands elements in");
+  for (const f of ["js/input/phone-pad.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js"])
+    assert.doesNotMatch(read(f), /getElementById|querySelector\(/, f + " never looks an id up — controller.html hands elements in");
   for (const id of ["h-gear", "h-speed", "h-lap", "h-pos", "h-ers", "h-flag", "h-ot", "h-aero", "h-last", "leds", "screen", "rim",
                     "b-shiftUp", "b-shiftDown", "b-ot-big", "b-boost-big", "b-overtake", "b-boost", "b-aero", "b-camera", "b-radio", "b-look", "b-recover", "b-pause", "b-center", "gas", "brake",
                     "menupad", "dpad", "dpad-hub", "b-navUp", "b-navDown", "b-navLeft", "b-navRight", "mp-mid", "mp-title", "b-pause-menu", "ab", "b-navSelect", "b-navBack"]) {
@@ -1588,7 +1592,8 @@ function wakePad(over = {}) {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  vm.runInContext(read("js/input/phone-pad.js"), ctx, { filename: absSrc("js/input/phone-pad.js") });
+  for (const f of ["js/input/pedal-travel.js", "js/input/phone-pad-codec.js", "js/input/phone-pad-page.js", "js/input/phone-pad.js"])
+    vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const P = vm.runInContext("PhonePad", ctx);
   const dom = { connect: fakeEl(), body: fakeEl(), status: fakeEl() };
   const ctl = P.pad(dom, { deps: {

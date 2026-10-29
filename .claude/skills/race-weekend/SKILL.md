@@ -1,6 +1,6 @@
 ---
 name: race-weekend
-description: "Use when tyre wear/compounds (tyre-model.js), pit stop time/lane (pit-lane.js), the STRATEGY/tyre HUD, quali or results sheets, start lights, flying start, rain/weather arc or sporting regs (two-compound rule, SC pass penalty) change. Handling → tune-physics; flags/SC → race-incidents-control; calendar → season-mode."
+description: "Use when changing tyre wear/compounds (tyre-model.js), pit stop time and pit lane (pit-lane.js), the strategy HUD, quali or results sheets, start lights, weather, or sporting rules (two-compound rule, penalty). Not handling → tune-physics; flags → race-incidents-control; calendar → season-mode."
 ---
 
 # Race weekend — tyres, pits, quali, start, weather, regs
@@ -53,6 +53,9 @@ __apex.weatherArc()                  // live arc or null; weatherArc("dry","rain
 
 No hook reads the two-compound state. Probe it: `__apex.tyres({level:"real"})` + a dry race of
 ≥ `TWO_COMPOUND_MIN_LAPS`, one compound, finish; the console shows `DSQ car=… why=…` (`Log.info("game", …)`).
+
+Career qualifying flow or DNF settlement money → **career-mode**. For verification
+selection and browser ownership, follow [AGENTS.md §Verification](../../../AGENTS.md#verification--scale-it-to-the-change).
 
 ## Tests
 

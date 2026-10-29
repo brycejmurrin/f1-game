@@ -602,5 +602,5 @@ const FlybySight = (function () {
     return { inF, vis, nearSubj, near, thirds: th, inside, steep, cover, mix: m, mixCost: mc, cost };
   }
 
-  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, rayBox, transmit, nearThirds, mix, mixCost, frame, camera, project, NEAR_M, GROUND_OK });
+  return Object.freeze({ propBoxes, offRoad, spanBoxes, sceneOf, transmit, nearThirds, mix, mixCost, frame, camera, project, GROUND_OK });
 })();

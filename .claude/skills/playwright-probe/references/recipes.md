@@ -45,7 +45,7 @@ node tools/shot/apex-eval.mjs monza "(a.park(0.18), a.camera('drift'), a.snapCam
 ```
 
 For arbitrary lap fractions without forking, use `shot.mjs` with your `frac` arg
-or a `previewCam` loop (see `cameras.md`).
+or a `previewCam` loop (the cameras reference, SKILL.md §References).
 
 ## Why one server + Chromium workers
 
@@ -88,7 +88,7 @@ helped asset fetch; they are not the current harness.
    ```
    **`shot.mjs` calls `snapCam()` automatically for `park` mode**; for `orbit` /
    `eye` / `cinematic` / `trackside` it sets `dbgCam` directly (no snapCam — and
-   never call snapCam after orbit; see `cameras.md`). Waiting longer is not a
+   never call snapCam after orbit; see the cameras reference). Waiting longer is not a
    fix (the ease is slow and `freeze()` can hold it). Symptom: eye-to-car distance
    in the hundreds of metres when chase should read ~5.8 m.
 
