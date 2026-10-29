@@ -17495,6 +17495,9 @@
       "landing": [
         "tests/unit/menu-a11y-audit.test.mjs"
       ],
+      "onClickShield": [
+        "tests/unit/menu-a11y-audit.test.mjs"
+      ],
       "onEscape": [
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"

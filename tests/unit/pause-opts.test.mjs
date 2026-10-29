@@ -116,10 +116,10 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   // A click as the browser dispatches it: capture listeners on #pausemenu
   // first; unless one stopped it, the button's own handler (js/game.js) runs.
   const handled = [];
-  function press(btn) {
+  function press(btn, extra = {}) {
     let stopped = false, prevented = false;
     const ev = {
-      type: "click", target: btn,
+      type: "click", target: btn, ...extra,
       stopImmediatePropagation() { stopped = true; },
       stopPropagation() { stopped = true; },
       preventDefault() { prevented = true; },
@@ -321,6 +321,31 @@ test("a disabled RESTART (multiplayer) is never armed; CONFIRM OFF passes straig
   c.press(c.quit);
   c.M.setConfirm("off");
   assert.ok(!c.quit.classList.contains("armed"));
+});
+
+// UI hunt 2026-10-29 #1: a 175 ms thumb double tap sent both presses to #pm-quit.
+test("a real press younger than ARM_MIN_MS is the same double tap: swallowed, still armed", () => {
+  const { press, handled, quit, advance, M } = load();
+  const tap = { isTrusted: true, detail: 1 };
+  assert.equal(M.ARM_MIN_MS, 350);
+  assert.equal(M.armAge(), Infinity, "nothing armed");
+  press(quit, tap);
+  advance(175);
+  assert.equal(M.armAge(), 175);
+  assert.ok(press(quit, tap).stopped, "the double tap's second click never reaches the game's handler");
+  assert.deepEqual(handled, []);
+  assert.ok(M.isArmed("pm-quit"), "the arm stays up, its clock unchanged");
+  assert.equal(M.armAge(), 175);
+  advance(200);
+  assert.ok(!press(quit, tap).stopped, "a deliberate second tap commits");
+  assert.deepEqual(handled, ["pm-quit"]);
+  // Keyboard activation (detail 0) and a script's el.click() (untrusted) are never ghosts.
+  for (const ev of [{ isTrusted: true, detail: 0 }, { isTrusted: false, detail: 1 }]) {
+    const r = load();
+    r.press(r.restart, ev);
+    assert.ok(!r.press(r.restart, ev).stopped);
+    assert.deepEqual(r.handled, ["pm-restart"]);
+  }
 });
 
 test("js/game.js keeps its handlers and the multiplayer restart guard untouched", () => {

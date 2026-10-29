@@ -212,6 +212,8 @@ test("custom-team save frees every cached car-body mesh variant", async ({ page 
   await page.locator("#pausebtn").click();
   // CONFIRM QUIT (js/ui/pause-opts.js) is ON by default: arm, then quit.
   await page.locator("#pm-quit").click();
+  // A real press younger than ARM_MIN_MS is a double tap and is swallowed.
+  await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 });
   await page.locator("#pm-quit").click();
   await page.locator("#mb-race").click();
   await page.locator("#select").waitFor({ state: "visible" });
