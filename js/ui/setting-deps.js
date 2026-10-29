@@ -444,6 +444,7 @@ const SettingDeps = (function () {
     else init();
   }
 
-  return { RULES, EXPLAIN, S, refresh, state };
+  // S stays module-local (state / explain predicates).
+  return { RULES, EXPLAIN, refresh, state };
 })();
 Object.freeze(SettingDeps);
