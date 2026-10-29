@@ -128,8 +128,11 @@ test("blocking and preload byte census stay under the post-cut ceilings", () => 
   // composition and saved-width fallback in menu-destinations.css. Keeping this
   // blocking avoids a title/menu shift before the new container layout loads.
   // Measured blocking/preload: 232559 B; retain a bounded 233300 B ceiling.
-  assert.ok(blocking < 233300, `blocking CSS is ${blocking} B; want < 233300`);
-  assert.ok(preload < 233300, `preload CSS is ${preload} B; want < 233300`);
+  // Menu fit (2026-10-29): play-door subtitles, utility wrap and the 1440p /
+  // ultrawide column measure live in menu-destinations.css (first paint).
+  // Measured after that block; ceiling stays a bound, not a target.
+  assert.ok(blocking < 235200, `blocking CSS is ${blocking} B; want < 235200`);
+  assert.ok(preload < 235200, `preload CSS is ${preload} B; want < 235200`);
   const settingsBytes = SETTINGS_FOUC.reduce((n, f) => n + fs.statSync(path.join(ROOT, f)).size, 0);
   assert.ok(settingsBytes > 70000, "the dropped preload still exists as print→all bytes");
 });
