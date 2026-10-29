@@ -1879,6 +1879,7 @@ body:not(.desktop) #carsetup #cs-customize {
     flex-wrap: nowrap;
     overflow-x: auto;
     overscroll-behavior-x: contain;
+    touch-action: pan-x;
   }
   #cs-cam-panel {
     max-height: min(20vh, 142px);
