@@ -507,7 +507,7 @@ test("TopModal.scanLayers wires every non-dialog UiLayers layer except the two t
   const s = code("js/ui/modal.js");
   assert.match(s, /"rotate-device":\s*1,\s*"photo-controls":\s*1/, "LAYER_SKIP names exactly the rotate blocker and the fly-cam");
   assert.match(s, /el\.tagName !== "DIALOG"\) wireLayer\(el\)/, "dialogs keep showModal()/close() focus handling");
-  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation, escapeTop, onClickShield \}/);
+  assert.match(s, /return \{ scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation, escapeTop, onClickShield, shieldIdle \}/);
 });
 
 test("TopModal isolates the title menu behind dialog and non-dialog sheets", () => {
@@ -860,10 +860,12 @@ test("TopModal: the ghost-tap shield swallows only a fast pointer repeat at the 
   const ghost = click(row, { clientX: 104, clientY: 113 });
   assert.equal(ghost.stopped, true, "the double tap's second click never reaches the circuit row");
   assert.equal(ghost.defaultPrevented, true);
+  assert.equal(h.TopModal.shieldIdle(), false, "the window is open: a bot-speed spec waits on shieldIdle()");
   assert.equal(click(row, { detail: 0 }).stopped, false, "keyboard Enter/Space (detail 0) passes");
   assert.equal(click(row, { isTrusted: false }).stopped, false, "a script's el.click() passes");
   assert.equal(click(row, { clientX: 400, clientY: 300 }).stopped, false, "a tap elsewhere is a real choice");
   now += 400;
+  assert.equal(h.TopModal.shieldIdle(), true);
   assert.equal(click(row).stopped, false, "after SHIELD_MS the same spot is live again");
   // The window runs from the OPENING tap, not the show: a screen that took a
   // second to swap in must not swallow the next deliberate tap at that spot.

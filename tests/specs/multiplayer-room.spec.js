@@ -230,6 +230,9 @@ test.describe("the waiting room", () => {
     await page.click("#sel-go");
     await expect(page.locator("#race-settings")).toBeVisible({ timeout: 30000 });
     await expect(page.locator("#rs-go")).toHaveText("CONFIRM FOR LOBBY", { timeout: 30000 });
+    // #rs-go sits where #sel-go was: a bot-speed click inside 350 ms of that
+    // tap is a double tap's ghost to TopModal's shield, and is swallowed.
+    await page.waitForFunction(() => TopModal.shieldIdle(), null, { polling: 100, timeout: 5000 });
     await page.click("#rs-go");
     await expect(page.locator("#vs-room")).toBeVisible({ timeout: 30000 });
     expect(await page.evaluate(() => window.__apex.info().state)).not.toBe("race");

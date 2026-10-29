@@ -449,5 +449,7 @@ window.TopModal = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation, escapeTop, onClickShield };
+  /** True once no ghost-tap window is open (specs that click at bot speed wait on it). */
+  const shieldIdle = () => !shield || Date.now() >= shield.until;
+  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation, escapeTop, onClickShield, shieldIdle };
 })();
