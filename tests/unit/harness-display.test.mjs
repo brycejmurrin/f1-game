@@ -10,6 +10,7 @@ import assert from "node:assert/strict";
 import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
 import { execFileSync } from "node:child_process";
+import vm from "node:vm";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -39,9 +40,11 @@ test("static server builds missing and stale metadata from an alternate source c
       else writeFileSync(target, "stale bytes");
       server = await startStaticServer(dir);
       const bytes = await (await fetch(server.url + "js/track/circuit-meta.js")).text();
-      assert.match(bytes, /Alternate source/, before);
-      assert.match(bytes, /"id":"other"/, before);
-      assert.doesNotMatch(bytes, /"path":/, "only picker metadata is served");
+      const sandbox = { window: { TrackDefs: [] } };
+      vm.runInNewContext(bytes, sandbox, { filename: join(dir, "js/track/circuit-meta.js") });
+      assert.deepEqual(Array.from(sandbox.window.TrackDefs, (entry) => ({ ...entry })), [
+        { id: "other", name: "Alternate source", country: "ZZ", _metaOnly: true },
+      ], `${before}: only metadata from the selected source is served`);
       assert.equal(readFileSync(target, "utf8"), bytes);
       await server.close(); server = null;
     }

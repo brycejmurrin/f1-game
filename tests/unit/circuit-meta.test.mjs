@@ -33,7 +33,7 @@ test("ensure-built: BUILT_PATHS carries the roster, buildInto renders it, a seco
   const again = ensureBuilt();
   assert.deepEqual(again.map((r) => r.was), BUILT_PATHS.map(() => "fresh"), "idempotent: nothing left to write");
   assert.equal(builtLine(again), "", "a fresh checkout prints nothing");
-  assert.match(builtLine([{ target: "x.js", was: "missing" }, { target: "y.js", was: "stale" }]), /built x\.js \(missing\); rebuilt y\.js \(stale\)/);
+  assert.equal(builtLine([{ target: "x.js", was: "missing" }, { target: "y.js", was: "stale" }]), "ensure-built: built x.js (missing); rebuilt y.js (stale)");
   const dir = mkdtempSync(join(tmpdir(), "apex-built-"));
   try {
     assert.deepEqual(buildInto(dir), [...BUILT_PATHS]);

@@ -46,8 +46,8 @@ with tempfile.TemporaryDirectory(dir=${JSON.stringify(path.join(ROOT, "scratch")
 print("refused before server and MCP")
 `], { cwd: ROOT, encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr + r.stdout);
-  assert.match(r.stdout, /refused before server and MCP/);
-  assert.match(r.stderr, /fixture builder failed/);
+  assert.equal(r.stdout, "refused before server and MCP\n");
+  assert.equal(r.stderr, "fixture builder failed\n");
 });
 
 test("cdmcp-measure.py and cdmcp-bg.mjs exist and are executable-ish", () => {
