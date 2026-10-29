@@ -166,9 +166,8 @@ const NetPlay = (function () {
     const sessionKinds = new Map(), peerInfo = new Map();
     const peerKind = (peer) => SpectatePolicy.kind(peer);
     let epoch = null;
-    function broadcastStrategy(data, exceptId) {
+    function broadcastStrategy(data) {
       for (const [id, s] of sessions) {
-        if (id === exceptId) continue;   // the relay's origin already holds this state
         const to = peerEpochs.get(id);
         if (to) { try { s.sendEvent(EV.STRATEGY, { ...data, epoch: to }); } catch (e) { /* peer closed */ } }
       }
@@ -578,7 +577,7 @@ const NetPlay = (function () {
             const fromHost = (role === "guest" || role === SpectatePolicy.SPECTATOR) && s === session;
             const r = remotes.get(d.wire) || (fromHost ? aiRemotes.get(d.wire) : null);
             const authorized = fromHost || (role === "host" && remoteFor(id) === d.wire);
-            if (r && authorized && applyStrategy(r.car, d) && role === "host") broadcastStrategy(strategyState(r.car, d.wire, d.track), id);
+            if (r && authorized && applyStrategy(r.car, d) && role === "host") broadcastStrategy(strategyState(r.car, d.wire, d.track));
           }
           if (name === EV.BYE) {
             lastReason = "bye";
@@ -1212,9 +1211,10 @@ const NetPlay = (function () {
             || c.pitState !== last.pit || c.pitArmed !== last.armed || c.pitFitted !== last.fitted
             || (c.pitNext && c.pitNext.id) !== last.next || c.compoundShortAtFinish !== last.compound) {
           broadcastStrategy(strategyState(c, wire, G.track.def.id));
-          // Stagger the 1 Hz refresh: each AI car's phase is offset by its wire id, so the field's
-          // ~21 payloads spread over the second instead of bursting in one frame (perf hunt 4).
-          if (!last) { last = {}; aiStrategyPhases.set(wire, last); last.at = now - (wire % 24) * (1000 / 24); }
+          // Stagger the 1 Hz refresh: each AI car's phase is pushed LATER by its wire id, so the field's
+          // ~21 payloads spread over the second instead of bursting in one frame, and no interval is
+          // ever shorter than 1 s (perf hunt 4).
+          if (!last) { last = {}; aiStrategyPhases.set(wire, last); last.at = now + (wire % 24) * (1000 / 24); }
           else last.at = now; last.stints = c.tyreStints; last.pit = c.pitState; last.armed = c.pitArmed;
           last.fitted = c.pitFitted; last.next = c.pitNext && c.pitNext.id; last.compound = c.compoundShortAtFinish;
         }

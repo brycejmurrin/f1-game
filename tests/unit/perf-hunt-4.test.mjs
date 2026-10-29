@@ -39,11 +39,10 @@ test("audio: SOUND OFF suspends the context and SFX OFF builds no engine graph",
   assert.match(src, /if \(mutedSuspended && !isEnabled\) return;   \/\/ muted on purpose/);
 });
 
-test("garage bay caps a settled phone bay and netplay staggers + skips the relay origin", () => {
+test("garage bay caps a settled phone bay and netplay staggers the AI strategy refresh", () => {
   assert.match(read("js/garage/setup-camera.js"), /_bayAcc \+= dt; return false;/);
   const net = read("js/net/netplay.js");
-  assert.match(net, /last\.at = now - \(wire % 24\) \* \(1000 \/ 24\)/);
-  assert.match(net, /broadcastStrategy\(strategyState\(r\.car, d\.wire, d\.track\), id\)/);
+  assert.match(net, /last\.at = now \+ \(wire % 24\) \* \(1000 \/ 24\)/);
 });
 
 // Behaviour, not source: SOUND OFF suspends the (fake) context and a later tap does not wake it;
