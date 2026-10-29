@@ -45,6 +45,13 @@ if [ -f .githooks/pre-commit ]; then
   fi
 fi
 
+# The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28): a fresh
+# clone has none and a pull can stale them. Every session, not only on install;
+# ~0.1 s, node builtins only, writes nothing when they are current. Silent on success.
+if [ -f tools/gen/ensure-built.mjs ] && ! node tools/gen/ensure-built.mjs --quiet >artifacts/session-ensure-built.log 2>&1; then
+  status+=("built files: FAILED (artifacts/session-ensure-built.log)")
+fi
+
 # Reuse the same executable as the harness and MCP wrapper, including system
 # Chromium on PATH. The installer chooses a writable cache if none is present.
 CHROMIUM="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"

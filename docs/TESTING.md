@@ -1380,6 +1380,10 @@ comment saying why they are not one.
 
 ## 5. Coverage table
 
+`pit-think-cache.test.mjs` covers lazy per-step AI pit weather/caution reads,
+live reads outside the car-loop bracket, tick invalidation and real strategy
+decision parity. It runs in the `tooling-fast` Node group without a browser.
+
 The `agent-output` group covers shared presentation levels, literal CLI execution
 and retention, MCP protocol/level routing and retrieval, configured launch pins,
 and the generated surface catalog. It runs without browsers and is included in

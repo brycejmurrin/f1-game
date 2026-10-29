@@ -15,10 +15,12 @@
 }
 [data-career-part="nav"] [aria-current="location"] { border-color: var(--red); background: var(--carbon); }
 .cr-nextrace { padding: 0; overflow: hidden; border-color: var(--career-team, var(--red)); }
-.cr-nextrace > img { display: block; width: 100%; aspect-ratio: 2.4; object-fit: cover; }
+/* display/width come from career.css `#cr-nextrace img, .cr-nextrace img`. */
+.cr-nextrace > img { aspect-ratio: 2.4; object-fit: cover; }
 .cr-nextrace > div { padding: var(--pad); }
 .cr-nextrace, [data-career-part="story"], [data-results-part="story"] { font-style: normal; }
-.cr-nextrace .cr-nr-name { margin: 0; font-style: italic; font-size: var(--fs-6); }
+/* italic is already on .cr-nr-name in career.css; this only retunes size + margin. */
+.cr-nextrace .cr-nr-name { margin: 0; font-size: var(--fs-6); }
 [data-career-part="facts"] { display: flex; flex-wrap: wrap; gap: var(--gap); font-size: var(--label); color: var(--dim); }
 [data-career-part="objective"] { display: flex; flex-direction: column; gap: var(--gap); margin-bottom: 0; }
 [data-career-part="objective"] strong { color: var(--text); }

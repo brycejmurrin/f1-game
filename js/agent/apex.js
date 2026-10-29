@@ -610,6 +610,10 @@ const api = {
       towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
       wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
+      // DAMAGE → HANDLING (#1578): per-axle grip ratio from damage (1 = none; always 1 with the opt-in OFF).
+      damageAxF: typeof DamageHandling !== "undefined" ? +DamageHandling.axles().f.toFixed(4) : 1,
+      damageAxR: typeof DamageHandling !== "undefined" ? +DamageHandling.axles().r.toFixed(4) : 1,
+      damageHandling: typeof DamageHandling !== "undefined" && DamageHandling.isEnabled(),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
       xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),

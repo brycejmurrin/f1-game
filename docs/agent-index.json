@@ -1056,6 +1056,7 @@
       "script": "test:gfx",
       "kind": "browser",
       "files": [
+        "tests/specs/ctx-lost-retry.spec.js",
         "tests/specs/hud-mirror.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/instanced-draw.spec.js",
@@ -3937,6 +3938,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/damage-handling.js",
+      "global": "DamageHandling",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/damage.js",
       "global": "Damage",
       "roster": "LAZY_RACE_SESSION"
@@ -3997,6 +4003,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/parc-ferme.js",
+      "global": "ParcFerme",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/pit-geom.js",
       "global": "PitGeom",
       "roster": "LAZY_RACE_SESSION"
@@ -4004,6 +4015,11 @@
     {
       "path": "js/race/pit-lane.js",
       "global": "PitLane",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
+      "path": "js/race/podium-beat.js",
+      "global": "RacePodium",
       "roster": "LAZY_RACE_SESSION"
     },
     {
@@ -4765,6 +4781,11 @@
       "path": "js/ui/platform-session.js",
       "global": "PlatformSession",
       "roster": "tag"
+    },
+    {
+      "path": "js/ui/podium-beat.js",
+      "global": "PodiumBeat",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/ui/post-fx-opts.js",

@@ -68,9 +68,9 @@ Load from the SKILL.md index when the task needs this detail.
    `tools/manifest.cjs` (the roster source of truth), then run `npm run gen`. A circuit
    has NO `<script>` tag: `gen-circuit-meta.mjs` (first step of `npm run gen`) rewrites the
    picker roster `js/track/circuit-meta.js`, and the full def hydrates per pick via
-   `LAZY_CIRCUIT` / `ensureCircuit`. `circuit-meta.js` is GENERATED (AGENTS.md rule 11):
-   never hand-edit it; `npm run gen:check` names drift, and `tests/unit/circuit-meta.test.mjs`
-   fails on it. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
+   `LAZY_CIRCUIT` / `ensureCircuit`. `circuit-meta.js` is BUILT, never committed (AGENTS.md
+   rule 11): gitignored, never hand-edited; the test runners, SessionStart and the git hooks
+   rebuild it, and the deploy renders it from source, so a circuit PR commits only its sources. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
    `CIRCUITS` order == `Tracks.LIST` == picker order:
 
    - **Always APPEND the id at the END of `CIRCUITS`**, never interleave: a stored
@@ -114,7 +114,7 @@ Load from the SKILL.md index when the task needs this detail.
 3. **Headless build guard and generated-file sync** — the fast pre-push checks, no browser:
    ```sh
    node tools/track/verify-track.cjs <id>     # OK <id>: props X verts (road Y, terrain Z); --all for the fleet
-   npm run gen:check                          # circuit-meta + shell drift after a manifest change (?v=dev, no bump)
+   npm run gen:check                          # shell drift after a manifest change (?v=dev, no bump); rebuilds circuit-meta
    ```
    A non-zero `verify-track` exit means the spline/road/terrain build or the
    `scenery(api)` callback **threw** — which in the running game would strand the

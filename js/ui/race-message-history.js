@@ -40,10 +40,11 @@ const RaceMessageHistory = (function () {
       return true;
     }
     function mount() {
-      const host = document.querySelector("#pausemenu .sheet-body");
+      // A RACE TOOLS tile beside REWIND & RETRY (css/experience.css), the sheet body when there is no tray
+      const tray = document.querySelector("#pausemenu #pm-quick-doors"), host = tray || document.querySelector("#pausemenu .sheet-body");
       if (!host || fold) return;
       fold = document.createElement("details"); fold.id = "pm-message-history";
-      const summary = document.createElement("summary"); summary.className = "adv-more-btn"; summary.textContent = "RECENT RACE MESSAGES";
+      const summary = document.createElement("summary"); if (!tray) summary.className = "adv-more-btn"; summary.textContent = tray ? "RACE MESSAGES" : "RECENT RACE MESSAGES";
       empty = document.createElement("p"); empty.className = "adv-help"; empty.textContent = "No race messages delivered this session.";
       const help = document.createElement("p"); help.className = "adv-help"; help.textContent = "Last twenty displayed cards, oldest first. Reading here does not replay speech.";
       list = document.createElement("ol"); list.className = "race-message-list"; list.setAttribute("aria-label", "Delivered race messages");

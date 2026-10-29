@@ -33,6 +33,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { createRequire } from "node:module";
 import { STAGE_DIRS, STAGE_ROOT_FILES, stageExcluded } from "./stage-files.mjs";
 import { minifyStaged } from "./minify.mjs";
+import { buildInto } from "../gen/ensure-built.mjs";
 
 const require = createRequire(import.meta.url);
 const { appVersionFrom, readApexVersion } = require("../../desktop/lib/version.cjs");
@@ -96,9 +97,13 @@ export function assertStageDest(dest, root) {
 }
 
 /**
- * Copy the runtime allow-list into `outDir` (replaced if it exists).
+ * Copy the runtime allow-list into `outDir` (replaced if it exists), then render
+ * the BUILT files (gitignored generator outputs, tools/lib/generated-paths.mjs
+ * BUILT_PATHS) into it from the selected `root` checkout's sources. Callers with
+ * copy-only fixture roots may explicitly pass `build: false`.
+ * docs/notes/DEPLOY-TIME-GEN-2026-10-28.md.
  * @param {string} outDir absolute or repo-relative output directory
- * @param {{ root?: string }} [opts]
+ * @param {{ root?: string, build?: boolean }} [opts]
  * @returns {string} absolute output path
  */
 export function stageSite(outDir, opts = {}) {
@@ -127,6 +132,7 @@ export function stageSite(outDir, opts = {}) {
       filter: (from) => !stageExcluded(path.relative(root, from)),
     });
   }
+  if (opts.build !== false) buildInto(dest, { root });
   return dest;
 }
 

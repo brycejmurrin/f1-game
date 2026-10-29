@@ -203,4 +203,69 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 @container title-menu (max-width: 20rem) {
   #overlay #menu-buttons #menu-create .btn-ico { display: none; }
 }
+/* Tall Home (tablet, laptop, desktop): the play doors say what they do.
+   Short landscape (the 390px phone) keeps one-line tiles. A half-width
+   tile cannot hold "YOU AGAINST THE CLOCK" on one line, so the subtitle
+   wraps on spaces instead of ending in an ellipsis. */
+@media (min-width: 700px) and (min-height: 720px) {
+  body #overlay #menu-buttons :is(#menu-primary, #mb-garage) .mb-sub {
+    display: block;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    text-wrap: wrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+    line-height: 1.15;
+    letter-spacing: 0.02em;
+    max-width: 100%;
+    color: color-mix(in oklab, var(--text) 82%, transparent);
+  }
+  @media (max-width: 1679px) {
+    body #overlay #menu-buttons #mb-vs .mb-sub {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+  }
+  body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) {
+    height: auto;
+    min-height: calc(var(--hrow) + 1.15em);
+    overflow: visible;
+  }
+  body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) > span { min-width: 0; max-width: 100%; }
+}
+@media (min-height: 520px), (max-aspect-ratio: 1/1) {
+  body #overlay #menu-buttons #menu-secondary > .bigbtn {
+    overflow-wrap: normal;
+    word-break: normal;
+    text-wrap: balance;
+    line-height: 1.1;
+  }
+}
+/* 1440p and 21:9: a measure, not half the monitor. Local tokens — no
+   responsive-foundation PR was open (searched 2026-10-29). */
+@media (min-width: 1680px) and (min-height: 700px) {
+  body[data-shape="wide"] #overlay {
+    --menu-fit-brand: 34rem;
+    --menu-fit-doors: 40rem;
+    grid-template-columns: minmax(16rem, var(--menu-fit-brand)) minmax(22rem, var(--menu-fit-doors));
+    justify-content: center;
+    column-gap: clamp(2rem, 4vw, 6rem);
+    padding-inline: max(var(--safe-l, 0rem), 3rem) max(var(--safe-r, 0rem), 3rem);
+  }
+  body[data-shape="wide"] #overlay #menu-buttons { width: min(var(--menu-fit-doors), 100%); justify-self: end; }
+}
+@media (max-width: 380px) {
+  body #overlay #menu-buttons { --hg: 6px; --hrow: 44px; }
+  body #overlay #menu-buttons .bigbtn {
+    padding-inline: calc(var(--gap) * 0.45);
+    font-size: max(var(--fs-micro), 14px);
+    min-height: 44px;
+  }
+  /* The utility row sticks over the rooms under it. A 92% scrim let
+     PHOTO STUDIO read through SETTINGS on a 375px phone. */
+  body #overlay #menu-buttons.sf-scroll #menu-secondary {
+    background: var(--bg);
+  }
+}
 }

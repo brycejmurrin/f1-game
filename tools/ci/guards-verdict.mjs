@@ -165,7 +165,7 @@ export function runGuards({
   return { status: 0, wrote: true, tree, dirty: false, reason: "green" };
 }
 
-function main(argv) {
+async function main(argv) {
   exitIfHelp(argv, `usage: node tools/ci/guards-verdict.mjs <check|run> [-- file.mjs…]`);
   const cmd = argv[0];
   if (cmd !== "check" && cmd !== "run") {
@@ -183,6 +183,15 @@ function main(argv) {
     console.error(v.message);
     process.exit(1);
   }
+  // The served generated files are gitignored (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md); load-order and
+  // global-registry read every FULL file, so build what is missing or stale first. They are ignored, so the
+  // tree hash this verdict caches is unchanged. A fixture checkout without the generator skips it.
+  const ensureMod = path.join(ROOT, "tools/gen/ensure-built.mjs");
+  if (fs.existsSync(ensureMod)) {
+    const { ensureBuilt, builtLine } = await import(pathToFileURL(ensureMod).href);
+    const line = builtLine(ensureBuilt());
+    if (line) console.error(`guards: ${line}`);
+  }
   const result = runGuards({ root: ROOT, files: files.length ? files : undefined });
   if (result.wrote) {
     console.error(`guards: cached green ${result.tree}`);
@@ -196,4 +205,4 @@ function main(argv) {
 }
 
 const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
-if (isMain) main(process.argv.slice(2));
+if (isMain) await main(process.argv.slice(2));

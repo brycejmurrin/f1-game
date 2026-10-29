@@ -1500,6 +1500,12 @@
       "interpreter": "bash"
     },
     {
+      "path": "tools/env/install-blender.sh",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "bash"
+    },
+    {
       "path": "tools/env/install-browsers.sh",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
@@ -1852,6 +1858,15 @@
       ]
     },
     {
+      "path": "tools/garage/arrival-poses.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/garage/author-crew-motion.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1882,10 +1897,31 @@
       "interpreter": "python3"
     },
     {
+      "path": "tools/gen/blender/garage-previz.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/gen/compress-audio.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "node"
+    },
+    {
+      "path": "tools/gen/ensure-built.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ],
+      "npmScripts": [
+        "prepare"
+      ]
     },
     {
       "path": "tools/gen/garage-defaults.mjs",
@@ -2783,7 +2819,8 @@
       "outputPolicy": "artifact-first",
       "interpreter": "python3",
       "nativeOutputFlagMentions": [
-        "--out"
+        "--out",
+        "--quiet"
       ]
     },
     {
@@ -4153,7 +4190,7 @@
     },
     {
       "name": "prepare",
-      "command": "git config core.hooksPath .githooks || true"
+      "command": "git config core.hooksPath .githooks || true && node tools/gen/ensure-built.mjs"
     },
     {
       "name": "rtc:e2e",
@@ -4253,7 +4290,7 @@
     },
     {
       "name": "test:gfx",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/hud-mirror.spec.js tests/specs/image-grade-visual.spec.js tests/specs/instanced-draw.spec.js tests/specs/lighting-ab.spec.js tests/specs/lighting-tuner-grade.spec.js tests/specs/race-cycle-memory.spec.js tests/specs/render-boot.spec.js tests/specs/tlx-probes.spec.js tests/specs/track-switch-memory.spec.js tests/specs/webgl-probes.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/ctx-lost-retry.spec.js tests/specs/hud-mirror.spec.js tests/specs/image-grade-visual.spec.js tests/specs/instanced-draw.spec.js tests/specs/lighting-ab.spec.js tests/specs/lighting-tuner-grade.spec.js tests/specs/race-cycle-memory.spec.js tests/specs/render-boot.spec.js tests/specs/tlx-probes.spec.js tests/specs/track-switch-memory.spec.js tests/specs/webgl-probes.spec.js"
     },
     {
       "name": "test:graph-parity",

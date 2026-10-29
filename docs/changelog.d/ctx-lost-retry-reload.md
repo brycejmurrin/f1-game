@@ -1,0 +1,1 @@
+Fixed: after the graphics reload budget is spent during race start, the title Retry card reloads the page instead of looping a dead Start Race, and stale reload counts no longer carry across fresh visits or deploys in the same tab.
