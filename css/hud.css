@@ -9,10 +9,6 @@
 /* HUD HUES (#1595), here because only the race reads them: tyre letters (CvdPalette repaints them per COLOUR VISION mode) and real-world signals (one colour in every mode). */
 :root { --tyre-s: #ff3b3b; --tyre-m: #ffd12e; --tyre-h: #f2f2f2; --tyre-i: #3ccf4e; --tyre-w: #3a8dff;
   --flag-yellow: #ffd600; --flag-amber: #ffb300; --flag-sc: #f4f6ff; --light-on: #ff1a1a; }
-/* GLANCE INK. Labels were --dim, which disappears once a plate is translucent over a day sky.
-   Mixed toward --text so a light theme and HIGH CONTRAST (both remap those two tokens) follow.
-   The responsive-foundation draft was not on the board; this stays local to the race HUD. */
-:root { --hud-glance: color-mix(in oklab, var(--text) 68%, var(--dim)); }
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
 /* HUD SIZE, on the CLUSTERS rather than on #hud. #hud is the full-screen

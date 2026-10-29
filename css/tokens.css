@@ -255,6 +255,7 @@
   --visor-ice: #233b50;
   --visor-rose: #4c2d3c;
   --dim: #9a9aa8;
+  --hud-glance: color-mix(in oklab, var(--text) 68%, var(--dim));
   --sal: env(safe-area-inset-left, 0px);
   --sar: env(safe-area-inset-right, 0px);
   --sat: env(safe-area-inset-top, 0px);
@@ -301,8 +302,7 @@
      chrome shows and hides. */
   --safe-w: calc(100svw - var(--safe-l) - var(--safe-r));
   --safe-h: calc(100 * var(--svhz) - var(--safe-t) - var(--safe-b));
-  /* Width tiers. Media queries repeat the pixels (layout-tokens.test.mjs).
-     A landscape phone can be tablet. Screens read --layout-active or html[data-layout]. */
+  /* Width tiers (layout-tokens.test.mjs). */
   --bp-phone: 480px;
   --bp-tablet: 700px;
   --bp-laptop: 900px;
@@ -312,6 +312,7 @@
   --layout-active: var(--bp-phone);
   /* One control column. 660px matched the landscape 32vw column at 1920. */
   --col-max: 660px;
+  --touch-label-floor: 10px; --touch-pedal-radius: 28%; --touch-tablet-btn: 96px; --touch-tablet-steer: 108px;
   --menu-fit-sheet: 1180px; --menu-fit-sheet-wide: 1360px; --menu-fit-pause: 480px;
   /* Foldables. Fallbacks are the whole viewport and a zero hinge. Unitless 0:
      a px literal on a property whose name contains "gap" counts as raw spacing. */
