@@ -376,7 +376,7 @@ test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once p
   const cull = fnSource(CH, "function cull(mesh, vp, eye, cullDist, fog) {");
   assert.doesNotMatch(cull, /_visList\.length\s*=/, "length = 0 / = n frees V8's backing store; the returned n is the contract");
   assert.match(cull, /_visList\[n\+\+\] = ch;/);
-  assert.match(fnSource(CH, "function free(mesh) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");
+  assert.match(fnSource(CH, "function free(mesh, freedGeos) {"), /_visList\.length = 0;/, "a freed world still leaves module scratch");
   // Present and the mirror both draw through _drawChunked. Its fallback walks
   // visList to the returned n; mergeVisible does the same on the shared list.
   // The shadow caster is the other reader and still loops i < n.
@@ -647,7 +647,7 @@ test("R1: the AI material is the lit instanced fragment on its own program key; 
   assert.equal(ai.customProgramCacheKey(), "ai-" + inst.customProgramCacheKey());
   assert.match(TLX, /draw\(mesh, model, opts\) \{\s*if \(opts && opts\.coalesce && mesh && mesh\.geo && _coAppend\(mesh\.geo, model, opts\)\) return;/);
   assert.match(fnSource(TLX, "async function warmFxPrograms() {"), /await _coWarm\(\);/);
-  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo, true\);/);
+  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo, !_ownershipFreeDepth\);/);
   assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
   assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
   assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);

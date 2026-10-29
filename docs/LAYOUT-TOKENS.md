@@ -11,7 +11,7 @@ fails if the copies drift.
 | Token | Role |
 |---|---|
 | `--gap` `--pad` `--gut` | Space between controls, sheet padding, minimum edge air. Short landscape tightens all three. |
-| `--fs-1` … `--fs-6` | Type scale. `--fs-micro` is the floor (14px). Do not invent a size below it. |
+| `--fs-1` … `--fs-6` | Type scale. `--fs-micro` is the floor (14px). Do not invent a size below it except the touch dock label floor (below). |
 | `--tap` `--chip-h` `--tap-sm` `--tap-min` | Control heights. `--tap-min` is the painted 24px floor under UI SIZE zoom. |
 | `--sal` `--sar` `--sat` `--sab` | `env(safe-area-inset-*)`. Notch and home indicator. |
 | `--safe-t` `--safe-r` `--safe-b` `--safe-l` | Inset plus `--gut`. Use these for padding. |
@@ -22,6 +22,28 @@ fails if the copies drift.
 browser toolbar moves and re-layout mid-scroll, so they are not tokens.
 `vh` remains only on type and gap clamps, where a live change would be worse
 than a few pixels of slack.
+
+## Colour (HUD)
+
+| Token | Role |
+|---|---|
+| `--hud-glance` | Secondary HUD ink: `color-mix` of `--text` and `--dim` so labels stay readable on translucent plates and follow LIGHT / HIGH CONTRAST remaps (#4183). |
+
+## Touch controls
+
+Declared in `css/tokens.css`; consumed in `css/touch-controls.css`. The fixed
+portrait/landscape ladder (`--btn`, `--steer`, `--btn-pitch`, …) stays local
+because those controls are `position:fixed` with literal safe-area anchors.
+
+| Token | Role |
+|---|---|
+| `--touch-label-floor` | 10px painted minimum for dock/action labels after dock zoom divides it (`--touch-label-z`, local). Allowed below `--fs-micro` so HUD zoom cannot shrink glyphs past readability. |
+| `--touch-pedal-radius` | Squircle corner radius for pedal buttons (circles unchanged). |
+| `--touch-tablet-btn` | Action button diameter from 744px portrait width (tablet slab; not `--bp-tablet`, which is 700px). |
+| `--touch-tablet-steer` | Steer button diameter on the same portrait-tablet tier. |
+
+`--touch-label-z` stays in `css/touch-controls.css` on the dock rule: it tracks
+`--hud-z-dock` / `--hud-btn-scale` and is not a layout width token.
 
 ## Width tiers
 
@@ -65,3 +87,35 @@ An open, flat foldable is one segment; the width tiers cover it.
 when two exist. `html[data-fold]="horizontal"|"vertical"` is the same answer
 for a rule that cannot use the media feature. One screen matches neither,
 so the value stays unset.
+
+## Menu fit caps
+
+Shared overlay and sheet widths. Declared on `:root` in `css/tokens.css`.
+Some screens still repeat a pixel in a `@media` query when the breakpoint
+cannot read a custom property; `tests/unit/layout-tokens.test.mjs` locks the
+width-tier copies only — fit caps are documented here and asserted where a
+unit test pins the consuming rule.
+
+| Token | Role |
+|---|---|
+| `--menu-fit-sheet` | Results / standings sheet on large monitors (1180px) |
+| `--menu-fit-sheet-wide` | Same on ultrawide (1360px) |
+| `--menu-fit-pause` | Pause menu sheet cap (480px) |
+| `--menu-fit-room-min` | Compact-wide utility tile floor (6.75rem in `css/menus.css`; token next) |
+| `--menu-fit-card` | Default hub / appearance card (760px in `css/data.css`) |
+| `--menu-fit-card-wide` | Data Hub desktop seven-tab row (920px in `css/data.css`) |
+| `--menu-fit-card-ultra` | Data Hub card from 1600px (1080px in `css/data.css`) |
+| `--menu-fit-brand` | Title wide brand column (34rem in `css/menu-destinations.css`) |
+| `--menu-fit-doors` | Title wide door column (40rem in `css/menu-destinations.css`) |
+| `--cs-sheet-floor` | Garage sheet minimum (410px in `css/carsetup.css`) |
+| `--cs-sheet-cap` | Garage default cap (420px in `css/carsetup.css`) |
+| `--cs-sheet-wide-cap` | Garage cap from 1800px (560px in `css/carsetup.css`) |
+| `--cs-sheet-livery-cap` | Livery editor cap (520px in `css/carsetup.css`) |
+| `--cs-car-reserve-ultra` | Car reserve at 1800px (640px in `css/carsetup.css`) |
+| `--cs-car-reserve-livery` | Livery reserve (720px in `css/carsetup.css`) |
+| `--ps-panel-w` | Photo Studio dock (340px in `css/photo-studio.css`) |
+| `--ps-panel-narrow` | Photo Studio short-landscape dock (300px in `css/photo-studio.css`) |
+
+These `#4187` sizes stay as literals in their sheets until the layout unit pins
+accept `var()` without growing the blocking CSS budget; the names here are the
+contract to migrate next.

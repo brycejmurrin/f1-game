@@ -23,12 +23,14 @@ function load(extra = {}) {
 
 test("fmtLaps / fmtLoss / fmtNext", () => {
   const S = load();
-  assert.equal(S.fmtLaps(12.4, 0.3), "~12 L");
-  assert.equal(S.fmtLaps(250, 0.1), "~99 L");
+  assert.equal(S.fmtLaps(12.4, 0.3), "12 L");
+  assert.equal(S.fmtLaps(250, 0.1), "99 L");
   assert.equal(S.fmtLaps(3, 1), "GONE");
   assert.equal(S.fmtLaps(null, 0.2), "--");
-  assert.equal(S.fmtLoss(21.4), "~21 s");
+  assert.equal(S.fmtLoss(21.4), "21 s");
   assert.equal(S.fmtLoss(NaN), "--");
+  // UI hunt 2026-10-29 row 12: a "~" at --fs-micro reads as a minus on a 1x phone.
+  assert.doesNotMatch(S.fmtLaps(5, 0.2) + S.fmtLoss(23), /~/);
   assert.equal(S.fmtNext(null), "--");
   assert.equal(S.fmtNext({ next: 14, code: "H", stops: 1 }), "L14 H");
   assert.equal(S.fmtNext({ next: null, stops: 1 }), "DONE");
@@ -96,8 +98,8 @@ test("tick: race + wear only; shows laps, loss, next, and the cue with the rival
   assert.equal(root.hidden, false);
   const row = (k) => root.children.find((r) => r.attrs["data-k"] === k);
   const val = (k) => row(k).children[1].textContent;
-  assert.equal(val("tyre"), "M ~10 L");
-  assert.equal(val("loss"), "~21 s");
+  assert.equal(val("tyre"), "M 10 L");
+  assert.equal(val("loss"), "21 s");
   assert.equal(val("next"), "L14 H");
   assert.equal(row("uc").hidden, false, "300 m at 50 m/s = 6 s < 21 s, older tyres");
   assert.equal(val("uc"), "VER");
@@ -155,7 +157,7 @@ test("strategy tick updates honest window and clears tyre warning on changed or 
   assert.match(val("loss"), /EST WINDOW \+3 s/); assert.match(val("next"), /EST TYRES SHORT OF L18/);
   left = 12; S.tick(G, p); assert.equal(val("next"), "L18");
   est = null; left = null; S.tick(G, p);
-  assert.equal(val("loss"), "~21 s", "red flag/null estimate never falls back to a window");
+  assert.equal(val("loss"), "21 s", "red flag/null estimate never falls back to a window");
   assert.equal(val("next"), "L18");
   pl = { next: null, stops: 0 }; left = 1; S.tick(G, p); assert.equal(val("next"), "NO STOP");
 });
@@ -190,5 +192,5 @@ test("tick shares synchronous player reads, including computed null, and preserv
   assert.deepEqual(calls, { spent: 2, left: 2, estimate: 2, plan: 2 }, "profile-hidden Strategy derives nothing");
   doc.body.classList.contains = () => false;
   S.tick(G, p, { player: p, spent: .8, left: 2, estimate: { lossS: 30 }, plan: { next: 16, lapsToStop: 4 } });
-  assert.equal(val("tyre"), "M ~2 L"); assert.match(val("loss"), /30/); assert.match(val("next"), /L16/);
+  assert.equal(val("tyre"), "M 2 L"); assert.match(val("loss"), /30/); assert.match(val("next"), /L16/);
 });

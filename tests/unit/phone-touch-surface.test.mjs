@@ -410,11 +410,11 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
 
 test("pedals are squircles, portrait left-hand swaps columns, the race hides the install tip", () => {
   const ov = css("css/touch-controls.css");
-  const src = read("css/touch-controls.css");
+  const tokSrc = read("css/tokens.css");
   assert.equal(decl(ov, ".touchbtn.pedal", "border-radius"), "var(--touch-pedal-radius)");
-  assert.match(src, /--touch-pedal-radius:\s*28%/);
-  assert.match(src, /--touch-tablet-btn:\s*96px/);
-  assert.match(src, /--touch-tablet-steer:\s*108px/);
+  assert.match(tokSrc, /--touch-pedal-radius:\s*28%/);
+  assert.match(tokSrc, /--touch-tablet-btn:\s*96px/);
+  assert.match(tokSrc, /--touch-tablet-steer:\s*108px/);
   assert.equal(decl(ov, "body.in-race #ios-install", "display"), "none",
     "the Home Screen tip must not cover GAS or the steer arrows during a race");
   // Position only. A fill on a body-class pedal rule outranks :active.
@@ -750,8 +750,9 @@ function paintedLabelPx(authoredPx, dockZoom) {
 
 test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () => {
   const ov = css("css/touch-controls.css");
+  const tk = css("css/tokens.css");
   const land = { context: /orientation:\s*landscape/ };
-  assert.equal(decl(ov, ":root", "--touch-label-floor"), "10px",
+  assert.equal(decl(tk, ":root", "--touch-label-floor"), "10px",
     "--touch-label-floor is the 10 CSS-px painted minimum");
 
   const dock = ruleFor(ov, /body:not\(\.desktop\) \.dock/, "zoom", land);

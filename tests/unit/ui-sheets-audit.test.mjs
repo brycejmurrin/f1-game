@@ -1007,7 +1007,7 @@ test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis",
 test("finishRace does not stamp the go() 0.5s floor as official winner elapsed", () => {
   // go() floors raceT at 0.5; a harness finishRace that copied it printed
   // OFFICIAL WINNER ELAPSED 0:00.500. Only stamp a clock when raceT has left that floor.
-  const apex = read("js/agent/apex.js");
+  const apex = read("js/race/ceremony.js");
   assert.match(apex, /clock = ran > 0\.5 \? ran : 0/);
   assert.match(apex, /c\.finishT = clock/);
 });
@@ -1114,7 +1114,7 @@ test("resNext uses the results view through translated first and second champion
   let championBuilds = 0, cleared = 0, menus = 0;
   const ctx = vm.createContext({
     els: h.els, season,
-    resultsCam: { reset() {} }, announcer: { stop() {} },
+    resultsCam: { reset() {} }, RaceCeremony: { resetLive() {} }, announcer: { stop() {} },
     isCareer: () => false, isChampionship: () => true,
     SeasonCal: { rounds: () => 3, clear: () => { cleared++; return { ok: true }; } },
     buildChampion: () => { championBuilds++; h.api.buildChampion(); },

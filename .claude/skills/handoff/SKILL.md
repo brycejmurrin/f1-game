@@ -1,6 +1,6 @@
 ---
 name: handoff
-description: "Use when the user asks for a handoff or paste-ready cold-start prompt, to continue in a new session or chat, says the session is getting long, nears the context limit, or a worker hits its cap."
+description: "Use when the user asks for a handoff or a prompt to continue in a new session, the session is long or near its context limit, or a worker hits its cap. Not for: editing skills or AGENTS.md → agent-config; driving a PR → steward."
 user-invocable: true
 ---
 

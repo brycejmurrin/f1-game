@@ -1,6 +1,6 @@
 # Public-web research recipes
 
-**Use when:** this recipe family is the narrowest match for the question.
+**Read when:** researching external documentation or checking the deployed artifact through public-web tools.
 
 **Verification:** record the exact command, target (local or deployed), and returned evidence.
 

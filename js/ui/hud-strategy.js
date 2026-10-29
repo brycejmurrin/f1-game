@@ -36,15 +36,16 @@ const HudStrategy = (function () {
   const THREAT_REACH = 3;     // engineer.js THREAT_REACH — own stop must be this near
   const COVER_MIN_WEAR = 0.4; // same floor as the engineer threat gate
 
-  /** "~12 L" laps left, "GONE" past the set's life, "--" unknown. */
+  /** "12 L" laps left, "GONE" past the set's life, "--" unknown. No "~": at
+   *  --fs-micro on a 1x phone it read as a minus ("-12 L"; UI hunt 2026-10-29). */
   function fmtLaps(left, spent) {
     if (spent >= 1) return "GONE";
     if (left == null || !Number.isFinite(left)) return "--";
-    return "~" + Math.max(0, Math.min(99, Math.round(left))) + " L";
+    return Math.max(0, Math.min(99, Math.round(left))) + " L";
   }
-  /** "~21 s" — a stop's cost, whole seconds. */
+  /** "21 s" — a stop's cost, whole seconds (no "~", as fmtLaps). */
   function fmtLoss(s) {
-    return s != null && Number.isFinite(s) && s > 0 ? "~" + Math.round(s) + " s" : "--";
+    return s != null && Number.isFinite(s) && s > 0 ? Math.round(s) + " s" : "--";
   }
   /** The NEXT line from PitLane.planInfo's {next, code, stops}. */
   function fmtNext(pl) {

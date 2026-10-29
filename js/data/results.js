@@ -215,8 +215,16 @@ const DataResults = (function () {
 
     // Every table renders as one bare <div> wrapper around its <table> — the
     // wrapper is what the caller (paint) clears and swaps on a re-sort.
+    // The scrollport, not the table: a classification is a data table, so a
+    // sideways scroll is the reflow exception (WCAG 1.4.10) instead of crushing
+    // POS / DRIVER / TIME until the surname wraps into the gap. Keyboard users
+    // reach that scroll with the region itself.
     function tableWrap(t) {
       const wrap = el("div");
+      wrap.tabIndex = 0;
+      wrap.setAttribute("role", "region");
+      wrap.setAttribute("aria-label", "Classification");
+      wrap.setAttribute("data-xscroll", "");
       wrap.appendChild(t);
       return wrap;
     }

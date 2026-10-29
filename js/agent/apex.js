@@ -528,7 +528,7 @@ const api = {
   // "+ = right" comment was backwards), half-width hw (m), speed (m/s), arc s.
   probe() {
     if (!G.player || !G.track) return null;
-    const lineAt = (s) => { const ln = TrackLine.at(G.track, wrapS(s)); return ln.x * ln.w; };
+    const lineAt = (s) => TrackLine.at(G.track, wrapS(s)).x;
     Tracks.sample(G.track, G.player.s, smp);
     let angle = 0;
     if (G.player.head != null) {
@@ -545,7 +545,8 @@ const api = {
       hw: smp.hw,
       speed: G.player.speed, s: G.player.s,
       // The racing-line assist's pursuit target (game.js updateCar): the AI
-      // line x*w at the same speed-scaled look-ahead. Where the line IS — the
+      // line x at the same speed-scaled look-ahead (lineW scales the pull, not
+      // the target). Where the line IS — the
       // corner's sign alone says nothing (past an apex the line is outside).
       lineAhead: G.track.line ? lineAt(G.player.s + Math.min(90, Math.max(25, Math.abs(G.player.speed) * 0.9))) : null,
     };
@@ -609,6 +610,10 @@ const api = {
       towing: +(G.player.towing || 0).toFixed(3),   // player slipstream 0..1 — folded into vmaxNow
       wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
+      // DAMAGE → HANDLING (#1578): per-axle grip ratio from damage (1 = none; always 1 with the opt-in OFF).
+      damageAxF: typeof DamageHandling !== "undefined" ? +DamageHandling.axles().f.toFixed(4) : 1,
+      damageAxR: typeof DamageHandling !== "undefined" ? +DamageHandling.axles().r.toFixed(4) : 1,
+      damageHandling: typeof DamageHandling !== "undefined" && DamageHandling.isEnabled(),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),
       xVmaxGain: +G.xVmaxGain(G.player).toFixed(4),
@@ -1270,22 +1275,15 @@ const api = {
     const ok = !!(G.redFlagRestart && G.redFlagRestart());
     return ok ? { state: G.state } : false;
   },
-  // Trigger the race-results screen cleanly, as if all cars crossed the line.
-  finishRace() {
+  // Trigger results as if all cars finished. Default = today's instant sheet;
+  // {ceremony:true} arms RaceCeremony when eligible (js/race/ceremony.js).
+  // A retirement never crosses the line (finishThrough); finishT only when raceT > 0.5.
+  finishRace(opts) {
     if (!G.track || G.state === "results" || G.state === "menu") return false;
-    // A retirement never crosses the line: it stays unfinished and classifies
-    // behind everyone who did, which is the order endRace() builds for a real
-    // flag. Waving one home here would hand a parked car a finish and points.
-    // go() floors raceT at 0.5 s; stamping that as finishT prints
-    // OFFICIAL WINNER ELAPSED 0:00.500 on every harness open. Only attach a
-    // finish clock when the race has actually run past that floor — finishT
-    // 0 omits the official elapsed line (results-sheet correctedFinish).
-    const ran = Number.isFinite(G.raceT) ? G.raceT : 0;
-    const clock = ran > 0.5 ? ran : 0;
-    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = clock; } });
-    endRace(raceOrder(G.cars));
-    return { state: G.state };
+    return RaceCeremony.finishThrough(G, endRace, raceOrder, opts);
   },
+  // RaceCeremony status / seek / skip (Esc = SKIP once the host UI wires it).
+  ceremony(arg) { return RaceCeremony.apexCall(arg); },
 
   freeze(v) {
     if (v === undefined) return G.frozen;

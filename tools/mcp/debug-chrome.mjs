@@ -170,7 +170,9 @@ export async function main(args = process.argv.slice(2)) {
     mkdirSync(DIR, { recursive: true }); mkdirSync(PROFILE, { recursive: true });
     const procs = [];
     const serverUp = await fetch(`http://127.0.0.1:${SERVER_PORT}/`, { signal: AbortSignal.timeout(1500) }).then(() => true, () => false);
-    if (!serverUp) procs.push({ role: "server", ...launch("python3", ["-m", "http.server", String(SERVER_PORT), "--bind", "127.0.0.1"], `http.server ${SERVER_PORT}`, "server.log") });
+    // The checkout's gitignored generated files (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): built before Chrome loads the title.
+    const { ensureBuilt } = await import("../gen/ensure-built.mjs"); ensureBuilt();
+    if (!serverUp) procs.push({ role: "server", ...launch("python3",["-m", "http.server", String(SERVER_PORT), "--bind", "127.0.0.1"], `http.server ${SERVER_PORT}`, "server.log") });
     const chrome = chromiumPath();
     procs.push({ role: "chrome", ...launch(chrome, chromeArgs({ port, url: headlessGame ? "about:blank" : url, webgpu, device }), `--remote-debugging-port=${port}`, "chrome.log") });
     writeFileSync(PID_FILE, JSON.stringify({ port, device, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");

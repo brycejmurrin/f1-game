@@ -926,6 +926,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/env/install-blender.sh": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/env/install-browsers.sh": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -945,6 +950,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "@c4"
+    },
+    "tools/garage/arrival-poses.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/garage/author-crew-motion.py": {
       "action": "keep-native",
@@ -971,7 +981,17 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/gen/blender/garage-previz.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/compress-audio.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
+    "tools/gen/ensure-built.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
@@ -1235,6 +1255,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Wet-road sample configuration, images and debug interpretation; no unmeasured reflection success."
+    },
+    "tools/gfx/stall-reload-sw-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Matched deploy-tip vs fix-head stall stress pair JSON and native exit status."
     },
     "tools/gfx/tlx-pack-check.cjs": {
       "action": "keep-native",

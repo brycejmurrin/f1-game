@@ -1,0 +1,1 @@
+Fixed: on software GL, Start Race no longer resizes the canvas down and back (each resize stalled SwiftShader for tens of seconds and could drop the context). The race scale is chosen once before the canvas is first sized, and texture-pack readback waits through the countdown and the race-entry handoff instead of readPixels during them.

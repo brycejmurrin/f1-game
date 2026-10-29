@@ -85,7 +85,7 @@ for (const warm of [false, true]) test(`coalesced teardown retires object and ow
   const events = [], geometry = { dispose() { events.push('geometry'); } };
   const mesh = { geometry, material: {}, parent: { remove() { events.push('remove'); } }, dispatchEvent(e) { events.push(e.type); } };
   const source = {}, runs = new Map([[source, [{ imesh: mesh }]]]);
-  const c = ctx({ _warmPending: warm, _dropQueue: [], _coRuns: runs, _instRegistry: [mesh] }, fn(tlx, 'dropWrapper') + fn(tlx, 'flushDropped') + fn(tlx, '_coDrop'));
+  const c = ctx({ _warmPending: warm, _ownershipFreeDepth: 0, _dropQueue: [], _coRuns: runs, _instRegistry: [mesh] }, fn(tlx, 'dropWrapper') + fn(tlx, 'flushDropped') + fn(tlx, '_coDrop'));
   c._coDrop(source); c._coDrop(source);
   assert.equal(runs.size, 0); assert.equal(c._instRegistry.length, 0);
   assert.equal(events.filter(e => e === 'dispose').length, warm ? 0 : 1);
@@ -100,7 +100,7 @@ for (const warm of [false, true]) test(`coalesced teardown retires object and ow
 test('releaseGeometry holds its wrappers until a scene render, bounded by DROP_LATER_MAX', () => {
   const events = [];
   const wrap = (id) => ({ id, geometry: {}, material: {}, parent: null, dispatchEvent() { events.push(id); } });
-  const c = ctx({ _warmPending: false, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 3, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 } },
+  const c = ctx({ _warmPending: false, _ownershipFreeDepth: 0, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 3, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 } },
     fn(tlx, 'flushDropLater') + fn(tlx, 'dropWrapper'));
   c.dropWrapper(wrap('a'), null, true); c.dropWrapper(wrap('b'), null, true);
   assert.deepEqual(events, [], 'held: no dispose before the next scene render');
@@ -120,7 +120,7 @@ test('releaseGeometry holds the coalesced run too (the instanced lit program\'s 
   const events = [];
   const run = (id) => ({ imesh: { id, geometry: { dispose() { events.push(id + ':view'); } }, material: {}, parent: null, dispatchEvent() { events.push(id); } } });
   const later = {}, now = {};
-  const c = ctx({ _warmPending: false, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 64, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 },
+  const c = ctx({ _warmPending: false, _ownershipFreeDepth: 0, _dropQueue: [], _dropLater: [], DROP_LATER_MAX: 64, _sceneRenders: 0, _dropStat: { held: 0, overflow: 0 },
     _coRuns: new Map([[later, [run('a')]], [now, [run('b')]]]), _instRegistry: [] },
     fn(tlx, 'flushDropLater') + fn(tlx, 'dropWrapper') + fn(tlx, '_coDrop'));
   c._coDrop(later, true); c._coDrop(now);

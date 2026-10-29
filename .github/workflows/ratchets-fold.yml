@@ -5,14 +5,17 @@ name: Ratchets fold
 # `ratchets.mjs --update` / `--auto-raise` on a topic branch writes a per-branch
 # delta fragment (#2291, #2514); nothing folded them, so they piled up. This
 # runs `ratchets.mjs --fold --min-fragments=N` daily (and on dispatch): the
-# effective ceilings do not change, only where the number lives moves. The
-# result goes to the bot branch `bot/ratchets-fold` and a PR into the deploy
-# branch, never a direct push (the deploy branch is protected).
+# effective ceilings do not change, only where the number lives moves. Each run
+# pushes a NEW branch `bot/ratchets-fold-<run_id>` (plain `git push`; the repo
+# pre-push hook blocks history rewrites on an existing ref like the stale
+# bot/ratchets-fold) and opens a PR into the deploy branch, never a direct push
+# (the deploy branch is protected).
 #
 # In-flight PRs are not touched: a fold only deletes fragments that are already
 # on the deploy branch, and a PR's own new fragment merges beside the folded
 # ratchets.json. A run is a no-op while fewer than `min_fragments` exist or
-# while an earlier fold PR is still open.
+# while an earlier fold PR is still open (any open PR whose head starts with
+# bot/ratchets-fold).
 #
 # DAILY, AND IT STARTS ITS OWN CI (audit 2026-10-26, lane X3). Weekly let the
 # fragments pile up between folds, and the fold PR sat with no CI: a PR opened
@@ -21,7 +24,7 @@ name: Ratchets fold
 # creates a run ("events triggered by the GITHUB_TOKEN will not create a new
 # workflow run ... workflow_dispatch and repository_dispatch events always create
 # workflow runs": https://docs.github.com/en/actions/concepts/security/github_token).
-# So the job dispatches ci.yml on bot/ratchets-fold itself (`actions: write`);
+# So the job dispatches ci.yml on the per-run fold branch itself (`actions: write`);
 # that run's check rows land on the fold commit, which is the PR's head. A GitHub
 # App installation token (https://github.com/actions/create-github-app-token)
 # would let the PR event start CI directly, but it needs an App and a secret this
@@ -47,7 +50,7 @@ permissions:
   contents: write
   pull-requests: write
   issues: write    # the "fold PR needs a hand" issue when gh pr create is refused
-  actions: write   # workflow_dispatch of ci.yml on bot/ratchets-fold (the fold PR's CI)
+  actions: write   # workflow_dispatch of ci.yml on the fold branch (the fold PR's CI)
 
 concurrency:
   group: ratchets-fold
@@ -58,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job commits and pushes bot/ratchets-fold
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1   # zizmor: ignore[artipacked] this job commits and pushes a per-run bot/ratchets-fold-* branch
         with:
           ref: claude/f1-game-project-26h3ng
 
@@ -71,7 +74,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --head bot/ratchets-fold --state open --json number --jq length)"
+          n="$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --json headRefName --jq '[.[] | select(.headRefName | startswith("bot/ratchets-fold"))] | length')"
           echo "open fold PRs: $n"
           echo "n=$n" >> "$GITHUB_OUTPUT"
 
@@ -94,20 +97,15 @@ jobs:
           npm run -s gen
           git config user.name "apex-ratchets-bot"
           git config user.email "noreply@anthropic.com"
-          git checkout -B bot/ratchets-fold
+          FOLD_BRANCH="bot/ratchets-fold-${GITHUB_RUN_ID}"
+          git checkout -b "$FOLD_BRANCH"
           git add -A tests/data docs/agent-index.json docs/notes/CEILING-HISTORY.md
           git commit -m "chore(ratchets): fold ratchets.d fragments into ratchets.json
 
           $(cat fold.log)"
-          # Fetch the bot branch first so --force-with-lease has a real expected value.
-          # checkout fetches only the deploy branch, so with no origin/bot/ratchets-fold
-          # tracking ref the lease rejected the push as "stale info" whenever a stale
-          # bot branch was left on the remote (run 40690807684, 2026-10-28). "|| true":
-          # the branch may not exist yet, and then the lease expects it absent.
-          git fetch --no-tags --depth=1 origin "+refs/heads/bot/ratchets-fold:refs/remotes/origin/bot/ratchets-fold" || true
-          git push --force-with-lease origin bot/ratchets-fold
+          git push origin "$FOLD_BRANCH"
           PR_TITLE="chore(ratchets): fold ratchets.d fragments"
-          PR_BODY="Scheduled fold (#2538): $(cat fold.log). Every effective ceiling is unchanged. Opened by .github/workflows/ratchets-fold.yml, which dispatched ci.yml on bot/ratchets-fold for this head."
+          PR_BODY="Scheduled fold (#2538): $(cat fold.log). Every effective ceiling is unchanged. Opened by .github/workflows/ratchets-fold.yml on branch \`$FOLD_BRANCH\`, which dispatched ci.yml on that head."
           # A REFUSED PR FAILS THE JOB (audit4 D1 / audit3 #5, 2026-10-26). This was
           # `|| echo ::warning::`, so run 40343209239 pushed the branch, could not
           # open the PR ("GitHub Actions is not permitted to create or approve pull
@@ -116,18 +114,18 @@ jobs:
           # exits 1. The cure is the repo setting "Allow GitHub Actions to create
           # and approve pull requests" (DECISIONS #10, Bryce applies it) or a hand PR.
           # https://cli.github.com/manual/gh_issue_create
-          if gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head bot/ratchets-fold \
+          if gh pr create --repo "$GITHUB_REPOSITORY" --base claude/f1-game-project-26h3ng --head "$FOLD_BRANCH" \
             --title "$PR_TITLE" --body "$PR_BODY" 2> pr.err; then
             PR_OK=1
           else
             PR_OK=0; cat pr.err
           fi
           # A GITHUB_TOKEN PR starts no CI; a workflow_dispatch always does (header).
-          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref bot/ratchets-fold \
-            || echo "::warning::ci.yml dispatch failed; dispatch it on bot/ratchets-fold by hand"
+          gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$FOLD_BRANCH" \
+            || echo "::warning::ci.yml dispatch failed; dispatch it on $FOLD_BRANCH by hand"
           if [ "$PR_OK" = 0 ]; then
-            export ISSUE_TITLE="fold PR needs a hand (bot/ratchets-fold)"
-            NOTE="The scheduled ratchets fold pushed \`bot/ratchets-fold\` ($(git rev-parse --short HEAD)) but \`gh pr create\` was refused: $(head -1 pr.err). Open the PR from \`bot/ratchets-fold\` by hand (its ci.yml run was dispatched), or enable Settings > Actions > General > \"Allow GitHub Actions to create and approve pull requests\" (DECISIONS #10). Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            export ISSUE_TITLE="fold PR needs a hand ($FOLD_BRANCH)"
+            NOTE="The scheduled ratchets fold pushed \`$FOLD_BRANCH\` ($(git rev-parse --short HEAD)) but \`gh pr create\` was refused: $(head -1 pr.err). Open the PR from \`$FOLD_BRANCH\` by hand (its ci.yml run was dispatched), or enable Settings > Actions > General > \"Allow GitHub Actions to create and approve pull requests\" (DECISIONS #10). Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             NUM="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,title --jq '[.[] | select(.title == env.ISSUE_TITLE)][0].number // empty')"
             if [ -n "$NUM" ]; then gh issue comment "$NUM" --repo "$GITHUB_REPOSITORY" --body "$NOTE"
             else gh issue create --repo "$GITHUB_REPOSITORY" --title "$ISSUE_TITLE" --body "$NOTE"; fi

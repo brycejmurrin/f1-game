@@ -24,6 +24,15 @@ var Damage = {
   get: () => null, state: () => null, worst: () => 0, zoneOf: () => null,
 };
 
+// DAMAGE → HANDLING (#1578): the stub holds the stored choice so the settings row works before the bundle lands;
+// the real module adopts it on load. forCar() is null: no handling effect until the real module is in.
+var DamageHandling = {
+  _stub: true, KEY: "damageHandling", _on: false,
+  factors: () => ({ aeroF: 1, aeroR: 1, grip: 1 }), forCar: () => null, axles: () => ({ f: 1, r: 1 }),
+  setEnabled: function (on) { this._on = on === true; }, isEnabled: function () { return this._on; },
+  fromStore: function (store) { this._on = !!store && store.get("damageHandling", false) === true; return this._on; },
+};
+
 var Duel = {
   _stub: true,
   BUMP: 1.04, LEGEND_BUMP: 1.06, LEGEND_CAR: 1.02,
@@ -146,4 +155,17 @@ var JumpStartPenalty = {
     tickReaction: function () {},
     reactWindowOpen: () => false,
   }),
+};
+
+// RaceCeremony (#4067) lives in LAZY_RACE_SESSION; before it lands no ceremony can run, so the sheet just shows.
+var RaceCeremony = {
+  _stub: true,
+  get: () => null, want: () => false, resetLive: function () {}, create: function () {},
+  apexCall: (arg) => (arg === undefined ? { phase: "idle", age: 0, eligible: false, skipped: false } : false),
+  afterClassify: function (G) { if (G && G.els && G.els.results) G.els.results.hidden = false; return false; },
+  finishThrough: function (G, endRace, raceOrder) {
+    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = G.raceT > 0.5 ? G.raceT : 0; } });
+    endRace(raceOrder(G.cars));
+    return { state: G.state };
+  },
 };

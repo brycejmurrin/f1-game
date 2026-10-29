@@ -90,15 +90,24 @@ const CamPicker = (function () {
       if (!b) return;
       b.setAttribute("aria-haspopup", "menu");
       b.setAttribute("aria-expanded", "false");
-      let holdT = 0, holdGeneration = 0;
+      let holdT = 0, holdGeneration = 0, downTs = NaN;
       let held = false;
       let released = false;
-      b.addEventListener("pointerdown", () => {
+      b.addEventListener("pointerdown", (e) => {
         cancelCamHold();
+        downTs = e && e.timeStamp;
         const generation = holdGeneration;
         holdT = setTimeout(() => { if (generation !== holdGeneration) return; holdT = 0; held = camPicker.show(); }, HOLD_MS);
       });
-      b.addEventListener("pointerup", () => { clearTimeout(holdT); released = true; });
+      // The hold is judged by the press's own event times, not by which task
+      // ran first: a long frame queues pointerup BEHIND the timer, so an 80 ms
+      // tap opened the picker (UI hunt 2026-10-29 row 3). A press shorter than
+      // HOLD_MS that the timer already "held" is undone and clicks as a tap.
+      b.addEventListener("pointerup", (e) => {
+        clearTimeout(holdT);
+        if (held && e && e.timeStamp - downTs < HOLD_MS) camPicker.hide();
+        released = true;
+      });
       b.addEventListener("pointerleave", () => clearTimeout(holdT));
       // A cancelled touch is not a long press. iOS cancels touches routinely
       // (edge swipe, notification, gesture arbitration) and a touch pointer
@@ -125,6 +134,12 @@ const CamPicker = (function () {
       if (window.addEventListener) {
         window.addEventListener("blur", camPicker.hide);
         window.addEventListener("pagehide", camPicker.hide);
+      }
+      // The grid belongs to its button: when the race ends (endRace / quit
+      // hide #btn-cam) an open picker went on painting through the results
+      // card (UI hunt 2026-10-29 row 2). css/hud.css has the CSS twin.
+      if (typeof MutationObserver === "function") {
+        new MutationObserver(() => { if (b.hidden) camPicker.hide(); }).observe(b, { attributes: true, attributeFilter: ["hidden"] });
       }
     })();
     return { hide: camPicker.hide };

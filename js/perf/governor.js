@@ -413,6 +413,7 @@ let _autoShed = 0;
 // lever and every accessor keep working. Never set by the game itself.
 let _tierHold = false;
 let _swGarageScaleSaved = null;
+let _swRaceScale = null;
 // THE OPENING WINDOW, recorded so a player's own device can answer a question
 // this repo's containers cannot. "WebGPU lags for the first few seconds and
 // then runs fine" is a report about frames that have already gone by the time
@@ -1214,19 +1215,54 @@ return {
   // Garage drive-out preview on SwiftShader: shed fill rate for the intro bay only.
   softwareGaragePreviewBegin(gfx) {
     if (!PerfGov.softwareRaster() || !gfx || !gfx.setRenderScale || !gfx.getRenderScale) return;
+    // The race scale was chosen once, before the canvas was first sized.
+    if (_swRaceScale != null) {
+      try { if (gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = true; } catch (_) { /* harness */ }
+      return;
+    }
     if (_swGarageScaleSaved != null) return;
     const cur = gfx.getRenderScale();
     if (cur > 0.55) { _swGarageScaleSaved = cur; gfx.setRenderScale(0.55); }
     try { if (gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = true; } catch (_) { /* harness */ }
   },
   softwareGaragePreviewEnd(gfx) {
+    if (_swRaceScale != null) _swGarageScaleSaved = null;
     if (_swGarageScaleSaved == null) return;
     if (gfx && gfx.setRenderScale) gfx.setRenderScale(_swGarageScaleSaved);
     _swGarageScaleSaved = null;
     try { if (gfx && gfx.envProbeOptOut !== undefined) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
   },
+  // Live software GL presents the race at 0.5 (PostCommon.softwareRaceShed /
+  // pinSoftwareRaceShed). Choose that before the first setSize so entry does
+  // not resize. Webdriver and the game VM keep the current scale (full-res
+  // specs). Idempotent: a second call does not setRenderScale.
+  chooseSoftwareRaceScale(gfx) {
+    const g = gfx || _gfx;
+    if (_swRaceScale != null) return _swRaceScale;
+    let st = null;
+    try { st = g && g.backendState && g.backendState(); } catch (_) { st = null; }
+    if (!(st && (st.softwareGL || st.softAdapter))) return null;
+    let cur = 1;
+    try { cur = +g.getRenderScale(); } catch (_) { /* 1 */ }
+    if (!(cur > 0)) cur = 1;
+    let shed = false;
+    try {
+      const knob = localStorage.getItem("apex26.swRaceShed");
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      shed = typeof PostCommon !== "undefined" && PostCommon.softwareRaceShed
+        ? !!PostCommon.softwareRaceShed(!!st.softwareGL, nav, knob) : false;
+    } catch (_) { shed = false; }
+    const want = shed && cur > 0.52 ? 0.5 : cur;
+    _swRaceScale = want;
+    try { if (cur - want >= 0.02 && g.setRenderScale) g.setRenderScale(want); } catch (_) { /* harness */ }
+    return want;
+  },
+  softwareRaceScaleChosen() { return _swRaceScale; },
   softwareGlUiReadbackDefer() {
     if (!PerfGov.softwareRaster()) return false;
+    try {
+      if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stallHandoffCover && RaceEntryProfile.stallHandoffCover()) return true;
+    } catch (_) { /* harness */ }
     try {
       const g = typeof document !== "undefined" && document.getElementById;
       if (!g) return false;

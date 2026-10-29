@@ -461,6 +461,7 @@ async function precacheAssetLists() {
     // LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)
     "js/race/reliability.js",
     "js/race/damage.js",
+    "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
     "js/race/pit-geom.js",
@@ -474,6 +475,11 @@ async function precacheAssetLists() {
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
     "js/race/jump-start-penalty.js",
+    "js/ui/podium-beat.js",
+    "js/race/podium-beat.js",
+    "js/race/parc-ferme.js",
+    "js/race/cooldown-lap.js",
+    "js/race/ceremony.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
@@ -786,7 +792,7 @@ self.addEventListener("install", (event) => {
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/ui\/podium-beat\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
           // GLX and career UI went in `required`; runtime-only doors are skipped.
