@@ -748,14 +748,16 @@
       // carries the same rule and the same reason.
     }
 
-    function free(mesh) {
+    function free(mesh, freedGeos) {
       if (!mesh) return;
+      const mark = (g) => { if (g && freedGeos) freedGeos.add(g); };
       const mv = mesh._tlxMv;
       if (mv) {
         mesh._tlxMv = null;
         for (let i = 0; i < mv.length; i++) {
           const g = mv[i] && mv[i].geo;
           if (!g) continue;
+          mark(g);
           // The merged draw's wrapper is keyed on THIS geometry, not a chunk.
           // three r186 drops a RenderObject only when the object or the material
           // dispatches "dispose" (a geometry dispose only clears vertex state),
@@ -773,14 +775,14 @@
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
-          if (ch.geo) { releaseGeometry(ch.geo); ch.geo.dispose(); ch.geo = null; }
+          if (ch.geo) { mark(ch.geo); releaseGeometry(ch.geo); ch.geo.dispose(); ch.geo = null; }
           if (ch.wrap) ch.wrap.geo = null;
         }
         mesh.chunks = null;
         mesh.geo = null;
         return;
       }
-      if (mesh.geo) { releaseGeometry(mesh.geo); mesh.geo.dispose(); mesh.geo = null; }
+      if (mesh.geo) { mark(mesh.geo); releaseGeometry(mesh.geo); mesh.geo.dispose(); mesh.geo = null; }
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }

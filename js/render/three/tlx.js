@@ -1322,7 +1322,7 @@ const TLX = (function () {
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
             renderer, mobileTier, isMobile, softwareGL: softContent("shadow"),
-            isWarming: () => !!_warmPending,   // releaseGeometry queues its park while a compile holds the casters
+            isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
           });
         }
       } catch (e) {
@@ -3942,6 +3942,8 @@ const TLX = (function () {
       // race→race switch). Queue the drop; flushDropped() finishes it on the
       // first present after the warm settles, when no compile holds the mesh.
       const _dropQueue = [];
+      let _ownershipFreeDepth = 0;
+      let _ownershipFreeBatch = null;
       // A FREED GEOMETRY'S RENDER OBJECTS OUTLIVE IT BY ONE SCENE RENDER. three
       // releases a pipeline when its last render object goes (Pipelines.delete:
       // usedTimes 0 -> _releasePipeline). The garage car is the only holder of
@@ -3971,13 +3973,15 @@ const TLX = (function () {
       function dropWrapper(m, ownedGeometry, afterRender) {
         try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         m.visible = false;
-        if (_warmPending) {
-          if (!_dropQueue.some((entry) => entry.mesh === m)) _dropQueue.push({ mesh: m, ownedGeometry });
+        if (_warmPending && !_ownershipFreeDepth) {
+          if (!_dropQueue.some((entry) => entry.mesh === m)) {
+            _dropQueue.push({ mesh: m, ownedGeometry, freedGeo: ownedGeometry || m.geometry });
+          }
           return;
         }
         if (m.__tlxDropped) return;
-        if (afterRender && !ownedGeometry) {
-          if (_dropLater.length < DROP_LATER_MAX) { _dropLater.push({ mesh: m, at: _sceneRenders }); _dropStat.held++; return; }
+        if (afterRender && !ownedGeometry && !_ownershipFreeDepth) {
+          if (_dropLater.length < DROP_LATER_MAX) { _dropLater.push({ mesh: m, at: _sceneRenders, freedGeo: m.geometry }); _dropStat.held++; return; }
           _dropStat.overflow++;
           flushDropLater(true);
         }
@@ -3996,21 +4000,39 @@ const TLX = (function () {
       // on _warmPending and flushDropped() is a no-op until warm settles. A menu→race
       // switch on llvmpipe can free the old circuit before that present (CI
       // session-quit-memory).
-      function flushOwnershipRelease() {
-        const q = _dropQueue.splice(0);
-        for (let i = 0; i < q.length; i++) {
-          const m = q[i].mesh, owned = q[i].ownedGeometry;
-          try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
-          m.visible = false;
-          if (m.__tlxDropped) continue;
-          m.__tlxDropped = true;
-          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
-          if (m._ownGeo && m.geometry) m.geometry.dispose();
-          m.geometry = null; m.material = null;
-          if (owned) try { owned.dispose(); } catch (_) { /* already lost */ }
+      function ownershipDropQueued(m, owned, freedGeo) {
+        try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+        const live = freedGeo && m.geometry && m.geometry !== freedGeo;
+        if (live) {
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object only */ }
+          return;
         }
-        flushDropLater(true);
-        if (shadowSys && shadowSys.flushOwnershipDropped) shadowSys.flushOwnershipDropped();
+        m.visible = false;
+        if (m.__tlxDropped) return;
+        m.__tlxDropped = true;
+        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        if (m._ownGeo && m.geometry) m.geometry.dispose();
+        m.geometry = null; m.material = null;
+        if (owned) try { owned.dispose(); } catch (_) { /* already lost */ }
+      }
+      function flushOwnershipRelease(freedGeos) {
+        if (!freedGeos || !freedGeos.size) return;
+        for (let i = _dropQueue.length - 1; i >= 0; i--) {
+          const e = _dropQueue[i];
+          const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
+          if (!fg || !freedGeos.has(fg)) continue;
+          _dropQueue.splice(i, 1);
+          ownershipDropQueued(e.mesh, e.ownedGeometry, fg);
+        }
+        let w = 0;
+        for (let i = 0; i < _dropLater.length; i++) {
+          const e = _dropLater[i];
+          const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
+          if (!fg || !freedGeos.has(fg)) { _dropLater[w++] = e; continue; }
+          ownershipDropQueued(e.mesh, null, fg);
+        }
+        _dropLater.length = w;
+        if (shadowSys && shadowSys.flushOwnershipDropped) shadowSys.flushOwnershipDropped(freedGeos);
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
@@ -5081,11 +5103,16 @@ const TLX = (function () {
         pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
           if (m && m.chunks && chunkedSys) {
-            chunkedSys.free(m);
-            flushOwnershipRelease();
+            if (!_ownershipFreeBatch) { _ownershipFreeBatch = new Set(); _ownershipFreeDepth = 1; }
+            chunkedSys.free(m, _ownershipFreeBatch);
             return;
           }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
+        },
+        flushChunkedOwnership() {
+          if (_ownershipFreeBatch && _ownershipFreeBatch.size) flushOwnershipRelease(_ownershipFreeBatch);
+          _ownershipFreeBatch = null;
+          _ownershipFreeDepth = 0;
         },
         freeTexture(t) {
           if (t && t.tex) {

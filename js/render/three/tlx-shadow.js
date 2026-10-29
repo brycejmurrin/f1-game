@@ -550,11 +550,13 @@
         releaseGeometry(e.geo);
       }
     }
-    function flushOwnershipDropped() {
-      if (!dropQ.length) return;
-      const q = dropQ.splice(0);
-      for (let i = 0; i < q.length; i++) {
-        const e = q[i], meshes = e.meshes;
+    function flushOwnershipDropped(freedGeos) {
+      if (!dropQ.length || !freedGeos || !freedGeos.size) return;
+      for (let qi = dropQ.length - 1; qi >= 0; qi--) {
+        const e = dropQ[qi];
+        if (!freedGeos.has(e.geo)) continue;
+        dropQ.splice(qi, 1);
+        const meshes = e.meshes;
         if (meshes) for (let k = 0; k < meshes.length; k++) {
           const m = meshes[k];
           if (!m) continue;
