@@ -4699,7 +4699,7 @@ function update(dt) {
       // In a session the guest waits (briefly, and boundedly) for the host's
       // classification rather than publishing its own — see awaitingResult.
       if (netPlay.awaitingResult()) resultT = 0.05;
-      else { resultT = 0; endRace(); }
+      else { resultT = 0; RaceCeremony.want(true); endRace(); }   // a natural flag arms the ceremony (default on; afterClassify gates eligibility, SKIP stays)
     }
   }
 
