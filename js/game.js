@@ -4842,7 +4842,7 @@ function updateCar(c, dt, ranked) {
   // The revs follow the coast DOWN in the gear it crossed in (a lift, not a downshift ladder):
   // returning before `c.rpm = rpmFor(...)` below held the crossing's revs — flat out on the
   // limiter — while coast() bled the car to a crawl (setEngine / RivalAudio read c.rpm).
-  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; c.skidIntensity = c.wheelLock = c.brakeDemand = c.throttleDemand = c.towing = c.wake = 0; c.deploying = false; c.collideT = Math.max(0, c.collideT - dt); return; }
+  if (c.finished && !netPlay.owns(c)) { pits.update(c, dt); if (c === player && cooldownDrives()) cooldownDrive(c, dt); else coast(c, dt); c.rpm = rpmFor(c.gear || 1, Math.max(0, c.speed || 0)); c._prevS = c.s; c.skidIntensity = c.wheelLock = c.brakeDemand = c.throttleDemand = c.towing = c.wake = 0; c.deploying = false; c.collideT = Math.max(0, c.collideT - dt); return; }
   // Incident-sim takeover (R2/R3/C1): while Rapier owns this car's 6-DoF body,
   // the bespoke integration + wall clamp + collision writeback are SKIPPED —
   // postStep drives px/pz/head/(s,x) from the dynamic body instead. Bounded and
@@ -6629,6 +6629,19 @@ function checkRetirements() {
 // Results, ghosts and matching-class records share one settlement path.
 function onTTLap(lapTime) { return records.finish(lapTime, lapRec.ttLaps, quali.referencePole()); }
 
+// CEREMONY COOLDOWN: the flag is down and RaceCeremony's cooldown beat lets the human drive the finished car
+// (kinematic in s/x like coast; classification, finishT and lap untouched). Throttle/brake slew the speed, steer moves x.
+function cooldownDrives() { const rc = RaceCeremony.get(); return state === "results" && !!rc && rc.status().inputOwner === "player"; }
+function cooldownDrive(c, dt) {
+  const inp = inputOf(c), thr = inp ? !!inp.throttle : Input.throttle(), brk = inp ? !!inp.brake : Input.brakeLevel() > 0;
+  const steer = inp ? (inp.steer ?? 0) : Input.steer(dt), vMax = vTop() * 0.55;
+  c.speed = clamp(c.speed + (thr ? 18 : brk ? -40 : -6) * dt, 0, vMax); c._coastHeld = false;
+  c.s = wrapS(c.s + c.speed * dt); c.prog += c.speed * dt;
+  Tracks.sample(track, c.s, smp);
+  c.x = clamp(c.x + steer * Math.min(c.speed, 20) * 0.25 * dt, -smp.hw * 0.9, smp.hw * 0.9);
+  const w = worldFromTrack(c.s, c.x, smp);
+  c.px = w.x; c.pz = w.z; c.head = Math.atan2(smp.t[0], smp.t[2]);
+}
 function coast(c, dt) {
   // Same shape as the grass-drag floor (see updateCar): a bare Math.max(24, …)
   // RAISES a car that finished slower than 24 m/s, and 24 sits above vTop() below
@@ -8584,7 +8597,7 @@ function tickBody(now) {
   // step (which would change the slip/grip behaviour). Leftover time carries to
   // the next frame; cap the substeps so a stall can't trigger a spiral of death.
   // Only where update() advances anyone — elsewhere it returns immediately.
-  if (!frozen && track && (state === "race" || state === "count")) {   // track: null mid stepped switch (K1)
+  if (!frozen && track && (state === "race" || state === "count" || cooldownDrives())) {   // track: null mid stepped switch (K1)
     physAcc += simTime;
     let steps = 0;
     PerfSpans.begin("physics");
@@ -8599,7 +8612,8 @@ function tickBody(now) {
         c.rPrevHead = c.head;                 // world heading interpolates like position too
       }
       _audioParamStep = physAcc - PHYS_DT < PHYS_DT || steps === 4;   // this frame's last step
-      update(PHYS_DT); physAcc -= PHYS_DT; steps++;
+      if (state === "results") { for (let i = 0; i < cars.length; i++) if (cars[i].finished || cars[i].retired) updateCar(cars[i], PHYS_DT, cars); } else update(PHYS_DT);
+      physAcc -= PHYS_DT; steps++;
     }
     PerfSpans.end("physics");
     _audioParamStep = true;   // any other update() caller (the __apex step hooks) sets them
