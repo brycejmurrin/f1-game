@@ -4050,7 +4050,7 @@ const TLX = (function () {
         meshPool.length = w;
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
-        _coDrop(geo, true);   // R1: its coalesced runs (often the instanced lit program's last holder)
+        _coDrop(geo, !_ownershipFreeDepth);   // R1: its coalesced runs (often the instanced lit program's last holder)
         _decalDrop(geo);   // F3: its batched decal run (immediate: no measured pipeline loss, and tlx-probes pins it)
       }
 
