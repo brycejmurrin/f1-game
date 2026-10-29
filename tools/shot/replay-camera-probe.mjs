@@ -116,6 +116,8 @@ export async function exitReplayThroughUi(page) {
     await page.evaluate(() => window.__apex.hud(true));
     interactions.push(await verifiedControlClick(page, '#pausebtn'));
     interactions.push(await verifiedControlClick(page, '#pm-quit'));
+    // A real press younger than PauseOpts.ARM_MIN_MS is a swallowed double tap.
+    await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 }).catch(() => {});
     if (await page.locator('#pm-quit').isVisible()) interactions.push(await verifiedControlClick(page, '#pm-quit'));
     await page.waitForFunction(() => window.__apex.info().state === 'menu', null, { polling: 100, timeout: 15000 });
     exit = await page.evaluate(() => ({ info: window.__apex.info(), replay: RealRace.status(), camera: window.__apex.camera(), savedCamera: localStorage.getItem('apex26.camMode') }));

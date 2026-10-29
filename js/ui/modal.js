@@ -28,6 +28,7 @@ window.TopModal = (function () {
   function sync(el) {
     const wantOpen = !el.hidden;
     if (wantOpen && !el.open) {
+      shieldLayer(el);
       try { el.showModal(); } catch (_) { /* already in the top layer */ }
       try { Log.info("ui", `TopModal open #${el.id || "?"}`); } catch (_) { /* Log absent */ }
     } else if (!wantOpen && el.open) {
@@ -50,6 +51,7 @@ window.TopModal = (function () {
     // Let the dialog itself take focus when Tab wraps past the last control
     // (otherwise Chromium lands on <body> for a blank step).
     if (!el.hasAttribute("tabindex")) el.tabIndex = -1;
+    tabWrap(el);
 
     new MutationObserver(() => sync(el))
       .observe(el, { attributes: true, attributeFilter: ["hidden"] });
@@ -161,24 +163,36 @@ window.TopModal = (function () {
     // cancel non-cancelable; its later close event would otherwise press BACK
     // a second time and skip a page in the Settings stack. Native close
     // requests still use wire()'s cancel/close handlers above.
-    if (layer.getAttribute("data-esc") === "none") {
-      e.preventDefault(); e.stopPropagation();
-      return;
-    }
-    const via = layer.getAttribute("data-esc-close");
-    if (!via) return;
-    const btn = document.getElementById(via);
-    // A named door that is missing or disabled still owns Escape (mirror
-    // data-esc="none"): otherwise the key falls through to pause/resume while
-    // the sheet stays up. Only click when the control can run.
-    if (!btn || btn.disabled) {
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
+    if (!ownsEscape(layer)) return;
     e.preventDefault();
     e.stopPropagation();
-    btn.click();
+    pressDoor(layer);
+  }
+
+  // A data-esc="none" gate, and a named door that is missing or disabled, still
+  // OWN Escape (otherwise the key falls through to pause/resume while the sheet
+  // stays up); only a layer with no door at all lets it pass.
+  const ownsEscape = (layer) => layer.getAttribute("data-esc") === "none" || !!layer.getAttribute("data-esc-close");
+  function pressDoor(layer) {
+    if (layer.getAttribute("data-esc") === "none") return;
+    const btn = document.getElementById(layer.getAttribute("data-esc-close"));
+    if (btn && !btn.disabled) btn.click();    // only click when the control can run
+  }
+
+  /* BACK WITHOUT A KEY (the browser's back gesture, js/ui/deep-link.js): the
+     answer Escape gives the top layer — a nested dialog closes itself, else
+     the layer's own door. True when a layer took the press. */
+  function escapeTop() {
+    const layer = window.UiLayers && window.UiLayers.top();
+    if (!layer) return false;
+    if (topModalInside(layer)) {
+      const inner = Array.from(document.querySelectorAll(":modal")).filter((m) => m !== layer && layer.contains(m)).pop();
+      try { if (inner.requestClose) inner.requestClose(); else inner.close(); } catch (_) { /* closed meanwhile */ }
+      return true;
+    }
+    if (!ownsEscape(layer)) return false;
+    pressDoor(layer);
+    return true;
   }
 
   /* WHAT FOCUS MAY LAND ON. One selector — MenuNav's, once it has loaded (it
@@ -214,6 +228,7 @@ window.TopModal = (function () {
   }
 
   function onFocusIn(e) {
+    noteFocus(e);
     // Non-dialog layers never got platform focus containment. Keep Tab inside
     // the top UiLayers pane (#select, #career, #lighting, …). Dialogs trap via
     // showModal(), but Chromium still parks on <body> for one step when Tab
@@ -315,12 +330,32 @@ window.TopModal = (function () {
   }
 
   function onLayerShow(layer) {
+    shieldLayer(layer);
     const a = document.activeElement;
-    if (inside(layer, a)) return;                       // the app placed focus itself
+    // The app may have placed focus itself (GARAGE, PRACTICE) before this
+    // callback: still remember the control it came from, or close dropped
+    // focus on <body> (UI hunt 2026-10-29 #4).
+    if (inside(layer, a)) { opener.set(layer, recentOutside(layer)); return; }
     opener.set(layer, connected(a) && a !== document.body ? a : null);
     const back = lastFocus.get(layer);
     const target = (connected(back) && layer.contains(back) && usable(back)) ? back : landing(layer);
     if (target) focusQuiet(target);
+  }
+
+  // The last few focus targets (and what each took focus from), newest last.
+  const trail = [];
+  function noteFocus(e) {
+    for (const el of [e.relatedTarget, e.target]) {
+      if (!el || el === document.body || trail[trail.length - 1] === el) continue;
+      trail.push(el);
+      if (trail.length > 6) trail.shift();
+    }
+  }
+  function recentOutside(layer) {
+    for (let i = trail.length - 1; i >= 0; i--) {
+      if (connected(trail[i]) && !layer.contains(trail[i])) return trail[i];
+    }
+    return null;
   }
 
   function onLayerHide(layer) {
@@ -335,20 +370,25 @@ window.TopModal = (function () {
     focusQuiet(back);
   }
 
-  function wireLayer(el) {
-    if (!el || wired.has(el) || typeof el.showModal === "function") return;
-    wired.add(el);
-    // Tabbing past a non-dialog's last control can focus browser chrome,
-    // which emits no document focus event. Wrap at the boundary before that happens.
+  // Tabbing past a layer's last control can focus browser chrome, or park a
+  // dialog on <body> for one step (no focus event, so onFocusIn cannot pull it
+  // back: UI hunt 2026-10-29 #9). Wrap at the boundary before that happens.
+  function tabWrap(el) {
     el.addEventListener("keydown", (e) => {
       if (e.key !== "Tab" || e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
-      if (!window.UiLayers || window.UiLayers.top() !== el) return;
+      if (!window.UiLayers || window.UiLayers.top() !== el || topModalInside(el)) return;
       const stops = Array.from(el.querySelectorAll(focusableSel())).filter((n) => usable(n) && n.tabIndex >= 0);
       const edge = e.shiftKey ? stops[0] : stops[stops.length - 1];
       if (!edge || document.activeElement !== edge) return;
       e.preventDefault();
       focusQuiet(e.shiftKey ? stops[stops.length - 1] : stops[0]);
     });
+  }
+
+  function wireLayer(el) {
+    if (!el || wired.has(el) || typeof el.showModal === "function") return;
+    wired.add(el);
+    tabWrap(el);
     new MutationObserver(() => {
       // Hide: un-inert the title BEFORE onLayerHide refocuses the opener there
       // (focus() on an inert node is a no-op). Show: record the opener first —
@@ -367,6 +407,30 @@ window.TopModal = (function () {
     }
   }
 
+  /* GHOST-TAP SHIELD. The second tap of a fast double tap landed on whatever
+     the NEW screen put under the thumb: RACE changed circuit, TRACK DESIGNER
+     fired its RACE button, results MENU opened CAREER (UI hunt 2026-10-29 #3).
+     A layer shown right after a pointer click swallows, for SHIELD_MS, a
+     pointer click inside it near that same spot. Keyboard activation
+     (detail 0) and a script's el.click() (untrusted) always pass. */
+  const SHIELD_MS = 350, SHIELD_PX = 32, TAP_RECENT_MS = 1000;
+  let lastTap = null, shield = null;
+  function shieldLayer(layer) {
+    const now = Date.now();
+    if (lastTap && now - lastTap.at < TAP_RECENT_MS) shield = { layer, until: now + SHIELD_MS, x: lastTap.x, y: lastTap.y };
+  }
+  function onClickShield(e) {
+    if (!e.isTrusted || e.detail === 0) return;
+    const s = shield, now = Date.now();
+    if (s && now < s.until && s.layer.contains(e.target) &&
+        Math.hypot(e.clientX - s.x, e.clientY - s.y) <= SHIELD_PX) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    lastTap = { at: now, x: e.clientX, y: e.clientY };
+  }
+
   function init() {
     Log.info("ui", "TopModal.init");
     scan();
@@ -374,6 +438,7 @@ window.TopModal = (function () {
     syncMenuIsolation();
     document.addEventListener("keydown", onEscape, true);
     document.addEventListener("focusin", onFocusIn, true);
+    window.addEventListener("click", onClickShield, true);
   }
 
   // docs/PERF-FINDINGS.md defer trap: !== "complete" preserves today's wait and stays correct under defer.
@@ -381,5 +446,5 @@ window.TopModal = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation };
+  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation, escapeTop, onClickShield };
 })();

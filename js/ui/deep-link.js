@@ -9,15 +9,45 @@ function parse(search) {
   try { go = new URLSearchParams(search || "").get("go"); } catch (_) { return null; }
   return go && Object.prototype.hasOwnProperty.call(DOORS, go) ? go : null;
 }
+/* BACK IS ESCAPE. The Android back button / iOS edge swipe left the game from
+   any screen, mid-race too (UI hunt 2026-10-29 #2). One sentinel entry, same
+   URL, sits on top of the page's own: a back that pops it closes the top layer
+   exactly as Escape would, else pauses a race, then re-pushes. On the bare
+   title nothing takes it, so the sentinel stays spent and the next back leaves;
+   the next tap or key re-arms it (Chromium's history intervention skips an
+   entry pushed with no user activation until the page gets one anyway). */
+const MARK = "apexBack";
+function onSentinel() {
+  try { return !!(history.state && history.state[MARK]); } catch (_) { return false; }
+}
+function pushSentinel() {
+  if (onSentinel()) return;
+  try { history.pushState(Object.assign({}, history.state, { [MARK]: 1 }), ""); } catch (_) { /* sandboxed page */ }
+}
+function onBack($) {
+  if (onSentinel()) return;                     // forward onto our own entry: nothing to undo
+  const top = typeof TopModal !== "undefined" && TopModal.escapeTop && TopModal.escapeTop();
+  let took = !!top;
+  if (!took && UiLayers.inRace()) { const p = $("pausebtn"); if (p) { p.click(); took = true; } }
+  if (took) pushSentinel();
+}
+function guardBack($) {
+  if (typeof window === "undefined" || typeof history === "undefined" || typeof history.pushState !== "function") return;
+  pushSentinel();
+  window.addEventListener("popstate", () => onBack($));
+  window.addEventListener("pointerdown", pushSentinel, true);
+  window.addEventListener("keydown", pushSentinel, true);
+}
 function create(G) {
   const { $, els } = G;
   const go = parse(location.search);
-  if (!go) return { go: null };
+  if (!go) { guardBack($); return { go: null }; }
   try {
     const q = new URLSearchParams(location.search); q.delete("go");
     const rest = q.toString();
-    history.replaceState(null, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
+    history.replaceState(history.state, "", location.pathname + (rest ? "?" + rest : "") + location.hash);
   } catch (_) { /* file:/opaque origin: the param just stays */ }
+  guardBack($);
   // Only the bare title takes a shortcut: a layer over it (consent, career hub, a picker) or a race keeps the player where they are.
   function titleLive() {
     if (UiLayers.inRace() || els.overlay.hidden) return false;
@@ -45,6 +75,6 @@ function create(G) {
   setTimeout(() => fire(0), 0);
   return { go };
 }
-return { create, parse, DOORS };
+return { create, parse, DOORS, onBack, MARK };
 })();
 Object.freeze(DeepLink);
