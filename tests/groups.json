@@ -1376,6 +1376,7 @@
         "tests/specs/carview-parts.spec.js",
         "tests/specs/custom-team.spec.js",
         "tests/specs/garage-aero.spec.js",
+        "tests/specs/garage-close-before-load.spec.js",
         "tests/specs/garage-close-one-click.spec.js",
         "tests/specs/garage-first-frame.spec.js",
         "tests/specs/garage-livery-churn.spec.js",

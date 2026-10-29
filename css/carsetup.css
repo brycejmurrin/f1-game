@@ -1908,15 +1908,23 @@ body:not(.desktop) #carsetup #cs-customize {
 }
 
 /* Change Car / garage open: sheet is up while buildSetup fills tabs (aria-busy). */
-#carsetup[aria-busy="true"] #cs-inner { cursor: progress; opacity: 0.72; }
+#carsetup[aria-busy="true"] #cs-inner { cursor: progress; opacity: 0.72; position: relative; }
+/* Reserve the stat block height before renderStatBars runs so the foot does not
+   jump when the four bars appear. Measured compact head ~70px (deploy tip). */
+#carsetup[aria-busy="true"] #cs-stats-inner { min-height: 72px; }
 #carsetup[aria-busy="true"] #cs-inner::before {
   content: "Loading garage…";
+  position: absolute;
+  left: var(--pad);
+  right: var(--pad);
+  top: calc(var(--gap) * 0.35);
+  margin: 0;
   display: block;
-  margin: 0 0 var(--gap);
   font-size: var(--fs-micro);
   font-weight: 700;
   letter-spacing: var(--ls-2);
   color: var(--dim);
+  pointer-events: none;
 }
 
 /* The pit arrival owns the canvas until the car is parked. */

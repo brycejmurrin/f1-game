@@ -1647,6 +1647,10 @@ function openSetup() {
   const cs = $("carsetup");
   const generation = ++csVisitGeneration;
   tuneExperiments.visit(Teams.LIST[G.teamIdx]);
+  // Exit chrome (hide BACK, stretch DONE) must match the label openGarage set
+  // BEFORE the sheet paints. Waiting for buildSetup() let the two-button foot
+  // show first and jump when syncGarageExitChrome ran — the CLOSE tap missed.
+  syncGarageExitChrome();
   cs.hidden = false;
   G.setupPreviewOn = true;
   cs.setAttribute("aria-busy", "true");
