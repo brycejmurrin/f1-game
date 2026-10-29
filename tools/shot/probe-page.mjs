@@ -188,7 +188,7 @@ async function screenShown(page, id, timeout) {
 }
 
 /** What the page looks like right now — so a timeout names its own cause. */
-export async function uiState(page) {
+async function uiState(page) {
   return page.evaluate(() => {
     const $ = (id) => document.getElementById(id);
     const g = $("game");
@@ -336,7 +336,7 @@ export async function garageDiagnostics(page) {
  * points at the selector rather than at the render gate. Wait for the real
  * condition, and say so when it never arrives.
  */
-export async function waitGameVisible(page, timeout = 30000) {
+async function waitGameVisible(page, timeout = 30000) {
   const shown = await page.waitForFunction(() => {
     const g = document.getElementById("game");
     if (!g) return false;

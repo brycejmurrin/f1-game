@@ -222,6 +222,6 @@ const ShareCardData = (function () {
     return freezeModel(Object.assign(model, common(opts)));
   }
 
-  return Object.freeze({ MODEL_KEYS, MAX_ROWS, CHART_POINTS, text, lapTime, fromDaily, fromGhost, fromRace, fromSeason, fromCareerYear });
+  return Object.freeze({ MODEL_KEYS, MAX_ROWS, CHART_POINTS, lapTime, fromDaily, fromGhost, fromRace, fromSeason, fromCareerYear });
 })();
 Object.freeze(ShareCardData);

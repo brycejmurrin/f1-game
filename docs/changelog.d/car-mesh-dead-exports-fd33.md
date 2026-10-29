@@ -1,0 +1,1 @@
+Removed: Unused public car mesh/shade/materials/outline exports — `CarMesh.MIRROR_GLASS_V`, CarShade internals (`RING_N`, `EXP`, `EXP_TOP`, `LOWER`, `RAMP`, `pref`, `loftRings`, `heightZone`, `skin`, `sect`, `pipe`, `rquad`), CarMaterials finish helpers (`applyZones`, `PAINT_ZONES`, `ZONE_FINISH`), and `GarageSurfaceOutline.FIELDS` stay module-local (no behaviour change).

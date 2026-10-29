@@ -62,15 +62,13 @@ const ShareCard = (function () {
     return ctx;
   }
 
+  // Paint uses Barlow Condensed only; await that face (1.5 s cap) before drawing.
   function ensureFonts(doc) {
     if (fontsReady) return fontsReady;
     const fonts = doc && doc.fonts;
     if (!fonts || typeof fonts.load !== "function") return Promise.resolve(false);
     fontsReady = Promise.race([
-      Promise.all([
-        fonts.load("700 48px 'Barlow Condensed'"),
-        fonts.load("600 24px 'Titillium Web'"),
-      ]).then(() => true, () => false),
+      fonts.load("700 48px 'Barlow Condensed'").then(() => true, () => false),
       new Promise((resolve) => setTimeout(() => resolve(false), 1500)),
     ]);
     return fontsReady;
@@ -153,7 +151,8 @@ const ShareCard = (function () {
     return "downloaded";
   }
 
-  // Whether SHARE can reach a share sheet (Web Share with files, or the app's native bridge).
+  // True when a share-sheet API is present (Web Share, or the native bridge).
+  // deliver() still probes canShare({ files }) before offering a payload.
   function canShareFiles(env) {
     env = env || {};
     const nav = env.navigator || (typeof navigator !== "undefined" ? navigator : null);
@@ -162,6 +161,6 @@ const ShareCard = (function () {
     return !env.navigator && typeof NativeDownload !== "undefined" && NativeDownload.viable();
   }
 
-  return Object.freeze({ MAX_BYTES, paint, render, deliver, ensureFonts, extension, canShareFiles, download: browserDownload });
+  return Object.freeze({ MAX_BYTES, paint, render, deliver, extension, canShareFiles, download: browserDownload });
 })();
 Object.freeze(ShareCard);

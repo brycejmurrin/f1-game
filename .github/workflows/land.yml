@@ -504,10 +504,12 @@ jobs:
           write_gate() {
             local head=$1 st=$2 c=$3 title=$4 summary=$5 seen state body
             WROTE=""
+            # A newer status from THIS run (an earlier attempt: a re-run reuses resolve's AT) is not a newer verdict;
+            # run 40740152111 kept its own attempt-1 error over its attempt-2 pass on #4110 (2026-10-28).
             seen=$(gh api "repos/$R/commits/$head/statuses?per_page=100" --jq \
-              '[.[] | select(.context == "gate")] | first | if . == null then "" else (.created_at | fromdateiso8601 | floor | tostring) end') || return 1
-            if [ -n "$seen" ] && [ "$seen" -gt "$AT_S" ]; then
-              echo "gate on ${head:0:12}: kept the newer verdict (posted at epoch $seen > $AT_S = $AT)"; return 0
+              '[.[] | select(.context == "gate")] | first | if . == null then "" else "\(.created_at | fromdateiso8601 | floor) \(.target_url // "")" end') || return 1
+            if [ -n "$seen" ] && [ "${seen%% *}" -gt "$AT_S" ] && [ "${seen#* }" != "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" ]; then
+              echo "gate on ${head:0:12}: kept the newer verdict (posted at epoch ${seen%% *} > $AT_S = $AT)"; return 0
             fi
             case "$st/$c" in completed/success) state=success ;; completed/*) state=failure ;; *) state=pending ;; esac
             body=$(jq -n --arg st "$state" --arg t "$title" --arg u "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" \
@@ -564,6 +566,10 @@ jobs:
               :   # the land-gate leg refused (gen, ratchets): a refusal is never a way in
             elif [ "$tcode" != 0 ] && [ "$tcode" != 3 ]; then
               code=1; line="trusted rows: ${tline:-exit $tcode}"
+              # No row for this head (trusted-rows timed out or failed): make "will retry" true (`retry`, RETRY_MAX per head).
+              if [ "$tline" = "no trusted rows for this head" ]; then
+                want_retry "$n" "$head"
+              fi
             elif [ "$tcode" = 3 ]; then
               code=3; line="$tline"
             elif [ "$code" = 0 ] && [ "$ttip" != "$tip" ]; then

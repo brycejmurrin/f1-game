@@ -1,8 +1,12 @@
+import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import zlib from "node:zlib";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
+import { localMergeGenCheck } from "../../tools/ci/merge-gate.mjs";
+import sceneryHash from "../../tools/shot/scenery-source-hash.cjs";
 import {
   buildTrackShotSurveyPlan,
   buildSurveyPlans,
@@ -28,6 +32,79 @@ const TMP_BASE = (() => {
   fs.mkdirSync(d, { recursive: true });
   return d;
 })();
+
+test("landing validates the scenery catalog in the actual merged checkout", async (t) => {
+  for (const mode of ["matching", "base-moved", "mismatch", "missing", "malformed", "missing-digest", "gen-failure", "validator-error"]) {
+    await t.test(mode, () => {
+      const dir = fs.mkdtempSync(path.join(TMP_BASE, "scenery-merge-"));
+      const git = (cwd, ...args) => {
+        const r = spawnSync("git", ["-c", "user.name=fixture", "-c", "user.email=fixture@example.invalid", ...args], { cwd, encoding: "utf8" });
+        assert.equal(r.status, 0, r.stderr);
+        return r.stdout.trim();
+      };
+      const write = (cwd, file, value) => {
+        fs.mkdirSync(path.dirname(path.join(cwd, file)), { recursive: true });
+        fs.writeFileSync(path.join(cwd, file), value);
+      };
+      try {
+        const remote = path.join(dir, "remote.git"), cwd = path.join(dir, "checkout");
+        git(dir, "init", "-q", "--bare", remote);
+        git(dir, "clone", "-q", remote, cwd);
+        git(cwd, "checkout", "-q", "-b", "deploy-x");
+        write(cwd, "package.json", JSON.stringify({ scripts: { "gen:check": "node -e \"process.exit(0)\"" } }));
+        write(cwd, "tools/manifest.cjs", "module.exports = { TRACK_VM: ['js/track/core/geom.js', '@circuits'] };\n");
+        write(cwd, "tools/shot/scenery-source-hash.cjs", fs.readFileSync(new URL("../../tools/shot/scenery-source-hash.cjs", import.meta.url)));
+        for (const file of ["tools/shot/gen-scenery-locations.cjs", "tools/lib/track-build-vm.cjs", "tools/lib/pack-assets.cjs",
+          "js/track/core/geom.js", "js/circuits/bahrain.js", "js/circuits/scenery/bahrain.js"]) write(cwd, file, "// fixture input\n");
+        write(cwd, "assets/pack/manifest.json", "{}\n");
+        write(cwd, "tests/data/landmarks/bahrain.json", "{\"ids\":[]}\n");
+        const catalog = "tools/shot/scenery-locations.json";
+        write(cwd, catalog, JSON.stringify({ sourceDigest: sceneryHash.scenerySourceDigest(cwd), locations: [] }));
+        git(cwd, "add", "-A"); git(cwd, "commit", "-q", "-m", "matching base catalog");
+        git(cwd, "push", "-q", "origin", "deploy-x");
+        git(cwd, "checkout", "-q", "-b", "pr", "deploy-x");
+        write(cwd, "docs/README.md", "PR unrelated to scenery\n");
+        if (mode === "mismatch") write(cwd, "js/track/core/geom.js", "// changed input\n");
+        if (mode === "missing") fs.unlinkSync(path.join(cwd, catalog));
+        if (mode === "malformed") write(cwd, catalog, "{not JSON");
+        if (mode === "missing-digest") write(cwd, catalog, "{}\n");
+        if (mode === "gen-failure") write(cwd, "package.json", JSON.stringify({ scripts: { "gen:check": "node -e \"process.exit(7)\"" } }));
+        git(cwd, "add", "-A"); git(cwd, "commit", "-q", "-m", `PR ${mode}`);
+        git(cwd, "push", "-q", "origin", "pr");
+        const head = git(cwd, "rev-parse", "pr");
+        if (mode === "base-moved") {
+          git(cwd, "checkout", "-q", "deploy-x");
+          write(cwd, "js/track/core/geom.js", "// new base input, stale catalog\n");
+          git(cwd, "add", "-A"); git(cwd, "commit", "-q", "-m", "base moves after head CI");
+          git(cwd, "push", "-q", "origin", "deploy-x");
+          git(cwd, "checkout", "-q", "pr");
+          assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, catalog))).sourceDigest, sceneryHash.scenerySourceDigest(cwd),
+            "the caller/PR checkout is fresh; only the combined merge is stale");
+        }
+        const tip = git(cwd, "rev-parse", "deploy-x"), calls = [];
+        let ratchetCalls = 0;
+        const result = localMergeGenCheck({ pr: 17, head, headRef: "pr", cwd, base: "deploy-x",
+          run: (cmd, argv, options) => {
+            calls.push(cmd);
+            assert.equal(options.cwd, path.join(cwd, "artifacts", "merge-gate", "wt-17"));
+            assert.equal(Object.keys(options.env).some((key) => /TOKEN|SECRET|^GH_|^ACTIONS_|^GITHUB_(OUTPUT|ENV|PATH|STATE|STEP_SUMMARY)$/.test(key)), false,
+              "both generation and catalog validation keep the untrusted environment boundary");
+            if (mode === "validator-error" && cmd === process.execPath) return { status: null, error: new Error("validator could not start") };
+            return spawnSync(cmd, argv, options);
+          },
+          ratchets: () => { ratchetCalls++; return { ok: true, evidence: "fixture ratchets hold" }; },
+        });
+        assert.equal(result.tip, tip, "a catalog refusal retains the actual merge tip");
+        assert.equal(result.error, undefined, "generation failures are refusals, not git infrastructure errors");
+        assert.deepEqual(calls, mode === "gen-failure" ? ["npm"] : ["npm", process.execPath]);
+        assert.equal(result.ok, mode === "matching", result.evidence);
+        assert.equal(ratchetCalls, mode === "matching" ? 1 : 0, "catalog/gen refusals stop before ratchets");
+        if (mode !== "matching") assert.equal(result.evidence.startsWith(mode === "gen-failure" ? "gen:check fails" : "scenery catalog fails"), true, result.evidence);
+        assert.equal(fs.existsSync(path.join(cwd, "artifacts", "merge-gate", "wt-17")), false, "all outcomes clean up the merged checkout");
+      } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    });
+  }
+});
 
 
 test("linspaceFracs spreads without hitting 1.0 duplicate", () => {

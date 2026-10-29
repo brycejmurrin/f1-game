@@ -13,9 +13,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal } from "../../tools/ci/test-bg.mjs";
+import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal, start, workerBudget } from "../../tools/ci/test-bg.mjs";
 
 test("parseTestBgArgv reads --timeout and --timeout=N as minutes", () => {
   assert.equal(parseTestBgArgv(["--wait", "--timeout", "45"]).waitTimeoutMin, 45);
@@ -130,11 +129,6 @@ test("test-bg refuses a browser group while the MCP Chrome daemon is live (box-w
   assert.equal(chromeRefusal({ browser: true, force: true, sessions }), null, "--force overrides");
   assert.equal(chromeRefusal({ browser: false, force: false, sessions }), null, "a node-only group is not a Chromium run");
   assert.equal(chromeRefusal({ browser: true, force: false, sessions: [] }), null);
-  // Wired before anything spawns: the check sits in start() ahead of supersede/spawnGroup.
-  const src = fs.readFileSync(new URL("../../tools/ci/test-bg.mjs", import.meta.url), "utf8");
-  const body = src.slice(src.indexOf("function start("));
-  assert.ok(body.indexOf("chromeRefusal(") > 0 && body.indexOf("chromeRefusal(") < body.indexOf("supersede(groups)"),
-    "start() must refuse before it supersedes or spawns anything");
 });
 
 test("probe-mcp chrome-start refuses while a Playwright run is live in this checkout", () => {
@@ -172,4 +166,125 @@ test("parseTestBgArgv: --spec runs one spec as a pseudo-group, --workers is read
   assert.throws(() => parseTestBgArgv(["--spec"]), /--spec requires a value/);
   assert.throws(() => parseTestBgArgv(["--wait", "--timout", "45"]), /unknown flag --timout/);
   assert.throws(() => parseTestBgArgv(["--workers", "0", "smoke"]), /--workers requires a positive integer/);
+});
+
+// The real start controller with inert process/registry edges: no browser,
+// subprocess, filesystem state, or signal is touched by these fixtures.
+function startFixture({ runs = [], load = 0, sessions = [], spawnResult, beforeWrite } = {}) {
+  const events = [], messages = [];
+  let state = { runs: runs.map((r) => ({ ...r })) };
+  let nextPid = 200;
+  const io = {
+    loadPkg: () => ({ scripts: { "test:smoke": "node tools/ci/run-playwright.mjs", "test:tiny": "node tools/ci/run-playwright.mjs" } }),
+    probeChromeSessions: () => sessions,
+    changedForWaste: () => [],
+    load1: () => load,
+    readState: () => state,
+    alive: (r) => !r.ended,
+    supersede: (groups) => {
+      events.push(["supersede", [...groups]]);
+      state.runs = state.runs.map((r) => groups.includes(r.group) ? { ...r, ended: "superseded" } : r);
+    },
+    mkdirLogs: () => events.push(["mkdir"]),
+    spawnGroup: (group, _pkg, options) => {
+      events.push(["spawn", group, options]);
+      return spawnResult ? spawnResult(group) : { group, pid: nextPid++, log: `/fixture/${group}.log` };
+    },
+    updateState: (mutate) => {
+      events.push(["write"]);
+      if (beforeWrite) beforeWrite(state);
+      state = mutate(state);
+    },
+    say: (message) => messages.push(message),
+    error: (message) => messages.push(message),
+    exit: (code) => { throw Object.assign(new Error("start refused"), { code }); },
+    now: () => "2026-10-29T00:00:00.000Z",
+  };
+  return { io, events, messages, state: () => state };
+}
+
+test("start: unknown groups and load at the refusal threshold leave runs untouched", () => {
+  for (const [groups, options, code] of [[["unknown"], {}, 2], [["smoke"], { load: 3 }, 3]]) {
+    const f = startFixture({ runs: [{ group: "smoke", pid: 100 }], ...options });
+    assert.throws(() => start(groups, {}, f.io), { code });
+    assert.deepEqual(f.events, [], "a refusal cannot supersede, spawn, or rewrite the registry");
+    assert.deepEqual(f.state().runs, [{ group: "smoke", pid: 100 }]);
+  }
+});
+
+test("start: a live MCP browser refuses before supersede or spawn", () => {
+  const f = startFixture({ sessions: ["probe-chrome-0123456789abcdef"] });
+  assert.throws(() => start(["smoke"], {}, f.io), { code: 3 });
+  assert.deepEqual(f.events, []);
+});
+
+test("start: a deferred sequential group still occupies the one-run cap", () => {
+  const f = startFixture({ runs: [{ group: "tiny", pid: 100 }] });
+  assert.throws(() => start(["smoke", "tiny"], {}, f.io), { code: 3 });
+  assert.deepEqual(f.events, [], "the already-running deferred tiny group must not be forgotten");
+  assert.deepEqual(f.state().runs, [{ group: "tiny", pid: 100 }]);
+});
+
+test("start: sequential selection supersedes only the group actually being restarted", () => {
+  const f = startFixture({ runs: [{ group: "smoke", pid: 100 }] });
+  start(["smoke", "tiny"], {}, f.io);
+  assert.deepEqual(f.events, [
+    ["supersede", ["smoke"]], ["mkdir"], ["spawn", "smoke", { lastFailed: false }], ["write"],
+  ]);
+  assert.deepEqual(f.state().runs, [{ group: "smoke", pid: 200, log: "/fixture/smoke.log" }]);
+  assert.equal(f.state().mode, "sequential");
+});
+
+test("start: a concurrent writer's live run survives the final registry mutation", () => {
+  const f = startFixture({ beforeWrite: (state) => state.runs.push({ group: "tiny", pid: 101 }) });
+  start(["smoke"], {}, f.io);
+  assert.deepEqual(f.state().runs.map((r) => [r.group, r.pid]), [["tiny", 101], ["smoke", 200]]);
+});
+
+test("start: forced parallel starts forward replay options and preserve an unrelated run", () => {
+  const f = startFixture({ runs: [{ group: "old", pid: 100 }] });
+  start(["smoke", "tiny"], { parallel: true, force: true, lastFailed: true }, f.io);
+  assert.deepEqual(f.events, [
+    ["supersede", ["smoke", "tiny"]], ["mkdir"],
+    ["spawn", "smoke", { lastFailed: true }], ["spawn", "tiny", { lastFailed: true }], ["write"],
+  ]);
+  assert.deepEqual(f.state().runs.map((r) => r.pid), [100, 200, 201]);
+  assert.equal(f.state().mode, "parallel");
+});
+
+test("start: an empty last-failed replay keeps other runs without a false start", () => {
+  const f = startFixture({ runs: [{ group: "old", pid: 100 }], spawnResult: () => null });
+  start(["smoke"], { force: true, lastFailed: true }, f.io);
+  assert.deepEqual(f.state().runs, [{ group: "old", pid: 100 }]);
+  assert.equal(f.messages.some((m) => m.startsWith("tail one:")), false);
+});
+
+test("start: a supervisor launch error cannot publish a fictitious run", () => {
+  const f = startFixture({ spawnResult: () => { throw new Error("launch denied"); } });
+  assert.throws(() => start(["smoke"], {}, f.io), /launch denied/);
+  assert.equal(f.events.some(([event]) => event === "write"), false);
+  assert.deepEqual(f.state().runs, []);
+});
+
+
+test("workerBudget: five host CPUs with four available CPUs defaults to one worker", () => {
+  const system = { cpus: () => Array(5), availableParallelism: () => 4 };
+  assert.deepEqual(workerBudget({ env: {}, system }), { cores: 4, workers: "1" });
+});
+
+test("workerBudget: a budget above four defaults to two workers", () => {
+  const system = { cpus: () => Array(16), availableParallelism: () => 5 };
+  assert.deepEqual(workerBudget({ env: {}, system }), { cores: 5, workers: "2" });
+});
+
+test("workerBudget: older Node falls back to CPU count and an empty count falls back to four", () => {
+  assert.deepEqual(workerBudget({ env: {}, system: { cpus: () => Array(5) } }), { cores: 5, workers: "2" });
+  assert.deepEqual(workerBudget({ env: {}, system: { cpus: () => [] } }), { cores: 4, workers: "1" });
+});
+
+test("workerBudget: environment and parsed CLI overrides beat the available-CPU default", () => {
+  const system = { cpus: () => Array(5), availableParallelism: () => 4 };
+  assert.equal(workerBudget({ env: { WORKERS: "3" }, system }).workers, "3");
+  const { workers } = parseTestBgArgv(["--workers=2", "smoke"]);
+  assert.equal(workerBudget({ workers, env: { WORKERS: "3" }, system }).workers, "2");
 });
