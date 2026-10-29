@@ -361,7 +361,7 @@ test("M5: a `land` PR waiting on CI/gate is not stale; a red or conflicting one 
   const red = land({ checks: [{ id: 1, name: "CI", status: "completed", conclusion: "failure" }] });
   assert.equal(planDispatch(state({ prs: [red] }), cfg(), NOW).launches[0].kind, "continue");
   assert.equal(landProblem(land({ mergeable_state: "dirty" })), "merge conflict");
-  for (const bot of [{ head_ref: "bot/changelog-fold" }, { head_ref: "bot/ratchets-fold" }, { author: "github-actions[bot]" }]) {
+  for (const bot of [{ head_ref: "bot/changelog-fold" }, { head_ref: "bot/ratchets-fold-40877449797" }, { author: "github-actions[bot]" }]) {
     const p = planDispatch(state({ prs: [pr(81, { updated_at: ago(9), ...bot })] }), cfg(), NOW);
     assert.deepEqual([p.launches.length, p.labels.length, skips(p)], [0, 0, ["PR #81: stale 9h but a fold bot's PR (never re-owned)"]]);
   }
