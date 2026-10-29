@@ -8597,7 +8597,7 @@ function tickBody(now) {
   // step (which would change the slip/grip behaviour). Leftover time carries to
   // the next frame; cap the substeps so a stall can't trigger a spiral of death.
   // Only where update() advances anyone — elsewhere it returns immediately.
-  if (!frozen && track && (state === "race" || state === "count" || cooldownDrives())) {   // track: null mid stepped switch (K1)
+  if (!frozen && track && (state === "race" || state === "count" || (state === "results" && RaceCeremony.get()?.status().inputOwner === "player"))) {   // track: null mid stepped switch (K1)
     physAcc += simTime;
     let steps = 0;
     PerfSpans.begin("physics");
