@@ -24,11 +24,6 @@
    and portrait racing is blocked outright (#rotate-device), so it is rarely on
    screen during a race at all. */
 :root {
-  /* Painted floor for GAS/BRAKE/BOOST/OT/AERO/PAUSE/CAM labels. Dock `zoom`
-     (--hud-z-dock) shrinks authored --fs-micro with the buttons; 14×0.69
-     painted 9.7px on a short landscape phone at HUD 150% (hud-mock 2026-10-14).
-     Font rules divide this by --touch-label-z. Width/height stay on --tap/--hold. */
-  --touch-label-floor: 10px;
   --btn: 76px;                                        /* action button diameter */
   /* 12px (was 8): AERO / OT / BOOST translucent fills at 8px read as one
      merged column on the fixed portrait ladder and on desktop survey stubs
@@ -41,15 +36,6 @@
      #btn-boost: this is the IDLE rung, and it is applied as element opacity
      rather than as a fill alpha so it can never touch a label's contrast. */
   --btn-a: 0.68;
-  /* Local stand-ins for the responsive-foundation tokens. No draft of that
-     PR was open on 2026-10-29 (searched open PRs), so the touch ladder names
-     its own until those land and these can alias them.
-     Pedals are squircles; BOOST / OT / AERO stay circles. Phones keep the
-     76 / 84 ladder; a portrait tablet (the rotate gate stops at 743px) grows
-     it. */
-  --touch-pedal-radius: 28%;
-  --touch-tablet-btn: 96px;
-  --touch-tablet-steer: 108px;
 }
 /* PLAYER BUTTON OPACITY rides the dock GROUPS, never the buttons. The ladder
    inside (--btn-a idle, opacity 1 for live states, .dead below idle) is a

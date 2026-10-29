@@ -27,6 +27,12 @@ function tokenPx(name) {
   return Number(m[1]);
 }
 
+function tokenDecl(name) {
+  const m = tokens.match(new RegExp(name + ":\\s*([^;]+);"));
+  assert.ok(m, name + " missing from css/tokens.css");
+  return m[1].trim();
+}
+
 test("width-tier tokens, the media queries, and scale.js name the same pixels", () => {
   const ctx = vm.createContext({ JSON, window: { matchMedia: () => ({ matches: false }) } });
   vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
@@ -45,6 +51,11 @@ test("width-tier tokens, the media queries, and scale.js name the same pixels", 
   assert.match(responsive, /horizontal-viewport-segments: 2/);
   assert.match(responsive, /vertical-viewport-segments: 2/);
   assert.match(tokens, /--safe-w: calc\(100svw - var\(--safe-l\) - var\(--safe-r\)\)/);
+  assert.equal(tokenDecl("--touch-label-floor"), "10px");
+  assert.equal(tokenDecl("--touch-pedal-radius"), "28%");
+  assert.equal(tokenDecl("--touch-tablet-btn"), "96px");
+  assert.equal(tokenDecl("--touch-tablet-steer"), "108px");
+  assert.equal(tokenDecl("--hud-glance"), "color-mix(in oklab, var(--text) 68%, var(--dim))");
 });
 
 test("layoutOf walks the tiers from the wide end", () => {

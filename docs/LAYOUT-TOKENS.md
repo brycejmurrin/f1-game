@@ -11,7 +11,7 @@ fails if the copies drift.
 | Token | Role |
 |---|---|
 | `--gap` `--pad` `--gut` | Space between controls, sheet padding, minimum edge air. Short landscape tightens all three. |
-| `--fs-1` … `--fs-6` | Type scale. `--fs-micro` is the floor (14px). Do not invent a size below it. |
+| `--fs-1` … `--fs-6` | Type scale. `--fs-micro` is the floor (14px). Do not invent a size below it except the touch dock label floor (below). |
 | `--tap` `--chip-h` `--tap-sm` `--tap-min` | Control heights. `--tap-min` is the painted 24px floor under UI SIZE zoom. |
 | `--sal` `--sar` `--sat` `--sab` | `env(safe-area-inset-*)`. Notch and home indicator. |
 | `--safe-t` `--safe-r` `--safe-b` `--safe-l` | Inset plus `--gut`. Use these for padding. |
@@ -22,6 +22,28 @@ fails if the copies drift.
 browser toolbar moves and re-layout mid-scroll, so they are not tokens.
 `vh` remains only on type and gap clamps, where a live change would be worse
 than a few pixels of slack.
+
+## Colour (HUD)
+
+| Token | Role |
+|---|---|
+| `--hud-glance` | Secondary HUD ink: `color-mix` of `--text` and `--dim` so labels stay readable on translucent plates and follow LIGHT / HIGH CONTRAST remaps (#4183). |
+
+## Touch controls
+
+Declared in `css/tokens.css`; consumed in `css/touch-controls.css`. The fixed
+portrait/landscape ladder (`--btn`, `--steer`, `--btn-pitch`, …) stays local
+because those controls are `position:fixed` with literal safe-area anchors.
+
+| Token | Role |
+|---|---|
+| `--touch-label-floor` | 10px painted minimum for dock/action labels after dock zoom divides it (`--touch-label-z`, local). Allowed below `--fs-micro` so HUD zoom cannot shrink glyphs past readability. |
+| `--touch-pedal-radius` | Squircle corner radius for pedal buttons (circles unchanged). |
+| `--touch-tablet-btn` | Action button diameter from 744px portrait width (tablet slab; not `--bp-tablet`, which is 700px). |
+| `--touch-tablet-steer` | Steer button diameter on the same portrait-tablet tier. |
+
+`--touch-label-z` stays in `css/touch-controls.css` on the dock rule: it tracks
+`--hud-z-dock` / `--hud-btn-scale` and is not a layout width token.
 
 ## Width tiers
 
