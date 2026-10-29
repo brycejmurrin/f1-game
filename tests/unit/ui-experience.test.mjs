@@ -563,7 +563,7 @@ test('pause LINE tile cycles the DRIVING LINE in-race, saves it like the RACE SE
   const tray = dom.byId('pm-quick-doors'), rewind = dom.byId('pm-checkpoint');
   tray.appendChild(rewind);
   local.api.create({ $: dom.byId, state: 'race', setupPreviewOn: false }, { coach: { paint() {}, practiceGoal: () => 'free', setPracticeGoal() {} }, trackReady: () => true });
-  const tile = dom.byId('pm-line');
+  const tile = dom.byId('pm-drivingline');
   assert.equal(tile.parentNode, tray, 'a RACE TOOLS tile');
   assert.equal(tray.children.indexOf ? tray.children.indexOf(tile) : Array.from(tray.children).indexOf(tile), Array.from(tray.children).indexOf(rewind) - 1, 'just before REWIND & RETRY');
   assert.equal(tile.textContent, 'LINE: FULL');
@@ -572,4 +572,7 @@ test('pause LINE tile cycles the DRIVING LINE in-race, saves it like the RACE SE
   tile.onclick(); assert.equal(tile.textContent, 'LINE: FULL');
   assert.deepEqual(saved, [['drivingLine', 'off'], ['drivingLine', 'corner'], ['drivingLine', 'full']], 'the RACE SETTINGS row\'s store key');
   assert.match(tile.getAttribute('aria-label'), /Driving line FULL/);
+  // #pm-line is ADVANCED's STEER ASSIST slider: a duplicate id there cut CAR HANDLING out of the arrow-key walk
+  const shell = fs.readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  assert.doesNotMatch(shell, /id="pm-drivingline"/, 'the runtime tile id must not collide with a shell id');
 });

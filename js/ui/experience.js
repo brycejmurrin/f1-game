@@ -216,7 +216,7 @@ const UiExperience = (function () {
     // Built here like RECOVER CAR, so the shell's node count does not grow.
     const LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
     const tray = $("pm-quick-doors");
-    const lineTile = tray && typeof DrivingLine !== "undefined" ? node("button", "", { id: "pm-line", type: "button" }) : null;
+    const lineTile = tray && typeof DrivingLine !== "undefined" ? node("button", "", { id: "pm-drivingline", type: "button" }) : null;
     function paintLine() {
       if (!lineTile) return;
       const row = LINE.find((r) => r[0] === DrivingLine.mode()) || LINE[0];
