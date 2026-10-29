@@ -4015,6 +4015,28 @@ const TLX = (function () {
         m.geometry = null; m.material = null;
         if (owned) try { owned.dispose(); } catch (_) { /* already lost */ }
       }
+      function purgeOwnershipRenderObjects(freedGeos) {
+        const ros = renderer._objects && renderer._objects._renderObjects;
+        if (!ros || !freedGeos || !freedGeos.size) return;
+        const list = typeof ros.values === "function" ? Array.from(ros.values()) : Array.from(ros);
+        for (let i = 0; i < list.length; i++) {
+          const ro = list[i];
+          const g = ro && ro.geometry;
+          if (!g || !freedGeos.has(g)) continue;
+          const o = ro.object;
+          if (o && typeof o.dispatchEvent === "function" && !o.__tlxDropped) {
+            ownershipDropQueued(o, o._ownGeo ? o.geometry : null, g);
+            continue;
+          }
+          // Native three WebGPU keeps vertex/bindings state keyed on geometry until
+          // its "dispose" event (measured macos-latest/Metal session-quit-memory:
+          // pooled mesh drops were clean on SwiftShader WebGL2 but ~97 monza chunk
+          // geometries stayed in _renderObjects until geometry.dispose fired).
+          if (renderer.backend && renderer.backend.isWebGPUBackend && typeof g.dispatchEvent === "function") {
+            try { g.dispatchEvent({ type: "dispose" }); } catch (_) { /* already torn down */ }
+          }
+        }
+      }
       function flushOwnershipRelease(freedGeos) {
         if (!freedGeos || !freedGeos.size) return;
         for (let i = _dropQueue.length - 1; i >= 0; i--) {
@@ -4033,6 +4055,7 @@ const TLX = (function () {
         }
         _dropLater.length = w;
         if (shadowSys && shadowSys.flushOwnershipDropped) shadowSys.flushOwnershipDropped(freedGeos);
+        purgeOwnershipRenderObjects(freedGeos);
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the

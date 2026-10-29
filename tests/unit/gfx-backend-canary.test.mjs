@@ -4639,6 +4639,10 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
     "chunked free accumulates released geos across props/road/terrain before the flush");
   assert.doesNotMatch(fnBody(tlxSrc, "flushOwnershipRelease"), /flushDropLater\(true\)/,
     "ownership flush must not drain every deferred drop — that stripped the next circuit's ribbons on CI");
+  assert.match(fnBody(tlxSrc, "flushOwnershipRelease"), /purgeOwnershipRenderObjects\(freedGeos\)/,
+    "ownership flush must evict straggler RenderObjects for freed geos (Metal WebGPU geometry cache)");
+  assert.match(fnBody(tlxSrc, "purgeOwnershipRenderObjects"), /renderer\.backend\.isWebGPUBackend[\s\S]*?g\.dispatchEvent\(\{ type: "dispose" \}\)/,
+    "native WebGPU drops vertex state when geometry dispatches dispose after mesh drops");
   assert.match(sh, /flushOwnershipDropped,\n/, "shadow pool exports the warm-bypass drain for chunked free");
   assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh, null, later\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
