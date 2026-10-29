@@ -292,7 +292,8 @@ const GfxDebug = (() => {
     else document.addEventListener("DOMContentLoaded", () => setTimeout(install, 0), { once: true });
   }
 
-  return { install, stop, text: build, wanted };
+  // install / stop / wanted stay module-local (auto-install on load); text() is the test/probe seam.
+  return { text: build };
 })();
 
 if (typeof window !== "undefined") window.GfxDebug = GfxDebug;

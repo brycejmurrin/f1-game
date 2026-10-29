@@ -576,6 +576,8 @@ const BenchRun = (function () {
     return true;
   }
 
+  // open / close / stillRunning / resultText stay module-local (mount, resume, paint);
+  // KEY stays — tools/perf/devicefarm-*.mjs reads BenchRun.KEY across reloads.
   return {
     KEY, SCHEMA, SCHEMAS, SEED, TESTS, median, overs, growth, summarize, scenes, newPlan, pathPrefs,
     create(G) {
@@ -585,7 +587,7 @@ const BenchRun = (function () {
       if (typeof setTimeout === "function") setTimeout(() => { resume().catch((e) => log("resume failed " + (e && e.message))); }, 0);
       return this;
     },
-    run, stop, open, close, active: stillRunning, result: resultText, wake: { acquire: wakeAcquire, release: wakeRelease, onVisible },
+    run, stop, wake: { acquire: wakeAcquire, release: wakeRelease, onVisible },
   };
 })();
 

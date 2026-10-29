@@ -316,7 +316,6 @@ async function precacheAssetLists() {
     "assets/fonts/titillium-web-latin-600-normal.woff2",
     "assets/fonts/titillium-web-latin-700-normal.woff2",
     "assets/fonts/titillium-web-latin-700-italic.woff2",
-    "assets/fonts/barlow-condensed-latin-500-normal.woff2",
     "assets/fonts/barlow-condensed-latin-600-normal.woff2",
     "assets/fonts/barlow-condensed-latin-700-normal.woff2",
     "assets/fonts/saira-apex26-800-italic.woff2",

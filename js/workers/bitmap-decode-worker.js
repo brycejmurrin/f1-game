@@ -1,23 +1,12 @@
-/* Apex 26 — decode image Blobs to transferable ImageBitmaps off the page
-   thread. The page uploads / draws; this worker only createImageBitmap().
-   Options match the pack strip (premultiplyAlpha:"none", colorSpaceConversion:
-   "none") plus imageOrientation so EXIF does not flip textures.
-   https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html */
+/* Apex 26 — pack-strip worker (type "strip"): inflate a baked pack strip
+   (assets/pack/mat-*.png) to raw RGBA layer bytes with no GPU and no DOM —
+   DecompressionStream on the IDAT stream, then the five PNG scanline filters.
+   Same reader as assets.js _decodeStripBytes without its per-layer yields
+   (apex26.packDecodeWorker, PARALLEL-HUNT-2026-10-24 P1). Pure: same bytes in
+   give the same bytes out, on any thread.
+   https://www.w3.org/TR/png-3/#9Filters
+   https://developer.mozilla.org/en-US/docs/Web/API/DecompressionStream */
 "use strict";
-const DEFAULT_OPTS = Object.freeze({
-  premultiplyAlpha: "none",
-  colorSpaceConversion: "none",
-  imageOrientation: "none",
-});
-
-// PACK STRIPS (type "strip"): a baked pack strip (assets/pack/mat-*.png) to
-// raw RGBA layer bytes with no GPU and no DOM — inflate the IDAT stream with
-// DecompressionStream and undo the five scanline filters. The same reader as
-// assets.js _decodeStripBytes (hunt 6 B·H6) without its per-layer yields: here
-// a long task blocks nobody (apex26.packDecodeWorker, PARALLEL-HUNT-2026-10-24
-// P1). Pure: the same bytes in give the same bytes out, on any thread.
-//   https://www.w3.org/TR/png-3/#9Filters
-//   https://developer.mozilla.org/en-US/docs/Web/API/DecompressionStream
 const PngStrip = (function () {
 
   async function inflate(parts, needed) {
@@ -62,7 +51,7 @@ const PngStrip = (function () {
     }
   }
 
-  // png: Uint8Array of the whole file; size: layer edge in px; rows: how many
+  // png: Uint8Array of the whole file; size: layer edge in px; layers: how many
   // layers from the top to unfilter (the last one the pack asks for, + 1).
   // Returns { pix, stride } — pix holds rows*size scanlines of RGBA — or null
   // for any PNG this reader does not take (the caller decodes as before).
@@ -94,7 +83,7 @@ const PngStrip = (function () {
     return { pix, stride };
   }
 
-  return { decode, unfilterRows };
+  return { decode };
 })();
 self.PngStrip = PngStrip;   // the unit test reads it from the worker context
 
@@ -114,30 +103,5 @@ async function strip(m) {
 self.onmessage = async (e) => {
   const m = e.data || {};
   if (m.type === "strip") return strip(m);
-  if (m.type !== "decode") return;
-  const seq = m.seq;
-  let bmp = null;
-  try {
-    const blob = m.blob;
-    if (!blob) throw new Error("decode: missing blob");
-    const opts = m.opts ? Object.assign({}, DEFAULT_OPTS, m.opts) : DEFAULT_OPTS;
-    if (m.crop != null && (!Array.isArray(m.crop) || m.crop.length !== 4 ||
-        !m.crop.every(Number.isFinite) || m.crop[2] <= 0 || m.crop[3] <= 0)) throw new Error("bitmap decode: invalid crop");
-    if (m.crop != null) {
-      const [sx, sy, sw, sh] = m.crop;
-      bmp = await createImageBitmap(blob, sx, sy, sw, sh, opts);
-    } else {
-      bmp = await createImageBitmap(blob, opts);
-    }
-    self.postMessage({ type: "decoded", seq, bmp }, [bmp]);
-    bmp = null; // the page owns a successfully transferred bitmap
-  } catch (err) {
-    try { if (bmp) bmp.close(); } catch (_) { /* disposal must not suppress the error reply */ }
-    // A terminated (or still-uncloneable) worker must not reject this async
-    // onmessage handler — that surfaces as an unhandledrejection in the worker
-    // with nothing left for the page to observe.
-    try {
-      self.postMessage({ type: "error", seq, message: String(err && err.message || err) });
-    } catch (_) { /* page already dropped us */ }
-  }
+  // Unknown / retired ports (former ImageBitmap "decode") — no reply.
 };

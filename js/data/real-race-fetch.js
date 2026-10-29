@@ -273,6 +273,6 @@ const DataRealRaceFetch = (function () {
     try { localStorage.setItem(CACHE_KEY + script.sessionKey, JSON.stringify(script)); lruWrite(order); } catch (e) { /* quota: the next open refetches */ }
   }
 
-  return { fetchRaw, forgetRaw, cached, remember, fetchTraces, packTrace, traceGet, tracePut, traceFits, OPENF1, TRACE_V, TRACE_HZ, TRACE_MAX, CACHE_KEY, CACHE_MAX };
+  return { fetchRaw, forgetRaw, cached, remember, fetchTraces, packTrace, traceGet, tracePut, traceFits, OPENF1, TRACE_V, TRACE_MAX, CACHE_KEY, CACHE_MAX };
 })();
 Object.freeze(DataRealRaceFetch);

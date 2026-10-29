@@ -102,6 +102,7 @@ const TitleWarm = (function () {
     };
   }
 
-  return { create, blockers, buildId, POLL_MS };
+  // blockers / buildId / POLL_MS stay module-local — create() is the only external seam.
+  return { create };
 })();
 Object.freeze(TitleWarm);

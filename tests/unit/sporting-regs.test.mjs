@@ -36,26 +36,38 @@ test("one dry compound is short; two different ones are not; a wet set lifts the
   assert.equal(R.compoundShort(log("M", "I")), false, "an intermediate set lifts the obligation");
   assert.equal(R.compoundShort(log("W")), false);
   assert.equal(R.compoundShort(null), true, "no log is no second compound");
-  assert.equal(R.compoundsRun(log("S", "M", "S")).dry, 2);
+  // compoundsRun stays module-local; compoundShort covers the dry-count rule.
+  assert.equal(R.compoundShort(log("S", "M", "S")), false, "two distinct dry compounds: not short");
 });
 
 test("the verdict: DSQ in a race the rule covers, 30 s if it ended suspended, nothing otherwise", () => {
+  // compoundVerdict stays module-local; applyCompoundRule owns the public surface.
   const car = { tyreLog: log("M"), penalty: 0 };
-  assert.equal(R.compoundVerdict(car, { applies: false }), null, "a sprint, a short race, a wet race: no rule");
-  assert.equal(R.compoundVerdict(car, { applies: true }).dsq, "one dry compound");
-  assert.equal(R.compoundVerdict(car, { applies: true, suspended: true }).penaltyS, 30);
-  assert.equal(R.compoundVerdict({ tyreLog: log("M", "H") }, { applies: true }), null, "complied");
-  assert.equal(R.compoundVerdict({ tyreLog: log("M"), retired: true }, { applies: true }), null,
+  assert.equal(R.applyCompoundRule([car], { applies: false }).length, 0, "a sprint, a short race, a wet race: no rule");
+  assert.equal(car.dsq, undefined);
+  assert.equal(R.applyCompoundRule([car], { applies: true }).length, 1);
+  assert.equal(car.dsq, "one dry compound");
+  const sus = { tyreLog: log("M"), penalty: 0 };
+  assert.equal(R.applyCompoundRule([sus], { applies: true, suspended: true }).length, 0);
+  assert.equal(sus.penalty, 30);
+  assert.equal(R.applyCompoundRule([{ tyreLog: log("M", "H"), penalty: 0 }], { applies: true }).length, 0, "complied");
+  const retired = { tyreLog: log("M"), retired: true, penalty: 0 };
+  assert.equal(R.applyCompoundRule([retired], { applies: true }).length, 0,
     "a retirement is not judged on a stop it never reached");
 });
 
 test("flag-time compound compliance survives later live-log changes without freezing unfinished cars", () => {
-  const car = { finished: true, compoundShortAtFinish: true, tyreLog: log("S") };
+  const car = { finished: true, compoundShortAtFinish: true, tyreLog: log("S"), penalty: 0 };
   car.tyreLog[0].code = "W"; car.tyreLog.push({ code: "M" });
-  assert.equal(R.compoundVerdict(car, { applies: true }).dsq, "one dry compound", "post-flag fit or mutation cannot erase the verdict");
-  assert.equal(R.compoundVerdict(car, { applies: true, suspended: true }).penaltyS, 30);
-  assert.equal(R.compoundVerdict({ ...car, compoundShortAtFinish: false, tyreLog: log("S") }, { applies: true }), null, "a compliant finish remains compliant");
-  assert.equal(R.compoundVerdict({ ...car, finished: false }, { applies: true }), null, "unfinished cars still use their live log");
+  assert.equal(R.applyCompoundRule([car], { applies: true }).length, 1, "post-flag fit or mutation cannot erase the verdict");
+  assert.equal(car.dsq, "one dry compound");
+  const sus = { finished: true, compoundShortAtFinish: true, tyreLog: log("S"), penalty: 0 };
+  assert.equal(R.applyCompoundRule([sus], { applies: true, suspended: true }).length, 0);
+  assert.equal(sus.penalty, 30);
+  const ok = { finished: true, compoundShortAtFinish: false, tyreLog: log("S"), penalty: 0 };
+  assert.equal(R.applyCompoundRule([ok], { applies: true }).length, 0, "a compliant finish remains compliant");
+  const live = { finished: false, compoundShortAtFinish: true, tyreLog: log("S", "M"), penalty: 0 };
+  assert.equal(R.applyCompoundRule([live], { applies: true }).length, 0, "unfinished cars still use their live log");
 });
 
 test("applyCompoundRule marks every offender, prices a suspended race, and clears a stale verdict", () => {
@@ -91,11 +103,20 @@ function run(w, f, level, seconds) {
 }
 
 test("the price scale: 10 s for one kept place, 20 for two, 30 for more", () => {
-  assert.equal(R.passPenaltyS(0), 0);
-  assert.equal(R.passPenaltyS(1), 10);
-  assert.equal(R.passPenaltyS(2), 20);
-  assert.equal(R.passPenaltyS(3), 30);
-  assert.equal(R.passPenaltyS(7), 30);
+  // passPenaltyS stays module-local; pin the documented seconds via createPassWatch.
+  const price = (n) => {
+    const w = R.createPassWatch(0.2), f = field(Math.max(n, 1));
+    w.tick(f.p, f.all, 3, DT);
+    f.p.prog = 110 + (n - 1) * 10 + 5;   // past n rivals under the Safety Car
+    w.tick(f.p, f.all, 3, DT);
+    const evs = run(w, f, 3, 1);
+    const pen = evs.find((e) => e.type === "penalty");
+    return pen ? pen.sec : 0;
+  };
+  assert.equal(price(1), 10);
+  assert.equal(price(2), 20);
+  assert.equal(price(3), 30);
+  assert.equal(price(7), 30);
 });
 
 test("a place gained under the SC opens the window; given back in time, nothing", () => {
@@ -389,15 +410,19 @@ function blueRun(w, f, seconds) {
   return evs;
 }
 
-test("blueFlagCar: only a car a lap up, physically just behind, within the time window", () => {
-  const f = blueField(40);                          // 40 m / 60 m/s ≈ 0.67 s < 1.2 s
-  assert.equal(R.blueFlagCar(f.p, f.all, f.ctx), f.lapper);
-  assert.equal(R.blueFlagCar(f.p, f.all, { ...f.ctx, total: 0 }), null);
+test("blue flag selector: only a car a lap up, physically just behind, within the time window", () => {
+  // blueFlagCar stays module-local; createBlueFlagWatch owns the public surface.
+  const near = blueField(40);                       // 40 m / 60 m/s ≈ 0.67 s < 1.2 s
+  const wNear = R.createBlueFlagWatch();
+  assert.ok(blueRun(wNear, near, 5).some((e) => e.type === "warn"), "lapper in the window arms the watch");
+  const noTrack = blueField(40);
+  noTrack.ctx = { ...noTrack.ctx, total: 0 };
+  assert.deepEqual(blueRun(R.createBlueFlagWatch(), noTrack, 5), [], "no track length: no flag");
   const far = blueField(200);                       // 200 / 60 ≈ 3.3 s — past the window
-  assert.equal(R.blueFlagCar(far.p, far.all, far.ctx), null);
+  assert.deepEqual(blueRun(R.createBlueFlagWatch(), far, 5), [], "past the time window: no flag");
   const sameLap = blueField(40);
   sameLap.lapper.prog = sameLap.p.prog - 40;        // behind, but not a lap up
-  assert.equal(R.blueFlagCar(sameLap.p, sameLap.all, sameLap.ctx), null);
+  assert.deepEqual(blueRun(R.createBlueFlagWatch(), sameLap, 5), [], "same lap: no flag");
 });
 
 test("no blue flag → no warning and no penalty", () => {

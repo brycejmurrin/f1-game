@@ -1048,11 +1048,10 @@ const CareerBackup = (function () {
 
   // slotKey, IDENTITY_KEYS and otherFlavourPending stay internal: applyCore /
   // collectIdentity own them; the UI only passes otherFlavourConfirmed.
+  // FLAVOURS / SLOTS stay module-local (collectSlots / wipeAllSlots / applyCore).
   return {
     FORMAT: FORMAT,
     MAX_BYTES: MAX_BYTES,
-    FLAVOURS: FLAVOURS,
-    SLOTS: SLOTS,
     build: build,
     serialize: serialize,
     download: download,

@@ -1,0 +1,1 @@
+Improved: Perf modules drop unused public exports (TitleWarm blockers/buildId/POLL_MS, GfxDebug install/stop/wanted, MenuTeardown.pauseSheetUp, GfxQuality PRESETS/label, GameMetrics PAGE_KEY/LOG_*/PAGES/LOG_NS/LOG_LVLS, SoakRun.probe, RendererPicker.BACKENDS). Metric names and phone-soak schema constants unchanged.

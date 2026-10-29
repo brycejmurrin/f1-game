@@ -772,6 +772,6 @@ var RaceRadio = (function () {
     };
   }
 
-  return Object.freeze({ create, durFor, CHAT, COMM, GAP_S, TV_CAMS });
+  return Object.freeze({ create, durFor });
 })();
 Object.freeze(RaceRadio);

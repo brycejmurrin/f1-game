@@ -387,12 +387,11 @@ const XrBoot = (function () {
   }
 
   return {
-    bind, mountUi, ensureXr, wantXrBundle, comfort, camComfort, loopByXr, isBound, canAttach,
+    bind, mountUi, ensureXr, comfort, camComfort, loopByXr, isBound, canAttach,
     ensureXrBackend, restorePinnedBackend, applyEyes, present, afterTick, chainWindowRaf,
-    findCockpit, diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
+    diag, setFoveation, saveAndForceCockpit, restoreSavedCam,
     // Test / UI helpers
     setCamMode: (...a) => setCamTransient(...a),
-    LS_XR_PENDING, LS_XR_PREV,
   };
 })();
 Object.freeze(XrBoot);

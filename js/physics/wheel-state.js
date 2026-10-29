@@ -272,9 +272,9 @@ const WheelState = (function () {
     return _results;
   }
 
+  // ensure/sync/kappaOf + the KAPPA_*/WHEEL_J/LOCK_*/SPIN_*/RESYNC_* knobs are
+  // stepPlayer internals — tests drive axleStep / stepPlayer / enabled only.
   return Object.freeze({
-    enabled, setEnabled, ensure, sync, kappaOf, axleStep, stepPlayer,
-    KAPPA_PEAK, KAPPA_MAX, KAPPA_VMIN,
-    KAPPA_RELAX_M, WHEEL_J, LOCK_KAPPA, SPIN_KAPPA, LOCK_SPAN, RESYNC_A,
+    enabled, setEnabled, axleStep, stepPlayer,
   });
 })();
