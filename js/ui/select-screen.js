@@ -810,6 +810,9 @@ function revealActiveTile() {
 
 function buildSelect(opts) {
   const inPlace = !!(opts && opts.inPlace);
+  // A menu door (the title is still up) opens a fresh picker: last visit's
+  // search must not reopen it pre-filtered. Returns and in-place rebuilds keep it.
+  if (!inPlace && els.overlay && !els.overlay.hidden) trackQuery = "";
   // ONE QUESTION: WHERE. WHO and WHAT are chosen in the garage via YOUR CAR.
   // NEXT opens race settings. The only thing that differs between modes here
   // is what the screen is called and what the foot button promises next.

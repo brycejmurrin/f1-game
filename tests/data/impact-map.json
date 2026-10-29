@@ -16567,6 +16567,12 @@
       ]
     },
     "js/ui/captions.js": {
+      "clear": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "onSpotter": [
+        "tests/unit/captions.test.mjs"
+      ],
       "push": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
@@ -17232,6 +17238,7 @@
         "tests/unit/hud-fit-idempotent.test.mjs"
       ],
       "resetRace": [
+        "tests/unit/captions.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-readouts.test.mjs"
       ],
