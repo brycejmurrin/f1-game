@@ -15,7 +15,7 @@
  * Soft-GL / no-sandbox are OPT-IN via env (never implied by CI= alone, and
  * never required for a packaged release the user downloads).
  */
-const { app, BrowserWindow, globalShortcut, shell, dialog } = require("electron");
+const { app, BrowserWindow, shell, dialog } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
@@ -216,8 +216,4 @@ app.on("web-contents-created", (_event, contents) => {
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
-});
-
-app.on("will-quit", () => {
-  globalShortcut.unregisterAll();
 });

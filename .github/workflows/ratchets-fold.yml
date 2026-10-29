@@ -99,6 +99,12 @@ jobs:
           git commit -m "chore(ratchets): fold ratchets.d fragments into ratchets.json
 
           $(cat fold.log)"
+          # Fetch the bot branch first so --force-with-lease has a real expected value.
+          # checkout fetches only the deploy branch, so with no origin/bot/ratchets-fold
+          # tracking ref the lease rejected the push as "stale info" whenever a stale
+          # bot branch was left on the remote (run 40690807684, 2026-10-28). "|| true":
+          # the branch may not exist yet, and then the lease expects it absent.
+          git fetch --no-tags --depth=1 origin "+refs/heads/bot/ratchets-fold:refs/remotes/origin/bot/ratchets-fold" || true
           git push --force-with-lease origin bot/ratchets-fold
           PR_TITLE="chore(ratchets): fold ratchets.d fragments"
           PR_BODY="Scheduled fold (#2538): $(cat fold.log). Every effective ceiling is unchanged. Opened by .github/workflows/ratchets-fold.yml, which dispatched ci.yml on bot/ratchets-fold for this head."

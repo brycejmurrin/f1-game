@@ -28,7 +28,6 @@ import { githubToken, NO_TOKEN_HINT } from "./github-token.mjs";
 
 export const REPO = "brycejmurrin/f1-game";
 export const DEPLOY = "claude/f1-game-project-26h3ng";
-export const CI_PATH = ".github/workflows/ci.yml";
 
 /** Backoff before each retry of a 5xx/429 (1 s, 2 s, 4 s), then the error stands. */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000];
