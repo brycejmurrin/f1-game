@@ -8271,6 +8271,9 @@
       "renderStatBars": [
         "tests/unit/garage-followups.test.mjs"
       ],
+      "syncGarageExitChrome": [
+        "tests/unit/garage-followups.test.mjs"
+      ],
       "*": [
         "tests/specs/career.spec.js",
         "tests/unit/car-materials.test.mjs",
