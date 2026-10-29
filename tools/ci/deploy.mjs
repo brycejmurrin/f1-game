@@ -607,14 +607,14 @@ export async function mergeDeployTip() {
   }
   if (derivedF.length) {
     for (const f of derivedF) must(git(["checkout", "--ours", "--", f]), `checkout --ours ${f}`);
-    if (derivedF.some((f) => f !== "docs/TESTING-COVERAGE.md")) run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index, hook page and impact map from the merged tree");
-    if (derivedF.includes("docs/TESTING-COVERAGE.md")) run("node", ["tools/docs/gen-coverage-table.mjs"], "regenerate the coverage table from the merged tests");
+    if (derivedF.some((f) => f !== "docs/TESTING-COVERAGE.md")) await run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index, hook page and impact map from the merged tree");
+    if (derivedF.includes("docs/TESTING-COVERAGE.md")) await run("node", ["tools/docs/gen-coverage-table.mjs"], "regenerate the coverage table from the merged tests");
     must(git(["add", ...derivedF]), "add");
     did.push("derived docs regenerated");
   }
   if (sceneryF.length) {
     must(git(["checkout", "--ours", "--", SCENERY_LOCATIONS]), `checkout --ours ${SCENERY_LOCATIONS}`);
-    run("node", ["tools/shot/gen-scenery-locations.cjs"], "regenerate the scenery survey locations from the merged circuits (~2 min)");
+    await run("node", ["tools/shot/gen-scenery-locations.cjs"], "regenerate the scenery survey locations from the merged circuits (~2 min)");
     must(git(["add", SCENERY_LOCATIONS]), "add");
     did.push("scenery locations regenerated");
   }

@@ -1032,3 +1032,74 @@ test("a BUILT path's modify/delete conflict is cureable, and `git rm --cached` r
     rmTemp(dir);
   }
 });
+
+// Exercise the REAL conflict cure in a throwaway checkout. A post-merge gen
+// cannot rescue a premature commit: inspect the merge commit itself and require
+// failed generators to leave HEAD untouched with the merge still in progress.
+function generatorCureFixture(output, generator, failure) {
+  const scratch = path.join(ROOT, "scratch");
+  fs.mkdirSync(scratch, { recursive: true });
+  const dir = fs.mkdtempSync(path.join(scratch, "generator-cure-"));
+  const g = (...args) => execFileSync("git", args, { cwd: dir, encoding: "utf8", stdio: "pipe" }).trim();
+  const write = (file, text) => {
+    fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+    fs.writeFileSync(path.join(dir, file), text);
+  };
+  try {
+    const files = execFileSync("git", ["ls-files", "--cached"], { cwd: ROOT, encoding: "utf8" }).split("\n").filter(Boolean);
+    for (const file of files) {
+      if (/^(assets|vendor|spike|artifacts|scratch)\//.test(file)) continue;
+      if (/\.(png|jpe?g|webp|gif|avif|glb|gltf|bin|ktx2|basis|hdr|exr|wasm|mp3|ogg|wav|m4a|mp4|webm|gz|zip|pdf|ttf|woff2?)$/i.test(file)) continue;
+      const source = path.join(ROOT, file);
+      if (!fs.existsSync(source) || !fs.lstatSync(source).isFile()) continue;
+      fs.mkdirSync(path.dirname(path.join(dir, file)), { recursive: true });
+      fs.copyFileSync(source, path.join(dir, file));
+    }
+    fs.symlinkSync(path.join(ROOT, "node_modules"), path.join(dir, "node_modules"));
+    // Only this fixture's conflicting-output generator matters; forbid the
+    // unrelated post-merge gen from silently repairing the merge under test.
+    const pkg = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8"));
+    pkg.scripts.gen = 'node -e ""';
+    write("package.json", JSON.stringify(pkg, null, 2) + "\n");
+    const script = `const fs = require('node:fs');\nsetTimeout(() => { ${failure ? "process.exit(7);" : `fs.writeFileSync(${JSON.stringify(output)}, 'generator-complete\\n');`} }, 250);\n`;
+    write(generator, generator.endsWith(".mjs") ? script.replace("const fs = require('node:fs');", "import fs from 'node:fs';") : script);
+    write(output, "base\n");
+    g("init", "-q", "-b", "base");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    g("add", "-A"); g("commit", "-qm", "base");
+    g("checkout", "-q", "-b", "tip"); write(output, "theirs\n"); g("commit", "-qam", "tip output");
+    g("update-ref", `refs/remotes/origin/${DEPLOY_BRANCH}`, "tip");
+    g("checkout", "-q", "-b", "ours", "base"); write(output, "ours\n"); g("commit", "-qam", "our output");
+    const before = g("rev-parse", "HEAD");
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e",
+      `const m = await import(${JSON.stringify(path.join(dir, "tools/ci/deploy.mjs"))}); await m.mergeDeployTip();`],
+      { cwd: dir, encoding: "utf8" });
+    return { dir, g, before, result };
+  } catch (error) { rmTemp(dir); throw error; }
+}
+
+for (const [output, generator] of [
+  ["docs/agent-index.json", "tools/docs/gen-agent-index.mjs"],
+  ["docs/TESTING-COVERAGE.md", "tools/docs/gen-coverage-table.mjs"],
+  ["tools/shot/scenery-locations.json", "tools/shot/gen-scenery-locations.cjs"],
+]) {
+  test(`conflict cure waits for ${generator} before the merge commit`, () => {
+    const r = generatorCureFixture(output, generator, false);
+    try {
+      assert.equal(r.result.status, 0, r.result.stdout + r.result.stderr);
+      const merge = r.g("rev-list", "--merges", `${r.before}..HEAD`).split("\n").filter(Boolean);
+      assert.equal(merge.length, 1, "exactly one merge, not a generated follow-up masking the race");
+      assert.equal(r.g("show", `${merge[0]}:${output}`), "generator-complete", "the merge itself contains completed generator output");
+      assert.equal(r.g("status", "--porcelain"), "", "no generator writes after the final commit");
+    } finally { rmTemp(r.dir); }
+  });
+  test(`conflict cure propagates ${generator} failure without committing`, () => {
+    const r = generatorCureFixture(output, generator, true);
+    try {
+      assert.notEqual(r.result.status, 0, "generator exit 7 must reject the real merge operation");
+      assert.equal(r.result.stderr.includes("(exit 7)"), true, "the intended generator failure reached the caller");
+      assert.equal(r.g("rev-parse", "HEAD"), r.before, "no merge or generated follow-up commit after generator failure");
+      assert.equal(r.g("rev-parse", "--verify", "MERGE_HEAD").length, 40, "failed cure remains inspectable for supported abort/resume");
+    } finally { rmTemp(r.dir); }
+  });
+}

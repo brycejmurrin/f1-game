@@ -27,7 +27,6 @@ import { createRequire } from "node:module";
 import { ROOT, isMain, argGate, ensureFile } from "./gen-lib.mjs";
 
 const require = createRequire(import.meta.url);
-const MANIFEST = require("../manifest.cjs");
 
 export const TARGET = "js/track/circuit-meta.js";
 
@@ -75,7 +74,11 @@ function serialize(value) {
 /** Generated picker source from the selected checkout, not the generator module's checkout. */
 export function generate({ root = ROOT } = {}) {
   root = path.resolve(root);
-  const manifest = root === ROOT ? MANIFEST : require(path.join(root, "tools/manifest.cjs"));
+  // Reusable builders can render again after a branch switch or source edit.
+  // Invalidate only this selected checkout's manifest, not unrelated modules.
+  const manifestPath = require.resolve(path.join(root, "tools/manifest.cjs"));
+  delete require.cache[manifestPath];
+  const manifest = require(manifestPath);
   const lines = [
     "/* Apex 26 — GENERATED circuit meta (tools/gen/gen-circuit-meta.mjs): picker",
     "   TrackDefs for the title/menu wall; full defs hydrate via LAZY_CIRCUIT. */",
