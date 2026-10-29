@@ -1,1 +1,1 @@
-Improved: FLOW / USAGE-PATHS finish tables name the cooldown → parc fermé → podium ceremony; `results-flow` Playwright group gates it (#4071).
+New: results-flow acceptance cases require a real finish-line crossing, automatic ceremony progression, and actual SKIP / CONTINUE touch controls; separate harness cases cover instant results and career settlement. Integration and full browser acceptance remain unverified (#4071).

@@ -120,7 +120,13 @@ Ceremony phase table (eligible sessions only; see the plan for timers and SKIP):
 | `results` | sheet buttons | today's cheq → orbit (or resume); HIGHLIGHTS opt-in | `buildResults` + `#results` |
 
 Retired / DSQ player: skip the cooldown drive; no podium unless classified P≤3.
-Browser gate: `tests/specs/results-flow.spec.js` (`test:results-flow`).
+Browser gate: `tests/specs/results-flow.spec.js` (`test:results-flow`). Acceptance
+must observe a real line crossing and automatic phase progression, then exercise
+the actual SKIP / CONTINUE controls. A capability skip, debug phase seek, or
+`finishRace({ ceremony: true })` alone does not verify the production finish path.
+The separately named harness cases cover backward compatibility and settlement;
+they are not evidence of natural progression. Slice integration and the complete
+mode / cleanup matrix remain unverified until the integrated browser gate runs.
 
 Two consequences worth knowing before changing any of it:
 

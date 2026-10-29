@@ -160,7 +160,13 @@ Sources: [`js/game.js`](../js/game.js) (`openQualiBody`, `q-*` handlers,
 | R10 | Caution/VSC/safety car → green; red flag → restart countdown → race | Race-control transitions, not the user's RESTART command. Same session continues. |
 | R11 | Player finishes or retires → TV waiting phase → natural results or SKIP TO RESULTS | Settlement happens once; skip only appears during the post-finish wait. Also quit during that wait to exercise settlement-before-teardown. Pre-ceremony field wait; not the cooldown drive. |
 | R12 | GP results → HIGHLIGHTS → orbit/results → RACE AGAIN or MENU | Only when eligible and replay data exists; retry/quit clears results-camera and scrub ownership. |
-| R13 | Eligible GP flag → ceremony (`cooldown` → `parcFerme` → optional `podium`) → `#results` | Requires `RaceCeremony` (#1584 slices 1–4). SKIP from any phase reaches results without soft-lock; `ceremony().eligible === false` for TT/quali/practice/duel/friend/WATCH. Phone 844×390: SKIP ≥ `--tap`. Gate: `tests/specs/results-flow.spec.js`. |
+| R13 | Eligible GP flag → ceremony (`cooldown` → `parcFerme` → optional `podium`) → `#results` | Requires `RaceCeremony` (#1584 slices 1–4). Actual SKIP / CONTINUE controls advance each beat through to results without soft-lock; `ceremony().eligible === false` for TT/quali/practice/duel/friend/WATCH. Phone 844×390: SKIP ≥ `--tap`. Gate: `tests/specs/results-flow.spec.js`. |
+
+R13 acceptance crosses the real finish line and observes automatic progression.
+Debug phase seeks and capability-skipped cases are not acceptance evidence.
+The gate must also exercise actual touch controls, settlement exactly once,
+cleanup, excluded modes, and reduced-motion / performance behavior. The
+integrated production path and complete matrix still require browser verification.
 
 Three camera concepts need separate checks: **TV** while driving, automatic
 **post-finish spectating**, and **ResultsCam** after classification. Ceremony adds
