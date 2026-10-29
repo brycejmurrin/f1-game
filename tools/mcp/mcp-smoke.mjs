@@ -127,7 +127,7 @@ function parseApexStatus(step) {
 }
 
 /** Minimal valid args per tree tool (the unit test's MIN_ARGS, kept cheap). */
-export const REAL_ARGS = {
+const REAL_ARGS = {
   apex_help: { tool: "apex_status" },
   apex_locations: { track: "monza" },
   apex_select_specs: { since: "HEAD~1" },

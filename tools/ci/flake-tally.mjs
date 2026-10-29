@@ -604,14 +604,6 @@ async function listRunPlaywrightArtifacts(runId, { token } = {}) {
   return { artifacts: arts };
 }
 
-/** Exact-name lookup, then keep only the artifact for this run id. */
-async function lookupArtifactExactName(name, runId, { token } = {}) {
-  const r = await githubApi("GET", artifactNamePath(name), { token });
-  if (r.error) return { error: r.error, code: r.code };
-  const hit = pickArtifactForRun(r.json?.artifacts || [], runId);
-  return hit ? { artifact: hit } : { artifact: null };
-}
-
 async function downloadArtifactZip(artifactId, destZip, { token } = {}) {
   const auth = token || githubToken();
   if (!auth) return { error: NO_TOKEN_HINT };

@@ -281,7 +281,10 @@ window.DrivingLine = (function () {
 
   function reset() { _api = null; cache.id = null; cache.verts = null; cache.count = 0; cache.v = null; cache.zone = null; }
 
-  return { MODES, PALETTES, OPACITIES, STRIDE, STEP, HALF_W, setMode, mode: getMode,
+  // MODES / PALETTES / STEP / HALF_W stay module-local (setters + build/draw);
+  // nothing outside reads them. OPACITIES / STRIDE / opacityMul / bankOffset
+  // stay exported — unit tests pin the opacity table and the bank lerp.
+  return { OPACITIES, STRIDE, setMode, mode: getMode,
            setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
            build, draw, speedAt, zoneAt, cue, reset, bankOffset,
            _cache: () => cache };

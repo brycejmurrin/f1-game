@@ -1,0 +1,1 @@
+Fixed: title menu is a named main landmark; Practice / Photo Studio / Garage keep their subtitles for screen readers when dense Home hides .mb-sub; FREE CAMERA arrows stay with the fly-cam instead of menu focus; race announcements clear from the live region when a session resets.
