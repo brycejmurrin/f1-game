@@ -349,6 +349,8 @@ const GaragePrebuild = (function () {
   // The page's one instance, for __apex.garagePrebuild() (the MirrorPass.instance() idiom: no G member).
   let _instance = null;
 
-  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, phoneHold, sheetOpenNow, POLL_MS, GIVE_UP_MS, QUIET_MS };
+  // POLL_MS / GIVE_UP_MS stay module-local (create() owns the timers).
+  // blockers / plan / homeKind / readSwitch / QUIET_MS stay exported — garage-prebuild unit seams.
+  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, phoneHold, sheetOpenNow, QUIET_MS };
 })();
 Object.freeze(GaragePrebuild);

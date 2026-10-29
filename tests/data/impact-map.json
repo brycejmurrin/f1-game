@@ -472,6 +472,7 @@
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
@@ -521,6 +522,7 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
@@ -579,6 +581,7 @@
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
@@ -814,6 +817,7 @@
         "tests/unit/audio-panel-settings-ui.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -826,6 +830,7 @@
         "tests/unit/audio-panel-settings-ui.test.mjs",
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/audio-tune.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
@@ -5001,6 +5006,7 @@
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
@@ -5009,6 +5015,7 @@
       ],
       "ensureAudio": [
         "tests/unit/global-registry.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/settings-open-perf.test.mjs"
       ],
@@ -5048,6 +5055,7 @@
       "raceAssets": [
         "tests/unit/boot-idle-prefetch.test.mjs",
         "tests/unit/data-lazy-loader.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs"
       ],
       "wantAgentSurface": [
@@ -5407,6 +5415,7 @@
         "tests/unit/data-lazy-loader.test.mjs",
         "tests/unit/flyby-panel.test.mjs",
         "tests/unit/lazy-audio-yield.test.mjs",
+        "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/lazy-track-build.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
@@ -13385,19 +13394,10 @@
         "tests/unit/career-settle.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
       ],
-      "blueFlagCar": [
-        "tests/unit/sporting-regs.test.mjs"
-      ],
       "champOrder": [
         "tests/unit/sporting-regs.test.mjs"
       ],
       "compoundShort": [
-        "tests/unit/sporting-regs.test.mjs"
-      ],
-      "compoundVerdict": [
-        "tests/unit/sporting-regs.test.mjs"
-      ],
-      "compoundsRun": [
         "tests/unit/sporting-regs.test.mjs"
       ],
       "createBlueFlagWatch": [
@@ -13417,9 +13417,6 @@
         "tests/unit/sporting-regs.test.mjs"
       ],
       "jumpStartFastLaunch": [
-        "tests/unit/sporting-regs.test.mjs"
-      ],
-      "passPenaltyS": [
         "tests/unit/sporting-regs.test.mjs"
       ],
       "reset": [
@@ -17417,6 +17414,7 @@
     "js/ui/menu-nav.js": {
       "activeLayer": [
         "tests/specs/menu-keyboard.spec.js",
+        "tests/unit/menu-nav-spatial.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
       ],
       "currentItem": [
