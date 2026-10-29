@@ -7,7 +7,6 @@
 
 const InputGhost = (function () {
   const STORE_KEY = "inputGhost.v1";
-  const KEY = "apex26." + STORE_KEY;
   const MAX_STORE_BYTES = 256 * 1024;   // half the pose budget — inputs pack denser
   const MIN_STEPS = 30;                 // half a second at 60 Hz
   // A lap left open (parked, stuck, AFK) grew two arrays per physics step without
@@ -41,11 +40,6 @@ const InputGhost = (function () {
       return _enc.encode(json).byteLength;
     }
     return json.length * 2;
-  }
-  function contextKey(value) {
-    const stable = (v) => Array.isArray(v) ? v.map(stable) : v && typeof v === "object"
-      ? Object.fromEntries(Object.keys(v).sort().map(k => [k, stable(v[k])])) : v;
-    return JSON.stringify(stable(value));
   }
   function currentBuild() {
     try {
@@ -593,14 +587,14 @@ const InputGhost = (function () {
   }
 
   return {
-    STORE_KEY, KEY, MIN_STEPS, MAX_LAP_S, DEFAULT_DT,
+    STORE_KEY, MAX_LAP_S,
     setTrack, startLap, record, finishLap,
     hasGhost, bestTime, snapshot, envelope, steps,
     atStep, beginReplay, next, replayIndex,
     needsState: () => !!rec && rec.n === 0,
     persistence: () => Object.assign({}, lastSave),
-    compatible, valid, contextKey, quantizeSteer, packFlags, decodeStep,
-    clear, flush, track: () => trackId, context: () => context,
+    compatible, valid, quantizeSteer, packFlags, decodeStep,
+    clear, flush,
     currentBuild, currentPhysRev, currentDt,
   };
 })();

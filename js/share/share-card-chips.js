@@ -165,6 +165,6 @@ const ShareCardChips = (function () {
     return btn;
   }
 
-  return Object.freeze({ SIZES, available, slug, altText, chip, preview, append });
+  return Object.freeze({ available, slug, chip, preview, append });
 })();
 Object.freeze(ShareCardChips);

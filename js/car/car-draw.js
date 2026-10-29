@@ -7,7 +7,7 @@
    only through this surface. Depends on nothing in game.js by name: state
    comes through the G façade (gfx / store / cars / raceT / camEye / camMode /
    dbgCam / state / raceTimeOfDay / track / teamIdx / driverIdx / headlessMode /
-   frame), the four helpers that could not leave game.js through deps (resolveLivery,
+   frame), the six helpers that could not leave game.js through deps (resolveLivery,
    partsVisualKey, drawAeroFlaps, damp, isTimeTrial, isQuali). */
 "use strict";
 
@@ -859,17 +859,24 @@ const CarDraw = (function () {
       }
       const cache = _aeroLevelCache[usePlayerSetup ? 1 : 0];
       // Factory: the ruleset (Parts.setLegality) is the only thing that moves it.
+      // Player: also the captured recipe key — STANDARD Daily forces factory parts
+      // while getTeamParts still returns the garage save (M27), so rev alone is not enough.
       const rev = usePlayerSetup ? G.store.rev : -1, leg = Parts.legalityKey();
+      const vk = usePlayerSetup ? playerVisualKey : "";
       const c = cache.get(team.id);
-      if (c && c.rev === rev && c.leg === leg && samePartStyles(c, liv)) return c;
-      const resolved = usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team);
-      const parts = Car3D.appearanceParts(Parts.getVisualTiers(resolved, team), liv);
+      if (c && c.rev === rev && c.leg === leg && c.vk === vk && samePartStyles(c, liv)) return c;
+      // Prefer the recipe setPlayerParts captured (factory under STANDARD Daily);
+      // fall back to the garage save only before recomputePlayerMods has run.
+      const parts = usePlayerSetup && playerParts && playerPartsTeam === team.id
+        ? Car3D.appearanceParts(playerParts, liv)
+        : Car3D.appearanceParts(Parts.getVisualTiers(
+            usePlayerSetup ? G.getTeamParts(team.id) : Parts.getFactorySetup(team), team), liv);
       // aero: the resolved RECIPE, resolved once here for every flap consumer.
       // parts.aero is the tier NUMBER — passing that to Car3D.aeroFlaps() NaN'd
       // every flap vertex and made the moveable wings invisible (see aeroStyleOf).
       const state = { val: Car3D.aeroLevelOf ? Car3D.aeroLevelOf(parts) : 2,
                       aero: Car3D.aeroStyleOf ? Car3D.aeroStyleOf(parts) : null,
-                      parts, rev, leg, styles: rememberPartStyles(liv), fwKey: null, fwKeyWt: null, fwKeyFull: "" };
+                      parts, rev, leg, vk, styles: rememberPartStyles(liv), fwKey: null, fwKeyWt: null, fwKeyFull: "" };
       cache.set(team.id, state);
       return state;
     }
@@ -2119,6 +2126,20 @@ const CarDraw = (function () {
       playerWheelId = vt._ids ? vt._ids.wheels : "standard";
       playerWheelVisual = vt._visual && vt._visual.wheels || null;
       playerVisualKey = visualKey;
+      // Restamp the live player through the ONE carVisual helper. makeCars stamps
+      // visualSetup once from getTeamParts (own:true); STANDARD Daily's body key is
+      // factory, so the TT ghost (teamMesh(player)) and stamp-keyed casters would
+      // keep the SAVED build until the next makeCars. Align with the recipe just
+      // applied (M27).
+      if (G.player && team && playerParts && playerParts._ids) {
+        const recipe = {};
+        for (const cat of Parts.CATALOG) recipe[cat.id] = playerParts._ids[cat.id] || "";
+        const stamped = carVisual(team, carDecalNum(team, G.player), true, () => recipe);
+        G.player.visualSetup = stamped.visualSetup;
+        G.player.visStamp = stamped.visStamp;
+        G.player.visPaint = stamped.visPaint;
+        G.player.visSh = stamped.visSh;
+      }
     }
     // MY TEAM re-customise: drop every "custom:" entry of the four body caches.
     // With a team id, that team's entries (the livery editor's CANCEL / SAVE:

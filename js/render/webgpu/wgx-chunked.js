@@ -15,7 +15,7 @@ const WGXChunked = (function () {
     // list, so one shared generation advanced twice a frame and every chunk missed in both passes.
     let _lm0 = 0, _lm1 = 0;
     const _lmGen = [0, 0];
-    let _mrMaskL = null, _mrSlot = 0, _mrPass = null, _mrRoad = false;
+    let _mrMaskL = null, _mrPass = null, _mrRoad = false;
 
     function _chunkFirstIndex(ch) {
       if (!ch) return 0;
@@ -244,24 +244,70 @@ const WGXChunked = (function () {
       active: false, vbuf: null, ibuf: null, attrBG: null,
       count: 0, first: 0, firstIndex: 0, indexFormat: null, m0: 0, m1: 0,
     };
+    // Draw-slot bookkeeping for ONE drawChunked call. The old entry allocated
+    // and bound a base slot before it knew the path, then the night flush
+    // allocated another and rebound — one setBindGroup and 256 B of ring
+    // upload that no draw sampled. A later run whose lamp mask matches the
+    // one already bound reuses that slot: the uniform does not change, so
+    // the bind is skipped too.
+    let _baseSlot = -1, _baseModel = null, _baseOpts = null;
+    let _lastSlot = -1, _lastM0 = 0, _lastM1 = 0, _boundOff = -1, _pcTpl = -1;
+    function _resetDrawState(model, o) {
+      _baseSlot = -1; _lastSlot = -1; _lastM0 = 0; _lastM1 = 0; _boundOff = -1; _pcTpl = -1;
+      _baseModel = model; _baseOpts = o;
+    }
+    function _bindOff(slot) {
+      const off = slot * core.DRAW_STRIDE;
+      if (_boundOff === off) return;
+      core.dynOff[0] = off;
+      core.litPass.setBindGroup(1, core.drawBindGroup, core.dynOff);
+      _boundOff = off;
+    }
+    // Day / unchunked: one slot, bound once. Night flushes own their slots.
+    function _bindFreshSlot() {
+      const s = core.allocDrawSlot();
+      if (s < 0) return -1;
+      core.writeDraw(s, _baseModel, _baseOpts);
+      _baseSlot = s;
+      _bindOff(s);
+      return s;
+    }
     function _mrFlush() {
       const run = _mrRun;
       if (!run.active) return;
       if (_mrMaskL) {
-        const s2 = core.allocDrawSlot();
-        const use = s2 >= 0 ? s2 : _mrSlot;
-        if (s2 >= 0) {
-          const db = s2 * core.DRAW_F32_STRIDE, sb = _mrSlot * core.DRAW_F32_STRIDE;
-          core.drawRing.copyWithin(db, sb, sb + 28);
+        const same = _lastSlot >= 0 && run.m0 === _lastM0 && run.m1 === _lastM1;
+        let use = _lastSlot;
+        if (!same) {
+          let s2;
+          if (_baseSlot < 0) {
+            s2 = core.allocDrawSlot();
+            if (s2 < 0) { run.active = false; return; }
+            core.writeDraw(s2, _baseModel, _baseOpts);
+            _baseSlot = s2;
+          } else {
+            s2 = core.allocDrawSlot();
+            // Ring full: drop the run. Rewriting an already-drawn slot would
+            // change that draw too (the upload is the buffer at submit).
+            if (s2 < 0) { run.active = false; return; }
+            const db = s2 * core.DRAW_F32_STRIDE, sb = _baseSlot * core.DRAW_F32_STRIDE;
+            // 36 used DrawU lanes, not 28. The short copy left carFinish (30)
+            // and packDraw (35) as whatever that ring slot held last frame.
+            core.drawRing.copyWithin(db, sb, sb + 36);
+            core.drawRing[db + 32] = 0; core.drawRing[db + 33] = 0; core.drawRing[db + 34] = 0;
+          }
+          const db = s2 * core.DRAW_F32_STRIDE;
           core.drawRing[db + 28] = run.m0;
           core.drawRing[db + 29] = run.m1;
-          // The copy stops at lane 28, so clear the relocated lampRange
-          // lanes explicitly — ring slots are reused and a stale
-          // lampRange.z=1 from a per-chunk frame would reroute the shader.
-          core.drawRing[db + 32] = 0; core.drawRing[db + 33] = 0; core.drawRing[db + 34] = 0;
+          // mat3.w is documented padding. writeDraw never stores it, so a
+          // 36-lane copy would spread whatever the base slot last held.
+          core.drawRing[db + 31] = 0;
+          use = s2;
+          _lastSlot = s2; _lastM0 = run.m0; _lastM1 = run.m1;
         }
-        core.dynOff[0] = use * core.DRAW_STRIDE;
-        _mrPass.setBindGroup(1, core.drawBindGroup, core.dynOff);
+        _bindOff(use);
+      } else if (_baseSlot < 0) {
+        if (_bindFreshSlot() < 0) { run.active = false; return; }
       }
       core.bindLitVerts(_mrPass, run.vbuf, core.identInstanceBuf, run.attrBG, _mrRoad);
       core.drawGeom(_mrPass, run);
@@ -280,14 +326,11 @@ const WGXChunked = (function () {
     function drawChunked(mesh, model, opts) {
       if (!core.litPass || !mesh || !mesh.vbuf) return;
       const o = core.litOpts(opts);
-      const slot = core.allocDrawSlot();
-      if (slot < 0) return;   // allocDrawSlot: -1 = ring full (drop, as before the split)
-      core.writeDraw(slot, model, o);
       core.setPipe(core.litPass, core.litPipeline(o));
       core.setBG0(core.litPass, core.activeFrameBG);
-      core.dynOff[0] = slot * core.DRAW_STRIDE;
-      core.litPass.setBindGroup(1, core.drawBindGroup, core.dynOff);
+      _resetDrawState(model, o);
       if (!mesh.chunks) {
+        if (_bindFreshSlot() < 0) return;
         // hasTrk roads are core.createMesh pieces (chunks=null). Drawing only
         // mesh.vbuf here left 4095 verts — the rest of the ribbon vanished
         // and terrain showed through (chopped asphalt).
@@ -369,14 +412,21 @@ const WGXChunked = (function () {
             }
             const cslot = core.allocDrawSlot();
             if (cslot < 0) break;
-            core.writeDraw(cslot, model, o);
             const cbase = cslot * core.DRAW_F32_STRIDE;
+            // One writeDraw, then a 36-lane copy. Measured 7× under the
+            // per-chunk loop (150 slots): the model and material do not change.
+            if (_pcTpl < 0) {
+              core.writeDraw(cslot, model, o);
+              _pcTpl = cslot;
+            } else {
+              const sb = _pcTpl * core.DRAW_F32_STRIDE;
+              core.drawRing.copyWithin(cbase, sb, sb + 36);
+            }
             // lampRange lives at lanes 32-34 (lanes 28-29 are the lamp masks).
             core.drawRing[cbase + 32] = seg.base + tbl.offsets[i];
             core.drawRing[cbase + 33] = tbl.counts[i];
             core.drawRing[cbase + 34] = 1;
-            core.dynOff[0] = cslot * core.DRAW_STRIDE;
-            core.litPass.setBindGroup(1, core.drawBindGroup, core.dynOff);
+            _bindOff(cslot);
             core.bindLitVerts(core.litPass, ch.vbuf || mesh.vbuf, core.identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
             core.drawGeom(core.litPass, ch);
           }
@@ -384,6 +434,7 @@ const WGXChunked = (function () {
         }
       }
       if (!cull) {
+        if (_bindFreshSlot() < 0) return;
         for (let i = 0; i < chunks.length; i++) {
           const ch = chunks[i];
           core.bindLitVerts(core.litPass, ch.vbuf || mesh.vbuf, core.identInstanceBuf, ch.attrBG || mesh.attrBG, o.surfaceId === 16);
@@ -402,9 +453,10 @@ const WGXChunked = (function () {
       // lights that cannot touch this geometry. The set is re-ranked as the
       // player moves, so masks are computed per call (visible chunks × nL
       // cheap AABB tests); small sets skip the machinery — the reject is
-      // already cheap. Run overflow rebinds the base slot (all-ones mask).
+      // already cheap. A full ring drops the run rather than rewriting a slot
+      // a draw already recorded.
       const maskL = core.frameNL > 8 ? core.frameLights : null, lp = core.lampPass;
-      _mrMaskL = maskL; _mrSlot = slot; _mrPass = core.litPass; _mrRoad = o.surfaceId === 16;
+      _mrMaskL = maskL; _mrPass = core.litPass; _mrRoad = o.surfaceId === 16;
       for (let i = 0; i < chunks.length; i++) {
         const ch = chunks[i];
         if (!Frustum.aabbInFrustum(core.fcPlanes, ch.min, ch.max) ||
@@ -444,21 +496,19 @@ const WGXChunked = (function () {
         //    authored storage read is live and merging could shift it, so the
         //    merge refuses rather than relying on the argument holding.
         //    Evidence for the shapes themselves: docs/archive/tools/gfx/wgx-vid-repro.mjs.
-        //  - no lamp mask, ROAD ONLY: a run ORs its chunks' masks, so merging
-        //    the ribbon at night would hand a long run the UNION and turn
-        //    cheap mask-skips back into full lamp evaluations over the road's
-        //    large screen coverage. The road stands down at night and keeps
-        //    one draw per chunk (still winning the setVertexBuffer elision,
-        //    the buffer is shared). Indexed meshes — terrain, props, glass —
+        //  - lamp mask, ROAD ONLY: a run ORs its chunks' masks, so merging
+        //    a WIDER mask at night would turn cheap mask-skips back into full
+        //    lamp evaluations over the road's large screen coverage. An EQUAL
+        //    mask does not widen anything — the union is the mask — so those
+        //    chunks stay one draw. Indexed meshes — terrain, props, glass —
         //    keep merging exactly as they do today: union masks there are
-        //    pre-existing behaviour, and narrowing them is a separate change
-        //    with its own measurement, not a rider on this one.
+        //    pre-existing behaviour.
         const indexed = !!ibuf;
         const chFirst = indexed ? _chunkFirstIndex(ch) : (ch.first | 0);
         const vidDead = indexed || !!core.roadLutBG;
-        const nightOK = indexed || !maskL;
         // Pooled bag (see _mrRun): `run.active` means a run is open.
         const run = _mrRun;
+        const nightOK = indexed || !maskL || (run.m0 === _lm0 && run.m1 === _lm1);
         const contig = run.active && (indexed ? run.firstIndex : (run.first | 0)) + run.count === chFirst;
         if (run.active && run.vbuf === vbuf && run.ibuf === ibuf && run.attrBG === attrBG
             && contig && vidDead && nightOK) {

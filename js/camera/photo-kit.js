@@ -62,8 +62,6 @@ const PhotoKit = (function () {
     return GRID_IDS[((i < 0 ? 0 : i) + 1) % GRID_IDS.length];
   }
 
-  /** One transient free-camera visit. set() deliberately never persists. */
-
   /** Attach DoF fields onto a dbgCam and drive the CSS overlay variables. */
   function applyDof(cam, focus, blur, overlay) {
     const f = clamp(fin(+focus) ? +focus : 0.35, 0, 1);
@@ -128,12 +126,12 @@ const PhotoKit = (function () {
   }
 
   return Object.freeze({
-    MARK_KEY, GRID_IDS, DOF_BLUR_MAX, MAX_MARKS,
+    MAX_MARKS,
     get LOOK_PRESETS() { return PhotoLooks.LOOK_PRESETS; },
     get LOOK_KEYS() { return PhotoLooks.LOOK_KEYS; },
-    loadAll, marksFor, saveMark, deleteMark, nextGrid,
+    marksFor, saveMark, deleteMark, nextGrid,
     createLookSession(get, set) { return PhotoLooks.createLookSession(get, set); },
     mountLookControls(parent, session, doc) { return PhotoLooks.mountLookControls(parent, session, doc); },
-    applyDof, setGrid, mountOverlays, showOverlays, clamp,
+    applyDof, setGrid, mountOverlays, showOverlays,
   });
 })();

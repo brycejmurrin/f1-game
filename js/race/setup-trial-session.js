@@ -1,8 +1,8 @@
 /* Fresh solo setup trials use normal race construction; never restore a world checkpoint. */
 const SetupTrialSession = (() => {
   "use strict";
-  // SessionPhys.PHYS is SessionRecords.PHYS. The records module is lazy, so a
-  // title-time trial reads the list from the boot module instead of the stub.
+  // SessionPhys.PHYS is the comparable-session physics list. The records module
+  // is lazy, so a title-time trial reads it from the boot module.
   const PHYS = SessionPhys.PHYS;
   const STATIC = ["physics", "car", "parts", "track", "weather", "assists"];
   const copy = value => JSON.parse(JSON.stringify(value));

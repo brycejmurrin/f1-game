@@ -817,6 +817,6 @@ const DesignerCanvas = (function () {
     return true;
   }
 
-  return { create, thumb, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS, HOLD_MS, COL };
+  return { create, thumb, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, HOLD_MS, COL };
 })();
 Object.freeze(DesignerCanvas);

@@ -63,7 +63,7 @@ var PitLane = (function () {
 
   const clamp = M4.clamp;
   const {
-    ENTRY_M, ENTRY_MIN, EXIT_M, BOX_M, PIT_K, entryRunM, LIMIT_FRAC, STRAIGHT_V, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC, BOX_TOL, BOX_BRAKE, PIT_SIDE, LANE_W, LANE_MIN, MIN_RACING, laneWidth, laneWidthOn, teamRow, BOX_LAT, BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M, pitch, GRID_POLE_M, COMMIT_M, CUE_M, CUE_WEAR, COMMIT_CLEAR, GRID_CLEAR, COMMIT_S, COMMIT_V, COMMIT_IN, ABORT_S, CRAWL_V, APPROACH_M, ENTRY_BRAKE, ROAD_IN, WORK_IN_M, EXIT_WALL_W, zoneOf, inWindow, inSpan, throughM,
+    ENTRY_M, ENTRY_MIN, EXIT_M, PIT_K, entryRunM, LIMIT_FRAC, STRAIGHT_V, LIMIT_FRAC_STREET, BOX_SPEED_FRAC, BOX_TOL, BOX_BRAKE, PIT_SIDE, LANE_W, LANE_MIN, MIN_RACING, laneWidth, laneWidthOn, teamRow, BOX_LAT, BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M, pitch, GRID_POLE_M, COMMIT_M, CUE_M, CUE_WEAR, COMMIT_CLEAR, GRID_CLEAR, COMMIT_S, COMMIT_V, COMMIT_IN, ABORT_S, CRAWL_V, APPROACH_M, ENTRY_BRAKE, ROAD_IN, WORK_IN_M, EXIT_WALL_W, zoneOf, inWindow, inSpan, throughM,
   } = PitGeom;
 
 
@@ -1731,10 +1731,13 @@ var PitLane = (function () {
 
     // Race teardown: the zone cache keys on the track object, and kept the last race's track until the next z().
     function releaseTrack() { zone = null; zoneFor = null; }
-    return { zoneOf: () => z(), releaseTrack, limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
-             arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think, stepBegin, stepEnd,
-             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
-             worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
+    // toBox / roadOf / committing / boxBusy / setNext / inWindow stay module-
+    // local (create internals + tests via PitLane.inWindow); nothing outside
+    // reads them on the instance. session-stub may still stub extras.
+    return { zoneOf: () => z(), releaseTrack, limit, approachV, entryV, exitV, stopAnim, inLane, held,
+             arm, update, reset, clearArm, info, serviceCar, planFor, think, stepBegin, stepEnd,
+             pickFor, ownedTyres, choices, selectNext, estimate, commitFrac, toEntry, cue,
+             worthStopping, canWork, addWork, workS: WORK_S,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,
              servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
@@ -1745,12 +1748,15 @@ var PitLane = (function () {
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }
 
+  // Module surface kept to what tests / always-loaded call sites actually read.
+  // BOX_BRAKE, COMMIT_V, CUE_WEAR, CUE_M, BOX_SQUARE_*, SQUARE_BY_M stay
+  // destructured for create() internals (instance fields like cueM / squareByM);
+  // they are not frozen here. BOX_M / BOX_S never had an external reader on PitLane.
   return { create, zoneOf, inWindow, throughM,
-           ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
+           ENTRY_M, EXIT_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_SPEED_FRAC,
+           BOX_TOL, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_CLEAR,
            GRID_POLE_M,
-           CUE_M, CUE_WEAR, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
-           BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M,
+           LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
            get BOX_PITCH() { return pitch(); }, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();
 Object.freeze(PitLane);
