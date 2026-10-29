@@ -1093,6 +1093,7 @@ const LAZY_RACE_SESSION = [
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
   "js/race/jump-start-penalty.js",
+  "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/pit-geom.js", "js/race/pit-lane.js"],

@@ -12043,6 +12043,44 @@
         "tests/unit/car-fields-vm.test.mjs"
       ]
     },
+    "js/race/cooldown-lap.js": {
+      "aiPolicy": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "create": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "exitReason": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "mountSkip": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "playerCanDrive": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "reset": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "sessionEligible": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "skip": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "skipTargetOk": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "start": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "status": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ]
+    },
     "js/race/daily-challenge.js": {
       "create": [
         "tests/unit/badges.test.mjs",
