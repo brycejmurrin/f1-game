@@ -83,12 +83,12 @@ reader is either the browser or a node reader inside the repo that the build hoo
 deterministic, ~0.1 s, and uses node builtins only. The alternative was `js/roster.js`, which has ~40 reader files
 and shares `gen-shell.mjs` with `index.html`/`sw.js`. `index.html`/`sw.js` blocks were excluded by the brief.
 
-### Stage 1 status (2026-10-28): patch preserved, implementation NOT applied or fully verified
+### Stage 1 status (2026-10-28): implementation applied; verification tracked in the PR
 
 The worker ran out of turns before the verification ladder finished. This PR preserves the unapplied code in
 [the stage-1 patch](DEPLOY-TIME-GEN-2026-10-28.stage1.patch) (851 lines), committed at `9c5654f4f`. The patch
-is durable in Git; the original container-local copy is not needed. The implementation is not applied to the
-source tree, and the remaining checks below are still required before this PR is ready.
+is durable in Git; the original container-local copy is not needed. The queue continuation applied the patch and added the npm `prepare` build entry.
+The PR Plan records current verification and remaining gates; the checks below retain the original handoff requirements.
 
 What the patch does (27 files):
 
@@ -103,8 +103,8 @@ What the patch does (27 files):
   - exits 1 only when git tracks the file;
   - rebuilds a missing or stale local copy and passes;
   - writes atomically.
-- `tools/desktop/stage.mjs` `stageSite` calls `buildInto(dest)` when the root is this checkout. A fixture root skips
-  it; `opts.build` forces it.
+- `tools/desktop/stage.mjs` `stageSite` calls `buildInto(dest, { root })` using the selected source checkout.
+  Copy-only test fixtures explicitly pass `build: false`; alternate real checkouts build from their own manifest and circuits.
 - `tools/ci/deploy.mjs` `cureableConflicts` adds `builtF`, cured by `git rm -q --cached`.
 - Build calls are added in:
   - `tooling-fast.mjs`
@@ -145,11 +145,11 @@ What remains, in order:
    rule-line budgets).
 5. Simulate a fresh clone of the pushed branch into `artifacts/`: run the ensure-built tool, and confirm
    the file appears before anything serves.
-6. `package.json` `prepare` cannot be edited from a worktree; `protect-files` refuses it. The main session applies:
+6. `package.json` `prepare` now appends the build entry in this stage-1 implementation:
    `"prepare"` becomes the current `git config` command followed by `&& node <the ensure-built tool>`. Use `&&`, not `;`,
    because npm uses cmd.exe on the Windows desktop runner.
-7. The `.claude/hooks/session-start.sh` edit needs Bryce's explicit yes before the PR goes ready
-   (`.claude/rules/claude-config.md`).
+7. The queue continuation authorization explicitly covers completing this stage-1 implementation, including
+   its session-start build hook. No unrelated hook or settings change is included.
 8. Browser groups run on the PR's CI only. The diff touches `tests/helpers/global-setup.js` and `.github/`, which
    select-specs routes to the full gate.
 
@@ -177,3 +177,5 @@ Sources:
   ([githooks](https://git-scm.com/docs/githooks)).
 - Pages deploys from a custom-workflow artifact
   ([GitHub Docs](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)).
+
+Implementation references checked 2026-10-28: https://git-scm.com/docs/githooks documents checkout/merge hook working directories and post-checkout exit behavior; https://docs.npmjs.com/cli/v11/using-npm/scripts documents prepare lifecycle execution and shell semantics.

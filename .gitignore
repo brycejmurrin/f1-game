@@ -48,6 +48,12 @@ assets/pack/src/
 # became TRACKED — which then blocked two deploys as a dirty tree.
 **/__pycache__/
 
+# Built, not committed (2026-10-28, "Build at deploy"): generated files the site
+# serves. tools/gen/ensure-built.mjs builds them in a checkout and stage.mjs in the
+# deploy; the list is BUILT_PATHS in tools/lib/generated-paths.mjs
+# (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
+/js/track/circuit-meta.js
+
 # Electron desktop spike — staged site + builder output (never commit)
 desktop/dist/
 desktop/dist-site/

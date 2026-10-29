@@ -16,6 +16,40 @@ const CLI = path.join(ROOT, "tools/mcp/cdmcp-cli.py");
 const BG = path.join(ROOT, "tools/mcp/cdmcp-bg.mjs");
 const N10 = path.join(ROOT, "tools/lighting/look-survey-n10.mjs");
 
+test("apex-shot build failure refuses server reuse/start and MCP navigation", () => {
+  const r = spawnSync("python3", ["-c", `
+import importlib.util, subprocess, tempfile
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("cdmcp_cli", ${JSON.stringify(CLI)})
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+with tempfile.TemporaryDirectory(dir=${JSON.stringify(path.join(ROOT, "scratch"))}) as d:
+    m.ROOT = Path(d)
+    builder = m.ROOT / "tools/gen/ensure-built.mjs"
+    builder.parent.mkdir(parents=True)
+    builder.write_text('console.error("fixture builder failed"); process.exit(7);')
+    def forbidden(*args, **kwargs):
+        raise AssertionError("server or MCP continued after failed build")
+    original_popen = subprocess.Popen
+    def only_builder(argv, *args, **kwargs):
+        if argv[0] != "node":
+            forbidden()
+        return original_popen(argv, *args, **kwargs)
+    m._port_open = forbidden
+    m.subprocess.Popen = only_builder
+    m.McpClient = forbidden
+    try:
+        m.cmd_apex_shot(["--no-file"])
+    except subprocess.CalledProcessError as e:
+        assert e.returncode == 7, e
+    else:
+        raise AssertionError("failed builder was ignored")
+print("refused before server and MCP")
+`], { cwd: ROOT, encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.match(r.stdout, /refused before server and MCP/);
+  assert.match(r.stderr, /fixture builder failed/);
+});
+
 test("cdmcp-measure.py and cdmcp-bg.mjs exist and are executable-ish", () => {
   assert.ok(fs.existsSync(MEASURE));
   assert.ok(fs.existsSync(BG));

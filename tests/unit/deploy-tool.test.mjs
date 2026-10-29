@@ -4,7 +4,7 @@
 // real diff, preflight refuses what the protocol refuses, and --help exits 0
 // without touching git. plan()/main() need the network and are not run here.
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
-import { GENERATED_PATHS } from "../../tools/lib/generated-paths.mjs";
+import { GENERATED_PATHS, BUILT_PATHS } from "../../tools/lib/generated-paths.mjs";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync, execFileSync } from "node:child_process";
@@ -993,4 +993,42 @@ console.log(JSON.stringify({error:r.error?.code,survivors:r.survivors}));`;
 
 test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (sync-pr conflict cure relies on it)", () => {
   for (const p of GENERATED_PATHS) assert.equal(cureableConflicts([p]).cureable, true, `${p} is listed as generated but deploy.mjs cannot cure a conflict in it`);
+});
+
+// BUILT, NOT COMMITTED (2026-10-28): the tip deleted js/track/circuit-meta.js; a branch from before that regenerated
+// it for a circuit edit. The merge is a modify/delete conflict, and the cure is to take the deletion.
+test("a BUILT path's modify/delete conflict is cureable, and `git rm --cached` resolves it as a deletion", () => {
+  assert.ok(BUILT_PATHS.length > 0);
+  for (const p of BUILT_PATHS) {
+    const c = cureableConflicts([p]);
+    assert.equal(c.cureable, true, `${p}: a built path must be cureable`);
+    assert.deepEqual(c.builtF, [p]);
+  }
+  assert.equal(cureableConflicts([BUILT_PATHS[0], "tools/manifest.cjs"]).cureable, false, "a real conflict beside it still stops");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-built-cure-"));
+  const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
+  const rel = BUILT_PATHS[0];
+  try {
+    g("init", "-q", "-b", "tip");
+    g("config", "user.email", "t@t"); g("config", "user.name", "t");
+    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(dir, rel), "old roster\n"); g("add", "-A"); g("commit", "-qm", "base");
+    g("checkout", "-q", "-b", "old-pr");
+    fs.writeFileSync(path.join(dir, rel), "old roster + a circuit\n"); g("commit", "-qam", "circuit edit regenerated the copy");
+    g("checkout", "-q", "tip");
+    fs.writeFileSync(path.join(dir, ".gitignore"), `/${rel}\n`); g("rm", "-q", "--cached", "--", rel); g("add", ".gitignore");
+    g("commit", "-qm", "stage 1: build at deploy");
+    g("checkout", "-q", "old-pr");
+    assert.notEqual(spawnSync("git", ["merge", "--no-edit", "tip"], { cwd: dir, encoding: "utf8" }).status, 0, "modify/delete conflicts");
+    const conflicted = g("diff", "--name-only", "--diff-filter=U").split("\n").filter(Boolean);
+    assert.deepEqual(conflicted, [rel]);
+    assert.equal(cureableConflicts(conflicted).cureable, true);
+    g("rm", "-q", "--cached", "--", ...cureableConflicts(conflicted).builtF);   // the cure mergeDeployTip runs
+    assert.equal(g("diff", "--name-only", "--diff-filter=U").trim(), "", "no conflict left");
+    g("commit", "--no-edit", "-q");
+    assert.equal(g("ls-files", "--", rel).trim(), "", "the merge keeps the built file out of git");
+    assert.ok(fs.existsSync(path.join(dir, rel)), "the working copy stays for ensure-built to refresh");
+  } finally {
+    rmTemp(dir);
+  }
 });

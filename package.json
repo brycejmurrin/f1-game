@@ -72,7 +72,7 @@
     "ui:audit": "node tools/ui/layout-audit.mjs",
     "wgx:gallery": "node tools/gfx/wgx-shot.mjs --gallery --lite",
     "wgx:capture": "node tools/gfx/gfx-probe.mjs --backend webgpu",
-    "prepare": "git config core.hooksPath .githooks || true",
+    "prepare": "git config core.hooksPath .githooks || true && node tools/gen/ensure-built.mjs",
     "test:perf-race-entry": "node tools/ci/run-playwright.mjs tests/specs/perf-race-entry.spec.js",
     "debug:unit": "node tools/ci/debug-unit.mjs",
     "memory:list": "node tools/env/apex-memory.mjs list",

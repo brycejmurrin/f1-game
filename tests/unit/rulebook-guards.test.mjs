@@ -53,6 +53,8 @@ const CANON = [
   ["re-subscribe after ready", /call `subscribe_pr_activity` again/i, "AGENTS.md"],
   ["first claimant fixes", /the first claimant fixes, the rest wait/i, "AGENTS.md"],
   ["memory-change line", /`memory-change: <reason>`/, ".github/pull_request_template.md"],
+  // Rule 11's build-at-deploy half (Bryce 2026-10-28, "Build at deploy"; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
+  ["built, never committed", /are built, never committed: gitignored/i, "AGENTS.md"],
 ];
 
 test("each canonical rule sentence lives in its home and at most one other file", () => {

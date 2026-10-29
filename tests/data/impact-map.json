@@ -15545,6 +15545,9 @@
       "*": [
         "tests/unit/circuit-def-fields.test.mjs",
         "tests/unit/circuit-meta.test.mjs",
+        "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/harness-display.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs"
       ]
