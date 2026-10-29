@@ -312,13 +312,9 @@ const TrackLine = (function () {
     for (const c of corners) {
       const e0 = c.entryStep - blendN, e1 = c.exitStep + blendN;
       for (let i = Math.floor(e0); i <= Math.ceil(e1); i++) {
-        // smoothstep, not a linear ramp: the weight's slope is continuous at
-        // both ends, so nothing that blends by it (the AI's lane, the assist)
-        // takes a kink where a window opens or closes
         let v = 1;
         if (i < c.entryStep) v = clamp((i - e0) / blendN, 0, 1);
         else if (i > c.exitStep) v = clamp((e1 - i) / blendN, 0, 1);
-        v = v * v * (3 - 2 * v);
         const idx = wrapI(start + i);
         if (v > w[idx]) { w[idx] = v; insideSgn[idx] = c.inside; }
       }

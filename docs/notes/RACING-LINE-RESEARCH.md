@@ -789,8 +789,11 @@ curvature of the line traced through `p + r·x`, against the bake's own model).
    The racing-line ASSIST had the same target, so on every straight it
    steered the player toward the centre at full strength. **Fix:** the ribbon
    draws `x`; the assist pursues `x` with its pull scaled by `w`
-   (`__apex.probe().lineAhead` reports the same `x`); `lineW` eases by
-   smoothstep instead of linearly.
+   (`__apex.probe().lineAhead` reports the same `x`). `lineW` keeps its
+   LINEAR ease: a smoothstep was tried and measured — it takes line weight
+   out of the approach (at 30–45 m before the turn-in it is 0.03–0.26
+   against 0.11–0.33), and `ai-racecraft-vm`'s Monza approach check put the
+   car at Parabolica 1.90 m toward the inside (the bar is 2 m outside).
 4. **Between nodes the ribbon was the lerped polyline.** `Tracks.sample` lerps
    position and frame between ~4 m nodes, so the whole turn happens at each
    node (14° a node in a 16 m hairpin) and a 2.5 m ribbon over a 4 m grid shows
