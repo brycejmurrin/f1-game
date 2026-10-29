@@ -4662,15 +4662,15 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
     "ownership flush must not drain every deferred drop — that stripped the next circuit's ribbons on CI");
   assert.match(fnBody(tlxSrc, "flushOwnershipRelease"), /purgeOwnershipRenderObjects\(freedGeos\)/,
     "ownership flush must evict straggler RenderObjects for freed geos (Metal WebGPU geometry cache)");
-  assert.match(fnBody(tlxSrc, "purgeOwnershipRenderObjects"), /renderer\.backend\.isWebGPUBackend[\s\S]*?g\.dispatchEvent\(\{ type: "dispose" \}\)/,
-    "native WebGPU drops vertex state when geometry dispatches dispose after mesh drops");
+  assert.match(fnBody(tlxSrc, "purgeOwnershipRenderObjects"), /g\.dispatchEvent\(\{ type: "dispose" \}\)/,
+    "straggler RenderObjects drop when geometry dispatches dispose (WebGL2 warm probes and WebGPU cache)");
   assert.match(sh, /flushOwnershipDropped,\n/, "shadow pool exports the warm-bypass drain for chunked free");
   assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh, null, later\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
   const ownershipFlush = fnBody(tlxSrc, "flushOwnershipRelease");
   const ownershipDrop = fnBody(tlxSrc, "ownershipDropQueued");
-  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
-    "warm probes dispose before clearing references, after pending compilation settles");
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispatchEvent\(\{ type: "dispose" \}\);[\s\S]*?m\.geometry = null; m\.material = null;/,
+    "warm probes drop render objects before clearing references, after pending compilation settles");
   assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
     "a retired probe releases when its last compiler settles");
   assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(ownershipFlush, "").replace(ownershipDrop, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,

@@ -3208,7 +3208,10 @@ const TLX = (function () {
               geo.removeEventListener("dispose", p.release); mat.removeEventListener("dispose", p.release);
             }
             if (p.pending) return;
-            for (const m of p.meshes.values()) { m.dispose(); m.geometry = null; m.material = null; }
+            for (const m of p.meshes.values()) {
+              try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+              m.geometry = null; m.material = null;
+            }
             p.meshes.clear();
           };
           mats.set(mat, p);
@@ -4086,15 +4089,15 @@ const TLX = (function () {
           const g = ro && ro.geometry;
           if (!g || !freedGeos.has(g)) continue;
           const o = ro.object;
-          if (o && typeof o.dispatchEvent === "function" && !o.__tlxDropped) {
-            ownershipDropQueued(o, o._ownGeo ? o.geometry : null, g);
-            continue;
+          if (o && typeof o.dispatchEvent === "function") {
+            if (!o.__tlxDropped) ownershipDropQueued(o, o._ownGeo ? o.geometry : null, g);
+            else {
+              try { if (o.parent) o.parent.remove(o); } catch (_) { /* already detached */ }
+              o.visible = false;
+              try { o.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object */ }
+            }
           }
-          // Native three WebGPU keeps vertex/bindings state keyed on geometry until
-          // its "dispose" event (measured macos-latest/Metal session-quit-memory:
-          // pooled mesh drops were clean on SwiftShader WebGL2 but ~97 monza chunk
-          // geometries stayed in _renderObjects until geometry.dispose fired).
-          if (renderer.backend && renderer.backend.isWebGPUBackend && typeof g.dispatchEvent === "function") {
+          if (typeof g.dispatchEvent === "function") {
             try { g.dispatchEvent({ type: "dispose" }); } catch (_) { /* already torn down */ }
           }
         }
