@@ -14,6 +14,7 @@ const Menus = (function () {
 
 function create(G) {
 Log.info("ui", "Menus.create");
+if (typeof GfxEscalation !== "undefined" && GfxEscalation.noteCleanMenuBoot) GfxEscalation.noteCleanMenuBoot();
 // Stable helpers from the game.js closure.
 // No tickUi: every handler here already plays uiSelect, and a tickUi after it
 // was a second blip on one click (the track and team tiles).
@@ -147,7 +148,10 @@ if (typeof SaveHealth !== "undefined" && saveWarning) SaveHealth.mount(saveWarni
 // consume it once here so the title explains the hitch instead of looking like
 // a silent kick to the menu.
 const CTX_LOST_NOTICE_KEY = "apex26.ctxLostNotice";
+const CTX_LOST_NEED_RELOAD_KEY = "apex26.ctxLostNeedReload";
+const CTX_LOST_EXHAUSTED_KEY = "apex26.ctxLostExhausted";
 const CTX_LOST_NOTICE_MSG = "Graphics reset — retrying with lighter settings";
+const CTX_LOST_EXHAUSTED_MSG = "Graphics keep resetting — reload or pick another RENDERER";
 let ctxLostNotice = $("ctx-lost-notice");
 if (!ctxLostNotice) {
   ctxLostNotice = document.createElement("aside");
@@ -206,18 +210,31 @@ const showCtxLostNotice = () => {
   } catch (_) { /* blocked storage: still show the card once if we were called */ pending = true; }
   if (!pending || !ctxLostNotice || G.state !== "menu") return;
   ctxLostNotice.hidden = false;
+  let exhausted = false;
+  try { exhausted = sessionStorage.getItem(CTX_LOST_EXHAUSTED_KEY) === "1"; } catch (_) { /* blocked storage */ }
+  if (exhausted) try { sessionStorage.removeItem(CTX_LOST_EXHAUSTED_KEY); } catch (_) { /* one-shot copy */ }
+  const msg = exhausted ? CTX_LOST_EXHAUSTED_MSG : CTX_LOST_NOTICE_MSG;
   const detail = $("ctx-lost-notice-detail");
-  if (detail) detail.textContent = CTX_LOST_NOTICE_MSG;
+  if (detail) detail.textContent = msg;
   if (!ctxLostSpoken) {
     ctxLostSpoken = true;
-    const said = CTX_LOST_NOTICE_MSG + ". Press Retry to start again.";
+    const said = msg + ". Press Retry to start again.";
     if (typeof LiveRegion !== "undefined") LiveRegion.say(said, "save");
     else if ($("announce-live")) $("announce-live").textContent = said;
   }
-  if (G.announce) G.announce(CTX_LOST_NOTICE_MSG, 5, "info");
+  if (G.announce) G.announce(msg, 5, "info");
 };
 if ($("ctx-lost-dismiss")) $("ctx-lost-dismiss").onclick = () => hideCtxLostNotice();
 if ($("ctx-lost-retry")) $("ctx-lost-retry").onclick = () => {
+  let needReload = false;
+  try { needReload = sessionStorage.getItem(CTX_LOST_NEED_RELOAD_KEY) === "1"; } catch (_) { /* blocked storage */ }
+  if (needReload) {
+    try { sessionStorage.setItem(CTX_LOST_NOTICE_KEY, "1"); } catch (_) { /* explain the reload */ }
+    try { sessionStorage.removeItem(CTX_LOST_NEED_RELOAD_KEY); } catch (_) { /* one reload per click */ }
+    hideCtxLostNotice();
+    try { location.reload(); } catch (_) { /* harness */ }
+    return;
+  }
   hideCtxLostNotice();
   if (G.startRace) G.startRace();
 };

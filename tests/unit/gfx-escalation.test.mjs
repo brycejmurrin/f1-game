@@ -127,6 +127,44 @@ test("legacy whole-name marker migrates and clean reset preserves unrelated name
   assert.equal(h.win.name, "not apex26.ctxLostReloads=9");
 });
 
+test("fresh navigate entry clears a stale reload budget", () => {
+  const storage = new Map([["apex26.ctxLostReloads", "3"]]);
+  const win = { name: "player\napex26.ctxLostReloads=3" };
+  const ctx = vm.createContext({
+    window: win,
+    sessionStorage: {
+      getItem(k) { return storage.get(k) ?? null; },
+      setItem(k, v) { storage.set(k, String(v)); },
+      removeItem(k) { storage.delete(k); },
+    },
+    performance: { getEntriesByType(type) { return type === "navigation" ? [{ type: "navigate" }] : []; } },
+    document: { querySelector: () => ({ content: "1695" }) },
+  });
+  runSrc(ctx, "js/perf/gfx-escalation.js");
+  assert.equal(vm.runInContext("GfxEscalation.reloadCount()", ctx), 0);
+  assert.equal(storage.has("apex26.ctxLostReloads"), false);
+});
+
+test("noteCleanMenuBoot clears budget when the shell build changed on reload", () => {
+  const storage = new Map([
+    ["apex26.ctxLostReloads", "3"],
+    ["apex26.ctxLostBudgetBuild", "1694"],
+  ]);
+  const ctx = vm.createContext({
+    window: { name: "apex26.ctxLostReloads=3" },
+    sessionStorage: {
+      getItem(k) { return storage.get(k) ?? null; },
+      setItem(k, v) { storage.set(k, String(v)); },
+      removeItem(k) { storage.delete(k); },
+    },
+    performance: { getEntriesByType(type) { return type === "navigation" ? [{ type: "reload" }] : []; } },
+    document: { querySelector: () => ({ content: "1695" }) },
+  });
+  runSrc(ctx, "js/perf/gfx-escalation.js");
+  vm.runInContext("GfxEscalation.noteCleanMenuBoot()", ctx);
+  assert.equal(vm.runInContext("GfxEscalation.reloadCount()", ctx), 0);
+});
+
 // Fresh VM documents exercise the real loss handlers and real budget owner.
 // No GPU is simulated; hidden loss and duplicate-event latches remain production code.
 for (const backend of ["three", "glx"]) {
