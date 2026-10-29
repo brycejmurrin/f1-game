@@ -23,14 +23,14 @@ function ctx2d(calls) {
     clearRect: () => { calls.clear++; }, fillRect() {}, fill() {}, stroke: () => { calls.stroke++; },
     save() {}, restore() {}, translate() {}, scale() {}, beginPath() {}, arc: () => { calls.arc++; },
     moveTo() {}, lineTo() {}, closePath() {},
-    createRadialGradient: () => grad, createLinearGradient: () => grad,
+    createRadialGradient: () => { calls.gradients++; return grad; }, createLinearGradient: () => { calls.gradients++; return grad; },
     createImageData: (w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }),
     getImageData: (x, y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4) }), putImageData() {},
   };
 }
 
 function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
-  const calls = { clear: 0, stroke: 0, arc: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
+  const calls = { clear: 0, stroke: 0, arc: 0, gradients: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
   const live = { visor, helmet };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
@@ -452,5 +452,79 @@ test("mobile visor shedding clears on race exit, visor OFF, non-onboard and non-
     assert.deepEqual([arm.V.stats().shed, arm.calls.attrs["data-visor-shed"]], [true, "1"]);
     exit(arm);
     assert.deepEqual([arm.V.stats().shed, arm.calls.attrs["data-visor-shed"]], [false, undefined]);
+  }
+});
+
+test("adaptive visor budgets reduce cadence and lamp work without changing canvas size", () => {
+  const scene = { ...NIGHT, lights: new Float32Array(Array.from({ length: 8 }, (_, i) => lamp((i - 4) * 1.5, -30 - i)).flat()), tailStart: 8, floodEmit: 1 };
+  const rows = [];
+  for (const [pressure, name, hz, glints] of [[0, "full", 15, 8], [1, "reduced", 10, 4], [2, "minimal", 6, 2]]) {
+    const { V, ctx, calls } = load({ apex: { visorScene: () => scene }, reflections: "strong", refraction: "medium" });
+    ctx.GLX = { isMobile: true };
+    ctx.GfxQuality.current = () => "medium";
+    ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => false, tier: () => 2 };
+    for (let i = 0; i < 600; i++) V.tick(1 / 60, true, 30, false);
+    const s = V.stats();
+    assert.deepEqual([s.budget, s.paintHz, s.paints, s.glints, s.w, s.h], [name, hz, hz * 10, glints, 844, 390]);
+    assert.equal(calls.bendMaps, pressure < 2 ? 1 : 0);
+    rows.push(calls.gradients / s.paints);
+  }
+  assert.ok(rows[0] > rows[1] && rows[1] > rows[2] && rows[2] > 0, `gradient work decreases while retaining highlights: ${rows}`);
+});
+
+test("adaptive visor transitions repaint once while paused and rebuild deferred refraction on recovery", () => {
+  const { V, ctx, calls, win } = load({ apex: { visorScene: () => DAY }, refraction: "medium", beams: 0 });
+  let pressure = 0;
+  ctx.GLX = { isMobile: true };
+  ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => false };
+  V.tick(1 / 60, true, 30, false);
+  let paints = V.stats().paints;
+  const gradients = calls.gradients;
+  for (const p of [1, 2, 0]) {
+    pressure = p;
+    V.tick(0, true, 30, false);
+    assert.equal(V.stats().paints, ++paints);
+    V.tick(0, true, 30, false);
+    assert.equal(V.stats().paints, paints);
+  }
+  assert.equal(calls.gradients - gradients, gradients * 3, "beams OFF remains OFF after recovery in the same daylight scene");
+  pressure = 2;
+  V.tick(0, true, 30, false);
+  win.innerWidth = 390; win.innerHeight = 844;
+  V.tick(0, true, 30, false);
+  assert.equal(calls.bendMaps, 1, "minimal resize defers displacement-map allocation");
+  pressure = 0;
+  V.tick(0, true, 30, false);
+  assert.deepEqual([calls.bendMaps, V.stats().w, V.stats().h], [2, 390, 844]);
+  V.tick(0, true, 30, false);
+  assert.equal(calls.bendMaps, 2);
+});
+
+test("adaptive visor respects reduced motion, avoids catch-up bursts and ignores desktop pressure", () => {
+  for (const [mobile, pressure, reduced, expectedHz] of [[true, 1, true, 8], [true, 2, true, 6], [false, 2, false, 15]]) {
+    const { V, ctx } = load({ apex: { visorScene: () => DAY } });
+    ctx.GLX = { isMobile: mobile };
+    ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => false };
+    V.tick(1 / 60, true, 30, reduced);
+    assert.equal(V.stats().paintHz, expectedHz);
+    const before = V.stats().paints;
+    V.tick(10, true, 30, reduced);
+    assert.equal(V.stats().paints, before + 1, "a long frame produces only one paint");
+    V.tick(0, true, 30, reduced);
+    assert.equal(V.stats().paints, before + 1, "no paused catch-up");
+  }
+});
+
+test("adaptive visor clears profile attributes on every exit from each pressure level", () => {
+  for (const pressure of [1, 2, 4]) {
+    for (const exit of [({ V }) => V.clear(), ({ V }) => V.tick(0, false, 0, false), ({ V, live }) => { live.visor = "off"; V.tick(0, true, 0, false); }, ({ V, live }) => { live.helmet = false; V.tick(0, true, 0, false); }]) {
+      const arm = load({ apex: { visorScene: () => DAY } });
+      arm.ctx.GLX = { isMobile: true };
+      arm.ctx.PerfGov = { autoShed: () => pressure, lookPostShed: () => pressure === 4 };
+      arm.V.tick(1 / 60, true, 30, false);
+      assert.ok(arm.calls.attrs["data-visor-budget"]);
+      exit(arm);
+      assert.deepEqual([arm.calls.attrs["data-visor-budget"], arm.calls.attrs["data-visor-shed"], arm.V.stats().paintHz], [undefined, undefined, 0]);
+    }
   }
 });

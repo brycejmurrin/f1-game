@@ -1,1 +1,1 @@
-Improved: On phones under severe rendering load, moving helmet-visor reflections and refraction pause while the visor frame stays visible, then return when the rendering budget recovers.
+Improved: On phones, helmet-visor optics adapt gradually to rendering pressure: fewer decorative highlights and slower repaints, then reduced refraction, with a pause under severe load. The visor frame and saved choices stay intact as the rendering budget changes.

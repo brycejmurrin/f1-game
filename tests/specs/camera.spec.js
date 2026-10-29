@@ -179,6 +179,13 @@ test.describe("mobile helmet visor budget", () => {
         visor: CockpitOpts.visor(), refraction: CockpitOpts.visorRefraction(),
       });
       const before = read();
+      // The real governor is frozen. Unit tests drive its pressure inputs; here
+      // exercise the resulting compositor selectors against the shipped CSS.
+      document.body.setAttribute("data-visor-budget", "1");
+      const reducedFilter = read().filter;
+      document.body.setAttribute("data-visor-budget", "2");
+      const minimalFilter = read().filter;
+      document.body.removeAttribute("data-visor-budget");
       PerfGov.setUserTier(4);   // controlled pressure input; selected preset stays MEDIUM
       for (let i = 0; i < 600; i++) VisorOptics.tick(1 / 60, true, 30, false);
       const shed = read();
@@ -187,10 +194,12 @@ test.describe("mobile helmet visor budget", () => {
       const restored = read();
       __apex.camera("chase");
       VisorOptics.tick(0, true, 30, false);
-      return { before, shed, restored, mobile: GLX.isMobile, preset: GfxQuality.current(), exitShed: document.body.hasAttribute("data-visor-shed") };
+      return { before, shed, restored, reducedFilter, minimalFilter, mobile: GLX.isMobile, preset: GfxQuality.current(), exitShed: document.body.hasAttribute("data-visor-shed") };
     });
     expect([result.mobile, result.preset, result.exitShed]).toEqual([true, "medium", false]);
     expect(result.before.filter).toContain("visor-bend-medium");
+    expect(result.reducedFilter).toContain("visor-bend-medium");
+    expect(result.minimalFilter).toBe("none");
     expect([result.shed.paints, result.shed.shed, result.shed.hidden, result.shed.filter]).toEqual([result.before.paints, true, true, "none"]);
     expect([result.restored.paints, result.restored.shed, result.restored.hidden]).toEqual([result.before.paints + 1, false, false]);
     expect(result.restored.filter).toContain("visor-bend-medium");

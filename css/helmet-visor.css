@@ -32,8 +32,8 @@ body[data-visor-blend="over"] #fx-visor { mix-blend-mode: normal; }
 /* Only the world is displaced: HUD and menus retain their original pixels. The map behind each filter is the
    port-shaped rim field VisorOptics builds (zero across the centre). Broadcast, WATCH, a hidden HUD and photo
    mode keep the road undistorted. */
-/* Severe mobile load suspends refraction along with the moving light layer; the static port stays. */
-body[data-helmet-cam]:not([data-visor-shed]):not(.bc-on):not(.watch-controls-on):not(.hud-hidden):not(.pc-uihidden):is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]):has(> #hud:not([hidden])) {
+/* Minimal mobile budget drops world refraction; severe load also hides the light layer. The port stays. */
+body[data-helmet-cam]:not([data-visor-shed]):not([data-visor-budget="2"]):not(.bc-on):not(.watch-controls-on):not(.hud-hidden):not(.pc-uihidden):is([data-helmet-visor="clear"], [data-helmet-visor="smoke"]):has(> #hud:not([hidden])) {
   &[data-helmet-visor-refraction="light"] :is(#game, #game-soft) { filter: url(#visor-bend-light); }
   &[data-helmet-visor-refraction="medium"] :is(#game, #game-soft) { filter: url(#visor-bend-medium); }
   &[data-helmet-visor-refraction="strong"] :is(#game, #game-soft) { filter: url(#visor-bend-strong); }

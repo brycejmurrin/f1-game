@@ -17,14 +17,20 @@
  *
  * The lighting→visor mapping (lightMap) and the port geometry (portPath) are pure functions, unit-tested in
  * tests/unit/visor-optics.test.mjs. Droplets.tick (js/fx/droplets.js, game.js's per-frame onboard-overlay
- * heartbeat) calls tick(); nothing here touches the simulation. Phone-cheap by construction: one 2D canvas at
- * 1 css px per device px, ≤ 14 gradients per repaint, no layout reads in the loop. */
+ * heartbeat) calls tick(); nothing here touches the simulation. One CSS-pixel canvas with a phone budget
+ * for repaint cadence and decorative complexity; synchronous paint statistics exclude compositor cost. */
 const VisorOptics = (function () {
   "use strict";
 
   const HZ = 15;                     // repaint rate; the compositor blends the last frame in between
   const HZ_REDUCED = 8;              // prefers-reduced-motion: the glints still follow the heading, more slowly
   const MAX_GLINTS = 8;              // the brightest lamps in view
+  const BUDGETS = [
+    { name: "full", hz: HZ, glints: MAX_GLINTS, beams: true },
+    { name: "reduced", hz: 10, glints: 4, beams: false },
+    { name: "minimal", hz: 6, glints: 2, beams: false },
+    { name: "off", hz: 0, glints: 0, beams: false },
+  ];
   const LAMP_GAIN = 1.5;             // glint = GAIN·√(energy/d²)·beam: a Bahrain flood (12 000) at 50 m saturates, a Monaco soffit (40) at 10 m ≈ 0.9
   // An eye adapted to daylight sees a lamp's reflection against the light already in the scene, not against black:
   // glints scale by 1/(1 + ADAPT·max(0, daylight − DARK)). Night (moon key + sky ≈ 0.14) keeps every glint; a dusk
@@ -45,6 +51,7 @@ const VisorOptics = (function () {
   let _cv = null, _ctx = null, _looked = false;
   let _blend = "", _blendParam, _blendT = -Infinity;
   let _w = 0, _h = 0, _shown = false, _shed = false, _acc = 1, _bendLevelBuilt = "";
+  let _budget = 0, _paintHz = HZ;
   let _portKey = "", _bendKey = "", _paths = null, _svg = null;
   // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
   // restyling every frame that is a forced style recalc of the page, and the 15 Hz paint asked for it on every
@@ -166,7 +173,7 @@ const VisorOptics = (function () {
    *  (VISOR REFLECTIONS); `fringe` is the chromatic rim amount (VISOR REFRACTION); `smoke` marks the tinted lens
    *  (its inner reflections read stronger against the darker transmitted scene). Every intensity is 0..~1.5 and
    *  proportional to light actually reaching the shield: a dark scene returns zeros. */
-  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1 } = {}) {
+  function lightMap(scene, w, h, { level = 1, fringe = 0, smoke = false, tint = null, bloom = 1, glare = 0.12, beams = 1, glintLimit = MAX_GLINTS } = {}) {
     const out = { sun: null, ghost: null, rays: null, rim: null, glints: [], fringe: 0, haze: 0, bloom: clampTo(bloom, 0, 2.5) };
     if (!scene || !scene.eye || !scene.tgt || !(level > 0)) return out;
     // VISOR BEAMS: one scale for every streak — the lamps' beams, the sun's rays, the star flares; 0 keeps the glints alone.
@@ -259,7 +266,7 @@ const VisorOptics = (function () {
         _glintBuf.push({ x, y, k: kl, d: dl, rgb: [L[i + 3] / m * 255, L[i + 4] / m * 255, L[i + 5] / m * 255], bx: bl > 1e-3 ? bx / bl : 0, by: bl > 1e-3 ? by / bl : 1, beam });
       }
       _glintBuf.sort((a, b) => b.k - a.k);
-      const n = Math.min(MAX_GLINTS, _glintBuf.length);
+      const n = Math.min(MAX_GLINTS, Math.max(0, glintLimit | 0), _glintBuf.length);
       for (let i = 0; i < n; i++) {
         const g = _glintBuf[i];
         const k = clampTo(g.k * gain * (0.7 + 0.3 * clampTo(glare / 0.12, 0, 2.5)), 0, 1.2);   // LENS GLARE lifts the cores
@@ -356,21 +363,25 @@ const VisorOptics = (function () {
     return Number.isFinite(n) ? clampTo(n, 0, 2) : 1;
   }
   function _low() { return typeof GfxQuality !== "undefined" && GfxQuality.current && GfxQuality.current() === "low"; }
-  // The phone's severe-load budget includes moving visor optics. Keep its static eye-port and choices;
-  // shrinking the 3D targets alone cannot reduce this full-viewport compositor layer.
-  function _pressure() {
-    return typeof GLX !== "undefined" && !!GLX.isMobile && typeof PerfGov !== "undefined"
-      && typeof PerfGov.lookPostShed === "function" && !!PerfGov.lookPostShed();
+  // Read measured/crash pressure, never the user's tier floor: a healthy MEDIUM phone stays full.
+  // Reuse the governor's settling/latch policy; resizing this canvas on each step would add allocation hitches.
+  function _pressureBudget() {
+    if (typeof GLX === "undefined" || !GLX.isMobile || typeof PerfGov === "undefined") return 0;
+    if (typeof PerfGov.lookPostShed === "function" && PerfGov.lookPostShed()) return 3;
+    const p = typeof PerfGov.autoShed === "function" ? PerfGov.autoShed() : 0;
+    return p >= 2 ? 2 : p >= 1 ? 1 : 0;
   }
-  function _syncShed(on) {
-    if (on === _shed) return false;
-    _shed = on;
+  function _syncBudget(budget) {
+    if (budget === _budget) return false;
+    _budget = budget; _shed = budget === 3;
     if (document.body) {
-      if (on) document.body.setAttribute("data-visor-shed", "1");
+      if (_shed) document.body.setAttribute("data-visor-shed", "1");
       else document.body.removeAttribute("data-visor-shed");
+      if (budget) document.body.setAttribute("data-visor-budget", String(budget));
+      else document.body.removeAttribute("data-visor-budget");
     }
-    if (!on) _acc = 1;   // recovery repaints the cleared layer, even while paused
-    return !on;
+    _acc = 1;   // a profile change repaints once immediately, including while paused
+    return true;
   }
 
   function _lookup() {
@@ -647,16 +658,17 @@ const VisorOptics = (function () {
    *  (the last paint stays). vs is unused today (kept for the airflow/heat ideas); reduced: prefers-reduced-motion. */
   function tick(dt, on, vs, reduced) {
     const helmet = _helmet();
-    if (!helmet) { _syncShed(false); _show(false); return; }
+    if (!helmet) { _syncBudget(0); _show(false); return; }
     let resized = _size();
     _port();                                                   // the aperture: CLEAR / TINTED build it, OFF clears it
     const visor = _opt("visor", "off");
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
-    const restored = _syncShed(visor !== "off" && !!on && _pressure());
+    const changed = _syncBudget(visor !== "off" && on ? _pressureBudget() : 0);
     if (visor === "off" || !on || _low() || _shed) { _show(false); return; }
+    const budget = BUDGETS[_budget];
     // The world filter is independent of the reflection canvas, including on resize.
     const t2 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
-    _bend();
+    if (_budget < 2) _bend();
     if (t2 && _bendKey && !_stats.msBend) _stats.msBend = r2(performance.now() - t2);
     if (!(level > 0)) { _show(false); return; }
     const t1 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
@@ -665,20 +677,20 @@ const VisorOptics = (function () {
     if (t1 && !_stats.msLookup) _stats.msLookup = r2(performance.now() - t1);
     _syncBlend(t1 || Date.now());
     _show(true);
-    const hz = reduced ? HZ_REDUCED : HZ;
+    const hz = _paintHz = Math.min(reduced ? HZ_REDUCED : HZ, budget.hz);
     _acc += dt > 0 ? dt : 0;
     if (!resized && _acc < 1 / hz) return;
-    if (!(dt > 0) && !resized && !restored) return;             // paused: keep the last paint, except after recovery
-    _acc = 0;
+    if (!(dt > 0) && !resized && !changed) return;              // a paused profile change still refreshes once
+    _acc = resized || changed || !_budget ? 0 : _acc % (1 / hz); // preserve reduced cadence without catch-up paints
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
     if (!scene) return;
-    const fringe = FRINGE[_opt("visorRefraction", "off")] || 0;
-    const beams = _beams();
+    const fringe = _budget < 2 ? FRINGE[_opt("visorRefraction", "off")] || 0 : 0;
+    const beams = budget.beams ? _beams() : 0;
     const kn = readKnobs(t0 || 0);
     let m;
     try {
-      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null, bloom: kn.bloom, glare: kn.glare, beams });
+      m = lightMap(scene, _w, _h, { level, fringe, smoke: visor === "smoke", tint: visor === "smoke" ? _lens : null, bloom: kn.bloom, glare: kn.glare, beams, glintLimit: budget.glints });
       _paint(m);
     } catch (e) {
       // Cosmetic layer: a bad frame (a non-finite gradient, a hook mid-rebuild) must never take the render loop
@@ -695,11 +707,11 @@ const VisorOptics = (function () {
 
   /** Probe / test surface: paint counts, CPU ms per paint and the last map's headline intensities. */
   function stats() {
-    return { shown: _shown, shed: _shed, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
+    return { shown: _shown, shed: _shed, budget: BUDGETS[_budget].name, paintHz: _shown ? _paintHz : 0, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
              msAvg: _stats.paints ? r2(_stats.msSum / _stats.paints) : 0, glints: _stats.glints, sun: _stats.sun, rim: _stats.rim, lamp: _stats.lamp,
              port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
   }
-  function clear() { _syncShed(false); _show(false); }
+  function clear() { _syncBudget(0); _show(false); }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {
