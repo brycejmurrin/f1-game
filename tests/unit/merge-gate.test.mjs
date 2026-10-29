@@ -728,8 +728,6 @@ test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs de
     "the trusted-rows/land-gate tip split asks for a re-gate");
   assert.match(run, /elif \[ "\$now" != "\$tip" \]; then\n[^\n]*deploy tip moved since the gate measured[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "a verdict whose tip is no longer the deploy tip asks for a re-gate");
-  assert.match(run, /if \[ "\$tline" = "no trusted rows for this head" \]; then\n\s*want_retry "\$n" "\$head"/,
-    "no trusted row for this head (\"error, will retry\") asks for a re-gate");
   assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 3, "no other branch asks for a re-gate");
   assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "one append, inside want_retry");
   assert.match(run, /echo "retry=\$retry"/);
@@ -773,6 +771,19 @@ test("land.yml post (STALE TIP): success only onto the tip the gate measured; a 
   assert.deepEqual(bodies(r).map((b) => b.state), ["pending"]);
   assert.equal(disarmed(r), true, "any non-success write disarms an armed PR");
   assert.equal(r.out.retry, "[]", "CI still running is not a tip move");
+
+  r = runStep(run, env({ NOW_TIP: TIP_A, FAKE_PR: armed, TRUSTED: "[]" }), verdict());
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(bodies(r).map((b) => b.state), ["pending"], "missing trusted rows cannot approve the head");
+  assert.deepEqual(JSON.parse(r.out.retry), [{ number: 7, head: HEAD7 }], "missing trusted rows request the bounded re-gate");
+  assert.equal(r.out.arm, "", "missing trusted rows cannot arm");
+  assert.equal(disarmed(r), true, "an earlier arm is disarmed while trusted verification is missing");
+
+  r = runStep(run, env({ NOW_TIP: TIP_A, FAKE_PR: armed, TRUSTED: "[]" }), verdict(2));
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(bodies(r).map((b) => b.state), ["failure"], "an actual land-gate refusal stays a refusal even without trusted rows");
+  assert.equal(r.out.retry, "[]", "missing rows cannot turn a gen/ratchet refusal into a retry");
+  assert.equal(r.out.arm, "");
 
   r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_STATUSES: JSON.stringify([{ context: "gate", created_at: "2026-10-27T10:00:09Z" }]) }), verdict());
   assert.deepEqual(bodies(r), [], "a newer verdict on the head is kept");
