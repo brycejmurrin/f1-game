@@ -557,26 +557,37 @@ function loadPkg() {
   return pkg;
 }
 
-function start(groups, { force = false, parallel = false, lastFailed = false } = {}) {
-  const pkg = loadPkg();
+// Inject only process/filesystem edges so start's actual ordering and registry
+// mutations can be exercised without launching or signaling any browser run.
+export function start(groups, { force = false, parallel = false, lastFailed = false } = {}, deps = {}) {
+  const io = {
+    loadPkg, probeChromeSessions, changedForWaste, readState, alive, supersede, spawnGroup, updateState, say,
+    load1: () => os.loadavg()[0],
+    mkdirLogs: () => fs.mkdirSync(LOGDIR, { recursive: true }),
+    error: (...args) => console.error(...args),
+    exit: (code) => process.exit(code),
+    now: () => new Date().toISOString(),
+    ...deps,
+  };
+  const pkg = io.loadPkg();
   const unknown = groups.filter((g) => !pkg.scripts[`test:${g}`]);
   if (unknown.length) {
-    console.error(`[test-bg] no such group: ${unknown.join(", ")}`);
-    console.error(`[test-bg] available: ${Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)).join(" ")}`);
-    process.exit(2);
+    io.error(`[test-bg] no such group: ${unknown.join(", ")}`);
+    io.error(`[test-bg] available: ${Object.keys(pkg.scripts).filter((k) => k.startsWith("test:")).map((k) => k.slice(5)).join(" ")}`);
+    io.exit(2);
   }
   const refusal = chromeRefusal({
     browser: groups.some((g) => /run-playwright/.test(pkg.scripts[`test:${g}`])),
-    force, sessions: force ? [] : probeChromeSessions(),
+    force, sessions: force ? [] : io.probeChromeSessions(),
   });
-  if (refusal) { console.error(refusal); process.exit(3); }
+  if (refusal) { io.error(refusal); io.exit(3); }
 
   // Advisory: a browser group on a docs-only diff buys nothing (AGENTS.md table).
   try {
     const waste = docsOnlyWasteWarning({
-      groups, scripts: pkg.scripts, changed: changedForWaste(), force,
+      groups, scripts: pkg.scripts, changed: io.changedForWaste(), force,
     });
-    if (waste) console.error(waste);
+    if (waste) io.error(waste);
   } catch (_) { /* advisory — never block a start */ }
 
   // Default: one group at a time. --parallel raises the cap to cores/WORKERS.
@@ -586,11 +597,11 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // A busy box measures the machine, not the code (AGENTS.md §Verification 5):
   // refuse to start a browser group above loadavg 3 unless --force. Every false
   // red in tiny.log on 2026-09-01 was a start at loadavg > 3.
-  const load1 = os.loadavg()[0];
+  const load1 = io.load1();
   if (!force && load1 >= LOAD_LIMIT) {
-    console.error(`[test-bg] REFUSED: 1-min loadavg ${load1.toFixed(2)} >= 3 — a timeout now would measure the box, not the code.`);
-    console.error(`[test-bg] wait for it to settle (cat /proc/loadavg), or pass --force and do not trust a timeout from this run.`);
-    process.exit(3);
+    io.error(`[test-bg] REFUSED: 1-min loadavg ${load1.toFixed(2)} >= 3 — a timeout now would measure the box, not the code.`);
+    io.error(`[test-bg] wait for it to settle (cat /proc/loadavg), or pass --force and do not trust a timeout from this run.`);
+    io.exit(3);
   }
 
   // Count what is ALREADY on the CPU. An earlier batch still running is exactly
@@ -602,42 +613,44 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // is: counting it would refuse the ordinary "re-run the group I am already
   // running" on a box that has room. The cap check runs FIRST so that a refusal
   // never kills a live run and then declines to replace it.
-  const running = readState().runs.filter((r) => alive(r) && !groups.includes(r.group));
 
   if (!parallel && !force && groups.length > 1) {
     // Sequential multi-group start without --wait: launch ONLY the first, and
     // print the rest as the next commands. Agents should not silently fan out.
-    say(`sequential mode (default): starting 1 of ${groups.length} — use --wait <groups> to chain, or --parallel to fan out`);
+    io.say(`sequential mode (default): starting 1 of ${groups.length} — use --wait <groups> to chain, or --parallel to fan out`);
     const rest = groups.slice(1);
     groups = groups.slice(0, 1);
-    say(`next: node tools/ci/test-bg.mjs ${rest.join(" ")}`);
+    io.say(`next: node tools/ci/test-bg.mjs ${rest.join(" ")}`);
   }
 
+  // Deferred sequential groups are still live work, not replacements. Count
+  // them until this invocation actually supersedes them.
+  const running = io.readState().runs.filter((r) => io.alive(r) && !groups.includes(r.group));
   const total = groups.length + running.length;
   if (total > maxConcurrent) {
-    console.error(`[test-bg] REFUSING: ${total} group(s) would run at once (${groups.length} asked for` +
+    io.error(`[test-bg] REFUSING: ${total} group(s) would run at once (${groups.length} asked for` +
       `${running.length ? `, ${running.length} already running: ${running.map((r) => r.group).join(", ")}` : ""}),` +
       ` but concurrent cap is ${maxConcurrent === Infinity ? "unlimited (--force)" : maxConcurrent}` +
       ` (${parallel ? `parallel, ${CORES} cores / ${WORKERS} workers` : "sequential default"}).`);
-    console.error(`[test-bg] Run them one at a time (default), or:\n`);
-    for (const g of groups) console.error(`    node tools/ci/test-bg.mjs ${g}`);
+    io.error(`[test-bg] Run them one at a time (default), or:\n`);
+    for (const g of groups) io.error(`    node tools/ci/test-bg.mjs ${g}`);
     if (groups.length > 1) {
-      console.error(`\n    node tools/ci/test-bg.mjs --wait ${groups.join(" ")}   # sequential chain`);
-      console.error(`    node tools/ci/test-bg.mjs --parallel ${groups.join(" ")}  # concurrent (cap ${PARALLEL_MAX})`);
+      io.error(`\n    node tools/ci/test-bg.mjs --wait ${groups.join(" ")}   # sequential chain`);
+      io.error(`    node tools/ci/test-bg.mjs --parallel ${groups.join(" ")}  # concurrent (cap ${PARALLEL_MAX})`);
     }
-    console.error(`\n(--force overrides; WORKERS=1 raises the parallel cap.)`);
-    process.exit(3);
+    io.error(`\n(--force overrides; WORKERS=1 raises the parallel cap.)`);
+    io.exit(3);
   }
 
   // Kill any live run of a group being restarted BEFORE its log is truncated
   // and its replacement spawned.
-  supersede(groups);
-  fs.mkdirSync(LOGDIR, { recursive: true });
+  io.supersede(groups);
+  io.mkdirLogs();
   const mode = parallel ? "parallel" : "sequential";
-  say(`spawning ${groups.length} group(s) mode=${mode} maxConcurrent=${maxConcurrent === Infinity ? "∞" : maxConcurrent} ${loadavgLine()}`);
+  io.say(`spawning ${groups.length} group(s) mode=${mode} maxConcurrent=${maxConcurrent === Infinity ? "∞" : maxConcurrent} ${loadavgLine()}`);
   const runs = [];
   for (const group of groups) {
-    const r = spawnGroup(group, pkg, { lastFailed });
+    const r = io.spawnGroup(group, pkg, { lastFailed });
     if (r) runs.push(r);
   }
   // MERGE WITH WHAT IS STILL RUNNING, don't clobber it. Starting a second batch
@@ -658,24 +671,24 @@ function start(groups, { force = false, parallel = false, lastFailed = false } =
   // new runs merge by pid — a `--wait` in another shell that stamped an `ended`
   // between our earlier read and this write keeps its stamp.
   let prior = [];
-  updateState((s) => {
-    prior = s.runs.filter((r) => alive(r) && !groups.includes(r.group));
-    return { runs: mergeByPid(prior, runs), started: new Date().toISOString(), workers: WORKERS, mode };
+  io.updateState((s) => {
+    prior = s.runs.filter((r) => io.alive(r) && !groups.includes(r.group));
+    return { runs: mergeByPid(prior, runs), started: io.now(), workers: WORKERS, mode };
   });
-  if (prior.length) say(`still running from an earlier start: ${prior.map((r) => r.group).join(", ")}`);
+  if (prior.length) io.say(`still running from an earlier start: ${prior.map((r) => r.group).join(", ")}`);
   // NOTHING SPAWNED IS A REAL OUTCOME, NOT A CRASH. spawnGroup() returns null
   // when `--last-failed <group>` finds a previous run with zero failures, so
   // after a green run this list is empty and runs[0].log threw a TypeError.
   // verify-change.mjs reads a non-zero exit from this tool as `refused`, so a
   // group that had simply nothing to re-run reported as a broken runner.
   if (!runs.length) {
-    say(`nothing to run — every requested group had no previous failures to replay`);
+    io.say(`nothing to run — every requested group had no previous failures to replay`);
     return;
   }
-  say(`tail one:   tail -f ${path.relative(ROOT, runs[0].log)}`);
-  say(`tail all:   tail -f ${runs.map((r) => path.relative(ROOT, r.log)).join(" ")}`);
-  say(`check:      node tools/ci/test-bg.mjs --status`);
-  say(`block:      node tools/ci/test-bg.mjs --wait`);
+  io.say(`tail one:   tail -f ${path.relative(ROOT, runs[0].log)}`);
+  io.say(`tail all:   tail -f ${runs.map((r) => path.relative(ROOT, r.log)).join(" ")}`);
+  io.say(`check:      node tools/ci/test-bg.mjs --status`);
+  io.say(`block:      node tools/ci/test-bg.mjs --wait`);
 }
 
 const LOAD_LIMIT = 3;                  // start()'s refusal threshold (1-min loadavg)
