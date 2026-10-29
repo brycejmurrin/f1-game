@@ -937,6 +937,6 @@ const TrackThemes = (function () {
     };
   }
 
-  return { ORDER, PRESETS, LOOK, has, get, swatchCss, sanitizeLook, lookOf, defFields, sceneryFor, survey, DRESS, lapM, cityGaps };
+  return { ORDER, PRESETS, LOOK, has, get, swatchCss, sanitizeLook, lookOf, defFields, sceneryFor, survey, DRESS, cityGaps };
 })();
 Object.freeze(TrackThemes);

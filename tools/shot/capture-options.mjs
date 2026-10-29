@@ -3,7 +3,7 @@ import { WEBGPU_CHROMIUM_ARGS } from "../lib/harness.mjs";
 import { captureGpuOptions, glStack } from "../lib/browser-workers.mjs";
 import { chromiumArgsForBackend } from "./probe-page.mjs";
 
-export const CAPTURE_PROFILES = Object.freeze({
+const CAPTURE_PROFILES = Object.freeze({
   custom: Object.freeze({ width: null, height: null, type: null, quality: null }),
   preview: Object.freeze({ width: 640, height: 360, type: "jpeg", quality: 80 }),
   comparison: Object.freeze({ width: 1280, height: 720, type: "png", quality: null }),

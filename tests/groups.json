@@ -2145,6 +2145,7 @@
         "tests/unit/legends-team.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/quali-persist.test.mjs",
