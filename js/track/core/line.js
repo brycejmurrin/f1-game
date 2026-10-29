@@ -102,6 +102,7 @@ const TrackLine = (function () {
                             // asymmetric chicane line; as a piecewise penalty it was stiff enough that
                             // over-relaxing it sent a Spa crossing to 3.4 m/m and damping it stalled
                             // the same way (2026-09-16, docs/notes/RACING-LINE-RESEARCH.md §11).
+  const FAIR_PASSES = 2;         // [1 2 1] fairing passes after the last trim (fairLine)
   const FAM_SHIFT_M = 1.5;       // m the INNER / OUTER families sit off the racing line inside a corner
   const HINT_SNAP_M = 80;        // a hint's turn must sit within this of a baked corner's apex
 
@@ -115,7 +116,7 @@ const TrackLine = (function () {
   // no two tracks share a mutable array. A hit skips resolveHints' dropped-hint
   // Log.warn — the miss that baked the entry already said it.
   const MEMO_MAX = 2;
-  const OUT = ["line", "lineW", "lineIn", "lineOut", "lineK", "attackQ", "toTurnIn"];
+  const OUT = ["line", "lineW", "lineIn", "lineOut", "lineK", "lineRoadK", "attackQ", "toTurnIn"];
   const _memo = [];
   // realm-safe (a Node VM test hands in the host's Float32Array)
   const isF32 = (a) => Object.prototype.toString.call(a) === "[object Float32Array]";
@@ -134,14 +135,49 @@ const TrackLine = (function () {
   function bake(track) {
     const curv = track.curv, hw = track.hw, def = track.def;
     if (!isF32(curv) || !isF32(hw)) return bakeFresh(track);
+    const kr = track.lineRoadK = roadK(track);   // the geometry, so a moved node is a miss
     const hints = JSON.stringify([def && def.lineHints, def && def.turns]);
     const hit = _memo.findIndex((m) => m.n === track.n && m.total === track.total && m.hints === hints &&
-      sameBits(m.curv, curv) && sameBits(m.hw, hw));
+      sameBits(m.curv, curv) && sameBits(m.hw, hw) && sameBits(m.out.lineRoadK, kr));
     if (hit >= 0) { const m = _memo.splice(hit, 1)[0]; _memo.unshift(m); return copyOut(m.out, track); }
     bakeFresh(track);
     _memo.unshift({ n: track.n, total: track.total, hints, curv: new Float32Array(curv), hw: new Float32Array(hw), out: copyOut(track, {}) });
     _memo.length = Math.min(_memo.length, MEMO_MAX);
     return track;
+  }
+
+  // THE ROAD AS THE LINE SEES IT. track.curv is a heading difference over
+  // ±12 m of interpolated tangents (TrackSpline.curvatureRaw) — the right
+  // smoothing for the AI's look-ahead and corner detection, but it reads a
+  // hairpin 1.5–2x gentler than the road the car drives: Monza's 1764 m
+  // corner is a 22 m radius in track.curv and 14 m in the node geometry.
+  // Relaxed against it, the line "opened" that corner to an 85 m radius while
+  // the path a car actually traces through p + r·x was 17 m — the optimiser
+  // was satisfied with a line that was jagged in the world
+  // (docs/notes/RACING-LINE-RESEARCH.md §12). TUMFTM's mincurv keeps the same
+  // promise by refitting until its model curvature is within 0.01 rad/m of
+  // the geometry (iqp_curverror_allowed). This is the curvature of the node
+  // polyline itself — the turn of the chord through nodes i ± ROADK_SPAN —
+  // so the offset curve the bake minimises is the one the world draws.
+  // A track without node positions (the synthetic unit tracks) is its own
+  // geometry: curv.
+  const ROADK_SPAN = 1;
+  function roadK(track) {
+    const n = track.n, px = track.px, pz = track.pz;
+    if (!px || !pz || n < 8) return track.curv;
+    const ds = track.total / n, m = ROADK_SPAN, k = new Float32Array(n);
+    const head = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = (i - 1 + n) % n, b = (i + 1) % n;
+      head[i] = Math.atan2(px[b] - px[a], pz[b] - pz[a]);   // TrackSpline.curvatureRaw's atan2(tx, tz)
+    }
+    for (let i = 0; i < n; i++) {
+      let d = head[(i + m) % n] - head[(i - m + n) % n];
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      k[i] = d / (2 * m * ds);
+    }
+    return k;
   }
 
   function bakeFresh(track) {
@@ -276,9 +312,13 @@ const TrackLine = (function () {
     for (const c of corners) {
       const e0 = c.entryStep - blendN, e1 = c.exitStep + blendN;
       for (let i = Math.floor(e0); i <= Math.ceil(e1); i++) {
+        // smoothstep, not a linear ramp: the weight's slope is continuous at
+        // both ends, so nothing that blends by it (the AI's lane, the assist)
+        // takes a kink where a window opens or closes
         let v = 1;
         if (i < c.entryStep) v = clamp((i - e0) / blendN, 0, 1);
         else if (i > c.exitStep) v = clamp((e1 - i) / blendN, 0, 1);
+        v = v * v * (3 - 2 * v);
         const idx = wrapI(start + i);
         if (v > w[idx]) { w[idx] = v; insideSgn[idx] = c.inside; }
       }
@@ -295,14 +335,16 @@ const TrackLine = (function () {
       }
     }
     for (let i = 0; i < n; i++) x[i] = clamp(x[i], lo[i], hi[i]);
-    relaxCoarse(x, curv, lo, hi, n, ds, RELAX_LAM, RELAX_CPASSES, RELAX_COARSE);
-    relaxCoarse(x, curv, lo, hi, n, ds, RELAX_LAM, RELAX_MPASSES, 2);
-    relaxLine(x, curv, lo, hi, n, ds, RELAX_PASSES, RELAX_LAM);
+    const kr = track.lineRoadK || (track.lineRoadK = roadK(track));
+    relaxCoarse(x, kr, lo, hi, n, ds, RELAX_LAM, RELAX_CPASSES, RELAX_COARSE);
+    relaxCoarse(x, kr, lo, hi, n, ds, RELAX_LAM, RELAX_MPASSES, 2);
+    relaxLine(x, kr, lo, hi, n, ds, RELAX_PASSES, RELAX_LAM);
     for (let r = 0; r < TRIM_ROUNDS; r++) {
       trimSlopes(x, lo, hi, n, ds, TRIM_PASSES);
-      relaxLine(x, curv, lo, hi, n, ds, TRIM_RELAX, RELAX_LAM);
+      relaxLine(x, kr, lo, hi, n, ds, TRIM_RELAX, RELAX_LAM);
     }
     trimSlopes(x, lo, hi, n, ds, TRIM_PASSES);
+    fairLine(x, lo, hi, n, FAIR_PASSES);
     // FAMILIES — the racing line shifted FAM_SHIFT_M toward the inside of the
     // corner (INNER: the defensive line and the inside pass) and toward the
     // outside (OUTER: the pass around the outside), weighted by `lineW` so
@@ -369,7 +411,7 @@ const TrackLine = (function () {
   // (exported) is the same expression for the audits and tests, so what they
   // measure is what the bake minimises.
   function lineCurvature(track) {
-    const n = track.n, ds = track.total / n, x = track.line, k = track.curv, out = new Float32Array(n);
+    const n = track.n, ds = track.total / n, x = track.line, k = track.lineRoadK || track.curv, out = new Float32Array(n);
     if (!x || !k) return out;
     const h = 0.5 / ds, inv2 = 1 / (ds * ds);
     for (let i = 0; i < n; i++) {
@@ -449,6 +491,20 @@ const TrackLine = (function () {
         x[i] = xi > hi[i] ? hi[i] : xi < lo[i] ? lo[i] : xi;
         x[b] = xb > hi[b] ? hi[b] : xb < lo[b] ? lo[b] : xb;
       }
+    }
+  }
+
+  // FAIRING, the last step. trimSlopes leaves each capped crossing a straight
+  // ramp with a corner at both ends — the line's curvature zig-zagged
+  // 0.025 → 0.042 → 0.031 → 0.015 → 0.030 node to node across Monza's first
+  // chicane. A [1 2 1]/4 pass rounds those corners and cannot break the cap:
+  // each new edge is a convex mix of three old edges, all already under it.
+  // Clamped to the road after each pass (hw can change node to node).
+  function fairLine(x, lo, hi, n, passes) {
+    const y = new Float32Array(n);
+    for (let p = 0; p < passes; p++) {
+      for (let i = 0; i < n; i++) y[i] = (x[i ? i - 1 : n - 1] + 2 * x[i] + x[i + 1 < n ? i + 1 : 0]) * 0.25;
+      for (let i = 0; i < n; i++) x[i] = y[i] > hi[i] ? hi[i] : y[i] < lo[i] ? lo[i] : y[i];
     }
   }
 
