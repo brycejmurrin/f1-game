@@ -228,7 +228,7 @@ test.describe("results-flow — phone landscape acceptance", () => {
     await page.evaluate(() => window.__apex.go());
     await crossFlag(page); await skipChain(page);
     await page.locator("#res-menu").tap();
-    await expect(page.locator("#menu")).toBeVisible();
+    await expect(page.locator("#overlay")).toBeVisible();
     expect(await page.evaluate(() => window.__apex.ceremony().phase)).toBe("idle");
     await expect(page.locator("#results")).not.toHaveAttribute("data-ceremony-phase", /.+/);
     await expect(page.locator("#ceremony-podium")).toBeHidden();
@@ -269,7 +269,9 @@ test.describe("results-flow — phone landscape acceptance", () => {
     await expect(page.locator(".res-settle")).toBeVisible();
     await page.locator("#res-next").tap();
     await expect(page.locator("#career")).toBeVisible();
-    expect(await page.evaluate(() => JSON.parse(JSON.stringify(window.__apex.career())))).toEqual(settled);
+    // Opening the hub only hands out the NEXT round's objective (`obj`); every settled field stays put.
+    expect(await page.evaluate(() => { const c = JSON.parse(JSON.stringify(window.__apex.career())); delete c.obj; return c; }))
+      .toEqual({ ...settled, obj: undefined });
   });
   test("natural lapped finish retains its lap deficit through actual ceremony controls", async ({ page }) => {
     await startLappedGp(page);
