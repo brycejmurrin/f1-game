@@ -6921,8 +6921,7 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
-        "tests/unit/vstd-invariant.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/vstd-invariant.test.mjs"
       ],
       "applyLightTune": [
         "tests/unit/flyby-intro.test.mjs"
@@ -7085,12 +7084,10 @@
       ],
       "isRaining": [
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/light-presets.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/light-presets.test.mjs"
       ],
       "isWetRoad": [
-        "tests/unit/photomode-hold.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/photomode-hold.test.mjs"
       ],
       "leaveGarage": [
         "tests/unit/garage-followups.test.mjs",
@@ -7396,7 +7393,6 @@
         "tests/unit/sporting-regs.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "tickBody": [
@@ -7446,8 +7442,7 @@
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/tyre-model.test.mjs",
-        "tests/unit/voice-pack.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/voice-pack.test.mjs"
       ],
       "updateCar": [
         "tests/specs/physics-characterization.spec.js",
@@ -13595,6 +13590,7 @@
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "weather": [
+        "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "wetAt": [
