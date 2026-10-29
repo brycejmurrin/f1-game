@@ -3,7 +3,7 @@
 The HUD on BLACK with every widget mocked (radio card, flag, limits chip, damage), a labelled box per
 element (readouts cyan, taps yellow, overlapping pairs RED), report.json + index.md + sheet.jpg. One race
 boot per pointer type, then DOM-only cells. Use it FIRST to see a layout or to before/after a CSS change;
-use [hud-survey.md](hud-survey.md) when the 3D frame behind matters (occlusion).
+use the hud-survey reference (SKILL.md §References) when the 3D frame behind matters (occlusion).
 
 ```sh
 node tools/shot/hud-mock.mjs                                              # phone 844x390: 5 cams x shipped/all-on

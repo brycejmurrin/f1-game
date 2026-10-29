@@ -1,6 +1,6 @@
 ---
 name: audio-debug
-description: "Use when the game is silent on iPhone or the first tap, the engine sounds flat at high speed, sfx isn't triggering, gear-shift audio is wrong, music cuts out, mute/volume is stuck, or WebAudio, engine pitch or music layers misbehave. Not audio polish that must not change physics (game-feel), offline precache of mp3s (pwa-cache-service-worker), or the music menu layout (ui-menu-a11y)."
+description: "Use when the game is silent (iPhone, before the first tap), engine pitch is wrong, sound effects or music break, or mute or volume is stuck. Not for: handling → tune-physics; offline mp3 caching → pwa-cache-service-worker; the music menu → ui-menu-a11y."
 ---
 
 # Debug and tune the audio engine

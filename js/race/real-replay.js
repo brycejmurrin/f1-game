@@ -753,6 +753,6 @@ const RealReplay = (function () {
     return api;
   }
 
-  return { create, fitFrame, mapPoint, trackTrace, fromTrack, buildTraces, sampleAt, highlightsFor, reelFor, fmtLap, SPEEDS, LEAD_S, HOLD_S, ENDED_S };
+  return { create, fitFrame, mapPoint, trackTrace, buildTraces, sampleAt, highlightsFor, reelFor, fmtLap, LEAD_S, HOLD_S, ENDED_S };
 })();
 Object.freeze(RealReplay);

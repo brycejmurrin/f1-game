@@ -348,6 +348,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
 | **perf/first-race-census.mjs** | First-race pipeline census: TLX WebGPU on Lavapipe, one driven first lap; every createRenderPipeline after | — |
 | **perf/garage-census.mjs** | Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style. | mcp-probe |
+| **perf/hot-bench.mjs** | VM microbench of step, physState and nodeAt: 6x hang ceiling vs a checked-in per-call baseline. | — |
 | **perf/idle-pipeline-census.mjs** | Idle pipeline-churn census: three createRenderPipeline per equal idle race window (GAS held, no BOOST). | — |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
 | **perf/lit-wgsl-census.mjs** | Hash the WGSL a TLX WebGPU race compiles (lavapipe) and diff two trees: does a change re-key Safari's pipeline cache? | — |
@@ -358,6 +359,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/query.mjs** | Summarise a saved profile (spans JSON or .cpuprofile: top-N self/total, fn/file filter) or compare two spans JSONs. | playwright-probe |
 | **perf/race-entry-timer.mjs** | Time one race entry: boot, race() → track flip, settle, stages, Log records; APEX_PIN / APEX_PROFILE knobs. | — |
 | **perf/runtime-memory.mjs** | Nonintrusive, feature-detected CDP heap/DOM/performance counters on a parent-owned browser session. | mcp-probe / js-debugger |
+| **perf/session-budgets.mjs** | Session perf budgets: hang ceilings vs recorded phone lines for garage, grid, frames and heap. | — |
 | **perf/vm-alloc-census.mjs** | VM allocation-per-frame census: JS bytes per race frame in the real game loop vs a checked-in baseline (--update). | — |
 | **perf/vm-leak-census.mjs** | VM leak census: live GPU handles, event listeners and timers across race → QUIT TO MENU cycles (count-based, exact). | — |
 
@@ -776,6 +778,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **lighting/look-survey-n10.json** | `lighting/look-survey-n10.mjs`, `tests/unit/cdmcp-measure.test.mjs` |
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-transport.test.mjs` |
+| **perf/baselines/hot-bench.json** | `perf/hot-bench.mjs`, `tests/unit/perf-hot-bench.test.mjs` |
 | **perf/baselines/vm-alloc.json** | `perf/vm-alloc-census.mjs`, `tests/unit/perf-vm-alloc-budget.test.mjs` |
 | **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/dijon-clips-coplanar.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |

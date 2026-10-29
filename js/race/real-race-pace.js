@@ -335,7 +335,7 @@ const RealRacePace = (function () {
     return clamp(open * corr, MUL_MIN, MUL_MAX);
   }
   return {
-    KP, MUL_MIN, MUL_MAX, REL_MIN, REL_MAX, COMPOUND, CLASSES,
+    KP, MUL_MIN, MUL_MAX,
     realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor,
     properName, situation, mapField, fieldAt, paceMul, classOf,
   };

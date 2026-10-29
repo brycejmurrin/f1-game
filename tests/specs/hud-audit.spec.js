@@ -79,7 +79,7 @@ test.describe("HUD landscape", () => {
       Object.defineProperty(window, "__minimapCueProbe", { value: probe });
       const fillText = CanvasRenderingContext2D.prototype.fillText;
       CanvasRenderingContext2D.prototype.fillText = function (text, ...args) {
-        if (text === "S1" || text === "S2" || text === "S3") {
+        if (text === "S1" || text === "S2" || text === "S3" || text === "AERO") {
           const seen = labels.get(this.canvas) || [];
           if (seen.length < 12) seen.push(text);
           labels.set(this.canvas, seen);
@@ -114,7 +114,7 @@ test.describe("HUD landscape", () => {
     await expect(page.locator("html")).toHaveAttribute("data-cb-cues", "on");
     await page.waitForFunction((previous) => {
       const p = Reflect.get(window, "__minimapCueProbe");
-      return p.background !== previous && p.labels.join(",") === "S1,S2,S3";
+      return p.background !== previous && p.labels.slice(0, 3).join(",") === "S1,S2,S3" && p.labels.includes("AERO");
     }, off.background, { polling: 100, timeout: BOOT_MS });
     const on = await page.evaluate(() => ({ ...Reflect.get(window, "__minimapCueProbe") }));
     expect(on.draws).toBeGreaterThan(off.draws);

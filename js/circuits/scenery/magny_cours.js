@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["magny_cours"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, ds, hw, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, ds, hw, pyMin, hash, every, along, anchor, vadd, onTrack,
         pine, tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup, seat, terrainYAt,
