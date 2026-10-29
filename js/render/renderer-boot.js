@@ -425,6 +425,9 @@ if (!gfx) {
 }
 // What this boot BOUND, for the next boot's early preload (guessBackend below).
 try { localStorage.setItem("apex26.gfxBootBound", _backendBound ? pref : "webgl2"); } catch (_) { /* blocked storage: the next guess reads the pick alone */ }
+// Before the game loop's first resize: one software-GL race scale, so race
+// entry does not setSize the canvas down and back.
+try { if (gfx && typeof PerfGov !== "undefined" && PerfGov.chooseSoftwareRaceScale) PerfGov.chooseSoftwareRaceScale(gfx); } catch (_) { /* harness */ }
 return { gfx, bound: _backendBound };
 }
 
