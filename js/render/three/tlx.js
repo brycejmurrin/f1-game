@@ -4056,8 +4056,8 @@ const TLX = (function () {
         m.geometry = null; m.material = null;
         if (ownedGeometry) try { ownedGeometry.dispose(); } catch (_) { /* already lost */ }
       }
-      function flushDropped() {
-        if (_warmPending || !_dropQueue.length) return;
+      function flushDropped(force) {
+        if ((!force && _warmPending) || !_dropQueue.length) return;
         for (const entry of _dropQueue) dropWrapper(entry.mesh, entry.ownedGeometry);
         _dropQueue.length = 0;
       }
@@ -4090,20 +4090,25 @@ const TLX = (function () {
           if (!g || !freedGeos.has(g)) continue;
           const o = ro.object;
           if (o && typeof o.dispatchEvent === "function") {
+            try { if (o.parent) o.parent.remove(o); } catch (_) { /* already detached */ }
+            o.visible = false;
             if (!o.__tlxDropped) ownershipDropQueued(o, o._ownGeo ? o.geometry : null, g);
-            else {
-              try { if (o.parent) o.parent.remove(o); } catch (_) { /* already detached */ }
-              o.visible = false;
-              try { o.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object */ }
-            }
+            else try { o.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object */ }
           }
           if (typeof g.dispatchEvent === "function") {
             try { g.dispatchEvent({ type: "dispose" }); } catch (_) { /* already torn down */ }
           }
+          if (typeof ros.delete === "function") ros.delete(ro);
         }
       }
       function flushOwnershipRelease(freedGeos) {
         if (!freedGeos || !freedGeos.size) return;
+        for (let i = 0; i < meshPool.length; i++) {
+          const m = meshPool[i];
+          const g = m.geometry;
+          if (g && freedGeos.has(g)) ownershipDropQueued(m, m._ownGeo ? m.geometry : null, g);
+        }
+        flushDropped(true);
         for (let i = _dropQueue.length - 1; i >= 0; i--) {
           const e = _dropQueue[i];
           const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
@@ -4120,6 +4125,7 @@ const TLX = (function () {
         }
         _dropLater.length = w;
         if (shadowSys && shadowSys.flushOwnershipDropped) shadowSys.flushOwnershipDropped(freedGeos);
+        if (shadowSys && shadowSys.purgeCastersForGeos) shadowSys.purgeCastersForGeos(freedGeos);
         purgeOwnershipRenderObjects(freedGeos);
       }
 
@@ -5198,7 +5204,14 @@ const TLX = (function () {
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
         },
         flushChunkedOwnership() {
-          if (_ownershipFreeBatch && _ownershipFreeBatch.size) flushOwnershipRelease(_ownershipFreeBatch);
+          if (_ownershipFreeBatch && _ownershipFreeBatch.size) {
+            flushOwnershipRelease(_ownershipFreeBatch);
+            for (const g of _ownershipFreeBatch) {
+              const names = Object.keys(g.attributes);
+              for (let k = 0; k < names.length; k++) delete g.attributes[names[k]];
+              try { g.dispose(); } catch (_) { /* already gone */ }
+            }
+          }
           _ownershipFreeBatch = null;
           _ownershipFreeDepth = 0;
         },

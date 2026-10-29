@@ -550,6 +550,49 @@
         releaseGeometry(e.geo);
       }
     }
+    function parkCasterForGeo(m, geo) {
+      if (!m || !geo) return;
+      const live = m.geometry !== geo && m.geometry !== parkedGeo && m.__lastGeo !== geo;
+      if (live) {
+        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object only */ }
+        return;
+      }
+      m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
+      try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+    }
+    function purgeCastersForGeos(freedGeos) {
+      if (!freedGeos || !freedGeos.size) return;
+      for (const pl of pools.values()) {
+        for (let j = 0; j < pl.pool.length; j++) {
+          const m = pl.pool[j];
+          if (!m) continue;
+          const g = m.geometry, lg = m.__lastGeo;
+          if (freedGeos.has(g)) parkCasterForGeo(m, g);
+          else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+        }
+      }
+      for (let i = 0; i < iCast.length; i++) {
+        const m = iCast[i];
+        if (!m) continue;
+        const g = m.geometry, lg = m.__lastGeo;
+        if (freedGeos.has(g)) parkCasterForGeo(m, g);
+        else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+      }
+      for (let i = 0; i < castScene.children.length; i++) {
+        const m = castScene.children[i];
+        if (!m || !m.isMesh) continue;
+        const g = m.geometry, lg = m.__lastGeo;
+        if (g && freedGeos.has(g)) parkCasterForGeo(m, g);
+        else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+      }
+      if (_probePrev) {
+        for (const m of _probePrev.meshes) {
+          if (!m || !m.isMesh) continue;
+          const g = m.geometry;
+          if (g && freedGeos.has(g)) disposeCaster(m);
+        }
+      }
+    }
     function flushOwnershipDropped(freedGeos) {
       if (!dropQ.length || !freedGeos || !freedGeos.size) return;
       for (let qi = dropQ.length - 1; qi >= 0; qi--) {
@@ -1017,6 +1060,7 @@
       releaseGeometry,
       flushDropped,
       flushOwnershipDropped,
+      purgeCastersForGeos,
       castShadowChunked: cast,
       shadowEnd: () => endPass(sunRT),
       carShadowEnd,
