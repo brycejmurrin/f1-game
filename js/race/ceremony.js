@@ -4,7 +4,7 @@
  * docs/plans/2026-10-27-cooldown-podium.md (#4067 / #1584). Esc = SKIP once
  * a host UI wires it; __apex.ceremony("…") / .skip() are the harness path. */
 "use strict";
-const RaceCeremony = (function () {
+var RaceCeremony = (function () {
   const PHASES = Object.freeze(["classified", "cooldown", "parcFerme", "podium", "results"]);
   const SEEKABLE = Object.freeze(["cooldown", "parcFerme", "podium", "results"]);
   // Wall-clock auto-advance (seconds). Cooldown length is a feel default from

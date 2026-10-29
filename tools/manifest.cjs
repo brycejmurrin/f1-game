@@ -382,7 +382,6 @@ const FULL = [
   "js/camera/photo-cam.js",
   "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
   "js/camera/results-cam.js",   // ResultsCam.create(G): chequered cut, results orbit, highlights reel
-  "js/race/ceremony.js",        // RaceCeremony.create(G): post-flag cooldown → parc fermé → podium → results (#4067)
   "js/lighting/tuner-panel.js",
   "js/camera/cam-tuner-boot.js", // CamTunerPanel stub; panel body is LAZY_CAM_EDITOR
   "js/physics/brake-cue.js",
@@ -833,7 +832,6 @@ const HARD_EDGES = [
   ["js/camera/director.js", "js/game.js"],          // game.js calls Director.create(G) at eval time
   ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
   ["js/camera/results-cam.js", "js/game.js"],        // game.js calls ResultsCam.create(G) at eval time
-  ["js/race/ceremony.js", "js/game.js"],             // game.js calls RaceCeremony.create(G) at eval time
   ["js/garage/prebuild.js", "js/game.js"],           // game.js calls GaragePrebuild.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
@@ -1098,6 +1096,7 @@ const LAZY_RACE_SESSION = [
   "js/race/jump-start-penalty.js",
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
   "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
+  "js/race/ceremony.js", // RaceCeremony: post-flag cooldown → parc fermé → podium → results (#4067); session-stub.js holds the title-time stub
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/pit-geom.js", "js/race/pit-lane.js"],

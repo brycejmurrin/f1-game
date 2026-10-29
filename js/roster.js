@@ -223,7 +223,8 @@
     "js/race/flying-start.js",
     "js/race/jump-start-penalty.js",
     "js/race/parc-ferme.js",
-    "js/race/cooldown-lap.js"
+    "js/race/cooldown-lap.js",
+    "js/race/ceremony.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [

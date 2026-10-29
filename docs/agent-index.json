@@ -362,7 +362,7 @@
       "name": "ceremony",
       "group": "control",
       "signature": "ceremony(phase|skip)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "clearInput",
@@ -371,16 +371,10 @@
       "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
-      "name": "finishRace",
-      "group": "control",
-      "signature": "finishRace({ceremony?})",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase|skip)"
-    },
-    {
       "name": "go",
       "group": "control",
       "signature": "go()",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "headless",
@@ -392,25 +386,25 @@
       "name": "jump",
       "group": "control",
       "signature": "jump(frac,speed,x)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "park",
       "group": "control",
       "signature": "park(f)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "race",
       "group": "control",
       "signature": "race(id)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "reset",
       "group": "control",
       "signature": "reset(f,v,x,seed)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace({ceremony?}) ceremony(phase|skip)"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "seed",
@@ -3926,7 +3920,7 @@
     {
       "path": "js/race/ceremony.js",
       "global": "RaceCeremony",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/cooldown-lap.js",

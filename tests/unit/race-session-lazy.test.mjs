@@ -168,7 +168,7 @@ function runStartRaceBody({ sessionOk = true, conflict = false, ctxLost = false 
     ensureRaceSession: async () => sessionOk, ensureAudio: async () => true, ensureLightPresets: async () => true,
     quitToMenu: () => log.push("quitToMenu"), quitToMenuAfterCtxLost: () => log.push("ctxLost"), announce: fn,
     radioVoice: obj, flow: "race", season, SeasonCal: { conflicted: () => false, canRace: () => true },
-    resultsCam: obj, _roadReflectionTransition: {}, IncidentSim: obj, raceCtl: obj, wxArc: obj, DebrisWorld: obj,
+    resultsCam: obj, RaceCeremony: { resetLive: fn }, _roadReflectionTransition: {}, IncidentSim: obj, raceCtl: obj, wxArc: obj, DebrisWorld: obj,
     banner: obj, raceMessageHistory: null, announcer: {}, hud: {}, _menuGate: {},
     loadTrack: fn, trackIdx: 0, gfxContextLost: () => ctxLost, releaseFieldScratch: () => { throw STOP; },
   });
