@@ -475,6 +475,7 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/pu-harvest-audio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
@@ -525,6 +526,7 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
@@ -574,6 +576,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
@@ -638,6 +641,7 @@
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/pu-harvest-audio.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -662,6 +666,7 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs",
@@ -689,7 +694,6 @@
         "tests/unit/wind-speed.test.mjs"
       ],
       "*": [
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
