@@ -83,44 +83,77 @@ const Frustum = (function () {
     return p;
   }
 
-  // Bucket instanced-batch instances into cellSize XZ cells with a conservative
-  // AABB per cell (instance reach = model extent x largest per-instance scale).
-  // Same grid the chunked meshes use, so "nearby" means the same thing to both.
-  // Byte-identical to the three builders it replaced (GLX createInstancedBatch,
-  // WGX, TLX): same key, same insertion order, same bounds.
+  // Shader motion the rest-pose box does not contain, in world metres.
+  // FLAG cloth (glsl-lit.js) is at most 0.13 m along the normal. FOLIAGE sway
+  // at the WIND knob's max of 3 is bend 1.25 * amp 0.96 = 1.2 m downwind, plus
+  // 0.15 m of flutter per unit of instance scale (js/lighting/knobs.js). 2 m
+  // covers that through scale ~5. The box is then clamped to the origin sphere,
+  // so a cell never grows past the sphere the three backends used to share.
+  const MOTION_PAD = 2;
+
+  // Bucket instanced-batch instances into cellSize XZ cells. The cell KEY and
+  // the instance order match the GLX / WGX / TLX builders this replaced. The
+  // box is the origin sphere (mesh radius × the largest column scale — a
+  // rotated corner reaches sqrt(3)× the axis half-width, which is how a 2.55 m
+  // Singapore prop used to pop) INTERSECTED with the transformed mesh AABB
+  // expanded by MOTION_PAD. An explicit radius keeps the sphere alone.
   function bucketInstances(matrices, n, pos, cell, radius) {
     let reach = radius || 0;
-    // The reach is the mesh's bounding RADIUS: the farthest vertex's distance
-    // from the local origin, not the largest single |coordinate| — that is
-    // only the half-width of the axis box, and a rotated instance's corner
-    // reaches up to sqrt(3)x it, so props (2.55 m at Singapore) poke out of
-    // their cell box and pop at the screen and shadow edges.
+    let cx = 0, cy = 0, cz = 0, hx = 0, hy = 0, hz = 0, tight = false;
     if (!reach) {
+      let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
       for (let i = 0; i + 2 < pos.length; i += 3) {
-        const d = Math.hypot(pos[i], pos[i + 1], pos[i + 2]);
+        const x = pos[i], y = pos[i + 1], z = pos[i + 2];
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (z < z0) z0 = z; if (z > z1) z1 = z;
+        const d = Math.hypot(x, y, z);
         if (d > reach) reach = d;
+      }
+      if (x1 >= x0) {
+        tight = true;
+        cx = (x0 + x1) * 0.5; cy = (y0 + y1) * 0.5; cz = (z0 + z1) * 0.5;
+        hx = (x1 - x0) * 0.5; hy = (y1 - y0) * 0.5; hz = (z1 - z0) * 0.5;
       }
     }
     const buckets = new Map();
     for (let i = 0; i < n; i++) {
       const b = i * 16, x = matrices[b + 12], y = matrices[b + 13], z = matrices[b + 14];
+      const m0 = matrices[b], m1 = matrices[b + 1], m2 = matrices[b + 2];
+      const m4 = matrices[b + 4], m5 = matrices[b + 5], m6 = matrices[b + 6];
+      const m8 = matrices[b + 8], m9 = matrices[b + 9], m10 = matrices[b + 10];
       // Column lengths ARE the per-instance scale (orthonormal basis * scale).
-      const sx = Math.hypot(matrices[b], matrices[b + 1], matrices[b + 2]);
-      const sy = Math.hypot(matrices[b + 4], matrices[b + 5], matrices[b + 6]);
-      const sz = Math.hypot(matrices[b + 8], matrices[b + 9], matrices[b + 10]);
+      const axis = m1 === 0 && m2 === 0 && m4 === 0 && m6 === 0 && m8 === 0 && m9 === 0;
+      const sx = axis ? Math.abs(m0) : Math.hypot(m0, m1, m2);
+      const sy = axis ? Math.abs(m5) : Math.hypot(m4, m5, m6);
+      const sz = axis ? Math.abs(m10) : Math.hypot(m8, m9, m10);
       const r = reach * Math.max(sx, sy, sz);
+      let x0 = x - r, x1 = x + r, y0 = y - r, y1 = y + r, z0 = z - r, z1 = z + r;
+      if (tight) {
+        const wx = m0 * cx + m4 * cy + m8 * cz + x;
+        const wy = m1 * cx + m5 * cy + m9 * cz + y;
+        const wz = m2 * cx + m6 * cy + m10 * cz + z;
+        const ex = Math.abs(m0) * hx + Math.abs(m4) * hy + Math.abs(m8) * hz + MOTION_PAD;
+        const ey = Math.abs(m1) * hx + Math.abs(m5) * hy + Math.abs(m9) * hz + MOTION_PAD;
+        const ez = Math.abs(m2) * hx + Math.abs(m6) * hy + Math.abs(m10) * hz + MOTION_PAD;
+        if (wx - ex > x0) x0 = wx - ex; if (wx + ex < x1) x1 = wx + ex;
+        if (wy - ey > y0) y0 = wy - ey; if (wy + ey < y1) y1 = wy + ey;
+        if (wz - ez > z0) z0 = wz - ez; if (wz + ez < z1) z1 = wz + ez;
+      }
       const key = (Math.floor(x / cell) + 1024) * 4096 + (Math.floor(z / cell) + 1024);
       let bk = buckets.get(key);
       if (!bk) buckets.set(key, (bk = { idx: [], mn: [Infinity, Infinity, Infinity], mx: [-Infinity, -Infinity, -Infinity] }));
       bk.idx.push(i);
       const mn = bk.mn, mx = bk.mx;
-      if (x - r < mn[0]) mn[0] = x - r; if (x + r > mx[0]) mx[0] = x + r;
-      if (y - r < mn[1]) mn[1] = y - r; if (y + r > mx[1]) mx[1] = y + r;
-      if (z - r < mn[2]) mn[2] = z - r; if (z + r > mx[2]) mx[2] = z + r;
+      if (x0 < mn[0]) mn[0] = x0; if (x1 > mx[0]) mx[0] = x1;
+      if (y0 < mn[1]) mn[1] = y0; if (y1 > mx[1]) mx[1] = y1;
+      if (z0 < mn[2]) mn[2] = z0; if (z1 > mx[2]) mx[2] = z1;
     }
     return [...buckets.values()];
   }
 
-  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, FOG_CULL_FD, bucketInstances };
+  // FOG_CULL_FD stays local — radialCulled is the shared API; the constant is
+  // an implementation detail of the fog-wall radius (dens > 0 → r = 3 / dens).
+  return { extractPlanes, makeFrustumPlanes, aabbInFrustum, aabbDist2, radialCulled, bucketInstances };
 })();
 Object.freeze(Frustum);

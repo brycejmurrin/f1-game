@@ -51,7 +51,7 @@ function bootInput({ coarse = false, orientation, pads = null, listeners = null 
   sb.window = sb;
   const ctx = vm.createContext(sb);
   vm.runInContext(read("js/core/mat4.js"), ctx, { filename: absSrc("js/core/mat4.js") });
-  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"])
+  for (const f of ["js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   return vm.runInContext("Input", ctx);
 }
@@ -330,6 +330,7 @@ test("the CAM button's accessible name starts with the word it shows", () => {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
+  vm.runInContext(read("js/camera/cam-picker.js"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
   vm.runInContext(read("js/camera/mode-switch.js"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const G = { $: (id) => (id === "btn-cam" ? btn : null), camMode: 0, store: { set() {} } };
   const cams = vm.runInContext("CamModes", ctx).create(G);

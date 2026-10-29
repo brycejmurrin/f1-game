@@ -34,7 +34,7 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     let livery = { c1: team.color, c2: team.color2 };
     const player = { team, num: team.drivers[0].num };
     const G = { player, teamIdx: Teams.LIST.indexOf(team), driverIdx: 0, seed: 37, ttDistance: 3,
-      store: { rev: 1, get: (k, d) => d }, getTeamParts: () => saved,
+      store: { rev: 1, get: (k, d) => d }, getTeamParts: () => saved, getLiveryId: () => "default",
       gfx: { createMesh: data => ({ serial: ++builds, ...data }), freeMesh() {} } };
     const ctx = vm.createContext({ G, Parts, Teams, Float32Array, CarMesh: {}, FieldLod: { init() {} },
       Log: { info() {}, warn() {} },
@@ -45,7 +45,7 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
       getTeamParts: () => saved, getLiveryId: () => "default",
       SetupTune: { mods() {}, BB_REF: 0.5, brakeBias() {}, balance() {}, aero() {} },
       modsFor: () => ({}), tyreBaseModsFor: () => ({}), tyres: { applyCompound() {}, optionRecord: () => ({}) } });
-    for (const file of ["js/core/hash32.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
+    for (const file of ["js/core/hash32.js", "js/race/session-phys.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
       vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
     G.records = vm.runInContext("SessionRecords.create(G)", ctx);
     const daily = ctx.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
@@ -65,9 +65,21 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     saved = custom;
     assert.equal(daily.select("2026-10-24", "standard").class, "standard");
     assert.equal(G.driverIdx, 0);
+    // makeCars stamps visualSetup once from the garage save (carVisual own:true).
+    // STANDARD Daily must restamp to the factory key before teamMesh (TT ghost) /
+    // player flaps read it — residual M27 after playerPartsFor covered body/cockpit.
+    const customStamp = Parts.CATALOG.map((c) => custom[c.id] || "").join(",");
+    player.visualSetup = custom;
+    player.visStamp = customStamp;
+    player.visPaint = customStamp + ":" + player.num;
+    player.visSh = customStamp + ":sh";
     refresh();
     const key = draw.playerVisualKey, standard = meshes();
     assert.ok(standard.every(m => m.ids.aero === factory.aero), history + ": STANDARD uses factory exterior, cockpit and shadow");
+    assert.equal(player.visualSetup, null, history + ": setPlayerParts restamps STANDARD off the SAVED visualSetup");
+    assert.equal(player.visStamp, "", history + ": factory stamp is empty");
+    assert.equal(draw.teamMesh(team, player).ids.aero, factory.aero, history + ": TT ghost teamMesh follows factory");
+    assert.equal(draw.teamDecalState(team, true).parts._ids.aero, factory.aero, history + ": player flaps use setPlayerParts, not getTeamParts");
     if (history === "factory-warm") assert.ok(standard.every((m, i) => m === warmed[i]), "factory entries remain reusable");
     if (history === "custom-warm") assert.ok(standard.every((m, i) => m !== warmed[i]), "custom meshes keep a distinct key");
     daily.stop(); saved = factory; G.store.rev++; refresh();
@@ -79,6 +91,9 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     assert.ok(meshes(customKey).every(m => m.ids.aero === custom.aero), "explicit menu key uses its saved custom recipe");
     refresh();
     assert.ok(meshes().every(m => m.ids.aero === custom.aero), "ordinary custom parts remain custom after Daily");
+    assert.ok(player.visualSetup && player.visStamp, "ordinary custom restamps the live player for teamMesh");
+    assert.equal(draw.teamMesh(team, player).ids.aero, custom.aero, "TT ghost follows the restamped custom recipe");
+    assert.equal(draw.teamDecalState(team, true).parts._ids.aero, custom.aero, "player flaps follow the restamped custom recipe");
     livery = { ...livery, aeroShape: "style_aero_rift" }; refresh(); draw.invalidateCustomMeshCaches(team.id);
     assert.ok(meshes().every(m => m.ids.aero === livery.aeroShape), "livery appearance is applied over fitted parts");
     livery = { c1: team.color, c2: team.color2 }; draw.invalidateCustomMeshCaches(team.id);

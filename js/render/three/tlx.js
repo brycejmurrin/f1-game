@@ -1922,7 +1922,7 @@ const TLX = (function () {
       // miss RATE is the number that predicts churn. Counting it costs two
       // increments.
       let _matHit = 0, _matMiss = 0, _matEvict = 0;
-      const _matMissLog = [];   // the first 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them
+      const _matMissLog = [];   // the LAST 64 miss keys, for memState().matMissKeys — census 212 counted 20 misses in a 20 s drive and could not name them; a first-64 log filled at boot hid every race miss (#3673)
       function fallbackMat(instanced) {
         // An attribute-instanced mesh (R1 run, A2 batch) needs a NODE material to carry its instance step:
         // the raw classic rung has none, so it draws nothing there (drawInstanced skips a null).
@@ -2000,7 +2000,7 @@ const TLX = (function () {
         let m = matCache.get(key);
         if (m) _matHit++; else {
           _matMiss++;
-          if (_matMissLog.length < 64) _matMissLog.push(key);
+          if (_matMissLog.push(key) > 64) _matMissLog.shift();
           if (matCache.size >= MAT_CACHE_CAP) {
             // Evict the oldest entry NOT used this frame. If every entry is in
             // use the cache simply runs over cap for the rest of the frame:
@@ -2063,6 +2063,27 @@ const TLX = (function () {
       const SPLIT_TRIS = 1024, SPLIT_MIN_IDX = 18000, SPLIT_SLOTS = 4;
       // apex26.tlxRoadSplit=0 pins the whole-lap draw; __tlx.roadSplit(on) flips it live and writes the pin.
       let _roadSplitOn = (function () { try { return localStorage.getItem("apex26.tlxRoadSplit") !== "0"; } catch (_) { return true; } })();
+      // Visible chunks of one record share attributes and one material. One
+      // concatenated index draws the same triangles (opaque depth test). The
+      // mirror keeps its own slot so the two passes do not rebuild each other.
+      // apex26.tlxChunkMerge=0 restores a draw per chunk. Values 1–4 stay the
+      // build-time merge in tlx-chunked.js and leave this draw path on.
+      let _chunkMerge = true;
+      try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
+      function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
+        if (!chunkedSys) return 0;
+        const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
+        const mat = rec.mat;
+        if (_chunkMerge && n > 1 && chunkedSys.mergeVisible
+            && !(mat && (mat.transparent || mat.depthWrite === false))
+            && !(rec.al < 1)) {
+          const g = chunkedSys.mergeVisible(rec.chunked, n, slot);
+          if (g) { acquireMesh(g, rec.m, rec.mat, rec).renderOrder = order; return n; }
+        }
+        const vis = chunkedSys.visList;
+        for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = order;
+        return n;
+      }
       function _drawSplit(rec, i, vp, eye, cd, fog) {
         const sp = rec.split;
         if (!chunkedSys || !TLXShaders.mergeRuns || sp.batch === _poolBatch) return false;
@@ -5522,13 +5543,7 @@ const TLX = (function () {
             for (let i = 0; i < drawList.n; i++) {
               const rec = drawList[i];
               if (rec.instanced) { _showInstanced(rec, i); continue; }
-              if (rec.chunked) {
-                if (!chunkedSys) continue;
-                const n = chunkedSys.cull(rec.chunked, _mirVP, _mirEye, _mirCull, _mirFog);
-                const vis = chunkedSys.visList;
-                for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
-                continue;
-              }
+              if (rec.chunked) { _drawChunked(rec, i, _mirVP, _mirEye, _mirCull, _mirFog, 1); continue; }
               if (rec.split && _drawSplit(rec, i, _mirVP, _mirEye, _mirCull, _mirFog)) continue;
               acquireMesh(rec.geo, rec.m, rec.mat, rec).renderOrder = i;
             }
@@ -6195,9 +6210,7 @@ const TLX = (function () {
               // what made the feature inert: the grid is a SINGLE shared
               // uniform set, so each chunked record overwrote the previous
               // one's grid and only the last survived.
-              const n = chunkedSys.cull(rec.chunked, _frameVP, frameEye, frameCullDist, frameCullFog);
-              const vis = chunkedSys.visList;
-              for (let j = 0; j < n; j++) acquireMesh(vis[j].geo, rec.m, rec.mat, rec).renderOrder = i;
+              const n = _drawChunked(rec, i, _frameVP, frameEye, frameCullDist, frameCullFog, 0);
               _chunkFrame.total += rec.chunked.chunks.length;
               _chunkFrame.visible += n;
               // Hold the release until the env probe has LATCHED.
@@ -6678,6 +6691,8 @@ const TLX = (function () {
             };
           },
           materialCacheSize() { return matCache.size; },
+          // #3673 first-race census: the matCache key a built pipeline's material was minted under (null: not a cached lit variant).
+          matKeyOf(m) { for (const [k, v] of matCache) if (v === m) return k; return null; },
           // What is growing when the GEOMETRY is not? A 4-minute race soak
           // measured the heap climbing 88-138 MB while geoCensus's registry
           // and attribute bytes both stayed flat (docs/PERF-FINDINGS.md 2o),

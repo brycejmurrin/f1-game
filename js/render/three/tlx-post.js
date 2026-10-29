@@ -39,8 +39,12 @@
  *   resolve doesn't expose the resolved DEPTH") described r184. Phones and
  *   the native-WebGPU path keep the single-sample recipe (FXAA carries the
  *   AA): core WebGPU cannot resolve a depth attachment. The ssrTag attachment
- *   is resolved too, so a tag averages across an edge (accepted). No
- *   invalidateFramebuffer either (three owns attachment lifecycle).
+ *   is resolved too, so a tag averages across an edge (accepted). Scene
+ *   depth/tag: depthEnd() invalidates (WebGL2) or discardHint (WebGPU patch 17)
+ *   when no post reader needs them; three's MSAA resolve path also invalidates.
+ *   Post ping-pong colour targets clear on every overwrite (runPass autoClear),
+ *   so a tile GPU never reloads their prior contents — see
+ *   docs/notes/TLX-FB-INVALIDATE-AUDIT-2026-10-28.md (#2649).
  *
  * SHAPE CONTRACT (see tlx.js header): publishes a FACTORY,
  *     TLXShaders.postChain = (THREE, TSL, ctx) => ({ enabled, hdrOk,
@@ -118,7 +122,9 @@
     let hdr = !!(renderer.backend && renderer.backend.isWebGPUBackend);
     // BLOOM FORMAT (hunt D6): R11F_G11F_B10F as GLX when it is RENDERABLE (and
     // blendable — the UP passes add): WebGL2 needs EXT_color_buffer_float (not
-    // the half-float one: iOS Safari stays RGBA16F); WebGPU the
+    // the half-float one; the probe below decides per device, and iOS is
+    // reported to expose it, web3dsurvey ~100 %, so do not assume RGBA16F
+    // there); WebGPU the
     // "rg11b10ufloat-renderable" feature three requests whenever the adapter
     // has it. Every bloom reader takes .rgb only. apex26.tlxBloom11=0 reverts.
     let bloom11 = false;
@@ -1304,6 +1310,11 @@
           godray: !godrayRT ? null : _gr11 ? "rg11b10" : hdr ? "rgba16f" : "rgba8",
           ssao: "r8", ldr: "rgba8",
         },
+        // Counted oracle (#2649): godray pair colour bytes (2 targets × bpp).
+        // RGBA16F = 8 B/px, rg11b10 = 4 B/px (GLX hdr3 parity). Half of post size.
+        // apex26.tlxGodray11 only takes effect on unfolded frames (no AO-in-alpha).
+        godrayPairBytes: !godrayRT ? 0 : grW * grH * (_gr11 ? 4 : hdr ? 8 : 4) * 2,
+        godray11: _gr11,
         ssrQuality: P.composite.U.ssrQuality.value,
         depth: { discard: _depthDiscard, kept: _depthKeep, discards: _depthDiscards },   // A-P1: the last frame's call
         tag: { discard: _tagDiscard, kept: _tagKeep, discards: _tagDiscards },   // A-P2

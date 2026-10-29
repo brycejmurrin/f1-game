@@ -186,7 +186,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
 | `results.js` | `DataResults` | LAZY_DATA | the data hub's RESULTS tab: classification for ANY session of any 2023+ weekend (practice, qualifying, sprint, race), not just the latest Grand Prix. |
 | `live.js` | `DataLive` | LAZY_DATA | the data hub's LIVE tab: polls OpenF1 for the running session's positions/gaps/weather. mergePositionBatch/mergeIntervalBatch fold a delta batch onto… |
-| `real-race-tab.js` | `DataRealRace` | LAZY_DATA | DATA HUB RACE IT tab (DataRealRace.create(deps)) Turns one real Grand Prix's OpenF1 timing (drivers, laps, stints, pits, overtakes, race control, weather,… |
+| `real-race-script.js` | `DataRealRaceScript` | LAZY_DATA | pure OpenF1 race-script builder. |
+| `real-race-fetch.js` | `DataRealRaceFetch` | LAZY_DATA | real-race session cache and position traces. |
+| `real-race-tab.js` | `DataRealRace` | LAZY_DATA | DATA HUB RACE IT tab. |
 | `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
 
 **`js/career/`**
@@ -220,6 +222,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `flags.js` | `Flags` | tag | national flags as inline SVG, for the circuit picker's flag strip and the hero caption beside a circuit's name. |
 | `save-health.js` | `SaveHealth` | tag | SaveHealth — on-demand measurements and cache-only cleanup. |
 | `select-screen.js` | `Menus` | tag | the select-screen UI for js/game.js: the circuit picker as a flag strip over a hero (the in-game still of the chosen circuit with its lap outline drawn on top… |
+| `loading-card.js` | `LoadingCard` | tag | LOADING CARD MODEL. |
 | `loading-screen.js` | `LoadingScreen` | tag | PRE-RACE LOADING SCREEN. |
 | `survey-hud.js` | `SurveyHud` | tag | APEX_SURVEY_HUD survey fixture. |
 | `scroll-fade.js` | `ScrollFade` | tag | ScrollFade — the "there is more below" affordance for every menu scroll region. |
@@ -306,13 +309,17 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `themes.js` | `SceneryThemes` | LAZY_TRACK_BUILD | deterministic scenery theme registry. |
 | `landmark-kit.js` | `LandmarkKit` | LAZY_TRACK_BUILD | bounded architectural forms for staged scenery geometry. |
 | `circuit-kit.js` | `CircuitKit` | LAZY_TRACK_BUILD | reusable, atomically staged circuit infrastructure. |
+| `landforms.js` | `SceneryLandforms` | LAZY_TRACK_BUILD | SceneryLandforms: distant peak, mountain and ridge backdrops for the nature band. |
 | `nature.js` | `SceneryNature` | LAZY_TRACK_BUILD | SceneryNature: the nature/landscape band of the buildProps composite-model toolkit — the shared trackside anchor() plus vegetation (pine/tree/palm/con… |
+| `stands.js` | `SceneryStands` | LAZY_TRACK_BUILD | SceneryStands: bleacher, scaffold, terrace and tiered-bowl spans plus their shared crowd band. |
 | `structures.js` | `SceneryStructures` | LAZY_TRACK_BUILD | SceneryStructures: the linear track furniture + race-infrastructure band of the buildProps composite-model toolkit — the along() node walker, the barr… |
+| `facade.js` | `SceneryFacade` | LAZY_TRACK_BUILD | SceneryFacade: the neon curtain-wall used by city building() and neonTower(). detail() stays in SceneryCity (it also dresses the day grid) and is passed in. |
 | `city.js` | `SceneryCity` | LAZY_TRACK_BUILD | SceneryCity: the city/building band of the buildProps composite-model toolkit — the shared neonFacade curtain wall, the building()/neonTower() massing… |
 | `identity.js` | `SceneryIdentity` | LAZY_TRACK_BUILD | SceneryIdentity: the shared circuit-identity toolkit of the buildProps composite models — underpass portals, flood masts (+ ring), LED facade bands, c… |
 | `pits.js` | `SceneryPits` | LAZY_TRACK_BUILD | SceneryPits: the pit complex's 3D furniture, built FROM TrackPit. |
 | `venue.js` | `SceneryVenue` | LAZY_TRACK_BUILD | SceneryVenue: grounded, bounded race-day facilities shared by every circuit. |
 | `guards.js` | `SceneryGuards` | LAZY_TRACK_BUILD | SceneryGuards: the road / pit-complex guards of TrackBuildProps (onRoadHit, rejBox, rejRad, onTrack). |
+| `api-wrap.js` | `SceneryApiWrap` | LAZY_TRACK_BUILD | SceneryApiWrap: the scenery(api) coordinate wrap (origin shift, reverse side, authored-frame along/every). |
 | `build-props.js` | `TrackBuildProps` | LAZY_TRACK_BUILD | TrackBuildProps: buildProps orchestration (guards + theme dress + scenery API + lamps + pits). |
 
 **`js/track/`**
@@ -330,9 +337,11 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `session-stub.js` | `—` | tag | race-session stub for the title script wall. |
 | `session-entry.js` | `SessionEntry` | tag | One owner for the asynchronous gap before a race or qualifying sheet commits. |
+| `session-phys.js` | `SessionPhys` | tag | SESSION PHYS (SessionPhys): the physics keys a comparable session records, shared by SessionRecords and setup trials. |
 | `race-insights.js` | `RaceInsights` | tag | Measured stint/energy advice, unscored drills and ordered race explanations. |
 | `driving-coach.js` | `DrivingCoach` | tag | Read-only driving feedback and explicitly unscored solo practice. |
 | `setup-trial-session.js` | `SetupTrialSession` | tag | Fresh solo setup trials use normal race construction; never restore a world checkpoint. |
+| `wx-hash.js` | `WxHash` | tag | WX HASH (WxHash): the FNV-1a unit draw shared by Forecast and RainCells. |
 | `storm.js` | `Storm` | tag | STORM (⛈): the weather above RAIN. |
 | `wind.js` | `Wind` | tag | WIND: a per-race wind (direction, mean speed, gusts) and what it does to a car. |
 | `race-control.js` | `RaceControl` | tag | RACE CONTROL (RaceControl.create(G)) The flag state: green / local yellow / VSC / safety car, and the one rule that reads off it (whether OVERTAKE is … |
@@ -346,6 +355,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `tv-graphics.js` | `TvGraphics` | tag | broadcast-profile lower thirds, battle bar and fastest-lap banner. |
 | `broadcast.js` | `Broadcast` | tag | BROADCAST (Broadcast.create(G, replay)) The TV view of a REAL RACE WATCH / HIGHLIGHTS run: a timing tower down the left (position, team colour, the real… |
 | `real-replay.js` | `RealReplay` | tag | REAL REPLAY (RealReplay.create(G)) Recreates a real Grand Prix from OpenF1's car positions: every car posed each frame where it really was (x/y traces fitted… |
+| `real-race-pace.js` | `RealRacePace` | tag | REAL RACE PACE (RealRacePace): pure timing-script helpers for lap maps, pace tables, the scripted pit plan and the closed-loop multiplier. |
 | `real-race.js` | `RealRace` | tag | REAL RACE (RealRace.create(G)) Replays a real Grand Prix from a timing script (js/data/real-race-tab.js builds one from OpenF1): the real grid, every AI car… |
 | `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
@@ -359,6 +369,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `damage.js` | `Damage` | LAZY_RACE_SESSION | DAMAGE: a per-car damage READOUT derived from the impacts the game already resolves (car-to-car contact through game.js collideFx, barrier strikes through… |
 | `duel.js` | `Duel` | LAZY_RACE_SESSION | DUEL: a practice race against ONE rival with his rating lifted. |
 | `session-records.js` | `SessionRecords` | LAZY_RACE_SESSION | Comparable time-trial classes and lap configuration continuity. |
+| `pit-geom.js` | `PitGeom` | LAZY_RACE_SESSION | PIT GEOMETRY (PitGeom): the lane window, box row and widths the state machine reads, including the surface curvature channel entryRunM. |
 | `pit-lane.js` | `PitLane` | LAZY_RACE_SESSION | PIT LANE: the other half of the sentence js/physics/tyre-model.js opened. |
 | `engineer.js` | `RaceEngineer` | LAZY_RACE_SESSION | RACE ENGINEER: the voice that makes the tyre model legible. |
 | `radio-lines.js` | `RadioLines` | LAZY_RACE_SESSION | RADIO LINES: the phrasebook the race engineer and the TV commentator speak from (js/race/race-radio.js decides WHEN; this decides the WORDS). |
@@ -393,6 +404,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `scenery-preview.js` | `DesignerSceneryPreview` | LAZY_EDITOR | Live overhead illustration for the designer. |
 | `canvas.js` | `DesignerCanvas` | LAZY_EDITOR | DesignerCanvas: the track designer's 2D drawing surface. |
 | `elev-presets.js` | `ElevPresets` | LAZY_EDITOR | ElevPresets: Flat / Rolling / Hilly node-height profiles for the track designer. |
+| `zones.js` | `TrackZones` | LAZY_EDITOR | TrackZones: zone lists follow the control polygon when the loop is edited. hwZones, bankZones, elevations, bridges and props are keyed by arc fraction of the… |
 | `profile.js` | `DesignerProfile` | LAZY_EDITOR | DesignerProfile: the track designer's elevation strip under the main canvas. |
 | `selection-panel.js` | `DesignerSelection` | LAZY_EDITOR | shared point/range selection controls for the map and profile. |
 | `followup-tools.js` | `DesignerFollowup` | LAZY_EDITOR | small designer review tools. |
@@ -439,10 +451,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `bindings.js` | `InputBindings` | tag | InputBindings: keyboard and controller maps, conflict resolution and device-aware labels. |
 | `pad-menu.js` | `InputPadMenu` | tag | InputPadMenu: gamepad/phone menu navigation, focus seeding and held-direction repeats. |
 | `haptics.js` | `InputHaptics` | tag | InputHaptics: device/remote vibration, controller rumble and capability checks. |
+| `pedal-travel.js` | `PedalTravel` | tag | PedalTravel — stamp-then-ease thumb travel, one home for both pedals. |
 | `hold-buttons.js` | `InputHoldButtons` | tag | InputHoldButtons: multi-pointer hold/tap buttons, analog travel and teardown safety nets. |
 | `controller-profiles.js` | `ControllerProfiles` | tag | ControllerProfiles — bounded physical-device maps; legacy maps seed only the first device. |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
 | `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for the ADVANCED pause-menu page. |
+| `phone-pad-codec.js` | `PhonePadCodec` | LAZY_NET | PhonePadCodec — the PHONE AS CONTROLLER wire format, one home. |
+| `phone-pad-page.js` | `PhonePadPage` | LAZY_NET | PhonePadPage — the phone wheel. |
 | `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |
 
 **`js/audio/`**
@@ -482,6 +497,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `wheel-state.js` | `WheelState` | tag | WHEEL STATE: torque-balanced per-axle rim speed and slip ratio. |
 | `vehicle.js` | `Vehicle` | tag | VEHICLE tick scratch. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
+| `ai-strategy.js` | `AiStrategy` | tag | AI STRATEGY: tyre-wear pace and the stint planner. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | @ts-check |
 | `ai-corridor.js` | `AiCorridor` | tag | @ts-check |
@@ -519,6 +535,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene-dress.js` | `GarageDress` | tag | GarageDress: the team dress of the garage bay. |
+| `crew-draw.js` | `GarageCrewDraw` | tag | Shared pit-crew draw helpers. |
 | `crew-motion.js` | `GarageCrewMotion` | tag | Blender-authored guide motion. |
 | `crew-service.js` | `GarageCrewService` | tag | Timed garage service: blanket handlers, a rolling front jack and garage support. |
 | `crew-choreo.js` | `GarageCrewChoreo` | tag | GarageCrewChoreo: Blender-authored crew choreography. |
@@ -555,11 +572,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `offsets.js` | `CamTune` | tag | PER-CAMERA-MODE framing offsets (the CAMERA TUNER's data layer): the knob registry (CAM_TUNE_DEFS), the per-mode override store (localStorage apex26.camTune),… |
 | `extra-rigs.js` | `ExtraRigs` | tag | EXTRA player camera rigs (RIVAL LOCK, PIT WALL, DRONE FOLLOW): append-only CAM_MODES solvers kept out of vantage.js for file-size headroom. |
 | `flyby-sight.js` | `FlybySight` | tag | FLYBY SIGHTLINES: what a flyby eye can actually SEE. |
+| `flyby-clear.js` | `FlybyClear` | tag | flyby eye clearance: which props are solid, the lift over a roof, and the ground floor under a crane shot. |
 | `flyby-seq.js` | `FlybySeq` | tag | FLYBY SHOT SEQUENCER: the pre-race loading screen's camera. |
 | `cam-avoid.js` | `CamAvoid` | tag | broadcast-camera wall / building avoidance for open circuits. |
 | `trackside.js` | `TracksideCams` | tag | TRACKSIDE fixed cameras: one eye per measured corner, outside the fence, auto-switching as the subject car passes. |
 | `flyby-panel.js` | `FlybyPanel` | tag | the FLYBY SHOT EDITOR pause-menu panel: pick a shot from the pre-race sequence (js/camera/flyby-seq.js), scrub the whole run, edit every pose field live… |
 | `director.js` | `Director` | tag | LIVE TV DIRECTOR (Director.create(G)): a broadcast-style camera brain for the race the player is driving. |
+| `photo-looks.js` | `PhotoLooks` | tag | photo-mode look presets: a transient grade applied while the free camera is open, restored when the visit ends. |
 | `photo-kit.js` | `PhotoKit` | tag | photo-mode kit extras: composition grids, depth-of-field hint, and per-circuit camera bookmarks (apex26.freecamMarks). |
 | `free-cam.js` | `FreeCam` | tag | the FREE CAMERA pause-menu panel (#freecam): photo mode's fly-cam (js/camera/photo-cam.js) as a first-class tool, with a speed dial, roll, FOV, snaps to the… |
 | `photo-cam.js` | `Photomode` | tag | photo mode for js/game.js: the free-fly camera (WASD/mouse/touch sticks, drag-to-look), enter/exit plumbing (render-scale bump, HUD hide, panel tuck) and its… |
@@ -569,14 +588,15 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `cockpit-opts.js` | `CockpitOpts` | tag | CockpitOpts: player-facing options for the first-person view. |
 | `cockpit-finishes.js` | `CockpitFinishes` | tag | first-person finish preferences. |
 | `cockpit-preview.js` | `CockpitPreview` | tag | isolated cockpit option preview. |
-| `drive-chase.js` | `DriveChase` | tag | lens only for the chase family. vantage.js owns the pose: distance, corner lead, the brake tuck, the drift swing. |
-| `drive-broadcast.js` | `DriveBroadcast` | tag | lens only for the broadcast cameras. |
-| `drive-onboard.js` | `DriveOnboard` | tag | lens only for cameras bolted to the car. |
+| `fov-mode.js` | `CamFov` | tag | one speed-FOV curve for every player camera. vantage.js asks CamFeel.modeFov, which forwards here, so the recipe is not buried in look-back and shake. |
+| `drive-lens.js` | `DriveLens` | tag | lens-only FOV delta for every live camera family. |
 | `feel.js` | `CamFeel` | tag | CamFeel: in-race camera feel that must not grow game.js. |
 | `cam-groups.js` | `CamGroups` | tag | CamGroups: the ONE table of which player cameras count as "onboard" and which take the cockpit HUD layout, by CamModes id. |
 | `cam-comfort.js` | `CamComfort` | tag | AUTO COMFORT camera preset. |
 | `fov-fit.js` | `CamFovFit` | tag | aspect-aware vertical FOV fit. camFov / vantage FOVs are VERTICAL. |
+| `vantage-ride.js` | `VantageRide` | tag | chase-rig ride height: one smoothed centreline height and grade, plus the C1 ground-floor blend. |
 | `vantage.js` | `GameCams` | tag | the camera-vantage solver for js/game.js: all per-mode framing (cockpit/hood/tcam/rear, chase/far/drift, heli/side/cinematic/low/overhead/reverse, plus… |
+| `cam-picker.js` | `CamPicker` | tag | CAM button picker: hold or right-click opens the view grid, arrow keys move it, AUTO appears only while a WATCH runs. |
 | `mode-switch.js` | `CamModes` | tag | CamModes — the PLAYER camera-mode switch UI: the CAM button (tap to cycle, hold/right-click for the picker grid) and the C-key cycle. |
 | `tuner-panel.js` | `CamTunerEditor` | LAZY_CAM_EDITOR | the CAMERA TUNER pause-menu panel: a chip per player camera mode plus a slider per knob from CamTune.defs(), comfort knobs, a global baseline scope, presets,… |
 | `flyby-editor.js` | `FlybyEditor` | LAZY_CAM_EDITOR | FLYBY SHOT EDITOR DOM panel (LAZY_CAM_EDITOR). |
@@ -587,19 +607,21 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `feed.js` | `OverlayFeed` | tag | stream/broadcast overlay frame schema. |
 | `render.js` | `OverlayRender` | tag | transform-only DOM painter for overlay.html. |
+| `bridge.js` | `OverlayBridge` | tag | OverlayBridge: the same-browser transport between the game and overlay.html. |
+| `publisher.js` | `OverlayPublisher` | tag | OverlayPublisher: the game page's half of the stream overlay. |
 
 **`js/xr/`**
 
 | File | Global | Loaded | Purpose (header, first sentence) |
 |---|---|---|---|
 | `xr-opts.js` | `XROpts` | tag | XROpts: SETTINGS › DISPLAY rows for VR MODE + VR RENDERER. |
-| `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring (Phase 0). |
+| `xr-boot.js` | `XrBoot` | tag | WebXR boot wiring. |
 | `xr-plan.js` | `XRPlan` | LAZY_XR | XRPlan: pure boot-time VR renderer path selection. |
 | `xr-rig.js` | `XrRig` | LAZY_XR | XR seated-rig math (pure). |
 | `xr-input.js` | `XrInput` | LAZY_XR | XR controller → Input.remoteSample / remoteEvent. |
 | `xr-session.js` | `XrSession` | LAZY_XR | WebXR immersive-vr session owner. |
 | `apex-xr.js` | `ApexXR` | LAZY_XR | ApexXR: thin façade over XRPlan + XrSession for boot / settings. |
-| `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button (Phase 0). |
+| `xr-ui.js` | `XrUi` | LAZY_XR | ENTER VR button. |
 
 **`js/share/`**
 
@@ -608,7 +630,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `share-card-data.js` | `ShareCardData` | tag | pure, JSON-safe data models for exported result cards. |
 | `share-card-layout.js` | `ShareCardLayout` | tag | pure card layout: model + spec + text metric -> paint ops. |
 | `share-card.js` | `ShareCard` | tag | canvas painter, PNG encoder and Web Share/download delivery. |
-| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip: one button shape for every result screen. |
+| `share-card-chips.js` | `ShareCardChips` | tag | the SHARE CARD chip and its preview sheet: one shape for every result screen. |
 
 **`js/render/glx/shaders/`**
 
@@ -696,13 +718,17 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `sdp.js` | `NetSdp` | LAZY_NET | NetSdp — the invite code's payload, as bytes instead of prose. |
 | `qr.js` | `NetQr` | LAZY_NET | NetQr — an invite you point a camera at. |
 | `scan.js` | `NetScan` | LAZY_NET | NetScan — reading a QR code with the device camera, in the page. |
+| `ice.js` | `NetIce` | LAZY_NET | NetIce — the STUN/TURN list NetTransport.rtc() gathers with. |
 | `transport.js` | `NetTransport` | LAZY_NET | NetTransport — the wire under multiplayer, and the seam that keeps the netcode testable. |
 | `handshake.js` | `NetHandshake` | LAZY_NET | NetHandshake — getting two browsers connected with NO server of ours. |
 | `lobby-codes.js` | `LobbyCodes` | LAZY_NET | lobby invite/answer paste, copy, share, scan, and QR helpers. |
 | `lobby-roster.js` | `LobbyRoster` | LAZY_NET | LobbyRoster: the stateless leaves of the VS FRIEND room's roster DOM (team lookup, css colour, span/replace/summaryRow helpers, driver/team labels, the seat… |
 | `lobby-settings.js` | `LobbySettings` | LAZY_NET | LobbySettings: VS FRIEND race-settings normalise + custom-circuit wire payload. |
+| `interp.js` | `NetInterp` | LAZY_NET | NetInterp — draw a rival smoothly from late, reordered or missing poses. |
 | `snapshot.js` | `NetSnapshot` | LAZY_NET | NetSnapshot — what actually goes on the wire, and how a rival is drawn smoothly from packets that arrive late, out of order, or not at all. |
 | `session.js` | `NetSession` | LAZY_NET | NetSession — the layer between a transport and the game. |
+| `quali-wire.js` | `QualiWire` | LAZY_NET | QualiWire — one validation site for a peer's qualifying time. |
+| `strategy-wire.js` | `StrategyWire` | LAZY_NET | StrategyWire — the versioned tyre and pit payload on the reliable channel. |
 | `spectate.js` | `NetSpectate` | LAZY_NET | NetSpectate — the role policy shared by NetPlay's seat assignment and send gates. |
 | `netplay.js` | `NetPlay` | LAZY_NET | NetPlay — the game side of multiplayer. |
 | `lobby.js` | `NetLobby` | LAZY_NET | NetLobby — getting two people into the same race, with no server. |

@@ -17,8 +17,8 @@ const DataSchedule = (function () {
     const dateOnly = iso.length === 10;
     const d = new Date(dateOnly ? iso + "T12:00:00Z" : iso);
     if (isNaN(d.getTime())) return iso;
-    return d.toLocaleDateString(undefined, dateOnly ? { day: "numeric", month: "short", timeZone: "UTC" }
-                                                    : { day: "numeric", month: "short" });
+    return I18n.date(d, dateOnly ? { day: "numeric", month: "short", timeZone: "UTC" }
+                                  : { day: "numeric", month: "short" });
   }
 
   function dateLabel(r) {
@@ -103,7 +103,7 @@ const DataSchedule = (function () {
 
   function create({ el, emptyMsg }) {
     function sessionTime(startMs) {
-      return new Date(startMs).toLocaleString(undefined, {
+      return I18n.date(new Date(startMs), {
         weekday: "short", hour: "2-digit", minute: "2-digit", timeZoneName: "short"
       });
     }
@@ -120,7 +120,7 @@ const DataSchedule = (function () {
           shownMinute = minute;
         }
         if (minute !== labelledMinute) {
-          clock.setAttribute("aria-label", left > 0 ? "Race starts in " + countdown(left) : "Race started");
+          clock.setAttribute("aria-label", left > 0 ? I18n.t("hub.raceStarts", {in: countdown(left)}, "Race starts in {in}") : I18n.t("hub.raceStarted", null, "Race started"));
           labelledMinute = minute;
         }
       }
@@ -239,7 +239,7 @@ const DataSchedule = (function () {
       if (r.time) {
         const t = new Date(Number.isFinite(raceInstant(r)) ? raceInstant(r) : `1970-01-01T${r.time}`);
         if (!isNaN(t.getTime())) {
-          main.appendChild(el("div", "dh-race-time", t.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })));
+          main.appendChild(el("div", "dh-race-time", I18n.date(t, { hour: "2-digit", minute: "2-digit", timeZoneName: "short" })));
         }
       }
       row.appendChild(main);
@@ -269,7 +269,7 @@ const DataSchedule = (function () {
       bar.setAttribute("data-ics", "bar");
       const pick = el("select", "dh-pick-select");
       pick.setAttribute("data-ics", "alarm");
-      pick.setAttribute("aria-label", "Reminder before each session");
+      pick.setAttribute("aria-label", I18n.t("hub.icsReminder", null, "Reminder before each session"));
       for (const [min, label] of [[0, "No reminder"], [15, "15 min before"], [30, "30 min before"], [60, "1 h before"], [1440, "1 day before"]]) {
         const opt = el("option", null, label);
         opt.value = String(min);
@@ -322,6 +322,6 @@ const DataSchedule = (function () {
     return { loadSchedule };
   }
 
-  return { create, raceInstant, fmtDate, dateLabel, isUpcoming, nextRace, weekendSessions, countdown, nextFlipAt };
+  return { create, raceInstant, dateLabel, isUpcoming, nextRace, weekendSessions, countdown, nextFlipAt };
 })();
 Object.freeze(DataSchedule);
