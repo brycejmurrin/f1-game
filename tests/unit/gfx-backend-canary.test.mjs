@@ -848,8 +848,11 @@ test("a refused WGX/TLX create does not persist WEBGL2 over the user's pick", ()
   // through core.allocFail so a failed upload stays inert, not a throw.
   assert.match(code("js/render/webgpu/wgx-chunked.js"), /allocFail\(\s*"createChunkedMesh"/);
   // allocDrawSlot() returns -1 when the draw ring is full: a chunk must drop
-  // its draw, not index the ring at -1 (RangeError mid-frame).
-  assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(slot < 0\) return;/);
+  // its draw, not index the ring at -1 (RangeError mid-frame). The night
+  // flush drops the open run; per-chunk breaks out of the chunk loop.
+  // One assertPinsAll site covers both full-ring exits (ratchet at tip ceiling).
+  assert.match(code("js/render/webgpu/wgx-chunked.js"),
+    /if \(s < 0\) return -1;[\s\S]*if \(s2 < 0\) \{ run\.active = false; return; \}/);
   assert.match(code("js/render/webgpu/wgx-chunked.js"), /if \(cslot < 0\) break;/);
   // A hand re-pick of WEBGPU resets the ladder so the player can retry full:
   // BEHAVIOUR through the picker.
@@ -1003,6 +1006,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     "apex26.tlxEnvProbe": "1",
     "apex26.tlxViz": "lit",
     "apex26.tlxWebKitGL": "WebGPU init failed",
+    "apex26.packIndex": "{\"models\":{}}",
     "apex26.wgxCapture": "1",
     "apex26.gfxHigh": "1",
     "apex26.uiScale": "110",
@@ -1041,6 +1045,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // boot's early backend preload (guessBackend). A RESET that kept it would preload
     // the old path's group once; dropping it costs nothing.
     "apex26.gfxBootBound",
+    // assets.js remembers the last pack's model file+md5 (a js/render write, so
+    // RESET must clear it). The next visit relearns the hint from the manifest.
+    "apex26.packIndex",
     "apex26.envProbeOff", "apex26.perChunkOff",
     "apex26.tlxForceGL", "apex26.tlxEnvProbe", "apex26.tlxViz",
     // tlx.js's per-DEVICE WebKit kill switch (the failure reason): while set, AUTO on WebKit binds three WebGL2.
@@ -1074,6 +1081,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // not crash state — RESET RENDERER must not wipe the player's SGSR choice.
     // spatialUpscaleGather is an A/B escape pin (tools/bench only writes "0").
     "apex26.spatialUpscale", "apex26.spatialUpscaleGather",
+    // Hand-set race-scale override (backend.swRaceShed). "0" keeps full res,
+    // "1" forces the software-GL cut. RESET RENDERER must not wipe it.
+    "apex26.swRaceShed",
   ]);
   // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
   // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
@@ -1141,6 +1151,7 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
   const removed = G.clearRendererStorage();
   assert.ok(removed.includes("apex26.gfxBackend"));
   assert.equal(ls.getItem("apex26.gfxBackend"), null);
+  assert.equal(ls.getItem("apex26.packIndex"), null, "RESET drops the remembered pack index");
   assert.equal(ls.getItem("apex26.gfxBackendProbe"), null);
   assert.equal(ls.getItem("apex26.gfxWgxLevel"), null);
   assert.equal(ls.getItem("apex26.gfxTlxFail"), null);
@@ -4547,6 +4558,24 @@ test("softwareGlowScale tier-4 knee follows lookPostShed on software GL (watchdo
   assert.equal(softwareGlowScale(1), 0.55, "healthy look post keeps the softer ×0.55 knee");
 });
 
+test("softwareRaceShed is half-res on a real software GL player and full-res under automation", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/render/shared/post-common.js"), ctx, { filename: absSrc("js/render/shared/post-common.js") });
+  const { softwareRaceShed } = vm.runInContext("PostCommon", ctx);
+  const player = { webdriver: false, userAgent: "Mozilla/5.0" };
+  assert.equal(softwareRaceShed(false, player, null), false, "hardware stays full-res");
+  assert.equal(softwareRaceShed(true, player, null), true, "a software-GL player sheds");
+  assert.equal(softwareRaceShed(true, { webdriver: true, userAgent: "" }, null), false, "webdriver pixel specs stay full-res");
+  assert.equal(softwareRaceShed(true, { webdriver: false, userAgent: "apex-game-vm" }, null), false, "the node game VM stays full-res");
+  assert.equal(softwareRaceShed(true, { webdriver: true, userAgent: "" }, "1"), true, "apex26.swRaceShed=1 forces the cut");
+  assert.equal(softwareRaceShed(true, player, "0"), false, "apex26.swRaceShed=0 keeps full-res");
+  const tlx = read("js/render/three/tlx.js");
+  assert.ok(tlx.includes("PostCommon.softwareRaceShed") && tlx.includes("_swRaceShedPinned") && tlx.includes("PerfGov.setAutoRes") && tlx.includes("PerfGov.setUserTier"));
+  assert.ok(tlx.includes("renderScale = 0.5"), "the pin uses the renderer's existing 0.5 floor");
+  assert.ok(tlx.includes("opts.bloom = 0") && tlx.includes("opts.godray = 0") && tlx.includes("opts.reflect = 0"));
+  assert.ok(tlx.includes('typeof _swRaceShed !== "undefined" && _swRaceShed && typeof _warmWhere !== "undefined" && _warmWhere !== "menu"') && tlx.includes("pinSoftwareRaceShed(opts)"), "a race-entry program warm pins before compile; a menu warm stays full-res");
+});
+
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
   // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
   // quotes. 0a31155 compared the raw string to "ultra", so every desktop that
@@ -4849,7 +4878,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
     "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
-  assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
+  assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\) && !warmQueuedHere\) return;/);
   assert.match(game, /if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/,
     "results keeps the last race present — physics already stopped, re-drawing is unpaid (ResultsCam.live is the orbit/highlights exception)");
   // endRace's OWN call: over all of game.js the match began at startRaceBody's

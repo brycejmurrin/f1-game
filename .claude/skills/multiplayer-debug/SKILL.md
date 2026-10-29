@@ -1,6 +1,6 @@
 ---
 name: multiplayer-debug
-description: "Use when VS FRIEND, phone-as-controller pairing/connection, WebRTC, invite links or QR codes, room codes, Nostr signalling, TURN/ICE, build handshakes, replicated rivals, lobby flow or net determinism break."
+description: "Use when VS FRIEND or phone-as-controller breaks: pairing, invite links, QR or room codes, WebRTC, signalling, TURN/ICE, lobby flow, or desyncing rivals. Not for: steering once paired → input-controls; AI rivals → ai-racecraft; lobby layout → ui-menu-a11y."
 ---
 
 ## Overview

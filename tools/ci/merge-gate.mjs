@@ -18,7 +18,7 @@
 //   plan      the body's `## Plan` checklist is closed (ready-gate's parser; an item starting `land:` is ignored)
 //   ci        the `CI` check-run from the GitHub Actions app, in the check suite of a ci.yml workflow run, is
 //             `success` on the PR's current head, newest attempt
-//   gen       the head merges clean onto the current base tip in a throw-away worktree, and `gen:check` passes there
+//   gen       clean merge onto the current base tip; `gen:check` and the scenery catalog digest pass there
 //   ratchets  tools/check/ratchets.mjs and the whole-tree count tests hold on that same merge result
 //             (two PRs under a ceiling alone can be over it together, #3236 + #3237, 2026-10-20)
 //   distance  the PR's merge-base is at most N (default MAX_BEHIND) GAME merges behind the base tip: a game merge is a
@@ -240,7 +240,7 @@ export function ratchetsOnMerge({ cwd = ROOT, run = spawnSync } = {}) {
 
 /**
  * Fetch the base and the head branch, merge `head` onto the base tip in a throw-away worktree, run gen:check
- * there, then the ratchets. Returns { ok, evidence, tip, ratchets?, error? }: `error` marks a git failure the gate
+ * and the scenery catalog digest there, then the ratchets. Returns { ok, evidence, tip, ratchets?, error? }: `error` marks a git failure the gate
  * reports as exit 1 (not a row); `ratchets` is absent when the merge or gen:check already refused.
  */
 /**
@@ -283,9 +283,25 @@ export function localMergeGenCheck({ pr, head, headRef, cwd = ROOT, base = DEPLO
     const first = `${gen.stdout || ""}\n${gen.stderr || ""}`.split("\n").map((l) => l.trim()).filter((l) => l && !/^>|^npm /.test(l)).slice(-3).join(" | ");
     return fail(`gen:check fails on the merge onto ${tip.slice(0, 8)}: ${first || "see output"} — sync-pr.mjs (it runs npm run gen) and push`);
   }
+  // The full scenery generator builds every circuit (~2 min), so gen:check
+  // deliberately omits it. Its cheap input fingerprint must still hold on THIS
+  // merge: a green head can inherit a stale catalog from a changed base (#4160).
+  // Keep PR code in a child with the same stripped environment as gen:check.
+  const catalog = run(process.execPath, ["-e", [
+    "const fs = require('node:fs');",
+    "const { scenerySourceDigest } = require('./tools/shot/scenery-source-hash.cjs');",
+    "const stored = JSON.parse(fs.readFileSync('tools/shot/scenery-locations.json', 'utf8')).sourceDigest;",
+    "if (typeof stored !== 'string' || !/^[a-f0-9]{64}$/.test(stored)) throw new Error('catalog sourceDigest is missing or malformed');",
+    "if (stored !== scenerySourceDigest(process.cwd())) throw new Error('catalog sourceDigest does not match scenery inputs');",
+  ].join("\n")], { cwd: wt, env: untrustedEnv(), encoding: "utf8", timeout: 60_000, maxBuffer: 1 << 20 });
+  if (catalog.error || catalog.status !== 0) {
+    const detail = catalog.error?.message || `${catalog.stdout || ""}\n${catalog.stderr || ""}`.split("\n")
+      .map((line) => line.trim()).find((line) => /Error:/.test(line)) || `exit ${catalog.status}`;
+    return fail(`scenery catalog fails on the merge onto ${tip.slice(0, 8)}: ${detail} — regenerate with node tools/shot/gen-scenery-locations.cjs on the synced branch and push`);
+  }
   const rat = ratchets({ cwd: wt, run });
   cleanup();
-  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check 0`, tip, ratchets: rat };
+  return { ok: true, evidence: `merges clean onto ${tip.slice(0, 8)}; gen:check and scenery catalog digest 0`, tip, ratchets: rat };
 }
 
 // ---- evaluator and CLI --------------------------------------------------------------------------------------

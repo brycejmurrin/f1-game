@@ -409,3 +409,56 @@ test("an unsupported :modal selector retains ordinary layer ranking", () => {
   U._doc.querySelectorAll = (selector) => { if (selector === ":modal") throw new SyntaxError("unsupported"); return query(selector); };
   assert.equal(U.top().id, "datahub");
 });
+
+// ── onFocusIn stands aside for LAYER_SKIP layers ────────────────────────────
+// scanLayers already skips rotate-device / photo-controls (no focus memory).
+// onFocusIn used to ignore that list and pull Tab into the fly-cam's buttons,
+// turning Space into a click — the same failure LAYER_SKIP documents.
+test("TopModal.onFocusIn does not trap Tab into a LAYER_SKIP layer", () => {
+  const doc = { activeElement: null };
+  const flyBtn = {
+    id: "pc-exit", hidden: false, disabled: false, tagName: "BUTTON",
+    getAttribute: () => null,
+    focus() { doc.activeElement = flyBtn; },
+  };
+  const stray = {
+    id: "behind", hidden: false, disabled: false, tagName: "BUTTON",
+    getAttribute: () => null,
+    focus() { doc.activeElement = stray; },
+  };
+  const photo = {
+    id: "photo-controls", hidden: false, tagName: "DIV",
+    contains: (el) => el === flyBtn,
+    querySelectorAll: () => [flyBtn],
+    querySelector: () => null,
+    getBoundingClientRect: () => ({ width: 800, height: 200 }),
+  };
+  const document = {
+    readyState: "loading", addEventListener() {},
+    get activeElement() { return doc.activeElement; },
+    body: { contains: () => true },
+    getElementById: (id) => ({ "photo-controls": photo }[id] || null),
+    querySelectorAll: () => [], querySelector: () => null,
+  };
+  const shown = (el) => !!el && !el.hidden;
+  const context = {
+    window: {
+      UiLayers: {
+        LAYER_IDS: ["photo-controls"],
+        top: () => photo,
+        shown,
+      },
+    },
+    WeakSet, WeakMap, queueMicrotask: () => {},
+    MutationObserver: class { observe() {} },
+    document, Log: { info() {}, warn() {} },
+  };
+  context.globalThis = context;
+  vm.createContext(context);
+  vm.runInContext(read("js/ui/modal.js"), context, { filename: absSrc("js/ui/modal.js") });
+  stray.focus();
+  assert.equal(doc.activeElement, stray);
+  context.window.TopModal.onFocusIn({ target: stray });
+  assert.equal(doc.activeElement, stray,
+    "focus stays on the stray control — photo-controls is LAYER_SKIP, not a menu trap");
+});

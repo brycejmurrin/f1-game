@@ -739,6 +739,8 @@ const RaceControl = (function () {
     return Infinity;
   }
 
-  return { create, finishDelay, finishPending, POST_FINISH_CAP, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap, HOLD_M, SC_PACE, SC_CATCH, SC_QUEUE_GAP };
+  // HOLD_M / SC_* / POST_FINISH_CAP stay module-local: holdCap, scQueueFrac and
+  // finishDelay own the thresholds; no external caller reads the constants.
+  return { create, finishDelay, finishPending, flagOut, beginLineStep, deferLine, settleLineStep, endLineStep, lineTransition, finishOrder, runOrder, classify, shortRun, scQueueFrac, holdCap };
 })();
 Object.freeze(RaceControl);

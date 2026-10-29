@@ -1,0 +1,1 @@
+Fixed: the title's garage prebuild no longer waits out a 30 s hidden-frame budget after a program warm that already finished, so GARAGE from the title can draw on the next present instead of sitting pending.

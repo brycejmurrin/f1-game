@@ -2,7 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { absSrc } from '../helpers/abs-src.mjs';
 const context = vm.createContext({});
+vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), context, { filename: absSrc('js/garage/crew-draw.js') });
 vm.runInContext(readFileSync(new URL('../../js/garage/arrival.js', import.meta.url), 'utf8'), context);
 const Arrival = vm.runInContext('GarageArrival', context);
 vm.runInContext(readFileSync(new URL('../../js/track/core/pit.js', import.meta.url), 'utf8'), context);
@@ -661,6 +663,7 @@ function garageEntryRegressionHarness() {
     reducedMotion: () => false,
   };
   vm.createContext(c);
+  vm.runInContext(readFileSync(new URL('../../js/garage/crew-draw.js', import.meta.url), 'utf8'), c, { filename: absSrc('js/garage/crew-draw.js') });
   vm.runInContext(introArrivalSource, c);
   const clockStart = introCameraSource.indexOf('let driveOut = null;');
   const clockEnd = introCameraSource.indexOf('// THE ARRIVAL PREVIEW', clockStart);
@@ -1275,4 +1278,11 @@ test('a slow entry frame or a short hitch cannot skip the arrival (#3511 review)
   clock.t += 5; arrival.step(0.1);                     // a 5 s app switch mid-arrival
   assert.ok(arrival.state.seconds <= 0.1 + 2.5 + 1e-9, `hitch credited ${arrival.state.seconds}s`);
   assert.equal(arrival.state.active, true);
+});
+
+test('a covered PREP menu with no owed warm frames still presents for a queued warm of the current menu world', () => {
+  const body = introGameSource.slice(introGameSource.indexOf('function render(dt) {'));
+  const q = body.indexOf('const warmQueuedHere = !!(track && menuWorld() && gfx.warmQueued && gfx.warmQueued());');
+  const guard = body.indexOf('if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;');
+  assert.ok(q > 0 && guard > q && body.indexOf('!(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0') > guard);
 });

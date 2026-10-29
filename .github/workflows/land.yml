@@ -165,8 +165,8 @@ on:
 env:
   DEPLOY_BRANCH: claude/f1-game-project-26h3ng
   RETRY_MAX: 3
-  # AUTO-SYNC: the most `land` PRs that may wait on a ci.yml run at once after a sync (THROTTLE in the header).
-  SYNC_MAX: 3
+  # AUTO-SYNC: at most 6 `land` PRs may wait on a ci.yml run at once after a sync (THROTTLE in the header).
+  SYNC_MAX: 6
 
 # ONE group per PR (a CI run on a PR head carries the PR number); the deploy branch's train runs share `land-tip`; a
 # CI run that names no PR (a fork) gets `land-sha-<head>`, never the train's group (GitHub keeps one pending run per
@@ -504,10 +504,12 @@ jobs:
           write_gate() {
             local head=$1 st=$2 c=$3 title=$4 summary=$5 seen state body
             WROTE=""
+            # A newer status from THIS run (an earlier attempt: a re-run reuses resolve's AT) is not a newer verdict;
+            # run 40740152111 kept its own attempt-1 error over its attempt-2 pass on #4110 (2026-10-28).
             seen=$(gh api "repos/$R/commits/$head/statuses?per_page=100" --jq \
-              '[.[] | select(.context == "gate")] | first | if . == null then "" else (.created_at | fromdateiso8601 | floor | tostring) end') || return 1
-            if [ -n "$seen" ] && [ "$seen" -gt "$AT_S" ]; then
-              echo "gate on ${head:0:12}: kept the newer verdict (posted at epoch $seen > $AT_S = $AT)"; return 0
+              '[.[] | select(.context == "gate")] | first | if . == null then "" else "\(.created_at | fromdateiso8601 | floor) \(.target_url // "")" end') || return 1
+            if [ -n "$seen" ] && [ "${seen%% *}" -gt "$AT_S" ] && [ "${seen#* }" != "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" ]; then
+              echo "gate on ${head:0:12}: kept the newer verdict (posted at epoch ${seen%% *} > $AT_S = $AT)"; return 0
             fi
             case "$st/$c" in completed/success) state=success ;; completed/*) state=failure ;; *) state=pending ;; esac
             body=$(jq -n --arg st "$state" --arg t "$title" --arg u "$GITHUB_SERVER_URL/$R/actions/runs/$GITHUB_RUN_ID" \
@@ -564,6 +566,10 @@ jobs:
               :   # the land-gate leg refused (gen, ratchets): a refusal is never a way in
             elif [ "$tcode" != 0 ] && [ "$tcode" != 3 ]; then
               code=1; line="trusted rows: ${tline:-exit $tcode}"
+              # No row for this head (trusted-rows timed out or failed): make "will retry" true (`retry`, RETRY_MAX per head).
+              if [ "$tline" = "no trusted rows for this head" ]; then
+                want_retry "$n" "$head"
+              fi
             elif [ "$tcode" = 3 ]; then
               code=3; line="$tline"
             elif [ "$code" = 0 ] && [ "$ttip" != "$tip" ]; then
@@ -669,8 +675,30 @@ jobs:
             echo "::warning::$msg"
             printf '> **%s**\n\n' "$msg" >> "$GITHUB_STEP_SUMMARY"
           fi
-          gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --auto --merge --match-head-commit "$head"
-          echo "armed (or merged) #$n @ ${head:0:12} onto ${tip:0:12} with $who" | tee -a "$GITHUB_STEP_SUMMARY"
+          if merge_out=$(gh pr merge "$n" --repo "$GITHUB_REPOSITORY" --auto --merge --match-head-commit "$head" 2>&1); then
+            printf '%s\n' "$merge_out"
+            echo "armed (or merged) #$n @ ${head:0:12} onto ${tip:0:12} with $who" | tee -a "$GITHUB_STEP_SUMMARY"
+            exit 0
+          else
+            merge_rc=$?
+            printf '%s\n' "$merge_out" >&2
+          fi
+          # The tip can move after the read above but before GitHub accepts the arm. Only this known race may
+          # use the existing bounded re-gate: never repeat the merge command or reuse the stale gate result.
+          case "$merge_out" in
+            *"GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)"*) ;;
+            *) exit "$merge_rc" ;;
+          esac
+          now=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/branches/$DEPLOY_BRANCH" --jq .commit.sha) || exit "$merge_rc"
+          pr=$(GH_TOKEN="$GITHUB_TOKEN" gh api "repos/$GITHUB_REPOSITORY/pulls/$n") || exit "$merge_rc"
+          paused=$(GH_TOKEN="$GITHUB_TOKEN" gh api --method GET "repos/$GITHUB_REPOSITORY/issues" -f state=open -f labels=dispatch:merge-pause -f per_page=50 \
+            --jq '[.[] | select(.title == "Dispatch" and (.pull_request | not))] | length > 0') || exit "$merge_rc"
+          [ "$paused" = false ] || exit "$merge_rc"
+          [[ "$now" =~ ^[0-9a-f]{40}$ ]] && [ "$now" != "$tip" ] || exit "$merge_rc"
+          jq -e --arg head "$head" --arg base "$DEPLOY_BRANCH" '.state == "open" and .draft == false and .head.sha == $head and .base.ref == $base
+            and ([.labels[].name] | index("land") != null and index("hold") == null)' <<<"$pr" >/dev/null || exit "$merge_rc"
+          echo "::notice::not armed #$n: deploy tip moved during arm ${tip:0:12} -> ${now:0:12}; re-gating within the existing retry budget" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "retry=$(jq -c -n --argjson n "$n" --arg h "$head" '{number: $n, head: $h}')" >> "$GITHUB_OUTPUT"
 
   # RETRY: the immediate re-gate (IMMEDIATE RE-GATE in the header). Dispatches this workflow on the deploy branch for
   # each PR that post or arm handed over because ONLY the deploy tip moved. actions: write and nothing else, no

@@ -111,7 +111,9 @@ const WGXDebugLabels = (function () {
     for (const k of Object.keys(COUNTERS)) delete COUNTERS[k];
   }
 
-  return { install, ensureLabel, validationMessage, _resetCounters };
+  // ensureLabel stays local: install/wrapPass call it; nothing outside reads
+  // WGXDebugLabels.ensureLabel (tests cover install + validationMessage + _resetCounters).
+  return { install, validationMessage, _resetCounters };
 })();
 
 if (typeof window !== "undefined") window.WGXDebugLabels = WGXDebugLabels;

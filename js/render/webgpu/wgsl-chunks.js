@@ -2583,14 +2583,13 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
   return vec4<f32>(c, 1.0);
 }`;
 
+  // hash / vnoise / brdf stay module-local: only LIT/SKY interpolate them;
+  // nothing outside this file reads WGSLChunks.hash|vnoise|brdf.
   return {
-    // named leaves (for future passes to compose)
-    hash,
-    vnoise,
+    // named leaves still composed by WGSLPost via window.WGSLChunks
     tonemap,
     fullscreenTri,
     colourGradeLeaf,
-    brdf,
     // real shaders, pre-composed from the leaves above
     SKY,
     LIT,

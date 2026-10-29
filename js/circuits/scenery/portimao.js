@@ -6,8 +6,8 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["portimao"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        pine, tree, bush, mountain, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+        pine, tree, bush, mountain, grandstandEx,
         billboard, gantry, marshalPost,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard, groundedSegments, bankedKerbStrip,

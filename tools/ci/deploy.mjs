@@ -76,6 +76,7 @@ import { saveOutputArtifact } from "../agent/output.mjs";
 import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
 import { strictFlags } from "../lib/cli-args.mjs";
 import { gitRun, gitMust } from "../lib/git-run.mjs";
+import { isBuilt } from "../lib/generated-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
@@ -102,7 +103,7 @@ const must = gitMust;
 // ceiling killed it with no verdict line. Every child now stops at this ceiling, with SIGTERM so
 // tooling-fast can reap the process groups it leads, and run() turns that into a named failure.
 export const CHILD_TIMEOUT_MS = Math.max(1, Number(process.env.APEX_DEPLOY_CHILD_TIMEOUT_MIN) || 25) * 60e3;
-export async function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
+async function spawnDeployChild(cmd, args, { cwd = ROOT, env = process.env, json = JSON_OUT, root = ROOT, announce = log, timeoutMs = CHILD_TIMEOUT_MS } = {}) {
   const stop = { timeoutMs };
   if (!json) return superviseDeployChild(cmd, args, { cwd, env, stdio: "inherit", ...stop });
   const artifact = saveOutputArtifact("", { root, tool: "deploy-child", kind: "log" });
@@ -464,13 +465,19 @@ export function cureableConflicts(conflicted) {
   // tools/shot/scenery-locations.json (gen-scenery-locations.cjs): same cure,
   // take ours and regenerate from the merged TRACK_VM sources.
   const sceneryF = conflicted.filter((f) => f === SCENERY_LOCATIONS);
+  // A BUILT path (gitignored since 2026-10-28; tools/lib/generated-paths.mjs BUILT_PATHS)
+  // conflicts only as modify/delete: the tip deleted the committed copy, an older
+  // branch regenerated it. Cure: take the deletion (`git rm --cached`); ensure-built
+  // rebuilds the local copy from the merged sources.
+  const builtF = conflicted.filter((f) => isBuilt(f));
   // (The gate-ladder figures used to be cured here too; since 2026-09-30 no
   // doc commits them — tools/gen/gen-ladder-figures.mjs only reports — so
   // there is nothing left to conflict.)
   const sourceContested = conflicted.includes("tests/groups.json");
   const cureable = conflicted.length > 0 && !sourceContested
-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length === conflicted.length;
-  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF };
+    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length
+      + builtF.length === conflicted.length;
+  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, builtF };
 }
 
 /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
@@ -537,11 +544,11 @@ export async function mergeDeployTip() {
   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
   // derived value rather than two intents to reconcile. Anything else is a
   // real disagreement and stops.
-  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF } = cureableConflicts(conflicted);
+  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, builtF } = cureableConflicts(conflicted);
   if (!cureable) {
     git(["merge", "--abort"]);
     const moved = manifestMoved();
-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f))
+    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f) && !builtF.includes(f))
       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
   }
@@ -600,16 +607,20 @@ export async function mergeDeployTip() {
   }
   if (derivedF.length) {
     for (const f of derivedF) must(git(["checkout", "--ours", "--", f]), `checkout --ours ${f}`);
-    if (derivedF.some((f) => f !== "docs/TESTING-COVERAGE.md")) run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index, hook page and impact map from the merged tree");
-    if (derivedF.includes("docs/TESTING-COVERAGE.md")) run("node", ["tools/docs/gen-coverage-table.mjs"], "regenerate the coverage table from the merged tests");
+    if (derivedF.some((f) => f !== "docs/TESTING-COVERAGE.md")) await run("node", ["tools/docs/gen-agent-index.mjs"], "regenerate the agent index, hook page and impact map from the merged tree");
+    if (derivedF.includes("docs/TESTING-COVERAGE.md")) await run("node", ["tools/docs/gen-coverage-table.mjs"], "regenerate the coverage table from the merged tests");
     must(git(["add", ...derivedF]), "add");
     did.push("derived docs regenerated");
   }
   if (sceneryF.length) {
     must(git(["checkout", "--ours", "--", SCENERY_LOCATIONS]), `checkout --ours ${SCENERY_LOCATIONS}`);
-    run("node", ["tools/shot/gen-scenery-locations.cjs"], "regenerate the scenery survey locations from the merged circuits (~2 min)");
+    await run("node", ["tools/shot/gen-scenery-locations.cjs"], "regenerate the scenery survey locations from the merged circuits (~2 min)");
     must(git(["add", SCENERY_LOCATIONS]), "add");
     did.push("scenery locations regenerated");
+  }
+  if (builtF.length) {
+    must(git(["rm", "-q", "--cached", "--", ...builtF]), "untrack the built files (they stay gitignored)");
+    did.push(`built files kept out of git (${builtF.join(", ")})`);
   }
   must(git(["commit", "--no-edit", "-q"]), "merge commit");
   await installIfLockMoved(before);

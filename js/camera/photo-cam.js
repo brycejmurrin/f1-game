@@ -94,6 +94,7 @@ function enterPhotoMode() {
   initPhotoCam();
   document.body.classList.add("photo-mode");
   $("photo-controls").hidden = false;
+  paintPhotoLine();
   const t = $("pc-toggle"); if (t) { t.classList.add("on"); t.innerHTML = "● FREE CAMERA"; }
   window.addEventListener("keydown", photoKeyHandler, true);
   window.addEventListener("keyup", photoKeyHandler, true);
@@ -107,6 +108,8 @@ function exitPhotoMode() {
   G.dbgCam = null;                          // hand the game camera back
   G.snapGameCam();                          // …AT the car: the damped rig otherwise swoops back from wherever the free camera was parked
   document.body.classList.remove("photo-mode", "pc-nopanel", "pc-uihidden");
+  DrivingLine.setPhoto(null);               // the LINE button is a per-shot preview, never a saved setting
+  paintPhotoLine();
   $("photo-controls").hidden = true;
   $("lighting-inner").hidden = false;     // un-hide the tuner if it was tucked away
   const pb = $("pc-panel"); if (pb) pb.textContent = "HIDE PANEL";
@@ -123,6 +126,17 @@ function togglePhotoPanel() {
   p.hidden = hide;
   document.body.classList.toggle("pc-nopanel", hide);
   const pb = $("pc-panel"); if (pb) pb.textContent = hide ? "SHOW PANEL" : "HIDE PANEL";
+  if (G.soundOn) GameAudio.uiTick();
+}
+let lineBtn = null;   // built below; a held reference, not an id lookup (the shell has no #pc-line)
+function paintPhotoLine() {
+  const b = lineBtn; if (!b) return;
+  const on = DrivingLine.shown();
+  b.textContent = on ? "HIDE LINE" : "SHOW LINE"; b.setAttribute("aria-pressed", on ? "true" : "false");
+}
+function togglePhotoLine() {
+  DrivingLine.setPhoto(!DrivingLine.shown());
+  paintPhotoLine();
   if (G.soundOn) GameAudio.uiTick();
 }
 function setPhotoUiHidden(hide) {
@@ -286,10 +300,16 @@ $("pc-exit").onclick = () => {
 };
 $("pc-panel").onclick = togglePhotoPanel;
 $("pc-hud").onclick = () => setPhotoUiHidden(true);
+{   // built here, not in index.html: the shell-node ratchet is shrink-only
+  const lb = lineBtn = document.createElement("button");
+  lb.id = "pc-line"; lb.type = "button"; lb.setAttribute("aria-pressed", "true"); lb.textContent = "HIDE LINE";
+  lb.onclick = togglePhotoLine;
+  $("pc-bar").insertBefore(lb, $("pc-hud"));
+}
 $("pc-restore").onclick = () => setPhotoUiHidden(false);
 $("pc-fov").oninput = (e) => { photoCam.fov = +e.target.value; };
 
-return { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
+return { updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
 }
 
 return { create };

@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 import { assertOutputDir } from "../lib/output-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const REPOSITORY = "brycejmurrin/f1-game";
+const REPOSITORY = "brycejmurrin/f1-game";
 // The parentless 35 KB scaffold: release tags must not pin later screenshot history.
 export const STORAGE_ANCHOR = "bbc4c0a112921e790535ea52fc04e9c74a1271fb";
 const MAX_ASSET_BYTES = 2 ** 31;

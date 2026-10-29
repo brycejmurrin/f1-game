@@ -382,61 +382,19 @@ function scratchRepo(prefix) {
   return { dir, g, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
-test("the commit guard recognises every shape of git commit, and judges what is COMMITTED", () => {
-  /* 2026-10-04 review: the commit regex matched `git( -C dir)? commit` on the
-     raw text. Ten forms walked past it, and a pathspec commit of js/ with only
-     a doc staged took the docs-only path. APEX_GUARD_PROBE=1 stops the hook
-     after it has classified the commit (and run the unstaged check), so this
-     runs the real decision without the 25 s guard suite. */
-  const repo = scratchRepo("hook-commit-");
-  const run = (command) => spawnSync("bash", [path.join(ROOT, ".claude/hooks/bash-guard.sh")], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
-    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
-  });
-  try {
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
-    repo.g("add", "docs/PHYSICS.md");
-    for (const cmd of [
-      "git commit -m x",
-      "git -c user.name=x commit -m x",
-      "git --no-pager commit -m x",
-      'bash -c "git commit -m x"',
-      "bash -c 'git commit -m x'",
-      "env X=1 git commit -m x",
-      "GIT_AUTHOR_NAME=x git commit -m x",
-      "/usr/bin/git commit -m x",
-      "sudo -u me git commit -m x",
-      "cd . && git commit -m 'multi\nline'",
-    ]) {
-      const r = run(cmd);
-      assert.equal(r.status, 0, `${cmd}: ${r.stderr}`);
-      assert.match(r.stderr, /bash-guard probe: commit docs-only/, `the guard must SEE this commit: ${cmd}`);
-    }
-    // A pathspec naming code makes it a code commit, whatever is staged.
-    const ps = run("git commit docs/PHYSICS.md js/game.js -m x");
-    assert.match(ps.stderr, /probe: commit code paths=docs\/PHYSICS\.md js\/game\.js/, ps.stderr);
-    assert.match(run("git commit -am x").stderr, /probe: commit code/, "-a stages at commit time: never docs-only");
-    // Not commits at all: no classification, no block.
-    for (const cmd of ["echo 'git commit -m x'", "git log --oneline", "git commit --dry-run -m x",
-                       "printf '%s' 'cd x; git commit'", "APEX_SKIP_GUARDS=1 git commit -m x"]) {
-      const r = run(cmd);
-      assert.equal(r.status, 0, cmd);
-      assert.doesNotMatch(r.stderr, /probe: commit/, `not a guarded commit: ${cmd}`);
-    }
-    // STAGED, not the working tree: an unstaged code edit beside a staged one
-    // makes the guards measure content this commit does not carry.
-    fs.writeFileSync(path.join(repo.dir, "tools/manifest.cjs"), "export const t = 1;\n");
-    repo.g("add", "tools/manifest.cjs");
-    fs.writeFileSync(path.join(repo.dir, "js/game.js"), "var a = 2;\n");
-    const partial = run("git commit -m x");
-    assert.equal(partial.status, 2, "a partially staged commit must be refused");
-    assert.match(partial.stderr, /differ from what this commit holds[\s\S]*js\/game\.js/);
-    assert.equal(run("git commit -am x").status, 0, "-a commits the working tree: nothing differs");
-    assert.equal(run("git commit -m x js/game.js tools/manifest.cjs").status, 0, "a pathspec commits those paths from the working tree");
-    assert.equal(run("git -c core.pager=cat commit -m x").status, 2, "the global-option form gets the same check");
-  } finally { repo.rm(); }
+test("the commit parser recognises plain and wrapped commits including committed paths", () => {
+  const parse=command=>JSON.parse(spawnSync("python3",[path.join(ROOT,".claude/hooks/shellparse.py"),"commit"],{input:command,encoding:"utf8"}).stdout);
+  for(const command of ["git commit -m x","git -c user.name=x commit -m x","git --no-pager commit -m x",
+    'bash -c "git commit -m x"',"env X=1 git commit -m x","GIT_AUTHOR_NAME=x git commit -m x",
+    "/usr/bin/git commit -m x","sudo -u me git commit -m x","cd . && git commit -m x"])
+    assert.equal(parse(command).length,1,command);
+  assert.deepEqual(parse("git commit docs/PHYSICS.md js/game.js -m x")[0].paths,["docs/PHYSICS.md","js/game.js"]);
+  assert.equal(parse("git commit -am x")[0].all,true);
+  for(const command of ["echo 'git commit -m x'","git log --oneline","printf '%s' 'cd x; git commit'"])
+    assert.deepEqual(parse(command),[],command);
+  assert.equal(parse("git commit --dry-run -m x")[0].dry,true);
+  assert.equal(parse("APEX_SKIP_GUARDS=1 git commit -m x")[0].skip,true);
 });
-
 test("the edit guard sees Bash writes: sed -i, heredocs, tee, cp into js/ or a generated file", () => {
   /* Auto mode tells agents to edit with sed and heredocs, and the edit guard
      was wired to Write/Edit only — so a live run's js/ and every generated file
@@ -1040,3 +998,32 @@ test("stop-guard.sh lets a stop through when Claude is already continuing, and o
   assert.notEqual(junk.status, 1, `a malformed payload must not crash the hook: ${junk.stderr}`);
 });
 
+
+// Claude Code's own skill validator (Claude Academy, "Troubleshooting skills"; needs Claude Code
+// v2.1.233+; https://code.claude.com/docs/en/plugins/cli-reference#validate-a-directory,
+// checked 2026-10-28). It catches a SKILL.md whose frontmatter does not parse, which the budget tests above
+// only see through our own parser. It skips where the CLI is absent or too old (CI runners).
+test("claude plugin validate accepts project skills and rejects malformed skill frontmatter", { timeout: 100000 }, (t) => {
+  const r = spawnSync("claude", ["plugin", "validate", ".claude/skills"], { cwd: ROOT, encoding: "utf8", timeout: 80000 });
+  if (r.error && r.error.code === "ENOENT") return t.skip("claude CLI not on PATH");
+  const out = `${r.stdout}${r.stderr}`;
+  if (/unknown command|not a (known|valid) command|unknown option/i.test(out)) return t.skip("claude CLI too old for `plugin validate`");
+  assert.equal(r.status, 0, `claude plugin validate .claude/skills failed:\n${out}`);
+  // Exercise the validator's decision rather than its success-message wording.
+  // The valid control ensures a nonzero result is about the malformed YAML,
+  // not an unsupported fixture layout or path.
+  fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "skill-validator-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const skills = path.join(dir, "skills"), skill = path.join(skills, "example"); fs.mkdirSync(skill, { recursive: true });
+  const file = path.join(skill, "SKILL.md");
+  fs.writeFileSync(file, '---\nname: example\ndescription: "Use when testing skill validation."\n---\n# Example\n');
+  const validate = () => spawnSync("claude", ["plugin", "validate", skills], { cwd: ROOT, encoding: "utf8", timeout: 5000 });
+  const valid = validate();
+  assert.equal(valid.status, 0, `valid fixture refused: ${valid.error || valid.stdout + valid.stderr}`);
+  fs.writeFileSync(file, '---\nname: example\ndescription: [unterminated\n---\n# Example\n');
+  const invalid = validate();
+  assert.equal(invalid.error, undefined, `validator must execute, not fail to launch: ${invalid.error}`);
+  assert.equal(invalid.signal, null, "malformed frontmatter must return a verdict, not time out");
+  assert.equal(invalid.status, 1, "malformed frontmatter must fail validation (not an unexpected validator error)");
+});

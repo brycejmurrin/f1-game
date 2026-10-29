@@ -140,3 +140,54 @@ test("the pause card's career brief reads Career.objectiveMet on settleRound's c
   G.timeTrial = false; live = false;
   assert.equal(career.objectiveStatus(G), "", "a loaded save that is not being raced shows nothing");
 });
+
+test("pause-card brief keeps a retired team-mate in order (not last-by-absence)", async () => {
+  const { fnSource } = await import("../helpers/fn-source.mjs");
+  const { absSrc } = await import("../helpers/abs-src.mjs");
+  const careerSrc = fs.readFileSync(new URL("../../js/career/career.js", import.meta.url), "utf8");
+  const objectiveMet = vm.runInContext(
+    "(" + fnSource(careerSrc, "function objectiveMet(") + ")",
+    vm.createContext({}),
+    { filename: absSrc("js/career/career.js") },
+  );
+  const c = { team: "haas", season: { round: 1 } };
+  const { career } = boot({
+    Teams: { POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1] },
+    Career: {
+      inCareer: () => true, data: () => c,
+      objectiveFor: () => ({ type: "beatMate", value: 0 }),
+      objectiveLabel: () => "Finish ahead of your team-mate",
+      objectiveMet,
+    },
+  });
+  const haas = { id: "haas" }, other = { id: "ferrari" };
+  const p = { team: haas, prog: 900, lap: 10 };
+  const mate = { team: haas, retired: true, prog: 800, lap: 9 };
+  const leaders = Array.from({ length: 3 }, (_, i) => ({ team: other, prog: 1200 - i, lap: 11 }));
+  // game.js drops retirements from G.ranked — mate is only in G.cars.
+  const G = { player: p, session: "race", cars: [...leaders, p, mate], ranked: [...leaders, p] };
+  assert.equal(career.objectiveStatus(G),
+    "OBJECTIVE · FINISH AHEAD OF YOUR TEAM-MATE · ON TARGET",
+    "player ahead of a retired mate by progress stays ON TARGET");
+  // Swap progress so the mate retired while ahead — must NOT flip ON TARGET
+  // just because ranked omitted them (old bug: matePos = ranked.length + 1).
+  mate.prog = 950;
+  assert.equal(career.objectiveStatus(G),
+    "OBJECTIVE · FINISH AHEAD OF YOUR TEAM-MATE · NOT YET",
+    "a mate who retired ahead stays ahead of the player in the live order");
+  // Classified DNF still scores (settleRound's scored gate).
+  const pointsCareer = boot({
+    Teams: { POINTS: [25, 18, 15, 12, 10, 8, 6, 4, 2, 1] },
+    Career: {
+      inCareer: () => true, data: () => c,
+      objectiveFor: () => ({ type: "points", value: 1 }),
+      objectiveLabel: () => "Score championship points",
+      objectiveMet,
+    },
+  }).career;
+  p.retired = true; p.classified = true; p.prog = 700;
+  G.ranked = leaders.slice();
+  G.cars = [...leaders, p, mate];
+  assert.match(pointsCareer.objectiveStatus(G), /ON TARGET$/,
+    "classified retirement keeps championship points on the pause card");
+});

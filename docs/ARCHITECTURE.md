@@ -186,7 +186,9 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `standings.js` | `DataStandings` | LAZY_DATA | — (no header comment) |
 | `results.js` | `DataResults` | LAZY_DATA | the data hub's RESULTS tab: classification for ANY session of any 2023+ weekend (practice, qualifying, sprint, race), not just the latest Grand Prix. |
 | `live.js` | `DataLive` | LAZY_DATA | the data hub's LIVE tab: polls OpenF1 for the running session's positions/gaps/weather. mergePositionBatch/mergeIntervalBatch fold a delta batch onto… |
-| `real-race-tab.js` | `DataRealRace` | LAZY_DATA | DATA HUB RACE IT tab (DataRealRace.create(deps)) Turns one real Grand Prix's OpenF1 timing (drivers, laps, stints, pits, overtakes, race control, weather,… |
+| `real-race-script.js` | `DataRealRaceScript` | LAZY_DATA | pure OpenF1 race-script builder. |
+| `real-race-fetch.js` | `DataRealRaceFetch` | LAZY_DATA | real-race session cache and position traces. |
+| `real-race-tab.js` | `DataRealRace` | LAZY_DATA | DATA HUB RACE IT tab. |
 | `hub.js` | `DataHub` | LAZY_DATA | DataHub: F1 data overlay (#datahub). |
 
 **`js/career/`**
@@ -358,6 +360,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `forecast.js` | `Forecast` | tag | WEATHER FORECAST (Forecast): what the pit wall KNOWS about a dynamic-weather race, as a timed, located-in-laps statement with honest uncertainty. |
+| `ceremony.js` | `RaceCeremony` | tag | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
 | `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
 | `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
@@ -365,6 +368,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `car-fields.js` | `CarFields` | tag | CAR FIELDS: pre-declare the fields a car only gains once the frame loop is running. makeCars() (js/game.js) spawns a car with ~176 own fields. |
 | `reliability.js` | `Reliability` | LAZY_RACE_SESSION | RELIABILITY: whether a car reaches the flag at all. |
 | `damage.js` | `Damage` | LAZY_RACE_SESSION | DAMAGE: a per-car damage READOUT derived from the impacts the game already resolves (car-to-car contact through game.js collideFx, barrier strikes through… |
+| `damage-handling.js` | `DamageHandling` | LAZY_RACE_SESSION | DAMAGE → HANDLING (#1578): the ONE setting-gated read of the Damage readout (js/race/damage.js) that reaches the driving model. |
 | `duel.js` | `Duel` | LAZY_RACE_SESSION | DUEL: a practice race against ONE rival with his rating lifted. |
 | `session-records.js` | `SessionRecords` | LAZY_RACE_SESSION | Comparable time-trial classes and lap configuration continuity. |
 | `pit-geom.js` | `PitGeom` | LAZY_RACE_SESSION | PIT GEOMETRY (PitGeom): the lane window, box row and widths the state machine reads, including the surface curvature channel entryRunM. |
@@ -378,6 +382,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `marshal-panels.js` | `MarshalPanels` | LAZY_RACE_SESSION | marshal light panels. |
 | `flying-start.js` | `FlyingStart` | LAZY_RACE_SESSION | FLYING START: qualifying and time trial begin at speed, the way a Data Hub JUMP IN does (js/race/real-race.js). |
 | `jump-start-penalty.js` | `JumpStartPenalty` | LAZY_RACE_SESSION | FALSE START (FIA 2026 SR B5.11.1; js/race/sporting-regs.js): throttle at green or a launch faster than the minimum reaction window. |
+| `parc-ferme.js` | `ParcFerme` | LAZY_RACE_SESSION | PARC FERMÉ beat (ceremony plan slice 3 / #4069). |
+| `cooldown-lap.js` | `CooldownLap` | LAZY_RACE_SESSION | COOLDOWN LAP (CooldownLap): post-flag drive beat for the ceremony flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). |
 
 **`js/workers/`**
 
@@ -449,10 +455,13 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `bindings.js` | `InputBindings` | tag | InputBindings: keyboard and controller maps, conflict resolution and device-aware labels. |
 | `pad-menu.js` | `InputPadMenu` | tag | InputPadMenu: gamepad/phone menu navigation, focus seeding and held-direction repeats. |
 | `haptics.js` | `InputHaptics` | tag | InputHaptics: device/remote vibration, controller rumble and capability checks. |
+| `pedal-travel.js` | `PedalTravel` | tag | PedalTravel — stamp-then-ease thumb travel, one home for both pedals. |
 | `hold-buttons.js` | `InputHoldButtons` | tag | InputHoldButtons: multi-pointer hold/tap buttons, analog travel and teardown safety nets. |
 | `controller-profiles.js` | `ControllerProfiles` | tag | ControllerProfiles — bounded physical-device maps; legacy maps seed only the first device. |
 | `input.js` | `Input` | tag | Input: keyboard / gamepad / tilt / touch for Apex 26. |
 | `steer-tuning.js` | `SteerTuning` | tag | steering-tuning sliders, presets and macro levels for the ADVANCED pause-menu page. |
+| `phone-pad-codec.js` | `PhonePadCodec` | LAZY_NET | PhonePadCodec — the PHONE AS CONTROLLER wire format, one home. |
+| `phone-pad-page.js` | `PhonePadPage` | LAZY_NET | PhonePadPage — the phone wheel. |
 | `phone-pad.js` | `PhonePad` | LAZY_NET | PhonePad — PHONE AS CONTROLLER: a phone on the sofa steers the game on the screen by tilting, over the multiplayer wire, and shows a steering-wheel dash fed… |
 
 **`js/audio/`**
@@ -492,6 +501,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `wheel-state.js` | `WheelState` | tag | WHEEL STATE: torque-balanced per-axle rim speed and slip ratio. |
 | `vehicle.js` | `Vehicle` | tag | VEHICLE tick scratch. |
 | `player-forces.js` | `PlayerForces` | tag | PLAYER FORCES: combined-slip budget, axle grip circle, soft tyre forces and the human rigid-body yaw/lateral integrate. |
+| `ai-strategy.js` | `AiStrategy` | tag | AI STRATEGY: tyre-wear pace and the stint planner. |
 | `ai-drive.js` | `AiDrive` | tag | AI DRIVE: situation-aware decisions for the kinematic AI field. |
 | `ai-band.js` | `AiBand` | tag | @ts-check |
 | `ai-corridor.js` | `AiCorridor` | tag | @ts-check |
@@ -529,6 +539,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene-dress.js` | `GarageDress` | tag | GarageDress: the team dress of the garage bay. |
+| `crew-draw.js` | `GarageCrewDraw` | tag | Shared pit-crew draw helpers. |
 | `crew-motion.js` | `GarageCrewMotion` | tag | Blender-authored guide motion. |
 | `crew-service.js` | `GarageCrewService` | tag | Timed garage service: blanket handlers, a rolling front jack and garage support. |
 | `crew-choreo.js` | `GarageCrewChoreo` | tag | GarageCrewChoreo: Blender-authored crew choreography. |
@@ -600,6 +611,8 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 |---|---|---|---|
 | `feed.js` | `OverlayFeed` | tag | stream/broadcast overlay frame schema. |
 | `render.js` | `OverlayRender` | tag | transform-only DOM painter for overlay.html. |
+| `bridge.js` | `OverlayBridge` | tag | OverlayBridge: the same-browser transport between the game and overlay.html. |
+| `publisher.js` | `OverlayPublisher` | tag | OverlayPublisher: the game page's half of the stream overlay. |
 
 **`js/xr/`**
 
