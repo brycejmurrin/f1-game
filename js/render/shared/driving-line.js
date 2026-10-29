@@ -63,6 +63,12 @@ window.DrivingLine = (function () {
 
   function setMode(m) { mode = MODES.includes(m) ? m : "off"; return mode; }
   function getMode() { return mode; }
+  // PHOTO override: photo mode and the Photo Studio show or hide the ribbon for a shot without touching the saved
+  // DRIVING LINE setting. null = follow the setting; false = hidden; true = shown (FULL when the setting is OFF).
+  let photo = null;
+  function setPhoto(v) { photo = v == null ? null : !!v; return photo; }
+  function shown() { return photo === null ? mode !== "off" : photo; }
+  function drawMode() { return photo === true && mode === "off" ? "full" : photo === false ? "off" : mode; }
   // LINE COLOUR. The speed cue is only a cue if it can be read: F1's own
   // green/amber/red puts the two ends of the scale on the pair the common
   // red-green deficiencies cannot separate. `safe` swaps in the IBM
@@ -236,10 +242,11 @@ window.DrivingLine = (function () {
   }
   function draw(gfx, api, playerSpeed) {
     if (api) _api = api;
-    if (mode === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
+    const dm = drawMode();
+    if (dm === "off" || !gfx || typeof gfx.drawDrivingLine !== "function") return false;
     ensure(api);
     // One scratch opts, refilled per frame: every backend reads it synchronously.
-    _drawOpts.speed = playerSpeed || 0; _drawOpts.cornersOnly = mode === "corner";
+    _drawOpts.speed = playerSpeed || 0; _drawOpts.cornersOnly = dm === "corner";
     _drawOpts.palette = palette === "safe" ? 1 : 0; _drawOpts.opacity = _opMul;
     const drew = gfx.drawDrivingLine(cache.verts, cache.count, cache.dirty, _drawOpts);
     if (drew) cache.dirty = false;
@@ -284,7 +291,7 @@ window.DrivingLine = (function () {
   // MODES / PALETTES / STEP / HALF_W stay module-local (setters + build/draw);
   // nothing outside reads them. OPACITIES / STRIDE / opacityMul / bankOffset
   // stay exported — unit tests pin the opacity table and the bank lerp.
-  return { OPACITIES, STRIDE, setMode, mode: getMode,
+  return { OPACITIES, STRIDE, setMode, mode: getMode, setPhoto, shown,
            setPalette, palette: getPalette, setOpacity, opacity: getOpacity, opacityMul,
            build, draw, speedAt, zoneAt, cue, reset, bankOffset,
            _cache: () => cache };
