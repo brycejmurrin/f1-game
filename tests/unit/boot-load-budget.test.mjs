@@ -25,7 +25,9 @@ const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
 // 325: tip PedalTravel + GarageCrewDraw + AiStrategy (323) + OverlayBridge + OverlayPublisher (#4056).
-const MAX_EAGER_SCRIPTS = 325;
+// 326: + EnergyPlan (#1580, PR #3981): game.js reads it every frame and the Settings ERS rows at boot, so it
+// cannot be lazy without a redesign (Bryce, 2026-10-29: "Raise to 326").
+const MAX_EAGER_SCRIPTS = 326;
 const MAX_EAGER_BYTES = 8_200_000;
 
 function eagerScripts() {
