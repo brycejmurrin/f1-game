@@ -377,7 +377,6 @@ const FULL = [
   "js/camera/photo-cam.js",
   "js/camera/replay-buf.js",    // ReplayBuf.create(G): solo 20 s / 30 Hz instant-replay ring + pause scrub
   "js/camera/results-cam.js",   // ResultsCam.create(G): chequered cut, results orbit, highlights reel
-  "js/race/parc-ferme.js",      // ParcFerme.create(G): ceremony parc fermé beat (#4069); after ResultsCam (reuses orbitPose)
   "js/lighting/tuner-panel.js",
   "js/camera/cam-tuner-boot.js", // CamTunerPanel stub; panel body is LAZY_CAM_EDITOR
   "js/physics/brake-cue.js",
@@ -1081,6 +1080,7 @@ const LAZY_RACE_SESSION = [
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
   "js/race/jump-start-penalty.js",
+  "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/pit-geom.js", "js/race/pit-lane.js"],

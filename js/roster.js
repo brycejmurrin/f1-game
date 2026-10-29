@@ -220,7 +220,8 @@
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
-    "js/race/jump-start-penalty.js"
+    "js/race/jump-start-penalty.js",
+    "js/race/parc-ferme.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [

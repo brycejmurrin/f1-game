@@ -3927,7 +3927,7 @@
     {
       "path": "js/race/parc-ferme.js",
       "global": "ParcFerme",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/pit-geom.js",
