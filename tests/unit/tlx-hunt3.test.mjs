@@ -647,7 +647,7 @@ test("R1: the AI material is the lit instanced fragment on its own program key; 
   assert.equal(ai.customProgramCacheKey(), "ai-" + inst.customProgramCacheKey());
   assert.match(TLX, /draw\(mesh, model, opts\) \{\s*if \(opts && opts\.coalesce && mesh && mesh\.geo && _coAppend\(mesh\.geo, model, opts\)\) return;/);
   assert.match(fnSource(TLX, "async function warmFxPrograms() {"), /await _coWarm\(\);/);
-  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo, true\);/);
+  assert.match(fnSource(TLX, "function releaseGeometry(geo) {"), /_coDrop\(geo, !_ownershipFreeDepth\);/);
   assert.match(TLX, /get coalesce\(\) \{ return _coOn && !skipBatches\(\); \}/);
   assert.match(TLX, /\(instanced === 2 \? "\|ai" : instanced \? "\|in" : ""\)/, "the material key separates the three modes");
   assert.match(TLX, /if \(instanced === 2 && m\) _attrInst\(m\);/);
