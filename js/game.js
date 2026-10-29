@@ -6740,24 +6740,17 @@ const _envLatch = [NaN, NaN, NaN, NaN, NaN, NaN, NaN, -1], ENV_HOLD_MOVE_M = 4, 
 let _envProbeOff = false;
 try { _envProbeOff = localStorage.getItem("apex26.envProbeOff") === "1"; } catch (_) {}
 let _raceEntryEnvProbeSession = false;
-let _raceEntryRenderScaleSaved = null;
 function clearRaceEntrySoften() {
   _raceEntryEnvProbeSession = false;
+  // Scale stays where PerfGov.chooseSoftwareRaceScale put it. A restore here
+  // is a second canvas setSize (tens of seconds on SwiftShader).
   if (typeof PerfGov !== "undefined" && PerfGov.softwareGaragePreviewEnd) PerfGov.softwareGaragePreviewEnd(gfx);
-  if (_raceEntryRenderScaleSaved != null && gfx && gfx.setRenderScale) {
-    gfx.setRenderScale(_raceEntryRenderScaleSaved);
-    _raceEntryRenderScaleSaved = null;
-  }
   try { if (gfx && gfx.envProbeOptOut) gfx.envProbeOptOut = false; } catch (_) { /* harness */ }
 }
 function installRaceEntrySoften() {
   if (typeof GfxEscalation === "undefined" || !GfxEscalation.registerRaceEntrySoften) return;
   GfxEscalation.registerRaceEntrySoften((g) => {
     if (typeof RaceEntryProfile === "undefined" || !RaceEntryProfile.softwareRaster || !RaceEntryProfile.softwareRaster()) return;
-    if (g && g.setRenderScale && g.getRenderScale) {
-      const cur = g.getRenderScale();
-      if (cur > 0.72) { _raceEntryRenderScaleSaved = cur; g.setRenderScale(0.72); }
-    }
     _raceEntryEnvProbeSession = true;
     try { if (g) g.envProbeOptOut = true; } catch (_) { /* harness */ }
   });
