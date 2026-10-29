@@ -64,6 +64,7 @@ function boot(options = {}) {
       ],
     },
     LightStore: { reapply: () => { order.push("lt-reapply"); } },
+    DrivingLine: { shown: () => true, setPhoto: () => {} },
     GameStore: { store: { get: (k, d) => (k === "homeScene" ? scene.value : d), set: (k, v) => { if (k === "homeScene") scene.value = v; } } },
     createImageBitmap: options.bitmap || (async () => ({ width: 1024, height: 768, close: () => {} })) });
   vm.runInContext(fs.readFileSync(new URL("../../js/ui/setting-row.js", import.meta.url), "utf8"), ctx);
