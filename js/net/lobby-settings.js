@@ -149,8 +149,9 @@ const LobbySettings = (function () {
     return out;
   }
 
+  // WEATHER / TIME_OF_DAY / DIFFICULTY / GRID stay module-local (normaliseSettings).
   return {
-    WEATHER, TIME_OF_DAY, DIFFICULTY, GRID, GRID_LABEL, RULES, MAX_CIRCUIT_JSON,
+    GRID_LABEL, RULES, MAX_CIRCUIT_JSON,
     own, customPicked, circuitPayload, installCircuit, normaliseSettings,
   };
 })();
