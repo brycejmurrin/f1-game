@@ -13,7 +13,8 @@ of everything about that circuit**: its real centreline (`path`), curated markin
 pair, `js/circuits/scenery/<id>.js`. The engine (`js/track/tracks.js`) reads
 `TrackDefs`, builds a Catmull-Rom spline from `path` (a def without one is a build
 error naming the circuit — there is no hand-authored fallback), and extrudes the
-road, terrain, and prop meshes. Circuit loading, generated picker meta, and the
+road, terrain, and prop meshes. Circuit loading, generated picker meta (built at deploy, never committed:
+`npm run gen` or `node tools/gen/ensure-built.mjs` rebuilds `js/track/circuit-meta.js`), and the
 manifest contract live in [AGENTS.md §Layout](../../../AGENTS.md#layout).
 
 ## Track-definition schema

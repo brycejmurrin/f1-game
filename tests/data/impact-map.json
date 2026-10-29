@@ -12043,6 +12043,44 @@
         "tests/unit/car-fields-vm.test.mjs"
       ]
     },
+    "js/race/cooldown-lap.js": {
+      "aiPolicy": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "create": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "exitReason": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "mountSkip": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "playerCanDrive": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "reset": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "sessionEligible": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "skip": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "skipTargetOk": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "start": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "status": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/cooldown-lap.test.mjs"
+      ]
+    },
     "js/race/daily-challenge.js": {
       "create": [
         "tests/unit/badges.test.mjs",
@@ -14297,7 +14335,9 @@
         "tests/unit/driving-line.test.mjs"
       ],
       "reset": [
-        "tests/unit/driving-line.test.mjs"
+        "tests/unit/driving-line.test.mjs",
+        "tests/unit/free-cam.test.mjs",
+        "tests/unit/photomode-hold.test.mjs"
       ],
       "setMode": [
         "tests/unit/driving-line.test.mjs"
@@ -15938,6 +15978,9 @@
       "*": [
         "tests/unit/circuit-def-fields.test.mjs",
         "tests/unit/circuit-meta.test.mjs",
+        "tests/unit/deploy-staging.test.mjs",
+        "tests/unit/deploy-tool.test.mjs",
+        "tests/unit/harness-display.test.mjs",
         "tests/unit/season-cal.test.mjs",
         "tests/unit/tools-a12-guards.test.mjs"
       ]

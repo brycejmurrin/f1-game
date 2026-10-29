@@ -114,7 +114,7 @@ function boot() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js", "js/camera/photo-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js", "js/render/shared/driving-line.js", "js/camera/photo-cam.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const G = {
     $: (id) => dom.byId(id), gfx: {}, photoCam: { pos: [0, 0, 0], pitch: 0, yaw: 0, fov: 60 },
     photoKeys: {}, photoMouse: {}, photoMove: {}, photoLook: {},

@@ -1095,6 +1095,7 @@ const LAZY_RACE_SESSION = [
   "js/race/jump-start-penalty.js",
   "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4); ResultsStory is FULL
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
+  "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat
