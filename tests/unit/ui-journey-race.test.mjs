@@ -106,6 +106,24 @@ test("compact race HUD uses body density, not orientation + max-height queries",
 test("pause owns paused navigation: #campicker stands down with the dim sheet", () => {
   const hud = read("css/hud.css");
   assert.match(hud, /body:has\(> \.screen\.dim:not\(\[hidden\]\)\) #campicker \{\s*display:\s*none/);
+  // UI hunt 2026-10-29 row 2: an open grid painted through the results card.
+  assert.match(stripComments(hud), /body:not\(\.in-race\) #campicker \{\s*display:\s*none/);
+});
+
+// UI hunt 2026-10-29 rows 1 and 4: at 844x390 the 280 px grid ran 7 rows to
+// y 461 (HELMET, the default cam, offscreen) and clipped CINEMATIC / TRACKSIDE.
+test("#campicker fits a short landscape: scroll-bounded, wide in compact, labels never clipped", () => {
+  const css = stripComments(read("css/touch-controls.css"));
+  const rule = (sel) => { const m = css.match(new RegExp("(?:^|\\n)" + sel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " \\{([^}]*)\\}")); assert.ok(m, sel); return m[1]; };
+  const base = rule("#campicker");
+  assert.match(base, /max-height:\s*calc\(100dvh[^;]*var\(--sab\)/, "bounded by the viewport and safe area");
+  assert.match(base, /overflow-y:\s*auto/, "the rest scrolls instead of painting offscreen");
+  const compactW = rule('body[data-density="compact"] #campicker').match(/width:\s*min\((\d+)px/);
+  assert.ok(compactW && +compactW[1] >= 480, "compact uses the free landscape width (>= 5 columns of 84 px)");
+  const btn = rule("#campicker button");
+  assert.match(btn, /min-width:\s*max-content/);
+  assert.match(btn, /white-space:\s*nowrap/);
+  assert.doesNotMatch(btn, /text-overflow/, "no ellipsis: the label is the whole control");
 });
 
 test("sector box still clears #pausebtn via --tap-hud / --hud-z", () => {

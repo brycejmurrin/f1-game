@@ -1739,6 +1739,10 @@ body:has(> .screen.dim:not([hidden])) #photo-controls { display: none; }
    is the CSS twin so #campicker cannot paint in the dim beside the pause card
    if the hidden attribute lags. Same :has() as #photo-controls above. */
 body:has(> .screen.dim:not([hidden])) #campicker { display: none; }
+/* …and off the race: endRace drops body.in-race, and an open grid painted
+   through the results card (UI hunt 2026-10-29 row 2). cam-picker.js also
+   hides it when #btn-cam hides; this is the twin if that lags. */
+body:not(.in-race) #campicker { display: none; }
 /* Same moment: stand the race chrome down while ANY menu screen is open.
    Measured MCP 852×393 @ UI SIZE 150%: #pm-quit overlapped #hud-speed /
    #hud-gear / #hud-energy (quit bot 401 on vh 393) and the touch pads still
