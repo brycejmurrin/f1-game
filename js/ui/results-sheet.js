@@ -675,8 +675,9 @@ function buildTTResults() {
         trackName, day: shareOpts.day, link: lap.ok ? lap.url : null, rivalName: guestGhost ? tr("results.rival", null, "RIVAL") : "" });
     }, "lap-" + trackId);
     const encoded = GhostShare.encode(shareGhost, shareOpts);
+    let fallbackBox = null;   // ONE box per sheet: each refused tap reuses it (it stacked a duplicate id)
     const fallback = (btn, value, label) => {
-      const box = document.createElement("textarea");
+      const box = fallbackBox || (fallbackBox = document.createElement("textarea"));
       box.id = "res-ghost-copy-fallback";
       box.className = "sel-chip";
       box.readOnly = true;
@@ -748,7 +749,9 @@ function buildTTResults() {
       else Ghost.clear(track.def.id);
       const remaining = G.records.board(track.def.id);
       G.ttRecord = remaining.length ? remaining[0].t : Infinity;
-      buildTTResults();
+      // The rebuild destroys this button: keep focus on its slot (js/ui/modal.js).
+      if (typeof TopModal !== "undefined" && TopModal.keepFocus) TopModal.keepFocus(els.results, buildTTResults);
+      else buildTTResults();
     };
     els.resultsTable.appendChild(clrBtn);
   }

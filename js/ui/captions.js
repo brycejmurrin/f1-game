@@ -91,7 +91,13 @@ const Captions = (function () {
     return "";
   }
 
+  // The strip sits outside #hud, so nothing else hides it: each paint re-arms
+  // a hold timer, and clear() drops it on race reset / quit to menu.
+  const STRIP_HOLD_MS = 2500;
+  let stripTimer = 0;
+
   function paintStrip(who, text, side) {
+    if (stripTimer) { clearTimeout(stripTimer); stripTimer = 0; }
     const el = byId("captions");
     if (!el || !stripVisible()) {
       if (el) el.hidden = true;
@@ -108,6 +114,15 @@ const Captions = (function () {
     }
     el.hidden = !(text && String(text).trim());
     el.setAttribute("aria-hidden", el.hidden ? "true" : "false");
+    if (!el.hidden && typeof setTimeout === "function") {
+      stripTimer = setTimeout(() => { stripTimer = 0; paintStrip("", ""); }, STRIP_HOLD_MS);
+    }
+  }
+
+  /** Hide the spotter strip and announcer caption (race reset, quit to menu). */
+  function clear() {
+    paintStrip("", "");
+    clearLoading();
   }
 
   function paintLoading(who, text) {
@@ -139,10 +154,7 @@ const Captions = (function () {
     r.style.setProperty("--caption-bg-a", String(bg / 100));
     r.dataset.captionSpeakerInk = speakerInk === "off" ? "off" : "on";
     r.style.setProperty("--caption-ch", String(TEXT_CH_MAX));
-    if (!stripVisible()) {
-      paintStrip("", "");
-      clearLoading();
-    }
+    if (!stripVisible()) clear();
   }
 
   function onRadio(meta) {
@@ -260,7 +272,7 @@ const Captions = (function () {
   return {
     RING_MAX, TEXT_CH_MAX,
     radioWho, push, ring: () => ring.slice(),
-    onRadio, onSpotter, onAnnouncerLine, announcerDone,
+    onRadio, onSpotter, onAnnouncerLine, announcerDone, clear,
     setMode, setSize, setPos, setBg, setSpeakerInk,
     initAppearanceRows,
   };
