@@ -1211,8 +1211,11 @@ const NetPlay = (function () {
             || c.pitState !== last.pit || c.pitArmed !== last.armed || c.pitFitted !== last.fitted
             || (c.pitNext && c.pitNext.id) !== last.next || c.compoundShortAtFinish !== last.compound) {
           broadcastStrategy(strategyState(c, wire, G.track.def.id));
-          if (!last) { last = {}; aiStrategyPhases.set(wire, last); }
-          last.at = now; last.stints = c.tyreStints; last.pit = c.pitState; last.armed = c.pitArmed;
+          // Stagger the 1 Hz refresh: each AI car's phase is pushed LATER by its wire id, so the field's
+          // ~21 payloads spread over the second instead of bursting in one frame, and no interval is
+          // ever shorter than 1 s (perf hunt 4).
+          if (!last) { last = {}; aiStrategyPhases.set(wire, last); last.at = now + (wire % 24) * (1000 / 24); }
+          else last.at = now; last.stints = c.tyreStints; last.pit = c.pitState; last.armed = c.pitArmed;
           last.fitted = c.pitFitted; last.next = c.pitNext && c.pitNext.id; last.compound = c.compoundShortAtFinish;
         }
       }

@@ -718,6 +718,8 @@
     "tests/unit/perf-governor.test.mjs",
     "// Hot-function microbench in the game VM (step, physState, nodeAt): 6x the checked-in per-call baseline, and a 4x within-run window spread.",
     "tests/unit/perf-hot-bench.test.mjs",
+    "// Perf sweep 2026-10-29 behaviour checks (game VM + fake AudioContext): SOUND OFF suspends, a tap does not wake it, SFX OFF builds no engine graph. ~3 s.",
+    "tests/unit/perf-hunt-4.test.mjs",
     "tests/unit/perf-race-entry.test.mjs",
     "tests/unit/perf-sentinel.test.mjs",
     "// Session hang ceilings vs recorded phone lines (garage, grid, frames, quit heap). No browser.",
