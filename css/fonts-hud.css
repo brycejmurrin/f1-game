@@ -38,12 +38,8 @@
    or x-height would not hold the boxes. It also leaves the populated `.hud-top`
    string 18% NARROWER than Rajdhani (206.2 -> 169.2 px at 14px), which is slack
    in exactly the place docs/notes/HUD-TABULAR-DIGITS.md says the fit pass fights
-   for it. The three weights mirror Rajdhani's; 800 still synth-bolds from 700. */
-@font-face {
-  font-family: "Barlow Condensed"; font-style: normal; font-weight: 500;
-  font-display: swap; size-adjust: 91.9%;
-  src: url("../assets/fonts/barlow-condensed-latin-500-normal.woff2") format("woff2");
-}
+   for it. Shipped weights are the ones CSS actually asks for (600/700); 500 had
+   no live font-weight:500 consumer. 800 still synth-bolds from 700. */
 @font-face {
   font-family: "Barlow Condensed"; font-style: normal; font-weight: 600;
   font-display: swap; size-adjust: 91.9%;

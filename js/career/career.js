@@ -332,7 +332,6 @@ function slots(flavour) {
     }
   return out;
 }
-function anySave(flavour) { return slots(flavour).some((s) => s.used); }
 function firstFree(flavour) {
   const set = slots(flavour);
   for (const s of set) if (!s.used) return s.i;
@@ -805,10 +804,6 @@ function owned(teamId) {
   for (const cat of Parts.CATALOG)
     for (const o of cat.options) if (!o.cost) s.add(o.id);
   return s;
-}
-function isOwned(teamId, optId) {
-  const s = owned(teamId);
-  return s ? s.has(optId) : true;
 }
 // The facility discount lands HERE, not at the point of sale, so the garage's
 // RESEARCH price and the balance charged can never disagree.
@@ -2003,25 +1998,25 @@ function state() {
 }
 
 return {
-  PRIZE, RESEARCH_MULT, BUDGET_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
+  PRIZE, RESEARCH_MULT, TDEV_MAX, TDEV_TO_PACE, START_MONEY,
   planning,
-  OBJ_BONUS, OBJ_REP, DEV_MAX, HISTORY_MAX, CRAFT_BASE, craftScore, seasonCraft,
-  SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, slotRevision, armedRevision, anySave, firstFree,
+  OBJ_BONUS, OBJ_REP, HISTORY_MAX, craftScore, seasonCraft,
+  SLOTS, FLAVOURS, slot, slots, useSlot, deleteSlot, slotRevision, armedRevision, firstFree,
   data, active, inCareer, conflicted, engage, load, save, saveStatus, clear, start, state, rnd, hash, seasonSeed,
   GRANT, freeMoney, grant,
   sponsor, sponsorAt, sponsorLabel, settleSponsor,
   FACILITY_MAX, FACILITY_DISCOUNT_MAX, facility, facilityCost, facilityDiscount,
   upgradeFacility, SPONSOR_KINDS,
   renewHire, hireDriver, hirePending, HIRE_MIN,
-  salaryFor, newDeal, expectedFinish, tierFinish, driverOverride, devFor,
+  salaryFor, expectedFinish, tierFinish, driverOverride, devFor,
   AMBITION, ambition, ambitionOf, setAmbition, goalValueFor,
   GOAL_KINDS, GOAL_ORDER, goalFor, goalLabel, goalNow, goalOnTrack, goalTypeFor,
   era, eraSeasonsLeft, seasonsElapsed, applyRegs,
-  gridDrivers, wageBill, freeAgents, MYTEAM_WORKS,
+  gridDrivers, freeAgents, MYTEAM_WORKS,
   paceMult, teamStats, aiSetup,
-  owned, isOwned, researchCost, research, budget, budgetUpgradeCost, upgradeBudget,
+  owned, researchCost, research, budget, upgradeBudget,
   identityValue, setIdentityValue, onIdentityChange, identityRevision: () => identityRevision,
-  objective, objectiveFor, objectiveLabel, objectiveMet, prizeFor, settleRound, scoreRound, worksCost, budgetCap,
+  objective, objectiveFor, objectiveLabel, objectiveMet, prizeFor, settleRound, scoreRound, budgetCap,
   OBJ_CHOICES, objectiveChoices, objectivePick, chooseObjective, objectiveLocked, markWeekendStarted,
   driverStandings, teamStandings, rollover, offers, offerPreview, acceptOffer, marketValue, offerBar,
   round, roundsTotal, seasonDone, trackIndex, calendar, tallyOf,

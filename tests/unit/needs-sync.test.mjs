@@ -27,9 +27,20 @@ test("decideSync: clean-behind green / running / unknown / none = no", () => {
     assert.equal(decideSync({ behind: true, conflict: false, ci, runStartedAt: T0, tipNewestAt: T1 }).verdict, "no", ci);
   }
 });
+test("decideSync: a distance-only gate refusal on a clean-behind branch = distance (the gate will not arm it)", () => {
+  const v = decideSync({ behind: true, conflict: false, ci: "success", runStartedAt: T0, tipNewestAt: T1, distance: true });
+  assert.equal(v.verdict, "distance");
+  assert.equal(verdictLine(v), "= sync needed: distance");
+});
+test("decideSync: conflict and stale-red still win over distance; up to date is no even with a stale refusal", () => {
+  assert.equal(decideSync({ behind: true, conflict: true, ci: "success", distance: true }).verdict, "conflict");
+  assert.equal(decideSync({ behind: true, conflict: false, ci: "failure", runStartedAt: T0, tipNewestAt: T1, distance: true }).verdict, "stale-red");
+  assert.equal(decideSync({ behind: false, conflict: false, ci: "success", distance: true }).verdict, "no");
+});
 test("exit codes and verdict line", () => {
-  assert.deepEqual(VERDICTS, ["conflict", "stale-red", "no"]);
+  assert.deepEqual(VERDICTS, ["conflict", "stale-red", "distance", "no"]);
   assert.equal(exitCode({ ok: true, verdict: "conflict" }), 0);
+  assert.equal(exitCode({ ok: true, verdict: "distance" }), 0);
   assert.equal(exitCode({ ok: true, verdict: "stale-red" }), 0);
   assert.equal(exitCode({ ok: true, verdict: "no" }), 1);
   assert.equal(exitCode({ ok: false }), 3);
@@ -65,6 +76,16 @@ test("needsSync: an unresolvable ref is an error, not a verdict", () => {
 test("needsSync: API failure degrades to a note, never a stale-red", () => {
   const v = needsSync("pr", { fetch: false, readGit: alias(repo(["a.txt", "a\n"], ["b.txt", "b\n"])), request: () => ({ error: "HTTP 403" }) });
   assert.equal(v.verdict, "no"); assert.match(v.note, /unreadable/);
+});
+test("needsSync: a distance-only `gate` refusal on a clean-behind head = distance via the injected API", () => {
+  const gate = (state, description) => ({ json: { statuses: [{ context: "gate", state, description }] } });
+  const api = (g) => (p) => (p.startsWith("commits/") ? g : { json: { workflow_runs: [] } });
+  const r = repo(["a.txt", "a\n"], ["b.txt", "b\n"]);
+  const only = "= merge-gate refused — open=ok hold=ok plan=ok ci=ok distance=FAIL pr=#7 sha=abc tip=def";
+  assert.equal(needsSync("pr", { fetch: false, readGit: alias(r), request: api(gate("failure", only)) }).verdict, "distance");
+  assert.equal(needsSync("pr", { fetch: false, readGit: alias(r), request: api(gate("failure", only.replace("plan=ok", "plan=FAIL"))) }).verdict, "no", "another failing row is not a distance case");
+  assert.equal(needsSync("pr", { fetch: false, readGit: alias(r), request: api(gate("success", only)) }).verdict, "no", "only a refusal counts");
+  assert.equal(needsSync("pr", { fetch: false, readGit: alias(r), request: api({ error: "HTTP 403" }) }).verdict, "no", "an unreadable status is not a distance refusal");
 });
 test("needsSync: red head + newer tip commit = stale-red via the injected API", () => {
   const request = () => ({ json: { workflow_runs: [{ id: 7, path: ".github/workflows/ci.yml", status: "completed", conclusion: "failure", run_started_at: "2000-01-01T00:00:00Z" }] } });

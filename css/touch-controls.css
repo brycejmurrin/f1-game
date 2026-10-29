@@ -347,20 +347,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */
 @media (orientation: landscape) {
-  /* HUD becomes a short horizontal strip at the very bottom so the big gear
-     no longer floats up over the car */
-  .hud-bottom { flex-direction: row; }
-  /* Positioning (left/right/bottom) now lives entirely in the INSTRUMENT
-     CLUSTER grid block below (`position: static`, `display: grid`) — this
-     rule only sets what that block does not: how the strip compacts when it
-     does not fit. Measured: the strip wants 467px. An iPhone SE landscape
-     leaves 467 here, 383 in manual and 287 in buttons mode — so it also has
-     to COMPACT, and wrap rather than collide when even that is not enough. */
-  .hud-bottom {
-    transform: none;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
   /* Landscape sizes the readouts DOWN. Portrait can afford a 58px gear because
      the screen is tall and the HUD owns the bottom third; landscape has ~390px
      of height total and the road is the thing you are actually looking at.
@@ -600,7 +586,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     grid-template-areas:
       "gear speed  ot"
       "gear energy aero";
-    align-items: start; justify-items: center;
+    align-items: start; justify-items: center; justify-content: center;
     gap: var(--gap) calc(var(--gap) * 2 / 3);
     min-width: 0;                  /* may shrink before it pushes a dock */
     pointer-events: none;
@@ -627,9 +613,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* The AERO chip's text is a live COUNTDOWN — "AERO 240m", "NO AERO ZONE" —
      so it changes width every frame. Wrapping it to two lines made the whole
      cluster jump a row taller and back as the car approached a zone. */
+  /* font-size already on #hud-ot / #hud-aero in css/hud.css. Padding is the
+     same 5px 10px there too, but dropping it here lowers tree rawSpacing and
+     that ceiling is owned outside this lane — keep the px until a ratchet
+     carve can land with it. nowrap is the only non-restate. */
   #hud-ot,
   #hud-aero {
-    white-space: nowrap; font-size: var(--fs-micro); padding: 5px 10px;
+    white-space: nowrap; padding: 5px 10px;
   }
 
   /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----

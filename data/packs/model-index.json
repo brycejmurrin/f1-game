@@ -16,52 +16,22 @@
     "k_barrierred": {
       "role": "placed"
     },
-    "k_barrierwall": {
-      "role": "kit_catalog"
-    },
     "k_barrierwhite": {
       "role": "placed"
     },
     "k_billboard": {
       "role": "kit_catalog"
     },
-    "k_billboarddouble_exclusive": {
-      "role": "kit_catalog"
-    },
     "k_billboardlow": {
       "role": "placed"
     },
-    "k_billboardlower": {
-      "role": "kit_catalog"
-    },
     "k_camera_exclusive": {
       "role": "placed"
-    },
-    "k_fencecurved": {
-      "role": "kit_catalog"
-    },
-    "k_fencestraight": {
-      "role": "kit_catalog"
     },
     "k_grandstand": {
       "role": "kit_catalog"
     },
     "k_grandstandawning": {
-      "role": "kit_catalog"
-    },
-    "k_grandstandcovered": {
-      "role": "kit_catalog"
-    },
-    "k_grandstandcoveredround": {
-      "role": "kit_catalog"
-    },
-    "k_grandstandround": {
-      "role": "kit_catalog"
-    },
-    "k_lightcolored": {
-      "role": "kit_catalog"
-    },
-    "k_lightpost_exclusive": {
       "role": "kit_catalog"
     },
     "k_lightpostlarge": {
@@ -70,31 +40,10 @@
     "k_lightpostmodern": {
       "role": "placed"
     },
-    "k_lightred": {
-      "role": "kit_catalog"
-    },
-    "k_lightreddouble": {
-      "role": "kit_catalog"
-    },
-    "k_overhead": {
-      "role": "kit_catalog"
-    },
-    "k_overheadlights": {
-      "role": "kit_catalog"
-    },
-    "k_overheadround": {
-      "role": "kit_catalog"
-    },
-    "k_overheadroundcolored": {
-      "role": "kit_catalog"
-    },
     "k_pitsgarage": {
       "role": "kit_catalog"
     },
     "k_pitsgarageclosed": {
-      "role": "kit_catalog"
-    },
-    "k_pitsgaragecorner": {
       "role": "kit_catalog"
     },
     "k_pitsoffice": {
@@ -123,12 +72,6 @@
     },
     "k_tentlong": {
       "role": "placed"
-    },
-    "k_tentroof": {
-      "role": "kit_catalog"
-    },
-    "k_tentroofdouble": {
-      "role": "kit_catalog"
     },
     "palm_lod0": {
       "role": "nature_bake"

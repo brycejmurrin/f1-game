@@ -247,8 +247,10 @@ const SaveSchemaRegistry = (function () {
     return null;
   }
 
+  // PREFIX / EXACT / validators stay module-private: resolve/validateKey/
+  // ingestSettingsSpec are the only external seams (save-schema-registry tests).
   return {
-    PREFIX, EXACT, validators, resolve, validateKey, noteWrite, ingestSettingsSpec,
+    resolve, validateKey, noteWrite, ingestSettingsSpec,
     get strict() { return strict; },
     set strict(v) { strict = !!v; },
     get settingsSpec() { return _settings; },

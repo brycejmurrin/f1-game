@@ -148,6 +148,7 @@ const SetupTune = (function () {
     return { f: cl(b / BB_REF), r: cl((1 - b) / (1 - BB_REF)) };
   }
 
-  return { RANGE, FIELDS, BASE, DEFAULTS, BB_REF, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField, balance, axleGrip, experiment };
+  // BASE / DEFAULTS stay module-local — defaults() is the public works-sheet seam.
+  return { RANGE, FIELDS, BB_REF, defaults, get, set, reset, isDefault, mods, rake, aero, brakeBias, bbScales, clampField, balance, axleGrip, experiment };
 })();
 Object.freeze(SetupTune);

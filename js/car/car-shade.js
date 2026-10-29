@@ -884,9 +884,12 @@ const CarShade = (function () {
     return moved;
   }
 
-  return { KEY, RING_N, EXP, EXP_TOP, LOWER, COVER_Z, COVER_Z_NEAR, RAMP, on, any, set, pref, ring, sink, loft, capLoft, podRing, loftRings, podLoft,
-           densifyCoverPts, downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, upperZone, heightZone, smooth,
-           skin, earcut, sect, pipe, strut, fine, rquad, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
+  // Module-local only (no external js/ or test readers): RING_N, EXP,
+  // EXP_TOP, LOWER, RAMP, pref, loftRings, heightZone, skin, sect, pipe, rquad.
+  // KEY stays public: car-shade.test pins the localStorage key via S.KEY.
+  return { KEY, COVER_Z, COVER_Z_NEAR, on, any, set, ring, sink, loft, capLoft, podRing, podLoft,
+           densifyCoverPts, downwash, cokeFoot, coverLoft, vertexNormals, lowerZone, upperZone, smooth,
+           earcut, strut, fine, block, box, boxFn, blockFn, housing, cTub, floor, endplate, tunnel, headrest,
            _norm: norm };
 })();
 Object.freeze(CarShade);

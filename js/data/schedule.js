@@ -322,6 +322,6 @@ const DataSchedule = (function () {
     return { loadSchedule };
   }
 
-  return { create, raceInstant, fmtDate, dateLabel, isUpcoming, nextRace, weekendSessions, countdown, nextFlipAt };
+  return { create, raceInstant, dateLabel, isUpcoming, nextRace, weekendSessions, countdown, nextFlipAt };
 })();
 Object.freeze(DataSchedule);
