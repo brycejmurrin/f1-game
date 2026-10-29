@@ -1,6 +1,6 @@
 ---
 name: f1-animation-cameras
-description: "Use when animation or camera motion needs work: garage pit-work arrivals, Flyby, broadcast cameras, follow-target blends, chase rigs, camera tuners, cuts that jump, WATCH/HIGHLIGHTS replay camera snaps, a stale follow anchor after a seek, follow change or exit. Owns CHANGING camera code and lag tuning; measuring lag, stills, the mode catalogue → playwright-probe."
+description: "Use when changing camera or animation motion: garage pit-work arrivals, chase, broadcast or Flyby cameras, camera tuners, follow blends, jumpy cuts, replay cameras that snap or keep a stale follow anchor after a seek. Not measuring lag or stills → playwright-probe; handling → tune-physics."
 ---
 
 # Animation and cameras in f1-game
@@ -14,7 +14,7 @@ the local chase-rig contract. Replay snaps and stale follow anchors (entry → s
 follow → exit → reentry): [references/replay.md](references/replay.md). A HIGHLIGHTS seek snap is the
 designed cut (`seekTo` → `reposition(…, paint=true)` → `G.snapGameCam`) — ask snap vs wrong subject vs bad blend first
 (anchor owners `references/replay-diagnosis.md`, evidence contract `references/replay-workflow.md`). Camera
-modes, still framing and MEASURING camera lag use **playwright-probe** `references/cameras.md`; FIXING lag
+modes, still framing and MEASURING camera lag use [playwright-probe camera measurements](../playwright-probe/references/cameras.md); FIXING lag
 (rig, blend, tuner defaults) is this skill.
 Flyby framing (cover, occlusion, sky, motion) has a no-browser node-VM report:
 `node tools/shot/frame-report.mjs --track monza --frames 6` (MCP `apex_frame_report`); it covers Flyby only, not the director or mode cuts.

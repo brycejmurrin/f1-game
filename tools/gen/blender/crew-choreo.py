@@ -297,10 +297,13 @@ if opts.render:   # top-down stills: proxies at the crew empties, Cycles CPU
     cam = bpy.data.objects.new('Plan camera', bpy.data.cameras.new('Plan camera')); scene.collection.objects.link(cam)
     cam.data.type = 'ORTHO'; cam.data.ortho_scale = 22; cam.location = (0, -3, 30); scene.camera = cam
     sun = bpy.data.objects.new('Sun', bpy.data.lights.new('Sun', 'SUN')); scene.collection.objects.link(sun)
+    def into(o, col):   # primitive ops link to the scene root; the clip's collection is what hide_render toggles
+        for u in list(o.users_collection): u.objects.unlink(o)
+        col.objects.link(o)
     for name, c in CLIPS.items():
         for a in c['actors']:
-            bpy.ops.mesh.primitive_cylinder_add(radius=.22, depth=1.7, location=(0, 0, .85)); p = bpy.context.object; p.parent = a['_obj']
-        bpy.ops.mesh.primitive_cube_add(size=1); body = bpy.context.object; body.parent = c['_car']; body.scale = (1, 1, 1)
+            bpy.ops.mesh.primitive_cylinder_add(radius=.22, depth=1.7, location=(0, 0, .85)); p = bpy.context.object; p.parent = a['_obj']; into(p, collections[name])
+        bpy.ops.mesh.primitive_cube_add(size=1); body = bpy.context.object; body.parent = c['_car']; body.scale = (1, 1, 1); into(body, collections[name])
     for name, c in CLIPS.items():
         for other, col in collections.items(): col.hide_render = other != name
         for k, frac in enumerate((.25, .5, .75, 1.0)):

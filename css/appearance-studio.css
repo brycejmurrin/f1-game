@@ -23,7 +23,9 @@
 #appearance-studio [data-as="row"] { display: flex; flex-wrap: wrap; align-items: center; gap: calc(var(--gap) * .5); margin-block: calc(var(--gap) * .6); min-width: 0; }
 #appearance-studio [data-as="label"] { flex: 0 0 28%; font-size: var(--fs-2); }
 #appearance-studio [data-as="segment"] { display: flex; flex-wrap: wrap; flex: 1; gap: calc(var(--gap) * .25); min-width: 0; }
-#appearance-studio button, #appearance-studio input, #appearance-studio select { font-family: var(--font-ui); min-height: var(--tap-min); }
+/* min-height is set per control below (button → --tap; input/select → --tap-paint).
+   A shared --tap-min here was cascade-dead under those later declarations. */
+#appearance-studio button, #appearance-studio input, #appearance-studio select { font-family: var(--font-ui); }
 #appearance-studio button { font-size: var(--fs-2); width: auto; height: auto; min-height: var(--tap); margin: 0; padding: calc(var(--gap) * .5) var(--gap); border: 1px solid var(--plate-line); border-radius: var(--r-sm); background: var(--plate); color: var(--text); justify-content: center; text-align: center; }
 /* 16px floor: iOS Safari auto-zooms the whole page when a focused input's
    font-size is under 16px, and the zoom sticks after the keyboard closes.
@@ -143,7 +145,8 @@
   color: var(--text);
   border-color: var(--plate-line);
 }
-#appearance-studio [data-as="note"], #appearance-studio [data-as="status"] { font-size: var(--fs-micro); color: var(--dim); line-height: 1.5; margin: var(--gap) 0 0; }
+#appearance-studio [data-as="note"], #appearance-studio [data-as="status"] { font-size: var(--fs-micro); line-height: 1.5; margin: var(--gap) 0 0; }
+#appearance-studio [data-as="note"] { color: var(--dim); }
 #appearance-studio [data-as="status"] { color: var(--text); min-height: 1.5em; }
 #appearance-studio [data-as="preview-side"] { position: sticky; top: 0; min-width: 0; padding: var(--pad); background: var(--surf-1); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
 #appearance-studio [data-as="preview-toolbar"] { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); margin-bottom: var(--gap); }

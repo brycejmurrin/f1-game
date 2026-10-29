@@ -1279,3 +1279,28 @@ test('a slow entry frame or a short hitch cannot skip the arrival (#3511 review)
   assert.ok(arrival.state.seconds <= 0.1 + 2.5 + 1e-9, `hitch credited ${arrival.state.seconds}s`);
   assert.equal(arrival.state.active, true);
 });
+
+test('arrival-poses.mjs (the Blender previz feed) samples the same poses, parked at the end of the arrival', async () => {
+  const { loadArrival, sample } = await import('../../tools/garage/arrival-poses.mjs');
+  const { Arrival: A, bay } = loadArrival();
+  assert.equal(bay.doorW, TrackPit.BAY.doorW);
+  for (const dir of ['in', 'out']) {
+    const clip = sample(A, { dir, angle: 'cut', fps: 12 });
+    const cfg = Arrival.settings({ angle: 'cut' }), fn = dir === 'out' ? Arrival.poseOut : Arrival.pose;
+    assert.equal(clip.frames.at(-1).t, Math.round(Arrival.duration(cfg, dir) * 1000) / 1000);
+    for (const [i, f] of clip.frames.entries()) {
+      if (i % 7 || i === clip.frames.length - 1) continue;
+      const p = fn(i / 12, cfg, false);   // the exact sample time; f.t is rounded
+      assert.ok(Math.abs(p.x - f.x) < 1e-3 && Math.abs(p.z - f.z) < 1e-3 && Math.abs(p.eye[0] - f.eye[0]) < 1e-3, `${dir} t=${f.t}`);
+    }
+  }
+  const last = sample(A, { dir: 'in' }).frames.at(-1);
+  assert.deepEqual([last.x, last.z, last.yaw], [0, 0, 0]);
+});
+
+test('a covered PREP menu with no owed warm frames still presents for a queued warm of the current menu world', () => {
+  const body = introGameSource.slice(introGameSource.indexOf('function render(dt) {'));
+  const q = body.indexOf('const warmQueuedHere = !!(track && menuWorld() && gfx.warmQueued && gfx.warmQueued());');
+  const guard = body.indexOf('if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;');
+  assert.ok(q > 0 && guard > q && body.indexOf('!(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0') > guard);
+});

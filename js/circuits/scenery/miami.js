@@ -7,13 +7,12 @@
 (window.TrackScenery = window.TrackScenery || {})["miami"] =
   function (api) {
       const {
-        K, lapBounds, out, MAT, COL, n, pyMin, place, prop, backdrop, grandstandEx,
-        building, tower, billboard, palm, bush, fence, wall, guardrail, tyreWall,
-        bankedKerbStrip, marshalPost, gantry, anchor, addBox, addCyl, addPrism, addPyramid,
+        K, lapBounds, out, MAT, COL, n, pyMin, backdrop, grandstandEx,
+        building, billboard, palm, bush, fence, wall, guardrail, tyreWall,
+        bankedKerbStrip, marshalPost, gantry, anchor, addBox, addCyl,
         addCone, addFrustum, vadd, hash, onTrack, every, along, cityFront,
         runoffApron, modelGroup, overheadSpan, waterSurface, groundPatch, recordBarrier,
-        scaffoldStand, bleacher, acacia, circuitKit, ledFacadeBands, terrainYAt, neonSign,
-      } = api;
+        scaffoldStand, bleacher, acacia, circuitKit, ledFacadeBands, terrainYAt, neonSign } = api;
 
       const { cx, cz, radius: rad } = lapBounds();
 

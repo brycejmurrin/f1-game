@@ -1,10 +1,6 @@
-/* Apex 26 — lens-only FOV delta for every live camera family. The rig (vantage.js) places the eye; this adds degrees, or null when the mode is not a lens family. Chase, broadcast and onboard keep the reads they had when they were three files. */
+/* Apex 26 — lens-only FOV delta for every live camera family. The rig (vantage.js) places the eye; this adds degrees, or null when the mode is not a lens family. Chase, broadcast and onboard keep the reads they had when they were three files. Public surface is apply() only (CamFeel.drive); family helpers stay internal. */
 const DriveLens = (function () {
   "use strict";
-
-  const CHASE_MODES = ["chase", "far", "drift", "low", "reverse"];
-  const ONBOARD_MODES = ["cockpit", "helmet", "hood", "visor", "tcam", "rear"];
-  const BROADCAST_MODES = ["heli", "side", "cinematic", "overhead", "drone", "rival", "pitwall", "trackside"];
 
   function abs(v) { return v < 0 ? -v : v; }
 
@@ -57,6 +53,6 @@ const DriveLens = (function () {
     return delta;
   }
 
-  return { apply, chase, broadcast, onboard, CHASE_MODES, ONBOARD_MODES, BROADCAST_MODES };
+  return { apply };
 })();
 Object.freeze(DriveLens);

@@ -218,6 +218,7 @@ export const RULES = [
   [/^js\/perf\/governor\.js/, ["hooks", "modes", "state-unit"], ""],
   [/^tests\/specs\/perf-frametime\.spec\.js/, ["perf-frametime"], "SwiftShader frame-time regression lane (soft by default)"],
   [/^tests\/helpers\/perf-frametime\.mjs/, ["perf-frametime", "tooling-fast"], "frametime baseline compare math"],
+  [/^tools\/perf\/session-budgets\.mjs|^tests\/helpers\/perf-session\.mjs/, ["perf-session", "tooling-fast"], "session hang ceilings and the software-GL session spec"],
   [/^tests\/data\/perf-frametime-baseline\.json/, ["perf-frametime"], "committed frametime baseline — regen via APEX_UPDATE_BASELINE"],
   [/^js\/perf\//, ["ui"], "the quality preset, renderer picker and the overlays — DOM screens"],
   [/^js\/input\//, ["input"], ""],

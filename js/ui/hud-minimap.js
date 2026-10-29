@@ -136,6 +136,34 @@ function drawMinimap() {
           mc.lineTo(8 + p[0] * (cssW - 16), 8 + p[1] * (cssH - 16));
         }
         mc.stroke();
+        if (cbCues) {
+          // AERO activation zones share the chip's terminology. Cross-hatches
+          // and text preserve their identity without blue, only in this cached
+          // background: no font work or extra layout reads on steady HUD ticks.
+          mc.strokeStyle = "#fff"; mc.lineWidth = 1;
+          mc.beginPath();
+          let sinceHatch = 6;
+          for (let i = from2; i < to2; i++) {
+            const p = map[i % n], next = map[(i + 1) % n];
+            const dx = (next[0] - p[0]) * (cssW - 16), dy = (next[1] - p[1]) * (cssH - 16);
+            const length = Math.hypot(dx, dy);
+            if (length > 0 && sinceHatch >= 6) {
+              const x = 8 + p[0] * (cssW - 16), y = 8 + p[1] * (cssH - 16);
+              mc.moveTo(x - dy / length * 4, y + dx / length * 4);
+              mc.lineTo(x + dy / length * 4, y - dx / length * 4);
+              sinceHatch = 0;
+            }
+            sinceHatch += length;
+          }
+          mc.stroke();
+          const start = map[from2 % n];
+          const x = Math.max(20, Math.min(cssW - 20, 8 + start[0] * (cssW - 16)));
+          const y = Math.max(8, Math.min(cssH - 8, 8 + start[1] * (cssH - 16)));
+          mc.font = "700 9px system-ui, sans-serif"; mc.textAlign = "center"; mc.textBaseline = "middle";
+          mc.strokeStyle = "black"; mc.fillStyle = "#fff"; mc.lineWidth = 3;
+          mc.strokeText("AERO", x, y); mc.fillText("AERO", x, y);
+          mc.strokeStyle = "rgba(38,165,245,0.9)"; mc.lineWidth = 3;
+        }
       }
     }
     // THE PIT LANE: a light dashed run from where the entry road peels off

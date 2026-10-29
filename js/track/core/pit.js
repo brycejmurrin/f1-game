@@ -482,9 +482,11 @@ const TrackPit = (function () {
     return -1;
   }
 
-  return { BANDS, STREET, NARROW, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, ROAD_MIN, EXIT_ROAD_MIN, WALL_GROW, MOUTH_RUN,
-           ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, LIMIT_KPH, GRID_POLE_M, GRID_CLEAR,
-           ROW_END, ROW_TAIL,
+  // STREET / NARROW / ROAD_MIN / WALL_GROW / LIMIT_KPH / GRID_* / ROW_END stay
+  // module-local (resolve/build only); nothing outside reads them. BANDS + the
+  // window/road floors + ROW_TAIL stay — tests and race/garage code pin them.
+  return { BANDS, BAY, SIGN, EXIT_WALL_W, PITCH, BOX_LEN, ENTRY_ROAD, EXIT_ROAD, EXIT_ROAD_MIN, MOUTH_RUN,
+           ENTRY_MAX, ENTRY_MIN, EXIT_M, EXIT_MIN, PIT_K, ROW_TAIL,
            resolve, window, row, build, at, outerAt, openBoundary, rowOf };
 })();
 Object.freeze(TrackPit);

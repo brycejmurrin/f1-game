@@ -1359,6 +1359,15 @@
       "twinned": false
     },
     {
+      "id": "perf-session",
+      "script": "test:perf-session",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-session-budgets.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "phone-recorder",
       "script": "test:phone-recorder",
       "kind": "browser",
@@ -3909,9 +3918,19 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/cooldown-lap.js",
+      "global": "CooldownLap",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/daily-challenge.js",
       "global": "DailyChallenge",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/damage-handling.js",
+      "global": "DamageHandling",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/damage.js",
@@ -3972,6 +3991,11 @@
       "path": "js/race/pace-math.js",
       "global": "PaceMath",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/parc-ferme.js",
+      "global": "ParcFerme",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/pit-geom.js",

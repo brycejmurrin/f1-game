@@ -208,6 +208,7 @@
     LAZY_RACE_SESSION: [
     "js/race/reliability.js",
     "js/race/damage.js",
+    "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
     "js/race/pit-geom.js",
@@ -220,7 +221,9 @@
     "js/race/start-lights.js",
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
-    "js/race/jump-start-penalty.js"
+    "js/race/jump-start-penalty.js",
+    "js/race/parc-ferme.js",
+    "js/race/cooldown-lap.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [

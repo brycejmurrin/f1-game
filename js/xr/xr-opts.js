@@ -198,7 +198,6 @@ const XROpts = (function () {
   }
 
   return {
-    KEY_XR, KEY_BACKEND, KEY_INPUT, DEF_XR, DEF_BACKEND,
     xrInput, setXrInput,
     xr, setXr, xrBackend, setXrBackend, initUI, onCaps, capsVr,
   };

@@ -59,7 +59,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["buddh"] =
   function (api) {
-      const { n, hash, every, anchor, onTrack, out, MAT, vadd,
+      const { hash, every, anchor, onTrack, out, MAT, vadd,
         tree, bush, place, ridge, addBox, addCyl, addCone, addFrustum, modelGroup,
         guardrail, tyreWall, marshalPost, cameraTower, broadcastCompound,
         billboard, sponsorHoarding, runoffApron, terrainYAt,
