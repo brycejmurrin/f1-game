@@ -314,6 +314,7 @@ const InputBindings = (function () {
     };
   }
 
-  return { create, HOLD_MODE_ACTIONS, holdModeDefaults, parseHoldMode };
+  // HOLD_MODE_ACTIONS stays module-local: parseHoldMode / holdModeDefaults own the list.
+  return { create, holdModeDefaults, parseHoldMode };
 })();
 Object.freeze(InputBindings);

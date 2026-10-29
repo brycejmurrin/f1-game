@@ -88,6 +88,8 @@ const Puddles = (function () {
     return smoothstep(lo, lo + K.SOFT, field(x, z) * pool(o.lat == null ? null : o.lat, o.downhill)) * g;
   }
 
-  return { K, hash21, vnoise, field, pool, growth, mask };
+  // vnoise / growth stay local — tests and shaders pin K + mask (+ hash21 /
+  // field / pool samples); nothing outside calls the intermediate helpers.
+  return { K, hash21, field, pool, mask };
 })();
 Object.freeze(Puddles);

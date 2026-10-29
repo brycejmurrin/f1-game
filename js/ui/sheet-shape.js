@@ -794,5 +794,5 @@ window.SheetShape = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  return { scan, observe, reclassify, shapeOf: (el) => (el && el.dataset.shape) || null };
+  return { scan, observe, reclassify };
 })();
