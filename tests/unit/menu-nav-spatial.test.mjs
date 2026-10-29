@@ -329,3 +329,13 @@ test("step(): the pane's foot never beats an in-band successor, and Down from th
   assert.equal(step(mid, 0, 1, [top, mid, last, back]).id, "last", "in-band successor wins");
   assert.equal(step(back, 0, 1, [top, mid, last, back]).id, "first", "BACK (no pane) wraps as before");
 });
+
+test("MenuNav.activeLayer refuses freecam with the other fly-cam layers", () => {
+  // freecam joins photo-controls / tl-editor so photo-cam arrows are not stolen.
+  assert.equal(/t\.id === "photo-controls" \|\| t\.id === "freecam" \|\| t\.id === "tl-editor"/.test(SRC), true);
+  const overlay = { id: "overlay" };
+  assert.equal(loadMenuNav({ layer: overlay }).activeLayer(), overlay);
+  for (const id of ["photo-controls", "freecam", "tl-editor"]) {
+    assert.equal(loadMenuNav({ layer: { id } }).activeLayer(), null, id);
+  }
+});
