@@ -424,9 +424,11 @@
                 If(float(li).greaterThanEqual(grU.numLights), () => { Break(); });
                 const geo = grU.lightGeo.element(li);
                 const LP = grU.lightPos.element(li).sub(p).toVar();
-                const ld = length(LP).toVar();
+                // Squared reject first, root only for lamps in range (as glsl-post.js: ld2 > rad*rad).
+                const ld2 = dot(LP, LP).toVar();
                 const rad = float(geo.x).toVar();
-                If(ld.lessThanEqual(rad), () => {
+                If(ld2.lessThanEqual(rad.mul(rad)), () => {
+                  const ld = sqrt(ld2).toVar();
                   const Ld = LP.div(max(ld, 1e-3)).toVar();
                   const s = ld.div(rad);
                   const win = clamp(s.mul(s).mul(s).mul(s).oneMinus(), 0.0, 1.0);

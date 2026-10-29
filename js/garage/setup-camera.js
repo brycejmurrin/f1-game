@@ -683,6 +683,8 @@ function _stampRect(out, r) {
   out.right = r.right; out.bottom = r.bottom;
   return out;
 }
+const BAY_MIN_MS = 24, BAY_GAP_MS = 250;
+let _bayAt = 0, _bayAcc = 0, _bayBusy = true;
 function renderSetupPreview(dt, holdDriveOut = false) {
   // SETUP bay only (not title Home): wait out an in-flight material-pack upload
   // before the first garage present. Measured on tip a52e9108 at 4× CPU: tapping
@@ -696,6 +698,18 @@ function renderSetupPreview(dt, holdDriveOut = false) {
     const pack = typeof Assets !== "undefined" && Assets.state ? Assets.state() : null;
     if (!GaragePrebuild.packSettled(pack)) return false;
   }
+  // PHONE BAY CAP (perf hunt 4): the governor never ticks here, so the bay redrew the whole scene on
+  // every rAF. On a phone a settled bay (no arrival, drive-out, preview or Home) draws at ~30 Hz with the
+  // skipped dt carried into the next draw, so the turntable speed is unchanged. A gap > BAY_GAP_MS means the
+  // bay was not running: draw at once (first present, reopen), which keeps the garageReady handshake.
+  if (G.setupPreviewOn && dt > 0 && (gfx.isMobile || gfx.mobileTier)) {
+    const t = performance.now(), gap = t - _bayAt;
+    if (gap < BAY_GAP_MS) {
+      if (!_bayBusy && !holdDriveOut && gap < BAY_MIN_MS) { _bayAcc += dt; return false; }
+      dt += _bayAcc;
+    }
+    _bayAcc = 0; _bayAt = t;
+  }
   // The race's HUD mirror: render() never reaches its slot on a garage frame,
   // so its rect stayed set and present() composited it over the car.
   if (typeof MirrorPass !== "undefined" && MirrorPass.instance()) MirrorPass.instance().standDown();
@@ -704,6 +718,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  _bayBusy = home.active || !!driveOut || !!preview || !!(arriving && arriving.active);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
   // Title Home ambient is already gated by home.moving (respects OS / Menu
   // motion: reduce). The #carsetup turntable is an EXPLICIT inspection control

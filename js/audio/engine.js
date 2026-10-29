@@ -220,6 +220,8 @@ var GameAudio = (function () {
     return t < node._apexMuteUntil;
   }
   let engineOn = false;
+  let engineWanted = false;          // a race wants the engine graph but SFX are off: built when they come on (perf hunt 4)
+  let mutedSuspended = false;        // the context was suspended BY setEnabled(false), not by iOS or a hidden tab
   let engineActionGeneration = 0;   // every explicit start/stop transfers engine ownership
   // Node batches from stopEngine() that still sit on sfxBus until their
   // 0.35 s fade ends — ONE ENTRY PER STOP. A resume that starts a new graph
@@ -449,6 +451,8 @@ var GameAudio = (function () {
       // compact banner keeps Safari VISIBLE, so nothing else tells the game
       // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
       if (ctx.state === "closed") return;
+      if (ctx.state === "running") mutedSuspended = false;
+      if (mutedSuspended && !isEnabled) return;   // our own mute suspend: not a fault, nothing to rebuild
       if (ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
       if (ctx.state === "interrupted") {
         // Session taken: release the SFX dip so a recovered graph is not stuck
@@ -478,6 +482,7 @@ var GameAudio = (function () {
     // the edge of a gesture — an unhandled rejection would surface as a crash.
     if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(resumeRejected("create")); }
     loadEngineSamples();
+    syncMuteSuspend();   // created while muted (saved SOUND OFF): don't keep rendering
     return true;
   }
 
@@ -732,6 +737,7 @@ var GameAudio = (function () {
    */
   function resumeIfNeeded(gestureEv) {
     if (!ctx || document.hidden) return;
+    if (mutedSuspended && !isEnabled) return;   // muted on purpose: a tap must not wake the render thread
     const isGesture = !!gestureEv;
     if (isGesture && gestureEv.isTrusted !== false) soundtrack.retryStreamUnlock();
     if (isGesture && deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) {
@@ -793,7 +799,7 @@ var GameAudio = (function () {
     if (typeof CrowdAudio !== "undefined" && CrowdAudio.detach) {
       try { CrowdAudio.detach(); } catch (e) { /* stub / mid-teardown */ }
     }
-    ctx = null;
+    ctx = null; mutedSuspended = false;
     master = null;
     sfxBus = null; focusBus = null; releaseBuses();
     limiter = null;
@@ -886,9 +892,33 @@ var GameAudio = (function () {
     param.setTargetAtTime(v, t, LEVEL_TAU);
   }
 
+  // SOUND OFF also SUSPENDS the context: gain 0 alone left ~21 always-on sources, the compressors
+  // and the audio unit rendering all session (perf hunt 4). The suspend waits for the gain glide
+  // (~3 x LEVEL_TAU) so the cut is not a click; mutedSuspended marks it as ours so the
+  // statechange handler and resumeIfNeeded do not treat it as an iOS interruption.
+  const MUTE_SUSPEND_MS = 150;
+  let muteSuspendTimer = null;
+  function syncMuteSuspend() {
+    if (muteSuspendTimer) { clearTimeout(muteSuspendTimer); muteSuspendTimer = null; }
+    if (isEnabled || !ctx) return;
+    muteSuspendTimer = setTimeout(() => {
+      muteSuspendTimer = null;
+      if (isEnabled || !ctx || ctx.state !== "running" || !ctx.suspend) return;
+      mutedSuspended = true;
+      try {
+        const p = ctx.suspend(); if (p && p.catch) p.catch((e) => { mutedSuspended = false; Log.debug("audio", "context suspend on mute rejected:", e && e.message); });
+      } catch (_) { mutedSuspended = false; }
+    }, MUTE_SUSPEND_MS);
+  }
   function setEnabled(b) {
     isEnabled = !!b;
     if (master) glideLevel(master.gain, isEnabled ? 0.8 : 0);
+    if (isEnabled) {
+      mutedSuspended = false;
+      if (engineWanted && !engineOn) startEngineGraph();
+      resumeIfNeeded();
+    }
+    syncMuteSuspend();
   }
 
   function enabled() {
@@ -1408,6 +1438,10 @@ var GameAudio = (function () {
   // explicit start/stop transfers ownership or cancels a queued hide resume.
   function startEngineGraph() {
     if (!ctx || engineOn) return;
+    // SFX off (music only): setEngine() never opens a gain, so the ~20 sources would render silence
+    // all race. Remember the request; setSfxEnabled(true) / setEnabled(true) build it.
+    if (!sfxOk()) { engineWanted = true; return; }
+    engineWanted = false;
     engineOn = true;
     try { startEngineBody(); }
     // ...and the flag comes back down even if the teardown ITSELF throws on the
@@ -1424,7 +1458,7 @@ var GameAudio = (function () {
   }
 
   function stopEngine() {
-    ++engineActionGeneration; resumeEngine = null;
+    ++engineActionGeneration; resumeEngine = null; engineWanted = false;
     stopEngineGraph();
   }
   function stopEngineGraph() {
@@ -2964,6 +2998,8 @@ var GameAudio = (function () {
     // A race that started with SFX off wanted rain but built no nodes
     // (startRain returns on !sfxOk()); turning SFX on must start it.
     if (sfxEnabled && rainWanted && !rainSrc) startRain();
+    if (sfxEnabled && engineWanted && !engineOn) startEngineGraph();
+    else if (!sfxEnabled && engineOn) { engineWanted = true; stopEngineGraph(); }
     // setEngine() owns the rev-keyed music duck and stops running the instant
     // SFX go off (sfxOk()), so release it here the way stopEngine() does.
     // musicGain hangs off master, not sfxBus: without this the music stayed up

@@ -709,6 +709,8 @@
     "tests/unit/pause-taps.test.mjs",
     "tests/unit/perf-frametime.test.mjs",
     "tests/unit/perf-governor.test.mjs",
+    "// Source guards for the 2026-10-29 perf sweep: TLX noise gates, puddle gate, fog varying, godray reject, audio suspend, bay cap, strategy stagger. ~0.1 s.",
+    "tests/unit/perf-hunt-4.test.mjs",
     "tests/unit/perf-race-entry.test.mjs",
     "tests/unit/perf-sentinel.test.mjs",
     "// PerfSpans ring/percentiles/off-switch + __apex.perf() in the game VM; profile lib noise rule; apex_profile argv pins.",

@@ -1376,38 +1376,40 @@ void main() {
     // mirror it constant for constant. Two octaves of world-space surface
     // noise (~7.7 m, ~3.4 m): fixed real locations, never screen-space (GT7
     // keeps puddles where they are, https://traxion.gg/gran-turismo-7-features-detailed-dynamic-weather-but-not-at-every-track/).
-    float pn = vnoise(vWorldPos.xz * 0.13 + 4.7) * 0.70 + vnoise(vWorldPos.xz * 0.29 + 11.3) * 0.30;
-    // PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01). On the road ribbon (vTrk.z is
-    // the half-width, > 0 only there) the noise is weighted by where water
-    // actually stands: the crown drains to the gutters (0.75 at the centre,
-    // 1.25 at the edges), and the LOW side of a banked turn holds it. The
-    // lateral downhill is read from the geometry — the world direction of
-    // increasing lateral x, from the screen-space derivatives of vTrk.y and
-    // vWorldPos.xz, dotted with the geometric normal's tilt — so a camber
-    // pools the inside and dries the outside without any per-circuit data.
-    // Before, water pooled equally on the crown and in the gutter, and a banked
-    // turn held standing water on its high side (the second graphics-detail
-    // survey, item 13). Mirrored constant for constant on TLX and WGX.
-    float pool = 1.0;
-    if (vTrk.z > 0.5) {
-      float lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
-      float rl = length(trkRightXZ);   // derivatives hoisted next to N (uniform control flow)
-      float downhill = rl > 1e-6 ? -dot(trkRightXZ / rl, Ngeo.xz) : 0.0;   // +: the +x side lies lower
-      // The gutters and kerb hollows hold the water (rough edges fill first —
-      // iRacing Tempest, https://www.iracing.com/?p=272386): weight 0.75 on
-      // the crown → 1.25 from |lat| 0.95 out. No curvature, no racing line.
-      pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
-    }
-    // GROWTH: nothing below road wetness 0.6 (a "wet" road is damp, not
-    // flooded); from 0.6 to 1.0 the threshold falls 1.0 → 0.62 so pools spread
-    // out of the deepest spots, and the amount fades in. Drying runs it
-    // backwards: puddles shrink to their deepest spots first, then vanish.
-    // Wide, soft edges (0.20) so pools BLEND into the wet sheet.
+    // Exact-zero gate: puddle = ... * pg * upFace * (1 - porous). Porous ground cannot hold standing
+    // water — no pooling, no sheen below — and with pg/upFace 0 the noise is wasted. Mirrored in TLX/WGX.
     float pg = clamp(smoothstep(0.6, 1.0, uWetness) * uPuddles, 0.0, 1.0);
-    float plo = 1.0 - 0.38 * pg;
-    puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace;
-    // Porous ground cannot hold standing water — no pooling, and no sheen below.
-    puddle *= 1.0 - porous;
+    if (pg > 0.0 && upFace > 0.0 && porous < 0.5) {
+      float pn = vnoise(vWorldPos.xz * 0.13 + 4.7) * 0.70 + vnoise(vWorldPos.xz * 0.29 + 11.3) * 0.30;
+      // PUDDLES FOLLOW THE ROAD SHAPE (2026-10-01). On the road ribbon (vTrk.z is
+      // the half-width, > 0 only there) the noise is weighted by where water
+      // actually stands: the crown drains to the gutters (0.75 at the centre,
+      // 1.25 at the edges), and the LOW side of a banked turn holds it. The
+      // lateral downhill is read from the geometry — the world direction of
+      // increasing lateral x, from the screen-space derivatives of vTrk.y and
+      // vWorldPos.xz, dotted with the geometric normal's tilt — so a camber
+      // pools the inside and dries the outside without any per-circuit data.
+      // Before, water pooled equally on the crown and in the gutter, and a banked
+      // turn held standing water on its high side (the second graphics-detail
+      // survey, item 13). Mirrored constant for constant on TLX and WGX.
+      float pool = 1.0;
+      if (vTrk.z > 0.5) {
+        float lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+        float rl = length(trkRightXZ);   // derivatives hoisted next to N (uniform control flow)
+        float downhill = rl > 1e-6 ? -dot(trkRightXZ / rl, Ngeo.xz) : 0.0;   // +: the +x side lies lower
+        // The gutters and kerb hollows hold the water (rough edges fill first —
+        // iRacing Tempest, https://www.iracing.com/?p=272386): weight 0.75 on
+        // the crown → 1.25 from |lat| 0.95 out. No curvature, no racing line.
+        pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+      }
+      // GROWTH: nothing below road wetness 0.6 (a "wet" road is damp, not
+      // flooded); from 0.6 to 1.0 the threshold falls 1.0 → 0.62 so pools spread
+      // out of the deepest spots, and the amount fades in. Drying runs it
+      // backwards: puddles shrink to their deepest spots first, then vanish.
+      // Wide, soft edges (0.20) so pools BLEND into the wet sheet.
+      float plo = 1.0 - 0.38 * pg;
+      puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace;
+    }
     // RAIN RIPPLES (2026-10-01): expanding rings from drop impacts, keyed to the
     // game clock, as a normal perturbation on the POOLED water only. N is read
     // below by the sun/lamp GGX lobes and the sky reflection, never by the

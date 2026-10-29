@@ -1431,23 +1431,26 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
     // reference; GLX glsl-lit.js constant for constant: two octaves of
     // world-space surface noise (~7.7 m, ~3.4 m), fixed real locations.
-    let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7)) * 0.70 + svnoise(in.wpos.xz * 0.29 + vec2<f32>(11.3)) * 0.30;
-    // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
-    // drains to the gutters (0.75 → 1.25), the low side of a banked turn holds
-    // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
-    var pool = 1.0;
-    if (vTrk.z > 0.5) {
-      let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
-      let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
-      let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
-      // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
-      pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
-    }
-    // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows, so
-    // drying shrinks the pools to their deepest spots first. params10.y = PUDDLES.
+    // Exact-zero gate (as GLX/TLX): puddle carries pg * upFace * (1 - porous), so skip the noise where it is 0.
     let pg = clamp(smoothstep(0.6, 1.0, wetness) * F.params10.y, 0.0, 1.0);
-    let plo = 1.0 - 0.38 * pg;
-    puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace * (1.0 - porous);
+    if (pg > 0.0 && upFace > 0.0 && porous < 0.5) {
+      let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7)) * 0.70 + svnoise(in.wpos.xz * 0.29 + vec2<f32>(11.3)) * 0.30;
+      // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
+      // drains to the gutters (0.75 → 1.25), the low side of a banked turn holds
+      // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
+      var pool = 1.0;
+      if (vTrk.z > 0.5) {
+        let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+        let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
+        let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
+        // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
+        pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+      }
+      // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows, so
+      // drying shrinks the pools to their deepest spots first. params10.y = PUDDLES.
+      let plo = 1.0 - 0.38 * pg;
+      puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace * (1.0 - porous);
+    }
     // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
     // constant for constant: two cell grids of impact rings as a normal tilt
     // on the pooled water; the GGX lobes and the sky reflection below read N.

@@ -689,6 +689,7 @@
         "tests/unit/wind-speed.test.mjs"
       ],
       "*": [
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/service-worker.test.mjs"
       ]
     },
@@ -8145,7 +8146,8 @@
         "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/image-grade-shaders.test.mjs"
+        "tests/unit/image-grade-shaders.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs"
       ]
     },
     "js/garage/setup-experiments.js": {
@@ -9846,6 +9848,9 @@
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
+      ],
+      "*": [
+        "tests/unit/perf-hunt-4.test.mjs"
       ]
     },
     "js/net/nostr.js": {
@@ -13969,6 +13974,7 @@
         "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",
@@ -15281,6 +15287,7 @@
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/tlx-glow-instancing.test.mjs"
       ]
@@ -15324,6 +15331,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/perf-governor.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",
@@ -15339,6 +15347,7 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -15411,6 +15420,7 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/perf-governor.test.mjs",
+        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",

@@ -7,7 +7,7 @@
 (function () {
   function fx(THREE, TSL, opts) {
     const {
-      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard, uv,
+      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard, uv, varying,
       float, vec2, vec3, vec4,
       positionGeometry, positionWorld, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
@@ -230,7 +230,8 @@
           const lit = mix(vec3(U.ambGround), vec3(U.ambSky), up).add(vec3(U.sunColor).mul(0.45));
           c.mulAssign(max(lit, vec3(0.18)));
         }
-        const fd = length(cameraPosition.sub(vec3(positionGeometry))).mul(U.fogDensity);
+        // Eye distance to the particle centre is constant across the quad: a vertex varying (GLX vDist, WGX o.dist).
+        const fd = varying(length(cameraPosition.sub(vec3(positionGeometry)))).mul(U.fogDensity);
         const fog = float(1.0).sub(exp(fd.mul(fd).negate()));
         return additive ? c.mul(fog.oneMinus()) : mix(c, vec3(U.fogColor), fog);
       })();
