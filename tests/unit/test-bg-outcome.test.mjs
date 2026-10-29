@@ -14,7 +14,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal, start } from "../../tools/ci/test-bg.mjs";
+import { outcomeOf, outcome, aliveRun, procStart, parseTestBgArgv, probeChromeSessions, chromeRefusal, start, workerBudget } from "../../tools/ci/test-bg.mjs";
 
 test("parseTestBgArgv reads --timeout and --timeout=N as minutes", () => {
   assert.equal(parseTestBgArgv(["--wait", "--timeout", "45"]).waitTimeoutMin, 45);
@@ -264,4 +264,27 @@ test("start: a supervisor launch error cannot publish a fictitious run", () => {
   assert.throws(() => start(["smoke"], {}, f.io), /launch denied/);
   assert.equal(f.events.some(([event]) => event === "write"), false);
   assert.deepEqual(f.state().runs, []);
+});
+
+
+test("workerBudget: five host CPUs with four available CPUs defaults to one worker", () => {
+  const system = { cpus: () => Array(5), availableParallelism: () => 4 };
+  assert.deepEqual(workerBudget({ env: {}, system }), { cores: 4, workers: "1" });
+});
+
+test("workerBudget: a budget above four defaults to two workers", () => {
+  const system = { cpus: () => Array(16), availableParallelism: () => 5 };
+  assert.deepEqual(workerBudget({ env: {}, system }), { cores: 5, workers: "2" });
+});
+
+test("workerBudget: older Node falls back to CPU count and an empty count falls back to four", () => {
+  assert.deepEqual(workerBudget({ env: {}, system: { cpus: () => Array(5) } }), { cores: 5, workers: "2" });
+  assert.deepEqual(workerBudget({ env: {}, system: { cpus: () => [] } }), { cores: 4, workers: "1" });
+});
+
+test("workerBudget: environment and parsed CLI overrides beat the available-CPU default", () => {
+  const system = { cpus: () => Array(5), availableParallelism: () => 4 };
+  assert.equal(workerBudget({ env: { WORKERS: "3" }, system }).workers, "3");
+  const { workers } = parseTestBgArgv(["--workers=2", "smoke"]);
+  assert.equal(workerBudget({ workers, env: { WORKERS: "3" }, system }).workers, "2");
 });

@@ -61,10 +61,18 @@ const isDocsOnly = (changed) =>
   changed.length > 0 && changed.every((f) => DOCS_ONLY.some((re) => re.test(f)));
 const LOGDIR = path.join(ROOT, "artifacts/logs");
 const STATEFILE = path.join(LOGDIR, "test-bg.json");
-// One worker on a 4-core box: two SwiftShader workers push loadavg to 6-8 and
-// every "failure" is then a timeout (tiny.log 2026-09-01: 3 false reds, all
-// PASS solo). Bigger boxes keep 2.
-let WORKERS = process.env.WORKERS || (os.cpus().length <= 4 ? "1" : "2");
+/** Use the CPU budget available to this process, not the host's logical CPUs.
+ *  Explicit CLI workers win over WORKERS; either wins over the default. */
+export function workerBudget({ workers, env = process.env, system = os } = {}) {
+  const cores = typeof system.availableParallelism === "function"
+    ? system.availableParallelism() : (system.cpus().length || 4);
+  return { cores, workers: workers || env.WORKERS || (cores <= 4 ? "1" : "2") };
+}
+// One worker reduces SwiftShader contention on a 4-core budget. Budgets above
+// four keep two workers; explicit CLI and environment overrides are retained.
+const initialBudget = workerBudget();
+const CORES = initialBudget.cores;
+let WORKERS = initialBudget.workers;
 
 // THE CAP EXISTS BECAUSE OVERSUBSCRIPTION DOES NOT LOOK LIKE OVERSUBSCRIPTION.
 // Every Playwright worker drives a SwiftShader Chromium, so the real browser
@@ -76,7 +84,6 @@ let WORKERS = process.env.WORKERS || (os.cpus().length <= 4 ? "1" : "2");
 //
 // Default concurrent cap is 1 (sequential). --parallel raises it to cores/WORKERS.
 // --force overrides the cap entirely for a box that really is bigger.
-const CORES = os.availableParallelism ? os.availableParallelism() : (os.cpus().length || 4);
 let PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2)));
 
 const readState = () => {
@@ -767,7 +774,7 @@ if (isMain) {
     if (!fs.existsSync(path.resolve(ROOT, f))) { console.error(`[test-bg] --spec: no such file ${f}`); process.exit(2); }
     SPEC_RUNS[specGroupName(f)] = f;
   }
-  if (parsed.workers) { WORKERS = parsed.workers; PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2))); }
+  if (parsed.workers) { WORKERS = workerBudget({ workers: parsed.workers }).workers; PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2))); }
 }
 const { waitTimeoutMin, groups, force, lastFailed, parallel } = parsed || {};
 
