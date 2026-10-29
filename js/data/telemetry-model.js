@@ -345,7 +345,7 @@ const DataTelemetryModel = (function () {
   }
 
   return { create, speedUnit, speedValue, speedText, clamp, laneRole, summaryTime, signed, summaryValue, dcode, sessionShort, drsOpen,
-           CHANNELS, PADL, PADR, PADY, chartX, chanRaw, chanNorm, sampleAt, clipCar, cumDist,
+           CHANNELS, PADL, PADR, PADY, chartX, chanNorm, sampleAt, clipCar, cumDist,
            distAtT, timeAtDist, brakingDuel, locAt, dropStrays, locBounds, gapLimitMs, isGap };
 })();
 Object.freeze(DataTelemetryModel);

@@ -43,6 +43,7 @@ const WallEndFace = (function () {
     return true;
   }
 
-  return { apply, FACE_DROP };
+  // FACE_DROP is the apply() threshold only — no external reader.
+  return { apply };
 })();
 Object.freeze(WallEndFace);
