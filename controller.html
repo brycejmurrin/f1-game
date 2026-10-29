@@ -84,7 +84,7 @@
      rev-light green/red/blue, the pedals and the LCD, which stays a dark
      screen in either theme, like a real one. --team is the car's colour
      from the dash (the HUD's --accent); until one arrives it is --accent. */
-  :root { --fg: var(--text); --line: var(--plate-line); --team-c: var(--team, var(--accent));
+  :root { --team-c: var(--team, var(--accent));
           --warn: #f6d200; --bad: #ff4d4d; --ok: #5ef08a; --blue: #4c8dff;
           --weave: repeating-linear-gradient(45deg, var(--carbon) 0 2px, color-mix(in oklab, var(--carbon) 78%, #000) 2px 4px); }
   :root[data-menu-accent="team"] { --red: var(--team, #e10600); }
@@ -154,13 +154,13 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; }
   .shift small { font-size: 12px; letter-spacing: .14em; color: var(--dim); }
   .tap { font-size: 16px; letter-spacing: .1em; display: none; }
-  .shift.on, .tap.on { color: var(--fg); border-color: var(--team-c); box-shadow: inset 0 0 0 2px var(--team-c); }
+  .shift.on, .tap.on { border-color: var(--team-c); box-shadow: inset 0 0 0 2px var(--team-c); }
   .pedal { flex: 1 1 0; border-radius: 26px; border: 2px solid var(--plate-line); background: var(--weave);
            font-weight: 800; font-size: 18px; letter-spacing: .1em; display: flex; align-items: flex-end; justify-content: center;
            padding-bottom: 22px; color: var(--dim); position: relative; overflow: hidden; }
   .pedal::before { content: ""; position: absolute; inset: 14px; border-radius: 18px; border: 1px dashed var(--card-line); }
   .pedal::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 0; transition: height 80ms; }
-  .pedal.on { color: var(--fg); }
+  .pedal.on { color: var(--text); }
   /* --travel: the pedal's live level (phone-pad.js hold): full on the touch, easing as the thumb slides up. */
   #gas.on { border-color: var(--ok); }   #gas.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(94,240,138,.16); }
   #brake.on { border-color: var(--bad); } #brake.on::after { height: calc(var(--travel, 1) * 100%); background: rgba(255,77,77,.16); }
@@ -252,7 +252,7 @@
   #leds span:nth-child(-n+5).on { background: var(--ok); box-shadow: 0 0 8px var(--ok); }
   #leds span:nth-child(n+6):nth-child(-n+10).on { background: var(--bad); box-shadow: 0 0 8px var(--bad); }
   #leds span:nth-child(n+11).on { background: var(--blue); box-shadow: 0 0 8px var(--blue); }
-  #screen.redline ~ #leds span, #screen.redline + #leds span { animation: strobe .12s steps(2) infinite; }
+  #screen.redline ~ #leds span { animation: strobe .12s steps(2) infinite; }
   @keyframes strobe { to { opacity: .25; } }
   #screen { flex: 1 1 0; min-height: 0; border-radius: 12px; border: 3px solid var(--card-line); background: #05060a;
             box-shadow: inset 0 0 24px rgba(0,0,0,.9), 0 0 0 1px #000; padding: 6px 10px;
@@ -295,7 +295,7 @@
      grips, the phone held like a rim — so portrait gets no squeezed layout,
      it gets a card that says which way to turn. The tilt maths follows the
      screen angle already, so the moment the phone turns the wheel is there. */
-  #rotate { display: none; position: absolute; inset: 0; z-index: 5; background: var(--bg); color: var(--fg);
+  #rotate { display: none; position: absolute; inset: 0; z-index: 5; background: var(--bg);
             flex-direction: column; justify-content: center; align-items: center; gap: 14px; text-align: center;
             padding: 24px; font-weight: 700; letter-spacing: .06em; }
   #rotate svg { width: 72px; height: 72px; color: var(--team-c); animation: turn 1.4s ease-in-out infinite alternate; }

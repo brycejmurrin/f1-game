@@ -393,6 +393,6 @@ const DesignerProfile = (function () {
     return api;
   }
 
-  return { create, KEY, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH, TOUCH_ARM_MS };
+  return { create, HIT_PX, HIT_TOUCH, DRAG_MOUSE, DRAG_TOUCH };
 })();
 Object.freeze(DesignerProfile);
