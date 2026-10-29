@@ -16,8 +16,14 @@
   #pm-race-context strong { font-size: var(--fs-5); }
   #pm-race-context :is(span, small) { color: var(--dim); font-size: var(--fs-micro); }
   /* RACE TOOLS tray: three short chip-height tiles to a row, quieter than the
-     doors above it, so the card has one primary, two doors and a tray. */
-  #pm-quick-doors { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--gap) / 2); grid-column: 1 / -1; }
+     doors above it, so the card has one primary, two doors and a tray.
+     A wrapping FLEX row, not a 3-col grid: the tile count moves (REPLAY,
+     RECOVER CAR, LINE, RACE MESSAGES and REVIEW INPUTS are built at runtime,
+     STRATEGY hides while watching), and a grid left one or two empty cells
+     beside the last tile. Here every tile grows, so a short last row fills
+     the tray instead. --tray-gap is in the basis so three fit exactly. */
+  #pm-quick-doors { --tray-gap: calc(var(--gap) / 2); --tray-cols: 3; display: flex; flex-wrap: wrap; gap: var(--tray-gap); grid-column: 1 / -1; }
+  #pm-quick-doors > * { flex: 1 1 calc((100% - (var(--tray-cols) - 1) * var(--tray-gap)) / var(--tray-cols)); min-width: 0; }
   #pm-quick-doors button { margin: 0; min-height: max(var(--chip-h), 44px); min-width: 0; font-size: var(--fs-micro); background: var(--carbon); color: var(--text); border: 1px solid var(--plate-line); border-radius: var(--r-md); padding: calc(var(--gap) / 3); transform: none; }
   #pm-quick-doors button[hidden] { display: none; }
   /* #pm-howto is listed with the full-span stack doors in css/dialogs.css, but
@@ -26,9 +32,12 @@
      2026-10-04). Keep every tray tile one cell so the second row is
      PHOTO | HOW TO PLAY | REWIND & RETRY. */
   #pm-quick-doors #pm-howto { grid-column: auto; }
-  #pm-checkpoint { font-size: var(--fs-micro); border: 1px solid var(--plate-line); padding: 0 calc(var(--gap) / 3); border-radius: var(--r-md); background: var(--carbon); min-width: 0; }
-  #pm-checkpoint[open] { grid-column: 1 / -1; padding-bottom: calc(var(--gap) / 2); }
-  #pm-checkpoint summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; }
+  /* Disclosure tiles (REWIND & RETRY, RACE MESSAGES, REVIEW INPUTS): the
+     same plate as a button tile closed, the tray's full width open. */
+  #pm-quick-doors > details { font-size: var(--fs-micro); border: 1px solid var(--plate-line); padding: 0 calc(var(--gap) / 3); border-radius: var(--r-md); background: var(--carbon); min-width: 0; }
+  #pm-quick-doors > details[open] { flex-basis: 100%; padding-bottom: calc(var(--gap) / 2); }
+  #pm-quick-doors > details > summary { min-height: max(var(--chip-h), 44px); display: flex; align-items: center; justify-content: center; cursor: pointer; text-align: center; list-style: none; }
+  #pm-quick-doors > details > summary::-webkit-details-marker { display: none; }
   #pm-checkpoint button { font-size: var(--fs-micro); }
   /* Short landscape phone (the compact pause card, css/dialogs.css): tighter tray
      gap and the --tap-paint floors. Here, after the base rules above, because
@@ -37,7 +46,7 @@
   @media (orientation: landscape) and (max-height: 500px) {
     #pm-quick-doors { gap: 2px; }
     #pm-quick-doors button,
-    #pm-checkpoint summary { min-height: max(34px, var(--tap-paint)); padding-block: 2px; }
+    #pm-quick-doors > details > summary { min-height: max(34px, var(--tap-paint)); padding-block: 2px; }
   }
   #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); color-scheme: dark; }
   #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }

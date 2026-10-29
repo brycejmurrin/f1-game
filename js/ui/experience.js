@@ -211,6 +211,27 @@ const UiExperience = (function () {
     wire("pm-strategy", () => deps.openSettingsPage("strategy", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("practice", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("review", "pm-session-review"));
+    // DRIVING LINE in-race: the RACE SETTINGS row's three values (js/race/race-settings.js
+    // RS_LINE) as one RACE TOOLS tile that cycles, saved to the same store key as that row.
+    // Built here like RECOVER CAR, so the shell's node count does not grow.
+    const LINE = [["off", "OFF"], ["corner", "CORNERS"], ["full", "FULL"]];
+    const tray = $("pm-quick-doors");
+    const lineTile = tray && typeof DrivingLine !== "undefined" ? node("button", "", { id: "pm-drivingline", type: "button" }) : null;
+    function paintLine() {
+      if (!lineTile) return;
+      const row = LINE.find((r) => r[0] === DrivingLine.mode()) || LINE[0];
+      lineTile.textContent = "LINE: " + row[1];
+      lineTile.setAttribute("aria-label", "Driving line " + row[1] + ". Activate to change");
+    }
+    if (lineTile) {
+      lineTile.onclick = () => {
+        const i = LINE.findIndex((r) => r[0] === DrivingLine.mode());
+        GameStore.store.set("drivingLine", DrivingLine.setMode(LINE[(i + 1) % LINE.length][0]));
+        paintLine();
+      };
+      tray.insertBefore(lineTile, $("pm-checkpoint"));
+      paintLine();
+    }
     const intro = $("practice-brief");
     let goal = $("practice-goal");
     function paintGoal() {
@@ -265,6 +286,7 @@ const UiExperience = (function () {
     }
     const context = $("pm-race-context");
     function refreshPause() {
+      paintLine();   // RACE SETTINGS may have changed it since the tile last painted
       if (!context) return;
       deps.coach.paint();
       const info = raceBrief(G);
