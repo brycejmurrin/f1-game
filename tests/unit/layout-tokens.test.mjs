@@ -14,6 +14,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const tokens = fs.readFileSync(path.join(ROOT, "css/tokens.css"), "utf8");
@@ -28,7 +29,7 @@ function tokenPx(name) {
 
 test("width-tier tokens, the media queries, and scale.js name the same pixels", () => {
   const ctx = vm.createContext({ JSON, window: { matchMedia: () => ({ matches: false }) } });
-  vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx);
+  vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
   const bps = JSON.parse(vm.runInContext("JSON.stringify(UiScale.LAYOUT_BPS)", ctx));
   const names = { ultra: "--bp-ultra", wide: "--bp-wide", desktop: "--bp-desktop", laptop: "--bp-laptop", tablet: "--bp-tablet" };
   assert.deepEqual(bps.map((r) => r[0]), Object.keys(names));
@@ -48,7 +49,7 @@ test("width-tier tokens, the media queries, and scale.js name the same pixels", 
 
 test("layoutOf walks the tiers from the wide end", () => {
   const ctx = vm.createContext({ window: { matchMedia: () => ({ matches: false }) } });
-  vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx);
+  vm.runInContext(scaleJs.replace(/^const UiScale\b/m, "var UiScale"), ctx, { filename: absSrc("js/ui/scale.js") });
   const of = (w) => vm.runInContext("UiScale.layoutOf(" + w + ")", ctx);
   assert.equal(of(0), "phone");
   assert.equal(of(479), "phone");
