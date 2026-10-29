@@ -732,6 +732,8 @@
     "// enough to stop in, and the COMMITMENT that replaced the pit button tells",
     "// a driven pit entry from a car that ran wide there. ~0.2 s.",
     "tests/unit/pit-lane.test.mjs",
+    "// Lazy per-step AI pit weather/caution reads, live dev calls and real decision parity; Node VM.",
+    "tests/unit/pit-think-cache.test.mjs",
     "tests/unit/platform-session-install.test.mjs",
     "// PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.",
     "tests/unit/player-forces.test.mjs",

@@ -3605,6 +3605,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/parts-visual-distinctness.test.mjs",
         "tests/unit/pick-tests.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/reliability.test.mjs",
         "tests/unit/tyre-model.test.mjs",
@@ -5287,6 +5288,7 @@
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/player-forces.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
@@ -5959,6 +5961,7 @@
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/overlay-render.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
@@ -11256,6 +11259,7 @@
         "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs"
       ]
@@ -11292,7 +11296,8 @@
         "tests/unit/ai-strategy.test.mjs"
       ],
       "*": [
-        "tests/unit/pit-lane.test.mjs"
+        "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs"
       ]
     },
     "js/physics/body-attitude.js": {
@@ -11460,6 +11465,7 @@
         "tests/unit/parts-ladder.test.mjs",
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
         "tests/unit/player-tools-backup.test.mjs",
@@ -11739,6 +11745,7 @@
       ],
       "classRecord": [
         "tests/unit/ai-strategy.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/tyre-model.test.mjs"
       ],
       "closeStints": [
@@ -11750,6 +11757,7 @@
       "create": [
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/player-forces.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/rain-cells.test.mjs",
@@ -11859,6 +11867,7 @@
       "treadFor": [
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/tyre-model.test.mjs",
         "tests/unit/weather-arc-rain.test.mjs",
@@ -12433,6 +12442,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs"
       ]
     },
@@ -12464,6 +12474,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs",
         "tests/unit/race-settings-vm.test.mjs",
@@ -12565,17 +12576,20 @@
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "stepBegin": [
-        "tests/unit/pit-lane.test.mjs"
+        "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs"
       ],
       "stepEnd": [
-        "tests/unit/pit-lane.test.mjs"
+        "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs"
       ],
       "stopAnim": [
         "tests/unit/pit-lane-vm.test.mjs"
       ],
       "think": [
         "tests/unit/pit-lane-vm.test.mjs",
-        "tests/unit/pit-lane.test.mjs"
+        "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-think-cache.test.mjs"
       ],
       "twoCompoundApplies": [
         "tests/unit/pit-lane-vm.test.mjs"

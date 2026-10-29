@@ -1506,13 +1506,27 @@ var PitLane = (function () {
     // stepBegin/stepEnd; nothing inside that loop finishes or retires a car
     // (finishes settle in settleLineStep after it), so every think() in it reads
     // the same answer. Outside the bracket (tests, dev hooks) it scans live.
-    let _flagStep = false, _flagMemo = null;
-    function stepBegin() { _flagStep = true; _flagMemo = null; }
-    function stepEnd() { _flagStep = false; _flagMemo = null; }
+    let _flagStep = false, _flagMemo = null, _pitReads = 0, _cautionMemo = 0, _treadMemo = 0;
+    function stepBegin() { _flagStep = true; _flagMemo = null; _pitReads = 0; }
+    function stepEnd() { _flagStep = false; _flagMemo = null; _pitReads = 0; }
     function flagNow() {
       if (_flagStep && _flagMemo !== null) return _flagMemo;
       const out = typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars);
       if (_flagStep) _flagMemo = out;
+      return out;
+    }
+    // Weather and caution tick before the car loop. Read lazily so human,
+    // finished and red-flag guards keep their short-circuits; dev calls stay live.
+    function cautionNow() {
+      if (_flagStep && (_pitReads & 1)) return _cautionMemo;
+      const out = cautionLevel();
+      if (_flagStep) { _cautionMemo = out; _pitReads |= 1; }
+      return out;
+    }
+    function treadNow() {
+      if (_flagStep && (_pitReads & 2)) return _treadMemo;
+      const out = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      if (_flagStep) { _treadMemo = out; _pitReads |= 2; }
       return out;
     }
     function think(c) {
@@ -1527,13 +1541,13 @@ var PitLane = (function () {
       // engineer has the same finalLap guard). A lapped AI still boxed for wets.
       if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || flagNow()) return "";
       // A red flag (4) is not a pit window: the field is held and the restart clears arms.
-      if (cautionLevel() >= 4) return "";
+      if (cautionNow() >= 4) return "";
       let stopsLeft = plan.stops - (c.pitStops || 0);
       const nextAt = plan.lapsAt[c.pitStops || 0];
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
       // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
       // dry->rain arc did not have.
-      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      const wantTread = treadNow();
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
       // ON THE RIGHT WET TYRE THE DRY PLAN'S LAPS MEAN NOTHING: plan.lapsAt was
       // cut for slicks, and every stop in a wet race refits the wet class
@@ -1558,7 +1572,7 @@ var PitLane = (function () {
       // CAUTION stop: pulled up to CAUTION_REACH laps forward onto a set that
       // cannot reach the flag, the "free" stop bought a second one. Bahrain,
       // 12 laps, SC on lap 2: 19 of 21 one-stop plans ran two stops, 2 ran three.
-      const caution = cautionLevel();
+      const caution = cautionNow();
       let fits = true;
       if (near || (caution >= 2 && caution < 4 && stopsLeft > 0 && lapsToStop <= AiDrive.STRAT.CAUTION_REACH)) {
         // (On a wet run the next set is the wet class, run to the flag.)
