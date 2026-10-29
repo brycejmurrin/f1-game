@@ -454,6 +454,8 @@ const TrackBuildClient = (function () {
     return !!Tracks.adoptPreviewCenterline(def, msg.track);
   }
 
-  return { enabled, set, spawn, idleWarm, build, previewMap, replay, busy, KEY, defaultOn };
+  // KEY / defaultOn stay local (enabled() reads storage + cores); tests pin
+  // enabled/set/spawn/idleWarm and hardcode the localStorage string.
+  return { enabled, set, spawn, idleWarm, build, previewMap, replay, busy };
 })();
 if (typeof window !== "undefined") window.TrackBuildClient = TrackBuildClient;

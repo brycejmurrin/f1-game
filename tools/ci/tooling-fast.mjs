@@ -1075,6 +1075,13 @@ if (isMain) {
     files0 = [...TOOLING_FAST_FILES];
   }
   const files = ciShardFiles(files0, parsed.shard);
+  {
+    // The served generated files are gitignored (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): build what is missing or
+    // stale before any suite reads js/ (the game VM, load-order, global-registry read every FULL file).
+    const { ensureBuilt, builtLine } = await import("../gen/ensure-built.mjs");
+    const line = builtLine(ensureBuilt());
+    if (line) console.log(`[tooling-fast] ${line}`);
+  }
   if (!parsed.jobsExplicit) {
     const pick = await probeAutoJobs();
     parsed.jobs = pick.jobs;

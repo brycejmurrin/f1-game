@@ -1094,6 +1094,7 @@ const LAZY_RACE_SESSION = [
   "js/race/flying-start.js",
   "js/race/jump-start-penalty.js",
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
+  "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/pit-geom.js", "js/race/pit-lane.js"],

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# .githooks/post-checkout (and post-merge, which runs this file): rebuild the
+# served generated files that are gitignored since 2026-10-28 (AGENTS.md rule 11;
+# docs/notes/DEPLOY-TIME-GEN-2026-10-28.md) after git moves the sources under them:
+# a branch switch, a new worktree, a file checkout, a pull or a merge.
+# Idempotent, ~0.1 s, node builtins only. Never fails the git command: git returns
+# post-checkout's status as the checkout's own, so every path below exits 0.
+# Git runs a hook from the root of the working tree (git-scm.com/docs/githooks), so
+# the tool is THIS checkout's copy; an older commit without it is a no-op.
+[ -f tools/gen/ensure-built.mjs ] || exit 0
+command -v node >/dev/null 2>&1 || exit 0
+node tools/gen/ensure-built.mjs --quiet \
+  || echo "$(basename "$0"): ensure-built failed; run node tools/gen/ensure-built.mjs" >&2
+exit 0
