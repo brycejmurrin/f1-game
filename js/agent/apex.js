@@ -528,7 +528,7 @@ const api = {
   // "+ = right" comment was backwards), half-width hw (m), speed (m/s), arc s.
   probe() {
     if (!G.player || !G.track) return null;
-    const lineAt = (s) => { const ln = TrackLine.at(G.track, wrapS(s)); return ln.x * ln.w; };
+    const lineAt = (s) => TrackLine.at(G.track, wrapS(s)).x;
     Tracks.sample(G.track, G.player.s, smp);
     let angle = 0;
     if (G.player.head != null) {
@@ -545,7 +545,8 @@ const api = {
       hw: smp.hw,
       speed: G.player.speed, s: G.player.s,
       // The racing-line assist's pursuit target (game.js updateCar): the AI
-      // line x*w at the same speed-scaled look-ahead. Where the line IS — the
+      // line x at the same speed-scaled look-ahead (lineW scales the pull, not
+      // the target). Where the line IS — the
       // corner's sign alone says nothing (past an apex the line is outside).
       lineAhead: G.track.line ? lineAt(G.player.s + Math.min(90, Math.max(25, Math.abs(G.player.speed) * 0.9))) : null,
     };
