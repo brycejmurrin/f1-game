@@ -8,9 +8,9 @@
   function (api) {
       const { K, lapBounds, out, n, px, pz, pyMin, place, backdrop, groundPlane,
               addBox, addCyl, addFrustum, addCone, every, onTrack, hash, vadd, anchor, along,
-              building, motorhome, grandstandEx, billboard, tree, hedge, fence,
+              building, motorhome, grandstandEx, billboard, hedge, fence,
               guardrail, tyreWall, marshalPost, tower, gantry, mountain, wall,
-              modelGroup, groundPatch, groundedSegments,
+              modelGroup, groundPatch,
               cityFront, forestEdge, bush,
               terrace, tieredBowl, broadleafFall, plane, acacia, cypress,
               cameraTower, sponsorHoarding, broadcastCompound, circuitKit, terrainYAt,

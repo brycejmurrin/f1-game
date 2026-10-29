@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["montreal"] =
   function (api) {
-      const { K, out, n, py, pyMin, place, backdrop, wall, grandstandEx,
+      const { K, out, pyMin, place, backdrop, wall, grandstandEx,
         building, anchor, addBox, addCyl, addCone, addPrism, addFrustum, vadd, hash,
         fence, tyreWall, hedge, billboard, gantry, marshalPost, bush,
         scaffoldStand, broadleafFall, tree, pine, seat, groundUnder, indexSolid,

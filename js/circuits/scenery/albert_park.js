@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["albert_park"] =
   function (api) {
-      const { out, n, px, pz, pyMin, place, prop, backdrop, waterSurface, groundPatch, modelGroup, groundYAt,
+      const { out, n, pyMin, place, prop, backdrop, waterSurface, groundPatch, modelGroup,
               every, hash, onTrack,
               grandstandEx, building, motorhome, tower, tree, palm, bush, hedge, billboard, gantry,
               marshalPost, fence, guardrail, tyreWall, anchor, vadd, addBox,

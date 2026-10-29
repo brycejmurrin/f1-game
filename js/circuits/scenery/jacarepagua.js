@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["jacarepagua"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack,
         bush, ridge, mountain, tree,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         floodMast, cameraTower, sponsorHoarding, palm, terrace, scaffoldStand,

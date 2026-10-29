@@ -6,12 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["hockenheim"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
-        px, pz, pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
         fence, guardrail, tyreWall, groundPatch, modelGroup,
-        sponsorHoarding, cameraTower, seat, forestEdge, terrace, bleacher,
-        addBox, addCyl, addPrism, addCone, bakedModel } = api;
+        sponsorHoarding, cameraTower, seat, forestEdge,
+        addBox, addCyl, addPrism, bakedModel } = api;
 
       const tiltBasis = (a, ang) => {
         const c = Math.cos(ang), s = Math.sin(ang);

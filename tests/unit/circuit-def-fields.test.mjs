@@ -530,3 +530,53 @@ test("tyreSeverity comparison comments agree with the named anchors", () => {
   }
   assert.deepEqual(bad, []);
 });
+
+// Scenery hygiene: api destructure bindings that are never read are dead
+// locals (the closure already closed over `api`). Drop them — do not leave
+// "place, px, pz" sitting unused after a rewrite. singapore / brands_hatch /
+// okayama are owned by the kit-paddock PR (#4074) this session; park them
+// until that PR lands, then drop the skip.
+const SCENERY_API_HYGIENE_SKIP = {
+  "singapore.js": "owned by #4074 kit-paddock batch 3",
+  "brands_hatch.js": "owned by #4074 kit-paddock batch 3",
+  "okayama.js": "owned by #4074 kit-paddock batch 3",
+};
+
+function sceneryApiLocalNames(inner) {
+  const parts = [];
+  let cur = "", depth = 0;
+  for (const ch of inner) {
+    if (ch === "{" || ch === "[") depth++;
+    else if (ch === "}" || ch === "]") depth--;
+    if (ch === "," && depth === 0) { parts.push(cur); cur = ""; continue; }
+    cur += ch;
+  }
+  if (cur.trim()) parts.push(cur);
+  return parts.map((p) => {
+    p = p.trim();
+    if (!p) return null;
+    if (p.includes(":")) return p.split(":")[1].trim().split("=")[0].trim();
+    return p.split("=")[0].trim();
+  }).filter(Boolean);
+}
+
+test("scenery api destructure bindings are all used in the same file", () => {
+  const dir = path.join(ROOT, "js", "circuits", "scenery");
+  const bad = [];
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".js"))) {
+    if (SCENERY_API_HYGIENE_SKIP[f]) continue;
+    let src = fs.readFileSync(path.join(dir, f), "utf8");
+    const m = src.match(/const\s*\{([\s\S]*?)\}\s*=\s*api\s*;/);
+    if (!m) {
+      bad.push(`${f}: no api destructure`);
+      continue;
+    }
+    src = src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+    for (const name of sceneryApiLocalNames(m[1])) {
+      const hits = src.match(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"));
+      if (!hits || hits.length <= 1) bad.push(`${f}: unused api.${name}`);
+    }
+  }
+  assert.deepEqual(bad, [],
+    "remove unused names from the scenery `const { … } = api` destructure (or park the file in SCENERY_API_HYGIENE_SKIP with a reason)");
+});
