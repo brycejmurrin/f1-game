@@ -3,5 +3,8 @@
     "js/track/tracks.js": {
       "lines": 5
     }
+  },
+  "tree": {
+    "assertPins": 1
   }
 }
