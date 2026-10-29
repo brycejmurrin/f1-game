@@ -16559,6 +16559,7 @@
     },
     "js/ui/captions.js": {
       "push": [
+        "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
       ],
       "radioWho": [
@@ -16568,6 +16569,7 @@
         "tests/unit/captions.test.mjs"
       ],
       "setMode": [
+        "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
       ],
       "setPos": [
