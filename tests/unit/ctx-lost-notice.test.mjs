@@ -105,10 +105,13 @@ test("select-screen consumes apex26.ctxLostNotice and wires RETRY to startRace",
   const menus = read("js/ui/select-screen.js");
   assert.ok(menus.includes('sessionStorage.getItem(CTX_LOST_NOTICE_KEY) === "1"'));
   assert.ok(menus.includes("sessionStorage.removeItem(CTX_LOST_NOTICE_KEY)"));
-  assert.ok(menus.includes("if (G.startRace) G.startRace()"));
+  assert.ok(menus.includes("location.reload()"));
+  assert.ok(menus.includes("CTX_LOST_NEED_RELOAD_KEY"));
   const game = read("js/game.js");
   assert.ok(game.includes("function quitToMenuAfterCtxLost()"));
   assert.ok(game.includes("stashCtxLostNotice()"));
+  assert.ok(game.includes("GfxEscalation.stashInPageRecoverFlags"));
+  assert.ok(read("js/perf/gfx-escalation.js").includes("apex26.ctxLostNeedReload"));
   assert.ok(game.includes("Graphics reset — retrying with lighter settings"));
 });
 

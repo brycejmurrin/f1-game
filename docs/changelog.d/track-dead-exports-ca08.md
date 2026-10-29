@@ -1,0 +1,1 @@
+Removed: unused js/track public exports (TrackPit STREET/NARROW/ROAD_MIN/WALL_GROW/LIMIT_KPH/GRID_*/ROW_END, TrackDef dayPal/nightPal/realPoints/applyHwZones/materializeListPoints, TrackSpline.SCALE, TrackBuildClient KEY/defaultOn). Regenerated scenery-locations sourceDigest after TRACK_VM edit.

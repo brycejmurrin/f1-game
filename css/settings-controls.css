@@ -290,6 +290,11 @@
     align-self: stretch;
   }
 }
+/* A wide sheet (laptop and up) reads nine doors as three columns, not a
+   long two-up list with a half-width orphan. */
+@container sheet (min-width: 52rem) {
+  #pm-settings-index { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
 /* WIDE-SHAPED SETTINGS: two-column option grid so landscape phones don't
    have to scroll through a single full-width column of buttons.
    Each option button shrinks from full-sheet width (~717px) to half-width
