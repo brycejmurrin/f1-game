@@ -7,11 +7,11 @@
 (window.TrackScenery = window.TrackScenery || {})["suzuka"] =
   function (api) {
       const { K, lapBounds, out, track, n, px, py, pz, hw, pyMin, place, every,
-              hash, mountain, pine, tree, bush, grandstandEx, spectatorHill, terrace,
+              hash, mountain, tree, bush, grandstandEx, spectatorHill, terrace,
               bleacher, cypress, broadleafFall,
               building, tower, billboard,
-              marshalPost, fence, guardrail, tyreWall, hedge, anchor, vadd,
-              addBox, addCyl, addCone, addFrustum, addPrism, addPyramid, groundYAt, terrainYAt, onTrack, forestEdge, backdrop,
+              marshalPost, fence, guardrail, tyreWall, anchor, vadd,
+              addBox, addCyl, addCone, addPrism, addPyramid, terrainYAt, onTrack, forestEdge, backdrop,
               MAT, modelGroup, overheadSpan, circuitKit, cameraTower, broadcastCompound, bakedModel } = api;
 
       // ── Suzuka palette ──────────────────────────────────────────────────────

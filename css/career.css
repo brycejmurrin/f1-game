@@ -266,6 +266,7 @@
 #cr-inner[data-density="compact"] #cr-meters {
   grid-column: 1; width: 100%; margin-left: 0; display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--gap);
+  justify-content: space-around;
 }
 /* Label and value on ONE line: stacked they cost ~18px of a 306px sheet. */
 #cr-inner[data-density="compact"] .cr-meter {
@@ -490,11 +491,6 @@
   white-space: normal;
   line-height: 1.15;
 }
-/* width / margin-left already set on the earlier compact #cr-meters rule. */
-#cr-inner[data-density="compact"] #cr-meters {
-  justify-content: space-around;
-}
-
 /* ---------- end of season (#career-offers) ---------- */
 /* A .dim top-layer <dialog> over #career (z-index 25), the same relationship
    #quali has to the screen that opened it — the hub is still where you are,

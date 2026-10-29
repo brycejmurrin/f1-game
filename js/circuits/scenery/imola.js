@@ -6,11 +6,11 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["imola"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, px, pz, hw, pyMin, hash, every, place, prop, backdrop,
+      const { K, lapBounds, out, MAT, n, px, pz, hw, pyMin, hash, every, place, backdrop,
               groundPatch, waterSurface, modelGroup,
-              groundYAt, terrainYAt, groundUnder, onTrack, addBox, addCyl, addPrism, addFrustum, vadd, anchor,
+              groundYAt, terrainYAt, groundUnder, onTrack, addBox, addCyl, addPrism, vadd, anchor,
               seat, foundation,
-              along, mountain, tree, pine, hedge, bush,
+              along, mountain, tree, bush,
               cypress, stonePine, plane, tieredBowl, terrace,
               grandstandEx, spectatorHill, building, motorhome, tower, billboard, marshalPost, gantry,
               fence, guardrail, tyreWall, wall, lampPost,

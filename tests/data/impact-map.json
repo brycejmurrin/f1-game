@@ -4628,6 +4628,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/bahrain.js": {
+      "*": [
+        "tests/unit/track-shot-survey.test.mjs"
+      ]
+    },
     "js/circuits/cota.js": {
       "*": [
         "tests/unit/changed-files.test.mjs",
@@ -4705,7 +4710,8 @@
     },
     "js/circuits/scenery/bahrain.js": {
       "*": [
-        "tests/unit/circuit-corner-anchors.test.mjs"
+        "tests/unit/circuit-corner-anchors.test.mjs",
+        "tests/unit/track-shot-survey.test.mjs"
       ]
     },
     "js/circuits/scenery/baku.js": {
@@ -5952,6 +5958,7 @@
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
@@ -6914,8 +6921,8 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
-        "tests/unit/vstd-invariant.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/ui-sheets-audit.test.mjs",
+        "tests/unit/vstd-invariant.test.mjs"
       ],
       "applyLightTune": [
         "tests/unit/flyby-intro.test.mjs"
@@ -7078,12 +7085,10 @@
       ],
       "isRaining": [
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/light-presets.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/light-presets.test.mjs"
       ],
       "isWetRoad": [
-        "tests/unit/photomode-hold.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/photomode-hold.test.mjs"
       ],
       "leaveGarage": [
         "tests/unit/garage-followups.test.mjs",
@@ -7388,8 +7393,8 @@
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/sporting-regs.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "tickBody": [
@@ -7439,8 +7444,7 @@
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/tyre-model.test.mjs",
-        "tests/unit/voice-pack.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/voice-pack.test.mjs"
       ],
       "updateCar": [
         "tests/specs/physics-characterization.spec.js",
@@ -10138,7 +10142,8 @@
       ],
       "frame": [
         "tests/unit/overlay-feed.test.mjs",
-        "tests/unit/overlay-publisher.test.mjs"
+        "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
@@ -10166,20 +10171,28 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "clear": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
+      ],
+      "contrast": [
+        "tests/unit/overlay-render.test.mjs"
       ],
       "create": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "options": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "paint": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "text": [
         "tests/unit/overlay-feed.test.mjs",
-        "tests/unit/overlay-publisher.test.mjs"
+        "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ]
     },
     "js/perf/bench-capture.js": {
@@ -11960,6 +11973,7 @@
       "create": [
         "tests/unit/director.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
@@ -12799,7 +12813,8 @@
         "tests/unit/overtake-mode.test.mjs",
         "tests/unit/race-control.test.mjs",
         "tests/unit/race-radio.test.mjs",
-        "tests/unit/s8-once-per-frame.test.mjs"
+        "tests/unit/s8-once-per-frame.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "rewound": [
         "tests/unit/race-control.test.mjs"
@@ -13578,6 +13593,7 @@
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "weather": [
+        "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "wetAt": [
@@ -14435,6 +14451,9 @@
       "softwareGlowScale": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "softwareRaceShed": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "sunScreen": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -15040,6 +15059,9 @@
       "pinSkyMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs"
+      ],
+      "pinSoftwareRaceShed": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "postFailure": [
         "tests/unit/render-final-contracts.test.mjs"
@@ -15972,7 +15994,8 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
-        "tests/unit/scenery-api-contract.test.mjs"
+        "tests/unit/scenery-api-contract.test.mjs",
+        "tests/unit/track-shot-survey.test.mjs"
       ]
     },
     "js/track/core/hidden-faces.js": {
@@ -16545,6 +16568,7 @@
     },
     "js/ui/captions.js": {
       "push": [
+        "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
       ],
       "radioWho": [
@@ -16554,6 +16578,7 @@
         "tests/unit/captions.test.mjs"
       ],
       "setMode": [
+        "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
       ],
       "setPos": [
@@ -16650,9 +16675,18 @@
       ],
       "setEditing": [
         "tests/unit/dock-layout.test.mjs"
+      ],
+      "usablePad": [
+        "tests/unit/dock-layout.test.mjs"
       ]
     },
     "js/ui/dom.js": {
+      "fmtLap": [
+        "tests/unit/i18n-number-format.test.mjs"
+      ],
+      "fmtRaceClock": [
+        "tests/unit/i18n-number-format.test.mjs"
+      ],
       "*": [
         "tests/specs/browser-ui-hunt.spec.js",
         "tests/specs/data-lifecycle.spec.js",
@@ -17058,7 +17092,8 @@
       ],
       "fmtGap": [
         "tests/unit/hud-gap-decimals.test.mjs",
-        "tests/unit/hud-relative.test.mjs"
+        "tests/unit/hud-relative.test.mjs",
+        "tests/unit/i18n-number-format.test.mjs"
       ],
       "lapsApart": [
         "tests/unit/hud-readouts.test.mjs",
@@ -17730,6 +17765,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
       ],
+      "layoutOf": [
+        "tests/unit/layout-tokens.test.mjs"
+      ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
@@ -18339,9 +18377,6 @@
       ]
     },
     "js/workers/bitmap-decode-client.js": {
-      "decode": [
-        "tests/unit/bitmap-decode-worker.test.mjs"
-      ],
       "drop": [
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
@@ -18358,9 +18393,6 @@
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
-      "decode": [
-        "tests/unit/bitmap-decode-worker.test.mjs"
-      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"

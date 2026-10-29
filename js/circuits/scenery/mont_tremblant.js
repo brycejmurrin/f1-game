@@ -47,9 +47,8 @@
 (window.TrackScenery = window.TrackScenery || {})["mont_tremblant"] =
   function (api) {
       const { n, hash, every, anchor, onTrack, out, MAT, vadd, modelGroup, seat,
-        pine, tree, bush, forestEdge, building, grandstandEx, spectatorHill,
-        guardrail, fence, tyreWall, marshalPost, cameraTower, billboard,
-        motorhome, groundPatch, ridge, mountain, terrainYAt, addBox,
+        pine, tree, bush, building, grandstandEx, spectatorHill,
+        guardrail, fence, tyreWall, marshalPost, cameraTower, billboard, groundPatch, ridge, mountain, terrainYAt, addBox,
         indexSolid, waterBand, overheadSpan } = api;
 
       // ---------------------------------------------------------------- 1.
@@ -81,7 +80,6 @@
       const { K } = api;            // the contract's frac -> node index (normalised for negatives)
       const RAIL = 3.2;                   // armco gap: hard against the tarmac
       const CAM_NEAR = 22;                // first rank past chase + canopy
-      const inOrbitRing = (dist) => dist >= 30 && dist <= 60; // scenery-orbit ~45 m
       const camHot = (k) => {
         const f = k / n;
         return (f >= 0.38 && f <= 0.56) || (f >= 0.66 && f <= 0.82);

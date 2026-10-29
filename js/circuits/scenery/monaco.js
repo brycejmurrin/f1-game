@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monaco"] =
   function (api) {
-      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, night, addBox, addPrism, addCyl, addCone, addFrustum, addPyramid, modelGroup, overheadSpan, lampPost, waterSurface, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, tree, bush, hedge, grandstand, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, cityFront, bakedModel, seat, motorhome } = api;
+      const { K, out, MAT, def, track, n, ds, px, py, pz, hw, pyMin, terrainYAt, night, addBox, addPrism, addCyl, addCone, addFrustum, modelGroup, overheadSpan, lampPost, waterField, groundedSegments, onTrack, hash, upOf, vadd, anchor, along, place, prop, building, tower, palm, bush, hedge, grandstandEx, scaffoldStand, bleacher, cypress, stonePine, plane, broadcastCompound, cameraTower, billboard, gantry, marshalPost, fence, guardrail, wall, bakedModel, seat, motorhome } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (15 per build here,
@@ -18,8 +18,6 @@
         if (onTrack(a.c[0], a.c[2], sz[0] / 2 + 6)) return;
         api.backdrop(k, side, dist, sz, col);
       };
-
-      const KR = (s) => TrackSpace.sourceNodeToRacing(def, K(s), n);
       /* KOLD: OLD-RACING frac -> current racing node. Most of this file's raw
          px/rx/tx readers were authored when startFrac was 0.28; 7a17351 moved
          the origin to 0.2516 and renumbered the control points, but raw index

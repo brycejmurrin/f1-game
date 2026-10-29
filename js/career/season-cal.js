@@ -704,12 +704,13 @@ function shuffled(ids, seed) {
   return a;
 }
 
+// SHORT_POINTS / resetWeekend stay module-local (payTable / restart / applyConfig).
 return {
-  SPRINT_POINTS, CLASSIC_POINTS, SHORT_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
+  SPRINT_POINTS, CLASSIC_POINTS, payTable, DROP_OPTS, LAP_OPTS, PRESETS, DEFAULT_LAPS, REAL_2026,
   config, setConfig, resetConfig, applyConfig, matchesConfig, fresh, normalize,
   engage, list, rounds, track, trackIndex,
   load, lastLoadLossy, save, clear, conflicted, saveStatus,
-  resume, blank, restart, resetWeekend, canRace, hasProgress,
+  resume, blank, restart, canRace, hasProgress,
   quali, qualiNext, qualiLabel, stage, midWeekend, sprintOn, lapsFor, formatLaps, roundLaps, pointsTable,
   award, scored, rank, rankTeams, netPts, drawRound, luckSeed,
   presetIds, preset, shuffled, gpName,

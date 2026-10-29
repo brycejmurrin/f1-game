@@ -343,7 +343,7 @@ var VoicePack = (() => {
     /** Speak `text` from voice `id` after `leadS`, if the pack covers all of it
      *  and it fits `budgetS`. Returns false (nothing scheduled) otherwise, so
      *  the caller can leave an unavailable line written. `onEnd` runs once, when the
-     *  line finishes or is cut. */
+     *  line finishes or is cut; optional `onStart` runs after decoded audio is scheduled. */
     function speak(id, text, o) {
       const pl = plan(id, text);
       if (!pl) { missed++; return false; }
@@ -384,6 +384,12 @@ var VoicePack = (() => {
           token.stop = () => { h.stop(); done(); };
           token.end = h.end;
           setTimeout(release, Math.max(0, (h.end - GameAudio.now()) * 1000) + 30);
+          if (opt.onStart != null) {
+            try {
+              if (typeof opt.onStart === "function") opt.onStart();
+              else Log.info("audio", "VoicePack onStart ignored: observer is not a function");
+            } catch (e) { Log.info("audio", "VoicePack onStart observer failed: " + (e && e.message)); }
+          }
         })
         .catch(() => { clearTimeout(watchdog); release(); });
       spoke++; lastSeq = pl.seq.map((s) => s.k || "|");

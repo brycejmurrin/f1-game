@@ -126,7 +126,7 @@ export async function exitReplayThroughUi(page) {
   }
   return { ...exit, interactions, hud: { before: hudBefore, restored: await page.evaluate(() => window.__apex.hud()) } };
 }
-export async function replayCameraProbe(opts, fixture) {
+async function replayCameraProbe(opts, fixture) {
   mkdirSync(opts.out, { recursive: true });
   let result;
   const samples = [];

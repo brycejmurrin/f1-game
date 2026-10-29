@@ -1839,6 +1839,46 @@ test("RaceControl.holdCap finds the car by its rank slot, with a scan fallback (
   assert.equal(R.holdCap(lead, ranked, null), Infinity, "the leader holds behind nobody");
 });
 
+// Independent of brakeTarget's loop: every sample solved through cornerSpeed,
+// the same envelope the planner uses. Identity modifiers only, so the return
+// is exactly sqrt(min entrySq). Pins the window path to that solve.
+function brakeTargetOracle(samples, ctx) {
+  const skill = ctx.traits.skill, diffC = ctx.diffCorner || 1, brake = ctx.brake || 22, grip = ctx.grip || 1;
+  const load = ctx.aeroLoad != null ? ctx.aeroLoad : 0.5;
+  const latMax = (ctx.latMax || 22) * (1 + (load - 0.5) * 0.16);
+  const scrub = 2 * brake * 0.85;
+  const pace = ctx.pace === undefined ? 1 : ctx.pace, vmax = ctx.vmax === undefined ? 72 : ctx.vmax;
+  let vLimSq = Infinity;
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i], d = Math.max(s.d || 0, 1), k = Math.max(Math.abs(s.k || 0), 1e-5);
+    const Lnode = Math.max(0, latMax * (s.mu !== undefined ? s.mu : A.bankGrip(s.bank)) * grip);
+    const vC = A.cornerSpeed(k, Lnode, pace, vmax) * skill * diffC;
+    const entrySq = vC * vC + scrub * d;
+    if (entrySq >= 0 && entrySq < vLimSq) vLimSq = entrySq;
+  }
+  const vLim = Math.sqrt(vLimSq);
+  return Number.isFinite(vLim) ? vLim : 1e6;
+}
+
+test("brakeTarget matches a full per-node solve on random look windows", () => {
+  let seed = 20261029;
+  const rnd = () => (seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 4294967296;
+  for (let run = 0; run < 40; run++) {
+    const n = 1 + ((rnd() * 48) | 0), rows = [], ks = new Float64Array(n), mus = new Float64Array(n);
+    let d = rnd() * 3; const step = 2 + rnd() * 4;
+    for (let i = 0; i < n; i++, d += step) {
+      const k = (rnd() < 0.25 ? 0.004 + rnd() * 0.02 : rnd() * 0.0008) * (rnd() < 0.5 ? -1 : 1);
+      const mu = A.bankGrip(rnd() < 0.2 ? rnd() * 0.2 : 0);
+      rows.push({ d, k, mu }); ks[i] = k; mus[i] = mu;
+    }
+    const ctx = { traits: [mid, ace, rook][run % 3], latMax: 18 + rnd() * 8, brake: 12 + rnd() * 14,
+      grip: 0.55 + rnd() * 0.5, pace: 0.45 + rnd() * 0.7, vmax: 70 + rnd() * 20, diffCorner: 0.7 + rnd() * 0.3, aeroLoad: rnd() };
+    const oracle = brakeTargetOracle(rows, ctx);
+    assert.ok(Object.is(A.brakeTarget({ ...ctx, samples: rows }), oracle), "array " + run);
+    assert.ok(Object.is(A.brakeTarget({ ...ctx, samples: A.lookWindow(ks, mus, n, rows[0].d, step) }), oracle), "window " + run);
+  }
+});
+
 test("a level AI-AI side rub takes ONE k for the pair, so bucket order cannot pick the yielder (audit4 F10)", () => {
   const src = readFileSync(join(ROOT, "js/physics/collide.js"), "utf8");
   assert.equal(/kTurn \?\? \w\.kTurn/.test(src), false, "`a.kTurn ?? b.kTurn` picks whichever car the walk names a");

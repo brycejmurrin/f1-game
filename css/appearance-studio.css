@@ -165,8 +165,6 @@
 #appearance-studio [data-as="preview-speed"] { font-size: var(--fs-6); font-weight: 800; }
 #pm-panel-appearance > [data-as="advanced"] { margin-top: var(--gap); padding: var(--pad); border: 1px solid var(--plate-line); border-radius: var(--r-md); }
 #pm-panel-appearance > [data-as="advanced"] > summary { min-height: var(--tap-paint); font-size: var(--fs-2); font-weight: 700; cursor: pointer; }
-/* Earlier --sheet-w / max-width for this :has() were cascade-dead under the
-   UI Fit r6 block later in this file (min() against --vwz). */
 @media (max-width: 900px) {
   #appearance-studio { grid-template-columns: minmax(0, 1fr); }
   #appearance-studio [data-as="preview-side"] { position: static; order: -1; }

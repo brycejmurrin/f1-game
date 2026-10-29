@@ -70,3 +70,13 @@ test("over the hard cap a spawn is denied, a hand-off create_session is allowed;
       tool_input: {} }, { APEX_CTX_SOFT: "300" }), "", "the env cap wins over STOP AT");
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+
+test('guard mode refuses malformed input while advisory mode stays silent',()=>{
+ for(const payload of ['not json','[]','{"tool_input":[]}','{"tool_input":0}','{"tool_input":""}']){
+  const run=guard=>spawnSync('python3',[HOOK,...(guard?['--guard']:[])],{input:payload,encoding:'utf8',
+   env:{...process.env,CLAUDE_PROJECT_DIR:ROOT,APEX_CTX_CAP:''}});
+  const guarded=run(true);assert.equal(guarded.status,2,payload+' '+guarded.stderr);assert.match(guarded.stderr,/BLOCKED/);
+  const advisory=run(false);assert.equal(advisory.status,0,advisory.stderr);assert.equal(advisory.stdout,'');
+ }
+});

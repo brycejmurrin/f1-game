@@ -183,6 +183,20 @@ function page({ kind = "none", painted = true, surface = "title", worldWarm = 0,
 }
 const owned = (h) => () => h.G.state === "menu" && !h.G.setupPreviewOn;
 
+test("spent hidden frames do not sit until the give-up when nothing is compiling", async () => {
+  const h = page();
+  const done = h.pre.run(owned(h), "title");
+  await h.flush(3);
+  assert.equal(h.gate.garageWarm, 2, "the frames are armed and the wait has started");
+  h.gate.garageWarm = 0;   // render consumed both; neither present painted
+  h.advance(50);
+  await h.flush();
+  const last = h.pre.state().last;
+  assert.equal(await done, false);
+  assert.equal(last.result, "pending");
+  assert.ok(last.frameMs < 1000, `frame wait was ${last.frameMs} ms, not GIVE_UP_MS`);
+});
+
 test("the title builds the car, then the room, then arms two hidden frames after ONE warm request", async () => {
   const h = page();
   const done = h.pre.run(owned(h), "title");

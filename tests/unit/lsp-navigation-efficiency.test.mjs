@@ -244,3 +244,135 @@ test("diagnostic cleanup preserves failures and leaves a replacement server alon
     lsp.proc = null; // owned fake pipe has no child lifecycle
   });
 });
+
+// Compare the returned navigation records, rather than regex presence in text.
+const auditExports = text => text.split("\n").flatMap(line => {
+  const fields = /^\s*\[export\] (.*?) {2}(\w+)/.exec(line);
+  return fields ? [[fields[1], fields[2]]] : [];
+});
+const auditCallers = text => locationRows(text).map(row => row.split(/\s{2,}/)[1]);
+
+test("audit: comma aliases and function arguments remain real consumers", async () => {
+  await fixture(async (lsp, root) => {
+    fs.writeFileSync(path.join(root, "src/audit.js"), `function firstAudit() {
+  const run = Ops.run, extra = 1;
+  return run(extra);
+}
+function passAudit(fn, value) { return fn(value); }
+function secondAudit() { return passAudit(Ops.run, 2); }
+`);
+    const callers = await query(lsp, "lsp_callers", { symbol: "Ops.run", path: "src/audit.js" });
+    assert.deepEqual(auditCallers(callers), ["firstAudit (via run)", "secondAudit"]);
+  });
+});
+
+test("audit: outlines describe wrapped, spread and returned object APIs", async () => {
+  await fixture(async (lsp, root) => {
+    fs.writeFileSync(path.join(root, "src/audit.js"), `const FrozenAudit = (() => {
+  function ping() { return 1; }
+  return Object.freeze({ ping, value: 1 });
+})();
+const SpreadAudit = (() => {
+  function pong() { return 2; }
+  const api = { pong };
+  return { ...api };
+})();
+const AssignedAudit = (() => {
+  function act() { return 3; }
+  const api = { act };
+  return Object.assign({}, api);
+})();
+const ReturnedAudit = (() => {
+  const api = { play() { return 4; } };
+  return api;
+})();
+const RenamedAudit = (() => {
+  function internal() { return 5; }
+  return { publicName: internal };
+})();
+`);
+    for (const [symbol, expected] of [
+      ["FrozenAudit", [["ping", "function"], ["value", "property"]]],
+      ["SpreadAudit", [["pong", "function"]]],
+      ["AssignedAudit", [["act", "function"]]],
+      ["ReturnedAudit", [["play", "function"]]],
+      ["RenamedAudit", [["publicName", "function"]]],
+    ]) {
+      const outline = await query(lsp, "lsp_outline", { symbol });
+      assert.deepEqual(auditExports(outline), expected, symbol);
+    }
+  });
+});
+
+test("audit: unused member fallback stays inside the selected IIFE", async () => {
+  await fixture(async (lsp, root) => {
+    fs.writeFileSync(path.join(root, "src/audit.js"), `const LeftAudit = (() => {
+  function ping() { return "left"; }
+  return { ping };
+})();
+const RightAudit = (() => {
+  function ping() { return "right"; }
+  return { ping };
+})();
+`);
+    const definition = await query(lsp, "lsp_definition", { symbol: "RightAudit.ping", body: true });
+    assert.deepEqual(locationRows(definition), ['src/audit.js:6:12  [def] function ping() { return "right"; }']);
+    const body = definition.split("\n").filter(row => /^\s*\d+ {2}/.test(row)).map(row => row.replace(/^\s*\d+ {2}/, "").trim());
+    assert.deepEqual(body, ['function ping() { return "right"; }']);
+  });
+});
+
+test("audit: reinjected globals expose the implementation beside the boot stub", async () => {
+  await fixture(async (lsp, root) => {
+    fs.writeFileSync(path.join(root, "src/audit-boot.js"), "var LazyAudit = { ping: () => null };\n");
+    fs.writeFileSync(path.join(root, "src/audit-full.js"), `var LazyAudit = (() => {
+  function ping() { return 42; }
+  return Object.freeze({ ping });
+})();
+`);
+    fs.writeFileSync(path.join(root, "src/audit-use.js"), "function useLazyAudit() { return LazyAudit.ping(); }\n");
+    const definition = await query(lsp, "lsp_definition", { symbol: "LazyAudit.ping", body: true });
+    assert.deepEqual(locationRows(definition), [
+      'src/audit-boot.js:1:19  [def] var LazyAudit = { ping: () => null };',
+      'src/audit-full.js:2:12  [def] function ping() { return 42; }',
+    ]);
+    assert.equal(definition.split("\n")[0].split("; ").at(-1), "runtime load order may determine the winner)");
+    const outline = await query(lsp, "lsp_outline", { symbol: "LazyAudit" });
+    assert.equal(outline.split("\n")[0], "multiple declarations of LazyAudit; runtime load order may determine the implementation");
+    assert.deepEqual(auditExports(outline), [["ping", "function"], ["ping", "function"]]);
+    fs.writeFileSync(path.join(root, "src/audit-combined.js"), `var CombinedAudit = { boot: true };
+var CombinedAudit = (() => {
+  function act() { return 9; }
+  return { act };
+})();
+`);
+    const combined = await query(lsp, "lsp_outline", { symbol: "CombinedAudit" });
+    assert.deepEqual(auditExports(combined), [["boot", "property"], ["act", "function"]]);
+    assert.equal(combined.split("\n")[0], "multiple declarations of CombinedAudit; runtime load order may determine the implementation");
+  });
+});
+
+test("audit: unsupported languages fail before starting the compiler", async () => {
+  await fixture(async (lsp, root) => {
+    fs.writeFileSync(path.join(root, "src/audit.css"), "@keyframes fade { from { opacity: 0; } }\n");
+    lsp.prepare = () => { throw Error("compiler must not start"); };
+    for (const name of ["lsp_outline", "lsp_definition", "lsp_references", "lsp_hover"]) {
+      const args = { file: "src/audit.css", ...(name === "lsp_outline" ? {} : { line: 1, column: 1 }) };
+      const result = await callTool(lsp, name, args);
+      assert.equal(result.isError, true);
+      assert.equal(result.content[0].text, "unsupported language: src/audit.css; navigation supports JavaScript (.js/.mjs/.cjs) and TypeScript (.ts/.mts/.cts)");
+    }
+  });
+});
+
+test("audit: equal-size edits with preserved mtime refresh source and outlines", async () => {
+  await fixture(async (lsp, root) => {
+    const file = path.join(root, "src/core/ops.js"), stamp = new Date(1700000000000);
+    fs.utimesSync(file, stamp, stamp);
+    assert.deepEqual(auditExports(await query(lsp, "lsp_outline", { symbol: "Ops" })), [["run", "function"]]);
+    fs.writeFileSync(file, fs.readFileSync(file, "utf8").replaceAll("run", "act"));
+    fs.utimesSync(file, stamp, stamp);
+    const outline = await query(lsp, "lsp_outline", { symbol: "Ops" });
+    assert.deepEqual(auditExports(outline), [["act", "function"]]);
+  });
+});

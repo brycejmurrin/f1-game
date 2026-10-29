@@ -10,11 +10,16 @@
 # shellparse.py's docstring lists the gap.
 import json, os, re, subprocess, sys
 
+# FAIL CLOSED (2026-10-28, the commit-hook split's hook pass): an unreadable or malformed payload is a refusal,
+# and protect-files.sh turns any crash below (exit 1) into exit 2 too. Before this it warned and passed.
 try:
     d = json.load(sys.stdin)
+    if not isinstance(d, dict) or not isinstance(d.get("tool_input", {}), (dict, type(None))):
+        raise ValueError("unexpected payload shape")
 except Exception:
-    sys.stderr.write("protect-files: WARNING could not read the hook payload; the edit guard did NOT run.\n")
-    sys.exit(0)
+    sys.stderr.write("BLOCKED: protect-files could not read the hook payload (not JSON, or an unexpected shape), so "
+                     "the edit guard did not run and this call is refused (fail closed).\n")
+    sys.exit(2)
 ti = d.get("tool_input") or {}
 tool = d.get("tool_name") or ""
 # Hook input names the subagent a call comes from (`agent_type`, documented at
@@ -450,11 +455,11 @@ if tool == "Bash":
         import shellparse
         targets = shellparse.write_targets(cmd, d.get("cwd") or os.getcwd())
     except Exception as e:
-        # Fail open, but LOUDLY (2026-10-14): a parser bug must not silently
-        # leave every Bash write unguarded.
-        sys.stderr.write(f"protect-files: WARNING shellparse failed ({type(e).__name__}: {e}); "
-                         "this command's file writes were NOT checked.\n")
-        sys.exit(0)
+        # FAIL CLOSED (2026-10-28; it failed open, loudly, since 2026-10-14): a parser bug must not leave a Bash
+        # write unguarded. write_targets reads unparseable text best-effort, so this is a real crash.
+        sys.stderr.write(f"BLOCKED: protect-files could not read this command's file writes (shellparse "
+                         f"{type(e).__name__}: {e}), so it is refused (fail closed). Report the hook error.\n")
+        sys.exit(2)
     removed = {p_ for p_, _h in ratchet_removals(cmd, d.get("cwd") or os.getcwd())}
     for t in targets:
         if t["kind"] in ("rm", "unlink") and os.path.realpath(t["path"]) in removed:

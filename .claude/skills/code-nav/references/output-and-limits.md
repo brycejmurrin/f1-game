@@ -1,7 +1,5 @@
 # Reading apex-lsp output, and its limits
 
-Moved out of `SKILL.md` on 2026-10-26 to keep the skill body an index.
-
 ## Reading the output
 
 - Rows read `file:line:col  [tag] (Module › fn)  source`. The tags:

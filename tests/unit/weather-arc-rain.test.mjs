@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { makeRng } from "../helpers/seeded-fuzz.mjs";
@@ -13,7 +14,9 @@ import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (f) => fs.readFileSync(path.join(ROOT, f), "utf8");
-const WET = 0.25, STORM = 0.72;   // game.js isWetRoad / isRaining (guarded below)
+const require = createRequire(import.meta.url);
+const { createGame } = require("../../tools/lib/game-vm.cjs");
+const WET = 0.25, STORM = 0.72;   // component-fixture contract; real game coverage below
 
 function boot() {
   const rng = makeRng(0x7a1e);
@@ -103,13 +106,105 @@ test("a field nobody updates is not drawn: the frozen box a drying race left beh
   assert.equal(drawn, 0, "no rainUpdate this frame → no streaks at a stale eye");
 });
 
-test("source guard: grip predicates stay surface-based while render reads rainfall", () => {
-  const game = read("js/game.js");
-  assert.match(game, /function isWetRoad\(\) \{ return trackWetness\(\) >= 0\.25; \}/);
-  assert.match(game, /function isRaining\(\) \{ return trackWetness\(\) >= 0\.72; \}/);
-  assert.match(game, /function trackWetness\(\) \{ return wxArc \? wxArc\.wetness\(\) : TyreModel\.wetness\(raceWeather, null\); \}/);
-  assert.ok(game.includes("Particles.rainSeed(!(wxArc && wxArc.arc) && isWetRoad() && !isRaining());"));
-  assert.ok(game.includes("Particles.rainUpdate(dt, camEye, wxArc.viewRainfall())"));
+test("real game: road thresholds, drizzle seeding and rendered rain retain separate weather owners", async (t) => {
+  const g = await createGame({ track: "monza", carMeshes: false });
+  const A = g.apex, G = g.G, P = vm.runInContext("Particles", g.ctx);
+  // The physics harness's inert renderer returns [] here; real rendering
+  // consumes six planes. Use the same shared math as all shipped backends.
+  G.gfx.makeFrustumPlanes = vm.runInContext("Frustum", g.ctx).makeFrustumPlanes;
+  let drawn = 0;
+  // Capture the real particle renderer's output; do not replace rainSeed,
+  // rainUpdate, weather predicates, WeatherArc or the game's render function.
+  P.init({ drawParticles(_data, floats, additive) { if (!additive) drawn += floats / 60; } });
+  let presents = 0;
+  const present = G.gfx.present.bind(G.gfx);
+  G.gfx.present = (...args) => { presents++; return present(...args); };
+  const paint = () => {
+    const before = presents;
+    drawn = 0; A.snapCam(true);
+    // snapCam's public paint path tolerates renderer errors; require a full
+    // present so an aborted frame cannot pass the no-rain case accidentally.
+    assert.equal(presents, before + 1, "the real render reaches present");
+    return drawn;
+  };
+  const arc = (from, to, dur) => {
+    A.weatherArc(null); A.weather(from); A.weatherArc(from, to, dur);
+    return G.weatherArc;
+  };
+  // The facade deliberately permits seeking the shared weather clock. Locate
+  // a surface state by observing the real model, not copying its lag equation.
+  const surface = (target) => {
+    const live = arc("dry", "rain", 120);
+    let lo = 0, hi = 240;
+    for (let i = 0; i < 45; i++) {
+      live.t = (lo + hi) / 2;
+      if (G.trackWetness() < target) lo = live.t; else hi = live.t;
+    }
+    live.t = (lo + hi) / 2;
+    assert.ok(Math.abs(G.trackWetness() - target) < 1e-9, "the real surface reaches the requested boundary fixture");
+  };
+  try {
+    await t.test("grip's wet-road predicate crosses 0.25 even while the weather chip remains dry", () => {
+      for (const [wetness, wet] of [[0.249, false], [0.251, true]]) {
+        surface(wetness);
+        assert.equal(G.raceWeather, "dry", "the chip is deliberately not the wetness oracle");
+        assert.equal(G.isWetRoad(), wet, `surface ${wetness}`);
+      }
+    });
+    await t.test("the rendered lightning clock crosses the real 0.72 surface gate", () => {
+      A.lightTune({ lightning: 1 });
+      G.raceT = 100;
+      for (const [wetness, raining] of [[0.719, false], [0.721, true]]) {
+        surface(wetness);
+        G._ltBase = { ambientSky: [0.2, 0.2, 0.2], ambientGround: [0.1, 0.1, 0.1], exposure: 1 };
+        G._ltFlash = 0; G._ltNextT = 99;
+        paint();
+        assert.equal(G._ltNextT, raining ? 100 : 99,
+          `surface ${wetness}: only an eligible rain frame advances the lightning window`);
+      }
+    });
+    await t.test("initRainDrops keeps static wet drizzle sparse but reserves the full pool for live arcs", () => {
+      const seeded = () => {
+        A.lightTune({ rainCount: 100, drizzleCount: 0.3 });
+        // Six random calls per drop: x/y/z, speed, length, alpha. Keep the
+        // eye-relative offsets (4.5, 0, 4.5): dist=sqrt(40.5)>2, and a falling
+        // streak cannot align with this horizontal ray. Alpha is 0.415 before
+        // the real opacity multiplier. This counts the pool, not random culls.
+        const gameMath = vm.runInContext("Math", g.ctx);
+        g.ctx.Math = vm.runInContext(`(() => {
+          const values = [0.75, 0.375, 0.75, 0.5, 0.5, 0.75];
+          let i = 0;
+          return Object.assign(Object.create(Math), { random: () => values[i++ % values.length] });
+        })()`, g.ctx);
+        try {
+          G.initRainDrops(); P.rainShow(true);
+          P.rainUpdate(0, [0, 1, 0], true); drawn = 0; P.draw();
+          return drawn;
+        } finally { g.ctx.Math = gameMath; }
+      };
+      A.weatherArc(null); A.weather("wet");
+      assert.equal(seeded(), 30, "static wet uses the drizzle pool");
+      A.weather("rain");
+      assert.equal(seeded(), 100, "static rain uses the full pool");
+      arc("wet", "rain", 120);
+      assert.equal(seeded(), 100, "a live arc must have room to grow without a pool-size jump");
+    });
+    await t.test("real render draws incoming rain over dry asphalt and stops over standing water", () => {
+      A.lightTune({ rainCount: 100, drizzleCount: 0.3 });
+      const arriving = arc("dry", "rain", 120); arriving.t = 5;
+      G.initRainDrops(); P.rainShow(true);
+      assert.ok(G.trackWetness() < 0.25);
+      assert.ok(G.viewRainfall() > 0.01);
+      assert.ok(paint() > 0, "render must feed atmospheric rainfall even though the road is dry");
+      const clearing = arc("rain", "dry", 10); clearing.t = 10;
+      G.initRainDrops(); P.rainShow(true);
+      assert.ok(G.trackWetness() > 0.72, "grip still sees standing water");
+      assert.equal(G.viewRainfall(), 0);
+      assert.equal(paint(), 0, "render must not feed wet-road predicates to falling rain");
+    });
+    assert.deepEqual(g.record.scripts.filter((s) => s.error), [], "no script failure may masquerade as absent rain");
+    assert.deepEqual(g.record.rejections, [], "no asynchronous boot failure");
+  } finally { g.close(); }
 });
 
 test("rain arrives before the road saturates, then stops while water remains", () => {
