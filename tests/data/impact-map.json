@@ -18346,9 +18346,6 @@
       ]
     },
     "js/workers/bitmap-decode-client.js": {
-      "decode": [
-        "tests/unit/bitmap-decode-worker.test.mjs"
-      ],
       "drop": [
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
@@ -18365,9 +18362,6 @@
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
-      "decode": [
-        "tests/unit/bitmap-decode-worker.test.mjs"
-      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"
