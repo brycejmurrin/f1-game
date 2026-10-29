@@ -892,7 +892,9 @@ const Helmets = (function () {
     return out;
   }
 
-  return { DESIGNS, COLORS: C, designFor, styled, STYLES, painter, shell, isVisor, generated, keyNum, ZONES, SHAPE, pointAt, build, buildAero, surfAt,
+  // keyNum / buildAero / surfAt stay internal: designFor and build call them; nothing
+  // outside this file reads Helmets.keyNum, Helmets.buildAero, or Helmets.surfAt.
+  return { DESIGNS, COLORS: C, designFor, styled, STYLES, painter, shell, isVisor, generated, ZONES, SHAPE, pointAt, build,
            RINGS, SLICES, FIELD_RINGS, FIELD_SLICES, ringT, MAX_SPLIT };   // the tessellation, so previews/tests can name both detail levels
 })();
 Object.freeze(Helmets);

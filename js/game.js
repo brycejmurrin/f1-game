@@ -7286,8 +7286,8 @@ function render(dt) {
   // A freshly pre-built world draws its first frames HIDDEN (scheduleFlybyTrack
   // owes them): shaders, textures and shadow maps warm up under the picker, not
   // in front of the player the instant race settings opens.
-  // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too.
-  if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; return; }
+  // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too. A present that only starts a program warm paints nothing — refund that frame (prebuild.js).
+  if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { const owed = _menuGate.garageWarm; _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; else if (gfx.warming && gfx.warming()) _menuGate.garageWarm = owed; return; }
   if (menuBlank && !(track && _menuGate.warm > 0)) return;
   // The last hidden warm frame is the one observable "this world has drawn":
   // tools/lib/mem-census.mjs waits on this record (a census taken before it read
@@ -9212,10 +9212,8 @@ els.resNext.onclick = () => {
   }
   if (isChampionship()) {
     if (season.round >= SeasonCal.rounds()) {
-      // First click: build the champion panel and STAY on the results screen. The
-      // panel's own DOM lives in js/ui/results-sheet.js with every other results
-      // builder; "MAIN MENU" on the button is the sentinel that it is already up.
-      if (els.resNext.textContent !== "MAIN MENU") { buildChampion(); return; }
+      // Older builders lack the marker, so keep their literal-only contract.
+      if (!(els.results.dataset.resultsView === "champion" || (els.results.dataset.resultsView === undefined && els.resNext.textContent === "MAIN MENU"))) { buildChampion(); return; }
       // Second click: go to menu, reset season
       const cleared = SeasonCal.clear();
       season = cleared.ok ? null : SeasonCal.load();

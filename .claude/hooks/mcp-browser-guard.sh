@@ -37,24 +37,38 @@
 # are matched too.
 #
 # Exit 2 blocks with the reason on stderr; exit 0 lets the call through.
-exec python3 -c '
+# FAIL CLOSED on its own errors too (2026-10-28): a missing python3, an
+# exception after the payload was read, or any exit but 0/2 is a refusal,
+# whatever the host's hook runner does with a failed hook.
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "BLOCKED: mcp-browser-guard needs python3 to tell a subagent from the main session; a browser tool is refused rather than risk a second Chromium (fail closed)." >&2
+  exit 2
+fi
+python3 -c '
 import json, re, sys
 try:
     d = json.load(sys.stdin)
-    if not isinstance(d, dict):
-        raise ValueError("payload is not an object")
+    if not isinstance(d, dict) or not isinstance(d.get("tool_input", {}), (dict, type(None))):
+        raise ValueError("payload is not an object, or tool_input is malformed")
 except Exception:
     sys.stderr.write("BLOCKED: mcp-browser-guard could not read the hook payload, so it cannot tell a subagent from the "
                      "main session; a browser tool is refused rather than risk a second Chromium (AGENTS.md "
                      "§Verification 10). Retry the call.\n")
     sys.exit(2)
-name = d.get("tool_name") or ""
-BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|js-debugger__.+|browserstack__(run\w*Session|run\w*Tests\w*|take\w*Screenshot|startAccessibilityScan|runPercyScan)|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start))$")
-ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
-debug_start = name == "mcp__apex-tools__apex_debug_chrome" and str(ti.get("action") or "start").strip().lower() not in ("status", "stop", "list", "help")
-if not (BROWSER.match(name) or debug_start or name.startswith("mcp__plugin_browser-use")):
-    sys.exit(0)
-sub = d.get("agent_id") or d.get("agent_type") or "/subagents/" in str(d.get("transcript_path") or "")
+try:
+    name = d.get("tool_name") or ""
+    BROWSER = re.compile(r"^mcp__(playwright-official__.+|chrome-devtools__.+|js-debugger__.+|browserstack__(run\w*Session|run\w*Tests\w*|take\w*Screenshot|startAccessibilityScan|runPercyScan)|apex-tools__apex_(eval|shot|shot_survey|agent|garage|hud_shot|hud_survey|hud_mock|track|ui_fit|ui_shot|ui_inspect|diagnostics|profile|job_start))$")
+    ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
+    debug_start = name == "mcp__apex-tools__apex_debug_chrome" and str(ti.get("action") or "start").strip().lower() not in ("status", "stop", "list", "help")
+    if not (BROWSER.match(name) or debug_start or name.startswith("mcp__plugin_browser-use")):
+        sys.exit(0)
+    sub = d.get("agent_id") or d.get("agent_type") or "/subagents/" in str(d.get("transcript_path") or "")
+except SystemExit:
+    raise
+except Exception as e:
+    sys.stderr.write("BLOCKED: mcp-browser-guard failed (" + type(e).__name__ + "), so this browser tool is refused "
+                     "(fail closed). Report the hook error.\n")
+    sys.exit(2)
 if not sub:
     sys.exit(0)
 sys.stderr.write("BLOCKED: " + name + " drives a browser, and a subagent never starts one (AGENTS.md "
@@ -63,3 +77,9 @@ sys.stderr.write("BLOCKED: " + name + " drives a browser, and a subagent never s
   "needs a browser as NOT RUN.\n")
 sys.exit(2)
 '
+rc=$?
+case "$rc" in
+  0|2) exit "$rc" ;;
+  *) echo "BLOCKED: mcp-browser-guard failed with exit $rc, so this browser tool is refused (fail closed)." >&2
+     exit 2 ;;
+esac

@@ -17,7 +17,7 @@ export function checkCatalog(tools,host=[]){
   for(const t of tools)if(t.inputSchema?.type!=='object')errors.push('Invalid input schema: '+t.name);
   return {ok:!errors.length,count:names.length,hostCompared:host.length,errors};
 }
-export async function main(argv=process.argv.slice(2)){
+async function main(argv=process.argv.slice(2)){
   if(argv.includes('--help')){console.log('Usage: node tools/mcp/check-chat-contract.mjs [host-tools.json]\nStarts a disposable protocol client; no browser actions. Host snapshot must be actual exposed F1 tool names, not a config manifest.');return;}
   if(argv.length>1)throw new Error('Expected at most one host snapshot');
   let host=[];if(argv[0]){const raw=JSON.parse(fs.readFileSync(argv[0],'utf8'));host=Array.isArray(raw)?raw:raw.tools;if(!Array.isArray(host))throw new Error('Expected tool-name array');host=host.map(t=>typeof t==='string'?t:t.name);if(host.some(n=>typeof n!=='string'))throw new Error('Invalid tool name');}

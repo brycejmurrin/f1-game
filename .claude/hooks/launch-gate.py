@@ -14,12 +14,15 @@
 #
 # The receipt is written by tools/ci/launch-gate.mjs (Q1): ok when
 # rate_limit_info.status is "allowed", or when the launch is Bryce's typed ask
-# (the receipt keeps his quote). FAILS OPEN on its OWN errors: an unreadable
-# payload or an internal exception prints one stderr line and exits 0 with no
-# decision (settings.json gives this hook no onFailure "block"), so a broken
-# hook never stalls a fleet. Output is the documented PreToolUse JSON
+# (the receipt keeps his quote). FAILS CLOSED on its OWN errors (2026-10-28,
+# the commit-hook split's hook pass; Bryce: "Yes, split it"): it used to fail
+# open, so a crash or an unreadable payload let a create_session through with no
+# quota receipt — the one thing the hook exists to stop. Now an unreadable or
+# malformed payload, or any internal exception, is a block (the reason on
+# stderr, exit 2), and settings.json sets onFailure "block" for a
+# timeout or a missing interpreter. Output is the documented PreToolUse JSON
 # (hookSpecificOutput.permissionDecision, https://code.claude.com/docs/en/hooks,
-# read 2026-10-26). Tests: tests/unit/launch-gate.test.mjs.
+# read 2026-10-28). Tests: tests/unit/launch-gate.test.mjs.
 import calendar, hashlib, json, os, re, sys, time
 
 MAX_AGE_S = 120  # tools/ci/launch-gate.mjs MAX_AGE_S
@@ -32,13 +35,22 @@ def deny(why):
                                              "permissionDecisionReason": "LAUNCH GATE: " + why + " — " + FIX}}))
 
 
+def refuse(why):
+    """The fail-closed exit: stderr for every host, exit 2 (a block in Claude Code, Cursor and Codex)."""
+    sys.stderr.write("BLOCKED: LAUNCH GATE " + why + ", so this create_session is refused (fail closed). "
+                     "Report the hook error; do not work around it.\n")
+    sys.stderr.flush()
+    os._exit(2)
+
+
 def main():
     try:
         d = json.load(sys.stdin)
     except Exception:
-        sys.stderr.write("launch-gate: unreadable hook payload; allowing (fail open).\n")
-        return
-    if not isinstance(d, dict) or not str(d.get("tool_name") or "").endswith("create_session"):
+        return refuse("could not read the hook payload")
+    if not isinstance(d, dict) or not isinstance(d.get("tool_input", {}), (dict, type(None))):
+        return refuse("got a malformed hook payload (not an object, or a tool_input that is not one)")
+    if not str(d.get("tool_name") or "").endswith("create_session"):
         return
     root = os.environ.get("CLAUDE_PROJECT_DIR") or d.get("cwd") or os.getcwd()
     ti = d.get("tool_input") if isinstance(d.get("tool_input"), dict) else {}
@@ -98,6 +110,6 @@ def main():
 if __name__ == "__main__":
     try:
         main()
-    except Exception as e:  # fail open on the hook's own bug
-        sys.stderr.write("launch-gate: internal error %s; allowing (fail open).\n" % type(e).__name__)
+    except Exception as e:  # fail CLOSED on the hook's own bug (2026-10-28)
+        refuse("failed with an internal error (%s: %s)" % (type(e).__name__, str(e)[:160]))
     sys.exit(0)

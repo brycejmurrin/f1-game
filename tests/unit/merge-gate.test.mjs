@@ -186,6 +186,9 @@ test("two PRs each at the assert-match ceiling alone are over it on the merge re
     for (const rel of [`${UNIT}/assert-match-ratchet.test.mjs`, "tools/check/ratchets.mjs", "tools/hooks/ratchet-reason.mjs"]) write(W, rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
     write(W, "tests/data/ratchets.json", JSON.stringify({ files: {}, tree: { assertPins: 3 } }) + "\n");
     write(W, `${UNIT}/base.test.mjs`, pins(2));
+    // This fixture isolates ratchet composition; provide a valid scenery catalog for the preceding gen row.
+    write(W, "tools/shot/scenery-source-hash.cjs", `module.exports = { scenerySourceDigest: () => "${"a".repeat(64)}" };\n`);
+    write(W, "tools/shot/scenery-locations.json", JSON.stringify({ sourceDigest: "a".repeat(64) }));
     git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base: 2 pins, ceiling 3"); git(W, "push", "-q", "origin", "deploy-x");
     for (const [name, file] of [["pr1", "one.test.mjs"], ["pr2", "two.test.mjs"]]) {   // each adds one pin: 3 of 3 alone
       git(W, "checkout", "-q", "-b", name, "deploy-x"); write(W, `${UNIT}/${file}`, pins(1));
@@ -616,8 +619,8 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   const fn = postRun.slice(start, postRun.indexOf("\n}\n", start) + 3);
   const atS = postRun.split("\n").find((l) => l.startsWith("AT_S="));
   const stub = `gh() { local q="" a; while [ $# -gt 0 ]; do a=$1; shift; case "$a" in --method) echo POSTED; return 0 ;; --jq) q=$1; shift ;; esac; done; jq -r "$q" <<<"$FAKE"; }`;
-  const runGate = (created) => {
-    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
+  const runGate = (created, url) => {
+    const fake = JSON.stringify(created ? [{ context: "gate", created_at: created, target_url: url }, { context: "CI", created_at: "2030-01-01T00:00:00Z" }] : []);
     const script = ["set -uo pipefail", "R=o/r; GITHUB_SERVER_URL=https://x; GITHUB_RUN_ID=1; GITHUB_STEP_SUMMARY=/dev/null", stub, atS, fn, "write_gate abc123 completed success title summary"].join("\n");
     const r = spawnSync("bash", ["-c", script], { encoding: "utf8", env: { ...process.env, AT: "2026-10-27T10:00:05Z", FAKE: fake } });
     assert.equal(r.status, 0, r.stderr);
@@ -627,6 +630,9 @@ test("land.yml write_gate (WP-L3b): AT is whole seconds and a same-second older 
   assert.equal(runGate("2026-10-27T10:00:04Z"), "POSTED", "an older status is replaced");
   assert.equal(runGate("2026-10-27T10:00:05Z"), "POSTED", "same second as AT: the old string compare kept it (`Z` > `.`)");
   assert.notEqual(runGate("2026-10-27T10:00:06Z"), "POSTED", "a status newer than this run's read is kept");
+  assert.notEqual(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/2"), "POSTED", "another run's newer status is kept");
+  assert.equal(runGate("2026-10-27T10:00:06Z", "https://x/o/r/actions/runs/1"), "POSTED",
+    "this run's own earlier attempt is replaced (a re-run reuses AT: run 40740152111, #4110)");
 });
 
 // ---- the immediate re-gate: a gate passed on a tip that moved is re-dispatched at once, bounded per head ---------
@@ -647,14 +653,15 @@ function runStep(script, env, files = {}) {
     `    *" --method PUT "*) echo "token=\${GH_TOKEN:-}" >> "$GH_LOG"`,
     `      case " \${GH_PUT_FAIL:-} " in *" $(sed -n 's#.*/pulls/\\([0-9]*\\)/update-branch.*#\\1#p' <<<"\${args[*]}") "*) echo "gh: merge conflict (HTTP 422)" >&2; return 1 ;; esac`,
     `      echo '{"message":"Updating pull request branch."}'; return 0 ;;`,
-    `    *"/issues"*) echo "\${PAUSED:-false}"; return 0 ;;`,
-    `    *"/branches/"*) echo "\${NOW_TIP:-}"; return 0 ;;`,
-    `    *" pr merge "*) return 0 ;;`,
+    `    *"/issues"*) if [ "$(grep -c '/issues' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; echo "\${PAUSED_AFTER-\${PAUSED:-false}}"; else echo "\${PAUSED:-false}"; fi; return 0 ;;`,
+    `    *"/branches/"*) if [ "$(grep -c '/branches/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31; echo "\${NOW_TIP_AFTER-\${NOW_TIP:-}}"; else echo "\${NOW_TIP:-}"; fi; return 0 ;;`,
+    `    *" pr merge "*) [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
     `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
     `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
     `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
     `    *) data=\${FAKE_PR:-'{}'}`,
+    `       if [[ " \${args[*]} " == *"/pulls/"* ]] && [ "$(grep -c '/pulls/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pr ] || return 31; data=\${FAKE_PR_AFTER-$data}; fi`,
     `       if [ -n "\${FAKE_PRS:-}" ]; then data=$(jq -c --arg n "$(sed -n 's#.*/pulls/\\([0-9]*\\).*#\\1#p' <<<"\${args[*]}")" '.[$n] // {}' <<<"$FAKE_PRS"); fi ;;`,
     `  esac`,
     `  if [ -n "$q" ]; then jq -r "$q" <<<"$data"; else echo "$data"; fi; }`,
@@ -719,13 +726,56 @@ test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other
   assert.ok(r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`)), "same tip: arms as before");
 });
 
+test("land.yml arm: only a proven base-modified race re-gates after a failed single merge call", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const error = "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)";
+  const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
+  const go = (extra = {}) => runStep(run, {
+    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A,
+    NOW_TIP_AFTER: TIP_B, ...auth,
+    GH_MERGE_RC: "17", GH_MERGE_STDERR: error, ...extra,
+  });
+  const singleArm = (r) => assert.equal(r.calls.filter((c) => c.includes("pr merge ")).length, 1, "never retries the merge command");
+  let r = go();
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 });
+  assert.equal(r.stderr.split("\n")[0], error, "original failure stays visible verbatim");
+  assert.equal(r.summary, `::notice::not armed #7: deploy tip moved during arm ${TIP_A.slice(0, 12)} -> ${TIP_B.slice(0, 12)}; re-gating within the existing retry budget\n`);
+  singleArm(r);
+  const refusals = [
+    { NOW_TIP_AFTER: TIP_A }, { NOW_TIP_AFTER: "" }, { NOW_TIP_AFTER: "invalid" },
+    { GH_MERGE_STDERR: "GraphQL: Resource not accessible by integration" },
+    { FAKE_PR_AFTER: pr7({ head: { sha: TIP_B } }) }, { FAKE_PR_AFTER: pr7({ draft: true }) },
+    { FAKE_PR_AFTER: pr7({ state: "closed" }) }, { FAKE_PR_AFTER: pr7({ base: { ref: "other" } }) },
+    { FAKE_PR_AFTER: pr7({ labels: [] }) },
+    { FAKE_PR_AFTER: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) },
+    { FAKE_PR_AFTER: "malformed" }, { PAUSED_AFTER: "true" }, { PAUSED_AFTER: "" },
+    ...["tip", "pr", "pause"].map((GH_ARM_RECHECK_FAIL) => ({ GH_ARM_RECHECK_FAIL })),
+  ];
+  for (const extra of refusals) {
+    r = go(extra);
+    assert.equal(r.status, 17, JSON.stringify(extra) + r.stderr);
+    assert.equal(r.out.retry, undefined, JSON.stringify(extra));
+    assert.equal(r.summary, "", "refusal never claims that the PR was armed");
+    assert.equal(r.stderr.split("\n")[0], extra.GH_MERGE_STDERR || error, "original merge error is preserved verbatim");
+    singleArm(r);
+    if (extra.GH_MERGE_STDERR) assert.equal(r.calls.filter((c) => c.includes("/branches/")).length, 1, "unrelated errors never enter recovery");
+  }
+  r = go({ GH_MERGE_RC: "0", GH_MERGE_STDERR: "" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.retry, undefined);
+  assert.equal(r.summary, `armed (or merged) #7 @ ${HEAD7.slice(0, 12)} onto ${TIP_A.slice(0, 12)} with ${auth.LAND_TOKEN ? "LAND_TOKEN" : "GITHUB_TOKEN"}\n`);
+  assert.equal(r.calls.filter((c) => c.includes("/branches/")).length, 1, "success has no recovery reads");
+  singleArm(r);
+});
+
 test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs deploy tip) are handed to retry; other errors are not", () => {
   const run = LAND.jobs.post.steps.find((s) => s.id === "post").run;
   assert.match(run, /the deploy tip moved between trusted-rows[^\n]*\n\s*#[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "the trusted-rows/land-gate tip split asks for a re-gate");
   assert.match(run, /elif \[ "\$now" != "\$tip" \]; then\n[^\n]*deploy tip moved since the gate measured[^\n]*\n\s*want_retry "\$n" "\$head"/,
     "a verdict whose tip is no longer the deploy tip asks for a re-gate");
-  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 2, "no other branch asks for a re-gate");
+  assert.equal((run.match(/^\s*want_retry "/gm) || []).length, 3, "no other branch asks for a re-gate");
   assert.equal((run.match(/retry=\$\(jq/g) || []).length, 1, "one append, inside want_retry");
   assert.match(run, /echo "retry=\$retry"/);
 });
@@ -768,6 +818,19 @@ test("land.yml post (STALE TIP): success only onto the tip the gate measured; a 
   assert.deepEqual(bodies(r).map((b) => b.state), ["pending"]);
   assert.equal(disarmed(r), true, "any non-success write disarms an armed PR");
   assert.equal(r.out.retry, "[]", "CI still running is not a tip move");
+
+  r = runStep(run, env({ NOW_TIP: TIP_A, FAKE_PR: armed, TRUSTED: "[]" }), verdict());
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(bodies(r).map((b) => b.state), ["pending"], "missing trusted rows cannot approve the head");
+  assert.deepEqual(JSON.parse(r.out.retry), [{ number: 7, head: HEAD7 }], "missing trusted rows request the bounded re-gate");
+  assert.equal(r.out.arm, "", "missing trusted rows cannot arm");
+  assert.equal(disarmed(r), true, "an earlier arm is disarmed while trusted verification is missing");
+
+  r = runStep(run, env({ NOW_TIP: TIP_A, FAKE_PR: armed, TRUSTED: "[]" }), verdict(2));
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(bodies(r).map((b) => b.state), ["failure"], "an actual land-gate refusal stays a refusal even without trusted rows");
+  assert.equal(r.out.retry, "[]", "missing rows cannot turn a gen/ratchet refusal into a retry");
+  assert.equal(r.out.arm, "");
 
   r = runStep(run, env({ NOW_TIP: TIP_B, FAKE_PR: armed, FAKE_STATUSES: JSON.stringify([{ context: "gate", created_at: "2026-10-27T10:00:09Z" }]) }), verdict());
   assert.deepEqual(bodies(r), [], "a newer verdict on the head is kept");

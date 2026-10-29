@@ -747,8 +747,8 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 |---|---|
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
-| **ci/dispatch.json** | `ci/dispatch.mjs`, `tests/unit/dispatch.test.mjs` |
-| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/bash-guard-hardening.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
+| **ci/dispatch.json** | `ci/dispatch.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md`, `tests/unit/dispatch.test.mjs` |
+| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
 | **environment/ENVIRONMENT.md** | `environment/MCP-STARTUP-SKILL.md`, `environment/bind-canonical.sh`, `environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md` |
 | **environment/MCP-STARTUP-SKILL.md** | `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/install-environment.sh` |
 | **environment/PLUGIN-BUILD.md** | `environment/bind-canonical.sh` |
@@ -776,7 +776,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-transport.test.mjs` |
 | **perf/baselines/vm-alloc.json** | `perf/vm-alloc-census.mjs`, `tests/unit/perf-vm-alloc-budget.test.mjs` |
-| **shot/scenery-locations.json** | `ci/deploy.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
+| **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/dijon-clips-coplanar.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |

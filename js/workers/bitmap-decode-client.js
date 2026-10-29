@@ -1,41 +1,25 @@
 /* Apex 26 — page side of js/workers/bitmap-decode-worker.js.
-   Decodes a Blob to an ImageBitmap on a Worker, then transfers it back.
-   Falls back to main-thread createImageBitmap when Workers are missing or
-   the worker errors. Upload / draw stays on the caller (render thread).
+   Pack-strip lane only (PARALLEL-HUNT-2026-10-24 P1): the worker inflates +
+   unfilters a baked strip PNG and transfers the RGBA bytes back, behind
+   apex26.packDecodeWorker ("1" on; unset or "0" OFF — a prototype). It answers
+   null on anything but success, so the caller decodes on the page as before.
    The client ships as a boot <script> tag (tools/manifest.cjs FULL); only the
-   worker entry is loaded via new Worker(ScriptLoader.url(...)), same pattern
-   as TrackBuildClient / build-worker.js.
-   strip() is the pack-strip lane (PARALLEL-HUNT-2026-10-24 P1): the worker
-   inflates + unfilters a baked strip PNG and transfers the RGBA bytes back,
-   behind apex26.packDecodeWorker ("1" on; unset or "0" OFF — a prototype).
-   It answers null on anything but success, so the caller decodes on the page
-   exactly as before. */
+   worker entry is loaded via new Worker(ScriptLoader.url(...)). */
 const BitmapDecode = (function () {
   "use strict";
-  const DEFAULT_OPTS = Object.freeze({
-    premultiplyAlpha: "none",
-    colorSpaceConversion: "none",
-    imageOrientation: "none",
-  });
   let _w = null, _seq = 0;
   const _pending = new Map();
-  const REQUEST_MS = 4000;
   // A whole 256 strip is ~90 ms of decode on a desktop core (node, the shipped
   // pack); a phone core several times that. Generous: a timeout only falls back.
   const STRIP_MS = 15000;
   const STRIP_KEY = "apex26.packDecodeWorker";
   function closeBitmap(bmp) { try { if (bmp && typeof bmp.close === "function") bmp.close(); } catch (_) { /* best-effort disposal of an abandoned bitmap */ } }
-  function validCrop(crop) {
-    if (crop != null && (!Array.isArray(crop) || crop.length !== 4 ||
-        !crop.every(Number.isFinite) || crop[2] <= 0 || crop[3] <= 0)) throw new Error("bitmap decode: invalid crop");
-  }
-  function settle(seq, err, bmp) {
+  function settle(seq, err, value) {
     const p = _pending.get(seq);
-    if (!p) { closeBitmap(bmp); return; }
+    if (!p) { closeBitmap(value && value.close ? value : null); return; }
     _pending.delete(seq);
     if (p.timer != null) clearTimeout(p.timer);
-    if (p.signal) p.signal.removeEventListener("abort", p.abort);
-    if (err) { if (!p.strip) closeBitmap(bmp); p.reject(err); } else p.resolve(bmp);
+    if (err) p.reject(err); else p.resolve(value);
   }
 
   function url(f) {
@@ -58,95 +42,22 @@ const BitmapDecode = (function () {
       w.onmessage = (e) => {
         const m = e.data || {};
         // A reply from a worker we already terminated (drop + respawn) must not
-        // settle a newer seq, and its transferred bitmap still needs closing.
+        // settle a newer seq, and any transferred bitmap still needs closing.
         if (_w !== w) { closeBitmap(m.bmp); return; }
-        const pending = _pending.get(m.seq);
-        // Reply kind must match the waiting request. A crossed strip/decode
-        // reply used to resolve the wrong shape (decode got {pix,stride}, or
-        // strip kept an ImageBitmap it then discarded without close()).
+        // Strip is the only live port. A crossed or error reply answers null
+        // and closes any ImageBitmap so it cannot leak.
         if (m.type === "strip") {
-          if (pending && !pending.strip) {
-            settle(m.seq, new Error("invalid bitmap worker reply"), null);
-            return;
-          }
           settle(m.seq, null, m.pix ? { pix: m.pix, stride: m.stride } : null);
           return;
         }
-        if (pending && pending.strip) {
-          closeBitmap(m.bmp);
-          settle(m.seq, null, null);
-          return;
-        }
-        const valid = m.type === "decoded" && m.bmp && typeof m.bmp.close === "function" &&
-          Number.isFinite(m.bmp.width) && m.bmp.width > 0 && Number.isFinite(m.bmp.height) && m.bmp.height > 0;
-        settle(m.seq, valid ? null : new Error(m.message || "invalid bitmap worker reply"), m.bmp);
+        closeBitmap(m.bmp);
+        settle(m.seq, null, null);
       };
       w.onerror = w.onmessageerror = () => { if (_w === w) drop(); };
       _w = w;
       return w;
     } catch (_) {
       return null;
-    }
-  }
-
-  async function mainThread(blob, opts, crop) {
-    const o = opts || DEFAULT_OPTS;
-    if (crop != null) {
-      const [sx, sy, sw, sh] = crop;
-      return createImageBitmap(blob, sx, sy, sw, sh, o);
-    }
-    return createImageBitmap(blob, o);
-  }
-
-  // blob: Blob|File; opts: ImageBitmapOptions; crop: [sx,sy,sw,sh] optional.
-  function abortError() { const e = new Error("bitmap decode aborted"); e.name = "AbortError"; return e; }
-  // Optional fourth argument is an AbortSignal. drop() remains a worker reset:
-  // worker faults fall back, while explicit cancellation never starts fallback.
-  async function decode(blob, opts, crop, signal) {
-    validCrop(crop);
-    if (signal && signal.aborted) throw abortError();
-    const o = opts ? Object.assign({}, DEFAULT_OPTS, opts) : DEFAULT_OPTS;
-    const w = spawn();
-    const fallback = async () => {
-      if (signal && signal.aborted) throw abortError();
-      const bmp = await mainThread(blob, o, crop);
-      if (signal && signal.aborted) { closeBitmap(bmp); throw abortError(); }
-      return bmp;
-    };
-    if (!w) return fallback();
-    const seq = ++_seq;
-    try {
-      return await new Promise((resolve, reject) => {
-        const p = { resolve, reject, timer: null };
-        _pending.set(seq, p);
-        if (signal) {
-          p.signal = signal; p.abort = () => settle(seq, abortError());
-          signal.addEventListener("abort", p.abort, { once: true });
-          if (signal.aborted) { p.abort(); return; }
-        }
-        p.timer = setTimeout(() => {
-          // A silent worker stall affects every request on this instance.
-          // Retire it so the next decode can start a healthy worker.
-          if (_w === w) drop(); else settle(seq, new Error("bitmap worker timed out"));
-        }, REQUEST_MS);
-        // drop() may have terminated `w` between spawn() and here (or the
-        // browser neutered it without firing onerror). Never postMessage at a
-        // corpse — that throws, and leaving `_w` pointed at it makes every
-        // later decode hit the same InvalidStateError forever.
-        if (_w !== w) {
-          settle(seq, new Error("bitmap worker dropped"));
-          return;
-        }
-        try {
-          w.postMessage({ type: "decode", seq, blob, opts: o, crop: crop || null });
-        } catch (err) {
-          if (_w === w) drop();
-          else settle(seq, err);
-        }
-      });
-    } catch (err) {
-      if (signal && signal.aborted) throw abortError();
-      return fallback();
     }
   }
 
@@ -169,11 +80,16 @@ const BitmapDecode = (function () {
     let got = null;
     try {
       got = await new Promise((resolve, reject) => {
-        const p = { resolve, reject, timer: null, strip: true };
+        const p = { resolve, reject, timer: null };
         _pending.set(seq, p);
         p.timer = setTimeout(() => {
+          // A silent worker stall affects every request on this instance.
+          // Retire it so the next strip can start a healthy worker.
           if (_w === w) drop(); else settle(seq, new Error("strip worker timed out"));
         }, STRIP_MS);
+        // drop() may have terminated `w` between spawn() and here. Never
+        // postMessage at a corpse — that throws, and leaving `_w` pointed at
+        // it makes every later strip hit the same InvalidStateError forever.
         if (_w !== w) { settle(seq, new Error("bitmap worker dropped")); return; }
         try { w.postMessage({ type: "strip", seq, blob, size, layers: last + 1 }); }
         catch (err) { if (_w === w) drop(); else settle(seq, err); }
@@ -186,10 +102,6 @@ const BitmapDecode = (function () {
     return out;
   }
 
-  function supported() {
-    return typeof Worker !== "undefined" && typeof createImageBitmap === "function";
-  }
-
-  return { decode, strip, stripEnabled, supported, DEFAULT_OPTS, drop };
+  return { strip, stripEnabled, drop };
 })();
 if (typeof window !== "undefined") window.BitmapDecode = BitmapDecode;

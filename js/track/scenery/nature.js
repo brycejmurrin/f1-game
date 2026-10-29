@@ -211,6 +211,16 @@ const SceneryNature = (function () {
         return;
       }
       ctx.note("pine", [a.c[0], a.c[1] + h / 2, a.c[2]], [h * 0.45, h, h * 0.45], { k, side });
+      // Both explicit pines and deferred forestEdge calls pass the SAME spot
+      // registry above. A missing pack keeps the procedural tree at that site.
+      if (def.furniture && def.furniture.bakedPines && ctx.bakedModel) {
+        // The model contains only WOOD/FOLIAGE; retain that soft-prop identity
+        // for whole-tree audits without overriding its per-vertex sway/materials.
+        out._mat = MAT.FOLIAGE;
+        const landed = ctx.bakedModel("pine_lod0", k, side, dist, { height: h });
+        out._mat = 0;
+        if (landed) return;
+      }
       // per-instance size jitter so a treeline doesn't read as identical clones
       const j = 0.85 + hash(k * 3.7 + side * 1.3 + dist) * 0.3;
       const vr = hash(k * 6.1 + side * 4.4 + dist + 9.3);

@@ -119,21 +119,21 @@ test("WP-L4: the receipt is bound to artifacts/launch/self.json and spent on one
   deny(/already spent/, "a spent receipt copied back");
 });
 
-test("hook fails open on its own errors and ignores other tools", () => {
+test("hook fails closed on its own errors and ignores other tools", () => {
   const root = tmp();
   const junk = hook(root, "not json");
-  assert.equal(junk.status, 0);
+  assert.equal(junk.status, 2);
   assert.equal(junk.stdout.trim(), "");
   assert.equal(decision(hook(root, { ...call, tool_name: "mcp__claude-code-remote__send_message" })), "pass");
-  assert.equal(decision(hook(root, [])), "pass");
+  assert.equal(hook(root, []).status, 2);
 });
 
-test("settings.json wires the hook on create_session without onFailure block (fail open)", () => {
+test("settings.json wires the hook on create_session with onFailure block (fail closed)", () => {
   const pre = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8")).hooks.PreToolUse;
   const g = pre.find((x) => x.hooks.some((h) => h.command.includes("launch-gate.py")));
   assert.ok(g, "launch-gate.py is not wired");
   assert.equal(g.matcher, "^mcp__claude-code-remote__create_session$");
-  assert.ok(g.hooks.every((h) => h.onFailure !== "block"));
+  assert.ok(g.hooks.every((h) => h.onFailure === "block"));
 });
 
 // System audit 4 G13 (O1/O2 hand-wrote the page and `touch`ed it): the page must carry the harness's own timestamp,
