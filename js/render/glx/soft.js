@@ -202,12 +202,12 @@ const GLXSoft = (function () {
       if (_frameWaiters.length) _frameWaiters.splice(0).forEach(function (w) { w(); });
     }
 
+    // softBlit / softBlitNotify stay local: blitIfDue and softBlit call them;
+    // nothing outside this create() reads Soft.softBlit|softBlitNotify.
+    // hasWaiters / captureDue were never wired — present() uses blitIfDue().
     return {
-      isEnabled, setEnabled, gen, ensureSoftDisplay, softBlit, softBlitNotify,
+      isEnabled, setEnabled, gen, ensureSoftDisplay,
       softPresentState, invalidateSoftPresent, awaitSoftPresent, blitIfDue, drainFrameWaiters,
-      // present() gates the blit on these without exposing the arrays.
-      hasWaiters: () => !!_softPresentWaiters.length,
-      captureDue: () => _softCaptureDue,
     };
   }
 

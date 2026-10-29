@@ -182,7 +182,7 @@ export function writeManifest(dir, { sha, timestamp } = {}) {
 
 /** Bounded retries for GitHub REST hiccups (5xx / 429 / network). Injectable under test. */
 export const GITHUB_API_MAX_ATTEMPTS = 4;
-export const GITHUB_API_BASE_DELAY_MS = 1000;
+const GITHUB_API_BASE_DELAY_MS = 1000;
 /** Exact-name pack lookups walk this many ancestors — never page the repo-wide artifact list. */
 export const ANCESTOR_PACK_LIMIT = 20;
 
