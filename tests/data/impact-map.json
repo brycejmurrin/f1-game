@@ -14277,7 +14277,9 @@
         "tests/unit/driving-line.test.mjs"
       ],
       "reset": [
-        "tests/unit/driving-line.test.mjs"
+        "tests/unit/driving-line.test.mjs",
+        "tests/unit/free-cam.test.mjs",
+        "tests/unit/photomode-hold.test.mjs"
       ],
       "setMode": [
         "tests/unit/driving-line.test.mjs"
