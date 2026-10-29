@@ -1,1 +1,1 @@
-Fixed: On software graphics, the first Start Race no longer reloads back to the title when the stall watchdog sheds quality — the race keeps loading to the grid instead.
+Fixed: On software graphics (SwiftShader / llvmpipe), the stall watchdog no longer reloads to the title with the graphics-reset card — during race entry, after garage close, or on the menu — it records the skip instead.

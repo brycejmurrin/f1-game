@@ -42,9 +42,9 @@ const LoopHealth = (() => {
   //                reload once per tab session (apex26.stallReloads, the
   //                ctxLostReloads shape), which hands the player back a working
   //                menu with the "Graphics reset" notice. With the budget spent
-  //                it only records and logs. On software GL with the race-entry
-  //                render shed already pinned (#4180), a reload lands on the same
-  //                renderer and frame cost — act "budget-sw" skips it.
+  //                it only records and logs. On software raster (SwiftShader /
+  //                llvmpipe via PerfGov.softwareRaster), reload lands on the
+  //                same path and cost — act "budget-sw" skips location.reload().
   // A race entry on a weak phone is a few multi-second tasks between frames, so
   // while the loading cover (#loading) is up the shed waits and the reload needs
   // LOAD_RELOAD_RUN frames: a cover stuck over a glacial build still recovers.
@@ -106,14 +106,9 @@ const LoopHealth = (() => {
   }
   // Race entry uses #loading; garage / race-settings sheets and MenuTeardown quit
   // cover share the relaxed reload budget (#3510 / live garage-close repro).
-  function softwareRaceShedActive() {
+  function skipReloadOnSoftwareRaster() {
     try {
-      if (typeof PerfGov === "undefined" || !PerfGov.softwareRaster || !PerfGov.softwareRaster()) return false;
-      if (typeof PostCommon === "undefined" || !PostCommon.softwareRaceShed) return false;
-      let knob = null;
-      try { knob = localStorage.getItem("apex26.swRaceShed"); } catch (_) { /* blocked storage */ }
-      const nav = typeof navigator !== "undefined" ? navigator : null;
-      return PostCommon.softwareRaceShed(true, nav, knob);
+      return typeof PerfGov !== "undefined" && !!(PerfGov.softwareRaster && PerfGov.softwareRaster());
     } catch (_) { return false; }
   }
   function reloadAlreadyLatched() {
@@ -157,9 +152,9 @@ const LoopHealth = (() => {
       Log.warn("game", `stall watchdog: still ${slowRun} frames over ${SLOW_MS} ms after the shed; reload budget spent`);
       return;
     }
-    if (softwareRaceShedActive()) {
+    if (skipReloadOnSoftwareRaster()) {
       stallAct = "budget-sw";
-      Log.warn("game", `stall watchdog: still glacial after the shed (worst ${Math.round(worstMs)} ms) — reload skipped on software race shed`);
+      Log.warn("game", `stall watchdog: still glacial after the shed (worst ${Math.round(worstMs)} ms) — reload skipped on software raster`);
       return;
     }
     if (reloadAlreadyLatched()) {

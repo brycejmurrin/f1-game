@@ -290,7 +290,7 @@ test("stall: off in the node game VM (webdriver false, apex-game-vm UA)", () => 
   assert.equal(h.LoopHealth.state().stall.watching, false);
 });
 
-test("stall: software race shed skips reload with act budget-sw", () => {
+test("stall: software raster skips reload with act budget-sw (race path)", () => {
   const h = loadStall({ softwareGL: true });
   h.frames(1, 16);
   h.frames(4, 2500);
@@ -298,6 +298,16 @@ test("stall: software race shed skips reload with act budget-sw", () => {
   assert.equal(h.calls.reload, 0);
   assert.equal(h.LoopHealth.state().stall.act, "budget-sw");
   assert.equal(h.ss.get("apex26.stallReloads"), undefined);
+});
+
+test("stall: menu path on software raster skips reload without swRaceShed knob", () => {
+  const h = loadStall({ softwareGL: true, swRaceShed: false });
+  assert.equal(h.ctx.G.state, "menu");
+  h.frames(1, 16);
+  h.frames(10, 2500);
+  assert.equal(h.calls.reload, 0, "garage-close class: no cover, ten slow frames, no reload");
+  assert.equal(h.LoopHealth.state().stall.act, "budget-sw");
+  assert.equal(h.ss.get("apex26.ctxLostNotice"), undefined, "no ctx-lost notice latch without reload");
 });
 
 test("stall: hardware path still reloads once after the shed", () => {
