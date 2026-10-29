@@ -44,7 +44,7 @@ const VisorOptics = (function () {
 
   let _cv = null, _ctx = null, _looked = false;
   let _blend = "", _blendParam, _blendT = -Infinity;
-  let _w = 0, _h = 0, _shown = false, _acc = 1, _bendLevelBuilt = "";
+  let _w = 0, _h = 0, _shown = false, _shed = false, _acc = 1, _bendLevelBuilt = "";
   let _portKey = "", _bendKey = "", _paths = null, _svg = null;
   // The TINTED lens colour, resolved once per port build. tintRGB() reads getComputedStyle(body): with the HUD
   // restyling every frame that is a forced style recalc of the page, and the 15 Hz paint asked for it on every
@@ -356,6 +356,22 @@ const VisorOptics = (function () {
     return Number.isFinite(n) ? clampTo(n, 0, 2) : 1;
   }
   function _low() { return typeof GfxQuality !== "undefined" && GfxQuality.current && GfxQuality.current() === "low"; }
+  // The phone's severe-load budget includes moving visor optics. Keep its static eye-port and choices;
+  // shrinking the 3D targets alone cannot reduce this full-viewport compositor layer.
+  function _pressure() {
+    return typeof GLX !== "undefined" && !!GLX.isMobile && typeof PerfGov !== "undefined"
+      && typeof PerfGov.lookPostShed === "function" && !!PerfGov.lookPostShed();
+  }
+  function _syncShed(on) {
+    if (on === _shed) return false;
+    _shed = on;
+    if (document.body) {
+      if (on) document.body.setAttribute("data-visor-shed", "1");
+      else document.body.removeAttribute("data-visor-shed");
+    }
+    if (!on) _acc = 1;   // recovery repaints the cleared layer, even while paused
+    return !on;
+  }
 
   function _lookup() {
     if (_looked) return _cv;
@@ -631,12 +647,13 @@ const VisorOptics = (function () {
    *  (the last paint stays). vs is unused today (kept for the airflow/heat ideas); reduced: prefers-reduced-motion. */
   function tick(dt, on, vs, reduced) {
     const helmet = _helmet();
-    if (!helmet) { _show(false); return; }
+    if (!helmet) { _syncShed(false); _show(false); return; }
     let resized = _size();
     _port();                                                   // the aperture: CLEAR / TINTED build it, OFF clears it
     const visor = _opt("visor", "off");
     const level = LEVEL[_opt("visorReflections", "light")] || 0;
-    if (visor === "off" || !on || _low()) { _show(false); return; }
+    const restored = _syncShed(visor !== "off" && !!on && _pressure());
+    if (visor === "off" || !on || _low() || _shed) { _show(false); return; }
     // The world filter is independent of the reflection canvas, including on resize.
     const t2 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     _bend();
@@ -651,7 +668,7 @@ const VisorOptics = (function () {
     const hz = reduced ? HZ_REDUCED : HZ;
     _acc += dt > 0 ? dt : 0;
     if (!resized && _acc < 1 / hz) return;
-    if (!(dt > 0) && !resized) return;                         // paused: keep the last paint
+    if (!(dt > 0) && !resized && !restored) return;             // paused: keep the last paint, except after recovery
     _acc = 0;
     const t0 = typeof performance !== "undefined" && performance.now ? performance.now() : 0;
     const scene = readScene();
@@ -678,11 +695,11 @@ const VisorOptics = (function () {
 
   /** Probe / test surface: paint counts, CPU ms per paint and the last map's headline intensities. */
   function stats() {
-    return { shown: _shown, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
+    return { shown: _shown, shed: _shed, w: _w, h: _h, ticks: _stats.ticks, paints: _stats.paints, msLast: r2(_stats.msLast), msMax: r2(_stats.msMax),
              msAvg: _stats.paints ? r2(_stats.msSum / _stats.paints) : 0, glints: _stats.glints, sun: _stats.sun, rim: _stats.rim, lamp: _stats.lamp,
              port: !!_portKey, bend: _bendLevelBuilt, blend: _blend, msBend: _stats.msBend, msLookup: _stats.msLookup, errors: _stats.errors };
   }
-  function clear() { _show(false); }
+  function clear() { _syncShed(false); _show(false); }
 
   /** Live scene snapshot for __apex.visorScene — keeps apex.js a one-line delegate. */
   function sceneFromG(G) {

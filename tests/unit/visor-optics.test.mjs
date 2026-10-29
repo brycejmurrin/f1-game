@@ -31,10 +31,10 @@ function ctx2d(calls) {
 
 function load({ helmet = true, visor = "clear", reflections = "light", refraction = "off", beams = 1, color = "neutral", intensity = "light", apex = null, win = { innerWidth: 844, innerHeight: 390 }, picker = undefined, search = "" } = {}) {
   const calls = { clear: 0, stroke: 0, arc: 0, bendMaps: 0, inserted: null, props: {}, attrs: {} };
-  const live = { visor };
+  const live = { visor, helmet };
   const game = { parentNode: { insertBefore: (n) => { calls.inserted = n; } }, nextSibling: null };
   const body = {
-    hasAttribute: (k) => k === "data-helmet-cam" && helmet,
+    hasAttribute: (k) => k === "data-helmet-cam" && live.helmet,
     setAttribute: (k, v) => { calls.attrs[k] = v; },
     removeAttribute: (k) => { delete calls.attrs[k]; },
     style: { setProperty: (k, v) => { calls.props[k] = v; }, removeProperty: (k) => { delete calls.props[k]; } },
@@ -406,4 +406,51 @@ test("visor blend (#3657): plus-lighter on WebGPU only; WebGL2, GLX and an unkno
   }
   const css = read("css/helmet-visor.css");
   assert.match(css, /body\[data-visor-blend="over"\] #fx-visor \{ mix-blend-mode: normal; \}/, "the stylesheet drops the blend on the over arm");
+});
+
+test("mobile visor pressure suspends moving optics and recovers immediately while paused", () => {
+  const { V, ctx, calls } = load({ apex: { visorScene: () => DAY }, refraction: "medium" });
+  let pressure = false, writes = 0;
+  ctx.GLX = { isMobile: true };
+  ctx.PerfGov = { lookPostShed: () => pressure };
+  const set = ctx.document.body.setAttribute;
+  ctx.document.body.setAttribute = (k, v) => { if (k === "data-visor-shed") writes++; set(k, v); };
+  V.tick(1 / 60, true, 30, false);
+  const before = V.stats().paints, port = calls.props["--visor-port"], maps = calls.bendMaps;
+  pressure = true;
+  for (let i = 0; i < 600; i++) V.tick(1 / 60, true, 30, false);
+  assert.deepEqual([V.stats().paints, calls.bendMaps, calls.inserted.hidden, V.stats().shed, writes], [before, maps, true, true, 1]);
+  assert.deepEqual([calls.attrs["data-visor-shed"], calls.props["--visor-port"]], ["1", port]);
+  pressure = false;
+  V.tick(0, true, 30, false);
+  assert.deepEqual([V.stats().paints, V.stats().shed, calls.inserted.hidden, calls.attrs["data-visor-shed"], calls.props["--visor-port"]], [before + 1, false, false, undefined, port]);
+  V.tick(0, true, 30, false);
+  assert.equal(V.stats().paints, before + 1, "a paused recovery paints once");
+});
+
+test("mobile visor pressure avoids cold canvas and refraction builds; desktop and absent governor stay active", () => {
+  const mobile = load({ apex: { visorScene: () => DAY }, refraction: "strong" });
+  mobile.ctx.GLX = { isMobile: true };
+  mobile.ctx.PerfGov = { lookPostShed: () => true };
+  for (let i = 0; i < 600; i++) mobile.V.tick(1 / 60, true, 30, false);
+  assert.deepEqual([mobile.V.stats().paints, mobile.calls.bendMaps, mobile.calls.inserted, mobile.calls.attrs["data-visor-port"]], [0, 0, null, "1"]);
+  for (const [isMobile, gov] of [[false, { lookPostShed: () => true }], [true, undefined], [true, {}]]) {
+    const { V, ctx } = load({ apex: { visorScene: () => DAY } });
+    ctx.GLX = { isMobile };
+    if (gov) ctx.PerfGov = gov;
+    for (let i = 0; i < 600; i++) V.tick(1 / 60, true, 30, false);
+    assert.deepEqual([V.stats().paints, V.stats().shed], [150, false]);
+  }
+});
+
+test("mobile visor shedding clears on race exit, visor OFF, non-onboard and non-helmet views", () => {
+  for (const exit of [({ V }) => V.clear(), ({ V }) => V.tick(0, false, 0, false), ({ V, live }) => { live.visor = "off"; V.tick(0, true, 0, false); }, ({ V, live }) => { live.helmet = false; V.tick(0, true, 0, false); }]) {
+    const arm = load({ apex: { visorScene: () => DAY } });
+    arm.ctx.GLX = { isMobile: true };
+    arm.ctx.PerfGov = { lookPostShed: () => true };
+    arm.V.tick(1 / 60, true, 0, false);
+    assert.deepEqual([arm.V.stats().shed, arm.calls.attrs["data-visor-shed"]], [true, "1"]);
+    exit(arm);
+    assert.deepEqual([arm.V.stats().shed, arm.calls.attrs["data-visor-shed"]], [false, undefined]);
+  }
 });
