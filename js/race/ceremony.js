@@ -70,6 +70,12 @@ var RaceCeremony = (function () {
   function create(G, deps) {
     const duelOn = (deps && deps.duelOn) || (() => false);
     const isWatch = (deps && deps.isWatch) || (() => false);
+    // The beat modules (slices 2-4) are optional lazies: a missing one degrades to a timer-only phase.
+    const cool = typeof CooldownLap !== "undefined" ? CooldownLap.create(G) : null;
+    const parc = typeof ParcFerme !== "undefined" ? ParcFerme.create(G) : null;
+    const podium = typeof RacePodium !== "undefined" ? RacePodium.create(G, {
+      resultsCam: { startOrbit: () => { const r = deps && deps.resultsCam && deps.resultsCam(); return !!(r && r.startOrbit && r.startOrbit()); } },
+    }) : null;
     let phase = "idle";
     let age = 0;
     let skipped = false;
@@ -95,14 +101,47 @@ var RaceCeremony = (function () {
     }
     function status() {
       const elig = phase === "idle" ? eligible(G, liveMeta()) : sessionEligible;
-      return { phase, age, eligible: elig, skipped, live: phase !== "idle" && phase !== "results" };
+      const cooling = phase === "cooldown";
+      return {
+        phase, age, eligible: elig, skipped, live: phase !== "idle" && phase !== "results",
+        inputOwner: cooling && cool && cool.driveAllowed() ? "player" : "none",
+        cameraOwner: cooling ? "chase" : (phase === "parcFerme" || phase === "podium" ? "ceremony" : "none"),
+      };
+    }
+    function cooldownHost() {
+      if (typeof document === "undefined") return null;
+      let h = document.getElementById("ceremony-cooldown");
+      if (h) return h;
+      h = document.createElement("div");
+      h.id = "ceremony-cooldown";
+      h.hidden = true;
+      h.style.cssText = "position:fixed;inset:auto 0 0 0;z-index:40;display:flex;justify-content:center;padding:calc(var(--gap, 8px) * 1.5);padding-bottom:max(calc(var(--gap, 8px) * 1.5), env(safe-area-inset-bottom, 0px));pointer-events:none";
+      (document.body || document.documentElement).appendChild(h);
+      return h;
+    }
+    function endBeats() {
+      if (cool) cool.reset();
+      const h = typeof document !== "undefined" ? document.getElementById("ceremony-cooldown") : null;
+      if (h) h.hidden = true;
+      if (parc) parc.reset();
+      if (podium) podium.reset();
     }
     function enter(next) {
       let p = next;
       if (p === "podium" && podiumCount(order, meta) < 3) p = "results";
+      endBeats();
       phase = p;
       age = 0;
       publish();
+      if (p === "cooldown" && cool) {
+        const h = cooldownHost();
+        if (cool.start({ force: true }) && h) {
+          h.hidden = false;
+          const b = cool.mountSkip(h, () => skip());
+          if (b) b.style.pointerEvents = "auto";
+        }
+      } else if (p === "parcFerme" && parc) parc.start({ onSkip: () => skip() });
+      else if (p === "podium" && podium) podium.start(order, meta, () => { if (phase === "podium") enter("results"); });
       if (p === "results") showSheet();
       return p;
     }
@@ -147,10 +186,15 @@ var RaceCeremony = (function () {
     function tick(dt) {
       if (phase === "idle" || phase === "results" || phase === "classified") return;
       age += dt > 0 ? dt : 0;
+      if (phase === "cooldown" && cool && cool.live() && cool.tick(dt)) { skip(); return; }
+      if (phase === "parcFerme" && parc) parc.tick(dt);
+      if (phase === "podium" && podium) podium.tick(dt);
+      if (phase === "idle" || phase === "results") return;   // a beat's own exit may have ended the ceremony
       const lim = DUR[phase];
       if (lim > 0 && age >= lim) skip();
     }
     function reset() {
+      endBeats();
       phase = "idle";
       age = 0;
       skipped = false;
