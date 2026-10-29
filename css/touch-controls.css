@@ -276,6 +276,10 @@
   margin: 0;
 }
 #ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
+/* THE DISMISS X IS A TAP TARGET: 20px glyph + 4/8 padding was a ~27px box,
+   under the --tap floor every other touch control meets. Grow the box, keep
+   the glyph; flex centring keeps the x where it was drawn. */
+#ios-install-x { min-width: var(--tap); min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; }
 /* `display: flex` above OUTRANKS the UA's `[hidden] { display: none }`, so the
    attribute stops working and the banner shows on every platform — where it
    sits bottom-centre and swallows clicks meant for #mb-race / #sel-go / #rs-go.

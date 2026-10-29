@@ -63,10 +63,13 @@
   background: var(--surf-1);
   border: 1px solid var(--plate-line);
   border-radius: var(--r-md);
-  outline: none;
   cursor: default;
 }
-.td-stage canvas:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+/* THE FOCUS RING IS AN OUTLINE, never outline:none plus a box-shadow: forced
+   colors strips box-shadow, so a keyboard user in Windows High Contrast lost
+   the canvas's only focus cue. The base :focus-visible ring (css/tokens.css,
+   inset) now applies as is; forced colors recolours an outline, it does not
+   drop it. */
 /* The elevation strip (js/editor/profile.js) under the main canvas: a fixed
    band tall enough for ≥44 px grips; the main canvas keeps the rest. */
 .td-stage > canvas[data-role="profile"] {
