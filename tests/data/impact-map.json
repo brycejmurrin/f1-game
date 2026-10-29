@@ -15057,6 +15057,9 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs"
       ],
+      "pinSoftwareRaceShed": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "postFailure": [
         "tests/unit/render-final-contracts.test.mjs"
       ],

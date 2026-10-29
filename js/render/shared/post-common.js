@@ -187,9 +187,9 @@ const PostCommon = (function () {
   }
 
   // Software-rasterizer race present. A full-res three/WebGL2 frame at 844×390
-  // measured ~12 s of GPU time on SwiftShader (2026-10-29); the same view at
-  // render scale 0.5 measured a 19 ms frame. Shedding bloom did not move the
-  // 12 s gap, so the cut is resolution, not the look-post stack. Off under
+  // measured ~12.7 s of rAF on SwiftShader (2026-10-29, worst 28.7 s); the same
+  // view at render scale 0.5 and the lowest look rung measured a render span
+  // max of ~6.2 s. Tier 4 at full res did not move the 12 s gap. Off under
   // webdriver and the node game VM so pixel specs stay full-res. Knob
   // "1" / "0" is apex26.swRaceShed (force on / force off).
   function softwareRaceShed(softwareGL, nav, knob) {

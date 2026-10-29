@@ -3634,9 +3634,45 @@ const TLX = (function () {
           _warmStages.draw = Math.round(performance.now() - _tStage);
         }
       }
+      // Half-res + lowest look rung on a software-GL race. present() reapplies
+      // it whenever a world frame may resize: entry soften restores the saved
+      // full scale when the cover lifts, and resize() no-ops while a warm is
+      // pending. Measured on SwiftShader, three WebGL2, Bahrain, 844×390:
+      // full-res rAF ~12.7 s (worst 28.7 s); this cut, internal 422×195,
+      // render span max ~6.2 s. Tier 4 alone did not move the full-res gap.
+      function pinSoftwareRaceShed(opts) {
+        if (!_swRaceShed) return;
+        if (!_swRaceShedPinned) {
+          _swRaceShedPinned = true;
+          // Same rung the stall watchdog reaches after four >1 s frames.
+          try {
+            if (typeof PerfGov !== "undefined") {
+              if (PerfGov.setAutoRes) PerfGov.setAutoRes(false);
+              if (PerfGov.setUserTier) PerfGov.setUserTier(4);
+            }
+          } catch (_) { /* harness has no governor */ }
+        }
+        if (renderScale > 0.52) { renderScale = 0.5; resizeNow(); }
+        // This frame's opts were built before the tier change. Zeroing them
+        // also keeps post.warm from compiling the bloom / SSAO / god-ray chain.
+        if (opts) {
+          opts.bloom = 0; opts.ssao = 0; opts.godray = 0; opts.contact = 0; opts.lampVol = 0; opts.flareMul = 0;
+          opts.reflect = 0; opts.carReflect = 0;
+        }
+      }
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
+        // Race Settings sits on "Programs" while this compile runs. A menu
+        // warm (where "menu") stays full-res — garage first draw is not this
+        // cut. A loading/race warm, including one started from a noEnv garage
+        // frame that present() does not shed, pins BEFORE _warmPending:
+        // resize() refuses once the warm owns the targets, and that compile
+        // is what lost the WebGL context on software GL (Pages 15b66c9,
+        // three forced to WebGL2, Bahrain, 2 of 2). The Spa pine merge in
+        // that tip does not run on Bahrain.
+        // typeof: the warm rigs eval this body without the outer shed bindings.
+        if (typeof _swRaceShed !== "undefined" && _swRaceShed && typeof _warmWhere !== "undefined" && _warmWhere !== "menu") pinSoftwareRaceShed(opts);
         _warmAt = performance.now(); _warmAttempts++;
         _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
         _warmStages.garageScene = null;
@@ -6285,28 +6321,7 @@ const TLX = (function () {
           // allowed to resize — including the one that starts the warm.
           // Kept above the rig-warm seen/dispatch pair: that pair is one
           // source line in tlx-rig-warm.test.mjs.
-          if (_swRaceShed && _postF.proj && !_postF.noEnv && !_warmPending) {
-            if (!_swRaceShedPinned) {
-              _swRaceShedPinned = true;
-              // Same rung the stall watchdog reaches after four >1 s frames
-              // (setUserTier(4)), plus the 0.5 resolution floor. Measured on
-              // SwiftShader, three WebGL2, Bahrain, 844×390: full-res rAF
-              // ~12.7 s (worst 28.7 s); this cut, internal 422×195, render
-              // span max ~6.2 s. Tier 4 alone did not move the full-res gap.
-              try {
-                if (typeof PerfGov !== "undefined") {
-                  if (PerfGov.setAutoRes) PerfGov.setAutoRes(false);
-                  if (PerfGov.setUserTier) PerfGov.setUserTier(4);
-                }
-              } catch (_) { /* harness has no governor */ }
-            }
-            if (renderScale > 0.52) { renderScale = 0.5; resizeNow(); }
-            // This frame's opts were built before the tier change.
-            if (opts) {
-              opts.bloom = 0; opts.ssao = 0; opts.godray = 0; opts.contact = 0; opts.lampVol = 0; opts.flareMul = 0;
-              opts.reflect = 0; opts.carReflect = 0;
-            }
-          }
+          if (_swRaceShed && _postF.proj && !_postF.noEnv && !_warmPending) pinSoftwareRaceShed(opts);
           if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;

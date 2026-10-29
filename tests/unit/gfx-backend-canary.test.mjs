@@ -1081,6 +1081,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // not crash state — RESET RENDERER must not wipe the player's SGSR choice.
     // spatialUpscaleGather is an A/B escape pin (tools/bench only writes "0").
     "apex26.spatialUpscale", "apex26.spatialUpscaleGather",
+    // Hand-set race-scale override (backend.swRaceShed). "0" keeps full res,
+    // "1" forces the software-GL cut. RESET RENDERER must not wipe it.
+    "apex26.swRaceShed",
   ]);
   // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
   // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
@@ -4570,6 +4573,7 @@ test("softwareRaceShed is half-res on a real software GL player and full-res und
   assert.ok(tlx.includes("PostCommon.softwareRaceShed") && tlx.includes("_swRaceShedPinned") && tlx.includes("PerfGov.setAutoRes") && tlx.includes("PerfGov.setUserTier"));
   assert.ok(tlx.includes("renderScale = 0.5"), "the pin uses the renderer's existing 0.5 floor");
   assert.ok(tlx.includes("opts.bloom = 0") && tlx.includes("opts.godray = 0") && tlx.includes("opts.reflect = 0"));
+  assert.ok(tlx.includes('typeof _swRaceShed !== "undefined" && _swRaceShed && typeof _warmWhere !== "undefined" && _warmWhere !== "menu"') && tlx.includes("pinSoftwareRaceShed(opts)"), "a race-entry program warm pins before compile; a menu warm stays full-res");
 });
 
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
