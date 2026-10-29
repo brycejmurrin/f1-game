@@ -17,8 +17,12 @@ launch policy was retired 2026-10-27; a dispatcher brief states its own STOP AT,
   PreToolUse (Agent, create_session) — over the HARD cap, deny a new spawn (permissionDecision "deny",
                                    https://code.claude.com/docs/en/hooks §PreToolUse decision control). A
                                    create_session whose prompt is a hand-off to a successor stays allowed: that
-                                   is the size stop's own way out. Any error → allow (exit 0, no output).
-APEX_CTX_CAP=off silences every mode.
+                                   is the size stop's own way out. settings.json runs this mode as
+                                   `context-cap.py --guard`, which FAILS CLOSED (2026-10-28, the commit-hook
+                                   split's hook pass): an unreadable payload or an internal error on a spawn is a
+                                   block (exit 2, the reason and both overrides on stderr). Without --guard (the
+                                   advisory events, where exit 2 would erase a user's prompt) any error → no output.
+APEX_CTX_CAP=off silences every mode; so does the `.claude/allow-context-cap` hatch.
 """
 import json
 import os
@@ -141,6 +145,8 @@ def decide(data, root, env):
 
 def main():
     data = json.load(sys.stdin)
+    if not isinstance(data, dict) or not isinstance(data.get("tool_input", {}), (dict, type(None))):
+        raise ValueError("payload is not an object, or tool_input is malformed")
     root = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     out = decide(data, root, os.environ)
     if out:
@@ -148,8 +154,17 @@ def main():
 
 
 if __name__ == "__main__":
+    guard = "--guard" in sys.argv[1:]
     try:
         main()
-    except Exception:  # fail open: advisory modes print nothing, the spawn guard allows
-        pass
+    except Exception as e:
+        # Advisory modes print nothing. The spawn guard (--guard) refuses: a crash must not let a spawn past the cap.
+        root = os.environ.get("CLAUDE_PROJECT_DIR") or os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        hatch = os.path.isfile(os.path.join(root, ".claude", "allow-context-cap"))
+        if guard and os.environ.get("APEX_CTX_CAP") != "off" and not hatch:
+            sys.stderr.write("BLOCKED: context-cap could not judge this spawn (%s: %s), so it is refused (fail closed). "
+                             "Report the hook error; a session the user told to continue past its cap can `touch "
+                             ".claude/allow-context-cap` (or set APEX_CTX_CAP=off).\n" % (type(e).__name__, str(e)[:160]))
+            sys.stderr.flush()
+            os._exit(2)
     sys.exit(0)

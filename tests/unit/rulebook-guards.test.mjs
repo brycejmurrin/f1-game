@@ -46,7 +46,7 @@ const CANON = [
   ["sync rule", /never for\s+clean-behind/i, "AGENTS.md"],
   ["merge commits only", /Merge commits only, never squash\s+or rebase/i, "AGENTS.md"],
   ["never cancel", /NEVER CANCEL AN ACTIONS RUN/, "AGENTS.md"],
-  ["commit in two calls", /reads the index as it is when `git commit` is typed/, "AGENTS.md"],
+  ["commit in two calls", /Commit in two calls: stage in its own command/, "AGENTS.md"],
   ["push without a pipe", /no output pipe/i, "AGENTS.md"],
   ["no timers", /No timers, no shell-poll loops, no standby wakes/i, "AGENTS.md"],
   ["dirty ready flip", /ready flip on a (?:dirty PR|CONFLICTING\/DIRTY head) starts no CI/i, "AGENTS.md"],
@@ -67,6 +67,7 @@ test("each canonical rule sentence lives in its home and at most one other file"
 
 // Retired mechanisms an instruction file must not teach again. A line that also says it is retired/superseded is history.
 const RETIRED = [
+  [/bash-guard(?:\.sh)? runs (?:the guards|`test:guards`)/i, "the in-PreToolUse commit suite (git pre-commit owns it)"],
   [/fleet-bus\.mjs|agent-msg\.mjs|who-is-on-it\.mjs|fleet-owner\.mjs|fleet-brief\.mjs|launch-lane\.mjs/, "the bus, claims board and launch-lane tools (retired 2026-10-27: GitHub is the only bus; docs/WORKERS.md)"],
   [/MERGE-HOLD:/, "the MERGE-HOLD body line (the `hold` label is the veto)"],
   [/```fleet\b|fleet-status:|@orchestrator BLOCKED/, "the PR fleet block and fleet-status line (the Hand-off block and labels replace them)"],

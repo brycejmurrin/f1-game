@@ -8,11 +8,13 @@
 # Claude's hookSpecificOutput (https://cursor.com/docs/agent/hooks). Exit 2
 # blocks in every host. For Cursor the guard's answer is mapped onto Cursor's
 # flat JSON, so the agent reads WHY (stderr alone reaches only the hook log)
-# and a gh ask stays an ask. The commit gate is left to .githooks/pre-commit
-# when core.hooksPath points there (no double 25 s run).
+# and a gh ask stays an ask. The commit gate is .githooks/pre-commit for every
+# host (2026-10-28 split): bash-guard.sh runs no test:guards, so this adapter
+# no longer needs APEX_COMMIT_GATE, and its timeout in .cursor/hooks.json and
+# .codex/hooks.json is 30 s like Claude's. bash-guard refuses a commit when no
+# pre-commit hook would run (fix: npm run prepare).
 set -u
 DIR=$(cd "$(dirname "$0")/../.." && pwd)
-[ "$(git -C "$DIR" config core.hooksPath 2>/dev/null)" = ".githooks" ] && export APEX_COMMIT_GATE=githook
 RAW=$(cat)
 NORM=$(printf '%s' "$RAW" | python3 -c '
 import json,sys

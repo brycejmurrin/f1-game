@@ -546,7 +546,7 @@
     "tests/unit/lamp-shadow-pick.test.mjs",
     "// Round-2: the m:ss formatters round before splitting (no 1:60.00) and signed deltas never print -0.000.",
     "tests/unit/lap-format-rollover.test.mjs",
-    "// tools/ci/launch-gate.mjs + .claude/hooks/launch-gate.py: create_session quota gate, fails open; slated for removal by the 2026-10-27 orchestration redesign §4.7. < 2 s.",
+    "// tools/ci/launch-gate.mjs + .claude/hooks/launch-gate.py: create_session quota gate, fails closed; slated for removal by the 2026-10-27 orchestration redesign §4.7. < 2 s.",
     "tests/unit/launch-gate.test.mjs",
     "tests/unit/layers-anyopen-memo.test.mjs",
     "tests/unit/layers-nav-memo.test.mjs",
