@@ -3870,6 +3870,7 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "active": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -16710,6 +16711,12 @@
       ]
     },
     "js/ui/captions.js": {
+      "clear": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "onSpotter": [
+        "tests/unit/captions.test.mjs"
+      ],
       "push": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
@@ -17630,6 +17637,9 @@
         "tests/specs/gamepad.spec.js"
       ],
       "landing": [
+        "tests/unit/menu-a11y-audit.test.mjs"
+      ],
+      "onClickShield": [
         "tests/unit/menu-a11y-audit.test.mjs"
       ],
       "onEscape": [

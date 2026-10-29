@@ -52,6 +52,9 @@ const DataHub = (function () {
   let tabButtons = {};            // id -> button element
   let openFlag = false;
   let active = "schedule";
+  // The tab a plain DATA HUB open lands on: the player's own last tab pick.
+  // A door that asks for a tab (WATCH → "race") does not overwrite it.
+  let doorTab = "schedule";
   let returnFocus = null;
   let developerTools = null;
   // Title sheets that own the top layer. Late ensureDataHub().then(open)
@@ -198,7 +201,7 @@ const DataHub = (function () {
       b.setAttribute("aria-controls", "dh-panel");
       if (!t.developer) b.setAttribute("aria-selected", "false");
       b.tabIndex = t.developer ? 0 : -1;
-      b.addEventListener("click", function () { showTab(t.id); });
+      b.addEventListener("click", function () { doorTab = t.id; showTab(t.id); });
       tabButtons[t.id] = b;
       (t.developer ? developerTools : tabs).appendChild(b);
     });
@@ -246,6 +249,7 @@ const DataHub = (function () {
         else idx = -1;
         if (idx !== -1) {
           ev.preventDefault();
+          doorTab = ids[idx];
           showTab(ids[idx]);
           tabButtons[ids[idx]].focus();
           return;
@@ -261,10 +265,12 @@ const DataHub = (function () {
       Log.info("data", "hub open skipped — #" + (block.id || "?") + " is up");
       return;
     }
-    if (want && TABS.some(function (t) { return t.id === want; })) active = want;
+    const asked = !!want && TABS.some(function (t) { return t.id === want; });
+    if (asked) active = want;
     // Already open: switch tab only. A second open would overwrite returnFocus with an element INSIDE the
     // dialog, and close() would then focus something hidden instead of where the player came from.
     if (openFlag) { showTab(active); return; }
+    if (!asked) active = doorTab;
     returnFocus = document.activeElement;
     Log.info("data", "hub open");
     root.hidden = false;

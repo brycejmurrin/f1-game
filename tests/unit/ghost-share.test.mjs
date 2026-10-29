@@ -530,7 +530,7 @@ test("BACK consumes the latest link once after overlapping decodes defer under S
   assert.equal(h.writes.length, 1);
 });
 
-function resultsHarness({ ghost = null, guest = false, recordedContext = null, sessionContext = null } = {}) {
+function resultsHarness({ ghost = null, guest = false, recordedContext = null, sessionContext = null, extra = {} } = {}) {
   const dom = makeDom();
   const Ghost = {
     hasGhost: () => !!ghost,
@@ -560,6 +560,7 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
     Quali: { MEDALS: [], MEDAL_RANK: {} },
     Career: { objectiveLabel: () => "", OBJ_BONUS: 0 },
     GameAudio: { finish() {} },
+    ...extra,
   };
   sandbox.window = sandbox;
   const ctx = vm.createContext(sandbox);
@@ -571,6 +572,7 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
       resultsTable: dom.byId("results-table"),
       resultsTitle: dom.byId("results-title"),
       resNext: dom.byId("res-next"),
+      results: dom.byId("results"),
     },
     track: { def: { id: "monza", name: "Monza" } },
     player: { best: 80 },
@@ -585,7 +587,7 @@ function resultsHarness({ ghost = null, guest = false, recordedContext = null, s
   };
   const api = vm.runInContext("GameResults", ctx).create(G);
   api.buildTTResults();
-  return { dom, G };
+  return { dom, G, api };
 }
 
 test("time-trial results offer link, code, and file only for a shareable local ghost", () => {
@@ -597,6 +599,29 @@ test("time-trial results offer link, code, and file only for a shareable local g
   assert.equal(shared.dom.byId("res-ghost-copy-link").textContent, "COPY LINK");
   assert.equal(shared.dom.byId("res-ghost-copy-code").textContent, "COPY CODE");
   assert.equal(shared.dom.byId("res-ghost-download").textContent, "DOWNLOAD");
+});
+
+test("a refused clipboard reuses ONE select-and-copy box across taps (no duplicate ids)", async () => {
+  const ApexClipboard = { write: async () => false, copySelection() {} };
+  const h = resultsHarness({ ghost: fixture, extra: { ApexClipboard } });
+  const table = h.dom.byId("results-table");
+  const after = (btn) => { btn.insertAdjacentElement = (_, node) => { node.remove(); table.appendChild(node); }; return btn; };
+  const link = after(h.dom.byId("res-ghost-copy-link")), code = after(h.dom.byId("res-ghost-copy-code"));
+  await link.onclick();
+  await link.onclick();
+  await code.onclick();
+  const boxes = table.children.filter((c) => c.id === "res-ghost-copy-fallback");
+  assert.equal(boxes.length, 1, "each refused tap reuses the box");
+  assert.equal(boxes[0].value, "APXG1.p.code", "the box shows the latest tap's value");
+});
+
+test("CLEAR GHOST rebuilds the sheet inside TopModal.keepFocus on the results root", () => {
+  const scopes = [];
+  const TopModal = { keepFocus(scope, fn) { scopes.push(scope); fn(); } };
+  const h = resultsHarness({ ghost: fixture, extra: { TopModal } });
+  h.dom.byId("res-ghost-clear").onclick();
+  assert.equal(scopes.length, 1);
+  assert.equal(scopes[0], h.G.els.results, "focus is kept within #results across the rebuild");
 });
 
 test("time-trial results identify a loaded guest as the rival ghost", () => {

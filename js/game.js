@@ -4260,6 +4260,7 @@ function armConfirm(btn, armedText, action) {
 // #loading is its owner's (loadingScreen.stop() clears its timer as well).
 function closeRaceSheets() {
   SettingsNav.invalidate();
+  if (typeof Captions !== "undefined") Captions.clear();   // the spotter strip sits outside #hud
   if (keyBinds) keyBinds.disarmAll();   // closeSettings()' non-DOM half: an armed key/pad capture or the wheel wizard
   for (const el of document.querySelectorAll(".screen")) if (el.id !== "loading") el.hidden = true;
   for (const id of ["pm-settings-index", "advanced", "audioset", "lighting", "camtune", "flyby"]) { const el = $(id); if (el) el.hidden = true; }

@@ -276,6 +276,10 @@
   margin: 0;
 }
 #ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
+/* THE DISMISS X IS A TAP TARGET: 20px glyph + 4/8 padding was a ~27px box,
+   under the --tap floor every other touch control meets. Grow the box, keep
+   the glyph; flex centring keeps the x where it was drawn. */
+#ios-install-x { min-width: var(--tap); min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; }
 /* `display: flex` above OUTRANKS the UA's `[hidden] { display: none }`, so the
    attribute stops working and the banner shows on every platform — where it
    sits bottom-centre and swallows clicks meant for #mb-race / #sel-go / #rs-go.
@@ -951,6 +955,11 @@ body.hud-hidden #hud-restore::after {
   display: flex; flex-wrap: wrap;
   --balance-basis: 84px; --balance-min: 84px;
   width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
+  /* Every view stays reachable: on a 390 px landscape the grid ran to y 461
+     and HELMET (the default cam) was offscreen (UI hunt 2026-10-29 row 1). */
+  max-height: calc(100dvh - 8px - var(--tap-hud) - var(--sat) - var(--sab) - 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   gap: calc(var(--gap) * 0.5);
   padding: calc(var(--gap) * 2 / 3);
   background: rgba(8, 8, 14, 0.92);
@@ -973,17 +982,23 @@ body.hud-hidden #hud-restore::after {
   background: var(--plate-hover);
   border: 1px solid var(--card-line);
   color: var(--text);
+  /* A cell never narrows below its label (CINEMATIC, TRACKSIDE, OVERHEAD
+     clipped at 3 columns; UI hunt 2026-10-29 row 4); the row wraps instead. */
+  min-width: max-content;
+  white-space: nowrap;
 }
 #campicker button.active {
   background: var(--plate-on);
   border-color: var(--red);
 }
 /* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
-   max-height gate — 852×393 is already body compact (body --compact-at 600). */
+   max-height gate — 852×393 is already body compact (body --compact-at 600).
+   A short landscape has width to spare, not height: spread the grid left of
+   CAM (5–6 columns, 4 rows of 20 views) instead of the old 280 px / 7 rows. */
 body[data-density="compact"] #campicker {
   gap: calc(var(--gap) * 0.5);
   padding: calc(var(--gap) * 0.75);
-  width: min(280px, calc(100vw - var(--sal) - var(--sar) - 20px));
+  width: min(560px, calc(100vw - var(--sal) - var(--sar) - 24px - var(--tap-hud)));
 }
 /* #soundbtn WAS `position: fixed; top; right; z-index: 22` here, and game.js
    un-hid it on every NON-RACE screen — so a title-screen control floated over
