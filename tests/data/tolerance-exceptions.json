@@ -5,6 +5,11 @@
       "file": "tests/unit/webgpu-lifecycle.test.mjs",
       "line": "surfaceId <= 90",
       "reason": "Not a tolerance: the pinned value is the top of the car surface-id range in the WGSL classifier. Garage finishes add ids 36 (tinted chrome), 37 (chameleon) and then 38 (forged carbon), 39 (gunmetal), 40 (gold plate) under FINISH_RESERVED, so the classifier bound moves 33 -> 37 -> 40 in GLX, TLX and WGX together; the 18 design-lane finishes (ids 60-85, design wave 2 #3169) move it to 90 (the surface-id-parity headroom over the top shipped id, 85). car-materials/livery-finish-contract tests pin the new ids."
+    },
+    {
+      "file": "tests/unit/css-critical-path.test.mjs",
+      "line": "239000",
+      "reason": "Menu UI redesign (#4179) stacks on ui-1 layout tokens (#4182): title-blocking tokens.css + responsive.css and menu fit CSS share one preload census. Post-merge measured blocking/preload 238718 B; 239000 B leaves headroom without reopening the pre–layout-foundation 235500 B band."
     }
   ]
 }
