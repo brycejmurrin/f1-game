@@ -442,14 +442,15 @@ var CrowdAudio = (function () {
     return t < swellUntil ? swellAmt : 0;
   }
 
+  // swell stays module-local: checkEvents / finish wrap call it; no outside
+  // CrowdAudio.swell site exists (inspect().swell exposes the live amount).
   return {
-    bindHost, bind, attach, detach, silence, update, swell, fireCheer,
-    inspect, liveOk, pitStraightBoost, grandstandBoost,
-    // test hooks
+    bindHost, bind, attach, detach, silence, update, fireCheer,
+    inspect, liveOk,
+    // test hooks (inspect().bedGain already exposes the GainNode)
     _resetEvents() { lastPos = 0; sawFinish = false; swellUntil = 0; swellAmt = 0; lastCheerT = -1e9; },
     _setPos(p) { lastPos = p | 0; },
     _cheerPool() { return cheers ? cheers.length : 0; },
-    _bedGain() { return bedGain; },
   };
 })();
 Object.freeze(CrowdAudio);

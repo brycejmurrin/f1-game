@@ -455,9 +455,13 @@ const Quali = (function () {
       return classification ? classification.map(({ car, ...row }) => row) : null;
     }
 
-    return { simulate, preview, order, results, rows, clear, begin, forgetOrder, lapTime, capFor, carLap, referencePole };
+    // forgetOrder / lapTime / capFor stay create()-local — begin() and the
+    // pace helpers call them; no quali.forgetOrder / .lapTime / .capFor reader.
+    return { simulate, preview, order, results, rows, clear, begin, carLap, referencePole };
   }
 
-  return { create, STEP, QUALI_TRIM, EXEC_SPREAD, MEDALS, MEDAL_RANK, medalFor };
+  // STEP / QUALI_TRIM / EXEC_SPREAD stay module-local — only create() and the
+  // medal helpers are read outside this file.
+  return { create, MEDALS, MEDAL_RANK, medalFor };
 })();
 Object.freeze(Quali);

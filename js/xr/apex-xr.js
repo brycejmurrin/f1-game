@@ -124,10 +124,6 @@ const ApexXR = (function () {
     return p.backendPref || null;
   }
 
-  function path() {
-    return plan().path;
-  }
-
   function fallbacks() {
     return (_fallbacks.length ? _fallbacks : plan().fallbacks).slice();
   }
@@ -184,9 +180,8 @@ const ApexXR = (function () {
   }
 
   return {
-    LS_XR, LS_BACKEND, LS_CAPS, SS_FALLBACK,
-    detect, caps, plan, bootPick, path, fallbacks, noteFallback, stats,
-    invalidate, rendererMatchesPlan, readPrefs, questUa,
+    detect, caps, plan, bootPick, fallbacks, noteFallback, stats,
+    invalidate, rendererMatchesPlan,
   };
 })();
 Object.freeze(ApexXR);

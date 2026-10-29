@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "note": "Metadata-only pack model roles. placed = scenery bakedModel literals; nature_bake = reserved tree LODs (#1619/#3958); kit_catalog = Kenney Racing Kit not yet placed. file/md5 stay in assets/pack/manifest.json. Prune helper: js/assets/pack-index.mjs (adjacent to #4028, not overlapping GPU load paths).",
+  "roles": [
+    "placed",
+    "kit_catalog",
+    "nature_bake"
+  ],
+  "models": {
+    "k_bannertowergreen": {
+      "role": "placed"
+    },
+    "k_bannertowerred": {
+      "role": "placed"
+    },
+    "k_barrierred": {
+      "role": "placed"
+    },
+    "k_barrierwhite": {
+      "role": "placed"
+    },
+    "k_billboard": {
+      "role": "kit_catalog"
+    },
+    "k_billboardlow": {
+      "role": "placed"
+    },
+    "k_camera_exclusive": {
+      "role": "placed"
+    },
+    "k_grandstand": {
+      "role": "kit_catalog"
+    },
+    "k_grandstandawning": {
+      "role": "kit_catalog"
+    },
+    "k_lightpostlarge": {
+      "role": "placed"
+    },
+    "k_lightpostmodern": {
+      "role": "placed"
+    },
+    "k_pitsgarage": {
+      "role": "kit_catalog"
+    },
+    "k_pitsgarageclosed": {
+      "role": "kit_catalog"
+    },
+    "k_pitsoffice": {
+      "role": "kit_catalog"
+    },
+    "k_pitsofficecorner": {
+      "role": "placed"
+    },
+    "k_pitsofficeroof": {
+      "role": "kit_catalog"
+    },
+    "k_pylon": {
+      "role": "placed"
+    },
+    "k_radarequipment": {
+      "role": "placed"
+    },
+    "k_tent": {
+      "role": "kit_catalog"
+    },
+    "k_tentclosed": {
+      "role": "kit_catalog"
+    },
+    "k_tentclosedlong": {
+      "role": "kit_catalog"
+    },
+    "k_tentlong": {
+      "role": "placed"
+    },
+    "palm_lod0": {
+      "role": "nature_bake"
+    },
+    "palm_lod1": {
+      "role": "nature_bake"
+    },
+    "pine_lod0": {
+      "role": "nature_bake"
+    },
+    "pine_lod1": {
+      "role": "nature_bake"
+    },
+    "tree_lod0": {
+      "role": "nature_bake"
+    },
+    "tree_lod1": {
+      "role": "nature_bake"
+    }
+  }
+}

@@ -271,6 +271,12 @@ const GaragePrebuild = (function () {
         t = now(); gate.garageWarm = 2;
         while (!gate.garageReady && current() && now() - t < GIVE_UP_MS) {
           if (want === "title" && sheetOpenNow()) { gate.garageWarm = 0; return finish(rec, "superseded"); }
+          // render() owes exactly these frames. Once they are spent and no
+          // program warm is in flight, waiting out GIVE_UP_MS cannot paint
+          // one: the present that started the warm returned without drawing
+          // (measured 30027 ms of this wait on software GL / three WebGL2,
+          // while memState().warm.total was 1.5 s). The visible tap draws.
+          if (gate.garageWarm <= 0 && !(G.gfx.warming && G.gfx.warming())) break;
           await d.menuSlice();
         }
         rec.frameMs = ms(now() - t);
@@ -349,6 +355,8 @@ const GaragePrebuild = (function () {
   // The page's one instance, for __apex.garagePrebuild() (the MirrorPass.instance() idiom: no G member).
   let _instance = null;
 
-  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, phoneHold, sheetOpenNow, POLL_MS, GIVE_UP_MS, QUIET_MS };
+  // POLL_MS / GIVE_UP_MS stay module-local (create() owns the timers).
+  // blockers / plan / homeKind / readSwitch / QUIET_MS stay exported — garage-prebuild unit seams.
+  return { create, instance: () => _instance, readSwitch, blockers, plan, homeKind, packSettled, saveData, phoneHold, sheetOpenNow, QUIET_MS };
 })();
 Object.freeze(GaragePrebuild);

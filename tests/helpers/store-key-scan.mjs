@@ -6,12 +6,16 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-/** Every scannable js/ file (circuits, vendored code and *presets.js data tables excluded). */
+/** Data-table files the apex26.* write/read scans skip (not writers). Do NOT
+ *  exclude `setup-presets.js` — it writes `setupPresets.<team>` (#review F1). */
+const SKIP_JS = new Set(["presets.js", "elev-presets.js"]);
+
+/** Every scannable js/ file (circuits, vendored code and lighting/elev presets tables excluded). */
 export function jsFiles(dir = "js", out = []) {
   for (const e of fs.readdirSync(path.join(ROOT, dir), { withFileTypes: true })) {
     const p = `${dir}/${e.name}`;
     if (e.isDirectory()) { if (!/^js\/circuits$|vendor|three\/lib/.test(p)) jsFiles(p, out); }
-    else if (e.name.endsWith(".js") && !e.name.endsWith("presets.js")) out.push(p);
+    else if (e.name.endsWith(".js") && !SKIP_JS.has(e.name)) out.push(p);
   }
   return out;
 }

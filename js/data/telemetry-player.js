@@ -180,7 +180,7 @@ const DataTelemetryPlayer = (function () {
           const row = el("div", "dh-laneboard-row");
           const dot = el("span", "dh-legend-dot dh-mapdot"); dot.style.background = cssColor(view.laneCols[i]);
           row.appendChild(dot);
-          const badge = (view._dup && view._dup[t.d.num] > 1 && t.sessionLabel) ? " " + t.sessionLabel : "";
+          const badge = DataTabUtils.sessionSuffix(view._dup, t.d.num, t.sessionLabel);
           row.appendChild(el("span", "dh-laneboard-code", dcode(t.d) + badge));
           const spd = el("span", "dh-laneboard-spd", "—");
           const dl = el("span", "dh-laneboard-dl", i === 0 ? "REF" : "—");

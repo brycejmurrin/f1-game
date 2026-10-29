@@ -336,6 +336,7 @@ const NetSdp = (function () {
     return fp && ufrag ? { fp, ufrag } : null;
   }
 
-  return { VERSION, pack, unpack, packChecked, verify, fingerprint, identity };
+  // VERSION / verify stay module-local (pack/unpack / packChecked only).
+  return { pack, unpack, packChecked, fingerprint, identity };
 })();
 Object.freeze(NetSdp);

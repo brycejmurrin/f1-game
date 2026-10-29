@@ -1,0 +1,1 @@
+Improved: importing a large GLB no longer builds a throwaway number list for every vertex, and a return visit starts that circuit's model downloads while the pack manifest is still revalidating. A known WebGPU failure offers the WebGL2 reload card instead of only the raw error overlay, and opening its details no longer flickers the card.

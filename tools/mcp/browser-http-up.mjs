@@ -107,7 +107,7 @@ async function waitFor(label, probe) {
   throw new Error(label + " did not come up");
 }
 
-export async function bringUp() {
+async function bringUp() {
   const prior = readState();
   const localOk = await ping(`http://127.0.0.1:${PORT}/healthz`);
   const publicOk = prior.url ? await ping(new URL(prior.url).origin + "/healthz") : false;
