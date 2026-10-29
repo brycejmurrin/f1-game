@@ -256,7 +256,7 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/bash-guard.sh\"",
-            "timeout": 360,
+            "timeout": 30,
             "onFailure": "block"
           },
           {
@@ -305,7 +305,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\"",
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/context-cap.py\" --guard",
             "timeout": 5,
             "onFailure": "block"
           }
@@ -317,7 +317,8 @@
           {
             "type": "command",
             "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/launch-gate.py\"",
-            "timeout": 5
+            "timeout": 5,
+            "onFailure": "block"
           }
         ]
       }

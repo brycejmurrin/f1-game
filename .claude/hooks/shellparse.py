@@ -862,7 +862,7 @@ def closed_pr_refusal(dests, root):
         try:
             cmd = shlex.split(os.environ["APEX_PR_STATE_CMD"]) if os.environ.get("APEX_PR_STATE_CMD") else \
                 ["node", "--input-type=module", "-e", PR_STATE_JS]
-            r = subprocess.run(cmd + ["brycejmurrin:" + branch], cwd=root, capture_output=True, text=True, timeout=30)
+            r = subprocess.run(cmd + ["brycejmurrin:" + branch], cwd=root, capture_output=True, text=True, timeout=5)
             prs = json.loads(r.stdout) if r.returncode == 0 else None
         except Exception:
             prs = None

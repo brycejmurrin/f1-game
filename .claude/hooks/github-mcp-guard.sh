@@ -43,28 +43,55 @@
 # went with the merge desk, WP-D1 2026-10-27). The reason texts and the receipt check
 # live in merge_policy.py, shared with bash-guard.sh's `gh` rule. Output is
 # the documented PreToolUse JSON (hookSpecificOutput.permissionDecision,
-# https://code.claude.com/docs/en/hooks). Exit 0 always; settings.json sets
-# onFailure "block" so a crash refuses the call instead of letting it through.
-exec python3 -c '
+# https://code.claude.com/docs/en/hooks), exit 0.
+#
+# FAIL CLOSED (2026-10-28): an unreadable payload or tool_input is a deny (it
+# was an ask), and the hook turns its own failures — no python3, a
+# merge_policy.py that will not load, any exception (sys.excepthook), any exit
+# but 0/2 — into exit 2, whatever the host does with a failed hook (Claude
+# Code's onFailure "block" in settings.json is the second layer).
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "BLOCKED: github-mcp-guard needs python3 to judge this GitHub call; it is refused (fail closed)." >&2
+  exit 2
+fi
+python3 -c '
 import json, os, re, sys
+def _crash(kind, err, tb):
+    sys.stderr.write("BLOCKED: github-mcp-guard failed (" + kind.__name__ + ": " + str(err)[:160] + "), so this GitHub "
+                     "call is refused (fail closed). Report the hook error; do not work around it.\n")
+    sys.stderr.flush()
+    os._exit(2)
+sys.excepthook = _crash
 sys.path.insert(0, sys.argv[1])
 import merge_policy as P
 try:
     d = json.load(sys.stdin)
+    if not isinstance(d, dict):
+        raise ValueError("payload is not an object")
 except Exception:
-    sys.stderr.write("github-mcp-guard: could not read the hook payload; asking instead of passing.\n")
-    d = {"tool_name": "unknown", "tool_input": {}}
+    sys.stderr.write("BLOCKED: github-mcp-guard could not read the hook payload, so this GitHub call is refused (fail closed).\n")
+    sys.exit(2)
 name = d.get("tool_name") or ""
 # Cursor beforeMCPExecution (.cursor/hooks/mcp-guard.sh) names the bare tool and
 # sends tool_input as a JSON string: https://cursor.com/docs/agent/hooks
-if name and "__" not in name and name != "unknown":
+if name and "__" not in name:
     name = "mcp__github__" + name
+# A tool_input that is not an object (or a JSON string of one) cannot be judged: a guarded operation, or a call with
+# no tool name, is refused; any other tool passes (Cursor sends EVERY MCP call through this script).
+bad_input = False
 if isinstance(d.get("tool_input"), str):
     try:
         d["tool_input"] = json.loads(d["tool_input"] or "{}")
     except Exception:
-        name = "unknown"
-ti = d.get("tool_input") or {}
+        bad_input = True
+ti = d.get("tool_input")
+if ti is None:
+    ti = {}
+if not isinstance(ti, dict):
+    bad_input, ti = True, {}
+GUARDED = re.compile(r"__(merge_pull_request|enable_pr_auto_merge|update_pull_request|issue_write|actions_run_trigger|push_files|create_or_update_file|create_branch|delete_file)$")
+if not name or (bad_input and GUARDED.search(name)):
+    name = "unknown"
 root = d.get("cwd") if not os.environ.get("CLAUDE_PROJECT_DIR") and d.get("cwd") else P.project_root()
 def first(*keys):
     for k in keys:
@@ -76,7 +103,7 @@ pr = first("pullNumber", "pull_number", "number", "pr")
 decision, reason = None, None
 merging = name.endswith("__merge_pull_request") or name.endswith("__enable_pr_auto_merge")
 if name == "unknown":
-    decision, reason = "ask", "github-mcp-guard could not parse this call; confirm it by hand."
+    decision, reason = "deny", "github-mcp-guard could not read this call (no tool name, or a tool_input that is not an object), so it is refused (fail closed)."
 elif merging:
     raw = ti.get("merge_method") if ti.get("merge_method") is not None else ti.get("mergeMethod")
     method = str(raw or "").strip().lower()
@@ -123,3 +150,9 @@ if decision:
     P.emit(decision, reason)
 sys.exit(0)
 ' "$(dirname "$0")"
+rc=$?
+case "$rc" in
+  0|2) exit "$rc" ;;
+  *) echo "BLOCKED: github-mcp-guard failed with exit $rc, so this GitHub call is refused (fail closed)." >&2
+     exit 2 ;;
+esac

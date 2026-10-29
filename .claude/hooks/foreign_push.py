@@ -26,6 +26,9 @@ import subprocess
 import sys
 
 
+# Network budget (2026-10-28): bash-guard.sh runs under a 30 s hook timeout (it no longer runs test:guards), and
+# this check, closed_pr_refusal (5 s) and live-run-check (4 s) run in sequence on a push: ls-remote 6 s + fetch
+# 10 s keep the worst case under it. A timeout fails open, loudly (check() below), as before.
 def _git(where, *args, timeout=15):
     r = subprocess.run(["git", "-C", where, *args], capture_output=True, text=True, timeout=timeout)
     return r.returncode, r.stdout.strip()
@@ -78,7 +81,7 @@ def foreign_commits(where, remote, branch):
     if not base:
         return []                                   # never fetched or pushed: a first push
     try:
-        rc, out = _git(where, "ls-remote", "--heads", remote, f"refs/heads/{branch}", timeout=20)
+        rc, out = _git(where, "ls-remote", "--heads", remote, f"refs/heads/{branch}", timeout=6)
     except subprocess.TimeoutExpired:
         raise RuntimeError(f"ls-remote {remote} timed out")
     if rc != 0:
@@ -91,7 +94,7 @@ def foreign_commits(where, remote, branch):
     if _git(where, "cat-file", "-e", tip + "^{commit}")[0] != 0:
         try:
             rc, _ = _git(where, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", remote,
-                         f"+refs/heads/{branch}:{private}", timeout=45)
+                         f"+refs/heads/{branch}:{private}", timeout=10)
         except subprocess.TimeoutExpired:
             raise RuntimeError(f"fetch {remote} {branch} timed out")
         if rc != 0:
