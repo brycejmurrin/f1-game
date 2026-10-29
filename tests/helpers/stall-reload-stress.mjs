@@ -51,9 +51,14 @@ export function stallReloadSnap() {
       api = st && st.api ? st.api : null;
     }
   } catch (_) { /* identity stays null */ }
+  // The live #game context only. A fresh canvas per sample (this poll runs for
+  // the whole stress window) allocates another WebGL context; Chrome then drops
+  // the oldest one, which is the game. On three forced to GL the race-entry
+  // ctx-lost recover quits to the menu, the clean() spin is gone, and the
+  // handoff cover never reaches its 30 slow frames — stall.act stays "".
   try {
-    const canvas = document.createElement("canvas");
-    const g = canvas.getContext("webgl2") || canvas.getContext("webgl");
+    const canvas = document.getElementById("game");
+    const g = canvas && (canvas.getContext("webgl2") || canvas.getContext("webgl"));
     if (g) {
       const ext = g.getExtension("WEBGL_debug_renderer_info");
       gl = String(g.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : g.RENDERER));
