@@ -611,7 +611,8 @@ var GameAudioSoundtrack = (function () {
       stopMusicIfGeneration(generation) { if (generation !== actionGeneration) return false; stopMusic(); return true; },
       startMusic, stopMusic, setMusicEnabled, skipTrack, prevTrack, trackName, tracks, addTracks, removeTrack, playTrackId, currentTrackId, setMusicBackend, musicBackend, setMusicSource, musicSource, sourceCounts, setMusicVolume, setRadioDuck,
       suspendMusic, resumeMusic, resetContext, releaseEngineDuck, duckForEngine, retryStreamUnlock,
-      isPlaying: () => musicOn, streaming: () => musicStreaming, lastTrack: () => lastTrackIdx, volume: () => musicVol,
+      // streaming stays create-local (musicStreaming); no soundtrack.streaming reader.
+      isPlaying: () => musicOn, lastTrack: () => lastTrackIdx, volume: () => musicVol,
     };
   }
   return { create };

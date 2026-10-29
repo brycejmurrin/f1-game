@@ -149,6 +149,8 @@ const CarFx = (function () {
     return { emit, status, haze };
   }
 
-  return { create, heatHaze, SPARK_V0, SPARK_V1, SPARK_RATE, LOCK_MIN, HAZE_RANGE, HAZE_TAU };
+  // heatHaze / LOCK_MIN / HAZE_TAU stay module-private: create() closes over them;
+  // no js/ or test reader used CarFx.heatHaze / LOCK_MIN / HAZE_TAU.
+  return { create, SPARK_V0, SPARK_V1, SPARK_RATE, HAZE_RANGE };
 })();
 Object.freeze(CarFx);

@@ -289,7 +289,7 @@ $("pc-hud").onclick = () => setPhotoUiHidden(true);
 $("pc-restore").onclick = () => setPhotoUiHidden(false);
 $("pc-fov").oninput = (e) => { photoCam.fov = +e.target.value; };
 
-return { initPhotoCam, updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
+return { updatePhotoCam, enterPhotoMode, exitPhotoMode, freeCam };
 }
 
 return { create };
