@@ -1466,4 +1466,30 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 
 #results .res-name:has([data-stint-details]) { display: block; -webkit-line-clamp: unset; line-clamp: unset; }
 
+/* Ceremony podium overlay (#4070): full-bleed beat while #results stays hidden.
+   Host is created at runtime (keeps shellNodes flat). CONTINUE reuses .bigbtn
+   and --tap (844×390 touch). */
+#ceremony-podium {
+  position: fixed; inset: 0; z-index: 38;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  padding: calc(var(--pad) * 1.2);
+  padding-bottom: max(calc(var(--pad) * 1.2), env(safe-area-inset-bottom, 0));
+  pointer-events: none;
+  background: linear-gradient(to top, color-mix(in oklab, var(--surf-0) 78%, transparent) 0%, transparent 55%);
+}
+#ceremony-podium[hidden] { display: none; }
+#ceremony-podium-body {
+  pointer-events: auto; max-width: min(720px, 100%); margin: 0 auto; width: 100%;
+}
+#ceremony-podium-body [data-results-part="story"] {
+  background: color-mix(in oklab, var(--carbon) 92%, transparent);
+}
+#ceremony-podium .sheet-foot {
+  pointer-events: auto; display: flex; justify-content: center; gap: var(--gap);
+  margin: var(--pad) auto 0; max-width: min(720px, 100%); width: 100%;
+}
+#ceremony-podium .bigbtn { min-height: var(--tap); min-width: min(240px, 100%); }
+body[data-density="compact"] #ceremony-podium { padding: calc(var(--pad) * 0.55); }
+body[data-density="compact"] #ceremony-podium .sheet-foot { margin-top: calc(var(--pad) * 0.45); }
+
 } /* @layer components */

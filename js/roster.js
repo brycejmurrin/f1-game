@@ -222,10 +222,16 @@
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
     "js/race/jump-start-penalty.js",
+    "js/ui/podium-beat.js",
+    "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
     "js/race/cooldown-lap.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
+    [
+      "js/ui/podium-beat.js",
+      "js/race/podium-beat.js"
+    ],
     [
       "js/race/pit-geom.js",
       "js/race/pit-lane.js"
