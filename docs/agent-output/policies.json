@@ -1256,6 +1256,11 @@
       "presentation": "shared-levels",
       "preserve": "Wet-road sample configuration, images and debug interpretation; no unmeasured reflection success."
     },
+    "tools/gfx/stall-reload-sw-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Matched deploy-tip vs fix-head stall stress pair JSON and native exit status."
+    },
     "tools/gfx/tlx-pack-check.cjs": {
       "action": "keep-native",
       "presentation": "native",

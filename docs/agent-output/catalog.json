@@ -1218,6 +1218,7 @@
         "test:render",
         "test:shimmer",
         "test:smoke",
+        "test:stall-reload-sw",
         "test:tiny",
         "test:ui",
         "test:webkit",
@@ -2336,6 +2337,12 @@
       "path": "tools/gfx/ssr-probe.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/gfx/stall-reload-sw-oracle.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node"
     },
     {
@@ -4372,6 +4379,10 @@
     {
       "name": "test:smoke",
       "command": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js"
+    },
+    {
+      "name": "test:stall-reload-sw",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js"
     },
     {
       "name": "test:state-unit",

@@ -2121,6 +2121,12 @@
       ],
       "kind": "browser"
     },
+    "test:stall-reload-sw": {
+      "files": [
+        "tests/specs/stall-reload-sw.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:state-unit": {
       "files": [
         "tests/unit/a11y-opts.test.mjs",

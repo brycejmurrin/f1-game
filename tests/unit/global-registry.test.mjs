@@ -135,7 +135,7 @@ const KNOWN_EXTERNAL_READS = {
   "js/perf/governor.js": ["__APEX_BUILD"],            // index.html inline shell script sets these —
   "js/agent/apex.js": ["__APEX_BUILD", "__apexErrors", "__apexROLoops"],   // the shell is outside the manifest,
   "js/game.js": ["__APEX_BUILD", "__apexReportError", "scheduler"], // shell build id + error card; scheduler.yield (Chrome 129+) typeof-guarded in startRaceBody, Safari → setTimeout(0)
-  "js/perf/race-entry-profile.js": ["scheduler"], // afterPaint yield on UI Start Race (Chrome 129+); typeof-guarded, else rAF+setTimeout / Promise.resolve
+  "js/perf/race-entry-profile.js": ["scheduler", "G", "loadingScreen"], // afterPaint yield; stallHandoffCover reads game state and loading-screen phase for LoopHealth (#3510)
   "js/car/car-draw.js": ["scheduler"], // warmCarAssetsAsync's step yield (Chrome 129+, perf hunt 4 F3.3); typeof-guarded, else setTimeout(0)
   "js/track/tracks.js": ["scheduler"], // buildPaced's task yield between slices under the race cover (pace.rafEvery, B·H14); typeof-guarded, else setTimeout(0)
   "js/render/shared/assets.js": ["scheduler"], // strip-decode yield (Chrome 129+); typeof-guarded, else queueMicrotask / setTimeout(0)

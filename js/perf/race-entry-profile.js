@@ -256,6 +256,26 @@ const RaceEntryProfile = (() => {
     menuEntrySession = false;
   }
 
+  /** True while race-entry handoff should use the stall watchdog's relaxed cover (#3510). */
+  function stallHandoffCover() {
+    if (armed) return true;
+    try {
+      if (typeof G !== "undefined" && G.state === "count") return true;
+    } catch (_) { /* harness */ }
+    try {
+      if (typeof loadingScreen !== "undefined" && loadingScreen.phase) {
+        const ph = loadingScreen.phase();
+        if (ph === "handoff" || ph === "busy" || ph === "build" || ph === "garage" || ph === "prep") return true;
+      }
+    } catch (_) { /* harness */ }
+    if (softwareRaster()) {
+      try {
+        if (typeof G !== "undefined" && G.state === "race" && introBudgetLeft() > 0) return true;
+      } catch (_) { /* harness */ }
+    }
+    return false;
+  }
+
   /** Yield so #loading can paint before ensure* / intro sync work.
    *  https://developer.chrome.com/blog/use-scheduler-yield — Safari: rAF+timeout. */
   function afterPaint() {
@@ -427,7 +447,7 @@ const RaceEntryProfile = (() => {
     begin, beginUi, continueWindow, afterPaint, end, lap, mark, notePresent, tickFrame,
     requestWarm, noteWarm, raiseHandoff, span, spanAsync, afterPresent, runSession, clearMenuEntrySession,
     snapshot, stageTable, diffStages, stagesFromSnapshot,
-    introBudgetLeft, setProgressSink, softwareRaster,
+    introBudgetLeft, setProgressSink, softwareRaster, stallHandoffCover,
     legs: () => legs.slice(),
     warmHistory: () => warmHistory.slice(),
     menuEntrySession: () => menuEntrySession,

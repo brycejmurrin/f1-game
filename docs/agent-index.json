@@ -1430,6 +1430,15 @@
       "twinned": false
     },
     {
+      "id": "stall-reload-sw",
+      "script": "test:stall-reload-sw",
+      "kind": "browser",
+      "files": [
+        "tests/specs/stall-reload-sw.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "state-unit",
       "script": "test:state-unit",
       "kind": "node",
