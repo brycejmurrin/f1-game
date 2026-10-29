@@ -34,7 +34,7 @@
   position: fixed; inset: 0;
   z-index: 20;
   display: grid;
-  align-content: center; justify-items: center;
+  justify-items: center;
   /* The brand block and the button column are two SEPARATE things; 2px between
      them read as one run-on block, which is why the disclaimer looked like a
      caption on the CAREER button rather than the last line of the small print. */

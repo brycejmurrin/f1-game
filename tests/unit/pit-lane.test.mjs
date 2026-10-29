@@ -51,6 +51,7 @@ function load() {
   // The pit complex model (TrackPit) is what PitLane reads its pitch and, on
   // a built track, its window and row from — loaded beside it, as the game does.
   vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-geom.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   return vm.runInContext("PitLane", ctx);
 }
@@ -248,6 +249,7 @@ function commitSession({ hw = 7, vTop = 60, total = 5386, weather = "dry", real 
                        "cadillac", "custom"].map((id) => ({ id })) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
   if (real) vm.runInContext(readFileSync(join(ROOT, "js/track/core/pit.js"), "utf8"), ctx, { filename: absSrc("js/track/core/pit.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-geom.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   const track = real ? real.track : { total, n: 1346, def: {} };
@@ -1076,6 +1078,7 @@ function laneOn(straightM, total = 5386) {
   ctx.Tracks = { sample: () => { throw new Error("entry geometry must not sample"); },
                  curvature: curvatureStub(track) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-geom.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   return { Pl, track, entry: Pl.entryRunM(track), zone: Pl.zoneOf(track) };
@@ -1131,6 +1134,7 @@ test("a circuit may still override the entry by hand", () => {
   track.def = { pitZone: { entryM: 275 } };
   ctx.Tracks = { sample: () => { throw new Error("no"); }, curvature: curvatureStub(track) };
   vm.runInContext(readFileSync(join(ROOT, "js/core/mat4.js"), "utf8"), ctx, { filename: absSrc("js/core/mat4.js") });
+  vm.runInContext(readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-geom.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8"), ctx, { filename: absSrc("js/race/pit-lane.js") });
   const Pl = vm.runInContext("PitLane", ctx);
   assert.equal(Pl.zoneOf(track).lenM, 275 + P.EXIT_M, "an authored entryM was ignored");
@@ -1140,10 +1144,13 @@ test("the entry read is the ONLY curvature this module does", () => {
   // Curvature channel: surface. It may decide WHERE the lane is, once per
   // circuit, and must never reach a driving car — so it belongs in zone
   // resolution and nowhere near update(), committing() or the box.
-  const src = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  const lane = readFileSync(join(ROOT, "js/race/pit-lane.js"), "utf8");
+  const src = readFileSync(join(ROOT, "js/race/pit-geom.js"), "utf8");
   // CALLS, not mentions: the availability guard (`!Tracks.curvature`) names it
   // without reading it, and counting that as a read would make this assertion
   // about spelling rather than about the contract.
+  const laneReads = lane.split("\n").filter((l) => /Tracks\.curvature\s*\(/.test(l) && !/^\s*(\/\/|\*)/.test(l));
+  assert.equal(laneReads.length, 0, `the state machine calls curvature: ${laneReads.join(" | ")}`);
   const reads = src.split("\n").filter((l) => /Tracks\.curvature\s*\(/.test(l) && !/^\s*(\/\/|\*)/.test(l));
   assert.equal(reads.length, 1, `curvature is CALLED ${reads.length} times, not once: ${reads.join(" | ")}`);
   const fn = src.slice(src.indexOf("function entryRunM"), src.indexOf("function zoneOf"));
@@ -1292,6 +1299,7 @@ test("windowOf names a rival's window for the gap chips: P<lap> within three lap
 function strategySession(laps) {
   const s = commitSession();
   const { ctx, G } = s;
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-strategy.js"), "utf8") + "\n;globalThis.AiStrategy = AiStrategy;", ctx, { filename: absSrc("js/physics/ai-strategy.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8") + "\n;globalThis.AiDrive = AiDrive;", ctx, { filename: absSrc("js/physics/ai-drive.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + "\n;globalThis.SportingRegs = SportingRegs;", ctx, { filename: absSrc("js/race/sporting-regs.js") });
   ctx.TyreModel.AI_CLASS = {

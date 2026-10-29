@@ -129,14 +129,6 @@ const PitSigns = (function () {
     return { x: (i % S.crestCols) * S.crestPx, y: S.crestY + Math.floor(i / S.crestCols) * S.crestPx, w: S.crestPx, h: S.crestPx };
   }
 
-  /** UV rect of cell `i`, V flipped as createTexture uploads with FLIP_Y
-   *  (the garage's uvOf does the same; U is NOT flipped — these quads are
-   *  world-space on the identity, a U flip would mirror every crest). */
-  function uvRect(i) {
-    const S = TrackPit.SIGN, r = cellRect(i);
-    return { uL: r.x / S.w, uR: (r.x + r.w) / S.w, vT: 1 - r.y / S.h, vB: 1 - (r.y + r.h) / S.h };
-  }
-
   // ── Runtime: the mesh, the texture and the draw (game.js calls these) ──
   let _drawn = 0, _calls = 0;           // frames drawn / frames asked (agent probe)
   const _opts = { glow: 0 };
@@ -151,8 +143,8 @@ const PitSigns = (function () {
       const canvas = paintAtlas(track.pit.row.boxes, { mobile: !!(G.isMobile || G.mobileTier), side: track.pit.side, limitKph: track.pit.limitKph });
       track.meshes.pitSignTex = G.createTexture(canvas);
       track.meshes.pitSigns = G.createTexMesh({ pos: q.pos, nrm: q.nrm, uv: q.uv, idx: q.idx });
-      // The entrance lamps' RED aspects: a second mesh on the same texture,
-      // drawn only under a red flag (draw()).
+      // The entrance lamps' GREEN call-in aspects: a second mesh on the same
+      // texture, drawn when the player is called in (draw()'s `called`).
       const r = track.pitSignal;
       track.meshes.pitSignal = r && r.idx && r.idx.length
         ? G.createTexMesh({ pos: r.pos, nrm: r.nrm, uv: r.uv, idx: r.idx }) : null;
@@ -201,6 +193,8 @@ const PitSigns = (function () {
   /** `{drawn, calls}`: frames the signs were drawn, frames the draw was asked. */
   const stats = () => ({ drawn: _drawn, calls: _calls });
 
-  return { supported, paintAtlas, cellRect, uvRect, upload, free, draw, stats };
+  // paintAtlas / cellRect stay module-local (upload paints the atlas).
+  // supported stays exported — pit-signs unit seam for the bare-VM gate.
+  return { supported, upload, free, draw, stats };
 })();
 Object.freeze(PitSigns);

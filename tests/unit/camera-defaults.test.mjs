@@ -33,6 +33,7 @@ test("CAM touch release preserves the long-press picker; cancelled holds never c
     const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
       setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
     ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race" };
     const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
@@ -60,7 +61,8 @@ test("setCamMode refuses NaN / Infinity so a poisoned index cannot stick", () =>
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
     setTimeout() { return 0; }, clearTimeout() {} };
   ctx.window = ctx;
-  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const G = { $: dom.byId, camMode: 3, store: { set(_k, v) { stored.push(v); } }, state: "race", camCutT: 0 };
   const cams = ctx.CamModes.create(G);
   const n = ctx.CamModes.CAM_MODES.length;
@@ -272,7 +274,8 @@ test("broadcast cameras carry per-mode cut ease durations", () => {
   const dom = makeDom();
   const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} }, setTimeout() { return 0; }, clearTimeout() {} };
   ctx.window = ctx;
-  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
+  vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
   const modes = ctx.CamModes.CAM_MODES, idx = (id) => modes.findIndex((m) => m.id === id);
   assert.equal(modes[idx("cinematic")].cut, 0.6);
   assert.equal(modes[idx("heli")].cut, 0.55);
@@ -771,6 +774,7 @@ test("pending CAM hold is retired on pause/hide/quit, hidden page and blur witho
       addEventListener(type, fn) { listeners.set(type, fn); },
       setTimeout(fn) { timers.set(++serial, fn); return serial; }, clearTimeout(id) { timers.delete(id); } };
     ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", paused: false };
     const cams = ctx.CamModes.create(G), button = dom.byId("btn-cam");
@@ -802,6 +806,7 @@ test("CAM context-menu and late hold cannot open on a paused, hidden or non-race
     const ctx = { document: dom.document, Log: { info() {} }, CamTunerPanel: { refresh() {} },
       setTimeout(fn) { callback = fn; return 1; }, clearTimeout() {} };
     ctx.window = ctx;
+    vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/cam-picker.js"), "utf8"), ctx, { filename: absSrc("js/camera/cam-picker.js") });
     vm.runInNewContext(fs.readFileSync(path.join(root, "js/camera/mode-switch.js"), "utf8"), ctx, { filename: absSrc("js/camera/mode-switch.js") });
     const G = { $: dom.byId, camMode: 0, store: { set() {} }, state: "race", paused: false };
     ctx.CamModes.create(G);

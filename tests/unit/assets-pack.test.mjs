@@ -82,6 +82,33 @@ function assetLoader(overrides = {}) {
   return sandbox.Assets;
 }
 
+test("a remembered pack index starts the named model fetch before the manifest returns", async () => {
+  const urls = [];
+  let releaseManifest;
+  const manifestGate = new Promise((resolve) => { releaseManifest = resolve; });
+  const md5 = "a".repeat(32);
+  const store = { "apex26.packIndex": JSON.stringify({ models: { box: { file: "models/box.bin", md5 } } }) };
+  const assets = assetLoader({
+    localStorage: {
+      getItem: (k) => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = String(v); },
+    },
+    fetch(url) {
+      urls.push(String(url));
+      if (String(url).endsWith("manifest.json")) {
+        return manifestGate.then(() => ({ ok: true, json: async () => ({ models: { box: { file: "models/box.bin", md5 } } }) }));
+      }
+      return Promise.resolve({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    },
+  });
+  const pending = assets.loadModelsFor('bakedModel("box")');
+  await new Promise((r) => setImmediate(r));
+  assert.ok(urls.some((u) => u.includes("models/box.bin?h=" + md5)), "model bytes are requested while the manifest is still in flight: " + urls.join(" "));
+  releaseManifest();
+  assert.equal(await pending, 0, "a body that is not an AX26 model resolves as a miss, not a throw");
+  assert.equal(urls.filter((u) => u.includes("models/box.bin")).length, 1, "a matching md5 reuses the early body");
+});
+
 test("asset loader shares an in-flight manifest across boot consumers", async () => {
   let requests = 0, resolveFetch;
   const assets = assetLoader({ fetch() {
@@ -2162,10 +2189,10 @@ test("glTF supplied normals match transformed triangle normals for rotations, no
     const c20 = (b * f - c * e) * id, c21 = (c * d - a * f) * id, c22 = (a * e - b * d) * id;
     return [c00 * n[0] + c10 * n[1] + c20 * n[2], c01 * n[0] + c11 * n[1] + c21 * n[2], c02 * n[0] + c12 * n[1] + c22 * n[2]];
   }
-  const oracleSource = source.replace(/const nx = normals\[i \* 3\][\s\S]*?nrmOut\.push\(x \/ l, y \/ l, z \/ l\);/, `
+  const oracleSource = source.replace(/const nx = normals\[i \* 3\], ny = normals\[i \* 3 \+ 1\], nz = normals\[i \* 3 \+ 2\];[\s\S]*?nrm\[o\] = x \/ l; nrm\[o \+ 1\] = y \/ l; nrm\[o \+ 2\] = z \/ l;/, `
     const n = normalOracle(world, [normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]]);
     const l = (Math.hypot(n[0], n[1], n[2]) || 1) * nSign;
-    nrmOut.push(n[0] / l, n[1] / l, n[2] / l);`);
+    nrm[o] = n[0] / l; nrm[o + 1] = n[1] / l; nrm[o + 2] = n[2] / l;`);
   assert.notEqual(oracleSource, source, "oracle substitution must reach the supplied-normal emission");
   const oracle = vm.runInNewContext(oracleSource + ";GLTF", { ArrayBuffer, DataView, Uint8Array, Float32Array, Uint16Array, Uint32Array, TextDecoder, normalOracle, Log: { enabled: () => false } }, { filename: absSrc("js/render/shared/gltf.js") });
   const glb = (nodes, supplied) => {
@@ -2357,4 +2384,115 @@ test("model admission tail drops decoded payloads across cache generations", asy
   assert.ok(second.pos.length); assert.notStrictEqual(second, first);
   assert.equal(downloads, 2, "next generation obtains its own model");
   assert.equal(await assets.decodeTail(), null);
+});
+
+// ---------------------------------------------------------------------------
+// Pack hygiene (front half, adjacent to #4028 — does not touch the GPU load
+// path). data/packs/model-index.json classifies every committed model key;
+// js/assets/pack-index.mjs prunes a remembered apex26.packIndex-shaped object
+// against a live manifest so dead keys / stale md5s cannot linger.
+// ---------------------------------------------------------------------------
+const ROLE_INDEX_PATH = path.join(ROOT, "data", "packs", "model-index.json");
+const { pruneRememberedIndex, rememberPayload, diffRoleIndex } =
+  await import(pathToFileURL(path.join(ROOT, "js/assets/pack-index.mjs")).href);
+
+function sceneryPlacedModelIds() {
+  const ids = new Set();
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".js")) {
+        for (const line of fs.readFileSync(p, "utf8").split("\n")) {
+          if (/^\s*\/\//.test(line) || /^\s*\*/.test(line)) continue;
+          for (const m of line.matchAll(/bakedModel\(\s*["']([^"']+)["']/g)) ids.add(m[1]);
+        }
+      }
+    }
+  };
+  walk(path.join(ROOT, "js", "circuits"));
+  return ids;
+}
+
+test("pruneRememberedIndex drops dead keys, md5 mismatches, and junk fields", () => {
+  const live = {
+    models: {
+      keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+      renamed: { file: "models/renamed.bin", md5: "b".repeat(32) },
+    },
+  };
+  const remembered = {
+    version: 99,
+    extra: true,
+    models: {
+      keep: { file: "models/keep.bin", md5: "a".repeat(32) },
+      gone: { file: "models/gone.bin", md5: "c".repeat(32) },
+      renamed: { file: "models/old.bin", md5: "b".repeat(32) },
+      staleHash: { file: "models/keep.bin", md5: "d".repeat(32) },
+      bad: { file: "models/keep.bin", md5: "not-an-md5" },
+    },
+  };
+  assert.deepEqual(pruneRememberedIndex(remembered, live), {
+    models: { keep: { file: "models/keep.bin", md5: "a".repeat(32) } },
+  });
+  assert.deepEqual(pruneRememberedIndex(null, live), { models: {} });
+  assert.deepEqual(pruneRememberedIndex(remembered, null), { models: {} });
+});
+
+test("rememberPayload keeps only content-addressed model rows", () => {
+  const live = {
+    models: {
+      ok: { file: "models/ok.bin", md5: "e".repeat(32), verts: 3 },
+      noMd5: { file: "models/x.bin" },
+      badMd5: { file: "models/y.bin", md5: "zz" },
+    },
+  };
+  assert.deepEqual(rememberPayload(live), {
+    models: { ok: { file: "models/ok.bin", md5: "e".repeat(32) } },
+  });
+  assert.deepEqual(
+    pruneRememberedIndex(rememberPayload(live), live).models.ok,
+    live.models.ok && { file: live.models.ok.file, md5: live.models.ok.md5 },
+  );
+});
+
+test("data/packs/model-index.json covers every committed model key once",
+  { skip: !hasPack && "no pack installed" }, () => {
+  assert.ok(fs.existsSync(ROLE_INDEX_PATH), "data/packs/model-index.json missing");
+  const roleIndex = JSON.parse(fs.readFileSync(ROLE_INDEX_PATH, "utf8"));
+  assert.equal(roleIndex.version, 1);
+  assert.deepEqual(roleIndex.roles, ["placed", "kit_catalog", "nature_bake"]);
+  const diff = diffRoleIndex(roleIndex, manifest, roleIndex.roles);
+  assert.deepEqual(diff.indexOnly, [], "index lists keys the manifest dropped");
+  assert.deepEqual(diff.liveOnly, [], "manifest grew keys the role index misses");
+  assert.deepEqual(diff.badRole, [], "every index row needs a known role");
+});
+
+test("placed role keys are the scenery bakedModel literals; catalog keys are not placed",
+  { skip: !hasPack && "no pack installed" }, () => {
+  const roleIndex = JSON.parse(fs.readFileSync(ROLE_INDEX_PATH, "utf8"));
+  const placed = sceneryPlacedModelIds();
+  const indexedPlaced = Object.entries(roleIndex.models)
+    .filter(([, rec]) => rec.role === "placed")
+    .map(([id]) => id)
+    .sort();
+  assert.deepEqual(indexedPlaced, [...placed].filter((id) => manifest.models[id]).sort(),
+    "placed role must match non-comment bakedModel(\"…\") ids that exist in the pack");
+  for (const id of placed) {
+    assert.ok(manifest.models[id], `scenery places unknown pack key "${id}"`);
+    assert.equal(roleIndex.models[id].role, "placed", `${id} is placed in scenery`);
+  }
+  for (const [id, rec] of Object.entries(roleIndex.models)) {
+    if (rec.role === "placed") continue;
+    assert.equal(placed.has(id), false,
+      `${id} is role ${rec.role} but scenery still calls bakedModel("${id}")`);
+  }
+});
+
+test("pack models/ has no orphan bins outside the manifest index",
+  { skip: !hasPack && "no pack installed" }, () => {
+  const dir = path.join(PACK, "models");
+  const keyed = new Set(Object.values(manifest.models || {}).map((rec) => path.basename(rec.file)));
+  const orphans = fs.readdirSync(dir).filter((f) => f.endsWith(".bin") && !keyed.has(f));
+  assert.deepEqual(orphans, [], "orphan bins are dead pack weight — drop or register them");
 });

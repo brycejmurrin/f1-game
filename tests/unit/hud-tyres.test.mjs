@@ -10,9 +10,10 @@ import { fileURLToPath } from "node:url";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/hud-tyres.js"), "utf8");
 
-function load() {
+function load(lang = "en", catalogue = {}) {
   const ctx = { console };
   vm.createContext(ctx); withI18n(ctx);
+  ctx.I18n._installCatalog(lang, catalogue);
   vm.runInContext(SRC + "; this.HudTyres = HudTyres;", ctx);
   return ctx.HudTyres;
 }
@@ -110,4 +111,21 @@ test("module has no Tracks / curvature / kCur reads", () => {
   assert.doesNotMatch(SRC, /\bTracks\b/);
   assert.doesNotMatch(SRC, /\bcurvature\b/);
   assert.doesNotMatch(SRC, /\bkCur\b/);
+});
+
+
+test("label and painted accessibility name translate compound names while chip codes stay invariant", () => {
+  const names = { soft: "Weich", medium: "Mittel", hard: "Hart", intermediate: "Intermediär", wet: "Regen" };
+  const catalogue = Object.fromEntries(Object.entries(names).map(([key, value]) => ["hud.tyre.name." + key, value]));
+  Object.assign(catalogue, { "hud.tyre.label": "{name}-Reifen", "hud.tyre.cold": "kalt",
+    "hud.tyre.lapsLeft": "noch {n, plural, one {# Runde} other {# Runden}}" });
+  const H = load("de", catalogue);
+  for (const [code, name] of [["S", "Weich"], ["M", "Mittel"], ["H", "Hart"], ["I", "Intermediär"], ["W", "Regen"]]) {
+    assert.equal(H.label(code, "ok", null, 0), name + "-Reifen");
+    assert.equal(H.compoundChip(code), code, "model/display chip codes remain invariant");
+  }
+  const attrs = {}, el = { dataset: {}, getAttribute: key => attrs[key], setAttribute: (key, value) => { attrs[key] = value; } };
+  H.paint(el, { tempS: 60, tempOpt: 90, tempWindow: 15 }, { code: "M", lapsLeft: 5, spent: .2 });
+  assert.equal(attrs["aria-label"], "Mittel-Reifen, kalt, noch 5 Runden");
+  assert.equal(el.dataset.temp, "cold", "CSS state tokens remain invariant");
 });

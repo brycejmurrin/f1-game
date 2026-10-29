@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedHash32 } from "../helpers/seed-hash32.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -34,7 +35,7 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     let livery = { c1: team.color, c2: team.color2 };
     const player = { team, num: team.drivers[0].num };
     const G = { player, teamIdx: Teams.LIST.indexOf(team), driverIdx: 0, seed: 37, ttDistance: 3,
-      store: { rev: 1, get: (k, d) => d }, getTeamParts: () => saved,
+      store: { rev: 1, get: (k, d) => d }, getTeamParts: () => saved, getLiveryId: () => "default",
       gfx: { createMesh: data => ({ serial: ++builds, ...data }), freeMesh() {} } };
     const ctx = vm.createContext({ G, Parts, Teams, Float32Array, CarMesh: {}, FieldLod: { init() {} },
       Log: { info() {}, warn() {} },
@@ -45,7 +46,7 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
       getTeamParts: () => saved, getLiveryId: () => "default",
       SetupTune: { mods() {}, BB_REF: 0.5, brakeBias() {}, balance() {}, aero() {} },
       modsFor: () => ({}), tyreBaseModsFor: () => ({}), tyres: { applyCompound() {}, optionRecord: () => ({}) } });
-    for (const file of ["js/core/hash32.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
+    for (const file of ["js/core/hash32.js", "js/race/session-phys.js", "js/race/session-records.js", "js/race/daily-challenge.js", "js/car/car-draw.js"])
       vm.runInContext(readFileSync(join(ROOT, file), "utf8"), ctx, { filename: absSrc(file) });
     G.records = vm.runInContext("SessionRecords.create(G)", ctx);
     const daily = ctx.daily = vm.runInContext("DailyChallenge.create(G)", ctx);
@@ -65,9 +66,21 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     saved = custom;
     assert.equal(daily.select("2026-10-24", "standard").class, "standard");
     assert.equal(G.driverIdx, 0);
+    // makeCars stamps visualSetup once from the garage save (carVisual own:true).
+    // STANDARD Daily must restamp to the factory key before teamMesh (TT ghost) /
+    // player flaps read it — residual M27 after playerPartsFor covered body/cockpit.
+    const customStamp = Parts.CATALOG.map((c) => custom[c.id] || "").join(",");
+    player.visualSetup = custom;
+    player.visStamp = customStamp;
+    player.visPaint = customStamp + ":" + player.num;
+    player.visSh = customStamp + ":sh";
     refresh();
     const key = draw.playerVisualKey, standard = meshes();
     assert.ok(standard.every(m => m.ids.aero === factory.aero), history + ": STANDARD uses factory exterior, cockpit and shadow");
+    assert.equal(player.visualSetup, null, history + ": setPlayerParts restamps STANDARD off the SAVED visualSetup");
+    assert.equal(player.visStamp, "", history + ": factory stamp is empty");
+    assert.equal(draw.teamMesh(team, player).ids.aero, factory.aero, history + ": TT ghost teamMesh follows factory");
+    assert.equal(draw.teamDecalState(team, true).parts._ids.aero, factory.aero, history + ": player flaps use setPlayerParts, not getTeamParts");
     if (history === "factory-warm") assert.ok(standard.every((m, i) => m === warmed[i]), "factory entries remain reusable");
     if (history === "custom-warm") assert.ok(standard.every((m, i) => m !== warmed[i]), "custom meshes keep a distinct key");
     daily.stop(); saved = factory; G.store.rev++; refresh();
@@ -79,6 +92,9 @@ test("STANDARD Daily and ordinary factory bodies share the factory recipe across
     assert.ok(meshes(customKey).every(m => m.ids.aero === custom.aero), "explicit menu key uses its saved custom recipe");
     refresh();
     assert.ok(meshes().every(m => m.ids.aero === custom.aero), "ordinary custom parts remain custom after Daily");
+    assert.ok(player.visualSetup && player.visStamp, "ordinary custom restamps the live player for teamMesh");
+    assert.equal(draw.teamMesh(team, player).ids.aero, custom.aero, "TT ghost follows the restamped custom recipe");
+    assert.equal(draw.teamDecalState(team, true).parts._ids.aero, custom.aero, "player flaps follow the restamped custom recipe");
     livery = { ...livery, aeroShape: "style_aero_rift" }; refresh(); draw.invalidateCustomMeshCaches(team.id);
     assert.ok(meshes().every(m => m.ids.aero === livery.aeroShape), "livery appearance is applied over fitted parts");
     livery = { c1: team.color, c2: team.color2 }; draw.invalidateCustomMeshCaches(team.id);
@@ -109,7 +125,7 @@ function load() {
   return { D, d: D.create(G), G, stored, calls };
 }
 
-test("COPY DAILY CODE binds time and medal to the same class PB across repeats", () => {
+test("COPY DAILY CODE binds time and medal to the same class PB across repeats", async () => {
   const { G } = load();
   let copied;
   let context = "standard-class";
@@ -130,7 +146,9 @@ test("COPY DAILY CODE binds time and medal to the same class PB across repeats",
   const start = src.indexOf("      codeBtn.onclick = () => {", src.indexOf('codeBtn.id = "res-daily-share-code"'));
   const end = src.indexOf("\n      };", start) + "\n      };".length;
   assert.ok(start >= 0 && end > start);
-  vm.runInContext(src.slice(start, end), ctx, { filename: absSrc("js/ui/results-sheet.js") });
+  withI18n(ctx); ctx.I18n._installCatalog("de", { "results.copied": "KOPIERT" });
+  const translator = src.slice(src.indexOf("const tr ="), src.indexOf("const trN ="));
+  vm.runInContext(translator + src.slice(start, end), ctx, { filename: absSrc("js/ui/results-sheet.js") });
   const day = ctx.G.daily.dayKey();
   const click = () => { ctx.codeBtn.onclick(); return vm.runInContext("ShareCode.decode", ctx)(copied); };
   ctx.G.daily.select(day, "standard"); ctx.G.daily.record(80, context);
@@ -141,6 +159,8 @@ test("COPY DAILY CODE binds time and medal to the same class PB across repeats",
   assert.equal(click().medal, "gold");
   ctx.G.daily.record(79, context);
   assert.equal(click().best, 79);
+  await Promise.resolve();
+  assert.equal(ctx.codeBtn.textContent, "KOPIERT", "the awaited copy confirmation uses the translated catalogue");
   context = "different-class";
   assert.equal(ctx.G.daily.shareResult().best, undefined);
   assert.equal(ctx.G.daily.shareResult().medal, null);

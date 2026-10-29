@@ -1,0 +1,1 @@
+Fixed: career hub `#cr-go` double-tap while the lazy UI loads no longer fires start/rollover twice; MY TEAM next-round cash high is P1+P2 (not two P1s); factory savings exclude the next regulation era's ban list; the pause-card career brief ranks retired cars by progress so a DNF team-mate is not treated as last.

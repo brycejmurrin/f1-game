@@ -1,0 +1,1 @@
+Improved: the stream overlay tints each position plate in its team colour (always readable), flashes new sector times — a still outline with reduce motion on — and docs/STREAMING.md explains the OBS setup.

@@ -45,11 +45,24 @@ const src = (rel) => fs.readFileSync(path.join(ROOT, rel), "utf8");
 // exist by the time create() runs. Loading the real ones (rather than stubbing)
 // keeps the interp buffer honest and costs nothing.
 globalThis.M4 = eval(src("js/core/mat4.js") + ";M4");   // shared math island — snapshot.js binds M4 at eval
+globalThis.NetInterp = eval(src("js/net/interp.js") + ";NetInterp");
 const NetSnapshot = eval(src("js/net/snapshot.js") + ";NetSnapshot");
 const NetSession = eval(src("js/net/session.js") + ";NetSession");
 globalThis.NetSnapshot = NetSnapshot;
 globalThis.NetSession = NetSession;
+globalThis.QualiWire = eval(src("js/net/quali-wire.js") + ";QualiWire");
+globalThis.StrategyWire = eval(src("js/net/strategy-wire.js") + ";StrategyWire");
 const NetPlay = eval(src("js/net/netplay.js") + ";NetPlay");
+
+test("quali-wire and strategy-wire evaluate before netplay", () => {
+  const { LAZY_NET, LAZY_NET_EDGES } = createRequire(import.meta.url)(path.join(ROOT, "tools/manifest.cjs"));
+  const play = LAZY_NET.indexOf("js/net/netplay.js");
+  for (const file of ["js/net/quali-wire.js", "js/net/strategy-wire.js"]) {
+    const i = LAZY_NET.indexOf(file);
+    assert.ok(i >= 0 && i < play, file + " loads before netplay.js");
+    assert.ok(LAZY_NET_EDGES.some(([a, b]) => a === file && b === "js/net/netplay.js"), file + " is an eval-time edge");
+  }
+});
 
 test("a host RESULT must be a bijection before its timing mutates any guest car", () => {
   const netOrderSource = symbolSource("function netOrder(order)");
@@ -472,6 +485,7 @@ test("on a two-guest host, each guest's QUALI is accepted for its own seat only"
 
 globalThis.NetPlay = NetPlay;
 globalThis.NetBytes = eval(src("js/net/bytes.js") + ";NetBytes");   // transport/handshake bind it at call time
+const NetIce = eval(src("js/net/ice.js") + ";NetIce");             // transport calls NetIce.create() at eval
 const NetTransport = eval(src("js/net/transport.js") + ";NetTransport");
 globalThis.NetTransport = NetTransport;
 const NetHandshake = eval(src("js/net/handshake.js") + ";NetHandshake");
@@ -1172,8 +1186,9 @@ test("a real PitLane stop handed back before or after fitting matches uninterrup
       assert.equal(ai.tyre.code, "M"); assert.equal(ai.tyreStints, 2); assert.equal(ai.pitStops, 1);
       assert.equal(ai.tyreWear, phase === "before-fit" ? 0 : 0.2);
       ai.finished = true;
-      const verdict = regs.compoundVerdict(ai, { applies: true });
-      assert.equal(verdict && verdict.dsq, phase === "post-flag-fit" ? "one dry compound" : null,
+      // compoundVerdict stays module-local; applyCompoundRule owns the public surface.
+      regs.applyCompoundRule([ai], { applies: true });
+      assert.equal(ai.dsq || null, phase === "post-flag-fit" ? "one dry compound" : null,
         "the frozen flag verdict survives independently of later service history");
       net.stop();
     }

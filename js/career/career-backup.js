@@ -1046,11 +1046,12 @@ const CareerBackup = (function () {
     return { ok: true };
   }
 
+  // slotKey, IDENTITY_KEYS and otherFlavourPending stay internal: applyCore /
+  // collectIdentity own them; the UI only passes otherFlavourConfirmed.
+  // FLAVOURS / SLOTS stay module-local (collectSlots / wipeAllSlots / applyCore).
   return {
     FORMAT: FORMAT,
     MAX_BYTES: MAX_BYTES,
-    FLAVOURS: FLAVOURS,
-    SLOTS: SLOTS,
     build: build,
     serialize: serialize,
     download: download,
@@ -1061,11 +1062,8 @@ const CareerBackup = (function () {
     applyWithUndo: applyWithUndo,
     preview: preview,
     writeSlot: writeSlot,
-    otherFlavourPending: otherFlavourPending,
     wipeAllSlots: wipeAllSlots,
     revisionOf: revisionOf,
-    slotKey: slotKey,
-    IDENTITY_KEYS: IDENTITY_KEYS,
   };
 })();
 Object.freeze(CareerBackup);

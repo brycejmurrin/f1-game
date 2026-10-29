@@ -2,6 +2,14 @@
 const GameResults = (function () {
   "use strict";
 
+// I18n.t with English defaults; the bare fallback keeps VM tests that load this file alone working.
+const tr = (key, vars, def) => typeof I18n !== "undefined" ? I18n.t(key, vars, def)
+  : String(def).replace(/\{(\w+)\}/g, (m, k) => (vars && vars[k] != null ? vars[k] : m));
+
+const trN = (x) => typeof I18n !== "undefined" ? I18n.n(x) : x.toLocaleString();   // prose numbers localise; lap times and gaps stay "."-formatted
+
+const medalName = (medal) => tr("results.medal." + medal, null, medal.toUpperCase());
+
 const PODIUM = [" p1", " p2", " p3"];   // indexed 0-based; 4th place on has none
 
 // Race classification timing is deliberately derived from the same fields as
@@ -51,7 +59,7 @@ function timingSummary(G, order, dnfOf, sourceOf) {
 function ptsLabel(season, driverId) {
   const pts = season.pts[driverId] || 0;
   const net = SeasonCal.netPts(season, driverId);
-  return net === pts ? `${pts} pts` : `${net} (${pts}) pts`;
+  return net === pts ? tr("results.points", { points: trN(pts) }, "{points} pts") : tr("results.netPoints", { net: trN(net), points: trN(pts) }, "{net} ({points}) pts");
 }
 // [teamId, pts] in SeasonCal.rankTeams order — the one constructors' rule
 // Career.teamStandings uses too (points, countback, tier, id). A points-only
@@ -110,7 +118,7 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
   const row = document.createElement("div");
   row.className = `res-row${extraClass || ""}`;
   row.setAttribute("role", "listitem");
-  const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = i + 1;
+  const pos = document.createElement("span"); pos.className = "res-pos"; pos.textContent = trN(i + 1);
   const sw = document.createElement("span"); sw.className = "res-swatch"; sw.setAttribute("aria-hidden", "true"); sw.style.background = color;
   const nm = document.createElement("span"); nm.className = "res-name"; nm.textContent = name;
   const pt = document.createElement("span"); pt.className = "res-pts"; pt.textContent = ptsText;
@@ -123,7 +131,7 @@ function create(G) {
 Log.info("ui", "GameResults.create");
 // LICENCE BADGES toast through the one banner (js/career/badges.js owns the rules).
 if (typeof Badges !== "undefined") Badges.setNotifier((labels) =>
-  G.announce && G.announce((labels.length > 1 ? "BADGES UNLOCKED — " : "BADGE UNLOCKED — ") + labels.join(" · "), 3, "race"));
+  G.announce && G.announce((labels.length > 1 ? tr("results.badgesUnlocked", null, "BADGES UNLOCKED") : tr("results.badgeUnlocked", null, "BADGE UNLOCKED")) + " — " + labels.join(" · "), 3, "race"));
 
 // The player's classified result as Badges.forRace reads it. Never in a
 // practice (unscored) session or a DUEL (two cars: P2 of 2 is not a podium —
@@ -141,12 +149,6 @@ function awardBadges(order, duel) {
     fastest: isFinite(best) && p.best === best,
   });
 }
-
-// I18n.t with English defaults; the bare fallback keeps VM tests that load this file alone working.
-const tr = (key, vars, def) => typeof I18n !== "undefined" ? I18n.t(key, vars, def)
-  : String(def).replace(/\{(\w+)\}/g, (m, k) => (vars && vars[k] != null ? vars[k] : m));
-
-const trN = (x) => typeof I18n !== "undefined" ? I18n.n(x) : x.toLocaleString();   // prose numbers localise; lap times and gaps stay "."-formatted
 
 // The points column for a car that scored nothing: DSQ or DNF.
 const outLabel = (why) => (String(why).indexOf("DSQ") === 0 ? "DSQ" : "DNF");
@@ -181,8 +183,8 @@ function stintStrip(c) {
   // The bar is decoration for a sighted reader and the codes are the content,
   // so the accessible name carries the same thing in words.
   strip.setAttribute("role", "img");
-  const names = { S: "Soft", M: "Medium", H: "Hard", I: "Intermediate", W: "Wet", SS: "Super soft", HS: "Hyper soft" };
-  const description = list.map((s) => `${names[s.code] || s.code} — completed laps ${s.lap0}-${s.lap1}`).join("; ");
+  const names = { S: tr("results.tyre.S", null, "Soft"), M: tr("results.tyre.M", null, "Medium"), H: tr("results.tyre.H", null, "Hard"), I: tr("results.tyre.I", null, "Intermediate"), W: tr("results.tyre.W", null, "Wet"), SS: tr("results.tyre.SS", null, "Super soft"), HS: tr("results.tyre.HS", null, "Hyper soft") };
+  const description = list.map((s) => tr("results.stints.range", { compound: names[s.code] || s.code, from: trN(s.lap0), to: trN(s.lap1) }, "{compound} — completed laps {from}-{to}")).join("; ");
   strip.setAttribute("aria-label", tr("results.stints.label", { stints: description }, "Tyre stints: {stints}"));
   list.forEach((s) => {
     const seg = document.createElement("div");
@@ -191,7 +193,7 @@ function stintStrip(c) {
     // before a lap was completed) rather than a division by zero.
     seg.style.flex = String(total > 0 ? s.laps : 1);
     seg.style.background = G.cssCol(s.colour);
-    seg.title = `${s.code} — laps ${s.lap0}-${s.lap1}`;
+    seg.title = tr("results.stints.tooltip", { code: s.code, from: trN(s.lap0), to: trN(s.lap1) }, "{code} — laps {from}-{to}");
     strip.appendChild(seg);
   });
   const details = document.createElement("details"); details.setAttribute("data-stint-details", "");
@@ -219,6 +221,7 @@ function buildResults(order, race) {
   Log.info("ui", `GameResults.buildResults n=${order && order.length}`);
   noteLastSession("race");
   const els = G.els;
+  if (els.results) els.results.dataset.resultsView = "race";
   const season = G.season;
   const track = G.track;
   const cars = G.cars;
@@ -227,12 +230,12 @@ function buildResults(order, race) {
   // A FRIEND race ends with the room still on screen but not alive: RACE AGAIN is a solo race and MENU
   // drops the connection (game.js resNext/resMenu stop NetPlay). Name both, and offer a fresh room.
   const friend = !!(G.netPlay && G.netPlay.active && G.netPlay.active());
-  if (els.resMenu) els.resMenu.textContent = friend ? "NEW FRIEND ROOM" : "MENU";
+  if (els.resMenu) els.resMenu.textContent = friend ? tr("results.newFriendRoom", null, "NEW FRIEND ROOM") : tr("results.menu", null, "MENU");
   const sprint = race && typeof race.sprint === "boolean" ? race.sprint
     : G.seasonMode && SeasonCal.scored() === "sprint";
-  els.resultsTitle.textContent = sprint ? `SPRINT — ${track.def.name}`
-    : G.seasonMode ? `ROUND ${season.round} — ${track.def.name}`
-    : `${track.def.name} RESULT`;
+  els.resultsTitle.textContent = sprint ? tr("results.sprintTitle", { track: track.def.name }, "SPRINT — {track}")
+    : G.seasonMode ? tr("results.roundTitle", { round: trN(season.round), track: track.def.name }, "ROUND {round} — {track}")
+    : tr("results.raceTitle", { track: track.def.name }, "{track} RESULT");
   // A WATCHED real race (REAL REPLAY / HIGHLIGHTS, js/race/real-race.js) ends here too, with the
   // followed car as G.player (G.followCar) — nobody drove it: no badge, no YOUR RACE card.
   const watched = typeof RealRace !== "undefined" && !!RealRace.status().watch;
@@ -287,7 +290,7 @@ function buildResults(order, race) {
     const box = document.createElement("div");
     box.className = "sel-label";
     box.setAttribute("role", "status");
-    box.textContent = `OFFICIAL WINNER ELAPSED — ${timing.winner.code || "WINNER"}  ${timing.winner.name || ""}: ${timing.text}`;
+    box.textContent = tr("results.winnerElapsed", { code: timing.winner.code || tr("results.winner", null, "WINNER"), name: timing.winner.name || "", time: timing.text }, "OFFICIAL WINNER ELAPSED — {code}  {name}: {time}");
     els.resultsTable.appendChild(box);
   }
   if (typeof ResultsStory !== "undefined") {
@@ -320,7 +323,7 @@ function buildResults(order, race) {
     const classified = !dnfOf(self) && self.classified !== false;
     if (self.gridPos > 0) {
       const gained = classified ? self.gridPos - (playerPlace + 1) : 0;
-      parts.push(tr("results.fromGrid", { pos: self.gridPos }, "FROM P{pos}") + (gained ? " (" + (gained > 0 ? "▲" : "▼") + Math.abs(gained) + ")" : ""));
+      parts.push(tr("results.fromGrid", { pos: trN(self.gridPos) }, "FROM P{pos}") + (gained ? " (" + (gained > 0 ? "▲" : "▼") + Math.abs(gained) + ")" : ""));
     }
     if (isFinite(self.best) && self.best > 0) {
       let fl = Infinity;
@@ -339,7 +342,7 @@ function buildResults(order, race) {
     const card = document.createElement("div"); card.className = "res-personal"; card.id = "res-incidents";
     const heading = document.createElement("strong"); heading.textContent = tr("results.incidents", null, "INCIDENTS & PENALTIES");
     const detail = document.createElement("span");
-    detail.textContent = incidents.slice(-8).map((e) => tr("results.lapN", { lap: e.lap }, "LAP {lap}") + " · " + e.text).join("  ·  ");
+    detail.textContent = incidents.slice(-8).map((e) => tr("results.lapN", { lap: trN(e.lap) }, "LAP {lap}") + " · " + e.text).join("  ·  ");
     card.append(heading, detail); els.resultsTable.appendChild(card);
   }
   const coaching = G.coach && G.coach.feedback && G.coach.feedback();
@@ -347,13 +350,13 @@ function buildResults(order, race) {
     const card = document.createElement("div"); card.className = "res-personal";
     const heading = document.createElement("strong"); heading.textContent = tr("results.coach", null, "COACH INSIGHT");
     const detail = document.createElement("span");
-    detail.textContent = (coaching.latest.turn ? tr("results.turnN", { turn: coaching.latest.turn }, "Turn {turn}") + " · " : "") + coaching.latest.detail;
+    detail.textContent = (coaching.latest.turn ? tr("results.turnN", { turn: trN(coaching.latest.turn) }, "Turn {turn}") + " · " : "") + coaching.latest.detail;
     const more = document.createElement("button"); more.type = "button";
     more.textContent = tr("results.viewCoach", null, "VIEW IN DRIVING SETTINGS");
     more.onclick = () => { if (G.openCoachDetails) G.openCoachDetails(); };
     card.append(heading, detail, more); els.resultsTable.appendChild(card);
   }
-  const classification = rankingList(els.resultsTable, "Race classification");
+  const classification = rankingList(els.resultsTable, tr("results.raceClassification", null, "Race classification"));
   order.forEach((c, i) => {
     const dnf = dnfOf(c);
     const nc = c.classified === false && !dnf && !hostRow.has(c.driverId);   // a guest reads the host verdict
@@ -383,7 +386,7 @@ function buildResults(order, race) {
       isFinite(winnerData.lap) && typeof carData.lap === "number" && isFinite(carData.lap)
       ? Math.max(0, lapsAt(winnerData) - lapsAt(carData)) : 0;
     const suffix = dnf ? `  (${dnf})` : carData.penalty ? `  (+${carData.penalty}s${carData.penaltyWhy ? " " + carData.penaltyWhy : ""})` : "";
-    const downSuffix = down ? `  (+${down}${down > 1 ? " LAPS)" : " LAP)"}` : "";
+    const downSuffix = down ? "  (" + (down > 1 ? tr("results.lapsDown", { laps: trN(down) }, "+{laps} LAPS") : tr("results.lapDown", { laps: trN(down) }, "+{laps} LAP")) + ")" : "";
     nm.textContent = `${c.code}  ${c.name}${suffix}${downSuffix}`;
     if (other) {
       // Text as well as colour, for the same reason the quali sheet does it.
@@ -401,7 +404,7 @@ function buildResults(order, race) {
     // NOT CLASSIFIED: still running below 90 % of the winner's laps (RaceControl.classify).
     const paid = c.classified !== false && ((!dnf && !nc) || (c.classified && !c.dsq));
     pt.textContent = G.practice && !watched ? tr("results.unscored", null, "Unscored")
-      : paid ? `${(table[i] || 0) + fl} pts${fl ? " +FL" : ""}` : nc ? "0 pts" : outLabel(dnf);
+      : paid ? tr("results.points", { points: trN((table[i] || 0) + fl) }, "{points} pts") + (fl ? " +FL" : "") : nc ? tr("results.points", { points: trN(0) }, "{points} pts") : outLabel(dnf);
     row.append(pos, sw, nm);
     if (timing && !dnf && c !== timing.winner && typeof carData.lap === "number" &&
         isFinite(carData.lap) && carData.lap === timing.winnerLap) {
@@ -431,7 +434,7 @@ function buildResults(order, race) {
     box.setAttribute("role", "status");
     const h = document.createElement("div");
     h.className = "res-settle-head";
-    h.textContent = st.dnf ? `ROUND SETTLED — DNF (${st.dnf})` : "ROUND SETTLED";
+    h.textContent = st.dnf ? tr("results.roundSettledDNF", { reason: st.dnf }, "ROUND SETTLED — DNF ({reason})") : tr("results.roundSettled", null, "ROUND SETTLED");
     box.appendChild(h);
     // One label/value settlement row, appended straight to `box`.
     const addRow = (cls, label, valueText) => {
@@ -446,25 +449,25 @@ function buildResults(order, race) {
     // missed brief pays nothing, and a column of zeroes reads as a bug.
     const line = (k, v, cls) => {
       if (!v) return;
-      addRow(`res-settle-row${cls ? ` ${cls}` : ""}`, k, `${v > 0 ? "+" : "\u2212"}${trN(Math.abs(v))} cr`);
+      addRow(`res-settle-row${cls ? ` ${cls}` : ""}`, (typeof k === "function" ? k() : k), `${v > 0 ? "+" : "\u2212"}${trN(Math.abs(v))} cr`);
     };
-    line(`Prize money — P${st.pos}`, st.prize);
-    line(`Prize money — team-mate P${st.matePos}`, st.matePrize);   // MY TEAM owns both cars
-    line("Salary", st.salary);
-    line(`Points bonus — ${st.pts} pts`, st.bonus);
+    line(() => tr("results.prizeMoney", { position: trN(st.pos) }, "Prize money — P{position}"), st.prize);
+    line(() => tr("results.matePrizeMoney", { position: trN(st.matePos) }, "Prize money — team-mate P{position}"), st.matePrize);   // MY TEAM owns both cars
+    line(tr("results.salary", null, "Salary"), st.salary);
+    line(() => tr("results.pointsBonus", { points: trN(st.pts) }, "Points bonus — {points} pts"), st.bonus);
     if (st.obj) {
       line(Career.objectiveLabel(st.obj), st.obj.done ? Career.OBJ_BONUS : 0);
-      if (!st.obj.done) addRow("res-settle-row missed", Career.objectiveLabel(st.obj), "MISSED");
+      if (!st.obj.done) addRow("res-settle-row missed", Career.objectiveLabel(st.obj), tr("results.missed", null, "MISSED"));
     }
-    line("Sponsor bonus", st.sponsorPay);
+    line(tr("results.sponsorBonus", null, "Sponsor bonus"), st.sponsorPay);
     if (st.sponsorVerdict) {
       const v = st.sponsorVerdict;
-      addRow("res-settle-row" + (v.met ? "" : " missed"), "Sponsor target — " + v.label,
-        (v.met ? "MET" : "MISSED") + (v.reason ? " · " + v.reason : ""));
+      addRow("res-settle-row" + (v.met ? "" : " missed"), tr("results.sponsorTarget", { target: v.label }, "Sponsor target — {target}"),
+        (v.met ? tr("results.met", null, "MET") : tr("results.missed", null, "MISSED")) + (v.reason ? " · " + v.reason : ""));
     }
-    line("Driver wages", -st.wages);
-    addRow("res-settle-row total", "BALANCE", `${trN(st.money)} cr`);
-    addRow("res-settle-row rep", "Reputation", `${Math.round(st.rep)} / 100`);
+    line(tr("results.driverWages", null, "Driver wages"), -st.wages);
+    addRow("res-settle-row total", tr("results.balance", null, "BALANCE"), `${trN(st.money)} cr`);
+    addRow("res-settle-row rep", tr("results.reputation", null, "Reputation"), `${trN(Math.round(st.rep))} / ${trN(100)}`);
     // Craft pays reputation, never money, so it sits BELOW the balance line and
     // outside the credit column — a percentage there would read as an unpaid fee.
     // A bare percentage is a score with no explanation, which is the thing this
@@ -472,17 +475,17 @@ function buildResults(order, race) {
     // events RaceInsights logged all race, condensed to the ones that cost craft,
     // with the laps to go and look at. Nothing when the race was faultless.
     if (typeof st.craft === "number") {
-      addRow("res-settle-row rep", "Race craft", `${Math.round(st.craft * 100)}%`);
+      addRow("res-settle-row rep", tr("results.raceCraft", null, "Race craft"), `${trN(Math.round(st.craft * 100))}%`);
       const debrief = G.coach && G.coach.insights ? G.coach.insights.debrief() : [];
       for (const d of debrief) {
-        addRow("res-settle-row craft", `${d.label} × ${d.count}`,
-          `lap ${d.laps.slice(0, 4).join(", ")}${d.laps.length > 4 ? "…" : ""}`);
+        addRow("res-settle-row craft", tr("results.craftCount", { label: d.label, count: trN(d.count) }, "{label} × {count}"),
+          tr("results.craftLaps", { laps: d.laps.slice(0, 4).map(trN).join(", ") + (d.laps.length > 4 ? "…" : "") }, "lap {laps}"));
       }
     }
     if (st.unsaved) {
       const unsaved = document.createElement("div");
       unsaved.id = "res-settle-unsaved";
-      unsaved.textContent = "SESSION ONLY — this result has not been saved to this device.";
+      unsaved.textContent = tr("results.sessionOnly", null, "SESSION ONLY — this result has not been saved to this device.");
       box.appendChild(unsaved);
     }
     els.resultsTable.appendChild(box);
@@ -492,12 +495,12 @@ function buildResults(order, race) {
     // Driver championship (top 10)
     const head = document.createElement("div");
     head.className = "sel-label";
-    head.textContent = sprint ? "DRIVERS — AFTER THE SPRINT" : `DRIVERS — AFTER ROUND ${season.round}`;
+    head.textContent = sprint ? tr("results.driversAfterSprint", null, "DRIVERS — AFTER THE SPRINT") : tr("results.driversAfterRound", { round: trN(season.round) }, "DRIVERS — AFTER ROUND {round}");
     els.resultsTable.appendChild(head);
     // SeasonCal.rank, not a bare points sort: equal points fall to countback
     // there and the STANDINGS sheet already used it — this list put whoever
     // was earlier in the field order first and the two screens disagreed.
-    const driverRanking = rankingList(els.resultsTable, "Driver standings");
+    const driverRanking = rankingList(els.resultsTable, tr("results.driverStandings", null, "Driver standings"));
     const all = seasonTable(cars, season).slice(0, 10);
     all.forEach((c, i) => {
       rankRow(driverRanking, i, seatColor(G, c), c.name ? `${c.code}  ${c.name}` : c.code,
@@ -506,26 +509,26 @@ function buildResults(order, race) {
     // Team championship (top 5)
     const tmHead = document.createElement("div");
     tmHead.className = "sel-label";
-    tmHead.textContent = "CONSTRUCTORS";
+    tmHead.textContent = tr("results.constructors", null, "CONSTRUCTORS");
     els.resultsTable.appendChild(tmHead);
-    const constructorRanking = rankingList(els.resultsTable, "Constructor standings");
+    const constructorRanking = rankingList(els.resultsTable, tr("results.constructorStandings", null, "Constructor standings"));
     const tmList = teamOrder(season).slice(0, 5);
     tmList.forEach(([teamId, pts], i) => {
       const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
-      rankRow(constructorRanking, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
+      rankRow(constructorRanking, i, G.cssCol(team.color), team.name || teamId, tr("results.points", { points: trN(pts) }, "{points} pts"));
     });
-    // Never "MAIN MENU" for a sprint: the champion panel at the end of a season
-    // uses that exact string as its first-click sentinel (js/game.js resNext).
-    els.resNext.textContent = sprint ? "TO THE GRAND PRIX"
-      : season.round >= SeasonCal.rounds() ? "VIEW CHAMPION" : "NEXT ROUND";
+    // The view marker distinguishes a race result from the champion panel;
+    // navigation never depends on this translated action label.
+    els.resNext.textContent = sprint ? tr("results.toGrandPrix", null, "TO THE GRAND PRIX")
+      : season.round >= SeasonCal.rounds() ? tr("results.viewChampion", null, "VIEW CHAMPION") : tr("results.nextRound", null, "NEXT ROUND");
   } else {
-    els.resNext.textContent = watched ? "WATCH AGAIN" : friend ? "RACE AGAIN (SOLO)" : "RACE AGAIN";   // a watched real race re-runs the replay, it is not a new race
+    els.resNext.textContent = watched ? tr("results.watchAgain", null, "WATCH AGAIN") : friend ? tr("results.raceAgainSolo", null, "RACE AGAIN (SOLO)") : tr("results.raceAgain", null, "RACE AGAIN");   // a watched real race re-runs the replay, it is not a new race
     if (friend) {
       const hint = document.createElement("div");
       hint.className = "res-personal";
       hint.setAttribute("data-results-part", "room");
       const note = document.createElement("span");
-      note.textContent = "The friend room closes when you leave. NEW FRIEND ROOM, or VS FRIEND on the title screen, starts another.";
+      note.textContent = tr("results.friendRoomClosed", null, "The friend room closes when you leave. NEW FRIEND ROOM, or VS FRIEND on the title screen, starts another.");
       hint.appendChild(note);
       els.resultsTable.appendChild(hint);
     }
@@ -536,11 +539,12 @@ function buildResults(order, race) {
 function buildTTResults() {
   noteLastSession("tt");
   const els = G.els;
+  if (els.results) els.results.dataset.resultsView = "tt";
   const track = G.track;
   els.resultsTable.textContent = "";
   els.resultsTitle.style.color = "";
-  if (els.resMenu) els.resMenu.textContent = "MENU";   // a friend race's NEW FRIEND ROOM label must not outlive it
-  els.resultsTitle.textContent = `${track.def.name} — TIME TRIAL`;
+  if (els.resMenu) els.resMenu.textContent = tr("results.menu", null, "MENU");   // a friend race's NEW FRIEND ROOM label must not outlive it
+  els.resultsTitle.textContent = tr("results.ttTitle", { track: track.def.name }, "{track} — TIME TRIAL");
   const best = G.player.best;
 
   // headline: your best lap this session (green if it set a new track record)
@@ -548,7 +552,7 @@ function buildTTResults() {
   head.className = "res-row you";
   head.style.fontSize = "18px";
   const hl = document.createElement("span"); hl.className = "res-name";
-  hl.textContent = G.ttNewRecord ? "★ NEW RECORD" : "YOUR BEST";
+  hl.textContent = G.ttNewRecord ? tr("results.newRecord", null, "★ NEW RECORD") : tr("results.yourBest", null, "YOUR BEST");
   const hv = document.createElement("span"); hv.className = "res-pts"; hv.style.width = "auto";
   hv.textContent = isFinite(best) ? lapClock(G, best) : "-";
   head.append(hl, hv);
@@ -571,7 +575,7 @@ function buildTTResults() {
       const gr = document.createElement("div");
       gr.className = "res-row";
       const gl = document.createElement("span"); gl.className = "res-name";
-      gl.textContent = guestGhost ? "RIVAL GHOST" : "YOUR PB";
+      gl.textContent = guestGhost ? tr("results.rivalGhost", null, "RIVAL GHOST") : tr("results.yourPB", null, "YOUR PB");
       const gv = document.createElement("span"); gv.className = "res-pts"; gv.style.width = "auto";
       gv.style.color = delta <= 0 ? "var(--faster)" : "var(--slower)";
       const shown = +delta.toFixed(3);   // sign from the rounded value: -0.0003 reads +0.000, not -0.000
@@ -591,11 +595,11 @@ function buildTTResults() {
     const mr = document.createElement("div");
     mr.className = "res-row";
     const ml = document.createElement("span"); ml.className = "res-name";
-    ml.textContent = `MEDAL — ${held ? held.toUpperCase() : "NONE YET"}`;
+    ml.textContent = tr("results.medal", { medal: held ? medalName(held) : tr("results.noMedal", null, "NONE YET") }, "MEDAL — {medal}");
     if (held) ml.style.color = `var(--${held})`;
     const mv = document.createElement("span"); mv.className = "res-pts"; mv.style.width = "auto";
     const next = Quali.MEDALS.slice().reverse().find(([m]) => !held || Quali.MEDAL_RANK[m] > Quali.MEDAL_RANK[held]);
-    mv.textContent = next ? `NEXT ${next[0].toUpperCase()} ≤ ${lapClock(G, pole * next[1])}` : `POLE ${lapClock(G, pole)}`;
+    mv.textContent = next ? tr("results.nextMedal", { medal: medalName(next[0]), time: lapClock(G, pole * next[1]) }, "NEXT {medal} ≤ {time}") : tr("results.poleTime", { time: lapClock(G, pole) }, "POLE {time}");
     mr.append(ml, mv);
     els.resultsTable.appendChild(mr);
   }
@@ -604,10 +608,10 @@ function buildTTResults() {
   const lbHead = document.createElement("div");
   lbHead.className = "sel-label";
   lbHead.id = "res-tt-board";
-  lbHead.textContent = `MATCHING SETUP & CONDITIONS — ${track.def.name}`;
+  lbHead.textContent = tr("results.matchingSetup", { track: track.def.name }, "MATCHING SETUP & CONDITIONS — {track}");
   els.resultsTable.appendChild(lbHead);
 
-  const leaderboard = rankingList(els.resultsTable, "Time trial leaderboard");
+  const leaderboard = rankingList(els.resultsTable, tr("results.ttLeaderboard", null, "Time trial leaderboard"));
   const board = G.records.board(track.def.id);
   board.forEach((e, i) => {
     const team = G.teamById(e.teamId);
@@ -624,28 +628,30 @@ function buildTTResults() {
     btn.type = "button";
     btn.className = "sel-chip";
     btn.id = "res-daily-share";
-    btn.textContent = "COPY DAILY RESULT";
+    btn.textContent = tr("results.copyDailyResult", null, "COPY DAILY RESULT");
     btn.onclick = () => {
       const text = G.daily.shareText();   // today's medal, from today's best (daily-challenge.js)
       ApexClipboard.write(text).then((ok) => {
-        btn.textContent = ok ? "COPIED" : text;
+        btn.textContent = ok ? tr("results.copied", null, "COPIED") : text;
       }, () => { btn.textContent = text; });
     };
     els.resultsTable.appendChild(btn);
-    if (typeof G.daily.shareCard === "function" && typeof ShareCardChips !== "undefined") {
-      els.resultsTable.appendChild(ShareCardChips.chip("res-card-share", () => G.daily.shareCard()));
+    if (typeof G.daily.card === "function" && typeof ShareCardChips !== "undefined") {
+      let daily = null;   // one card() per tap: the builder and the share text read the same result
+      ShareCardChips.append(els.resultsTable, "res-card-share", () => (daily = G.daily.card()).model,
+        () => daily ? daily.name : "daily", () => daily ? daily.text : "");
     }
     if (typeof ShareCode !== "undefined" && ShareCode.encode) {
       const codeBtn = document.createElement("button");
       codeBtn.type = "button";
       codeBtn.className = "sel-chip";
       codeBtn.id = "res-daily-share-code";
-      codeBtn.textContent = "COPY DAILY CODE";
+      codeBtn.textContent = tr("results.copyDailyCode", null, "COPY DAILY CODE");
       codeBtn.onclick = () => {
         const encoded = ShareCode.encode("daily", G.daily.shareResult());
-        if (!encoded.ok) { codeBtn.textContent = "UNAVAILABLE"; return; }
+        if (!encoded.ok) { codeBtn.textContent = tr("results.unavailable", null, "UNAVAILABLE"); return; }
         ApexClipboard.write(encoded.code).then((ok) => {
-          codeBtn.textContent = ok ? "COPIED" : encoded.code;
+          codeBtn.textContent = ok ? tr("results.copied", null, "COPIED") : encoded.code;
         }, () => { codeBtn.textContent = encoded.code; });
       };
       els.resultsTable.appendChild(codeBtn);
@@ -666,7 +672,7 @@ function buildTTResults() {
     if (typeof ShareCardChips !== "undefined") ShareCardChips.append(els.resultsTable, "res-ghost-card", () => {
       const lap = typeof ShareCode !== "undefined" ? ShareCode.encode("lap", { track: trackId, day: shareOpts.day, time: shareGhost.time }) : {};
       return ShareCardData.fromGhost(shareGhost, guestGhost ? GhostShare.guest().ghost : null, { trackId,
-        trackName, day: shareOpts.day, link: lap.ok ? lap.url : null, rivalName: guestGhost ? "RIVAL" : "" });
+        trackName, day: shareOpts.day, link: lap.ok ? lap.url : null, rivalName: guestGhost ? tr("results.rival", null, "RIVAL") : "" });
     }, "lap-" + trackId);
     const encoded = GhostShare.encode(shareGhost, shareOpts);
     const fallback = (btn, value, label) => {
@@ -675,22 +681,22 @@ function buildTTResults() {
       box.className = "sel-chip";
       box.readOnly = true;
       box.value = value;
-      box.setAttribute("aria-label", label + " — select and copy");
+      box.setAttribute("aria-label", tr("results.selectCopyLabel", { label }, "{label} — select and copy"));
       btn.insertAdjacentElement ? btn.insertAdjacentElement("afterend", box) : els.resultsTable.appendChild(box);
       if (box.focus) box.focus();
       if (box.select) box.select();
       ApexClipboard.copySelection();
-      btn.textContent = "SELECT & COPY";
+      btn.textContent = tr("results.selectCopy", null, "SELECT & COPY");
     };
     const copy = async (btn, field, label) => {
       const shared = await encoded;
       if (!shared.ok) {
-        btn.textContent = shared.reason === "too-large" ? "TOO LARGE — DOWNLOAD" : "UNAVAILABLE";
+        btn.textContent = shared.reason === "too-large" ? tr("results.tooLargeDownload", null, "TOO LARGE — DOWNLOAD") : tr("results.unavailable", null, "UNAVAILABLE");
         return;
       }
       const value = shared[field];
       const ok = await ApexClipboard.write(value);
-      if (ok) btn.textContent = "COPIED";
+      if (ok) btn.textContent = tr("results.copied", null, "COPIED");
       else fallback(btn, value, label);
     };
     const action = (id, text) => {
@@ -699,17 +705,17 @@ function buildTTResults() {
       els.resultsTable.appendChild(btn);
       return btn;
     };
-    const link = action("res-ghost-copy-link", "COPY LINK");
-    link.onclick = () => copy(link, "url", "Ghost link");
-    const code = action("res-ghost-copy-code", "COPY CODE");
-    code.onclick = () => copy(code, "code", "Ghost code");
-    const download = action("res-ghost-download", "DOWNLOAD");
+    const link = action("res-ghost-copy-link", tr("results.copyLink", null, "COPY LINK"));
+    link.onclick = () => copy(link, "url", tr("results.ghostLink", null, "Ghost link"));
+    const code = action("res-ghost-copy-code", tr("results.copyCode", null, "COPY CODE"));
+    code.onclick = () => copy(code, "code", tr("results.ghostCode", null, "Ghost code"));
+    const download = action("res-ghost-download", tr("results.download", null, "DOWNLOAD"));
     download.onclick = async () => {
       if (download.disabled) return;
       const file = GhostShare.fileExport(shareGhost, shareOpts);
-      if (!file.ok) { download.textContent = "UNAVAILABLE"; return; }
+      if (!file.ok) { download.textContent = tr("results.unavailable", null, "UNAVAILABLE"); return; }
       download.disabled = true;
-      download.textContent = "SAVING…";
+      download.textContent = tr("results.saving", null, "SAVING…");
       try {
         const blob = new Blob([file.text], { type: "application/json" });
         if (typeof NativeDownload !== "undefined" && NativeDownload.viable()) {
@@ -723,9 +729,9 @@ function buildTTResults() {
           // kill the object URL before the browser has finished reading it.
           setTimeout(() => URL.revokeObjectURL(href), 10000);
         }
-        download.textContent = "DOWNLOADED";
+        download.textContent = tr("results.downloaded", null, "DOWNLOADED");
       } catch (e) {
-        download.textContent = typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? "CANCELLED" : "DOWNLOAD FAILED";
+        download.textContent = typeof NativeDownload !== "undefined" && NativeDownload.isCancelled(e) ? tr("results.cancelled", null, "CANCELLED") : tr("results.downloadFailed", null, "DOWNLOAD FAILED");
       } finally { download.disabled = false; }
     };
   }
@@ -736,7 +742,7 @@ function buildTTResults() {
     clrBtn.type = "button";
     clrBtn.className = "sel-chip";
     clrBtn.id = "res-ghost-clear";
-    clrBtn.textContent = guestGhost ? "✕ CLEAR RIVAL GHOST" : "✕ CLEAR GHOST";
+    clrBtn.textContent = guestGhost ? tr("results.clearRivalGhost", null, "✕ CLEAR RIVAL GHOST") : tr("results.clearGhost", null, "✕ CLEAR GHOST");
     clrBtn.onclick = () => {
       if (guestGhost) GhostShare.clearGuest();
       else Ghost.clear(track.def.id);
@@ -747,7 +753,7 @@ function buildTTResults() {
     els.resultsTable.appendChild(clrBtn);
   }
 
-  els.resNext.textContent = "TRY AGAIN";
+  els.resNext.textContent = tr("results.tryAgain", null, "TRY AGAIN");
 }
 
 function buildStandings() {
@@ -762,7 +768,7 @@ function buildStandings() {
   if (!season) {
     const note = document.createElement("div");
     note.className = "dh-empty";
-    note.textContent = "No championship is running — standings appear in a Season or a Career.";
+    note.textContent = tr("results.noChampionship", null, "No championship is running — standings appear in a Season or a Career.");
     body.appendChild(note);
     return;
   }
@@ -773,17 +779,17 @@ function buildStandings() {
   const midWeekend = SeasonCal.midWeekend(season);
   const rounds = SeasonCal.rounds();
   G.$("standings-title").textContent = round >= rounds
-    ? "FINAL CHAMPIONSHIP"
-    : midWeekend ? `CHAMPIONSHIP — AFTER THE SPRINT, ROUND ${round + 1} / ${rounds}`
-    : `CHAMPIONSHIP — AFTER ROUND ${round} / ${rounds}`;
+    ? tr("results.finalChampionship", null, "FINAL CHAMPIONSHIP")
+    : midWeekend ? tr("results.championshipSprint", { round: trN(round + 1), rounds: trN(rounds) }, "CHAMPIONSHIP — AFTER THE SPRINT, ROUND {round} / {rounds}")
+    : tr("results.championshipRound", { round: trN(round), rounds: trN(rounds) }, "CHAMPIONSHIP — AFTER ROUND {round} / {rounds}");
 
   // Driver standings — all cars sorted by pts
   const drHead = document.createElement("div");
   drHead.className = "sel-label";
-  drHead.textContent = "DRIVERS";
+  drHead.textContent = tr("results.drivers", null, "DRIVERS");
   body.appendChild(drHead);
 
-  const driverRanking = rankingList(body, "Driver standings");
+  const driverRanking = rankingList(body, tr("results.driverStandings", null, "Driver standings"));
   const drList = Object.entries(season.pts)
     .sort((a, b) => SeasonCal.rank(season, a[0], b[0]));   // points, then countback
   const cardRows = [];
@@ -801,14 +807,14 @@ function buildStandings() {
   // Team standings
   const tmHead = document.createElement("div");
   tmHead.className = "sel-label";
-  tmHead.textContent = "CONSTRUCTORS";
+  tmHead.textContent = tr("results.constructors", null, "CONSTRUCTORS");
   body.appendChild(tmHead);
 
-  const constructorRanking = rankingList(body, "Constructor standings");
+  const constructorRanking = rankingList(body, tr("results.constructorStandings", null, "Constructor standings"));
   const tmList = teamOrder(season);
   tmList.forEach(([teamId, pts], i) => {
     const team = Teams.LIST.find((t) => t.id === teamId) || { color: [0.5, 0.5, 0.5], name: teamId };
-    rankRow(constructorRanking, i, G.cssCol(team.color), team.name || teamId, `${pts} pts`);
+    rankRow(constructorRanking, i, G.cssCol(team.color), team.name || teamId, tr("results.points", { points: trN(pts) }, "{points} pts"));
   });
 
   // Next round info
@@ -818,21 +824,22 @@ function buildStandings() {
     info.style.cssText = "margin-top:12px;font-size:12px;color:#9a9aa5;text-align:center";
     // From the pause menu this round is the one being driven, not the next.
     const live = G.state === "race" || G.state === "count";
-    const lead = live ? "IN PROGRESS: ROUND " : midWeekend ? "NEXT: GRAND PRIX, ROUND " : "NEXT: ROUND ";
-    info.textContent = `${lead}${round + 1} — ${nextTrack.name} (${SeasonCal.gpName ? SeasonCal.gpName(nextTrack) : nextTrack.gp})`;
+    const lead = live ? tr("results.roundInProgress", { round: trN(round + 1) }, "IN PROGRESS: ROUND {round}") : midWeekend ? tr("results.nextGrandPrixRound", { round: trN(round + 1) }, "NEXT: GRAND PRIX, ROUND {round}") : tr("results.nextRoundN", { round: trN(round + 1) }, "NEXT: ROUND {round}");
+    info.textContent = tr("results.nextRoundDetails", { round: lead, track: nextTrack.name, grandPrix: SeasonCal.gpName ? SeasonCal.gpName(nextTrack) : nextTrack.gp }, "{round} — {track} ({grandPrix})");
     body.appendChild(info);
   }
 }
 
 function buildChampion() {
   const els = G.els;
+  if (els.results) els.results.dataset.resultsView = "champion";
   const season = G.season;
   // Countback decides a tie for the title (SeasonCal.rank); a points-only sort
   // crowned whichever tied driver came first in the field order.
   const sorted = seasonTable(G.cars, season);
   const champ = sorted[0];
   const champColor = seatColor(G, champ);
-  els.resultsTitle.textContent = "WORLD CHAMPION";
+  els.resultsTitle.textContent = tr("results.worldChampion", null, "WORLD CHAMPION");
   els.resultsTitle.style.color = champColor;
   els.resultsTable.textContent = "";
   const banner = document.createElement("div");
@@ -845,20 +852,20 @@ function buildChampion() {
   els.resultsTable.append(banner, teamBanner);
   const head = document.createElement("div");
   head.className = "sel-label";
-  head.textContent = "FINAL STANDINGS";
+  head.textContent = tr("results.finalStandings", null, "FINAL STANDINGS");
   els.resultsTable.appendChild(head);
-  const driverRanking = rankingList(els.resultsTable, "Final driver standings");
+  const driverRanking = rankingList(els.resultsTable, tr("results.finalDriverStandings", null, "Final driver standings"));
   sorted.forEach((c, i) => {
     rankRow(driverRanking, i, seatColor(G, c), c.code, ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
   });
   if (typeof ShareCardChips !== "undefined") {
     const champRows = sorted.map((c) => ({ code: c.code, name: c.name, teamColor: seatColor(G, c),
       value: ptsLabel(season, c.driverId), you: !!c.isPlayer }));   // plain rows: the chip must not hold the cars
-    const champOpts = { round: season.round, rounds: SeasonCal.rounds(), headline: champ.code + " IS WORLD CHAMPION" };
+    const champOpts = { round: season.round, rounds: SeasonCal.rounds(), headline: tr("results.championHeadline", { code: champ.code }, "{code} IS WORLD CHAMPION") };
     ShareCardChips.append(els.resultsTable, "res-champion-card", () => ShareCardData.fromSeason(champRows, champOpts), "champion");
   }
-  els.resNext.textContent = "MAIN MENU";
-  G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);
+  els.resNext.textContent = tr("results.mainMenu", null, "MAIN MENU");
+  G.announce(tr("results.championAnnouncement", { code: champ.code }, "{code} IS WORLD CHAMPION!"), 4);
   // endRace already played the finish fanfare; a second finish() here stacked blips on the season finale.
 }
 

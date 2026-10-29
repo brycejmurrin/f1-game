@@ -116,7 +116,7 @@ const ElevPresets = (function () {
   }
 
   return Object.freeze({
-    NAMES, clampH, sanitize, isFlat, apply, arcs, sample, plan,
+    clampH, sanitize, isFlat, apply, plan,
   });
 })();
 Object.freeze(ElevPresets);

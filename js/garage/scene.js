@@ -1349,10 +1349,10 @@ function draw(team, liv, eye, getParts, driverIdx, ctx, carMesh, arrival, carMat
 // the car through MAT_REFLECT_X.
 //
 // Sorting all ~19k points was the cost (14 ms measured, paid on every part
-// pick). The Akl–Toussaint pass first finds the four axis-extreme points and
-// discards everything strictly inside their quadrilateral — a point inside
-// that quad is inside the hull, so the answer is unchanged and the sort runs
-// over the few hundred that remain.
+// pick). The prune first finds eight support directions (an octagon, not the
+// four axis extremes — a car's wheel corners sit outside that diamond) and
+// discards everything strictly inside it; a point inside the octagon is inside
+// the hull, so the answer is unchanged and the sort runs over what remains.
 function framingHull(data) {
   const p = data && data.pos;
   if (!p || !p.length) return null;
@@ -1526,6 +1526,7 @@ function debug() {
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
+  // FIXTURES / LED_DROP / hangerSpan stay public — garage-personality pins the LED hangers.
   return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, mood, setMood, moodDef, moodCtx, MOODS, hangerSpan, FIXTURES, LED_DROP, CEIL_Y, draw, framingHull, recentre,
            previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, release };
 })();

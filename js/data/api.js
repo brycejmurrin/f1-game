@@ -88,10 +88,25 @@ const F1API = (function () {
     return { url: JOLPICA + "/" + y + "/" + what + ".json", ttl: y < season() ? TTL_HISTORIC : TTL_STANDINGS };
   }
 
+  // Jolpica embeds the season on StandingsLists[0]. A proxy or stale CDN that
+  // answers another year's body under this year's URL used to paint that table
+  // silently (no LAST SEASON tag). Refuse the mismatch so loadStandings can
+  // fall back / show empty instead of the wrong championship.
+  function standingsSeasonOk(sl, year) {
+    const want = year != null ? String(year | 0) : season();
+    const got = sl && str(sl.season);
+    if (got && got !== want) {
+      Log.warn("data", "standings season mismatch: asked " + want + " got " + got);
+      return false;
+    }
+    return true;
+  }
+
   function driverStandings(year) {
     const q = standingsUrl(year, "driverstandings");
     return request(q.url, q.ttl).then(function (json) {
       const sl = jStandingsList(json);
+      if (!standingsSeasonOk(sl, year)) return [];
       return arr(sl && sl.DriverStandings).map(function (s) {
         const d = (s && s.Driver) || {};
         const cons = (s && Array.isArray(s.Constructors) && s.Constructors[0]) || {};
@@ -113,6 +128,7 @@ const F1API = (function () {
     const q = standingsUrl(year, "constructorstandings");
     return request(q.url, q.ttl).then(function (json) {
       const sl = jStandingsList(json);
+      if (!standingsSeasonOk(sl, year)) return [];
       return arr(sl && sl.ConstructorStandings).map(function (s) {
         const cons = (s && s.Constructor) || {};
         return {

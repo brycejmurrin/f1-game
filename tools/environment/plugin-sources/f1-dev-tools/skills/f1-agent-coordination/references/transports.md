@@ -10,7 +10,7 @@ The checkout's `docs/WORKERS.md` is the one home: issues are tasks, labels are s
 
 ## External provider launch
 
-For Claude Code, use create/list/message session tools only if actually exposed and authenticated. Same-account service restrictions still apply. For Cursor, the checkout's `tools/ci/cursor-agents.mjs` is read-only; it cannot launch or message agents merely because a key exists. Consult current Cursor API docs before adding write operations. For independent Codex Cloud tasks, use a supported environment/task connection; native collaboration is not that connection.
+For Claude Code, use create/list/message session tools only if actually exposed and authenticated. Same-account service restrictions still apply. For Cursor, inspect the current checkout's `tools/ci/cursor-agents.mjs --help`: it supports reads, launch and follow-up, plus lifecycle controls restricted to agent IDs recorded by that tool's launch. A configured key does not prove authentication or authorize a launch. Check `tools/ci/dispatch.json` for automated host enablement and `docs/WORKERS.md` for the lane contract; a disabled dispatcher route does not remove the client's capabilities. For independent Codex Cloud tasks, use a supported environment/task connection; native collaboration is not that connection.
 
 If a provider is missing, prepare the supported adapter and tell the user the precise remaining connection requirement. Never print credentials or request secrets pasted into chat. Do not install a CLI just to suggest that subscription authentication has been supplied. OpenAI API agents and subscription Codex Cloud tasks have separate setup and billing; do not silently substitute one for the other.
 
