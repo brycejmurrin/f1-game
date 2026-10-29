@@ -7314,7 +7314,6 @@
         "tests/specs/scenery-kits.spec.js",
         "tests/specs/smoke.spec.js",
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -10285,6 +10284,9 @@
     },
     "js/perf/gfx-escalation.js": {
       "nextReloadCount": [
+        "tests/unit/gfx-escalation.test.mjs"
+      ],
+      "noteCleanMenuBoot": [
         "tests/unit/gfx-escalation.test.mjs"
       ],
       "onReloadBudgetExceeded": [
@@ -17900,6 +17902,7 @@
       "create": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
+        "tests/unit/ctx-lost-retry-reload.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",

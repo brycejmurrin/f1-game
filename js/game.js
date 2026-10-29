@@ -4317,6 +4317,7 @@ function stashCtxLostNotice() {
 function quitToMenuAfterCtxLost() {
   clearRaceEntrySoften();
   stashCtxLostNotice();
+  if (gfxContextLost() && typeof GfxEscalation !== "undefined" && GfxEscalation.stashInPageRecoverFlags) GfxEscalation.stashInPageRecoverFlags();
   loadingScreen.stop();
   quitToMenu();
   try {

@@ -258,6 +258,7 @@
     "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
     "// Context-loss menu notice + reload budget cleared at lights-out.",
     "tests/unit/ctx-lost-notice.test.mjs",
+    "tests/unit/ctx-lost-retry-reload.test.mjs",
     "tests/unit/cursor-agents.test.mjs",
     "tests/unit/curvature-channels.test.mjs",
     "// The track designer's registry (js/editor/custom-tracks.js + track-themes.js):",
@@ -1799,6 +1800,7 @@
     },
     "test:gfx": {
       "files": [
+        "tests/specs/ctx-lost-retry.spec.js",
         "tests/specs/hud-mirror.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/instanced-draw.spec.js",
