@@ -294,6 +294,10 @@ def _port_open(port: int) -> bool:
 
 def _ensure_static_server(port: int = 3456) -> subprocess.Popen | None:
     """Reuse an existing :port server, else start `npx serve` for the repo root."""
+    # The checkout's gitignored generated files (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md):
+    # Build before probing/reusing a server, spawning one, or navigating MCP.
+    # A failed generator leaves the checkout unservable; propagate its failure.
+    subprocess.run(["node", str(ROOT / "tools/gen/ensure-built.mjs"), "--quiet"], cwd=str(ROOT), check=True)
     if _port_open(port):
         print(f"reusing http://127.0.0.1:{port}/")
         return None

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
+import { fileURLToPath } from 'node:url';
 import { makeDom } from '../helpers/mini-dom.mjs';
 const code = fs.readFileSync(new URL('../../js/ui/experience.js', import.meta.url), 'utf8');
 const ctx = vm.createContext({}); vm.runInContext(code + ';globalThis.api=UiExperience;', ctx);
@@ -559,7 +560,7 @@ test('pause LINE tile cycles the DRIVING LINE in-race, saves it like the RACE SE
   sandbox.window = sandbox;
   sandbox.RaceInsights = { DRILLS: {}, needsRivals: () => false };   // a stub: the practice goal list is not under test here
   const local = vm.createContext(sandbox);
-  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local, { filename: fileURLToPath(new URL('../../js/ui/experience.js', import.meta.url)) });
   const tray = dom.byId('pm-quick-doors'), rewind = dom.byId('pm-checkpoint');
   tray.appendChild(rewind);
   local.api.create({ $: dom.byId, state: 'race', setupPreviewOn: false }, { coach: { paint() {}, practiceGoal: () => 'free', setPracticeGoal() {} }, trackReady: () => true });

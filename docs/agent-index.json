@@ -3918,9 +3918,19 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/cooldown-lap.js",
+      "global": "CooldownLap",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/daily-challenge.js",
       "global": "DailyChallenge",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/damage-handling.js",
+      "global": "DamageHandling",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/damage.js",
