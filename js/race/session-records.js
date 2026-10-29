@@ -135,6 +135,7 @@ var SessionRecords = (function () {
     function board(id) { return id === Ghost.track() ? comparableBoard(id) : GameStore.ttBoard(id); }
     return { begin, current, config, sample, sampleInput, accept, board, invalidate, finish, prepareDaily, restoreDaily, key: () => key };
   }
-  return { create, PHYS };
+  // PHYS stays on SessionPhys (boot) and is module-local here via SessionPhys.PHYS.
+  return { create };
 })();
 Object.freeze(SessionRecords);

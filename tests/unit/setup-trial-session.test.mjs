@@ -7,7 +7,7 @@ const source = fs.readFileSync(new URL('../../js/race/setup-trial-session.js', i
 const recordBox = vm.createContext({});
 vm.runInContext(fs.readFileSync(new URL('../../js/race/session-phys.js', import.meta.url), 'utf8'), recordBox, { filename: absSrc('js/race/session-phys.js') });
 vm.runInContext(fs.readFileSync(new URL('../../js/race/session-records.js', import.meta.url), 'utf8'), recordBox);
-const PHYS = Array.from(vm.runInContext('SessionRecords.PHYS', recordBox));
+const PHYS = Array.from(vm.runInContext('SessionPhys.PHYS', recordBox));
 const plain = value => JSON.parse(JSON.stringify(value));
 function fixture() {
   const tune = { arbF: 6, arbR: 6, rideF: 25, rideR: 60, brakeBias: 56 };
