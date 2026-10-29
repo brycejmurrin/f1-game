@@ -2199,7 +2199,8 @@ function invalidateMap() { _minimap.invalidate(); }
 let _pitSideTrack = null, _pitSide = 1;
 function resetRace() {
   _pitSideTrack = null; _pitSide = 1;   // per race: left set, it pinned the last pit-cue circuit across races
-  if (typeof HudInputs !== "undefined" && HudInputs.reset) HudInputs.reset(); if (typeof Captions !== "undefined") Captions.clear();   // the last spotter call: #captions sits outside #hud
+  if (typeof HudInputs !== "undefined" && HudInputs.reset) HudInputs.reset();
+  if (typeof Captions !== "undefined") Captions.clear();   // the last spotter call: #captions sits outside #hud
   _lastRank = 0; _posFlashT = 0; if (els.pos) delete els.pos.dataset.delta;
   _holdLap = 0; _holdPrev = 0; _holdOn = false; _secPrevBest = [Infinity, Infinity, Infinity]; _secDeltaT = [0, 0, 0];
   _ePrev = NaN; _blueSaid = null; _blueLaps = 0;
