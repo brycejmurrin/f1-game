@@ -101,8 +101,9 @@ const FlybySeq = (function () {
   const NEAR = 0.9;
 
   /* SOLID PROPS, THE LIFT, AND THE GROUND FLOOR live in FlybyClear.
-     The names stay here so the planner and the exported FlybySeq surface
-     call the same functions they always did. */
+     Thin wrappers keep the planner's bare names and the exported FlybySeq
+     surface that other modules and tests still call. boxGrid / nearBoxes /
+     groundAt stay internal — only the clearance helpers need the public names. */
   function isSolid(r) { return FlybyClear.isSolid(r); }
   function blockers(track) { return FlybyClear.blockers(track); }
   function boxGrid(list) { return FlybyClear.boxGrid(list); }
@@ -2011,14 +2012,13 @@ const FlybySeq = (function () {
   function reset() { _lastIdx = -1; _airCorner = 0; }
 
   return {
-    solve, shotAt, warmProgress, airCorner, reset, clearEye, floorEye, groundAt, insideProp, blockers, isSolid, onRoadPose,
-    landmarks, bounds, landmarkScore, lmBase, landmarkFallback, planShot, treeBlockers,
-    anchorS, posePoint, cornerS, cornerSide, cornerTurn, lmFace,
-    poseFromWorld, shotFromView, nearestCorner, select, setSession, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
+    solve, shotAt, warmProgress, airCorner, reset, clearEye, floorEye, insideProp, blockers, isSolid, onRoadPose,
+    landmarks, bounds, lmBase, landmarkFallback, planShot,
+    anchorS, posePoint, cornerS, cornerSide, cornerTurn,
+    poseFromWorld, shotFromView, select, setSession, whenMatch, isNight, isWet, vary, setPlayerSlot, slotIndex, slotKnown, withoutSlot, withoutGrid, bindCorners, warm, cancelWarm, setDuration, planSteps,
     boundaries, presentation, swayAt, setHeroCars, driveHero, gridProgress,
-    DEFAULT, GRID_SHOTS, EASE,
-    POLE_BACK, GRID_SPACING, GRID_ROWS, FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
-    get MIN_FILL() { return FlybyClear.MIN_FILL; }, get MIN_H() { return FlybyClear.MIN_H; },
+    DEFAULT, GRID_SHOTS,
+    FAR, FOG, NEAR, FENCE, REF_S, PAN_MAX, PARA_MAX,
   };
 })();
 Object.freeze(FlybySeq);

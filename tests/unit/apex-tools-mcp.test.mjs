@@ -285,8 +285,9 @@ test("dryRun / mock apex_verify_change_fast pins --fast --json, never --wait or 
   assert.ok(body.argv.includes("--fast"), body.argv);
   assert.ok(body.argv.includes("--json"), body.argv);
   assert.ok(!body.argv.includes("--wait"), body.argv);
-  const blob = JSON.stringify(body);
-  assert.doesNotMatch(blob, /test-bg/);
+  // A checkout can itself be named test-bg-start-3043. Guard the command,
+  // not unrelated parent-directory text in the serialized response.
+  assert.deepEqual([path.basename(body.argv[1]), ...body.argv.slice(2)], ["verify-change.mjs", "--fast", "--json"]);
 });
 
 test("apex_bump_cache_check argv never contains --apply", () => {

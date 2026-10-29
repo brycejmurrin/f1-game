@@ -4628,6 +4628,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/bahrain.js": {
+      "*": [
+        "tests/unit/track-shot-survey.test.mjs"
+      ]
+    },
     "js/circuits/cota.js": {
       "*": [
         "tests/unit/changed-files.test.mjs",
@@ -4705,7 +4710,8 @@
     },
     "js/circuits/scenery/bahrain.js": {
       "*": [
-        "tests/unit/circuit-corner-anchors.test.mjs"
+        "tests/unit/circuit-corner-anchors.test.mjs",
+        "tests/unit/track-shot-survey.test.mjs"
       ]
     },
     "js/circuits/scenery/baku.js": {
@@ -5952,6 +5958,7 @@
         "tests/unit/livery-wheels.test.mjs",
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-race-tab-gap-refresh.test.mjs",
@@ -6914,8 +6921,7 @@
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/results-cam.test.mjs",
         "tests/unit/settings-open-perf.test.mjs",
-        "tests/unit/vstd-invariant.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/vstd-invariant.test.mjs"
       ],
       "applyLightTune": [
         "tests/unit/flyby-intro.test.mjs"
@@ -7078,12 +7084,10 @@
       ],
       "isRaining": [
         "tests/unit/audio-recovery.test.mjs",
-        "tests/unit/light-presets.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/light-presets.test.mjs"
       ],
       "isWetRoad": [
-        "tests/unit/photomode-hold.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/photomode-hold.test.mjs"
       ],
       "leaveGarage": [
         "tests/unit/garage-followups.test.mjs",
@@ -7389,7 +7393,6 @@
         "tests/unit/sporting-regs.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs",
         "tests/unit/wake-lock-vm.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "tickBody": [
@@ -7439,8 +7442,7 @@
         "tests/unit/source-integrity.test.mjs",
         "tests/unit/start-lights.test.mjs",
         "tests/unit/tyre-model.test.mjs",
-        "tests/unit/voice-pack.test.mjs",
-        "tests/unit/weather-arc-rain.test.mjs"
+        "tests/unit/voice-pack.test.mjs"
       ],
       "updateCar": [
         "tests/specs/physics-characterization.spec.js",
@@ -10138,7 +10140,8 @@
       ],
       "frame": [
         "tests/unit/overlay-feed.test.mjs",
-        "tests/unit/overlay-publisher.test.mjs"
+        "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "sector": [
         "tests/unit/overlay-feed.test.mjs"
@@ -10166,20 +10169,28 @@
         "tests/unit/overlay-feed.test.mjs"
       ],
       "clear": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
+      ],
+      "contrast": [
+        "tests/unit/overlay-render.test.mjs"
       ],
       "create": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "options": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "paint": [
-        "tests/unit/overlay-feed.test.mjs"
+        "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ],
       "text": [
         "tests/unit/overlay-feed.test.mjs",
-        "tests/unit/overlay-publisher.test.mjs"
+        "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs"
       ]
     },
     "js/perf/bench-capture.js": {
@@ -11960,6 +11971,7 @@
       "create": [
         "tests/unit/director.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/real-race-script.test.mjs",
         "tests/unit/real-replay-broadcast.test.mjs"
       ],
@@ -13578,6 +13590,7 @@
         "tests/unit/weather-arc-rain.test.mjs"
       ],
       "weather": [
+        "tests/unit/weather-arc-rain.test.mjs",
         "tests/unit/weather-blend.test.mjs"
       ],
       "wetAt": [
@@ -15972,7 +15985,8 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
-        "tests/unit/scenery-api-contract.test.mjs"
+        "tests/unit/scenery-api-contract.test.mjs",
+        "tests/unit/track-shot-survey.test.mjs"
       ]
     },
     "js/track/core/hidden-faces.js": {
@@ -18339,9 +18353,6 @@
       ]
     },
     "js/workers/bitmap-decode-client.js": {
-      "decode": [
-        "tests/unit/bitmap-decode-worker.test.mjs"
-      ],
       "drop": [
         "tests/unit/bitmap-decode-worker.test.mjs"
       ],
@@ -18358,9 +18369,6 @@
       ]
     },
     "js/workers/bitmap-decode-worker.js": {
-      "decode": [
-        "tests/unit/bitmap-decode-worker.test.mjs"
-      ],
       "strip": [
         "tests/unit/bitmap-decode-worker.test.mjs",
         "tests/unit/worker-pack-strip.test.mjs"

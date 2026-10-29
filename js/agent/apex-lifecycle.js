@@ -118,6 +118,7 @@ const ApexLifecycle = (function () {
   let _one = null;   // listeners install once, at the first call
   const api = (G, getGfx, o) => (_one || (_one = create(G, getGfx)))(o);
 
-  return { create, api };
+  // create stays module-local — apex.js only calls ApexLifecycle.api.
+  return { api };
 })();
 Object.freeze(ApexLifecycle);
