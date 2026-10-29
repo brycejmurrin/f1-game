@@ -13353,6 +13353,7 @@
     },
     "js/race/session-stub.js": {
       "*": [
+        "tests/unit/damage.test.mjs",
         "tests/unit/global-registry.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",

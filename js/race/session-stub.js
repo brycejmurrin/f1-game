@@ -24,6 +24,15 @@ var Damage = {
   get: () => null, state: () => null, worst: () => 0, zoneOf: () => null,
 };
 
+// DAMAGE → HANDLING (#1578): the stub holds the stored choice so the settings row works before the bundle lands;
+// the real module adopts it on load. forCar() is null: no handling effect until the real module is in.
+var DamageHandling = {
+  _stub: true, KEY: "damageHandling", _on: false,
+  factors: () => ({ aeroF: 1, aeroR: 1, grip: 1 }), forCar: () => null, axles: () => ({ f: 1, r: 1 }),
+  setEnabled: function (on) { this._on = on === true; }, isEnabled: function () { return this._on; },
+  fromStore: function (store) { this._on = !!store && store.get("damageHandling", false) === true; return this._on; },
+};
+
 var Duel = {
   _stub: true,
   BUMP: 1.04, LEGEND_BUMP: 1.06, LEGEND_CAR: 1.02,

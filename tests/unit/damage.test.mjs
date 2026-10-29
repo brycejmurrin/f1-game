@@ -279,3 +279,15 @@ test("VM: ON, a broken front wing lowers front grip in physState at speed; repai
     assert.equal(fixed.damageAxF, 1);
   } finally { S.DamageHandling.setEnabled(false); }
 });
+
+test("DamageHandling lives in the lazy race session: the stub holds the stored choice and the real module adopts it", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/race/session-stub.js"), ctx, { filename: absSrc("js/race/session-stub.js") });
+  const stub = vm.runInContext("DamageHandling", ctx);
+  assert.equal(stub._stub, true);
+  assert.equal(stub.forCar({ local: true }), null, "no handling effect from the stub");
+  assert.equal(stub.fromStore({ get: (_k, d) => (_k === "damageHandling" ? true : d) }), true);
+  vm.runInContext(DH_SRC, ctx, { filename: absSrc("js/race/damage-handling.js") });
+  assert.equal(vm.runInContext("DamageHandling._stub", ctx), undefined);
+  assert.equal(vm.runInContext("DamageHandling.isEnabled()", ctx), true, "the pre-hydration choice survives the swap");
+});

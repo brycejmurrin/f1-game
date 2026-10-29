@@ -19,7 +19,7 @@
  * room's settings do not carry it; see the PR for #1578).
  * Never reads track curvature or the racing line: inputs are the damage record.
  */
-const DamageHandling = (function () {
+var DamageHandling = (function () {
   "use strict";
 
   const KEY = "damageHandling";
@@ -28,7 +28,8 @@ const DamageHandling = (function () {
   const FLOOR_AERO = 0.3;   // fully damaged floor: −30 % of both axles' aero load
   const KNOCK_GRIP = 0.05;  // a knocked suspension: −5 % mechanical grip on both axles
 
-  let enabled = false;
+  // The session stub (js/race/session-stub.js) may already hold the stored choice: adopt it.
+  let enabled = typeof DamageHandling !== "undefined" && !!DamageHandling && DamageHandling._stub === true && DamageHandling.isEnabled();
   // One pooled result: PlayerForces reads it synchronously inside step() and keeps nothing.
   const out = { aeroF: 1, aeroR: 1, grip: 1, axF: 1, axR: 1 };
 

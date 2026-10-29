@@ -3915,7 +3915,7 @@
     {
       "path": "js/race/damage-handling.js",
       "global": "DamageHandling",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/damage.js",

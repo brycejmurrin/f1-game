@@ -415,7 +415,6 @@ const FULL = [
   "js/ui/a11y-opts.js",      // SETTINGS › ACCESSIBILITY (reduce motion row + focus + colourblind cues)
   "js/ui/hud-elements.js",   // per-element HUD toggles (runtime checklist; body[data-hud-hide])
   "js/ui/hud-tyres.js",      // cold/ok/hot tyre temperature state for GameHud
-  "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
   "js/ui/hud-damage.js",     // the DAMAGE chip on #hud-damage (paints Damage; display only)
   "js/ui/live-region.js",    // LiveRegion: the one writer of #announce-live (flag > penalty > save > radio > HUD queue)
   "js/ui/hud-skin.js",   // HudSkin: runtime team accent (skinAccent) — for GameHud
@@ -1081,6 +1080,7 @@ const LAZY_RACE = [
 const LAZY_RACE_SESSION = [
   "js/race/reliability.js",
   "js/race/damage.js",
+  "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
   "js/race/duel.js",
   "js/race/session-records.js",
   "js/race/pit-geom.js",
