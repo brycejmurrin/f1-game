@@ -28,4 +28,5 @@ Use when capturing live Apex UI screenshots systematically (menus, garage, HUD).
 - Box may lack GPU: if race hangs or Graphics unavailable, save that state and stop race HUD; use user-provided cockpit shots for HUD overlaps.
 - Share the sampler as a comment on the issue or PR it serves (comments are the only messages; docs/WORKERS.md).
 - Name files with stable slugs matching the checklist.
-- Do not enable auto-merge or merge. Model Auto/`default` only.
+- Do not enable auto-merge or merge. Launch model: `composer-2.5` routine; Grok 7
+  hard only (slug at launch); never `default`/Auto.

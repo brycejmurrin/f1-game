@@ -99,6 +99,8 @@
   :where(body:not([data-density="compact"])) #tc-frame { transform: translate(72px, 0); }
 }
 
+/* Wide, tablet and fold rules are @layer layout at the end of this file. */
+
 /* ---------- LARGE PORTRAIT (iPad upright, a rotated monitor) ---------- */
 /* Keeps the stacked composition — a tall screen has height to spend, not width —
    but not the phone's SIZES. A 340px button column centred in an 834px iPad left
@@ -119,8 +121,8 @@
      32vw yields on the same physical width. */
   :where(body:not([data-density="compact"])) #menu-hero,
   :where(body:not([data-density="compact"])) #menu-primary,
-  :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), 660px, 100%); }
-  :where(body:not([data-density="compact"])) #menu-explore { width: min(calc(66 * var(--vwz)), 660px, 100%); }
+  :where(body:not([data-density="compact"])) #menu-secondary { width: min(calc(66 * var(--vwz)), var(--col-max), 100%); }
+  :where(body:not([data-density="compact"])) #menu-explore { width: min(calc(66 * var(--vwz)), var(--col-max), 100%); }
   :where(body:not([data-density="compact"])) #menu-buttons { gap: 14px; }
   :where(body:not([data-density="compact"])) #menu-buttons .bigbtn { font-size: clamp(20px, calc(2.4 * var(--vwz)), 28px); }
   :where(body:not([data-density="compact"])) #menu-buttons .minibtn { font-size: clamp(14px, calc(1.5 * var(--vwz)), 18px); }
@@ -324,3 +326,45 @@
 
 
 } /* @layer overlays */
+
+@layer layout {
+/* Beats @layer responsive. 1fr tracks pinned the wordmark to the left edge at
+   2560 (741px hole). 1440×900 stays under 1920, so the title-desktop golden holds.
+   --bp-wide is 1920px; a media query cannot read a custom property. */
+@media (min-width: 1920px) and (orientation: landscape) {
+  :where(body:not([data-density="compact"])) #overlay {
+    grid-template-columns: minmax(0, min(var(--col-max), var(--layout-active))) minmax(0, min(var(--col-max), var(--layout-active)));
+    justify-content: center;
+    column-gap: clamp(calc(var(--gap) * 4), 4vw, calc(var(--gap) * 8));
+  }
+  :where(body:not([data-density="compact"])) #menu-brand,
+  :where(body:not([data-density="compact"])) #menu-buttons {
+    width: min(100%, var(--col-max));
+    justify-self: center;
+  }
+}
+
+/* Upright tablet: centre the doors in the leftover row. Phones and compact stay put. */
+@media (orientation: portrait) and (min-width: 700px) {
+  :where(body:not([data-density="compact"])) #menu-buttons { align-content: safe center; }
+}
+
+/* Two viewport segments: keep the shell on the first pane, off the hinge. */
+@media (horizontal-viewport-segments: 2) {
+  :where(#overlay, .screen) {
+    width: var(--seg-w);
+    max-width: var(--seg-w);
+    margin-inline: 0 auto;
+    box-sizing: border-box;
+    padding-inline-end: max(var(--safe-r), var(--fold-gap));
+  }
+}
+@media (vertical-viewport-segments: 2) {
+  :where(#overlay, .screen) {
+    max-height: var(--seg-h);
+    margin-block: 0 auto;
+    box-sizing: border-box;
+    padding-block-end: max(var(--safe-b), var(--fold-gap-y));
+  }
+}
+} /* @layer layout */
