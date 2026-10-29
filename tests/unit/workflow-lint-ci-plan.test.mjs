@@ -77,20 +77,23 @@ exit 0
 }
 
 test("fold workflows FAIL when gh pr create is refused, and open one issue instead of a warning (audit3 #5)", () => {
-  for (const [f, branch] of [["ratchets-fold.yml", "bot/ratchets-fold"], ["changelog-fold.yml", "bot/changelog-fold"]]) {
+  for (const [f, branch, extraEnv] of [
+    ["ratchets-fold.yml", "bot/ratchets-fold-1", { FOLD_BRANCH: "bot/ratchets-fold-1" }],
+    ["changelog-fold.yml", "bot/changelog-fold", {}],
+  ]) {
     const w = wf(f);
     assert.equal(w.permissions.issues, "write", `${f}: the refusal issue needs issues: write`);
     const run = w.jobs.fold.steps.find((st) => st.name === "Fold").run;
     const at = run.indexOf("PR_TITLE=");
     assert.ok(at > 0, `${f}: the PR block starts at PR_TITLE=`);
     const tail = run.slice(at);
-    const refused = runWithFakeGh(`echo folded > fold.log\n${tail}`, { refusePr: true });
+    const refused = runWithFakeGh(`echo folded > fold.log\n${tail}`, { refusePr: true, env: extraEnv });
     assert.equal(refused.code, 1, `${f}: a refused PR ends the job red\n${refused.out}`);
     const verbs = refused.calls.map((c) => c.split(" ").slice(0, 2).join(" "));
     assert.deepEqual(verbs, ["pr create", "workflow run", "issue list", "issue create"],
       `${f}: PR attempt, the branch's CI still dispatched, then ONE issue (${refused.calls.join(" | ")})`);
     assert.ok(refused.calls[3].includes(`fold PR needs a hand (${branch})`), refused.calls[3]);
-    const ok = runWithFakeGh(`echo folded > fold.log\n${tail}`, { refusePr: false });
+    const ok = runWithFakeGh(`echo folded > fold.log\n${tail}`, { refusePr: false, env: extraEnv });
     assert.equal(ok.code, 0, `${f}: an opened PR ends green\n${ok.out}`);
     assert.deepEqual(ok.calls.map((c) => c.split(" ").slice(0, 2).join(" ")), ["pr create", "workflow run"]);
   }
