@@ -213,11 +213,19 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
-    text-wrap: balance;
+    text-wrap: wrap;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
     line-height: 1.15;
     letter-spacing: 0.02em;
     max-width: 100%;
     color: color-mix(in oklab, var(--text) 82%, transparent);
+  }
+  @media (max-width: 1679px) {
+    body #overlay #menu-buttons #mb-vs .mb-sub {
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
   }
   body #overlay #menu-buttons :is(#menu-primary .bigbtn, #mb-garage) {
     height: auto;
