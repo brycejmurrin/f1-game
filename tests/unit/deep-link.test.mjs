@@ -140,7 +140,8 @@ test("BACK IS ESCAPE: one sentinel entry; a back closes the top layer or pauses 
   assert.equal(history.state[ctx.DeepLink.MARK], 1);
   win.pointerdown();
   assert.equal(pushes.length, 1, "a tap while the sentinel is up pushes nothing");
-  const back = () => { history.state = null; win.popstate(); };   // the browser pops the sentinel
+  assert.equal(history.state[ctx.DeepLink.BASE], 1, "the sentinel sits on a BASE-stamped entry");
+  const back = () => { history.state = { [ctx.DeepLink.BASE]: 1 }; win.popstate(); };   // the browser pops the sentinel onto its base
   env.escape = true; back();
   assert.deepEqual(clicks, ["door"], "a layer is up: its Escape door is pressed");
   assert.equal(pushes.length, 2, "…and the sentinel is re-armed");
@@ -155,6 +156,17 @@ test("BACK IS ESCAPE: one sentinel entry; a back closes the top layer or pauses 
   assert.equal(pushes.length, 4, "the next tap or key re-arms it");
   win.popstate();
   assert.equal(pushes.length, 4, "a forward step onto the sentinel is ignored");
+  // A HOW TO PLAY section link (#htp-driving) is a fragment navigation and
+  // fires popstate with the URL changed: it must not close the open sheet.
+  env.escape = true; clicks.length = 0;
+  history.state = null; win.popstate();   // #htp-driving: a fresh entry, no state
+  assert.deepEqual(clicks, [], "a fragment navigation is not a back");
+  // HTP close rewrites the URL keeping history.state; the NEXT section jump
+  // is again a fresh unstamped entry and must still be ignored.
+  win.pointerdown(); history.replaceState(history.state, ""); history.state = null; win.popstate();
+  assert.deepEqual(clicks, [], "a second section jump after a close is not a back either");
+  back();
+  assert.deepEqual(clicks, ["door"], "a real back off the re-armed sentinel still closes the top layer");
 });
 
 test("a ?go= link keeps the sentinel: the param strip preserves history.state", () => {

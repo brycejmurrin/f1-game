@@ -16,16 +16,25 @@ function parse(search) {
    title nothing takes it, so the sentinel stays spent and the next back leaves;
    the next tap or key re-arms it (Chromium's history intervention skips an
    entry pushed with no user activation until the page gets one anyway). */
-const MARK = "apexBack";
-function onSentinel() {
-  try { return !!(history.state && history.state[MARK]); } catch (_) { return false; }
+const MARK = "apexBack", BASE = "apexBase";
+// A HOW TO PLAY #htp-* section link is a fragment navigation: it fires
+// popstate onto a fresh entry with no state, and treating that as BACK closed
+// the sheet. So the entry each sentinel sits on is stamped BASE first; only a
+// pop that lands on a stamped entry is a back off the sentinel.
+function stateHas(key) {
+  try { return !!(history.state && history.state[key]); } catch (_) { return false; }
 }
+function onSentinel() { return stateHas(MARK); }
 function pushSentinel() {
   if (onSentinel()) return;
-  try { history.pushState(Object.assign({}, history.state, { [MARK]: 1 }), ""); } catch (_) { /* sandboxed page */ }
+  try {
+    if (!stateHas(BASE)) history.replaceState(Object.assign({}, history.state, { [BASE]: 1 }), "");
+    history.pushState(Object.assign({}, history.state, { [MARK]: 1 }), "");
+  } catch (_) { /* sandboxed page */ }
 }
 function onBack($) {
   if (onSentinel()) return;                     // forward onto our own entry: nothing to undo
+  if (!stateHas(BASE)) return;                  // a fragment navigation, not a back off the sentinel
   const top = typeof TopModal !== "undefined" && TopModal.escapeTop && TopModal.escapeTop();
   let took = !!top;
   if (!took && UiLayers.inRace()) { const p = $("pausebtn"); if (p) { p.click(); took = true; } }
@@ -75,6 +84,6 @@ function create(G) {
   setTimeout(() => fire(0), 0);
   return { go };
 }
-return { create, parse, DOORS, onBack, MARK };
+return { create, parse, DOORS, onBack, MARK, BASE };
 })();
 Object.freeze(DeepLink);
