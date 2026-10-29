@@ -3,6 +3,17 @@
 Load this when a prop vanished, clipped the racing line, or a dress grew
 the mesh a lot. Placement model + helper families stay in SKILL.md.
 
+## Contents
+- Survey before placing
+- Frames: which `k` an emitter expects
+- On-track rejection
+- Terrain anchoring
+- Reverse circuits
+- Vertex budget — increment, not a ceiling
+- Denser vegetation
+- Overhead landmarks
+- Trees/lamps
+
 ## Survey before placing
 
 Grep existing dressing at the target frac in `js/circuits/scenery/<id>.js` and read

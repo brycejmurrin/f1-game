@@ -24,7 +24,10 @@ alwaysApply: true
   `tools/mcp/apex-tools-mcp.sh call`,
   `tools/mcp/chrome-devtools-mcp.sh`, `probe-mcp.py chrome-start`; `tinyfish-mcp.sh`
   CLI-only. Map: `docs/AGENT-SURFACE.md`.
-- **Cursor Cloud:** model `default` only. Namespaces: `cursor*` plus six repo
+- **Cursor Cloud:** `composer-2.5` for routine jobs; Grok 7 for hard jobs only
+  (confirm its exact Cursor slug at launch — do not invent one); never `default`
+  or Auto. Dispatcher: `hosts.cursor.model` in `tools/ci/dispatch.json`. Namespaces:
+  `cursor*` plus six repo
   servers after Bootstrap §3; bare `cursor*` only → CLI fallbacks, re-Save when
   `environment-info` shows nameless `bash` rows. A `lane:cursor` run does not
   call `subscribe_github_*` (`docs/WORKERS.md` §Per vendor). AGENTS.md and the skills win.

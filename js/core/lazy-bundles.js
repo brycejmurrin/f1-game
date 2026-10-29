@@ -27,6 +27,7 @@ let raceSessionLoad = null;
 const RACE_SESSION_READY = {
   "js/race/reliability.js": () => typeof Reliability !== "undefined" && !!Reliability && !Reliability._stub,
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
+  "js/race/damage-handling.js": () => typeof DamageHandling !== "undefined" && !!DamageHandling && !DamageHandling._stub,
   "js/race/duel.js": () => typeof Duel !== "undefined" && !!Duel && !Duel._stub,
   "js/race/session-records.js": () => typeof SessionRecords !== "undefined" && !!SessionRecords && !SessionRecords._stub,
   "js/race/pit-geom.js": () => typeof PitGeom !== "undefined" && !!PitGeom,

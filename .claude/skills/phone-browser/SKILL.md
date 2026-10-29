@@ -1,6 +1,6 @@
 ---
 name: phone-browser
-description: "Use when a user with only a phone or iPhone (no computer) wants the game in Chromium via the Grok custom connector, or its tunnel URL or localhost link will not open. Not the deployed site → deploy-research. Not an 844x390 UI review → survey-ui-matrix."
+description: "Use when someone with only a phone wants to play the working tree in Chromium through the Grok connector, or its tunnel link won't open. Not for: the deployed site → deploy-research; an 844x390 UI review → survey-ui-matrix; VS FRIEND → multiplayer-debug."
 ---
 
 # Phone browser

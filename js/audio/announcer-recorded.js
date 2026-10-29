@@ -36,7 +36,7 @@ var RecordedAnnouncer = (() => {
         if (gen !== generation) return false;
         // Explicit editor/settings auditions may run over a paused race.
         // Automatic introductions and results reads still end on pause.
-        if (G.soundOn && (!G.paused || (options && options.allowPaused === true)) && !(typeof document !== "undefined" && document.hidden)) return true;
+        if (G.soundOn && G.radio.volume() > 0 && (!G.paused || (options && options.allowPaused === true)) && !(typeof document !== "undefined" && document.hidden)) return true;
         stop(); return false;
       };
       const ready = p.load ? p.load(id) : Promise.resolve(p.ready(id));
@@ -58,8 +58,16 @@ var RecordedAnnouncer = (() => {
           timer = setTimeout(() => {
             timer = null;
             if (!valid()) return;
-            const ok = p.speak(id, row.text, { channel: "intro", fx: "announcer", volume: G.radio.volume(),
+            const volume = G.radio.volume();
+            if (!(volume > 0)) { stop(); return; }
+            let captioned = false;
+            const ok = p.speak(id, row.text, { channel: "intro", fx: "announcer", volume,
               budgetS: (end - Date.now()) / 1000, valid,
+              onStart: () => {
+                if (!valid() || captioned) return;
+                captioned = true;
+                if (typeof Captions !== "undefined" && Captions.onAnnouncerLine) Captions.onAnnouncerLine(row.text);
+              },
               onEnd: () => { if (valid()) timer = setTimeout(next, 250); } });
             if (!ok) next();
           }, wait);

@@ -28,3 +28,18 @@ export function isGenerated(p) {
   const s = String(p || "").replace(/^\.\//, "");
   return GENERATED_PATHS.includes(s);
 }
+
+// BUILT, NOT COMMITTED (2026-10-28; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md, Bryce: "Build at deploy").
+// Generator outputs the site serves that are gitignored: tools/gen/ensure-built.mjs builds them in every
+// served or tested checkout, and tools/desktop/stage.mjs renders them into the staged site from source.
+// A merge conflict in one (an old branch edited its committed copy; the tip deleted it) cures by taking
+// the deletion — deploy.mjs's cureableConflicts. Each entry is in .gitignore (tests/unit/deploy-staging.test.mjs).
+export const BUILT_PATHS = Object.freeze([
+  "js/track/circuit-meta.js",
+]);
+
+/** Is `p` (repo-relative, forward slashes) a build product that git must not track? Pure. */
+export function isBuilt(p) {
+  const s = String(p || "").replace(/^\.\//, "");
+  return BUILT_PATHS.includes(s);
+}

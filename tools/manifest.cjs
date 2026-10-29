@@ -1080,6 +1080,7 @@ const LAZY_RACE = [
 const LAZY_RACE_SESSION = [
   "js/race/reliability.js",
   "js/race/damage.js",
+  "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
   "js/race/duel.js",
   "js/race/session-records.js",
   "js/race/pit-geom.js",
@@ -1093,6 +1094,8 @@ const LAZY_RACE_SESSION = [
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
   "js/race/jump-start-penalty.js",
+  "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
+  "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/race/pit-geom.js", "js/race/pit-lane.js"],

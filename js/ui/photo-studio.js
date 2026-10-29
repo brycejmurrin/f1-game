@@ -167,6 +167,11 @@ function create(G, deps) {
   const condReset = button("RESET CONDITIONS", () => resetCond(), "ps-cond-reset");
   const condGroup = group("TIME & WEATHER", [todRow, wxRow, condReset,
     mk("p", { className: "adv-help", textContent: "Changes the light and weather for this photo only. Your race and results stay as they were." })]);
+  // DRIVING LINE: show or hide the suggested-line ribbon for this photo only (DrivingLine.setPhoto), put back on close.
+  const lineRow = select("Driving line", [["on", "Shown"], ["off", "Hidden"]], () => (DrivingLine.shown() ? "on" : "off"),
+    (v) => { if (st.busy || st.closing || isGarage()) return; DrivingLine.setPhoto(v === "on"); }, "ps-line");
+  const lineGroup = group("DRIVING LINE", [lineRow,
+    mk("p", { className: "adv-help", textContent: "Shows or hides the racing line for this photo only. Your DRIVING LINE setting stays as it is." })]);
   function paintCond() {
     for (const [id, row, v] of [["ps-tod", todRow, G.setTimeOfDay()], ["ps-weather", wxRow, G.weather()]]) {
       SettingRow.paint(row, v);
@@ -369,6 +374,7 @@ function create(G, deps) {
       subjectGroup,
       carGroup,
       condGroup,
+      lineGroup,
       lightGroup,
       looksGroup,
       group("COMPOSITION", [
@@ -472,7 +478,8 @@ function create(G, deps) {
       E[id].value = "0"; E[id + "-value"].textContent = "0" + unit;
     }
     placeCar();
-    condGroup.hidden = isGarage();
+    condGroup.hidden = isGarage(); lineGroup.hidden = isGarage();
+    if (!isGarage()) SettingRow.paint(lineRow, DrivingLine.shown() ? "on" : "off");
     looksChanged = false; paintLooks();
     if (!isGarage()) {
       cond.tod = G.setTimeOfDay(); cond.wx = G.weather(); cond.arc = G.weatherArc; cond.touched = false; paintCond();
@@ -509,6 +516,7 @@ function create(G, deps) {
   function finishClose(back) {
     if (!st.open && !st.closing) return;
     if (!isGarage() && cond.tod != null) { resetCond(); cond.tod = null; }
+    if (!isGarage()) DrivingLine.setPhoto(null);
     endLight();
     const returnTo = st.back; st.generation++; st.open = false; st.back = null; st.closing = false;
     if (releaseCar) { releaseCar(); releaseCar = null; }

@@ -13,10 +13,12 @@ import { absSrc } from "../helpers/abs-src.mjs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/dock-layout.js"), "utf8");
 
+let lastWin;
 function loadDock() {
+  lastWin = { innerWidth: 400, innerHeight: 800, visualViewport: { width: 0, height: 0 } };
   const ctx = {
     Log: { info() {}, warn() {}, debug() {}, enabled() { return false; } },
-    window: { innerWidth: 400, innerHeight: 800 },
+    window: lastWin,
     document: { documentElement: {} },
     getComputedStyle() { return { getPropertyValue() { return "0"; } }; },
   };
@@ -48,6 +50,19 @@ function dockEl() {
     },
   };
 }
+
+test("usablePad prefers a positive visual viewport over the layout viewport", () => {
+  lastWin.visualViewport.width = 320;
+  lastWin.visualViewport.height = 500;
+  const pad = DL.usablePad({ });
+  assert.equal(pad.w, 320);
+  assert.equal(pad.h, 500);
+  lastWin.visualViewport.width = 0;
+  lastWin.visualViewport.height = 0;
+  const layout = DL.usablePad({ });
+  assert.equal(layout.w, 400, "a zero visual viewport falls back to innerWidth");
+  assert.equal(layout.h, 800);
+});
 
 test("clampXY keeps a dock between its safe-area home and MAX (a negative share would park it off screen)", () => {
   const c = DL.clampXY({ x: 2, y: -2 });

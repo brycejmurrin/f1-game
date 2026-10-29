@@ -1,6 +1,6 @@
 ---
 name: pwa-cache-service-worker
-description: "Use when editing sw.js, version.json or PWA manifest: an installed PWA on an old build (UpdateCheck), offline play, stale shell, shell version guard, DEFERRED precache, or Playwright reloads on a mid-run version.json bump."
+description: "Use when editing the service worker (sw.js), version.json or the PWA manifest: an installed app stuck on an old build, offline play, stale shell, or precache lists. Not for: audio → audio-debug; textures → asset-pack; picking tests → check-changes."
 ---
 
 # PWA cache and service worker
@@ -53,6 +53,15 @@ from that key offline, never written at runtime).
 (`CSP` in `tools/gen/gen-shell.mjs`, first in `<head>`): a new third-party
 script, frame or non-https endpoint must be added THERE, or the browser
 refuses it. `load-order.test.mjs` pins its shape.
+
+## First workflow
+
+1. Identify the symptom: install failure, offline boot, stale shell, or resumed-app update.
+2. Compare the affected device's booted build with live evidence from **deploy-research**;
+   use [stale-shell diagnosis](references/workflow.md) before changing cache policy.
+3. Edit the owning source; manifest/CSP/generated-shell changes follow the Generated parts section.
+4. Run the targeted service-worker node checks below; the parent owns the offline browser probe
+   under [AGENTS.md verification rules](../../../AGENTS.md#verification--scale-it-to-the-change).
 
 ## When to Use
 

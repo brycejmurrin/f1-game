@@ -1281,7 +1281,7 @@ const TrackBuildProps = (function () {
       markBarrier, blockAt, post, recordBarrier, indexBarrier, clearTreeDist,
       indexSolid, indexSolidAt, barrierClear, massBlocked, massAdd, reserveEmittedSolid, bankOffsetAt,
       seat, foundation, cantilever, groundYAt, terrainYAt, onTrack,
-      frameAt, overheadSpan, models,
+      frameAt, overheadSpan, models, bakedModel,
       // placement primitives + math helpers
       place, prop, backdrop, groundPlane, every,
       hash, upOf, cross, norm, lerp, vadd,
@@ -1730,7 +1730,7 @@ const TrackBuildProps = (function () {
       // z*cs + Z), so the guard measures what ships. Callers write
       // `if (!bakedModel(...)) building(...)` and that fallback is itself
       // guarded, so a rejected stamp degrades to nothing, not to a raw box.
-      const bb = meshBox(mesh), sc = o.scale != null ? o.scale : 1;
+      const bb = meshBox(mesh), sc = Number.isFinite(o.height) && o.height > 0 && bb.h > 0 ? o.height / bb.h : o.scale != null ? o.scale : 1;
       const cs = __M.cos(yaw), sn = __M.sin(yaw);
       const cx = bb.cx * sc, cz = bb.cz * sc;
       const wc = [a.c[0] + cx * cs + cz * sn,
