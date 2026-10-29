@@ -1,0 +1,851 @@
+diff --git a/.claude/hooks/session-start.sh b/.claude/hooks/session-start.sh
+index 0b293bcd97..397fd1b0b4 100755
+--- a/.claude/hooks/session-start.sh
++++ b/.claude/hooks/session-start.sh
+@@ -28,6 +28,13 @@ else
+   status+=("node_modules: fresh")
+ fi
+ 
++# The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28): a fresh
++# clone has none and a pull can stale them. Every session, not only on install;
++# ~0.1 s, node builtins only, writes nothing when they are current. Silent on success.
++if [ -f tools/gen/ensure-built.mjs ] && ! node tools/gen/ensure-built.mjs --quiet >artifacts/session-ensure-built.log 2>&1; then
++  status+=("built files: FAILED (artifacts/session-ensure-built.log)")
++fi
++
+ # Reuse the same executable as the harness and MCP wrapper, including system
+ # Chromium on PATH. The installer chooses a writable cache if none is present.
+ CHROMIUM="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"
+diff --git a/.claude/skills/new-track/SKILL.md b/.claude/skills/new-track/SKILL.md
+index 9b2ef78041..35bbdfde4a 100644
+--- a/.claude/skills/new-track/SKILL.md
++++ b/.claude/skills/new-track/SKILL.md
+@@ -14,8 +14,8 @@ pair, `js/circuits/scenery/<id>.js`. The engine (`js/track/tracks.js`) reads
+ `TrackDefs`, builds a Catmull-Rom spline from `path` (a def without one is a build
+ error naming the circuit — there is no hand-authored fallback), and extrudes the
+ road, terrain, and prop meshes. **Circuit files have no `<script>` tag:** the shell
+-carries only the generated picker meta (`js/track/circuit-meta.js` — `npm run gen` rewrites it,
+-never hand-edit; AGENTS.md rule 11), and a full def hydrates per pick through `LAZY_CIRCUIT`
++carries only the generated picker meta (`js/track/circuit-meta.js` — built, never committed:
++`npm run gen` or `node tools/gen/ensure-built.mjs` rebuilds it; AGENTS.md rule 11), and a full def hydrates per pick through `LAZY_CIRCUIT`
+ (`tools/manifest.cjs`; `ensureCircuit` in `js/core/lazy-bundles.js`).
+ 
+ ## Track-definition schema
+diff --git a/.claude/skills/new-track/references/workflow.md b/.claude/skills/new-track/references/workflow.md
+index bef742f8c3..24957c801a 100644
+--- a/.claude/skills/new-track/references/workflow.md
++++ b/.claude/skills/new-track/references/workflow.md
+@@ -68,9 +68,9 @@ Load from the SKILL.md index when the task needs this detail.
+    `tools/manifest.cjs` (the roster source of truth), then run `npm run gen`. A circuit
+    has NO `<script>` tag: `gen-circuit-meta.mjs` (first step of `npm run gen`) rewrites the
+    picker roster `js/track/circuit-meta.js`, and the full def hydrates per pick via
+-   `LAZY_CIRCUIT` / `ensureCircuit`. `circuit-meta.js` is GENERATED (AGENTS.md rule 11):
+-   never hand-edit it; `npm run gen:check` names drift, and `tests/unit/circuit-meta.test.mjs`
+-   fails on it. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
++   `LAZY_CIRCUIT` / `ensureCircuit`. `circuit-meta.js` is BUILT, never committed (AGENTS.md
++   rule 11): gitignored, never hand-edited; the test runners, SessionStart and the git hooks
++   rebuild it, and the deploy renders it from source, so a circuit PR commits only its sources. Never hand-edit a `?v=` tag ([shell/cache](../../check-changes/references/bump.md): `?v=dev`, no bump).
+    `CIRCUITS` order == `Tracks.LIST` == picker order:
+ 
+    - **Always APPEND the id at the END of `CIRCUITS`**, never interleave: a stored
+@@ -114,7 +114,7 @@ Load from the SKILL.md index when the task needs this detail.
+ 3. **Headless build guard and generated-file sync** — the fast pre-push checks, no browser:
+    ```sh
+    node tools/track/verify-track.cjs <id>     # OK <id>: props X verts (road Y, terrain Z); --all for the fleet
+-   npm run gen:check                          # circuit-meta + shell drift after a manifest change (?v=dev, no bump)
++   npm run gen:check                          # shell drift after a manifest change (?v=dev, no bump); rebuilds circuit-meta
+    ```
+    A non-zero `verify-track` exit means the spline/road/terrain build or the
+    `scenery(api)` callback **threw** — which in the running game would strand the
+diff --git a/.githooks/post-checkout b/.githooks/post-checkout
+new file mode 100755
+index 0000000000..3b201a6713
+--- /dev/null
++++ b/.githooks/post-checkout
+@@ -0,0 +1,14 @@
++#!/usr/bin/env bash
++# .githooks/post-checkout (and post-merge, which runs this file): rebuild the
++# served generated files that are gitignored since 2026-10-28 (AGENTS.md rule 11;
++# docs/notes/DEPLOY-TIME-GEN-2026-10-28.md) after git moves the sources under them:
++# a branch switch, a new worktree, a file checkout, a pull or a merge.
++# Idempotent, ~0.1 s, node builtins only. Never fails the git command: git returns
++# post-checkout's status as the checkout's own, so every path below exits 0.
++# Git runs a hook from the root of the working tree (git-scm.com/docs/githooks), so
++# the tool is THIS checkout's copy; an older commit without it is a no-op.
++[ -f tools/gen/ensure-built.mjs ] || exit 0
++command -v node >/dev/null 2>&1 || exit 0
++node tools/gen/ensure-built.mjs --quiet \
++  || echo "$(basename "$0"): ensure-built failed; run node tools/gen/ensure-built.mjs" >&2
++exit 0
+diff --git a/.githooks/post-merge b/.githooks/post-merge
+new file mode 100755
+index 0000000000..7f00ed521c
+--- /dev/null
++++ b/.githooks/post-merge
+@@ -0,0 +1,4 @@
++#!/usr/bin/env bash
++# .githooks/post-merge — a pull or merge can change the sources of the gitignored
++# generated files; rebuild them exactly as post-checkout does (that file explains).
++exec bash "$(dirname "$0")/post-checkout" "$@"
+diff --git a/.github/actions/setup-apex/action.yml b/.github/actions/setup-apex/action.yml
+index 02e84e66a4..19b7e33dc1 100644
+--- a/.github/actions/setup-apex/action.yml
++++ b/.github/actions/setup-apex/action.yml
+@@ -16,3 +16,8 @@ runs:
+     # binaries — those cost ~200 MB and only the browser jobs need them.
+     - run: npm ci
+       shell: bash
++    # The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28;
++    # docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): build them before any job serves,
++    # tests or stages the checkout. Skipped on a commit older than the tool.
++    - run: if [ -f tools/gen/ensure-built.mjs ]; then node tools/gen/ensure-built.mjs; fi
++      shell: bash
+diff --git a/.gitignore b/.gitignore
+index d6b78996b0..1326148f34 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -48,6 +48,12 @@ assets/pack/src/
+ # became TRACKED — which then blocked two deploys as a dirty tree.
+ **/__pycache__/
+ 
++# Built, not committed (2026-10-28, "Build at deploy"): generated files the site
++# serves. tools/gen/ensure-built.mjs builds them in a checkout and stage.mjs in the
++# deploy; the list is BUILT_PATHS in tools/lib/generated-paths.mjs
++# (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
++/js/track/circuit-meta.js
++
+ # Electron desktop spike — staged site + builder output (never commit)
+ desktop/dist/
+ desktop/dist-site/
+diff --git a/AGENTS.md b/AGENTS.md
+index 5705c36fe3..f010b270c3 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -74,8 +74,8 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
+    A pass that needed a retry is a red: list the flaky test in the PR like a not-run group, then fix it or quarantine it in `tests/data/flaky-quarantine.json`; `APEX_FAIL_ON_FLAKY=1` makes the runner fail it.
+ 10. Never hand a subagent a browser run ("report it unverified"; `bash-guard.sh` refuses it inside one). Worktrees start at the parent's CURRENT HEAD
+     (`worktree.baseRef: "head"` is HEAD when the worktree is made, not the session's boot sha); `track-surveyor` edits in its own, so merge its branch into yours before you verify (survey-track §Hand-back).
+-11. Never hand-edit a generated file: the `@gen-shell` blocks of `index.html` and `sw.js`, `version.json`, `package.json`'s test scripts (source `tests/groups.json`), `tools/README.md`, `js/roster.js`, `tools/carview.html`, `js/track/circuit-meta.js`, `CHANGELOG.md` (fragments go in `docs/changelog.d/`), `tests/data/ratchets.json` and `ratchets.d/*.json` (`protect-files.sh` enforces it).
+-    Edit the SOURCE, then `npm run gen` (`gen:check` names drift). No doc quotes the ladder's sizes — `node tools/gen/gen-ladder-figures.mjs` prints them.
++11. Never hand-edit a generated file: the `@gen-shell` blocks of `index.html` and `sw.js`, `version.json`, `package.json`'s test scripts (source `tests/groups.json`), `tools/README.md`, `js/roster.js`, `tools/carview.html`, `CHANGELOG.md` (fragments go in `docs/changelog.d/`), `tests/data/ratchets.json` and `ratchets.d/*.json` (`protect-files.sh` enforces it).
++    Edit the SOURCE, then `npm run gen` (`gen:check` names drift). Served files listed in `BUILT_PATHS` (`tools/lib/generated-paths.mjs`; today `js/track/circuit-meta.js`) are built, never committed: gitignored, built by `node tools/gen/ensure-built.mjs` (SessionStart, the git hooks, CI setup and the test runners run it) and by `stage.mjs` at deploy (`docs/notes/DEPLOY-TIME-GEN-2026-10-28.md`). No doc quotes the ladder's sizes — `node tools/gen/gen-ladder-figures.mjs` prints them.
+ 12. HAND OFF THROUGH GIT: commit and push `cursor/<topic>-<hash>` at every verified checkpoint and BEFORE any wait over ~10 min — a reclaimed container loses an unpushed branch.
+     Commit in two calls: stage in its own command, then `git commit` in the next — the commit hook reads the index as it is when `git commit` is typed, while `test:guards` reads the working tree, so the two agree only when nothing is left unstaged; never chain an edit or a `git add` into the commit call. Push with `git push -u origin <branch>` alone, no output pipe.
+     Open a DRAFT PR into the deploy branch at the FIRST commit, before the work is verified (GitHub MCP, `draft: true`, labels and `Closes #<n>` per `docs/WORKERS.md` §2; a draft gets CI only with the `run-ci` label, ready the full tier). Not `deploy.mjs --pr`: it opens a NON-draft PR with no Plan or Hand-off.
+diff --git a/docs/agent-output/policies.json b/docs/agent-output/policies.json
+index cc317f56e8..e13dab3ce9 100644
+--- a/docs/agent-output/policies.json
++++ b/docs/agent-output/policies.json
+@@ -966,6 +966,11 @@
+       "presentation": "native",
+       "preserve": "@c4"
+     },
++    "tools/gen/ensure-built.mjs": {
++      "action": "keep-native",
++      "presentation": "native",
++      "preserve": "@c4"
++    },
+     "tools/gen/garage-defaults.mjs": {
+       "action": "keep-native",
+       "presentation": "native",
+diff --git a/js/track/circuit-meta.js b/js/track/circuit-meta.js
+deleted file mode 100644
+index 496085b821..0000000000
+--- a/js/track/circuit-meta.js
++++ /dev/null
+@@ -1,58 +0,0 @@
+-/* Apex 26 — GENERATED circuit meta (tools/gen/gen-circuit-meta.mjs): picker
+-   TrackDefs for the title/menu wall; full defs hydrate via LAZY_CIRCUIT. */
+-(function () {
+-  "use strict";
+-  var D = (window.TrackDefs = window.TrackDefs || []);
+-  D.push({"id":"bahrain","name":"BAHRAIN","gp":"Bahrain GP","country":"Bahrain","night":true,"theme":"desert","sceneryTheme":"desert","lengthKm":5.4,"tyreSeverity":1.55,"reverse":false,"sunAzimBias":-0.36,"baseHW":7,"sceneryCoordinates":"racing","terrainMat":"SAND","_metaOnly":true});
+-  D.push({"id":"monaco","name":"MONACO","gp":"Monaco GP","country":"Monaco","night":false,"theme":"street_day","lengthKm":3.3,"gpLaps":78,"tyreSeverity":1.01,"street":true,"reverse":true,"baseHW":5,"sceneryCoordinates":"source","terrainOuter":28,"_metaOnly":true});
+-  D.push({"id":"silverstone","name":"SILVERSTONE","gp":"British GP","country":"UK","night":false,"theme":"green","sceneryTheme":"permanent","lengthKm":5.9,"tyreSeverity":0.89,"reverse":false,"sunAzimBias":0.28,"baseHW":8,"sceneryCoordinates":"racing","ownPitStraight":true,"flatTerrain":true,"terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"spa","name":"SPA","gp":"Belgian GP","country":"Belgium","night":false,"theme":"green","lengthKm":7,"tyreSeverity":0.85,"reverse":false,"sunAzimBias":0.44,"baseHW":8,"sceneryCoordinates":"racing","terrainOuter":90,"terrainFalloffStart":54,"_metaOnly":true});
+-  D.push({"id":"monza","name":"MONZA","gp":"Italian GP","country":"Italy","night":false,"theme":"green","lengthKm":5.8,"tyreSeverity":0.55,"reverse":false,"sunAzimBias":0.16,"baseHW":8,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"suzuka","name":"SUZUKA","gp":"Japanese GP","country":"Japan","night":false,"theme":"green","lengthKm":5.8,"tyreSeverity":0.85,"reverse":false,"sunAzimBias":-0.14,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"singapore","name":"SINGAPORE","gp":"Singapore GP","country":"Singapore","night":true,"theme":"street_night","sceneryTheme":"street","lengthKm":4.9,"gpLaps":62,"tyreSeverity":1.15,"street":true,"reverse":true,"baseHW":6,"sceneryCoordinates":"racing","sceneryLapMirror":true,"terrainOuter":48,"terrainMat":"CONCRETE","_metaOnly":true});
+-  D.push({"id":"cota","name":"COTA","gp":"United States GP","country":"USA","night":false,"theme":"green","lengthKm":5.5,"tyreSeverity":1.12,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","terrainOuter":60,"_metaOnly":true});
+-  D.push({"id":"interlagos","name":"INTERLAGOS","gp":"São Paulo GP","country":"Brazil","night":false,"theme":"green","lengthKm":4.3,"tyreSeverity":0.92,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"vegas","name":"LAS VEGAS","gp":"Las Vegas GP","country":"USA","night":true,"theme":"street_night","lengthKm":6.2,"tyreSeverity":1.05,"street":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":26,"terrainMat":"SAND","_metaOnly":true});
+-  D.push({"id":"madrid","name":"MADRID","gp":"Spanish GP","country":"Spain","night":false,"theme":"modern","lengthKm":5.47,"tyreSeverity":1.18,"street":false,"banked":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":56,"_metaOnly":true});
+-  D.push({"id":"zandvoort","name":"ZANDVOORT","gp":"Dutch GP","country":"Netherlands","night":false,"theme":"green","lengthKm":4.3,"gpLaps":72,"tyreSeverity":1.05,"classic":true,"banked":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"jeddah","name":"JEDDAH","gp":"Saudi Arabian GP","country":"Saudi Arabia","night":true,"theme":"street_night","lengthKm":6.2,"tyreSeverity":0.9,"street":true,"reverse":false,"baseHW":6,"sceneryCoordinates":"racing","terrainOuter":28,"_metaOnly":true});
+-  D.push({"id":"albert_park","name":"ALBERT PARK","gp":"Australian GP","country":"Australia","night":false,"theme":"green","sceneryTheme":"park","lengthKm":5.3,"tyreSeverity":0.61,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","ownPitStraight":true,"flatTerrain":true,"terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"shanghai","name":"SHANGHAI","gp":"Chinese GP","country":"China","night":false,"theme":"modern","lengthKm":5.5,"tyreSeverity":0.45,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","flatTerrain":true,"terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"miami","name":"MIAMI","gp":"Miami GP","country":"USA","night":false,"theme":"modern","lengthKm":5.4,"tyreSeverity":1.22,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","flatTerrain":true,"terrainOuter":90,"_metaOnly":true});
+-  D.push({"id":"imola","name":"IMOLA","gp":"Emilia Romagna GP","country":"Italy","night":false,"theme":"green","lengthKm":4.9,"tyreSeverity":1.02,"classic":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"montreal","name":"MONTREAL","gp":"Canadian GP","country":"Canada","night":false,"theme":"green","lengthKm":4.4,"tyreSeverity":0.4,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","flatTerrain":true,"terrainOuter":70,"_metaOnly":true});
+-  D.push({"id":"redbull","name":"RED BULL RING","gp":"Austrian GP","country":"Austria","night":false,"theme":"green","lengthKm":4.3,"tyreSeverity":1.97,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":48,"_metaOnly":true});
+-  D.push({"id":"hungaroring","name":"HUNGARORING","gp":"Hungarian GP","country":"Hungary","night":false,"theme":"green","lengthKm":4.4,"tyreSeverity":0.77,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":90,"_metaOnly":true});
+-  D.push({"id":"baku","name":"BAKU","gp":"Azerbaijan GP","country":"Azerbaijan","night":true,"theme":"street_night","lengthKm":6,"tyreSeverity":0.82,"street":true,"reverse":false,"baseHW":6,"sceneryCoordinates":"racing","_metaOnly":true});
+-  D.push({"id":"mexico","name":"MEXICO CITY","gp":"Mexican GP","country":"Mexico","night":false,"theme":"modern","lengthKm":4.3,"tyreSeverity":1.08,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"qatar","name":"QATAR","gp":"Qatar GP","country":"Qatar","night":true,"theme":"desert","sceneryTheme":"night-event","lengthKm":5.4,"tyreSeverity":1.6,"reverse":false,"sunAzimBias":-0.3,"baseHW":8,"sceneryCoordinates":"racing","flatTerrain":true,"terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"abudhabi","name":"ABU DHABI","gp":"Abu Dhabi GP","country":"UAE","night":true,"theme":"desert","lengthKm":5.3,"tyreSeverity":0.88,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","ownPitStraight":true,"_metaOnly":true});
+-  D.push({"id":"hockenheim","name":"HOCKENHEIM","gp":"German GP","country":"Germany","night":false,"theme":"green","lengthKm":4.6,"tyreSeverity":0.72,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"nurburgring","name":"NURBURGRING","gp":"Eifel GP","country":"Germany","night":false,"theme":"green","lengthKm":5.1,"tyreSeverity":1,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","terrainOuter":100,"_metaOnly":true});
+-  D.push({"id":"catalunya","name":"CATALUNYA","gp":"Spanish GP","country":"Spain","night":false,"theme":"green","lengthKm":4.7,"gpLaps":66,"tyreSeverity":2,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":115,"_metaOnly":true});
+-  D.push({"id":"sepang","name":"SEPANG","gp":"Malaysian GP","country":"Malaysia","night":false,"theme":"green","lengthKm":5.5,"tyreSeverity":1.48,"classic":true,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"istanbul","name":"ISTANBUL","gp":"Turkish GP","country":"Turkey","night":false,"theme":"green","lengthKm":5.3,"tyreSeverity":1.22,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"paul_ricard","name":"PAUL RICARD","gp":"French GP","country":"France","night":false,"theme":"modern","lengthKm":5.8,"tyreSeverity":1.28,"classic":true,"reverse":true,"baseHW":8,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":130,"_metaOnly":true});
+-  D.push({"id":"portimao","name":"PORTIMAO","gp":"Portuguese GP","country":"Portugal","night":false,"theme":"green","lengthKm":4.7,"gpLaps":66,"tyreSeverity":1.25,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":125,"_metaOnly":true});
+-  D.push({"id":"sochi","name":"SOCHI","gp":"Russian GP","country":"Russia","night":false,"theme":"modern","lengthKm":5.8,"tyreSeverity":0.86,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","terrainOuter":100,"_metaOnly":true});
+-  D.push({"id":"mugello","name":"MUGELLO","gp":"Tuscan GP","country":"Italy","night":false,"theme":"green","lengthKm":5.2,"tyreSeverity":1.18,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"magny_cours","name":"MAGNY-COURS","gp":"French GP","country":"France","night":false,"theme":"green","lengthKm":4.4,"tyreSeverity":0.88,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","terrainOuter":115,"_metaOnly":true});
+-  D.push({"id":"estoril","name":"ESTORIL","gp":"Portuguese GP","country":"Portugal","night":false,"theme":"green","lengthKm":4.182,"tyreSeverity":0.98,"classic":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"kyalami","name":"KYALAMI","gp":"South African GP","country":"South Africa","night":false,"theme":"green","lengthKm":4.5,"tyreSeverity":1.05,"classic":true,"reverse":true,"baseHW":7.5,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"watkins_glen","name":"WATKINS GLEN","gp":"United States GP","country":"USA","night":false,"theme":"green","lengthKm":5.4,"tyreSeverity":1.02,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"indianapolis","name":"INDIANAPOLIS","gp":"United States GP","country":"USA","night":false,"theme":"modern","lengthKm":4.192,"tyreSeverity":0.68,"classic":true,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","terrainOuter":90,"_metaOnly":true});
+-  D.push({"id":"buenos_aires","name":"BUENOS AIRES","gp":"Argentine GP","country":"Argentina","night":false,"theme":"green","lengthKm":4.3,"tyreSeverity":0.98,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","terrainOuter":115,"_metaOnly":true});
+-  D.push({"id":"jacarepagua","name":"JACAREPAGUA","gp":"Brazilian GP","country":"Brazil","night":false,"theme":"modern","lengthKm":5,"tyreSeverity":1.12,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"fuji","name":"FUJI","gp":"Japanese GP","country":"Japan","night":false,"theme":"green","lengthKm":4.554,"tyreSeverity":1,"classic":true,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"okayama","name":"OKAYAMA","gp":"Pacific GP","country":"Japan","night":false,"theme":"green","lengthKm":3.704,"tyreSeverity":0.84,"classic":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-  D.push({"id":"korea","name":"KOREA","gp":"Korean GP","country":"South Korea","night":false,"theme":"green","lengthKm":5.613,"tyreSeverity":1.38,"classic":true,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","undulate":false,"terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"jerez","name":"JEREZ","gp":"Spanish GP","country":"Spain","night":false,"theme":"desert","lengthKm":4.426,"tyreSeverity":0.82,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"donington","name":"DONINGTON","gp":"European GP","country":"UK","night":false,"theme":"green","lengthKm":3.998,"tyreSeverity":1,"classic":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"anderstorp","name":"ANDERSTORP","gp":"Swedish GP","country":"Sweden","night":false,"theme":"green","lengthKm":4.017,"tyreSeverity":0.9,"classic":true,"reverse":false,"baseHW":10.5,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"brands_hatch","name":"BRANDS HATCH","gp":"British GP","country":"UK","night":false,"theme":"green","lengthKm":3.899,"tyreSeverity":1.1,"classic":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"zolder","name":"ZOLDER","gp":"Belgian GP","country":"Belgium","night":false,"theme":"green","lengthKm":4.004,"tyreSeverity":1.02,"classic":true,"reverse":false,"baseHW":7.5,"sceneryCoordinates":"racing","ownPitStraight":true,"terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"dijon","name":"DIJON","gp":"French GP","country":"France","night":false,"theme":"green","lengthKm":3.727,"tyreSeverity":0.95,"classic":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"buddh","name":"BUDDH","gp":"Indian GP","country":"India","night":false,"theme":"green","lengthKm":5.138,"tyreSeverity":1.42,"classic":true,"reverse":false,"baseHW":8,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"mont_tremblant","name":"MONT-TREMBLANT","gp":"Canadian GP","country":"Canada","night":false,"theme":"green","lengthKm":4.243,"tyreSeverity":1,"classic":true,"reverse":false,"baseHW":7,"sceneryCoordinates":"racing","terrainOuter":110,"_metaOnly":true});
+-  D.push({"id":"mosport","name":"MOSPORT","gp":"Canadian GP","country":"Canada","night":false,"theme":"green","lengthKm":3.948,"tyreSeverity":1.02,"classic":true,"reverse":false,"baseHW":6.5,"sceneryCoordinates":"racing","terrainOuter":120,"_metaOnly":true});
+-})();
+diff --git a/tests/helpers/global-setup.js b/tests/helpers/global-setup.js
+index c43c2979e8..0248ae971a 100644
+--- a/tests/helpers/global-setup.js
++++ b/tests/helpers/global-setup.js
+@@ -1,12 +1,17 @@
+ // @ts-check
+ /** Playwright preflight: require the Apex shell within one 10-second budget. */
+ import http from 'http';
++import { ensureBuilt, builtLine } from '../../tools/gen/ensure-built.mjs';
+ 
+ /**
+  * @param {import('@playwright/test').FullConfig} config
+  * @param {Parameters<typeof waitForServer>[1]} [options]
+  */
+ async function globalSetup(config, options) {
++  // The served generated files are gitignored (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): build what is missing
++  // or stale before the first page loads, whatever started the run (run-playwright, test-bg, CI, npx playwright).
++  const built = builtLine(ensureBuilt());
++  if (built) console.log(`✓ ${built}`);
+   const baseURL = config.projects[0]?.use?.baseURL ?? 'http://localhost:3456';
+   await waitForServer(baseURL, options);
+   console.log(`✓ dev server ready at ${baseURL}`);
+diff --git a/tests/unit/circuit-meta.test.mjs b/tests/unit/circuit-meta.test.mjs
+index ba363352de..1a8728e2f2 100644
+--- a/tests/unit/circuit-meta.test.mjs
++++ b/tests/unit/circuit-meta.test.mjs
+@@ -1,7 +1,8 @@
+ // circuit-meta — title boots GENERATED meta stubs; full defs hydrate via LAZY_CIRCUIT.
+ import { test } from "node:test";
+ import assert from "node:assert/strict";
+-import { readFileSync, existsSync } from "node:fs";
++import { readFileSync, existsSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
++import { tmpdir } from "node:os";
+ import { join, dirname } from "node:path";
+ import { fileURLToPath } from "node:url";
+ import { createRequire } from "node:module";
+@@ -12,10 +13,33 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
+ const require = createRequire(import.meta.url);
+ const MANIFEST = require(join(ROOT, "tools/manifest.cjs"));
+ 
+-test("js/track/circuit-meta.js exists and matches the generator", async () => {
+-  assert.ok(existsSync(join(ROOT, MANIFEST.CIRCUIT_META)));
+-  const { check } = await import(join(ROOT, "tools/gen/gen-circuit-meta.mjs"));
++// BUILT, NOT COMMITTED (2026-10-28; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): the roster is gitignored and
++// built where it is served, so `check()` (gen:check) refuses only a TRACKED copy and rebuilds a local one.
++test("js/track/circuit-meta.js is a build product: untracked, built, and equal to the generator", async () => {
++  const { check, generate, trackedInGit, TARGET } = await import(join(ROOT, "tools/gen/gen-circuit-meta.mjs"));
++  assert.equal(TARGET, MANIFEST.CIRCUIT_META);
++  assert.equal(trackedInGit(), false, `${TARGET} is tracked: git rm --cached it (it is built, never committed)`);
+   assert.equal(check(), true);
++  assert.ok(existsSync(join(ROOT, MANIFEST.CIRCUIT_META)));
++  assert.equal(readFileSync(join(ROOT, MANIFEST.CIRCUIT_META), "utf8"), generate());
++});
++
++test("ensure-built: BUILT_PATHS carries the roster, buildInto renders it, a second ensure writes nothing", async () => {
++  const { BUILT_PATHS } = await import(join(ROOT, "tools/lib/generated-paths.mjs"));
++  const { ensureBuilt, buildInto, builtLine } = await import(join(ROOT, "tools/gen/ensure-built.mjs"));
++  const { generate } = await import(join(ROOT, "tools/gen/gen-circuit-meta.mjs"));
++  assert.ok(BUILT_PATHS.includes(MANIFEST.CIRCUIT_META));
++  ensureBuilt();
++  const again = ensureBuilt();
++  assert.deepEqual(again.map((r) => r.was), BUILT_PATHS.map(() => "fresh"), "idempotent: nothing left to write");
++  assert.equal(builtLine(again), "", "a fresh checkout prints nothing");
++  assert.match(builtLine([{ target: "x.js", was: "missing" }, { target: "y.js", was: "stale" }]), /built x\.js \(missing\); rebuilt y\.js \(stale\)/);
++  const dir = mkdtempSync(join(tmpdir(), "apex-built-"));
++  try {
++    assert.deepEqual(buildInto(dir), [...BUILT_PATHS]);
++    assert.equal(readFileSync(join(dir, MANIFEST.CIRCUIT_META), "utf8"), generate());
++    assert.deepEqual(readdirSync(join(dir, "js/track")), ["circuit-meta.js"], "no temp file left behind");
++  } finally { rmSync(dir, { recursive: true, force: true }); }
+ });
+ 
+ test("meta roster has one stub per CIRCUITS id with no path payload", () => {
+diff --git a/tests/unit/deploy-staging.test.mjs b/tests/unit/deploy-staging.test.mjs
+index 864b25acf3..a667520050 100644
+--- a/tests/unit/deploy-staging.test.mjs
++++ b/tests/unit/deploy-staging.test.mjs
+@@ -26,6 +26,7 @@ import fs from "node:fs";
+ import path from "node:path";
+ import os from "node:os";
+ import { createRequire } from "node:module";
++import { spawnSync } from "node:child_process";
+ import { stageSite } from "../../tools/desktop/stage.mjs";
+ import { fileURLToPath } from "node:url";
+ import { STAGE_DIRS, STAGE_EXCLUDE, STAGE_ROOT_FILES, stageExcluded, stagedNames } from "../../tools/desktop/stage-files.mjs";
+@@ -230,6 +231,33 @@ test("no shipped file references a STAGE_EXCLUDE path", () => {
+   assert.deepEqual(offenders, [], "a shipped file names an excluded path: stage it again or drop the reference");
+ });
+ 
++// BUILT, NOT COMMITTED (2026-10-28; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): a served generator output that
++// git ignores reaches the live site only because stageSite renders it from source. Pin both halves.
++test("every BUILT_PATHS file is gitignored, untracked, and rendered into the staged site from source", async () => {
++  const { BUILT_PATHS } = await import("../../tools/lib/generated-paths.mjs");
++  const { buildInto } = await import("../../tools/gen/ensure-built.mjs");
++  const git = (...a) => spawnSync("git", a, { cwd: ROOT, encoding: "utf8" });
++  for (const p of BUILT_PATHS) {
++    assert.equal(git("check-ignore", "-q", "--no-index", "--", p).status, 0, `${p} must be in .gitignore`);
++    assert.equal(git("ls-files", "--", p).stdout.trim(), "", `${p} must not be tracked`);
++    assert.ok(STAGE_DIRS.includes(p.split("/")[0]), `${p} must sit under a staged directory`);
++  }
++  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "built-stage-"));
++  const root = path.join(tmp, "source");
++  try {
++    for (const name of STAGE_ROOT_FILES) { fs.mkdirSync(root, { recursive: true }); fs.writeFileSync(path.join(root, name), "fixture\n"); }
++    for (const name of STAGE_DIRS) fs.mkdirSync(path.join(root, name), { recursive: true });
++    stageSite(path.join(tmp, "fixture-site"), { root });
++    for (const p of BUILT_PATHS) assert.equal(fs.existsSync(path.join(tmp, "fixture-site", p)), false, `a fixture root builds nothing: ${p}`);
++    const want = path.join(tmp, "want");
++    buildInto(want);
++    stageSite(path.join(tmp, "site"), { root, build: true });
++    for (const p of BUILT_PATHS) {
++      assert.deepEqual(fs.readFileSync(path.join(tmp, "site", p)), fs.readFileSync(path.join(want, p)), `${p} staged from source`);
++    }
++  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
++});
++
+ test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
+   assert.equal(stageExcluded("assets/atlases"), true);
+   assert.equal(stageExcluded("assets/atlases/atlas-arch-albedo.png"), true);
+diff --git a/tests/unit/deploy-tool.test.mjs b/tests/unit/deploy-tool.test.mjs
+index 35d44fc41d..653aef7267 100644
+--- a/tests/unit/deploy-tool.test.mjs
++++ b/tests/unit/deploy-tool.test.mjs
+@@ -4,7 +4,7 @@
+ // real diff, preflight refuses what the protocol refuses, and --help exits 0
+ // without touching git. plan()/main() need the network and are not run here.
+ import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
+-import { GENERATED_PATHS } from "../../tools/lib/generated-paths.mjs";
++import { GENERATED_PATHS, BUILT_PATHS } from "../../tools/lib/generated-paths.mjs";
+ import { test } from "node:test";
+ import assert from "node:assert/strict";
+ import { spawnSync, execFileSync } from "node:child_process";
+@@ -994,3 +994,41 @@ console.log(JSON.stringify({error:r.error?.code,survivors:r.survivors}));`;
+ test("every path tools/lib/generated-paths.mjs calls generated is one deploy.mjs's conflict cure regenerates (sync-pr conflict cure relies on it)", () => {
+   for (const p of GENERATED_PATHS) assert.equal(cureableConflicts([p]).cureable, true, `${p} is listed as generated but deploy.mjs cannot cure a conflict in it`);
+ });
++
++// BUILT, NOT COMMITTED (2026-10-28): the tip deleted js/track/circuit-meta.js; a branch from before that regenerated
++// it for a circuit edit. The merge is a modify/delete conflict, and the cure is to take the deletion.
++test("a BUILT path's modify/delete conflict is cureable, and `git rm --cached` resolves it as a deletion", () => {
++  assert.ok(BUILT_PATHS.length > 0);
++  for (const p of BUILT_PATHS) {
++    const c = cureableConflicts([p]);
++    assert.equal(c.cureable, true, `${p}: a built path must be cureable`);
++    assert.deepEqual(c.builtF, [p]);
++  }
++  assert.equal(cureableConflicts([BUILT_PATHS[0], "js/game.js"]).cureable, false, "a real conflict beside it still stops");
++  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "apex-built-cure-"));
++  const g = (...a) => execFileSync("git", a, { cwd: dir, stdio: "pipe", encoding: "utf8" });
++  const rel = BUILT_PATHS[0];
++  try {
++    g("init", "-q", "-b", "tip");
++    g("config", "user.email", "t@t"); g("config", "user.name", "t");
++    fs.mkdirSync(path.dirname(path.join(dir, rel)), { recursive: true });
++    fs.writeFileSync(path.join(dir, rel), "old roster\n"); g("add", "-A"); g("commit", "-qm", "base");
++    g("checkout", "-q", "-b", "old-pr");
++    fs.writeFileSync(path.join(dir, rel), "old roster + a circuit\n"); g("commit", "-qam", "circuit edit regenerated the copy");
++    g("checkout", "-q", "tip");
++    fs.writeFileSync(path.join(dir, ".gitignore"), `/${rel}\n`); g("rm", "-q", "--cached", "--", rel); g("add", ".gitignore");
++    g("commit", "-qm", "stage 1: build at deploy");
++    g("checkout", "-q", "old-pr");
++    assert.notEqual(spawnSync("git", ["merge", "--no-edit", "tip"], { cwd: dir, encoding: "utf8" }).status, 0, "modify/delete conflicts");
++    const conflicted = g("diff", "--name-only", "--diff-filter=U").split("\n").filter(Boolean);
++    assert.deepEqual(conflicted, [rel]);
++    assert.equal(cureableConflicts(conflicted).cureable, true);
++    g("rm", "-q", "--cached", "--", ...cureableConflicts(conflicted).builtF);   // the cure mergeDeployTip runs
++    assert.equal(g("diff", "--name-only", "--diff-filter=U").trim(), "", "no conflict left");
++    g("commit", "--no-edit", "-q");
++    assert.equal(g("ls-files", "--", rel).trim(), "", "the merge keeps the built file out of git");
++    assert.ok(fs.existsSync(path.join(dir, rel)), "the working copy stays for ensure-built to refresh");
++  } finally {
++    rmTemp(dir);
++  }
++});
+diff --git a/tests/unit/rulebook-guards.test.mjs b/tests/unit/rulebook-guards.test.mjs
+index 132c27081d..f0dd9bdbd7 100644
+--- a/tests/unit/rulebook-guards.test.mjs
++++ b/tests/unit/rulebook-guards.test.mjs
+@@ -53,6 +53,8 @@ const CANON = [
+   ["re-subscribe after ready", /call `subscribe_pr_activity` again/i, "AGENTS.md"],
+   ["first claimant fixes", /the first claimant fixes, the rest wait/i, "AGENTS.md"],
+   ["memory-change line", /`memory-change: <reason>`/, ".github/pull_request_template.md"],
++  // Rule 11's build-at-deploy half (Bryce 2026-10-28, "Build at deploy"; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
++  ["built, never committed", /are built, never committed: gitignored/i, "AGENTS.md"],
+ ];
+ 
+ test("each canonical rule sentence lives in its home and at most one other file", () => {
+diff --git a/tools/ci/deploy.mjs b/tools/ci/deploy.mjs
+index 50f0b73492..b111d496b5 100644
+--- a/tools/ci/deploy.mjs
++++ b/tools/ci/deploy.mjs
+@@ -76,6 +76,7 @@ import { saveOutputArtifact } from "../agent/output.mjs";
+ import { DEFAULT_LOG, stamp, readStatus, waitStatus } from "../lib/deploy-status.mjs";
+ import { strictFlags } from "../lib/cli-args.mjs";
+ import { gitRun, gitMust } from "../lib/git-run.mjs";
++import { isBuilt } from "../lib/generated-paths.mjs";
+ 
+ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+ const argv = process.argv.slice(2);
+@@ -464,13 +465,19 @@ export function cureableConflicts(conflicted) {
+   // tools/shot/scenery-locations.json (gen-scenery-locations.cjs): same cure,
+   // take ours and regenerate from the merged TRACK_VM sources.
+   const sceneryF = conflicted.filter((f) => f === SCENERY_LOCATIONS);
++  // A BUILT path (gitignored since 2026-10-28; tools/lib/generated-paths.mjs BUILT_PATHS)
++  // conflicts only as modify/delete: the tip deleted the committed copy, an older
++  // branch regenerated it. Cure: take the deletion (`git rm --cached`); ensure-built
++  // rebuilds the local copy from the merged sources.
++  const builtF = conflicted.filter((f) => isBuilt(f));
+   // (The gate-ladder figures used to be cured here too; since 2026-09-30 no
+   // doc commits them — tools/gen/gen-ladder-figures.mjs only reports — so
+   // there is nothing left to conflict.)
+   const sourceContested = conflicted.includes("tests/groups.json");
+   const cureable = conflicted.length > 0 && !sourceContested
+-    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length === conflicted.length;
+-  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF };
++    && shellF.length + ratchetF.length + pkgF.length + toolsF.length + catalogF.length + derivedF.length + sceneryF.length
++      + builtF.length === conflicted.length;
++  return { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, builtF };
+ }
+ 
+ /* THE UNION MAY NEED A DEPENDENCY THE BOX HAS NOT GOT. A merged lockfile is
+@@ -537,11 +544,11 @@ export async function mergeDeployTip() {
+   // The CUREABLE set: files this repo GENERATES, where a conflict is a stale
+   // derived value rather than two intents to reconcile. Anything else is a
+   // real disagreement and stops.
+-  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF } = cureableConflicts(conflicted);
++  const { cureable, shellF, ratchetF, pkgF, toolsF, catalogF, derivedF, sceneryF, builtF } = cureableConflicts(conflicted);
+   if (!cureable) {
+     git(["merge", "--abort"]);
+     const moved = manifestMoved();
+-    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f))
++    const named = conflicted.filter((f) => f !== RATCHETS && !shellF.includes(f) && !pkgF.includes(f) && !toolsF.includes(f) && !catalogF.includes(f) && !derivedF.includes(f) && !sceneryF.includes(f) && !builtF.includes(f))
+       .map((f) => (moved[f] ? `${f} (moved to ${moved[f]} — re-apply their edit there)` : f));
+     throw new Error(`real conflicts (not just generated files): ${named.join(", ")} — resolve by hand`);
+   }
+@@ -611,6 +618,10 @@ export async function mergeDeployTip() {
+     must(git(["add", SCENERY_LOCATIONS]), "add");
+     did.push("scenery locations regenerated");
+   }
++  if (builtF.length) {
++    must(git(["rm", "-q", "--cached", "--", ...builtF]), "untrack the built files (they stay gitignored)");
++    did.push(`built files kept out of git (${builtF.join(", ")})`);
++  }
+   must(git(["commit", "--no-edit", "-q"]), "merge commit");
+   await installIfLockMoved(before);
+   // The cures above re-derive only the files that CONFLICTED; a derived file
+diff --git a/tools/ci/guards-verdict.mjs b/tools/ci/guards-verdict.mjs
+index f54d10073e..de5697c781 100644
+--- a/tools/ci/guards-verdict.mjs
++++ b/tools/ci/guards-verdict.mjs
+@@ -165,7 +165,7 @@ export function runGuards({
+   return { status: 0, wrote: true, tree, dirty: false, reason: "green" };
+ }
+ 
+-function main(argv) {
++async function main(argv) {
+   exitIfHelp(argv, `usage: node tools/ci/guards-verdict.mjs <check|run> [-- file.mjs…]`);
+   const cmd = argv[0];
+   if (cmd !== "check" && cmd !== "run") {
+@@ -183,6 +183,15 @@ function main(argv) {
+     console.error(v.message);
+     process.exit(1);
+   }
++  // The served generated files are gitignored (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md); load-order and
++  // global-registry read every FULL file, so build what is missing or stale first. They are ignored, so the
++  // tree hash this verdict caches is unchanged. A fixture checkout without the generator skips it.
++  const ensureMod = path.join(ROOT, "tools/gen/ensure-built.mjs");
++  if (fs.existsSync(ensureMod)) {
++    const { ensureBuilt, builtLine } = await import(pathToFileURL(ensureMod).href);
++    const line = builtLine(ensureBuilt());
++    if (line) console.error(`guards: ${line}`);
++  }
+   const result = runGuards({ root: ROOT, files: files.length ? files : undefined });
+   if (result.wrote) {
+     console.error(`guards: cached green ${result.tree}`);
+@@ -196,4 +205,4 @@ function main(argv) {
+ }
+ 
+ const isMain = process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url;
+-if (isMain) main(process.argv.slice(2));
++if (isMain) await main(process.argv.slice(2));
+diff --git a/tools/ci/tooling-fast.mjs b/tools/ci/tooling-fast.mjs
+index e8b0cacbdd..51d60f6806 100644
+--- a/tools/ci/tooling-fast.mjs
++++ b/tools/ci/tooling-fast.mjs
+@@ -1075,6 +1075,13 @@ if (isMain) {
+     files0 = [...TOOLING_FAST_FILES];
+   }
+   const files = ciShardFiles(files0, parsed.shard);
++  {
++    // The served generated files are gitignored (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): build what is missing or
++    // stale before any suite reads js/ (the game VM, load-order, global-registry read every FULL file).
++    const { ensureBuilt, builtLine } = await import("../gen/ensure-built.mjs");
++    const line = builtLine(ensureBuilt());
++    if (line) console.log(`[tooling-fast] ${line}`);
++  }
+   if (!parsed.jobsExplicit) {
+     const pick = await probeAutoJobs();
+     parsed.jobs = pick.jobs;
+diff --git a/tools/desktop/stage.mjs b/tools/desktop/stage.mjs
+index 0890e3d068..a0c9453954 100644
+--- a/tools/desktop/stage.mjs
++++ b/tools/desktop/stage.mjs
+@@ -33,6 +33,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
+ import { createRequire } from "node:module";
+ import { STAGE_DIRS, STAGE_ROOT_FILES, stageExcluded } from "./stage-files.mjs";
+ import { minifyStaged } from "./minify.mjs";
++import { buildInto } from "../gen/ensure-built.mjs";
+ 
+ const require = createRequire(import.meta.url);
+ const { appVersionFrom, readApexVersion } = require("../../desktop/lib/version.cjs");
+@@ -96,9 +97,14 @@ export function assertStageDest(dest, root) {
+ }
+ 
+ /**
+- * Copy the runtime allow-list into `outDir` (replaced if it exists).
++ * Copy the runtime allow-list into `outDir` (replaced if it exists), then render
++ * the BUILT files (gitignored generator outputs, tools/lib/generated-paths.mjs
++ * BUILT_PATHS) into it from this checkout's sources. The build runs when `root`
++ * is this checkout (pages.yml, the verify-live recreate, the desktop and Android
++ * packagers) — a fixture root has no circuits to build from — or with
++ * `opts.build: true`. docs/notes/DEPLOY-TIME-GEN-2026-10-28.md.
+  * @param {string} outDir absolute or repo-relative output directory
+- * @param {{ root?: string }} [opts]
++ * @param {{ root?: string, build?: boolean }} [opts]
+  * @returns {string} absolute output path
+  */
+ export function stageSite(outDir, opts = {}) {
+@@ -127,6 +133,7 @@ export function stageSite(outDir, opts = {}) {
+       filter: (from) => !stageExcluded(path.relative(root, from)),
+     });
+   }
++  if (opts.build ?? path.resolve(root) === ROOT) buildInto(dest);
+   return dest;
+ }
+ 
+diff --git a/tools/env/cloud-agent-install.sh b/tools/env/cloud-agent-install.sh
+index a5ae52b29c..fb63a703d4 100755
+--- a/tools/env/cloud-agent-install.sh
++++ b/tools/env/cloud-agent-install.sh
+@@ -187,6 +187,10 @@ ensure_mcp_clones() {
+   fi
+ }
+ 
++# The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28): build
++# them before anything serves the checkout. Node builtins only; idempotent.
++node "$ROOT/tools/gen/ensure-built.mjs" || echo "WARN: ensure-built failed — run node tools/gen/ensure-built.mjs" >&2
++
+ if ! bash "$ROOT/tools/env/install-browsers.sh"; then
+   system_browser="$(node "$ROOT/tools/lib/chromium-path.mjs" --path || true)"
+   if [[ -n "$system_browser" && -x "$system_browser" ]]; then
+diff --git a/tools/gen/ensure-built.mjs b/tools/gen/ensure-built.mjs
+new file mode 100644
+index 0000000000..037da4648c
+--- /dev/null
++++ b/tools/gen/ensure-built.mjs
+@@ -0,0 +1,90 @@
++#!/usr/bin/env node
++// @doc Builds the gitignored generated files the site serves (BUILT_PATHS) when missing or stale; serve, test and deploy entries run it.
++// @skill check-changes
++/**
++ * ensure-built.mjs — the one command that makes a checkout servable.
++ *
++ * BUILT, NOT COMMITTED (2026-10-28; Bryce: "Build at deploy"; staged design in
++ * docs/notes/DEPLOY-TIME-GEN-2026-10-28.md). A generated file the site serves used
++ * to be committed, so two PRs that each passed alone could leave the deploy tip
++ * with a stale copy and fail `gen:check` for every PR behind them (2026-10-27).
++ * Each path in BUILT_PATHS (tools/lib/generated-paths.mjs) is gitignored instead
++ * and built from source here. Idempotent and ~0.1 s: it writes only what is
++ * missing or stale, through a rename, so a reader never sees half a file.
++ *
++ * Who runs it: package.json `prepare` (npm install / npm ci), the SessionStart
++ * hook, .githooks/post-checkout and post-merge, .github/actions/setup-apex (every
++ * CI job), tools/env/cloud-agent-install.sh (Cursor), Playwright's global setup,
++ * tooling-fast, test:guards, the harness static server (tools/shot, apex-tools
++ * MCP) and debug-chrome. tools/desktop/stage.mjs calls buildInto() to render the
++ * files into the staged site from source, never from a local copy.
++ *
++ *   node tools/gen/ensure-built.mjs           # one line per built file: fresh | built (missing) | rebuilt (stale)
++ *   node tools/gen/ensure-built.mjs --quiet   # silent unless a generator fails (the git hooks)
++ *   node tools/gen/ensure-built.mjs --list    # the built paths, one per line
++ * Exit 1 when a generator throws (a circuit def that no longer evaluates).
++ */
++import path from "node:path";
++import { ROOT, isMain, argGate, ensureFile } from "./gen-lib.mjs";
++import { BUILT_PATHS } from "../lib/generated-paths.mjs";
++import * as circuitMeta from "./gen-circuit-meta.mjs";
++
++/** BUILT_PATHS entry → the generator that renders it (sync, reads this checkout's sources). */
++const RENDER = new Map([
++  [circuitMeta.TARGET, circuitMeta.generate],
++]);
++for (const p of BUILT_PATHS) {
++  if (!RENDER.has(p)) throw new Error(`ensure-built: ${p} is in BUILT_PATHS but no generator here renders it`);
++}
++for (const p of RENDER.keys()) {
++  if (!BUILT_PATHS.includes(p)) throw new Error(`ensure-built: ${p} has a generator here but is not in BUILT_PATHS`);
++}
++
++/**
++ * Build every BUILT_PATHS file of THIS checkout that is missing or stale.
++ * @returns {{ target: string, was: "fresh" | "missing" | "stale" }[]}
++ */
++export function ensureBuilt() {
++  return BUILT_PATHS.map((target) => ({ target, was: ensureFile(path.join(ROOT, target), RENDER.get(target)()) }));
++}
++
++/**
++ * Render every BUILT_PATHS file from this checkout's sources into `dir` (a staged
++ * site): the deploy ships what the commit's sources produce, whatever stale copy
++ * the working tree may hold.
++ * @param {string} dir absolute staged root
++ * @returns {string[]} the targets written
++ */
++export function buildInto(dir) {
++  for (const target of BUILT_PATHS) ensureFile(path.join(dir, target), RENDER.get(target)());
++  return [...BUILT_PATHS];
++}
++
++/** One line naming what a call wrote, or "" when everything was fresh (runners print only real work). */
++export function builtLine(rows) {
++  const wrote = rows.filter((r) => r.was !== "fresh");
++  if (!wrote.length) return "";
++  return "ensure-built: " + wrote.map((r) => `${r.was === "missing" ? "built" : "rebuilt"} ${r.target} (${r.was})`).join("; ");
++}
++
++if (isMain(import.meta.url)) {
++  const argv = process.argv.slice(2);
++  const gated = argGate(argv, { allowed: ["--quiet", "--list"] });
++  if (gated !== null) process.exit(gated);
++  if (argv.includes("--list")) {
++    for (const p of BUILT_PATHS) console.log(p);
++    process.exit(0);
++  }
++  let rows;
++  try {
++    rows = ensureBuilt();
++  } catch (e) {
++    console.error(`ensure-built: FAILED — ${e && e.message || e}`);
++    process.exit(1);
++  }
++  if (!argv.includes("--quiet")) {
++    for (const r of rows) {
++      console.log(`ensure-built: ${r.target} ${r.was === "fresh" ? "fresh" : r.was === "missing" ? "built (missing)" : "rebuilt (stale)"}`);
++    }
++  }
++}
+diff --git a/tools/gen/gen-circuit-meta.mjs b/tools/gen/gen-circuit-meta.mjs
+index 20da91f4fd..085d680cf4 100644
+--- a/tools/gen/gen-circuit-meta.mjs
++++ b/tools/gen/gen-circuit-meta.mjs
+@@ -1,21 +1,30 @@
+ #!/usr/bin/env node
+ /**
+  * gen-circuit-meta.mjs — lightweight TrackDefs for the title/menu script wall.
+- * @doc Extracts circuit picker metadata into js/track/circuit-meta.js (LAZY_CIRCUIT hydrates).
++ * @doc Builds js/track/circuit-meta.js (circuit picker metadata; a gitignored build product, LAZY_CIRCUIT hydrates).
+  * @skill check-changes
+  *
+  * Title/menu only needs id/name/country/flags/length — PERF-FINDINGS §circuit-tag.
+  * The authored circuit files stay the single home of a def; this file is GENERATED
+  * and lives outside js/circuits/ so readdir-based circuit-id discovery stays clean.
+  *
++ * BUILT, NOT COMMITTED (2026-10-28, stage 1 of docs/notes/DEPLOY-TIME-GEN-2026-10-28.md;
++ * Bryce: "Build at deploy"). The output is gitignored. tools/gen/ensure-built.mjs builds
++ * it wherever a checkout is served or tested, and tools/desktop/stage.mjs renders it
++ * into the staged site from source, so two PRs that each touch a circuit can no longer
++ * leave the deploy tip with a stale committed copy.
++ *
+  *   node tools/gen/gen-circuit-meta.mjs           # write js/track/circuit-meta.js
+- *   node tools/gen/gen-circuit-meta.mjs --check   # exit 1 on drift
++ *   node tools/gen/gen-circuit-meta.mjs --check   # gen:check: exit 1 when git TRACKS the file
++ *                                                 # (it must stay a build product); a missing or
++ *                                                 # stale local copy is rebuilt, not reported
+  */
+ import fs from "node:fs";
+ import path from "node:path";
+ import vm from "node:vm";
++import { spawnSync } from "node:child_process";
+ import { createRequire } from "node:module";
+-import { ROOT, isMain, firstDiff, argGate } from "./gen-lib.mjs";
++import { ROOT, isMain, argGate, ensureFile } from "./gen-lib.mjs";
+ 
+ const require = createRequire(import.meta.url);
+ const MANIFEST = require("../manifest.cjs");
+@@ -81,18 +90,36 @@ export function generate() {
+ }
+ 
+ export function write() {
+-  const out = path.join(ROOT, TARGET);
+-  fs.writeFileSync(out, generate());
++  ensureFile(path.join(ROOT, TARGET), generate());
+   return TARGET;
+ }
+ 
++/** Build the local copy when it is missing or stale. @returns {"fresh"|"missing"|"stale"} */
++export function ensure() {
++  return ensureFile(path.join(ROOT, TARGET), generate());
++}
++
++/** Does git track TARGET in this checkout? false when git cannot say (no repo, no git). */
++export function trackedInGit() {
++  const r = spawnSync("git", ["ls-files", "--", TARGET], { cwd: ROOT, encoding: "utf8" });
++  return r.status === 0 && r.stdout.trim() !== "";
++}
++
++/** gen:check for a build product. There is no committed copy to drift, so the
++ *  check is: the generator still runs on today's sources, and git does not track
++ *  the output (a merge that kept an old branch's copy, or a `git add -f`, would
++ *  commit bytes that go stale on the next circuit edit). A missing or stale local
++ *  copy is rebuilt here, so the generators after this one in gen:check read
++ *  today's roster. */
+ export function check() {
+-  const want = generate();
+-  const got = fs.readFileSync(path.join(ROOT, TARGET), "utf8");
+-  if (got === want) return true;
+-  const diff = firstDiff(got, want);
+-  console.error(`gen-circuit-meta: ${TARGET} is stale` + (diff ? ` (${diff})` : ""));
+-  return false;
++  if (trackedInGit()) {
++    console.error(`gen-circuit-meta: ${TARGET} is tracked by git, but it is a build product (gitignored; `
++      + `docs/notes/DEPLOY-TIME-GEN-2026-10-28.md). Untrack it: git rm --cached ${TARGET}`);
++    return false;
++  }
++  const was = ensure();
++  if (was !== "fresh") console.log(`gen-circuit-meta: ${TARGET} was ${was}; rebuilt (a build product, not committed)`);
++  return true;
+ }
+ 
+ if (isMain(import.meta.url)) {
+diff --git a/tools/gen/gen-lib.mjs b/tools/gen/gen-lib.mjs
+index e411d8f1c0..0911aacfe2 100644
+--- a/tools/gen/gen-lib.mjs
++++ b/tools/gen/gen-lib.mjs
+@@ -101,3 +101,22 @@ export function emit(rel, content, argv = process.argv.slice(2)) {
+ export function isMain(metaUrl) {
+   return !!process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(metaUrl);
+ }
++
++/**
++ * Bring a BUILD PRODUCT up to date: a generated file that is gitignored and built
++ * where it is served (tools/gen/ensure-built.mjs; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md).
++ * Writes only when the bytes differ, through a temp file and a rename, so a test or a
++ * static server reading it concurrently sees the old bytes or the new, never half a file.
++ * @param {string} abs absolute path
++ * @param {string} content
++ * @returns {"fresh" | "missing" | "stale"} the state BEFORE the call ("fresh" = nothing written)
++ */
++export function ensureFile(abs, content) {
++  const current = fs.existsSync(abs) ? fs.readFileSync(abs, "utf8") : null;
++  if (current === content) return "fresh";
++  fs.mkdirSync(path.dirname(abs), { recursive: true });
++  const tmp = `${abs}.${process.pid}.tmp`;
++  fs.writeFileSync(tmp, content);
++  fs.renameSync(tmp, abs);
++  return current === null ? "missing" : "stale";
++}
+diff --git a/tools/lib/generated-paths.mjs b/tools/lib/generated-paths.mjs
+index 863211b4f3..14cdddf35c 100644
+--- a/tools/lib/generated-paths.mjs
++++ b/tools/lib/generated-paths.mjs
+@@ -28,3 +28,18 @@ export function isGenerated(p) {
+   const s = String(p || "").replace(/^\.\//, "");
+   return GENERATED_PATHS.includes(s);
+ }
++
++// BUILT, NOT COMMITTED (2026-10-28; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md, Bryce: "Build at deploy").
++// Generator outputs the site serves that are gitignored: tools/gen/ensure-built.mjs builds them in every
++// served or tested checkout, and tools/desktop/stage.mjs renders them into the staged site from source.
++// A merge conflict in one (an old branch edited its committed copy; the tip deleted it) cures by taking
++// the deletion — deploy.mjs's cureableConflicts. Each entry is in .gitignore (tests/unit/deploy-staging.test.mjs).
++export const BUILT_PATHS = Object.freeze([
++  "js/track/circuit-meta.js",
++]);
++
++/** Is `p` (repo-relative, forward slashes) a build product that git must not track? Pure. */
++export function isBuilt(p) {
++  const s = String(p || "").replace(/^\.\//, "");
++  return BUILT_PATHS.includes(s);
++}
+diff --git a/tools/lib/harness.mjs b/tools/lib/harness.mjs
+index 9a66efe372..17b4163bff 100644
+--- a/tools/lib/harness.mjs
++++ b/tools/lib/harness.mjs
+@@ -45,9 +45,13 @@ import { createServer } from "node:http";
+ import { createRequire } from "node:module";
+ import { extname, join, normalize, relative, resolve, sep } from "node:path";
+ 
++import { fileURLToPath } from "node:url";
++
+ import { chromiumPath, normalizeBrowserFlavor, resolveChromium } from "./chromium-path.mjs";
++import { ensureBuilt } from "../gen/ensure-built.mjs";
+ 
+ const require = createRequire(import.meta.url);
++const REPO_ROOT = resolve(fileURLToPath(new URL("../..", import.meta.url)));
+ const _wgpuArgs = require("./webgpu-chrome-args.cjs");
+ export const WEBGPU_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_CHROMIUM_ARGS;
+ export const WEBGPU_LAVAPE_CHROMIUM_ARGS = _wgpuArgs.WEBGPU_LAVAPE_CHROMIUM_ARGS;
+@@ -228,6 +232,9 @@ export async function startStaticServer(root, {
+   immutableAssets = null,
+ } = {}) {
+   const base = resolve(root);
++  // Serving this checkout: build its gitignored generated files first (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md),
++  // so tools/shot and the apex-tools MCP never boot a title without its circuit roster. A staged site carries its own.
++  if (base === REPO_ROOT) ensureBuilt();
+   const prefix = base + sep;
+   let snapshotPrefix = null, snapshot = null;
+   const cache = new Map();
+diff --git a/tools/mcp/cdmcp-cli.py b/tools/mcp/cdmcp-cli.py
+index f70eda2659..09f3e2602c 100755
+--- a/tools/mcp/cdmcp-cli.py
++++ b/tools/mcp/cdmcp-cli.py
+@@ -294,6 +294,9 @@ def _port_open(port: int) -> bool:
+ 
+ def _ensure_static_server(port: int = 3456) -> subprocess.Popen | None:
+     """Reuse an existing :port server, else start `npx serve` for the repo root."""
++    # The checkout's gitignored generated files (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md):
++    # build what is missing or stale before a page loads the title. Best effort.
++    subprocess.run(["node", str(ROOT / "tools/gen/ensure-built.mjs"), "--quiet"], cwd=str(ROOT), check=False)
+     if _port_open(port):
+         print(f"reusing http://127.0.0.1:{port}/")
+         return None
+diff --git a/tools/mcp/debug-chrome.mjs b/tools/mcp/debug-chrome.mjs
+index f99bac5281..f19ed29432 100644
+--- a/tools/mcp/debug-chrome.mjs
++++ b/tools/mcp/debug-chrome.mjs
+@@ -170,7 +170,9 @@ export async function main(args = process.argv.slice(2)) {
+     mkdirSync(DIR, { recursive: true }); mkdirSync(PROFILE, { recursive: true });
+     const procs = [];
+     const serverUp = await fetch(`http://127.0.0.1:${SERVER_PORT}/`, { signal: AbortSignal.timeout(1500) }).then(() => true, () => false);
+-    if (!serverUp) procs.push({ role: "server", ...launch("python3", ["-m", "http.server", String(SERVER_PORT), "--bind", "127.0.0.1"], `http.server ${SERVER_PORT}`, "server.log") });
++    // The checkout's gitignored generated files (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): built before Chrome loads the title.
++    const { ensureBuilt } = await import("../gen/ensure-built.mjs"); ensureBuilt();
++    if (!serverUp) procs.push({ role: "server", ...launch("python3",["-m", "http.server", String(SERVER_PORT), "--bind", "127.0.0.1"], `http.server ${SERVER_PORT}`, "server.log") });
+     const chrome = chromiumPath();
+     procs.push({ role: "chrome", ...launch(chrome, chromeArgs({ port, url: headlessGame ? "about:blank" : url, webgpu, device }), `--remote-debugging-port=${port}`, "chrome.log") });
+     writeFileSync(PID_FILE, JSON.stringify({ port, device, startedAt: new Date().toISOString(), procs }, null, 2) + "\n");
