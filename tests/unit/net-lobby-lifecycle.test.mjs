@@ -54,6 +54,8 @@ function harness({ wakeLock, prefetchIce, scanFactory, teams, netSession, transp
   for (const id of ["vs-close", "vs-invite-more", "vs-host", "vs-join", "vs-make-answer", "vs-accept",
                     "vs-scan-invite", "vs-scan-answer", "vs-scan-cancel", "vs-code-host", "vs-code-join", "vs-code-in", "vs-code-head", "vs-code-hint", "vs-code-value",
                     "vs-code-share", "vs-code-copy", "vs-edit-car", "vs-ready"]) element(id);
+  // The sheet foot: lobby.js builds its BACK beside CLOSE at wire() time.
+  elements.get("vs-close").parentNode = { insertBefore(n) { if (n && n.id) elements.set(n.id, n); return n; } };
   const scan = element("vs-scan");
   const video = element("vs-scan-video");
   const listeners = new Map();
@@ -2658,5 +2660,26 @@ test("removing the last guest of a CODE room rotates it, and its expiry reads in
     rooms[rooms.length - 1].onFail({ error: "expired", message: "Check the six characters and try again." });
     assert.doesNotMatch(h.status.textContent, /six characters/, "the host never sees the guest's copy");
     assert.ok(h.status.textContent.includes("INVITE ANOTHER"), "the host's own copy: " + h.status.textContent);
+  } finally { h.lobby.cancel(); }
+});
+
+// UI hunt 2026-10-29 #8: the HOST / JOIN steps offered only CLOSE.
+test("BACK from a HOST step drops only that attempt and returns to the HOST/JOIN choice", async () => {
+  const h = harness({ scanFactory: () => ({ stop() {}, start() {} }) });
+  try {
+    h.lobby.wire();
+    h.lobby.open();
+    assert.equal(h.elements.get("vs-back").hidden, true, "the choice itself has nothing to go back to");
+    assert.equal((await h.lobby.host()).ok, true);
+    assert.equal(h.elements.get("vs-pick").hidden, true);
+    assert.equal(h.elements.get("vs-back").hidden, false, "a HOST step offers BACK");
+    assert.equal(h.lobby.status().pending, true, "an offer is out");
+    h.click("vs-back");
+    assert.equal(h.elements.get("vs-pick").hidden, false, "back on the HOST/JOIN choice");
+    assert.equal(h.elements.get("vs-back").hidden, true);
+    assert.equal(h.elements.get("vsfriend").hidden, false, "the lobby stays open");
+    assert.equal(h.lobby.status().pending, false, "the half-built offer is torn down");
+    await h.lobby.join();
+    assert.deepEqual(h.transports, ["host", "guest"], "the other path starts fresh");
   } finally { h.lobby.cancel(); }
 });

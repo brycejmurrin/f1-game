@@ -2148,3 +2148,30 @@ test("a foreign write to the live slot during the before-import capture still re
   assert.equal(result.reason, "conflict");
   assert.equal(h.store.get("career.driver.0").money, 9000);
 });
+
+// UI hunt 2026-10-29 #7: BACK / Esc (#cr-back is the data-esc-close door) from
+// the NEW CAREER wizard skipped the slot picker it came from and left to the title.
+test("NEW CAREER BACK steps back to the slot picker and restores the borrowed live slot", () => {
+  const h = loadHarness();
+  h.Career.start({ teamId: "haas", seed: 1 });
+  const ui = bootBackupUi({ Career: h.Career, CareerBackup: h.CareerBackup, store: h.store });
+  let toTitle = 0;
+  ui.G.refreshCareerButton = () => { toTitle++; };
+  ui.G.els.overlay.hidden = true;
+  const empty = () => ui.G.$("cr-left").querySelectorAll(".cr-slot-main").find((b) => b.getAttribute("aria-label") === "Driver career slot 2, empty");
+  const card = empty();
+  assert.ok(card, "an empty driver slot card");
+  ui.G.$("cr-left").replaceChildren(); ui.G.$("cr-right").replaceChildren();
+  card.onclick();
+  assert.equal(h.Career.active(), false, "the wizard borrows the empty slot");
+  ui.G.$("cr-left").replaceChildren(); ui.G.$("cr-right").replaceChildren();
+  ui.G.$("cr-back").onclick();
+  assert.equal(toTitle, 0, "BACK from the wizard does not leave to the title");
+  assert.equal(ui.dom.byId("career").hidden, false);
+  assert.equal(ui.G.els.overlay.hidden, true);
+  assert.deepEqual({ ...h.Career.slot() }, { flavour: "driver", i: 0 }, "the live slot is restored");
+  assert.equal(h.Career.active(), true);
+  assert.ok(empty(), "the slot picker is shown again");
+  ui.G.$("cr-back").onclick();
+  assert.equal(toTitle, 1, "BACK from the title-opened picker then leaves to the title");
+});

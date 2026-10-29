@@ -1630,8 +1630,10 @@ function create(G) {
     // The foot button must say where it GOES: from the hub's CAREER MODES door
     // it returns to the HUB; from the title it is MAIN MENU. Labelling MAIN MENU
     // then opening CAREER 2026 was the lying label Esc also followed (data-esc-close).
+    // The NEW CAREER wizard steps back to its slot list, so it says BACK too.
     const back = $("cr-back");
-    if (back) back.textContent = (picking && slotsOrigin === "hub" && Career.active()) ? I18n.t("career.back", null, "BACK") : I18n.t("career.mainMenu", null, "MAIN MENU");
+    const stepsBack = (picking && slotsOrigin === "hub" && Career.active()) || (!picking && !!draft && !Career.active());
+    if (back) back.textContent = stepsBack ? I18n.t("career.back", null, "BACK") : I18n.t("career.mainMenu", null, "MAIN MENU");
     ScrollFade.refresh();
   }
 
@@ -1698,7 +1700,13 @@ function create(G) {
       picking = false; armedDelete = ""; armedImport = ""; pendingImport = null;
       G.openCareer(); return;
     }
-    if (draft && draftFrom && !Career.active()) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
+    // NEW CAREER wizard: BACK (and Esc, the same door) steps back one screen to
+    // the slot list it was opened from, restoring the borrowed live slot.
+    if (draft && !Career.active()) {
+      if (draftFrom) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
+      draft = null; draftFieldErr = null; picking = true;
+      build(); return;
+    }
     // (build() retitles this button per state — see buildSlotPanes/buildHubPanes.)
     close();
     els.overlay.hidden = false;

@@ -335,8 +335,17 @@ test("career: a NEW CAREER draft does not survive leaving the screen", () => {
   const emptySlot = $("cr-left").querySelectorAll(".cr-slot.empty")[0];
   emptySlot.querySelector(".cr-slot-main").onclick();
   assert.equal($("cr-title").textContent, "NEW CAREER");
-  // MAIN MENU
+  // BACK steps out of the wizard to the slot list it came from (UI hunt 2026-10-29 #7)…
+  assert.equal($("cr-back").textContent, "BACK");
+  empty(dom, "cr-left", "cr-right");
   $("cr-back").onclick();
+  assert.equal($("career").hidden, false);
+  assert.equal($("cr-title").textContent, "CAREER MODES");
+  assert.equal($("cr-back").textContent, "MAIN MENU");
+  // …and a draft abandoned through the shared exit (GARAGE, a race) dies too.
+  $("cr-left").querySelectorAll(".cr-slot.empty")[0].querySelector(".cr-slot-main").onclick();
+  assert.equal($("cr-title").textContent, "NEW CAREER");
+  ui.close();
   assert.equal($("career").hidden, true);
   // Re-enter through the HUB door with no career live (the path that does not
   // go through the picker): must be the modes screen, not the abandoned form.
@@ -495,8 +504,17 @@ test("season setup: unchanged qualifying survives APPLY; changing rules requires
   assert.equal(G.season.qualiOrder.length, 1);
   assert.equal($("season-setup").hidden, false);
   $("ss-back").onclick();
+  assert.equal($("season-setup").hidden, false, "unapplied edits arm BACK first");
+  assert.equal($("ss-back").textContent, "DISCARD EDITS?");
+  $("ss-back").onclick();
+  assert.equal($("season-setup").hidden, true, "the second BACK discards");
   ui.open();
+  assert.equal($("ss-back").textContent, "BACK", "a fresh visit disarms BACK");
+  assert.equal($("ss-back").dataset.armed, undefined);
   assert.equal($("ss-apply").dataset.armed, undefined, "BACK discards the armed draft");
+  $("ss-back").onclick();
+  assert.equal($("season-setup").hidden, true, "BACK with nothing edited leaves at once");
+  ui.open();
   $("ss-laps").children[0].onclick();
   $("ss-apply").onclick();
   assert.equal(calls, 1, "a reopened setup must confirm again");
