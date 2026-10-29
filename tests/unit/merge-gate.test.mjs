@@ -186,6 +186,9 @@ test("two PRs each at the assert-match ceiling alone are over it on the merge re
     for (const rel of [`${UNIT}/assert-match-ratchet.test.mjs`, "tools/check/ratchets.mjs", "tools/hooks/ratchet-reason.mjs"]) write(W, rel, fs.readFileSync(path.join(ROOT, rel), "utf8"));
     write(W, "tests/data/ratchets.json", JSON.stringify({ files: {}, tree: { assertPins: 3 } }) + "\n");
     write(W, `${UNIT}/base.test.mjs`, pins(2));
+    // This fixture isolates ratchet composition; provide a valid scenery catalog for the preceding gen row.
+    write(W, "tools/shot/scenery-source-hash.cjs", `module.exports = { scenerySourceDigest: () => "${"a".repeat(64)}" };\n`);
+    write(W, "tools/shot/scenery-locations.json", JSON.stringify({ sourceDigest: "a".repeat(64) }));
     git(W, "add", "-A"); git(W, "commit", "-q", "-m", "base: 2 pins, ceiling 3"); git(W, "push", "-q", "origin", "deploy-x");
     for (const [name, file] of [["pr1", "one.test.mjs"], ["pr2", "two.test.mjs"]]) {   // each adds one pin: 3 of 3 alone
       git(W, "checkout", "-q", "-b", name, "deploy-x"); write(W, `${UNIT}/${file}`, pins(1));
