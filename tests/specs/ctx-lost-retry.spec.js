@@ -37,7 +37,13 @@ async function startBahrainRace(page) {
       }, 1500);
       return race(id, ...rest);
     };
-    return apex.race("bahrain");
+    const started = apex.race("bahrain");
+    // Budget-exhausted race-entry loss quits to menu before the grid; __apex.race()
+    // rejects by design. Playwright awaits evaluate's return — swallow so the spec
+    // can assert the ctx-lost card instead of dying on the harness error.
+    if (started && typeof started.then === "function") {
+      started.then(() => {}, () => {});
+    }
   });
 }
 
