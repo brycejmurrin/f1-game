@@ -1,5 +1,5 @@
 // p75 size envelope: every TEAM_STYLE body + every BODY_STYLES row except the new ones, on the mclaren chassis.
-// node scratch/d1d/envelope.mjs [--json]   NEW=rift,keel,delta,serpent rows are compared, not counted.
+// node design-preview/concept-bodies/envelope.mjs [--json]   NEW=rift,keel,delta,serpent rows are compared, not counted.
 import { lowerEnvelope, frozen } from "./envelope-limits.mjs";
 import { dims } from "./measure.mjs";
 import { loadParts } from "../../tools/car/parts-sweep.mjs";
