@@ -56,7 +56,7 @@
 // pages.yml run on the deploy branch is red. The pinned issue titled `Dispatch` is Bryce's switch: its `dispatch:pause`
 // label launches nothing (as does `pause` in tools/ci/dispatch.json); `dispatch:merge-pause` arms nothing — land.yml
 // reads that label, this tool only reports it (the base-behind limit lives in merge-gate.mjs, not here).
-// Rules, in order (plan §4.4): (1) `ready` issues without `claimed` → one worker each, `priority` first, newest next,
+// Task rules (plan §4.4): (1) `ready` issues without `claimed` → one worker each, `priority` first, newest next,
 // within maxLaunchesPerRun and maxLiveWorkers, none when the quota is not `allowed`, and none at all while landQueueMax
 // or more open non-draft PRs carry `land` (LANDING BACKPRESSURE, 2026-10-27: 42 of 70 open PRs waited to land, merges
 // ran ~3.5/h against ~7/h opened; one skip line says so; rules 2 and 3 drain the queue and are never paused);
@@ -70,6 +70,7 @@
 // comment younger than launchClaimHours is a live claim, so a second run inside the hour launches nothing twice.
 // Live workers (maxLiveWorkers) = children tagged `role:worker` that are RUNNING or in status_bucket WORKING, plus recent
 // launch comments no fetched session names; idle and finished children, Bryce's own and the dispatcher never count.
+// Launch slots go to deploy recovery, requested takeovers, stale PRs, then new issues; all share the same caps.
 // Rule 2's "last activity" is the PR's updated_at (any push, comment, edit or label change) or its newest comment, the
 // dispatcher's launch comments excluded. Label-only churn can only delay a takeover, never fake one; the head commit's
 // committer date is NOT the push time (a commit made at 10:00 and pushed at 12:30 is not 2.5 h idle). Never stale: a
@@ -239,15 +240,30 @@ export function sessionRefs(s) {
   const issues = [...new Set([...tag(/^issue:(\d+)$/), ...[...title.matchAll(/#(\d{1,6})\b/g)].map((m) => Number(m[1])).filter((n) => !prs.includes(n))])];
   return { prs, issues };
 }
+/** Closing declarations in prose for this repository; comments and code examples do not reserve work.
+ * Syntax: https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue */
+function closingIssues(body, repo = DEFAULT_CONFIG.repo) {
+  const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, "")
+    .replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, "")
+    .replace(/https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)\b/gi, "$1#$2");
+  const ids = new Set();
+  for (const m of text.matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:([\w.-]+\/[\w.-]+))?#(\d+)\b/gi)) {
+    if (m[1] && m[1].toLowerCase() !== repo.toLowerCase()) continue;
+    const n = Number(m[2]);
+    if (Number.isSafeInteger(n) && n > 0) ids.add(n);
+  }
+  return [...ids];
+}
+
 /** Does session `s` name PR `p`: by its pr field, a `pr:<n>` tag or a `PR #n` title, by the PR's ```handoff `owner:`
  *  line, or by an issue the PR body closes (`Closes #n`; batch workers tag `issue:<n>` and name the PR only in the
  *  hand-off — dispatcher report 2026-10-27, #4016–#4021 planned as orphans). Pure. */
-export function ownsPr(s, p) {
+export function ownsPr(s, p, repo = DEFAULT_CONFIG.repo) {
   const refs = sessionRefs(s);
   if (refs.prs.includes(Number(p.number))) return true;
   if (String(parseHandoff(p.body)?.owner || "").includes(s.id)) return true;
-  const closes = [...String(p.body || "").matchAll(/\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d{1,6})\b/gi)].map((m) => Number(m[1]));
-  return closes.some((n) => refs.issues.includes(n));
+  return closingIssues(p.body, repo).some((n) => refs.issues.includes(n));
 }
 /** A PR's last activity: its updated_at (push, comment, edit, label) or its newest comment, the dispatcher's own launch
  *  comments excluded (header: why not the head commit's committer date). Pure. */
@@ -391,37 +407,6 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     live[host]++;
     launches.push({ kind, host, number, title, spec, comment: { on, body: `dispatch: launched ${host}:${title} for ${number ? `#${number}` : "deploy:red"} at ${new Date(now).toISOString()}` } });
   };
-  // (1) ready issues without a claim; none at all while the landing queue is full (backpressure: rules 2 and 3 still run).
-  const landQueue = prs.filter((p) => !p.draft && has(p, "land")).length;
-  const queueFull = Number.isFinite(config.landQueueMax) && landQueue >= config.landQueueMax;
-  if (queueFull) skip("issue launches paused", `${landQueue} PRs waiting to land (max ${config.landQueueMax}) — land before starting more`);
-  const ready = issues.filter((i) => !i.pull_request && has(i, "ready") && !has(i, "claimed") && !has(i, "blocked") && !has(i, "needs-decision"))
-    .sort((a, b) => (has(b, "priority") - has(a, "priority")) || (t(b.updated_at) - t(a.updated_at)));
-  for (const i of queueFull ? [] : ready) {
-    const l = liveLaunch(i.comments, now, claimH, sessions);
-    if (l) { skip(`issue #${i.number}`, `launched ${l.host} ${ageLabel(l.at, now)} ago (live claim)`); continue; }
-    const cursor = has(i, "lane:cursor");
-    if (cursor && !config.hosts.cursor.enabled) { skip(`issue #${i.number}`, "lane:cursor but hosts.cursor.enabled is false"); continue; }
-    const host = cursor ? "cursor" : "claude";
-    launch("issue", host, i.number, `[Worker] #${i.number} ${i.title}`.slice(0, 120), issuePrompt(i, config, host), i.number, [`issue:${i.number}`, `lane:${host}`]);
-  }
-  // (2) stale open PRs → needs-owner + ONE takeover.
-  for (const p of prs) {
-    const codex = has(p, "lane:codex");
-    const limit = codex ? config.staleHours.codex : config.staleHours.default;
-    const idleH = (now - activityAt(p)) / 3.6e6;
-    const asked = has(p, "needs-owner");   // its worker (or Bryce) asked for a takeover: launch now, not after 2 h
-    if (idleH < limit && !asked) continue;
-    if (isBotPr(p)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but a fold bot's PR (never re-owned)`); continue; }
-    if (has(p, "land") && !landProblem(p, now, limit, flags.mergePause)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but labelled land and waiting on CI/gate/train`); continue; }
-    if (has(p, "hold") || has(p, "needs-decision")) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but ${has(p, "hold") ? "hold" : "needs-decision"}`); continue; }
-    const owner = sessions.find((s) => isLiveWorker(s) && ownsPr(s, p));
-    if (owner) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but live worker ${owner.id} names it`); continue; }
-    const l = liveLaunch(p.comments, now, claimH, sessions);
-    if (l) { skip(`PR #${p.number}`, `takeover launched ${ageLabel(l.at, now)} ago (live claim)`); continue; }
-    if (!has(p, "needs-owner")) label(p.number, ["needs-owner"]);
-    launch("continue", "claude", p.number, `[Worker] CONTINUE PR #${p.number} ${p.title || ""}`.slice(0, 120), continuePrompt(p, config, "claude"), p.number, [`pr:${p.number}`, "lane:claude"]);
-  }
   // (3) deploy red → Board label + one fixer.
   if (state.deployRed) {
     const claimed = prs.find((p) => has(p, "deploy:red"));
@@ -432,6 +417,46 @@ export function planDispatch(state, config = DEFAULT_CONFIG, now = Date.now()) {
     else if (l && l.target === "deploy:red") skip("deploy:red fixer", `launched ${ageLabel(l.at, now)} ago (live claim)`);
     else launch("deploy-red", "claude", 0, "[Worker] deploy:red fixer", deployRedPrompt(config, "claude"), board?.number, ["deploy:red", "lane:claude"]);
   } else if (board && has(board, "deploy:red")) label(board.number, [], ["deploy:red"]);
+  // (2) stale open PRs → needs-owner + ONE takeover.
+  const recover = [...prs].sort((a, b) => (has(b, "needs-owner") - has(a, "needs-owner"))
+    || (has(b, "priority") - has(a, "priority")) || activityAt(a) - activityAt(b));
+  for (const p of recover) {
+    const codex = has(p, "lane:codex");
+    const limit = codex ? config.staleHours.codex : config.staleHours.default;
+    const idleH = (now - activityAt(p)) / 3.6e6;
+    const asked = has(p, "needs-owner");   // its worker (or Bryce) asked for a takeover: launch now, not after 2 h
+    if (idleH < limit && !asked) continue;
+    if (isBotPr(p)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but a fold bot's PR (never re-owned)`); continue; }
+    if (has(p, "land") && !landProblem(p, now, limit, flags.mergePause)) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but labelled land and waiting on CI/gate/train`); continue; }
+    if (has(p, "hold") || has(p, "needs-decision")) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but ${has(p, "hold") ? "hold" : "needs-decision"}`); continue; }
+    const owner = sessions.find((s) => isLiveWorker(s) && ownsPr(s, p, config.repo));
+    if (owner) { skip(`PR #${p.number}`, `stale ${Math.round(idleH)}h but live worker ${owner.id} names it`); continue; }
+    const l = liveLaunch(p.comments, now, claimH, sessions);
+    if (l) { skip(`PR #${p.number}`, `takeover launched ${ageLabel(l.at, now)} ago (live claim)`); continue; }
+    if (!has(p, "needs-owner")) label(p.number, ["needs-owner"]);
+    launch("continue", "claude", p.number, `[Worker] CONTINUE PR #${p.number} ${p.title || ""}`.slice(0, 120), continuePrompt(p, config, "claude"), p.number, [`pr:${p.number}`, "lane:claude"]);
+  }
+  // (1) ready issues without a claim; none at all while the landing queue is full (backpressure: rules 2 and 3 still run).
+  const landQueue = prs.filter((p) => !p.draft && has(p, "land")).length;
+  const queueFull = Number.isFinite(config.landQueueMax) && landQueue >= config.landQueueMax;
+  if (queueFull) skip("issue launches paused", `${landQueue} PRs waiting to land (max ${config.landQueueMax}) — land before starting more`);
+  const ready = issues.filter((i) => !i.pull_request && has(i, "ready") && !has(i, "claimed") && !has(i, "blocked") && !has(i, "needs-decision") && !has(i, "epic"))
+    .sort((a, b) => (has(b, "priority") - has(a, "priority")) || (t(b.updated_at) - t(a.updated_at)));
+  const linkedPrs = new Map();
+  for (const p of prs) {
+    if (p.state && p.state !== "open") continue;
+    for (const n of closingIssues(p.body, config.repo)) linkedPrs.set(n, [...(linkedPrs.get(n) || []), p.number]);
+  }
+  for (const i of queueFull ? [] : ready) {
+    const linked = linkedPrs.get(Number(i.number));
+    if (linked) { skip(`issue #${i.number}`, `already has open PR ${linked.map((n) => `#${n}`).join(", ")}`); continue; }
+    const l = liveLaunch(i.comments, now, claimH, sessions);
+    if (l) { skip(`issue #${i.number}`, `launched ${l.host} ${ageLabel(l.at, now)} ago (live claim)`); continue; }
+    const cursor = has(i, "lane:cursor");
+    if (cursor && !config.hosts.cursor.enabled) { skip(`issue #${i.number}`, "lane:cursor but hosts.cursor.enabled is false"); continue; }
+    const host = cursor ? "cursor" : "claude";
+    launch("issue", host, i.number, `[Worker] #${i.number} ${i.title}`.slice(0, 120), issuePrompt(i, config, host), i.number, [`issue:${i.number}`, `lane:${host}`]);
+  }
   // (4) archive a session whose every PR and issue is done for archiveAfterMinutes; never one archiveGuard names, never
   // one without a claim comment.
   const claimedIds = claimedSessionIds(state);

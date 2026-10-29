@@ -306,13 +306,15 @@ test("apply (M4): labels and the Board edit go through the client; NO launch com
   assert.equal(writes, 2);
   const line = (s, tag) => [s.slice(0, tag.length), JSON.parse(s.slice(tag.length))];
   assert.deepEqual(line(out[0], "CREATE_SESSION ")[1].source_url, "https://github.com/brycejmurrin/f1-game");
+  assert.equal(line(out[0], "CREATE_SESSION ")[1].title, "[Worker] CONTINUE PR #20 PR 20");
   assert.equal(out[1], `RECORD_LAUNCH node tools/ci/dispatch.mjs --record-launch ${recordToken(p.launches[0])} --session {SESSION_ID}`);
-  assert.equal(line(out[2], "CREATE_SESSION ")[1].title, "[Worker] CONTINUE PR #20 PR 20");
+  assert.equal(line(out[2], "CREATE_SESSION ")[1].title, "[Worker] #10 Task 10");
   assert.equal(out[3].slice(0, 14), "RECORD_LAUNCH ");
   assert.equal(out[4], "ARCHIVE_SESSION session_01DONE000000");
   // --record-launch posts the launch comment, stamped when it runs, on the planned issue.
   const later = NOW + 60e3, posted = [], log = [];
-  const rc = main(["--record-launch", recordToken(p.launches[0])], { api: (path, o) => (posted.push([path, o.method, o.body.body]), { json: {} }), log: (s) => log.push(s), now: () => later });
+  const issueLaunch = p.launches.find((l) => l.kind === "issue");
+  const rc = main(["--record-launch", recordToken(issueLaunch)], { api: (path, o) => (posted.push([path, o.method, o.body.body]), { json: {} }), log: (s) => log.push(s), now: () => later });
   assert.equal(rc, 0);
   assert.deepEqual(posted, [["issues/10/comments", "POST", "dispatch: launched claude:[Worker] #10 Task 10 for #10 at 2026-10-27T12:01:00.000Z"]]);
   assert.equal(liveLaunch([{ body: posted[0][2] }], later, 2).target, "#10");
@@ -586,10 +588,56 @@ test("land-queue backpressure (2026-10-27): at landQueueMax open non-draft `land
 test("land-queue backpressure (2026-10-27): rule 2 takeovers and the rule 3 deploy:red fixer still launch while issue launches pause; the Board caps line shows the queue", () => {
   const landing = Array.from({ length: 15 }, (_, k) => pr(200 + k, { labels: ["land"], draft: false }));
   const p = planDispatch(state({ issues: [board(), issue(10, ["ready"])], prs: [...landing, pr(20, { updated_at: ago(3) })], deployRed: true }), cfg(), NOW);
-  assert.deepEqual(p.launches.map((l) => [l.kind, l.number]), [["continue", 20], ["deploy-red", 0]]);
-  assert.deepEqual(p.labels, [{ number: 20, add: ["needs-owner"], remove: [] }, { number: 1, add: ["deploy:red"], remove: [] }]);
+  assert.deepEqual(p.launches.map((l) => [l.kind, l.number]), [["deploy-red", 0], ["continue", 20]]);
+  assert.deepEqual(p.labels, [{ number: 1, add: ["deploy:red"], remove: [] }, { number: 20, add: ["needs-owner"], remove: [] }]);
   assert.deepEqual(skips(p), ["issue launches paused: 15 PRs waiting to land (max 15) — land before starting more"]);
   const b = p.board.split("\n");
   assert.equal(b[4], "caps: launches/run 4; live workers claude 2/8, cursor 0/4; cost cap $10 · land queue 15/15");
   assert.equal(b.at(-1), "- issue launches paused: 15 PRs waiting to land (max 15) — land before starting more");
+});
+
+test("ready issues with an open PR closing them do not launch duplicate workers", () => {
+  const bodies = [
+    ["Closes #10", true], ["FIXES: #10", true], ["Resolved #10", true],
+    ["Closes brycejmurrin/f1-game#10", true], ["Fixes BRYCEJMURRIN/F1-GAME#10", true],
+    ["Closes https://github.com/brycejmurrin/f1-game/issues/10", true],
+    ["Closes https://github.com/another/repository/issues/10", false],
+    ["Closes #11, resolves #10", true], ["Closes #100", false],
+    ["Closes another/repository#10", false], ["Refs #10", false],
+    ["<!-- Example: Closes #10 -->", false], ["```\nCloses #10\n```", false],
+    ["Example: `Closes #10`", false], ["Example: ``Closes #10``", false],
+    ["`Example `` Closes #10`", false], ["``Example ` Closes #10``", false],
+    ["Example: ``Closes #99``. Closes #10", true],
+  ];
+  for (const [body, linked] of bodies) {
+    const p = planDispatch(state({ issues: [board(), issue(10, ["ready"]), issue(12, ["ready"])],
+      prs: [pr(50, { body })] }), cfg(), NOW);
+    assert.deepEqual(p.launches.map((l) => l.number), linked ? [12] : [10, 12], body);
+    assert.equal(p.skipped.some((s) => s.what === "issue #10" && s.why.includes("#50")), linked, body);
+  }
+  const closed = planDispatch(state({ issues: [board(), issue(10, ["ready"])],
+    prs: [pr(50, { state: "closed", body: "Closes #10" })] }), cfg(), NOW);
+  assert.deepEqual(closed.launches.map((l) => l.number), [10], "closed PRs do not reserve work");
+});
+
+test("ready epics are never launched as tasks; their ready sub-issues remain eligible", () => {
+  const p = planDispatch(state({ issues: [board(), issue(10, ["ready", "epic", "priority"]),
+    issue(11, ["ready"], { body: "Sub-issue of #10" })] }), cfg(), NOW);
+  assert.deepEqual(p.launches.map((l) => l.number), [11]);
+});
+
+test("deploy recovery and requested takeovers get scarce launch slots before stale PRs and new issues", () => {
+  const input = state({ issues: [board(), issue(10, ["ready", "priority"]), issue(11, ["ready"]),
+    issue(12, ["ready"]), issue(13, ["ready"])], deployRed: true,
+    prs: [pr(20, { updated_at: ago(4) }), pr(30, { labels: ["needs-owner"] })] });
+  const kinds = (p) => p.launches.map((l) => [l.kind, l.number]);
+  assert.deepEqual(kinds(planDispatch(input, cfg({ maxLaunchesPerRun: 2 }), NOW)),
+    [["deploy-red", 0], ["continue", 30]]);
+  assert.deepEqual(kinds(planDispatch(input, cfg(), NOW)),
+    [["deploy-red", 0], ["continue", 30], ["continue", 20], ["issue", 10]]);
+  for (const on of [{ quota: "allowed_warning" }, { issues: [board(), dispatchIssue(["dispatch:pause"])] },
+    { sessions: Array.from({ length: 8 }, (_, i) => ({ id: `live-${i}`, tags: ["role:worker"], status: "RUNNING" })) }]) {
+    assert.equal(planDispatch({ ...input, ...on }, cfg(), NOW).launches.length, 0,
+      "recovery keeps the existing quota, pause and live-worker limits");
+  }
 });
