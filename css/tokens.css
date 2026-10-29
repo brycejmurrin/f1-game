@@ -8,9 +8,10 @@
    as the winner). The `@layer` declaration below just makes that ordering
    explicit and deterministic instead of load-order-implicit. */
 
-/* Deterministic cascade-layer order across the split stylesheet. reset < base <
-   components < hud < overlays. Later layers win normal-declaration ties. */
-@layer reset, base, components, hud, overlays;
+/* Deterministic cascade-layer order. Later names win normal-declaration ties.
+   `responsive` is menu-destinations.css (it used to sort last by being undeclared).
+   `layout` is the viewport fixes in css/responsive.css and must beat it. */
+@layer reset, base, components, hud, overlays, responsive, layout;
 
 /* Self-hosted web fonts (SIL OFL 1.1 — see assets/fonts/*-OFL.txt). Vendored via
    `npm pack @fontsource/{titillium-web,barlow-condensed}`; latin woff2 subsets
@@ -293,8 +294,30 @@
   /* Usable box inside hardware on full-screen menus (#overlay, .screen hosts).
      Any cap written against raw svh/vw must use these, not 100% of the
      viewport — viewport-fit=cover includes the notch and home indicator. */
-  --safe-w: calc(100vw - var(--safe-l) - var(--safe-r));
+  /* svw, not vw: the same house unit as --safe-h's svh. vw is the large
+     viewport and includes the classic scrollbar, so a sheet capped at
+     --safe-w could be wider than the layout viewport. dvw is not the
+     house unit for the same reason dvh is not — it changes while browser
+     chrome shows and hides. */
+  --safe-w: calc(100svw - var(--safe-l) - var(--safe-r));
   --safe-h: calc(100 * var(--svhz) - var(--safe-t) - var(--safe-b));
+  /* Width tiers. Media queries repeat the pixels (layout-tokens.test.mjs).
+     A landscape phone can be tablet. Screens read --layout-active or html[data-layout]. */
+  --bp-phone: 480px;
+  --bp-tablet: 700px;
+  --bp-laptop: 900px;
+  --bp-desktop: 1440px;
+  --bp-wide: 1920px;
+  --bp-ultra: 2200px;
+  --layout-active: var(--bp-phone);
+  /* One control column. 660px matched the landscape 32vw column at 1920. */
+  --col-max: 660px;
+  /* Foldables. Fallbacks are the whole viewport and a zero hinge. Unitless 0:
+     a px literal on a property whose name contains "gap" counts as raw spacing. */
+  --seg-w: env(viewport-segment-width 0 0, 100vw);
+  --seg-h: env(viewport-segment-height 0 0, 100svh);
+  --fold-gap: max(0, calc(env(viewport-segment-left 1 0, 0) - env(viewport-segment-right 0 0, 0)));
+  --fold-gap-y: max(0, calc(env(viewport-segment-top 0 1, 0) - env(viewport-segment-bottom 0 0, 0)));
   /* Software-keyboard occlusion, LAYOUT px. env() cannot see the keyboard —
      on iOS Safari and Chromium-Android it shrinks only the VISUAL viewport,
      so svh/dvh/lvh all miss it too. js/game/sheetshape.js watches
@@ -1358,4 +1381,10 @@ button:disabled:active { background: var(--plate); }
   --gap: 8px;
   --gut: 8px;
 }
+/* Active width tier. The min-width IS the token (layout-tokens.test.mjs). */
+@media (min-width: 700px) { :root { --layout-active: var(--bp-tablet); } }
+@media (min-width: 900px) { :root { --layout-active: var(--bp-laptop); } }
+@media (min-width: 1440px) { :root { --layout-active: var(--bp-desktop); } }
+@media (min-width: 1920px) { :root { --layout-active: var(--bp-wide); } }
+@media (min-width: 2200px) { :root { --layout-active: var(--bp-ultra); } }
 } /* @layer base */
