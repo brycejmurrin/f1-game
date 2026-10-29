@@ -233,6 +233,8 @@
     "tests/unit/contact-geometry.test.mjs",
     "// context-cap.py hook: STOP AT / env caps, advisory once per level, hard-cap spawn deny with the hand-off exit.",
     "tests/unit/context-cap-hook.test.mjs",
+    "// CooldownLap (js/race/cooldown-lap.js): post-flag drive exits (pit/lap/time/SKIP), eligibility, AI cool/park, ≥44px SKIP (#4068 slice 2). VM.",
+    "tests/unit/cooldown-lap.test.mjs",
     "// coverage-merge is the only consumer of the raw V8 lists a flagged run",
     "// writes (APEX_JS_COVERAGE=1 / NODE_V8_COVERAGE); a url shape that stops",
     "// mapping reads as 0 %, not as an error, so its filters are pinned here. ~2 s.",
@@ -514,6 +516,7 @@
     "tests/unit/hw-zones.test.mjs",
     "// i18n contribution lint + migrated-file guard (Slice 2 / #1601): fixtures + ship locales + --guard.",
     "tests/unit/i18n-lint.test.mjs",
+    "tests/unit/i18n-number-format.test.mjs",
     "tests/unit/i18n-parts-career.test.mjs",
     "tests/unit/i18n.test.mjs",
     "tests/unit/image-grade-shaders.test.mjs",
@@ -550,6 +553,8 @@
     "tests/unit/launch-gate.test.mjs",
     "tests/unit/layers-anyopen-memo.test.mjs",
     "tests/unit/layers-nav-memo.test.mjs",
+    "// Width tiers: --bp-* in tokens.css, the media-query copies, and UiScale.layoutOf stay one list.",
+    "tests/unit/layout-tokens.test.mjs",
     "// getContext TDZ before G exists: gesture listeners and restoreOnEngine must not throw or latch early.",
     "tests/unit/lazy-bundles-getcontext.test.mjs",
     "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -691,6 +696,8 @@
     "tests/unit/pace-math.test.mjs",
     "// Perf hunt 6 (B·H6): the material strips decode to their stored bytes (DecompressionStream + PNG unfilter) with no GPU readback; every shipped layer is byte-identical to sharp's decode; a missing DecompressionStream or a tagged/palette/corrupt PNG falls back to createImageBitmap.",
     "tests/unit/pack-png-bytes.test.mjs",
+    "// Parc fermé beat (js/race/parc-ferme.js, #4069 slice 3): park pose, frozen phone path, timer + SKIP. ~0.05 s.",
+    "tests/unit/parc-ferme.test.mjs",
     "// particles.js dirty latch: parked rain skips expand/upload until eye cell moves.",
     "tests/unit/particles-dirty.test.mjs",
     "// W13c: wheels/tyres catalog copy vs cover:1 and 2026 Pirelli role colours.",
@@ -708,8 +715,12 @@
     "tests/unit/pause-taps.test.mjs",
     "tests/unit/perf-frametime.test.mjs",
     "tests/unit/perf-governor.test.mjs",
+    "// Hot-function microbench in the game VM (step, physState, nodeAt): 6x the checked-in per-call baseline, and a 4x within-run window spread.",
+    "tests/unit/perf-hot-bench.test.mjs",
     "tests/unit/perf-race-entry.test.mjs",
     "tests/unit/perf-sentinel.test.mjs",
+    "// Session hang ceilings vs recorded phone lines (garage, grid, frames, quit heap). No browser.",
+    "tests/unit/perf-session-budgets.test.mjs",
     "// PerfSpans ring/percentiles/off-switch + __apex.perf() in the game VM; profile lib noise rule; apex_profile argv pins.",
     "tests/unit/perf-spans.test.mjs",
     "tests/unit/perf-try.test.mjs",
@@ -732,9 +743,13 @@
     "// enough to stop in, and the COMMITMENT that replaced the pit button tells",
     "// a driven pit entry from a car that ran wide there. ~0.2 s.",
     "tests/unit/pit-lane.test.mjs",
+    "// Lazy per-step AI pit weather/caution reads, live dev calls and real decision parity; Node VM.",
+    "tests/unit/pit-think-cache.test.mjs",
     "tests/unit/platform-session-install.test.mjs",
     "// PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.",
     "tests/unit/player-forces.test.mjs",
+    "// #4070 podium beat: PodiumBeat overlay + RacePodium CONTINUE/timer → #results. ~0.05 s.",
+    "tests/unit/podium-beat.test.mjs",
     "tests/unit/poll-live-shell.test.mjs",
     "// CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.",
     "tests/unit/pr-board.test.mjs",
@@ -2050,6 +2065,12 @@
     "test:perf-race-entry": {
       "files": [
         "tests/specs/perf-race-entry.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:perf-session": {
+      "files": [
+        "tests/specs/perf-session-budgets.spec.js"
       ],
       "kind": "browser"
     },

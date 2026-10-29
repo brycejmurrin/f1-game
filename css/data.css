@@ -1333,4 +1333,61 @@ body[data-density="compact"] {
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .dh-card { background: var(--surf-1); }
 }
+
+/* Active destination stays obvious when the strip scrolls: the filled plate
+   plus a red rule. The underline/pill looks outrank this (higher specificity). */
+#datahub .dh-tab.active { box-shadow: inset 0 -3px 0 var(--red); }
+
+/* Short landscape: one scrolling row. Wrapped destinations ate the schedule
+   on 844×390. Tall portrait keeps the 3-column grid (data-hub-layout pin). */
+body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
+  /* row (not wrap): one scrolling strip on a short landscape sheet. The wide
+     card keeps .dh-tabs { flex-wrap: wrap }, so EXPORT is not a clipped row. */
+  flex-flow: row;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs::-webkit-scrollbar { display: none; }
+body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tab { scroll-snap-align: start; }
+
+/* Classification tables scroll sideways on a phone instead of crushing the
+   driver column. Data tables are the WCAG 1.4.10 two-dimensional exception. */
+[data-xscroll] {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  touch-action: pan-x;
+  scroll-padding-inline: var(--gap);
+}
+[data-xscroll]:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+body[data-width="narrow"] [data-xscroll] .dh-table,
+body[data-density="compact"] [data-xscroll] .dh-table {
+  table-layout: auto;
+  width: max(100%, 36rem);
+  max-width: none;
+}
+body[data-width="narrow"] [data-xscroll] .dh-td-driver,
+body[data-width="narrow"] [data-xscroll] th:nth-child(2) {
+  min-width: 9.5rem;
+}
+body[data-width="narrow"] [data-xscroll] :is(th:first-child, .dh-td-pos),
+body[data-density="compact"] [data-xscroll] :is(th:first-child, .dh-td-pos) {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--panel);
+}
+
+/* 1440p and ultrawide: the 920px card left the classification in a column
+   with empty scrim on either side. The 920px pin on the unscoped desktop
+   rule stays for the layout test. */
+@media (min-width: 1600px) {
+  body[data-width="wide"][data-density="normal"] #datahub .dh-card {
+    width: min(1080px, 100%);
+  }
+}
+
 } /* @layer overlays */

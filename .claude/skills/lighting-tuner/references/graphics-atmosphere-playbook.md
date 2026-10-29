@@ -14,4 +14,4 @@ Translate Three.js terms to Apex knobs (`js/lighting/`, `lightTune`, `applyRaceS
 | Color grading / bloom | Post stack; shader defects → **renderer-debug** |
 | Wet surfaces / rain | `weatherArc`, surface shaders; precipitation visuals → scenery + lighting |
 
-Bake workflow: `scripts/bake.mjs`, `references/bake.md`. Validate with `__apex.lightState()` and one dusk/night screenshot (**playwright-probe**).
+Bake workflow: SKILL.md §Scripts. Validate with `__apex.lightState()` and one dusk/night screenshot (**playwright-probe**).

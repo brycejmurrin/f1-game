@@ -9,6 +9,10 @@
 /* HUD HUES (#1595), here because only the race reads them: tyre letters (CvdPalette repaints them per COLOUR VISION mode) and real-world signals (one colour in every mode). */
 :root { --tyre-s: #ff3b3b; --tyre-m: #ffd12e; --tyre-h: #f2f2f2; --tyre-i: #3ccf4e; --tyre-w: #3a8dff;
   --flag-yellow: #ffd600; --flag-amber: #ffb300; --flag-sc: #f4f6ff; --light-on: #ff1a1a; }
+/* GLANCE INK. Labels were --dim, which disappears once a plate is translucent over a day sky.
+   Mixed toward --text so a light theme and HIGH CONTRAST (both remap those two tokens) follow.
+   The responsive-foundation draft was not on the board; this stays local to the race HUD. */
+:root { --hud-glance: color-mix(in oklab, var(--text) 68%, var(--dim)); }
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
 /* HUD SIZE, on the CLUSTERS rather than on #hud. #hud is the full-screen
@@ -98,7 +102,7 @@
   display: flex; gap: 10px;
 }
 .hud-box {
-  background: rgb(8 8 14 / calc(0.78 * var(--hud-panel-a-eff)));
+  background: rgb(8 8 14 / calc(0.92 * var(--hud-panel-a-eff)));
   /* Paint the stripe outside layout: canonical/paint zoom passes can snap a
      border twice. Padding keeps its space without the path-dependent width. */
   --hud-box-stripe: 3px;
@@ -119,9 +123,11 @@
      came out a grid step or more low — HUD SIZE 200 painted 1 px narrower than 100 on CI (e6f22d6). */
   line-height: 1.143;
   letter-spacing: 0.2em;
-  color: var(--dim);
+  color: var(--hud-glance);
 }
-.hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* POS is the rank you hunt at a glance; the other captions stay the quieter ink. Width is unchanged. */
+#hud-box-pos .hud-label { color: var(--text); }
+.hud-value { font-family: var(--font-hud); font-size: 19px; line-height: 1.1; font-weight: 700; font-variant-numeric: tabular-nums; text-shadow: var(--hud-halo); }
 /* A STABLE TOWER: a box that changes width re-centres the flex row, so each slot holds its widest
    spelling, 0.04em letter-spacing included ("22/22" 2.41em, "8:88.88" 3.03em, Barlow Condensed 700).
    In em, not ch: ch follows the face on screen, and a fit measured in the fallback (ch 0.56em vs
@@ -215,7 +221,7 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
      pushed the count over.) When BOTH children are empty the plate collapses
      — see `.hud-gaps[data-empty]` below — so a ~10×10 junk chip does not sit
      under the minimap on portrait cockpit with nobody ahead/behind. */
-  background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); padding: 3px 8px; border-radius: var(--r-sm);
+  background: rgb(8 8 14 / calc(0.86 * var(--hud-panel-a-eff))); padding: 3px 8px; border-radius: var(--r-sm);
   /* no backdrop-filter — over the live canvas (see .hud-box) */
   text-shadow: 0 1px 3px rgba(0,0,0,0.9);   /* legible over a bright sky/sand/snow scene, like #hud-speed */
 }
@@ -266,6 +272,15 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
   display: flex; flex-direction: column; align-items: center; gap: calc(var(--gap) / 3);
 }
 #hud-speed { font-family: var(--font-hud); font-size: calc(34px * var(--hud-text-boost, 1)); font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; text-shadow: 0 2px 12px rgba(0,0,0,0.95), 0 0 4px rgba(0,0,0,0.9); }
+/* Chase and the other non-TV cams: a plate behind the digits. Cockpit hides this
+   node (the wheel LCD owns it, css/track-detail.css). The spread is a shadow
+   of the existing plate token, so no new colour literal and the measured box
+   — fitHud's bottom cap — stays the 34px line. */
+body:not(.hud-bcam) #hud-speed {
+  background: var(--look-hud-bg);
+  border-radius: var(--r-sm);
+  box-shadow: 0 0 0 3px var(--look-hud-bg);
+}
 /* A FIXED SLOT FOR THE DIGITS. tabular-nums makes every digit the same width
    but not every NUMBER: "99" -> "100" is a whole digit, and this block is
    centred in its column, so each crossing of 100 km/h (several a lap) shifted
@@ -287,8 +302,8 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
    this from the measured ledger, so a font swap that changes the advance fails
    there rather than silently shortening the slot again. */
 #hud-speed-n { display: inline-block; min-width: 1.373em; text-align: right; }
-.hud-unit { font-size: var(--fs-micro); color: var(--dim); margin-left: calc(var(--gap) / 3); }
-#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: calc(var(--gap) / 6); background: rgb(8 8 14 / calc(0.6 * var(--hud-panel-a-eff))); border: 1px solid var(--card-line); border-radius: var(--r-md); padding: 5px 8px; }
+.hud-unit { font-size: var(--fs-micro); color: var(--hud-glance); margin-left: calc(var(--gap) / 3); text-shadow: var(--hud-halo); }
+#hud-gearbox { display: flex; flex-direction: column; align-items: center; gap: 5px; margin-bottom: calc(var(--gap) / 6); background: rgb(8 8 14 / calc(0.92 * var(--hud-panel-a-eff))); border: 1px solid var(--card-line); border-radius: var(--r-md); padding: 5px 8px; }
 /* HELMET visor: GEAR sits where the wheel LCD is (js/ui/hud-layout.js
    HELMET_TOUCH). At 0.6 alpha the LCD's SPD/G labels ghost through the pill
    and read as a second overlapping gear readout (player shots, 2026-10-05).
@@ -306,7 +321,7 @@ body[data-hl-set="helmet"] #hud-gearbox {
 }
 #hud-tach {
   width: 132px; height: 16px; border-radius: var(--r-md);
-  background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff))); border: 1px solid rgba(255, 255, 255, 0.4);
+  background: rgb(8 8 14 / calc(0.88 * var(--hud-panel-a-eff))); border: 1px solid rgba(255, 255, 255, 0.4);
   overflow: hidden; position: relative;
   /* The fill's width is written at frame rate (js/ui/hud.js paintInstruments).
      Every rule sizing this box gives it a fixed width AND height (here,
@@ -796,8 +811,8 @@ body:is(.hud-met-timing, .hud-met-compact):not([data-hud-hide~="tyre"]) #hud-tyr
   left: calc(10px + var(--sal) / var(--hud-z));
   top: calc(8px + var(--sat) / var(--hud-z));
   width: 128px; height: 128px;
-  opacity: 0.90;
-  background: rgb(8 8 14 / calc(0.55 * var(--hud-panel-a-eff))); box-shadow: inset 0 0 0 2px var(--you), 0 2px 8px rgba(0,0,0,0.6);
+  opacity: 1;
+  background: rgb(8 8 14 / calc(0.86 * var(--hud-panel-a-eff))); box-shadow: inset 0 0 0 2px var(--you), 0 2px 8px rgba(0,0,0,0.6);
 }
 /* PHONE PORTRAIT: the centred POS/LAP/TIME/BEST row is wider than the slot
    beside #minimap (survey 390×844: tower x=31–359 vs map x=10–138, ranked
@@ -1150,7 +1165,7 @@ body.hud-prof-broadcast:has(> :where(#hud) > #hud-mirror-chip:not([hidden])) :is
      the phone rule is body:not(.desktop)). fitHud publishes --dock-r-w
      whenever the dock has a box; desktop stays 0. */
   right: calc(10px + var(--sar) / var(--hud-z));
-  background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff)));
+  background: rgb(8 8 14 / calc(0.9 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
   padding: 5px 9px;
   /* no backdrop-filter — over the live canvas (see .hud-box) */
@@ -1215,7 +1230,7 @@ body:not(.desktop) #hud-sectors {
      so in every spec fixture it has no box at all and contributes nothing to a
      collision check — absence reading as a pass. */
   right: calc(10px + var(--sar) / var(--hud-z) + var(--dock-r-w, 0px));
-  background: rgb(8 8 14 / calc(0.72 * var(--hud-panel-a-eff)));
+  background: rgb(8 8 14 / calc(0.9 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
   /* Tighter than the sector box above it: this is a four-state indicator, not a
      column of times, and it only ever appears over a driver already busy. */
@@ -1383,7 +1398,7 @@ body:not([data-hud-arrange]) :is(#lights, #announce) { pointer-events: none; }
   /* --vwzh, the HUD twin: this element IS zoomed by --hud-scale (see the
      .hud-top zoom rule above), so the cap is in its own zoom. */
   max-width: min(440px, calc(72 * var(--vwzh)));
-  background: rgb(8 8 14 / calc(0.82 * var(--hud-panel-a-eff)));
+  background: rgb(8 8 14 / calc(0.94 * var(--hud-panel-a-eff)));
   border-radius: var(--r-sm);
   overflow: hidden;   /* the plate is square — the card's radius does the corners */
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
@@ -1915,7 +1930,8 @@ body.lt-open:not(.pc-nopanel) .pc-fovlab { font-size: var(--fs-micro); }
 body.lt-open:not(.pc-nopanel) .pc-fovlab input[type="range"] { width: 70px; }
 body.lt-open:not(.pc-nopanel) #pc-exit,
 body.lt-open:not(.pc-nopanel) #pc-panel,
-body.lt-open:not(.pc-nopanel) #pc-hud {
+body.lt-open:not(.pc-nopanel) #pc-hud,
+body.lt-open:not(.pc-nopanel) #pc-line {
   padding: 5px 10px; font-size: var(--fs-micro);
 }
 .pc-hint { font-size: var(--fs-micro); color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
@@ -1923,7 +1939,7 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 /* Free-cam FOV — same painted --slider hit as every menu range, so UI SIZE
    zoom does not shrink this one below the SETTINGS / tuner tracks. */
 .pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); height: var(--slider); min-height: var(--slider); }
-#pc-exit, #pc-panel, #pc-hud {
+#pc-exit, #pc-panel, #pc-hud, #pc-line {
   width: auto; margin: 0; padding: 7px 16px; border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;
   /* The three pc-* controls the earlier --tap-min pass missed: padding-driven
@@ -1934,12 +1950,12 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 /* Compact, but not under the touch floor (#2158): the padding above painted
    the three buttons (lt-open) 40 tall and the FOV track 32 at 844x390. */
 @media (pointer: coarse) {
-  body.lt-open:not(.pc-nopanel) :is(#pc-exit, #pc-panel, #pc-hud),
+  body.lt-open:not(.pc-nopanel) :is(#pc-exit, #pc-panel, #pc-hud, #pc-line),
   .pc-fovlab input[type="range"] { min-height: var(--tap-paint); }
   .pc-fovlab input[type="range"] { height: var(--tap-paint); }
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
-#pc-panel, #pc-hud { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
+#pc-panel, #pc-hud, #pc-line { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
 /* the FREE CAMERA launch buttons in the lighting tuner and the flyby editor */
 #pc-toggle, #fb-freecam {
   width: auto; margin: 0; padding: calc(var(--gap) * 0.75) calc(var(--gap) * 7 / 6); border-radius: var(--r-md);
@@ -2474,7 +2490,7 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 }
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
 /* Pause review is a still, labelled chart independent of the live HUD scale. */
-#pausemenu .input-review { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
+#pausemenu .sheet-body > .input-review { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }   /* outside the RACE TOOLS tray only: in it, a tile (css/experience.css) */
 .input-review-canvas { display: block; width: 100%; max-width: 100%; height: auto; }
 /* PHONE TEST recorder (js/perf/phone-recorder.js): a tiny non-interactive REC
    badge low-left inside the safe area, and the how-to + buttons in the METRICS fold. */

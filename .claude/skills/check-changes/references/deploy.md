@@ -1,4 +1,4 @@
-# The deploy branch: union verification and the live check (folded from the deploy-merge skill)
+# The deploy branch: union verification and the live check
 
 Deploy branch: `claude/f1-game-project-26h3ng` (`pages.yml` →
 https://brycejmurrin.github.io/f1-game/). Work reaches it only through a PR that

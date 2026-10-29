@@ -212,6 +212,18 @@ real trade, and the reason the two ends are worth choosing between.
 `physState()` reports `aeroLoad`, `xVmaxGain`, `xDfLoss`, `vmaxNow`, `aeroGrip`
 and `aeroDf`, so none of this has to be read out of `updateCar` again.
 
+**DAMAGE → HANDLING (#1578, opt-in, Race Settings › DAMAGE: HANDLING; ships
+DISPLAY).** `js/race/damage-handling.js` is the one setting-gated read of the
+Damage readout. ON, the local car's broken front wing scales the FRONT axle's
+share of the aero-load term above (up to −60 %), the rear wing the rear (−60 %),
+floor damage both (−30 %), and a suspension knock costs both axles 5 % of their
+mechanical grip. PlayerForces multiplies `muF`/`muR` by the resulting ratios
+(`physState().damageAxF/damageAxR`). With the option OFF, `ctx.damage` is null
+and both ratios are exactly 1. Aero load scales with v², so a broken wing is
+felt at speed: in the VM skidpad at 72 m/s and 0.8 lock, a lost front wing takes
+ay from 3.63 to 2.79 g, and at 20 m/s it barely moves it. A completed pit stop
+repairs it. AI cars keep the readout-only contract.
+
 `c.aeroX` is the FLAP TRAVEL (0..1) and is what every consumer reads — physics,
 HUD and the wings' own moveable ELEMENTS. Per the 2026 rules every element
 except each mainplane rotates, and both wings actuate together: at the default

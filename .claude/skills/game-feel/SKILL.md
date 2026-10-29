@@ -1,6 +1,6 @@
 ---
 name: game-feel
-description: "Use when impacts, kerbs, walls, gear shifts or collisions feel weak or flat: screen shake, hit-stop, sparks/kickup, tyre marks, haptic cues, punchier audio polish that must NOT change physics or determinism. Car behaviour → tune-physics; camera lag: measure → playwright-probe, fix → f1-animation-cameras."
+description: "Use when crashes, kerbs or gear shifts feel weak: screen shake, hit-stop, sparks, tyre marks, haptics or punchier sound, without changing physics. Not for: handling → tune-physics; steering input → input-controls; measuring camera lag → playwright-probe."
 ---
 
 # Game feel for Apex 26
@@ -51,6 +51,7 @@ must be AUDIO or VISUAL (body attitude, particles, HUD); shake and haptics alone
 
 ## When NOT to use
 
+- Silent or broken audio, rather than punchier feedback → **audio-debug**.
 - The car's measured behaviour is wrong (understeer, grip, pace) → **tune-physics**.
 - Camera lag: measure → **playwright-probe**, fix → **f1-animation-cameras** (also replay/broadcast cuts).
 - Rumble/haptics *mapping* on a gamepad → **input-controls**.

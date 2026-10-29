@@ -19,6 +19,8 @@ test below).
 The parked-pose and same-arc assertions live in `tests/unit/garage-arrival.test.mjs`
 ("…backs into the bay and parks"); extend that test, not a browser capture.
 Drive-out is `poseOut` with the same shape (`OUT_SETTLE`, `OUT_DURATION`).
+Designing a new path or camera: the Blender previz in `docs/DESIGN-TOOLS.md`
+§Garage arrival and drive-out previz (`tools/env/install-blender.sh` first).
 
 Motion validation: stage race then readiness, `go`, seeded reset, and verify a
 ready player before recording. Hold track, seed, driver, settings, wall/sim

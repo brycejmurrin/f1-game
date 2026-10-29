@@ -926,6 +926,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/env/install-blender.sh": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/env/install-browsers.sh": {
       "action": "artifact-first",
       "presentation": "shared-levels",
@@ -945,6 +950,11 @@
       "action": "targeted-summary",
       "presentation": "shared-levels",
       "preserve": "@c4"
+    },
+    "tools/garage/arrival-poses.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/garage/author-crew-motion.py": {
       "action": "keep-native",
@@ -971,7 +981,17 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/gen/blender/garage-previz.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/gen/compress-audio.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
+    "tools/gen/ensure-built.mjs": {
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
@@ -1856,6 +1876,11 @@
       "presentation": "shared-levels",
       "preserve": "@c1"
     },
+    "tools/perf/baselines/hot-bench.json": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c7"
+    },
     "tools/perf/baselines/vm-alloc.json": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1911,6 +1936,11 @@
       "presentation": "native",
       "preserve": "Per-phase `- <label> <phase>` lines, the `= garage-census` summary JSON line and the --json artifact."
     },
+    "tools/perf/hot-bench.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "One line per bench (name, ms/call, window samples, spread). --update also prints the baseline path and the benches JSON. Exit status is the process status."
+    },
     "tools/perf/idle-pipeline-census.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
@@ -1957,6 +1987,11 @@
       "preserve": "@c1"
     },
     "tools/perf/runtime-memory.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c8"
+    },
+    "tools/perf/session-budgets.mjs": {
       "action": "no-direct-output",
       "presentation": "native",
       "preserve": "@c8"

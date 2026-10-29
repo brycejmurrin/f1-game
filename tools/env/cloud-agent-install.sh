@@ -197,6 +197,10 @@ ensure_mcp_clones() {
   fi
 }
 
+# The served generated files are gitignored (AGENTS.md rule 11, 2026-10-28): build
+# them before anything serves the checkout. Node builtins only; idempotent.
+node "$ROOT/tools/gen/ensure-built.mjs" || echo "WARN: ensure-built failed — run node tools/gen/ensure-built.mjs" >&2
+
 if ! bash "$ROOT/tools/env/install-browsers.sh"; then
   system_browser="$(node "$ROOT/tools/lib/chromium-path.mjs" --path || true)"
   if [[ -n "$system_browser" && -x "$system_browser" ]]; then

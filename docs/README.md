@@ -54,6 +54,7 @@ your change touches → the skill that drives it.
 
 Redirect stubs (cited from source comments; follow the link): [RENDERERS.md](RENDERERS.md),
 [SCENERY-GROUNDING.md](SCENERY-GROUNDING.md), [LAYOUT-AUDIT.md](LAYOUT-AUDIT.md),
+[LAYOUT-TOKENS.md](LAYOUT-TOKENS.md),
 [AGENT-WORLD-API.md](AGENT-WORLD-API.md), [CONSOLE-RECIPES.md](CONSOLE-RECIPES.md),
 [PERF-FINDINGS.md](PERF-FINDINGS.md), [ARCHITECTURE-REVIEW.md](ARCHITECTURE-REVIEW.md).
 

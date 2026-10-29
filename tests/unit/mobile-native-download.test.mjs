@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -322,7 +323,8 @@ test("ghost download reflects the awaited native result and re-enables its butto
     const held = new Promise((yes, no) => { resolve = yes; reject = no; });
     const plugin = outcome === "write" ? sandbox.Capacitor.Plugins.Filesystem : sandbox.Capacitor.Plugins.Share;
     plugin[outcome === "write" ? "writeFile" : "share"] = () => { calls++; return held; };
-    vm.runInContext(handler, vm.createContext(sandbox));
+    const translator = source.slice(source.indexOf("const tr ="), source.indexOf("const trN ="));
+    vm.runInContext(translator + handler, withI18n(vm.createContext(sandbox)));
     const pending = button.onclick();
     await new Promise(setImmediate);
     assert.equal(button.textContent, "SAVING…");

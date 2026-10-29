@@ -987,6 +987,32 @@ const TLX = (function () {
       // WebGL renderer string — never from softPresent/headless UA (#3601).
       const softwareGL = !!_softAdapter
         || (!!(renderer.backend && renderer.backend.isWebGLBackend) && detectSoftwareGL());
+      // Half-res race presents on a software rasterizer. Measured 2026-10-29 on
+      // three's WebGL2 leg (apex26.tlxForceGL=1, SwiftShader, Bahrain, 844×390):
+      // a full-res frame left the next rAF ~12 s out (worst ~29 s). Half
+      // resolution plus the lowest graphics rung (no bloom, shafts, or SSR)
+      // brought the render span down to ~6.2 s on the same view. Webdriver and the
+      // game VM stay full-res (pixel specs). apex26.swRaceShed=1 forces the
+      // cut, =0 refuses it. Re-applied on every world present: race-entry
+      // soften restores the saved full scale when the cover lifts. Auto-res
+      // turns off once so the governor cannot climb back into that 12 s frame.
+      // Hand-set. "1" forces the software-GL race cut under automation; "0" keeps
+      // full resolution. Nothing in the game writes it — the probe and a player do.
+      function setSwRaceShed(on) {
+        try {
+          if (on) localStorage.setItem("apex26.swRaceShed", "1");
+          else localStorage.removeItem("apex26.swRaceShed");
+        } catch (_) { /* blocked storage */ }
+      }
+      function softwareRaceShedOn() {
+        let knob = null;
+        try { knob = localStorage.getItem("apex26.swRaceShed"); } catch (_) { /* blocked storage: the auto gate still applies */ }
+        const nav = typeof navigator !== "undefined" ? navigator : null;
+        return typeof PostCommon !== "undefined" && PostCommon.softwareRaceShed
+          ? !!PostCommon.softwareRaceShed(!!softwareGL, nav, knob) : false;
+      }
+      const _swRaceShed = softwareRaceShedOn();
+      let _swRaceShedPinned = false;
       try {
         if (canvas && typeof canvas.setAttribute === "function") {
           const api = (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2";
@@ -3608,9 +3634,45 @@ const TLX = (function () {
           _warmStages.draw = Math.round(performance.now() - _tStage);
         }
       }
+      // Half-res + lowest look rung on a software-GL race. present() reapplies
+      // it whenever a world frame may resize: entry soften restores the saved
+      // full scale when the cover lifts, and resize() no-ops while a warm is
+      // pending. Measured on SwiftShader, three WebGL2, Bahrain, 844×390:
+      // full-res rAF ~12.7 s (worst 28.7 s); this cut, internal 422×195,
+      // render span max ~6.2 s. Tier 4 alone did not move the full-res gap.
+      function pinSoftwareRaceShed(opts) {
+        if (!_swRaceShed) return;
+        if (!_swRaceShedPinned) {
+          _swRaceShedPinned = true;
+          // Same rung the stall watchdog reaches after four >1 s frames.
+          try {
+            if (typeof PerfGov !== "undefined") {
+              if (PerfGov.setAutoRes) PerfGov.setAutoRes(false);
+              if (PerfGov.setUserTier) PerfGov.setUserTier(4);
+            }
+          } catch (_) { /* harness has no governor */ }
+        }
+        if (renderScale > 0.52) { renderScale = 0.5; resizeNow(); }
+        // This frame's opts were built before the tier change. Zeroing them
+        // also keeps post.warm from compiling the bloom / SSAO / god-ray chain.
+        if (opts) {
+          opts.bloom = 0; opts.ssao = 0; opts.godray = 0; opts.contact = 0; opts.lampVol = 0; opts.flareMul = 0;
+          opts.reflect = 0; opts.carReflect = 0;
+        }
+      }
       function startProgramWarm(opts) {
         _warmRequested = false;
         if (typeof renderer.compileAsync !== "function") return;
+        // Race Settings sits on "Programs" while this compile runs. A menu
+        // warm (where "menu") stays full-res — garage first draw is not this
+        // cut. A loading/race warm, including one started from a noEnv garage
+        // frame that present() does not shed, pins BEFORE _warmPending:
+        // resize() refuses once the warm owns the targets, and that compile
+        // is what lost the WebGL context on software GL (Pages 15b66c9,
+        // three forced to WebGL2, Bahrain, 2 of 2). The Spa pine merge in
+        // that tip does not run on Bahrain.
+        // typeof: the warm rigs eval this body without the outer shed bindings.
+        if (typeof _swRaceShed !== "undefined" && _swRaceShed && typeof _warmWhere !== "undefined" && _warmWhere !== "menu") pinSoftwareRaceShed(opts);
         _warmAt = performance.now(); _warmAttempts++;
         _warmStages.at = Math.round(_warmAt); _warmStages.attempts = _warmAttempts;
         _warmStages.garageScene = null;
@@ -6327,6 +6389,13 @@ const TLX = (function () {
           _hideUndrawnInstanced();
           // Do not render over an in-flight node build. A time budget may skip
           // later warm passes, but cannot cancel a compile already in flight.
+          // Before the warm return. A pending warm makes resize() a no-op, and
+          // race-entry soften restores the saved full scale when the cover
+          // lifts, so the cut has to land on every world present that is
+          // allowed to resize — including the one that starts the warm.
+          // Kept above the rig-warm seen/dispatch pair: that pair is one
+          // source line in tlx-rig-warm.test.mjs.
+          if (_swRaceShed && _postF.proj && !_postF.noEnv && !_warmPending) pinSoftwareRaceShed(opts);
           if (_rigWarm && !_rigWarm.started) _rigWarm.seen++;   // a present reached the queue (warmDraws' re-arm)
           if (!_warmPending && !_deviceLost) { if (_warmRequested) startProgramWarm(opts); else if (_mirWarmReq) startMirrorWarm(opts); else if (_rigWarm) startRigWarm(); }
           if (_warmPending) return;
@@ -6711,6 +6780,7 @@ const TLX = (function () {
           // "TLX looks wrong on my phone" report has to answer first, since the
           // WebGPU/WebGL2 choice is now device-dependent (see the pin above).
           ctxLost() { return !!_deviceLost; },
+          swRaceShed(on) { setSwRaceShed(on); },
           backendState() {
             return {
               api: (renderer.backend && renderer.backend.isWebGPUBackend) ? "webgpu" : "webgl2",
@@ -6727,7 +6797,7 @@ const TLX = (function () {
                 return null;
               })(),
               isMobile, mobileTier, isWebKit, liteGpu: _liteGpu,
-              softwareGL, softAdapter: _softAdapter, headless: _headless,
+              softwareGL, softwareRaceShed: _swRaceShed, softAdapter: _softAdapter, headless: _headless,
               forceHw: _forceHw.on, forceBatches: _forceBatches,
               // The live verdict, not just the inputs: which way skipBatches()
               // actually went. And gpuErrFrames — DISTINCT presents an error

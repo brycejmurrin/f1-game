@@ -25,7 +25,9 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import vm from "node:vm";
 import { createRequire } from "node:module";
+import { spawnSync } from "node:child_process";
 import { stageSite } from "../../tools/desktop/stage.mjs";
 import { fileURLToPath } from "node:url";
 import { STAGE_DIRS, STAGE_EXCLUDE, STAGE_ROOT_FILES, stageExcluded, stagedNames } from "../../tools/desktop/stage-files.mjs";
@@ -201,7 +203,7 @@ test("real stageSite preserves manifest-declared locale catalogs and SW locale b
     for (const locale of Object.keys(manifest)) {
       put(`locales/${locale}.json`, locale === "zz" ? '{"hello":"Fixture é"}\n' : fs.readFileSync(path.join(ROOT, `locales/${locale}.json`)));
     }
-    stageSite(dest, { root });
+    stageSite(dest, { root, build: false });
     const targets = new Set([...SW_LOCALES, "locales/manifest.json", ...Object.keys(manifest).map((locale) => `locales/${locale}.json`)]);
     for (const rel of targets) {
       assert.deepEqual(fs.readFileSync(path.join(dest, rel)), fs.readFileSync(path.join(root, rel)), rel);
@@ -230,6 +232,42 @@ test("no shipped file references a STAGE_EXCLUDE path", () => {
   assert.deepEqual(offenders, [], "a shipped file names an excluded path: stage it again or drop the reference");
 });
 
+// BUILT, NOT COMMITTED (2026-10-28; docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): a served generator output that
+// git ignores reaches the live site only because stageSite renders it from source. Pin both halves.
+test("every BUILT_PATHS file is gitignored, untracked, and rendered into the staged site from source", async () => {
+  const { BUILT_PATHS } = await import("../../tools/lib/generated-paths.mjs");
+  const git = (...a) => spawnSync("git", a, { cwd: ROOT, encoding: "utf8" });
+  for (const p of BUILT_PATHS) {
+    assert.equal(git("check-ignore", "-q", "--no-index", "--", p).status, 0, `${p} must be in .gitignore`);
+    assert.equal(git("ls-files", "--", p).stdout.trim(), "", `${p} must not be tracked`);
+    assert.ok(STAGE_DIRS.includes(p.split("/")[0]), `${p} must sit under a staged directory`);
+  }
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "built-stage-"));
+  const root = path.join(tmp, "source");
+  try {
+    for (const name of STAGE_ROOT_FILES) { fs.mkdirSync(root, { recursive: true }); fs.writeFileSync(path.join(root, name), "fixture\n"); }
+    for (const name of STAGE_DIRS) fs.mkdirSync(path.join(root, name), { recursive: true });
+    stageSite(path.join(tmp, "fixture-site"), { root, build: false });
+    for (const p of BUILT_PATHS) assert.equal(fs.existsSync(path.join(tmp, "fixture-site", p)), false, `an explicit copy-only fixture builds nothing: ${p}`);
+    // A second source root must supply its own manifest and circuits, even if a
+    // stale local build product is present. The module checkout's roster differs.
+    fs.mkdirSync(path.join(root, "tools"), { recursive: true });
+    fs.mkdirSync(path.join(root, "js/circuits"), { recursive: true });
+    fs.mkdirSync(path.join(root, "js/track"), { recursive: true });
+    fs.writeFileSync(path.join(root, "tools/manifest.cjs"), 'module.exports = { CIRCUITS: ["chosen"], circuitPath: id => "js/circuits/" + id + ".js" };\n');
+    fs.writeFileSync(path.join(root, "js/circuits", "chosen.js"), 'window.TrackDefs.push({ id: "chosen", name: "Selected source", country: "ZZ", path: [[0, 0], [1, 1]] });\n');
+    fs.writeFileSync(path.join(root, "js/track/circuit-meta.js"), "stale output from selected root\n");
+    stageSite(path.join(tmp, "site"), { root });
+    const sandbox = { window: { TrackDefs: [] } };
+    vm.runInNewContext(fs.readFileSync(path.join(tmp, "site/js/track/circuit-meta.js"), "utf8"), sandbox, { filename: path.join(tmp, "site/js/track/circuit-meta.js") });
+    assert.equal(sandbox.window.TrackDefs.length, 1);
+    assert.equal(sandbox.window.TrackDefs[0].id, "chosen");
+    assert.equal(sandbox.window.TrackDefs[0].name, "Selected source");
+    assert.equal(sandbox.window.TrackDefs[0].path, undefined, "staging renders metadata, not the full circuit payload");
+
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+});
+
 test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
   assert.equal(stageExcluded("assets/atlases"), true);
   assert.equal(stageExcluded("assets/atlases/atlas-arch-albedo.png"), true);
@@ -247,7 +285,7 @@ test("stageSite skips STAGE_EXCLUDE paths and keeps their siblings", () => {
     put("assets/atlases/atlas-arch-albedo.png");
     put("assets/atlases/README.md");
     put("assets/pack/mat-albedo-128.png");
-    stageSite(dest, { root });
+    stageSite(dest, { root, build: false });
     assert.equal(fs.existsSync(path.join(dest, "assets/atlases")), false);
     assert.equal(fs.existsSync(path.join(dest, "assets/pack/mat-albedo-128.png")), true);
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }

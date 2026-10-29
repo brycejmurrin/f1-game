@@ -371,6 +371,7 @@ const TrackSpline = (function () {
     };
   }
 
-  return { SCALE, centerline, cr, crc, sample, sampleXZ, curvatureRaw, curvature, project, wallAt, postLimits, surfaceFolds };
+  // SCALE stays local (centerline only); nothing outside reads the arcade scale.
+  return { centerline, cr, crc, sample, sampleXZ, curvatureRaw, curvature, project, wallAt, postLimits, surfaceFolds };
 })();
 Object.freeze(TrackSpline);

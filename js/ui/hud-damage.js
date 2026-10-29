@@ -30,8 +30,8 @@ const HudDamage = (function () {
       const v = r[PARTS[i][0]];
       if (v >= 0.15) out.push(PARTS[i][2] + " " + Math.round(v * 10) * 10 + "%");
     }
-    if (r && r.knock) out.push("suspension knock");
-    return "Car damage: " + (out.length ? out.join(", ") : "none");
+    if (r && r.knock) out.push(I18n.t("hud.damage.knock", null, "suspension knock"));
+    return I18n.t("hud.damage.label", { parts: out.length ? out.join(", ") : I18n.t("hud.damage.none", null, "none") }, "Car damage: {parts}");
   }
 
   // Quantized signature of what is drawn; a repaint only when it changes.

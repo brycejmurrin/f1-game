@@ -18,6 +18,7 @@ import fs from "node:fs";
 import path from "node:path";
 import cp from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { BUILT_PATHS } from "../../tools/lib/generated-paths.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -504,7 +505,7 @@ test("README's season round list names exactly the non-classic circuits", () => 
 // A BARE `name.js` in a live doc names a file by basename alone, so the path
 // check above never sees it — which is how `debrisworld.js`, `light-presets.js`
 // and `light-store.js` outlived the files they named by weeks. Each backticked
-// bare basename must be the basename of a tracked file. Exempt: lines that say
+// bare basename must name a tracked file or an existing canonical build product. Exempt: lines that say
 // they are history (historical / old / split from / was / former), and
 // docs/plans/, whose proposals name files that do not exist yet by definition
 // (the superpowers exemption above, for the same reason).
@@ -514,7 +515,8 @@ const BARE_JS_ALLOW = new Map([
 ]);
 test("live docs name only real files in backticked bare `name.js` tokens", () => {
   if (!TRACKED) return;                         // outside a checkout there is no index to consult
-  const bases = new Set([...TRACKED.files].map((f) => path.basename(f)));
+  const built = BUILT_PATHS.filter((f) => fs.existsSync(path.join(ROOT, f)));
+  const bases = new Set([...TRACKED.files, ...built].map((f) => path.basename(f)));
   const HISTORY = /historical|\bold\b|split from|\bwas\b|former/i;
   const bad = [];
   let seen = 0;
@@ -532,7 +534,7 @@ test("live docs name only real files in backticked bare `name.js` tokens", () =>
     });
   }
   assert.ok(seen >= 1, "no live doc names a backticked bare .js file — the scan checked nothing");
-  assert.deepEqual(bad, [], "a live doc names a .js file no tracked file is called — write its real path, or mark the line historical");
+  assert.deepEqual(bad, [], "a live doc names a .js file no tracked file or existing build product is called — write its real path, or mark the line historical");
 });
 
 // A BARE test-file name (`foo.test.mjs`, `foo.spec.js`) is how TESTING.md's coverage

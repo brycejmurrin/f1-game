@@ -45,6 +45,7 @@ const PlayerForces = (function () {
   //   dt, driverDelta, assistDelta, lineDelta, onThrottle, throttleLvl, gearMult, deploy, braking,
   //   surfaceMu, kerbGrip, bankMu, modsCornering, loadF, loadR, vertLoad,
   //   af, ar, sp, steer, weatherGrip, aeroDf, dirtyMul, coastCut, vTopNow, tyres
+  //   damage (optional: js/race/damage-handling.js factors, null = no effect)
   // delta is derived after muF via GripSteer.forPlayer (identity at OFF).
   function step(c, ctx) {
     const dt = ctx.dt;
@@ -154,6 +155,17 @@ const PlayerForces = (function () {
     c._dirtyAirMul = dirtyMul;      // read-only coach evidence: actual applied wake multiplier
     c._coachAssisted = Math.abs(assistDelta) + Math.abs(lineDelta) > 1e-6;
     c._aeroGrip = aeroGrip;          // see c._vmaxNow — the other half of the trade
+    // DAMAGE → HANDLING (#1578, opt-in; js/race/damage-handling.js). ctx.damage is null with the
+    // setting OFF and both axle ratios are exactly 1. ON, a broken wing scales ITS axle's share of
+    // the aero-load term above (so it bites at speed), and a suspension knock costs mechanical grip.
+    const dmg = ctx.damage;
+    let dmgF = 1, dmgR = 1;
+    if (dmg) {
+      const load = DOWNFORCE * aeroDf * Math.min(1, (vAbs / vTopNow) ** 2);
+      dmgF = (1 + load * dmg.aeroF) / (1 + load) * dmg.grip;
+      dmgR = (1 + load * dmg.aeroR) / (1 + load) * dmg.grip;
+    }
+    if (dmg) { dmg.axF = dmgF; dmg.axR = dmgR; }   // applied ratios, kept on the pooled record (no car fields)
     const surfMu = surfaceMu;
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
     // for a player sitting on a settled off-line marble cluster, fed in ALONGSIDE
@@ -212,7 +224,7 @@ const PlayerForces = (function () {
     const ellipseR = useWheel ? 1 : bbSlipR;
     const muBase = LAT_MAX * PLAYER_GRIP * aeroGrip * surfMu * kerbGrip * weatherGrip * modsCornering * bankMu * (1 + vertLoad) * marbleMu * tyreMu;
     const rollAx = SetupTune.axleGrip(c.rollBalance, c.lateralAccel || 0, loadF);
-    const muF = Math.max(0.5, muBase * ellipseF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
+    const muF = Math.max(0.5, muBase * ellipseF * loadF * (1 - LOAD_SENS * (loadF / FRONT_WEIGHT - 1)) * FRONT_GRIP * tyreAx.f * rollAx.f * dmgF);   // load-sensitive: the loaded axle gains less than its share (LOAD_SENS)
     // Grip steer: own-state driverDelta cap (js/physics/grip-steer.js). Identity at OFF.
     const og = Vehicle.grip;
     og.muF = muF; og.csFront = CS_FRONT; og.af = af; og.ar = ar;
@@ -221,7 +233,7 @@ const PlayerForces = (function () {
       ? GripSteer.forPlayer(driverDelta, c, og)
       : driverDelta;
     delta = clamp(gripped + assistDelta + lineDelta, -0.7, 0.7);
-    const muR = Math.max(0.5, muBase * ellipseR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r);
+    const muR = Math.max(0.5, muBase * ellipseR * loadR * (1 - LOAD_SENS * (loadR / (1 - FRONT_WEIGHT) - 1)) * (1 - DRIFT * 0.55) * tyreAx.r * rollAx.r * dmgR);
     const csR = CS_REAR * (1 - DRIFT * 0.40);            // looser rear also softens its stiffness
     // --- slip angles: each axle's lateral travel (body frame) vs its forward
     // travel, minus the steer it's pointed at. vx is floored so the atan stays

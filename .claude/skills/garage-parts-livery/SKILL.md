@@ -1,6 +1,6 @@
 ---
 name: garage-parts-livery
-description: "Use when editing the GARAGE parts catalog, livery/finish/fin data or paint code, paint legibility for numbers/crests/sponsors, SIGNATURE/FACTORY_PRESETS, ersProfile/aeroLoad, career owned-part UI, car mesh/geometry modules. Livery screenshots and studio captures → playwright-probe."
+description: "Use when editing the GARAGE parts catalog, liveries, paint, number and sponsor legibility, factory presets, ersProfile/aeroLoad, career owned-part UI, or car meshes. Not livery screenshots → playwright-probe; handling → tune-physics."
 ---
 
 # Garage — parts, livery, and car mesh
@@ -43,7 +43,7 @@ Field catalog — `Parts.CATALOG` order, SIGNATURE / `FACTORY_PRESETS`, `ersProf
 
 - Pure driving feel → **tune-physics**.
 - Career economy with no parts edit → **career-mode**.
-- Isolated car shots → **playwright-probe** (`references/car-studio.md`); batch
+- Isolated car shots → [playwright-probe car studio](../playwright-probe/references/car-studio.md); batch
   garage shot contract → [`references/shot-cli.md`](references/shot-cli.md).
 - Cache bump → `node tools/gen/gen-shell.mjs --check` ([shell/cache](../check-changes/references/bump.md)).
 - A live, driven-by-hand look at the Garage/LIVERY screen (as opposed to a
@@ -84,7 +84,7 @@ in the ink pickers of `js/car/liverytex.js` or a team's `logo3` in `js/data/team
 pickers and placement → [references/placement.md](references/placement.md) § Cover-design guards.
 
 Deep reference: **`../../../docs/CAREER.md`**. Related: **playwright-probe**, **career-mode**,
-**tune-physics**, **agent-view** `references/state.md` (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
+**tune-physics**, [agent-view state hooks](../agent-view/references/state.md) (`physState()` for live ERS), `node tools/gen/gen-shell.mjs --check`.
 
 ## BEFORE pack — fetch, do not recapture
 
