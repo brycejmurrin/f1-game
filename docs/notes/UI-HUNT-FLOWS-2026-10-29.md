@@ -43,6 +43,24 @@ thumb double-tap; `touch-action: manipulation` turns each into a click). Driver 
   SwiftShader adapters, SW blocked by the rig, scenery suppression counts).
 - Circuit search, garage tab memory and data hub tab memory reopen as intended.
 
+## Data Hub at 844×390 — the layout-audit timeout is the harness (dispatcher follow-up)
+
+The 844×390 layout-audit could not open five Data Hub tab cells (`#datahub:not([hidden])` timed out).
+**This is a harness reset bug, not a game bug.** Repro on the same rig:
+
+- Player path: tapping DATA HUB opens it every time (3 out of 3 Escape → reopen cycles). With the network up,
+  SCHEDULE, STANDINGS, RESULTS, LIVE and the GPS export (under Developer tools) all render content in the
+  211 px panel.
+- layout-audit's reset (`tools/ui/layout-audit.mjs:775-777`) hides every overlay with `hidden = true` instead of
+  going through the hub's own close. `DataHub`'s `openFlag` stays `true`. The next `#mb-data` click then
+  takes the "already open: switch tab only" branch (`js/data/hub.js:267`) and never un-hides the root. The
+  title passes the harness's `titleUsable` check, so no reload is triggered, and the wait times out. Reproduced:
+  `afterHarnessReset {hidden:true, open:false}` → click `#mb-data` → `TIMEOUT`.
+- No game path writes `#datahub.hidden` except `DataHub.close()`, so players cannot reach this state.
+- Harness fix: call `DataHub.close()` in the reset before hiding overlays, if the hub is open
+  (`typeof DataHub !== "undefined" && DataHub.isOpen()`). Better still, close each open layer through its
+  `data-esc-close` door, which probes.md §2 asks for.
+
 ## Not run
 
 Real iPhone Safari (emulated WebKit UA on Chromium only); gamepad (no emulation in this rig — D-pad was proxied
