@@ -159,7 +159,11 @@
   position: absolute;
   inset-inline: 0;
   z-index: 0;
+  /* svh, not vh: a phone's dynamic toolbar makes 100vh the TALL viewport, so
+     each bar overshot by half the toolbar. The vh line is the fallback for an
+     engine without svh (same pair as css/data.css .dh-overlay). */
   height: max(0px, calc((100vh - 100vw / 2.35) / 2));
+  height: max(0px, calc((100svh - 100vw / 2.35) / 2));
   background: #000;   /* cinema bars, not a themed surface: the LIGHT theme's --bg made them white */
   pointer-events: none;
 }

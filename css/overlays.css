@@ -930,8 +930,8 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
   padding-bottom: calc(var(--tap) + var(--gap));
   scroll-padding-bottom: calc(var(--tap) + var(--gap));
 }
-/* UPDATE READY (js/ui/update-check.js): a newer deploy is live. Above the
-   non-dialog layers (title, #select, #career, #carsetup), bottom-right clear
+/* UPDATE READY (js/ui/update-check.js): a newer deploy is live. On the
+   title (and any other non-dialog menu layer), bottom-right clear
    of the safe area, a full tap target; never shown in a race (the module hides
    it there). The HUD chip's plate, not the team accent (nontext-contrast:
    --accent is decoration only). */
@@ -951,9 +951,16 @@ body[data-shape="wide"]:not([data-density="compact"]) #overlay[data-home-scene]:
    the ::backdrop, visible and unpressable. A popover would draw above it and
    still be inert ("except the dialog and its descendants": MDN, showModal()).
    It stands down like #save-warning and is back when the dialog closes,
-   scoped the same way (the telemetry popup is #datahub's child). */
-body:has(> dialog:modal) #update-chip,
-body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
+   scoped the same way (the telemetry popup is #datahub's child). INSTALL APP
+   (#install-chip, same z) had no such pair and sat inert the same way. */
+body:has(> dialog:modal) :is(#update-chip, #install-chip),
+body:has(> :where(#datahub) > dialog:modal) :is(#update-chip, #install-chip) { display: none; }
+/* NOT OVER A DIV SCREEN EITHER. #select, #career and #carsetup are plain
+   div.screen layers (no top layer), so z 9000 put the chips over their
+   bottom-right primary (#sel-go, #cs-done): a mis-tap on START reloaded the
+   game mid-setup. They stand down while one of those screens is shown and
+   come back on the title. All three are body's children (index.html). */
+body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #install-chip) { display: none; }
 
 /* ===== Boot-critical-path trim (from css/responsive.css) =====
    Same @layer overlays. These rules style title-hidden or in-race UI only,

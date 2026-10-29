@@ -319,6 +319,13 @@
   border-radius: 50%; background: var(--red); border: 2px solid var(--text);
   cursor: nwse-resize; touch-action: none;
 }
+/* A FINGER GRABS THE HANDLE: 22px is the dot, not the target. On a coarse
+   pointer a transparent ::before overhangs it by 11px a side (44px box) so
+   the visual stays small and the hit area meets the tap floor; the fixed
+   position above is the pseudo-element's containing block. */
+@media (pointer: coarse) {
+  :root[data-tl-edit] #tl-handle::before { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
+}
 
 /* ---------- SCREEN LOOKS (moved) ----------
    Per-screen APPEARANCE folds + non-title peek reveals live in

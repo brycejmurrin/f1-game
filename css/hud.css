@@ -1454,10 +1454,27 @@ html[data-caption-pos="bottom"] #captions.cap-strip {
   top: auto;
   bottom: calc(var(--sab, 0px) + 12px / var(--hud-z, 1));
 }
+/* BESIDE MIRROR IS IN THE MIRROR'S ROW, right of the frame. Setting only
+   left/right kept the base bottom anchor, so the strip landed bottom-right
+   over the touch pedals (#dock-right). This element is NOT zoomed, so the
+   mirror's top and width (#hud-mirror above, in its zoom group's units) are
+   re-stated in SCREEN px: each zoom-unit term times --cap-mz, the band's zoom;
+   the vw/svh terms of --mir-w already divide by it, so they appear bare. */
 html[data-caption-pos="mirror"] #captions.cap-strip {
-  left: auto;
-  right: calc(var(--sar, 0px) + 8px / var(--hud-z, 1));
+  --cap-mz: var(--hud-z-top, var(--hud-scale, 1));
+  --cap-mir-top: calc(var(--sat, 0px) + (8px + var(--hud-top-h, 54px) + 8px) * var(--cap-mz));
+  --cap-mir-half: calc(clamp(calc(120px * var(--cap-mz)), min(18vw, 36svh), calc(300px * var(--cap-mz))) / 2);
+  top: var(--cap-mir-top);
+  bottom: auto;
+  left: calc(50% + var(--cap-mir-half) + 8px);
+  right: auto;
+  max-width: min(440px, calc(50% - var(--cap-mir-half) - 16px - var(--sar, 0px)));
   transform: none;
+}
+/* BROADCAST lifts the mirror to the very top (the tower is top-left); only the
+   mirror rule above reads --cap-mir-top, so this needs no caption-pos gate. */
+body.hud-prof-broadcast #captions.cap-strip {
+  --cap-mir-top: calc(var(--sat, 0px) + 8px * var(--cap-mz));
 }
 html[data-captions="off"] #captions.cap-strip { display: none !important; }
 /* ON TOUCH THE CARD STAYS IN THE DOCK LANE. --announce-lane-x / -shift / -w
