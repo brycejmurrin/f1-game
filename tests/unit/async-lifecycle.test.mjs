@@ -621,7 +621,10 @@ test("snapshot and delta classification share row mapping while retaining their 
   const intervals = [
     { driver_number: 44, gap_to_leader: 0, date: newer },
     { driver_number: 4, gap_to_leader: " +1 LAP ", date: newer },
-    { driver_number: 4, gap_to_leader: 3, date: older }
+    { driver_number: 4, gap_to_leader: 3, date: older },
+    // Austin 2026 race (session 11396) also emits "+2 LAPS". parseFloat of that
+    // string is 2 — the same class of bug gapValue exists to stop for "+1 LAP".
+    { driver_number: 7, gap_to_leader: "+2 LAPS", date: newer }
   ];
   const h = dataApiHarness([positions, positions, intervals, intervals, [], [], [], []]);
   const snapshot = await h.api.positions(7, 0);
@@ -632,7 +635,9 @@ test("snapshot and delta classification share row mapping while retaining their 
   const gaps = await h.api.intervals(7, 0);
   const gapDelta = await h.api.liveIntervals(7, older);
   assert.equal(gaps[4], "+1 LAP");
+  assert.equal(gaps[7], "+2 LAPS");
   assert.equal(gapDelta.values[4], gaps[4]);
+  assert.equal(gapDelta.values[7], "+2 LAPS");
   assert.equal(gapDelta.values[44], 0);
   assert.equal(gapDelta.cursor, newer);
   assert.equal(await h.api.positions(7, 0), null);

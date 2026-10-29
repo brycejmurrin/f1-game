@@ -29,14 +29,13 @@ const XrSession = (function () {
   let _refSpace = null;
   let _baseRefSpace = null;
   let _xrFrame = null;
-  let _xrTime = 0;
   let _xrFrameCount = 0;
   let _running = false;
   let _visible = true;
   let _backend = "webgl2";          // active session backend after feature negotiation
   let _wantWebgpu = false;
   let _enabledFeatures = [];
-  let _bindings = null;             // { getRenderer, onFrame, onStart, onEnd, setCamCockpit, motionLock }
+  let _bindings = null;             // { attachSession, detachSession, onFrame, onStart, onEnd }
   let _inputLatch = { primary: false, secondary: false };
   let _anchor = { eye: [0, 1.2, 0], fwd: [0, 0, 1], up: [0, 1, 0] };
   const _eyeFrames = [];          // borrowed until the next eyeFrames call
@@ -116,7 +115,6 @@ const XrSession = (function () {
   function enabledFeatures() { return _enabledFeatures.slice(); }
   function frameCount() { return _xrFrameCount; }
   function getFrame() { return _xrFrame; }
-  function getTime() { return _xrTime; }
   function getSession() { return _session; }
   function getRefSpace() { return _refSpace; }
 
@@ -283,7 +281,6 @@ const XrSession = (function () {
     const onXRFrame = (time, frame) => {
       if (_session !== session || generation !== _generation || !_running) return;
       _xrRequest = null;
-      _xrTime = time;
       _xrFrame = frame;
       _xrFrameCount++;
       if ((!_centered && !_resetPending) || _recenterPending) recenter(frame);
@@ -484,12 +481,10 @@ const XrSession = (function () {
   }
 
   return {
-    MODE, LS_XR_BACKEND,
     probe, isSupported, isProbed, isPresenting, isVisible,
     start, end, bind, on, recenter, setAnchor, getAnchor, eyeFrames,
-    getFrame, getTime, getSession, getRefSpace, backend, lastError,
-    frameCount, enabledFeatures, featureGranted, listEnabledFeatures,
-    webgpuXrAvailable, xrBackendPref, sessionInit,
+    getFrame, getSession, getRefSpace, backend, lastError,
+    frameCount, enabledFeatures, featureGranted, sessionInit,
   };
 })();
 Object.freeze(XrSession);

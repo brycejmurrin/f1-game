@@ -162,6 +162,7 @@ const SaveHealth = (function () {
   if (typeof document !== "undefined" && document.addEventListener) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot, { once: true }); else boot();
   }
-  return { inspect, cleanup, mount, category };
+  // category stays module-local (inspect grouping).
+  return { inspect, cleanup, mount };
 })();
 Object.freeze(SaveHealth);

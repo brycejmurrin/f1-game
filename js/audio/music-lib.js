@@ -381,8 +381,11 @@ window.MusicLib = (function () {
     document.addEventListener("DOMContentLoaded", () => { wire(); init(); }, { once: true });
   } else init();
 
+  // render stays module-local: every caller is inside this IIFE. Outside code
+  // uses MusicLib.refresh / init / list / clear / add / remove / retry /
+  // playbackStatus / health.
   return {
-    init, list, add, remove, clear, refresh, render, playbackStatus, retry,
+    init, list, add, remove, clear, refresh, playbackStatus, retry,
     health: (id) => health.has(id) ? Object.assign({}, health.get(id)) : null,
     count() { return cache.length; },
     available() { return usable; },

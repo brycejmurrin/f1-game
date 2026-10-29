@@ -143,6 +143,6 @@ const ShareCardLayout = (function () {
     return Object.freeze(ops.map(Object.freeze));
   }
 
-  return Object.freeze({ SPECS, PALETTE, fitted, layout });
+  return Object.freeze({ SPECS, PALETTE, layout });
 })();
 Object.freeze(ShareCardLayout);

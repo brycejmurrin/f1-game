@@ -42,16 +42,22 @@ const offlineRetries = new Map();
 // Default chosen backend at install: TLX (three) is the shipped picker default.
 // GLX stays in the required pool separately. Scenery + data/net are the
 // background pool, fetched after it (download priority only — see install).
-// WGX stays in the optional Set (gen-shell lockstep with DEFERRED) but is
-// skipped at install — explicit opt-in; fetch handler runtime-caches on use.
+// Runtime-only doors (WGX, track designer, XR, camera editors) stay in the
+// optional Set for gen-shell lockstep with DEFERRED/LAZY_*, but are skipped at
+// install — explicit opt-in; fetch handler runtime-caches on use.
 function isInstallCriticalOptional(u) {
   return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
 }
 // Default-off / explicit opt-in: still seeded in `optional` when gen-shell
-// requires lockstep (WGX), but never install-precached. Hand-authored vendors
-// (Rapier, jsQR, trystero) are omitted from the Set entirely — same outcome.
+// requires lockstep, but never install-precached. WGX + LAZY_EDITOR / LAZY_XR /
+// LAZY_CAM_EDITOR (~510 KB raw) are title doors a race session never opens.
+// Hand-authored vendors (Rapier, jsQR, trystero) are omitted from the Set
+// entirely — same outcome.
 function isRuntimeOnlyOptional(u) {
-  return /^js\/render\/webgpu\//.test(u);
+  return /^js\/render\/webgpu\//.test(u)
+    || /^js\/editor\//.test(u)
+    || /^js\/xr\//.test(u)
+    || /^js\/camera\/(tuner-panel|flyby-editor)\.js$/.test(u);
 }
 // Is this navigation the game's own shell? Any *.html page other than
 // index.html is a different document and must never be answered with the game.
@@ -135,7 +141,7 @@ function cacheBuild(name) {
 //
 // THE ORDER IS COMPUTED ONCE PER WORKER, not per request: `caches.keys()` plus
 // two marker lookups per generation ran on EVERY cache-first fetch — a boot's
-// ~150 script requests paid for ~150 identical sorts. The order changes only
+// ~300 script requests paid for ~300 identical sorts. The order changes only
 // when this worker changes the cache set or a marker (install, activate, the
 // sweep, a fetch opening a generation it has not seen) or learns the current
 // name, so `_cacheOrder` is keyed on `_cacheNameKnown` and dropped by
@@ -284,6 +290,10 @@ async function precacheAssetLists() {
     "icons/icon-192.png",
     "icons/icon-512.png",
     "icons/icon-maskable-512.png",
+    // Manifest shortcuts (Quick race / Daily / Next GP / Controller / Garage)
+    // all share this 96px icon. OS usually fetches it at install, but an
+    // offline re-open of the installed app still asks the SW for it (audit4 L7).
+    "icons/shortcut-96.png",
     // In-game APP ICON picker sets (appearance-opts.js).
     ...["A", "B", "C", "D", "E", "F"].flatMap((s) => ["icons/shortcuts/" + s + "/favicon-32.png", "icons/shortcuts/" + s + "/apple-touch-180.png"]),
     // The vendored three.js island TLX imports at runtime. Hand-authored
@@ -306,7 +316,6 @@ async function precacheAssetLists() {
     "assets/fonts/titillium-web-latin-600-normal.woff2",
     "assets/fonts/titillium-web-latin-700-normal.woff2",
     "assets/fonts/titillium-web-latin-700-italic.woff2",
-    "assets/fonts/barlow-condensed-latin-500-normal.woff2",
     "assets/fonts/barlow-condensed-latin-600-normal.woff2",
     "assets/fonts/barlow-condensed-latin-700-normal.woff2",
     "assets/fonts/saira-apex26-800-italic.woff2",
@@ -454,6 +463,7 @@ async function precacheAssetLists() {
     "js/race/damage.js",
     "js/race/duel.js",
     "js/race/session-records.js",
+    "js/race/pit-geom.js",
     "js/race/pit-lane.js",
     "js/race/engineer.js",
     "js/race/radio-lines.js",
@@ -470,13 +480,17 @@ async function precacheAssetLists() {
     "js/track/scenery/landmark-kit.js",
     "js/track/scenery/circuit-kit.js",
     "js/track/core/hidden-faces.js",
+    "js/track/scenery/landforms.js",
     "js/track/scenery/nature.js",
+    "js/track/scenery/stands.js",
     "js/track/scenery/structures.js",
+    "js/track/scenery/facade.js",
     "js/track/scenery/city.js",
     "js/track/scenery/identity.js",
     "js/track/scenery/pits.js",
     "js/track/scenery/venue.js",
     "js/track/scenery/guards.js",
+    "js/track/scenery/api-wrap.js",
     "js/track/scenery/build-props.js",
     // LAZY_AUDIO — engine/panel/voice behind first sound gesture or race start
     "js/audio/signal.js",
@@ -514,6 +528,8 @@ async function precacheAssetLists() {
     "js/data/standings.js",
     "js/data/results.js",
     "js/data/live.js",
+    "js/data/real-race-script.js",
+    "js/data/real-race-fetch.js",
     "js/data/real-race-tab.js",
     "js/data/hub.js",
     // LAZY_NET — the multiplayer stack behind VS FRIEND
@@ -523,16 +539,22 @@ async function precacheAssetLists() {
     "js/net/sdp.js",
     "js/net/qr.js",
     "js/net/scan.js",
+    "js/net/ice.js",
     "js/net/transport.js",
     "js/net/handshake.js",
     "js/net/lobby-codes.js",
     "js/net/lobby-roster.js",
     "js/net/lobby-settings.js",
+    "js/net/interp.js",
     "js/net/snapshot.js",
     "js/net/session.js",
+    "js/net/quali-wire.js",
+    "js/net/strategy-wire.js",
     "js/net/spectate.js",
     "js/net/netplay.js",
     "js/net/lobby.js",
+    "js/input/phone-pad-codec.js",
+    "js/input/phone-pad-page.js",
     "js/input/phone-pad.js",
     // LAZY_WORKER — worker entry scripts (new Worker, never a page tag)
     "js/track/build-worker.js",
@@ -548,6 +570,7 @@ async function precacheAssetLists() {
     "js/editor/scenery-preview.js",
     "js/editor/canvas.js",
     "js/editor/elev-presets.js",
+    "js/editor/zones.js",
     "js/editor/profile.js",
     "js/editor/selection-panel.js",
     "js/editor/followup-tools.js",
@@ -609,7 +632,7 @@ async function precacheAssetLists() {
     }
   }
   // Cache API put during install makes V8 build a "full" code cache of every
-  // script (v8.dev). These three are LAZY_AGENT (no <script> tag) — belt and
+  // script (v8.dev). LAZY_AGENT files have no <script> tag — belt and
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
@@ -629,10 +652,10 @@ async function precacheAssetLists() {
 // and the optionals are version-pinned by PATH (the content-named woff2s) — which is the exact condition the fetch handler below
 // already relies on when it says a cache hit is always correct without
 // revalidation. `cache: "no-store"` here contradicted that and made a cold
-// first visit download the whole app TWICE: ~5.8 MB for the page's own 145
-// script tags, then the same ~5.8 MB again for the install, in parallel, on one
-// connection. Nothing in the history justifies it — it arrived inside an
-// unrelated commit and no comment defends it.
+// first visit download the whole app TWICE: the page's own ~310 script tags
+// (~3.3 MB raw on a measured live shell) then the same bytes again for the
+// install, in parallel, on one connection. Nothing in the history justifies
+// it — it arrived inside an unrelated commit and no comment defends it.
 //
 // The application shell is still fetched with `no-store` (see
 // precacheAssetLists) because index.html is the one genuinely mutable document
@@ -757,21 +780,23 @@ self.addEventListener("install", (event) => {
     // so it must be SEEDED under that key: the DEFERRED backends, and now the
     // race payload (light-presets + the per-circuit scenery closures) too.
     // Stamp regex covers ScriptLoader injects: DEFERRED + LAZY_* incl. js/race/
-    // (LAZY_RACE_SESSION) and js/workers/ (bitmap-decode). Keep both path classes.
+    // (LAZY_RACE_SESSION), js/workers/ (bitmap-decode), and the phone-pad trio
+    // (codec, page, session — all three are injected, none is a shell tag).
+    // Keep both path classes.
     // The stamp is the deploy's CONTENT HASH where the shell's map names one
     // (stampKey above), so an unchanged file keeps its key across deploys.
     const stamped = urls.optional.map((u) =>
-      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
+      /^js\/render\/(glx|webgpu|three)\/|^js\/circuits\/|^js\/audio\/|^js\/race\/|^js\/data\/|^js\/net\/|^js\/editor\/|^js\/xr\/|^js\/camera\/(tuner-panel|flyby-editor)\.js$|^js\/career\/career-(ui|planning-ui)\.js$|^js\/input\/phone-pad(?:-codec|-page)?\.js$|^js\/lighting\/presets\.js$|^js\/track\/(build-worker\.js$|scenery\/|core\/hidden-faces\.js$)|^js\/workers\//.test(u)
         ? stampKey(u) : u).filter((u) => {
           const bare = u.replace(/\?v=.*$/, "");
-          // GLX and career UI went in `required`; WGX is runtime-only (opt-in).
+          // GLX and career UI went in `required`; runtime-only doors are skipped.
           return !isRequiredLazy(bare) && !isRuntimeOnlyOptional(bare);
         });
     // INSTALL-CRITICAL first (chosen backend = TLX + three.js), then the
-    // BACKGROUND pool (scenery / data / net — not WGX), then SETTLED, then
-    // skipWaiting. The order of the pools is a download priority, nothing
-    // more: skipWaiting() only SETS A FLAG, and the browser reads it after
-    // every install extend-lifetime promise has settled
+    // BACKGROUND pool (scenery / data / net — not runtime-only doors), then
+    // SETTLED, then skipWaiting. The order of the pools is a download priority,
+    // nothing more: skipWaiting() only SETS A FLAG, and the browser reads it
+    // after every install extend-lifetime promise has settled
     // (https://w3c.github.io/ServiceWorker/ — Install, then Try Activate). A
     // skipWaiting between the pools — the old layout — activated nothing early
     // and only read as if it did; activation always followed SETTLED.

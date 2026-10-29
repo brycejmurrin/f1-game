@@ -4,6 +4,10 @@ const LazyBundles = (function () {
 "use strict";
 function create(deps) {
 const { els, loadBackendScripts: loadScripts } = deps;
+const ctxOrNull = () => {
+  try { return typeof deps.getContext === "function" ? deps.getContext() : null; }
+  catch (_) { return null; }
+};
 // LAZY_AGENT. Not SW-optional (V8 full-compiles install puts). Players on
 // github.io skip this; tests and localhost inject.
 const AGENT_FILES = ApexRoster.LAZY_AGENT;
@@ -25,6 +29,7 @@ const RACE_SESSION_READY = {
   "js/race/damage.js": () => typeof Damage !== "undefined" && !!Damage && !Damage._stub,
   "js/race/duel.js": () => typeof Duel !== "undefined" && !!Duel && !Duel._stub,
   "js/race/session-records.js": () => typeof SessionRecords !== "undefined" && !!SessionRecords && !SessionRecords._stub,
+  "js/race/pit-geom.js": () => typeof PitGeom !== "undefined" && !!PitGeom,
   "js/race/pit-lane.js": () => typeof PitLane !== "undefined" && !!PitLane && !PitLane._stub,
   "js/race/engineer.js": () => typeof RaceEngineer !== "undefined" && !!RaceEngineer && !RaceEngineer._stub,
   "js/race/radio-lines.js": () => typeof RadioLines !== "undefined" && !!RadioLines && !RadioLines._stub,
@@ -278,6 +283,8 @@ const DATA_READY = {
   "js/data/standings.js": () => typeof DataStandings !== "undefined",
   "js/data/results.js": () => typeof DataResults !== "undefined",
   "js/data/live.js": () => typeof DataLive !== "undefined",
+  "js/data/real-race-script.js": () => typeof DataRealRaceScript !== "undefined",
+  "js/data/real-race-fetch.js": () => typeof DataRealRaceFetch !== "undefined",
   "js/data/real-race-tab.js": () => typeof DataRealRace !== "undefined",
   "js/data/hub.js": () => typeof DataHub !== "undefined",
 };
@@ -342,13 +349,19 @@ const NET_READY = {
   "js/net/sdp.js": () => typeof NetSdp !== "undefined",
   "js/net/qr.js": () => typeof NetQr !== "undefined",
   "js/net/scan.js": () => typeof NetScan !== "undefined",
+  "js/net/ice.js": () => typeof NetIce !== "undefined",
+  "js/net/interp.js": () => typeof NetInterp !== "undefined",
   "js/net/transport.js": () => typeof NetTransport !== "undefined",
   "js/net/handshake.js": () => typeof NetHandshake !== "undefined",
   "js/net/lobby-codes.js": () => typeof LobbyCodes !== "undefined",
   "js/net/snapshot.js": () => typeof NetSnapshot !== "undefined",
   "js/net/session.js": () => typeof NetSession !== "undefined",
+  "js/net/quali-wire.js": () => typeof QualiWire !== "undefined",
+  "js/net/strategy-wire.js": () => typeof StrategyWire !== "undefined",
   "js/net/netplay.js": () => typeof NetPlay !== "undefined",
   "js/net/lobby.js": () => typeof NetLobby !== "undefined",
+  "js/input/phone-pad-codec.js": () => typeof PhonePadCodec !== "undefined",
+  "js/input/phone-pad-page.js": () => typeof PhonePadPage !== "undefined",
   "js/input/phone-pad.js": () => typeof PhonePad !== "undefined",
 };
 function ensureNet() {
@@ -540,9 +553,9 @@ function prefetchAudio() {
 }
 function restoreOnEngine() {
   if (audioRestored || typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return true;
-  audioRestored = true;
-  const G = deps.getContext(), store = G && G.store;
+  const G = ctxOrNull(), store = G && G.store;
   if (!store) return true;
+  audioRestored = true;
   try {
     GameAudio.setEnabled(!!G.soundOn);
     GameAudio.setMusicVolume(store.get("volMusic"));
@@ -583,7 +596,7 @@ function audioGestureUnlock(e) {
   if (e && (e.isTrusted === false || (e.type === "keydown" && e.key === "Escape"))) return;
   if (!audioHooked) ensureAudio();   // memoised; after a failed load or ready hook this is the retry
   if (typeof GameAudio === "undefined" || !GameAudio || GameAudio._stub) return;
-  const G = deps.getContext();
+  const G = ctxOrNull();
   if (!G || !G.soundOn) return;
   const ctx = GameAudio.context ? GameAudio.context() : null;
   try { if (!ctx || ctx.state !== "running") GameAudio.init(); } catch (err) { Log.warn("audio", "gesture unlock failed: " + (err && err.message)); }
@@ -656,7 +669,7 @@ function ensureAudio() {
     // Crowd ambience (Radio r9): bind the live G façade without touching game.js.
     try {
       if (typeof CrowdAudio !== "undefined" && CrowdAudio && CrowdAudio.bind) {
-        CrowdAudio.bind(typeof deps.getContext === "function" ? deps.getContext() : null);
+        CrowdAudio.bind(ctxOrNull());
       }
     } catch (e) { Log.warn("audio", "CrowdAudio.bind failed: " + (e && e.message)); }
     audioHooked = true;
@@ -793,7 +806,8 @@ function raceAssets() {
     // Best-effort: ensureCircuit REJECTS when the payload cannot load (offline,
     // a CDN 404, a stale tab), and an unguarded rejection here paints the red
     // overlay on the title. startRace / openQuali re-ask and handle their own.
-    ensureScenery(deps.getContext().trackIdx).catch((e) => {
+    const bootCtx = ctxOrNull();
+    if (bootCtx) ensureScenery(bootCtx.trackIdx).catch((e) => {
       Log.warn("track", "scenery prefetch failed: " + (e && e.message));
     });
     // Build worker: warmed at the title for the AGENT SURFACE only (its
@@ -827,7 +841,7 @@ function bootDesktopAudio() {
   const bind = () => {
     ensureAudio().then((ok) => {
       if (!ok) return;
-      const G = deps.getContext();
+      const G = ctxOrNull();
       if (!G || !G.soundOn) return;
       try {
         GameAudio.init();

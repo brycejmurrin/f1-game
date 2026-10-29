@@ -12,8 +12,8 @@
 
 const XrInput = (function () {
   const BTN_TRIGGER = 0;
-  const BTN_SQUEEZE = 1;
-  const BTN_STICK = 3;
+  // BTN_SQUEEZE (1) is intentionally unmapped — squeeze must not snap the seated gaze.
+  // BTN_STICK (3) thumbstick click is unmapped (no consumer).
   const BTN_PRIMARY = 4;    // A (right) / X (left)
   const BTN_SECONDARY = 5;  // B (right) / Y (left)
   const AXIS_STICK_X = 2;
@@ -46,7 +46,7 @@ const XrInput = (function () {
   function mapFrame(sources, prev, options) {
     const menuOpen = !!(options && options.menuOpen);
     const menuNav = menuOpen && !!options.overlay;
-    let thr = 0, brk = 0, stickX = 0, stickY = 0, held = 0;
+    let thr = 0, brk = 0, stickX = 0, stickY = 0;
     let primaryDown = false, secondaryDown = false;
     const list = sources || [];
     // XRInputSourceArray is indexed/iterable, but has no Array.prototype.some.
@@ -79,8 +79,6 @@ const XrInput = (function () {
       }
       if (btn(gp, BTN_PRIMARY) > 0.5) primaryDown = true;
       if (btn(gp, BTN_SECONDARY) > 0.5) secondaryDown = true;
-      // Thumbstick click is unused (BTN_STICK exported for diagnostics only).
-      void BTN_STICK;
     }
     const latch = prev || { primary: false, secondary: false };
     const events = [];
@@ -100,7 +98,8 @@ const XrInput = (function () {
 
     const steer = XrRig.stickToSteer(stickX);
     return {
-      sample: { roll: hasStick ? steer : null, thr: thr, brk: brk, held: held },
+      // held stays 0: XR has no clutch/hand-brake remoteSample bit.
+      sample: { roll: hasStick ? steer : null, thr: thr, brk: brk, held: 0 },
       driving: hasGamepad && !(options && options.driving === false),
       events,
       recenter,
@@ -128,10 +127,6 @@ const XrInput = (function () {
     return true;
   }
 
-  return {
-    mapFrame, inject,
-    BTN_TRIGGER, BTN_SQUEEZE, BTN_STICK, BTN_PRIMARY, BTN_SECONDARY,
-    AXIS_STICK_X, AXIS_STICK_Y,
-  };
+  return { mapFrame, inject };
 })();
 Object.freeze(XrInput);

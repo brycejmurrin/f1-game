@@ -3,12 +3,12 @@
  * Decides { path, backendPref, forceGL, … } from capability + preference bags
  * only — no DOM / navigator reads. The shippable VR path is TLX + forceWebGL
  * (`backendPref:"three"`, `forceGL:true`): GLX has no attachXrSession, so a
- * "webgl2" boot override left ENTER VR unable to attach (BUG-HUNT-ROUND-2;
- * renderer-boot.js). Experimental WebGPU XR stays opt-in (TLX, forceGL false).
- * The override never writes apex26.gfxBackend — disarming restores the 2D pick.
+ * "webgl2" boot override left ENTER VR unable to attach (renderer-boot.js).
+ * Experimental WebGPU XR stays opt-in (TLX, forceGL false). The override
+ * never writes apex26.gfxBackend — disarming restores the 2D pick.
  *
- * Spec: task 20 / master plan D1. Consumed by ApexXR (js/xr/apex-xr.js) and
- * the thin backendPreference() hook in js/game.js.
+ * Consumed by ApexXR (js/xr/apex-xr.js) and the thin backendPreference()
+ * hook in js/game.js.
  */
 "use strict";
 
@@ -55,7 +55,7 @@ const XRPlan = (function () {
 
   /**
    * @param {{ caps?: object, prefs?: object, boot?: object }} input
-   * caps: { xr, vr, gpu, xrgpu, layers?, mobileQuest? }
+   * caps: { xr, vr, gpu, xrgpu, mobileQuest? }
    * prefs: { xr: "0"|"1", xrBackend: "webgl2"|"webgpu", gfxBackend? }
    * boot: { xrFallback? } — xrFallback "webgl2" forces the shippable TLX+forceGL path
    */
@@ -121,6 +121,6 @@ const XRPlan = (function () {
     return webgl2Armed(reasons, fallbacks);
   }
 
-  return { resolve, normXr, normBackend, PATH_WEBGL2, PATH_WEBGPU };
+  return { resolve, normXr, normBackend };
 })();
 Object.freeze(XRPlan);

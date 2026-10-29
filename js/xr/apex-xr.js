@@ -1,8 +1,8 @@
 /* Apex 26 — ApexXR: thin façade over XRPlan + XrSession for boot / settings.
  *
  * Owns the cached plan, capability probe → apex26.xrCaps latch, bootPick() for
- * game.js backendPreference(), and noteFallback() for the post-boot ladder
- * (task 45). Does NOT own the immersive session — that stays XrSession.
+ * game.js backendPreference(), and noteFallback() for the post-boot ladder.
+ * Does NOT own the immersive session — that stays XrSession.
  *
  * Storage (all apex26.-prefixed):
  *   apex26.xr          "0"|"1"     VR mode armed (XROpts)
@@ -64,7 +64,6 @@ const ApexXR = (function () {
       vr: cached === "1",
       gpu: typeof navigator !== "undefined" && !!navigator.gpu,
       xrgpu: typeof globalThis !== "undefined" && typeof globalThis.XRGPUBinding !== "undefined",
-      layers: false,
       mobileQuest: typeof navigator !== "undefined" && questUa(navigator.userAgent),
     };
   }
@@ -125,10 +124,6 @@ const ApexXR = (function () {
     return p.backendPref || null;
   }
 
-  function path() {
-    return plan().path;
-  }
-
   function fallbacks() {
     return (_fallbacks.length ? _fallbacks : plan().fallbacks).slice();
   }
@@ -185,9 +180,8 @@ const ApexXR = (function () {
   }
 
   return {
-    LS_XR, LS_BACKEND, LS_CAPS, SS_FALLBACK,
-    detect, caps, plan, bootPick, path, fallbacks, noteFallback, stats,
-    invalidate, rendererMatchesPlan, readPrefs, questUa,
+    detect, caps, plan, bootPick, fallbacks, noteFallback, stats,
+    invalidate, rendererMatchesPlan,
   };
 })();
 Object.freeze(ApexXR);

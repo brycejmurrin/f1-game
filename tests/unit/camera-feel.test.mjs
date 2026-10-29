@@ -39,11 +39,11 @@ function loadCamFeel(disk, extra) {
     ...(extra || {}),
   };
   vm.runInNewContext(
-    ["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"]
+    ["fov-mode.js", "drive-lens.js", "feel.js"]
       .map((f) => fs.readFileSync(path.join(root, "js/camera", f), "utf8")).join("\n")
-      + "\nthis.exported = CamFeel;",
+      + "\nthis.exported = CamFeel; this.DriveLens = DriveLens;",
     ctx);
-  return { CamFeel: ctx.exported, store };
+  return { CamFeel: ctx.exported, DriveLens: ctx.DriveLens, store };
 }
 
 test("follow is exact with no dt and eases when a frame has one", () => {
@@ -187,6 +187,16 @@ test("buzz / free-look scope tables stay aligned", () => {
   assert.equal(CamFeel.isBuzzMode("helmet"), true);
   assert.equal(CamFeel.isFreeLookMode("helmet"), true);
   for (const sp of [0, 0.5, 1]) assert.equal(CamFeel.modeFov("helmet", sp, 1), CamFeel.modeFov("cockpit", sp, 1));
+});
+
+test("DriveLens public surface is apply only; family helpers stay internal", () => {
+  const { DriveLens } = loadCamFeel();
+  assert.deepEqual(Object.keys(DriveLens).sort(), ["apply"]);
+  const ctx0 = { sp: 0.5, yaw: 0.2, brake: 0.1, slip: 0 };
+  assert.equal(DriveLens.apply("chase", null, null, ctx0), 4 * 0.5 + 2 * 0.2 + 2 * 0.1);
+  assert.equal(DriveLens.apply("heli", null, null, ctx0), 8 * 0.5 + 3 * 0.2);
+  assert.equal(DriveLens.apply("cockpit", null, null, ctx0), 1.5 * 0.5 + 1 * 0.1);
+  assert.equal(DriveLens.apply("unknown", null, null, ctx0), null);
 });
 
 test("helmet drive rates match cockpit so a mode switch does not retune the lens", () => {
@@ -353,7 +363,7 @@ test("a snapped chase frame clears the bend hang the next live frame eases from"
   const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
     GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
     Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
-  vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+  vm.runInContext(["js/core/mat4.js", ...["fov-mode.js", "drive-lens.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage-ride.js", "js/camera/vantage.js"]
     .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams;", ctx);
   const live = (s) => ctx.GC.vantage(track, "chase", s, 0, 60, 0, { carPos: [0, s], carHead: 0, dt: 1 / 60, att: {} }).eye[0];
   K = 0.06; for (let i = 0; i < 180; i++) live(500);       // sit in a left hairpin
@@ -374,7 +384,7 @@ test("a TV-director solve never perturbs the player's bend hang", () => {
     const ctx = vm.createContext({ Math, JSON, Object, Array, Number, Tracks,
       GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
       Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
-    vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+    vm.runInContext(["js/core/mat4.js", ...["fov-mode.js", "drive-lens.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage-ride.js", "js/camera/vantage.js"]
       .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams; this.CF = CamFeel;", ctx);
     return ctx;
   };
@@ -405,7 +415,7 @@ test("look-back mirrors the player's solve only; extra.noLook opts out (bug-hunt
       Input: { lookingBack: () => back },
       GameStore: { store: { get: (k, d) => d, set: () => true, raw: () => null, rawSet: () => true } },
       Log: { info() {}, debug() {}, warn() {}, error() {} }, document: undefined });
-    vm.runInContext(["js/core/mat4.js", ...["drive-chase.js", "drive-broadcast.js", "drive-onboard.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage.js"]
+    vm.runInContext(["js/core/mat4.js", ...["fov-mode.js", "drive-lens.js", "feel.js"].map((f) => "js/camera/" + f), "js/camera/vantage-ride.js", "js/camera/vantage.js"]
       .map((f) => fs.readFileSync(path.join(root, f), "utf8")).join("\n") + "\nthis.GC = GameCams;", ctx);
     const extra = { carPos: [0, 500], carHead: 0, snap: true, att: {} };
     if (noLook) extra.noLook = true;

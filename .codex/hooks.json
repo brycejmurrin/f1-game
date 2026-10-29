@@ -7,7 +7,7 @@
           {
             "type": "command",
             "command": "bash .codex/hooks/shell-guard.sh",
-            "timeout": 200
+            "timeout": 30
           }
         ]
       },

@@ -172,6 +172,30 @@ test("fractional hill lengths keep the saved id through registration and reload"
   assert.equal(reloaded.C.list().length, 1, "re-saving the input never duplicates the circuit");
 });
 
+test("non-flat node heights drop legacy cosine elevations (no stack on the built road)", () => {
+  const { C, Tracks } = boot();
+  const pts = ellipse();
+  const heights = pts.map((_, i) => (i === 10 ? 15 : 0));
+  const elev = [{ s: 0.25, halfM: 250, rise: 20 }];
+  const elevOnly = C.sanitize(design({ pts, elevations: elev }));
+  const both = C.sanitize(design({ pts, heights, elevations: elev }));
+  assert.ok(elevOnly.elevations && elevOnly.elevations.length === 1, "flat heights keep cosine hills");
+  assert.equal(both.elevations, null, "sanitize drops elevations when heights move a node");
+  assert.ok(both.heights[10] > 0);
+  const range = (tr) => {
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < tr.n; i++) { lo = Math.min(lo, tr.py[i]); hi = Math.max(hi, tr.py[i]); }
+    return hi - lo;
+  };
+  const rawBoth = C.toRaw(both);
+  assert.equal(rawBoth.elevations, null, "toRaw also refuses to stack");
+  const hOnly = C.sanitize(design({ pts, heights }));
+  const from = (raw) => Tracks.buildCenterline(Tracks._vmContext.TrackDef.fromRaw(raw), { line: false });
+  const trH = from(C.toRaw(hOnly));
+  const trBoth = from(rawBoth);
+  assert.ok(Math.abs(range(trBoth) - range(trH)) < 0.05, "built relief matches heights-only, not heights+cosine");
+});
+
 test("hill canonicalization preserves stable legacy geometry and sampled identities", () => {
   const { C } = boot();
   const legacy = design({ elevations: [{ s: 0.5, halfM: 23, rise: 1.25 }],
