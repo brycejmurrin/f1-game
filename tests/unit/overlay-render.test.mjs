@@ -125,3 +125,19 @@ test("reduced motion turns the sector flash into a static outline, with no anima
   assert.equal(staticFlash, true);
   assert.equal(motionOk, true, "the animation only runs when motion is allowed");
 });
+
+test("captions-only demo boots only its own overlay, even when the game TV HUD is available", () => {
+  const dom = makeDom();
+  const { root } = overlayRoot(dom);
+  root.id = "overlay";
+  root.setAttribute("role", "region");
+  dom.document.body.appendChild(root);
+  load({ document: dom.document, location: { search: "?demo=1&only=captions&rows=4" },
+    performance: { now: () => 0 }, window: { setInterval() {} },
+    setTimeout() {}, clearTimeout() {},
+    TvGraphics: { create() { throw new Error("the overlay demo must not mount the game's TV HUD"); } } });
+  assert.equal(dom.document.body.dataset.only, "captions");
+  assert.equal(root.querySelector(".ov-caption").hidden, false);
+  assert.equal(root.querySelector(".ov-caption").querySelector("span").textContent, "That was a decisive move.");
+  assert.deepEqual(dom.document.body.children, [root], "the demo mounts no global broadcast chrome outside its overlay");
+});

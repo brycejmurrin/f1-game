@@ -65,6 +65,12 @@
   }
   @media (max-width: 700px) { .ov-tower { top: 12px; left: 12px; } .ov-sectors { top: 12px; right: 12px; }
     .ov-caption { bottom: 12px; } .ov-battle { top: 12px; } }
+  /* Narrow broadcasts use a second row for the battle card, below the sectors
+     and opposite the timing tower. Keep the centered desktop composition. */
+  @media (max-width: 1100px) {
+    .ov-battle { top: calc(7vh + 64px); left: auto; right: 3vw; translate: none; }
+    body[data-side="right"] .ov-battle { left: 3vw; right: auto; }
+  }
 </style>
 </head>
 <body data-side="left">
@@ -76,7 +82,6 @@
 </main>
 <script src="js/race/broadcast.js?v=dev"></script>
 <script src="js/overlay/feed.js?v=dev"></script>
-<script src="js/race/tv-graphics.js?v=dev"></script>
 <script src="js/overlay/bridge.js?v=dev"></script>
 <script src="js/overlay/render.js?v=dev"></script>
 </body>

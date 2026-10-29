@@ -221,20 +221,6 @@ const OverlayRender = (function () {
       return painter;
     }
     const started = performance.now();
-    if (typeof TvGraphics !== "undefined") {
-      const demoRanked = [
-        { code: "LEC", pos: 1, prog: 5050, speed: 76 },
-        { code: "NOR", pos: 2, prog: 4996, speed: 76 },
-      ];
-      const demoG = { hudProfile: "broadcast", state: "race", raceT: 18, lap: 18, laps: 53, ranked: demoRanked };
-      const tv = TvGraphics.create(demoG);
-      tv.tick(.25, true);
-      window.setTimeout(() => {
-        demoRanked[0] = { code: "NOR", pos: 1, prog: 5055, speed: 77, fastest: true };
-        demoRanked[1] = { code: "LEC", pos: 2, prog: 5002, speed: 76 };
-        tv.tick(.25, true);
-      }, 900);
-    }
     const paint = () => painter.paint(demoFrame((performance.now() - started) / 1000));
     paint();
     window.setInterval(paint, 250);
