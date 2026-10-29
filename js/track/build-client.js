@@ -360,7 +360,7 @@ const TrackBuildClient = (function () {
           fallback.push(m[base]);
           // The empty chunk handle is replaced, so the adopted track cannot
           // free it later. Remove it from our ledger before releasing it.
-          if (gfx.freeChunkedMesh) { real[tok.__rec] = null; gfx.freeChunkedMesh(h); }
+          if (gfx.freeChunkedMesh) { real[tok.__rec] = null; gfx.freeChunkedMesh(h); if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership(); }
         }
         m[k] = null;
       }
@@ -397,7 +397,7 @@ const TrackBuildClient = (function () {
         if (!h) continue;
         try {
           if (r.op === "batch" || (r.op !== "mesh" && r.op !== "chunked")) { if (gfx.freeInstancedBatch) gfx.freeInstancedBatch(h); }
-          else if (r.op === "chunked" && gfx.freeChunkedMesh) gfx.freeChunkedMesh(h);
+          else if (r.op === "chunked" && gfx.freeChunkedMesh) { gfx.freeChunkedMesh(h); if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership(); }
           else gfx.freeMesh(h);
         } catch (_) { /* the replay's error is the one to surface */ }
       }

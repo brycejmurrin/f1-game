@@ -503,12 +503,26 @@
     //
     // NOT WHILE A WARM IS IN FLIGHT (tlx.js dropWrapper has the measurement): compileAsync collects (object, material)
     // pairs up front and awaits them one at a time, so a slot parked here is re-fetched by the warm with its render
-    // object gone and its geometry attribute-less. Queue the geometry; flushDropped() runs the park on the first
-    // present after the warm settles. Slots re-used for another geometry by then no longer match and are left alone.
-    const dropQ = [];   // geometries owed a park
+    // object gone and its geometry attribute-less. Queue the geometry AND the slots that hold it;
+    // flushDropped() disposes those slots on the first present after the warm settles, including a
+    // slot the next pass has already retargeted (its render object can still name the freed geometry).
+    const dropQ = [];   // { geo, meshes } owed a park. meshes is who held geo when it was queued:
+    // a warm can outlive the free, and the next pass retargets the slot before flush, so a
+    // later match on m.geometry / __lastGeo misses the render object that still names geo.
     function releaseGeometry(geo) {
       if (!geo) return;
-      if (ctx.isWarming && ctx.isWarming()) { if (dropQ.indexOf(geo) < 0) dropQ.push(geo); return; }
+      if (ctx.isWarming && ctx.isWarming()) {
+        if (dropQ.some((e) => e.geo === geo)) return;
+        const meshes = [];
+        for (const pl of pools.values()) {
+          for (let i = 0; i < pl.pool.length; i++) {
+            const m = pl.pool[i];
+            if (m.geometry === geo || (m.geometry === parkedGeo && m.__lastGeo === geo)) meshes.push(m);
+          }
+        }
+        dropQ.push({ geo, meshes });
+        return;
+      }
       for (const pl of pools.values()) {
         for (let i = 0; i < pl.pool.length; i++) {
           const m = pl.pool[i];
@@ -521,7 +535,87 @@
     function flushDropped() {
       if (!dropQ.length || (ctx.isWarming && ctx.isWarming())) return;
       const q = dropQ.splice(0);
-      for (let i = 0; i < q.length; i++) releaseGeometry(q[i]);
+      for (let i = 0; i < q.length; i++) {
+        const e = q[i], meshes = e.meshes;
+        // The slot may already be drawing another circuit. Dispose drops the render
+        // object that still names the freed geometry; leave a live replacement in place
+        // so the next cast rebuilds only that slot's render object.
+        if (meshes) for (let k = 0; k < meshes.length; k++) {
+          const m = meshes[k];
+          if (!m) continue;
+          const live = m.geometry !== e.geo && m.geometry !== parkedGeo;
+          if (!live) { m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null; }
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        }
+        releaseGeometry(e.geo);
+      }
+    }
+    function parkCasterForGeo(m, geo) {
+      if (!m || !geo) return;
+      const live = m.geometry !== geo && m.geometry !== parkedGeo && m.__lastGeo !== geo;
+      if (live) {
+        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object only */ }
+        return;
+      }
+      m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
+      try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+    }
+    function purgeCastersForGeos(freedGeos) {
+      if (!freedGeos || !freedGeos.size) return;
+      for (const pl of pools.values()) {
+        for (let j = 0; j < pl.pool.length; j++) {
+          const m = pl.pool[j];
+          if (!m) continue;
+          const g = m.geometry, lg = m.__lastGeo;
+          if (freedGeos.has(g)) parkCasterForGeo(m, g);
+          else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+        }
+      }
+      for (let i = 0; i < iCast.length; i++) {
+        const m = iCast[i];
+        if (!m) continue;
+        const g = m.geometry, lg = m.__lastGeo;
+        if (freedGeos.has(g)) parkCasterForGeo(m, g);
+        else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+      }
+      for (let i = 0; i < castScene.children.length; i++) {
+        const m = castScene.children[i];
+        if (!m || !m.isMesh) continue;
+        const g = m.geometry, lg = m.__lastGeo;
+        if (g && freedGeos.has(g)) parkCasterForGeo(m, g);
+        else if (lg && freedGeos.has(lg)) parkCasterForGeo(m, lg);
+      }
+      if (_probePrev) {
+        for (const m of _probePrev.meshes) {
+          if (!m || !m.isMesh) continue;
+          const g = m.geometry;
+          if (g && freedGeos.has(g)) disposeCaster(m);
+        }
+      }
+    }
+    function flushOwnershipDropped(freedGeos) {
+      if (!dropQ.length || !freedGeos || !freedGeos.size) return;
+      for (let qi = dropQ.length - 1; qi >= 0; qi--) {
+        const e = dropQ[qi];
+        if (!freedGeos.has(e.geo)) continue;
+        dropQ.splice(qi, 1);
+        const meshes = e.meshes;
+        if (meshes) for (let k = 0; k < meshes.length; k++) {
+          const m = meshes[k];
+          if (!m) continue;
+          const live = m.geometry !== e.geo && m.geometry !== parkedGeo;
+          if (!live) { m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null; }
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        }
+        for (const pl of pools.values()) {
+          for (let j = 0; j < pl.pool.length; j++) {
+            const m = pl.pool[j];
+            if (m.geometry !== e.geo && !(m.geometry === parkedGeo && m.__lastGeo === e.geo)) continue;
+            m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
+            try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+          }
+        }
+      }
     }
 
     // The batch is gone (track switch): its caster goes with it, so a hidden
@@ -965,6 +1059,8 @@
       freeInstanced,
       releaseGeometry,
       flushDropped,
+      flushOwnershipDropped,
+      purgeCastersForGeos,
       castShadowChunked: cast,
       shadowEnd: () => endPass(sunRT),
       carShadowEnd,

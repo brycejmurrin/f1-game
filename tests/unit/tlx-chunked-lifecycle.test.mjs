@@ -501,7 +501,8 @@ function visChunk(idx, min, max) {
 }
 
 test("mergeVisible concatenates chunk indices once and reuses the geometry while the set holds", () => {
-  const sys = factory([]);
+  const released = [];
+  const sys = factory(released);
   const a = visChunk(new Uint16Array([0, 1, 2]), [0, 0, 0], [1, 1, 1]);
   const b = visChunk(new Uint16Array([3, 4, 5]), [10, 0, 0], [12, 2, 2]);
   const mesh = { chunks: [a, b] };
@@ -523,6 +524,11 @@ test("mergeVisible concatenates chunk indices once and reuses the geometry while
   assert.equal(sys.mergeVisible(mesh, 2, 0), g, "the main slot is unchanged by the mirror merge");
   assert.equal(sys.mergeVisible(mesh, 1, 0), null, "a single chunk stays on its own geometry");
   sys.free(mesh);
+  assert.equal(mesh.chunks, null, "free still drops the chunk list");
   assert.equal(g.disposals, 1);
   assert.equal(g.attributes.position, undefined, "free does not keep the shared vertex attribute on the merged geometry");
+  assert.equal(released.length, 4, "both merge geometries and both chunk geometries are released");
+  let sawMerge = 0;
+  for (let i = 0; i < released.length; i++) if (released[i] === g || released[i] === other) sawMerge++;
+  assert.equal(sawMerge, 2, "both merge geometries are released, not only disposed");
 });

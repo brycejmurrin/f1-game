@@ -748,31 +748,47 @@
       // carries the same rule and the same reason.
     }
 
-    function free(mesh) {
+    function free(mesh, freedGeos) {
       if (!mesh) return;
+      const mark = (g) => { if (g && freedGeos) freedGeos.add(g); };
+      const dropGeo = (g, stripMergeAttrs) => {
+        if (!g) return;
+        mark(g);
+        releaseGeometry(g);
+        if (freedGeos) return;
+        if (stripMergeAttrs) {
+          const names = Object.keys(g.attributes);
+          for (let k = 0; k < names.length; k++) delete g.attributes[names[k]];
+        }
+        try { g.dispose(); } catch (_) { /* already gone */ }
+      };
       const mv = mesh._tlxMv;
       if (mv) {
         mesh._tlxMv = null;
         for (let i = 0; i < mv.length; i++) {
           const g = mv[i] && mv[i].geo;
           if (!g) continue;
-          // Vertex attributes are the chunks'. Drop only this geometry's index.
-          for (const k in g.attributes) delete g.attributes[k];
-          try { g.dispose(); } catch (_) { /* already gone */ }
+          // The merged draw's wrapper is keyed on THIS geometry, not a chunk.
+          // three r186 drops a RenderObject only when the object or the material
+          // dispatches "dispose" (a geometry dispose only clears vertex state),
+          // so geometry.dispose() alone left the wrapper in the pool and the
+          // previous circuit's merge slot in renderer._objects on the next race.
+          dropGeo(g, true);
+          mv[i].geo = null;
         }
       }
       _visList.length = 0;   // the last cull's list may be this mesh's chunks: a dropped world must not sit in module scratch
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
-          if (ch.geo) { releaseGeometry(ch.geo); ch.geo.dispose(); ch.geo = null; }
+          if (ch.geo) { dropGeo(ch.geo, false); ch.geo = null; }
           if (ch.wrap) ch.wrap.geo = null;
         }
         mesh.chunks = null;
         mesh.geo = null;
         return;
       }
-      if (mesh.geo) { releaseGeometry(mesh.geo); mesh.geo.dispose(); mesh.geo = null; }
+      if (mesh.geo) { dropGeo(mesh.geo, false); mesh.geo = null; }
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
