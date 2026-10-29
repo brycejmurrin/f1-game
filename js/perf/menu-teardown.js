@@ -95,8 +95,9 @@ const MenuTeardown = (function () {
     };
   }
 
+  // pauseSheetUp stays module-local (cover/report call it); report remains the probe seam.
   return {
-    cover, pauseSheetUp, garageBusyPlate, runSync, deferUi, deferQuitTail, report,
+    cover, garageBusyPlate, runSync, deferUi, deferQuitTail, report,
     beginQuit, endQuit, beginGarageClose, endGarageClose,
   };
 })();
