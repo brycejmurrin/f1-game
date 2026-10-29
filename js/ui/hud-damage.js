@@ -73,5 +73,6 @@ const HudDamage = (function () {
     return paint(_el, r, Damage.worst(r) > Damage.SHOW);
   }
 
-  return Object.freeze({ paint, sync, level, text, label });
+  // label stays module-local (paint owns aria-label; tests pin paint/level/text).
+  return Object.freeze({ paint, sync, level, text });
 })();
