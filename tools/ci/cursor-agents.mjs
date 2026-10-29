@@ -277,7 +277,7 @@ export async function transcriptCall(id, ref, { sel = "all", max = 4000, dir, fe
 
 // ---- control verbs: launch / followup / cancel / archive / delete -------------------------------
 
-export const DEFAULT_REPO = "https://github.com/brycejmurrin/f1-game";
+const DEFAULT_REPO = "https://github.com/brycejmurrin/f1-game";
 export const DEFAULT_MODEL = "composer-2.5";
 const AGENT_ID = /^bc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_PROMPT = 100000;
@@ -304,7 +304,7 @@ export function recordAllow(id, meta, file = allowFile()) {
   writeAllow({ ...readAllow(file), [id]: meta }, file);
 }
 
-export function forgetAllow(id, file = allowFile()) {
+function forgetAllow(id, file = allowFile()) {
   const a = readAllow(file);
   delete a[id];
   writeAllow(a, file);
@@ -316,7 +316,7 @@ export function assertAllowed(id, file = allowFile()) {
   if (!readAllow(file)[id]) throw new Refused(`REFUSED ${id} was not launched by this tool (see: allowed)`);
 }
 
-export const newAgentId = () => `bc-${crypto.randomUUID()}`;
+const newAgentId = () => `bc-${crypto.randomUUID()}`;
 
 function needText(text, what) {
   if (typeof text !== "string" || !text.trim()) throw new Error(`${what} is empty`);
@@ -346,7 +346,7 @@ const isObj = (x) => !!x && typeof x === "object" && !Array.isArray(x);
 export const LAUNCH_ENV_ALLOW = Object.freeze(["APEX_FLEET_AS", "APEX_SESSION_ID", "APEX_AGENT_WEBHOOK_URL", "APEX_AGENT_WEBHOOK_AUTH", "CURSOR_API_KEY"]);
 const notAllowed = (n) => `${n} is not in the launch env allowlist (${LAUNCH_ENV_ALLOW.join(", ")})`;
 // Remote MCP hosts a launch may name: Cursor's API, GitHub, and the host of our own APEX_AGENT_WEBHOOK_URL (read from env).
-export const MCP_HOST_ALLOW = Object.freeze(["api.cursor.com", "github.com", "*.github.com"]);
+const MCP_HOST_ALLOW = Object.freeze(["api.cursor.com", "github.com", "*.github.com"]);
 export function mcpHostAllowed(host, env = process.env) {
   const h = String(host).toLowerCase().replace(/\.$/, "");
   const hook = (() => {
@@ -548,7 +548,7 @@ async function apiError(r) {
 }
 
 /** ` envNames=A,B mcpEnvRefs=C`: the env NAMES a launch forwards (X1 audit trail); values never print. */
-export const envNamesNote = (envVars, mcpServers) =>
+const envNamesNote = (envVars, mcpServers) =>
   `${envVars && Object.keys(envVars).length ? ` envNames=${Object.keys(envVars).join(",")}` : ""}${mcpServers?.envRefs?.length ? ` mcpEnvRefs=${mcpServers.envRefs.join(",")}` : ""}`;
 
 const fail = (e, what) => new Error(`${what}: HTTP ${e.status} ${e.code}${e.message ? ` — ${e.message.slice(0, 200)}` : ""}`);

@@ -523,15 +523,11 @@ const NetNostr = (function () {
     });
   }
 
-  // exchange() IS directExchange(), not a full Trystero room join (joinRoom /
-  // makeAction / onPeerJoin): that carries the answer over Trystero's OWN
-  // RTCPeerConnection, which dies exactly when ours starts (measured, see the
-  // directExchange header). Nothing in the vendored tree beyond
-  // createEvent/subscribe is reached.
-  const exchange = directExchange;
-
-  return { JOIN_TIMEOUT_MS, HOST_TIMEOUT_MS, RELAY_CHECK_MS, available, exchange, directExchange, load,
-    RELAYS, relayUrls, validRelay,
+  // directExchange is the public room API (not a full Trystero joinRoom /
+  // makeAction / onPeerJoin — that path dies when our PC starts; see the
+  // directExchange header). RELAY_CHECK_MS / load / validRelay stay module-local.
+  return { JOIN_TIMEOUT_MS, HOST_TIMEOUT_MS, available, directExchange,
+    RELAYS, relayUrls,
     MAX_CONTENT_CHARS, MAX_FRAME_CHARS, MAX_SEEN, MAX_SEEN_CHARS, MAX_HEARD_ACTIVE, OFFER_CREATED_SLACK_S,
     readRelayFrame, createBoundedInbox };
 })();
