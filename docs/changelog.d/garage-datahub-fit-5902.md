@@ -1,0 +1,1 @@
+Fixed: On a landscape phone the garage keeps the team name on one line and opens Photo Studio from the camera bar, and Data Hub classification tables scroll sideways so the driver column stays readable.

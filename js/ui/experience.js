@@ -208,6 +208,18 @@ const UiExperience = (function () {
     });
     wire("mb-photo", () => deps.openPhoto("home"));
     wire("pm-photo", () => deps.openPhoto("race"));
+    // The garage camera bar gains PHOTO here, not in the shell: one more
+    // index.html tag would raise the shell-node ceiling for a single chip.
+    const cam = $("cs-cam");
+    if (cam && !$("cs-photo")) {
+      const photo = document.createElement("button");
+      photo.type = "button";
+      photo.id = "cs-photo";
+      photo.title = "Photo Studio — frame this car and save a background";
+      photo.textContent = "PHOTO";
+      cam.insertAdjacentElement("afterend", photo);
+    }
+    wire("cs-photo", () => deps.openPhoto("garage"));
     wire("pm-strategy", () => deps.openSettingsPage("strategy", "pm-pit-panel"));
     wire("pm-practice", () => deps.openSettingsPage("practice", "pm-practice-panel"));
     wire("pm-review", () => deps.openSettingsPage("review", "pm-session-review"));

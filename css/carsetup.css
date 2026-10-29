@@ -466,25 +466,39 @@
     grid-column: 1 / -1; grid-row: 3;
     padding: 0 var(--pad) calc(var(--pad) * 0.25);
   }
-  /* ...AND THE HEAD IS ONE LINE. Same measurement: the head was two lines, the
-     title over a budget row that was itself readout-over-FREE-BUILD, 76 own of
-     the 281. The title stacks GARAGE over the team name in a narrow column, the
-     readout wraps to two lines beside FREE BUILD instead of above it, and the
-     row is as tall as the FREE BUILD chip (~52 own with padding). The budget row
-     asks for 5.5 chips of width, so a team name too long for the title column
-     still wraps the row underneath, as before — nothing truncates.
-     FOLDED WITH #919 (d5eb31183): its compact-tier `#cs-budget-row` nowrap and
-     `#cs-budget` flex: 1 1 0 / min-width: 0 (end of this file, every compact
-     garage) are the readout-beside-FREE-BUILD half of this, so those
-     declarations are no longer repeated here; this tier adds only the title
-     column, the row's width basis and the readout's leading. */
+  /* ONE LINE. Measured 844×390: a 7.5×--label column stacked the team name
+     and the free-build sentence ate the parts list. The ON chip states the
+     mode; the sentence stays in the tree, clipped. The team name ellipsizes.
+     FOLDED WITH #919 (d5eb31183): compact `#cs-budget-row` nowrap stays at the
+     end of this file, so this tier only sets the title row. */
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-header { flex-flow: row wrap; align-items: center; }
   /* Keep the budget row on that same horizontal flex axis below 400px too.
      Otherwise its width basis becomes height inside the column wrapper. */
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget-wrap { display: contents; }
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar {
-    flex: 0 1 auto; flex-direction: column; align-items: flex-start; gap: 0;
-    min-width: 0; max-width: calc(var(--label) * 7.5);
+    flex: 1 1 auto;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    align-items: baseline;
+    gap: 0.45em;
+    min-width: 0;
+    max-width: none;
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-team {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget.unlimited {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-titlebar > * { line-height: 1.15; max-width: 100%; overflow-wrap: anywhere; }
   #cs-inner:not([data-pair="on"])[data-density="compact"]:not([data-shape="tall"]) #cs-budget-row { flex: 1 1 calc(var(--chip-h) * 5.5); min-width: 0; }
@@ -629,6 +643,7 @@
 .cs-opt-cost.free { color: rgba(255,255,255,0.3); font-weight: 600; }
 .cs-opt.active {
   background: var(--plate-on); border-color: var(--red);
+  box-shadow: inset 3px 0 0 var(--red);
 }
 .cs-opt.active .cs-opt-dot { border-color: var(--red); background: radial-gradient(circle, #fff 0 3px, var(--red) 4px); }
 .cs-opt.active .cs-opt-cost { color: #fff; }
@@ -1259,7 +1274,7 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
    to decide a group is a set of toggles, and a disclosure already states itself
    with aria-expanded. Two competing state attributes on one button is worse for
    a screen reader than either alone. */
-#cs-cam {
+#cs-cam, #cs-photo {
   flex: 0 0 auto; width: auto; margin: 0;
   display: flex; align-items: center; gap: 6px;
   padding: 5px 10px; border-radius: var(--r-sm);
@@ -1279,8 +1294,9 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 }
 /* Gated per the tokens.css policy: a tap sticks :hover on iOS. */
 @media (hover: hover) and (pointer: fine) {
-  #cs-cam:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
+  #cs-cam:hover, #cs-photo:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
 }
+body:not(.desktop) #cs-photo { min-height: var(--tap); min-width: var(--tap); }
 .cs-cam-caret { font-size: var(--fs-micro); line-height: 1; transition: transform 0.15s ease; }
 #cs-cam[aria-expanded="true"] {
   background: rgba(0,204,136,0.18); color: #0c8;
@@ -1973,5 +1989,21 @@ body:not(.desktop) #carsetup #cs-customize {
 /* STAT BARS: HIDE. The block is an item in #cs-header's flex column, so its
    gap goes with it; the head simply gets shorter and the list taller. */
 :root[data-look-garage-stats="hide"] #carsetup #cs-stats-inner { display: none; }
+
+/* A cut-off category read as a broken label. The id outranks .sf-r's 36px
+   fade, and the mask only paints once ScrollFade adds that class. */
+#cs-inner:not([data-pair="on"]) #cs-tabs { --sfade-r: 52px; }
+
+/* Ultrawide and 1440p: the 420px cap left a thin strip beside a huge car.
+   560px still reserves 640 visual px for the car. The look-pw rule (two ids)
+   outranks this when the player has set a panel width. */
+@media (min-width: 1800px) {
+  #carsetup {
+    --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 640px / var(--ui-scale)), 560px));
+  }
+  #carsetup:has(.cs-liv-editor) {
+    --cs-sheet-w: min(100%, clamp(410px, calc(100 * var(--vwz) - 720px / var(--ui-scale)), 520px));
+  }
+}
 
 } /* @layer components */

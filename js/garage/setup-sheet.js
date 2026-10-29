@@ -619,7 +619,9 @@ function buildSetup() {
   const spent = Parts.getCost(parts, team);
   const remaining = cap - spent;
 
-  $("cs-team").textContent = team.name.toUpperCase();
+  const teamEl = $("cs-team");
+  teamEl.textContent = team.name.toUpperCase();
+  teamEl.title = team.name;
 
 
   const budgetEl = $("cs-budget");
