@@ -312,6 +312,7 @@
   --layout-active: var(--bp-phone);
   /* One control column. 660px matched the landscape 32vw column at 1920. */
   --col-max: 660px;
+  --menu-fit-sheet: 1180px; --menu-fit-sheet-wide: 1360px; --menu-fit-pause: 480px;
   /* Foldables. Fallbacks are the whole viewport and a zero hinge. Unitless 0:
      a px literal on a property whose name contains "gap" counts as raw spacing. */
   --seg-w: env(viewport-segment-width 0 0, 100vw);
