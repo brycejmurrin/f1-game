@@ -1856,7 +1856,7 @@ function updateHud(force, dtMs) {
     if (typeof HudStrategy !== "undefined" && (typeof HudElements === "undefined" || HudElements.isOn("strat"))) pitReadouts = { player, spent, left };
     const bar = els.tyreFill && els.tyreFill.parentNode;
     if (bar && bar.dataset) {
-      const txt = left == null || spent >= 1 ? "" : left < 0.5 ? "<1L" : "~" + Math.min(99, Math.round(left)) + "L";
+      const txt = left == null || spent >= 1 ? "" : left < 0.5 ? "<1L" : Math.min(99, Math.round(left)) + "L";
       if (bar.dataset.laps !== txt) bar.dataset.laps = txt;
     }
     // THE PIT CUE, and it replaces a button rather than decorating one. A stop
