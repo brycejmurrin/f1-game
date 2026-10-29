@@ -9,6 +9,8 @@ import path from "node:path";
 import vm from "node:vm";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
+import { gameSource } from "../helpers/game-source.mjs";
+import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -160,8 +162,10 @@ test("HUD chip: hidden under the threshold, tinted levels + text + aria-label ab
 
 // ── THE CONTRACT ──────────────────────────────────────────────────────────────
 // Damage is a readout. Driving physics, the AI and race control must not read
-// it — not even to "just check". A future performance option is an explicit,
-// setting-gated read and must change THIS test on purpose.
+// it — not even to "just check". The ONE exception is the explicit, setting-
+// gated DAMAGE → HANDLING option (#1578): js/race/damage-handling.js reads it,
+// game.js hands PlayerForces its factors as ctx.damage, and with the option OFF
+// that is null (pinned below).
 test("no physics / AI / race-control module reads Damage", () => {
   const files = fs.readdirSync(path.join(ROOT, "js/physics")).filter((f) => f.endsWith(".js")).map((f) => "js/physics/" + f)
     .concat(["js/race/race-control.js", "js/race/sporting-regs.js", "js/race/quali-model.js", "js/race/reliability.js",
@@ -190,4 +194,101 @@ test("#hud-damage joins the top-band --hud-z zoom group with #hud-limits", () =>
   assert.ok(rule, "#hud-damage rule present");
   assert.match(rule[1], /top: calc\([\s\S]*\/ var\(--hud-z\)/);
   assert.match(rule[1], /right: calc\([\s\S]*\/ var\(--hud-z\)/);
+});
+
+// ── DAMAGE → HANDLING (#1578): opt-in, default OFF ─────────────────────────────
+const DH_SRC = read("js/race/damage-handling.js");
+function loadDH() {
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(SRC + "; this.Damage = Damage;", ctx, { filename: absSrc("js/race/damage.js") });
+  vm.runInContext(DH_SRC + "; this.DamageHandling = DamageHandling;", ctx, { filename: absSrc("js/race/damage-handling.js") });
+  return ctx;
+}
+
+test("DamageHandling ships OFF: forCar is null, even for a wrecked local car, until the setting is on", () => {
+  const { Damage: D, DamageHandling: H } = loadDH();
+  const c = car({ local: true });
+  D.apply(D.get(c), 4.8, 0, 1);
+  assert.equal(H.isEnabled(), false);
+  assert.equal(H.forCar(c), null);
+  assert.equal(H.fromStore({ get: (k, d) => d }), false, "an unset key is OFF");
+  assert.equal(H.fromStore({ get: (k, d) => (k === H.KEY ? true : d) }), true);
+  assert.ok(H.forCar(c), "ON: the local car gets factors");
+  assert.equal(H.forCar(car({ local: false })), null, "ON: an AI / remote car keeps the readout-only contract");
+});
+
+test("DamageHandling factors: front wing → front aero, rear wing → rear aero, floor → both, knock → grip", () => {
+  const { DamageHandling: H } = loadDH();
+  const clean = H.factors({ fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 0 });
+  assert.deepEqual({ ...clean }, { aeroF: 1, aeroR: 1, grip: 1 }, "no damage, no effect");
+  const fw = H.factors({ fwL: 1, fwR: 1, rw: 0, floor: 0, knock: 0 });
+  assert.ok(fw.aeroF < 1 && fw.aeroR === 1 && fw.grip === 1, "a broken front wing costs the front only");
+  const half = H.factors({ fwL: 1, fwR: 0, rw: 0, floor: 0, knock: 0 });
+  assert.ok(half.aeroF > fw.aeroF && half.aeroF < 1, "half a wing costs half as much");
+  const rw = H.factors({ fwL: 0, fwR: 0, rw: 1, floor: 0, knock: 0 });
+  assert.ok(rw.aeroR < 1 && rw.aeroF === 1);
+  const floor = H.factors({ fwL: 0, fwR: 0, rw: 0, floor: 1, knock: 0 });
+  assert.ok(floor.aeroF < 1 && floor.aeroR < 1 && floor.aeroF === floor.aeroR);
+  assert.ok(H.factors({ fwL: 0, fwR: 0, rw: 0, floor: 0, knock: 1 }).grip < 1);
+  const worst = H.factors({ fwL: 9, fwR: 9, rw: 9, floor: 9, knock: 1 });
+  assert.ok(worst.aeroF >= 0 && worst.aeroR >= 0, "out-of-range parts clamp; aero never goes negative");
+});
+
+test("a completed pit stop repairs the handling: the factors return to 1 on the pit-out edge", () => {
+  const { Damage: D, DamageHandling: H } = loadDH();
+  H.setEnabled(true);
+  const c = car({ local: true });
+  D.apply(D.get(c), 4.8, 0.5, 1);
+  assert.ok(H.forCar(c).aeroF < 1);
+  c.pitOutT = 1.5; D.observe(c, 1 / 60, 72);
+  const f = H.forCar(c);
+  assert.deepEqual([f.aeroF, f.aeroR, f.grip], [1, 1, 1]);
+});
+
+test("the physics reads damage ONLY through the gated ctx.damage seam", () => {
+  const pf = read("js/physics/player-forces.js"), g = gameSource();
+  assert.match(pf, /const dmg = ctx\.damage;/);
+  assert.match(pf, /let dmgF = 1, dmgR = 1;\s*\n\s*if \(dmg\) \{/, "OFF leaves both axle ratios at exactly 1");
+  const fills = [...g.matchAll(/pf\.damage = ([^;]+);/g)].map((m) => m[1]);
+  assert.deepEqual(fills, ['typeof DamageHandling !== "undefined" ? DamageHandling.forCar(c) : null'], "game.js fills it from DamageHandling once");
+  for (const f of fs.readdirSync(path.join(ROOT, "js/physics")).filter((x) => x.endsWith(".js")))
+    assert.doesNotMatch(read("js/physics/" + f), /\bDamageHandling\b/, f + " must not reach for the module itself");
+});
+
+test("VM: ON, a broken front wing lowers front grip in physState at speed; repair restores it; OFF is byte-identical", async () => {
+  const { createRequire } = await import("node:module");
+  const { createGame } = createRequire(import.meta.url)("../../tools/lib/game-vm.cjs");
+  const g = await createGame({ track: "monza" });
+  await g.race("monza", "day", "dry");
+  const S = g.sandbox, P = g.G.player, A = g.apex;
+  const drive = () => { A.setInput({ throttle: true }); g.step(240); return A.physState(); };
+  const base = drive();
+  assert.equal(base.damageAxF, 1); assert.equal(base.damageHandling, false);
+  // OFF: a wrecked wing changes nothing the physics reports.
+  const rec = S.Damage.get(P); rec.fwL = rec.fwR = 1;   // the front wing only (a real nose hit also books floor + knock)
+  const off = drive();
+  assert.equal(off.damageAxF, 1); assert.equal(off.damageAxR, 1);
+  S.DamageHandling.setEnabled(true);
+  try {
+    const on = drive();
+    assert.ok(on.damageAxF < 1, "front axle loses grip with the wing gone: " + on.damageAxF);
+    assert.equal(on.damageAxR, 1, "the rear wing and floor are intact");
+    // Repair: the pit-out edge resets the record.
+    P.pitOutT = 2; S.Damage.observe(P, 1 / 60, g.G.vTop());
+    const fixed = drive();
+    assert.equal(fixed.damageAxF, 1);
+  } finally { S.DamageHandling.setEnabled(false); }
+});
+
+test("DamageHandling lives in the lazy race session: the stub holds the stored choice and the real module adopts it", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/race/session-stub.js"), ctx, { filename: absSrc("js/race/session-stub.js") });
+  const stub = vm.runInContext("DamageHandling", ctx);
+  assert.equal(stub._stub, true);
+  assert.equal(stub.forCar({ local: true }), null, "no handling effect from the stub");
+  assert.equal(stub.fromStore({ get: (_k, d) => (_k === "damageHandling" ? true : d) }), true);
+  vm.runInContext(DH_SRC, ctx, { filename: absSrc("js/race/damage-handling.js") });
+  assert.equal(vm.runInContext("DamageHandling._stub", ctx), undefined);
+  assert.equal(vm.runInContext("DamageHandling.isEnabled()", ctx), true, "the pre-hydration choice survives the swap");
 });

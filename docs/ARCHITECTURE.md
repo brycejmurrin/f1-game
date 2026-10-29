@@ -367,6 +367,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `car-fields.js` | `CarFields` | tag | CAR FIELDS: pre-declare the fields a car only gains once the frame loop is running. makeCars() (js/game.js) spawns a car with ~176 own fields. |
 | `reliability.js` | `Reliability` | LAZY_RACE_SESSION | RELIABILITY: whether a car reaches the flag at all. |
 | `damage.js` | `Damage` | LAZY_RACE_SESSION | DAMAGE: a per-car damage READOUT derived from the impacts the game already resolves (car-to-car contact through game.js collideFx, barrier strikes through… |
+| `damage-handling.js` | `DamageHandling` | LAZY_RACE_SESSION | DAMAGE → HANDLING (#1578): the ONE setting-gated read of the Damage readout (js/race/damage.js) that reaches the driving model. |
 | `duel.js` | `Duel` | LAZY_RACE_SESSION | DUEL: a practice race against ONE rival with his rating lifted. |
 | `session-records.js` | `SessionRecords` | LAZY_RACE_SESSION | Comparable time-trial classes and lap configuration continuity. |
 | `pit-geom.js` | `PitGeom` | LAZY_RACE_SESSION | PIT GEOMETRY (PitGeom): the lane window, box row and widths the state machine reads, including the surface curvature channel entryRunM. |

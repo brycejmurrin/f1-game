@@ -1080,6 +1080,7 @@ const LAZY_RACE = [
 const LAZY_RACE_SESSION = [
   "js/race/reliability.js",
   "js/race/damage.js",
+  "js/race/damage-handling.js",   // DamageHandling: the opt-in DAMAGE → HANDLING read (#1578; OFF = no effect)
   "js/race/duel.js",
   "js/race/session-records.js",
   "js/race/pit-geom.js",

@@ -3928,6 +3928,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/damage-handling.js",
+      "global": "DamageHandling",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/damage.js",
       "global": "Damage",
       "roster": "LAZY_RACE_SESSION"

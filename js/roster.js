@@ -208,6 +208,7 @@
     LAZY_RACE_SESSION: [
     "js/race/reliability.js",
     "js/race/damage.js",
+    "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
     "js/race/pit-geom.js",
