@@ -818,13 +818,8 @@ const Input = (function () {
     const p = activePad();
     return p ? restFor(p) : (padRestLegacy !== null ? padRestLegacy : padRestOffset);
   }
-  // Forget the driving pad's offset only (the wheel wizard moved its steering axis).
-  function clearPadRest() {
-    const p = activePad();
-    if (p) padRestMap.delete(padIdOf(p));
-    padRestLegacy = null; padRestOffset = 0;
-  }
   // What KeyBinds persists as apex26.padRest: {[padId]: offset}, 0 when none.
+  // Axis-map / profile resets clear rest via invalidateAxisRest (no clearPadRest export).
   function padRestStore() {
     if (padRestLegacy !== null) return padRestLegacy;
     return padRestMap.size ? Object.fromEntries(padRestMap) : 0;
@@ -2609,7 +2604,7 @@ const Input = (function () {
     getControllerProfiles: () => ensureDeviceProfiles() ? deviceProfiles.data() : { v: 1, devices: [] },
     setControllerProfiles: (raw) => ensureDeviceProfiles() ? deviceProfiles.replace(raw) : null,
     resetControllerProfile,
-    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, clearPadRest, padRestStore,
+    setPadAxisMap, getPadAxisMap, padAxesAreDefault, beginAxisCapture, calibratePad, padCalibrationOwner, parkedPadPreview, padRest, setPadRest, padRestStore,
     touchControlsNeeded,
     pickPad,
     onPointerKindChange,

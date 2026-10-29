@@ -81,7 +81,7 @@ const MirrorPass = (function () {
   // THE PHONE RUNG'S DRAW DISTANCE (B·H10, Bryce 2026-10-21: "shorter mirror draw distance"). Monza sweep, 7
   // positions: the lite mirror drew 75k tris mean / 117k worst at 180 m, 65k / 71k at 120 m, and no less at 100 or 80 m
   // — the floor is TLX's one unchunked whole-lap road (~51k tris, tlx.js chunkedTrackCoords:false), which no cull
-  // reaches. The low and min rungs never draw further than lite. QUALITY is exported so a probe can sweep it live.
+  // reaches. The low and min rungs never draw further than lite.
   const QUALITY = [
     { name: "full", lite: false, res: 1.0, ss: 2, cull: 280, reach: 260, every: 1, instEvery: _instEvery },
     { name: "lite", lite: true,  res: 0.6, ss: 2, cull: LITE_CULL, reach: Math.min(140, LITE_CULL), every: 1, instEvery: 1 },
@@ -851,8 +851,9 @@ const MirrorPass = (function () {
   }
 
   // The live instance, for __apex.mirror() (js/agent/apex.js) — game.js creates exactly one.
+  // QUALITY stays module-local (create() picks the rung); no probe or test reads it.
   let _instance = null;
-  return { create, MODES, QUALITY, instance: () => _instance };
+  return { create, MODES, instance: () => _instance };
 })();
 
 if (typeof window !== "undefined") window.MirrorPass = MirrorPass;
