@@ -3992,6 +3992,26 @@ const TLX = (function () {
         for (const entry of _dropQueue) dropWrapper(entry.mesh, entry.ownedGeometry);
         _dropQueue.length = 0;
       }
+      // Track switch while a program/mirror warm is in flight: dropWrapper queues
+      // on _warmPending and flushDropped() is a no-op until warm settles. A menu→race
+      // switch on llvmpipe can free the old circuit before that present (CI
+      // session-quit-memory).
+      function flushOwnershipRelease() {
+        const q = _dropQueue.splice(0);
+        for (let i = 0; i < q.length; i++) {
+          const m = q[i].mesh, owned = q[i].ownedGeometry;
+          try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+          m.visible = false;
+          if (m.__tlxDropped) continue;
+          m.__tlxDropped = true;
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+          if (m._ownGeo && m.geometry) m.geometry.dispose();
+          m.geometry = null; m.material = null;
+          if (owned) try { owned.dispose(); } catch (_) { /* already lost */ }
+        }
+        flushDropLater(true);
+        if (shadowSys && shadowSys.flushOwnershipDropped) shadowSys.flushOwnershipDropped();
+      }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
       // pool's 20-second idle sweep keeps a disposed track's BufferGeometry
@@ -5060,7 +5080,11 @@ const TLX = (function () {
         // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
         pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
-          if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
+          if (m && m.chunks && chunkedSys) {
+            chunkedSys.free(m);
+            flushOwnershipRelease();
+            return;
+          }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
         },
         freeTexture(t) {

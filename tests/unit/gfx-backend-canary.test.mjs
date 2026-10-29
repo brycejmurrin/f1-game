@@ -4640,13 +4640,19 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 1, "prunePool drops idle shared wrappers through the helper");
   assert.equal((tlxSrc.match(/dropWrapper\(m, null, true\);/g) || []).length, 1, "releaseGeometry too, held until the next scene render (pipeline keep-alive)");
   assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
+  assert.match(fnBody(tlxSrc, "flushOwnershipRelease"), /m\.dispatchEvent\(\{ type: "dispose" \}\);[^]*?m\.geometry = null; m\.material = null;/,
+    "ownership flush bypasses warm and drops queued wrappers like dropWrapper would");
+  assert.match(tlxSrc, /freeChunkedMesh\(m\) \{[\s\S]*?chunkedSys\.free\(m\);\s*flushOwnershipRelease\(\);/,
+    "track switch frees chunked mesh then drains deferred drops before the next build peak");
+  assert.match(sh, /flushOwnershipDropped,\n/, "shadow pool exports the warm-bypass drain for chunked free");
   assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh, null, later\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
+  const ownershipFlush = fnBody(tlxSrc, "flushOwnershipRelease");
   assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
     "warm probes dispose before clearing references, after pending compilation settles");
   assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
     "a retired probe releases when its last compiler settles");
-  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(ownershipFlush, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.

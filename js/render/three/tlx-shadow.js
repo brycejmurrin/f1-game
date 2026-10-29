@@ -550,6 +550,28 @@
         releaseGeometry(e.geo);
       }
     }
+    function flushOwnershipDropped() {
+      if (!dropQ.length) return;
+      const q = dropQ.splice(0);
+      for (let i = 0; i < q.length; i++) {
+        const e = q[i], meshes = e.meshes;
+        if (meshes) for (let k = 0; k < meshes.length; k++) {
+          const m = meshes[k];
+          if (!m) continue;
+          const live = m.geometry !== e.geo && m.geometry !== parkedGeo;
+          if (!live) { m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null; }
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        }
+        for (const pl of pools.values()) {
+          for (let j = 0; j < pl.pool.length; j++) {
+            const m = pl.pool[j];
+            if (m.geometry !== e.geo && !(m.geometry === parkedGeo && m.__lastGeo === e.geo)) continue;
+            m.visible = false; m.geometry = parkedGeo; m.__lastGeo = null;
+            try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+          }
+        }
+      }
+    }
 
     // The batch is gone (track switch): its caster goes with it, so a hidden
     // mesh never pins a freed geometry alive (the parkedGeo rule, per batch).
@@ -992,6 +1014,7 @@
       freeInstanced,
       releaseGeometry,
       flushDropped,
+      flushOwnershipDropped,
       castShadowChunked: cast,
       shadowEnd: () => endPass(sunRT),
       carShadowEnd,
