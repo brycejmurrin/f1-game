@@ -90,10 +90,10 @@ var CooldownLap = (function () {
 
     function progOf(c) {
       if (!c) return 0;
-      if (Number.isFinite(c.prog)) return c.prog;
       const total = G.track && G.track.total;
-      if (!(total > 0) || !Number.isFinite(c.s)) return 0;
-      return c.s / total;
+      if (!(total > 0)) return Number.isFinite(c.prog) ? c.prog : 0;
+      if (Number.isFinite(c.prog)) return c.prog / total;   // c.prog is cumulative METRES; the budget is in laps
+      return Number.isFinite(c.s) ? c.s / total : 0;
     }
 
     function samplePlayer() {
