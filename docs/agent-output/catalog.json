@@ -1218,6 +1218,7 @@
         "test:render",
         "test:shimmer",
         "test:smoke",
+        "test:stall-reload-sw",
         "test:tiny",
         "test:ui",
         "test:webkit",
@@ -4335,6 +4336,10 @@
     {
       "name": "test:smoke",
       "command": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js"
+    },
+    {
+      "name": "test:stall-reload-sw",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js"
     },
     {
       "name": "test:state-unit",

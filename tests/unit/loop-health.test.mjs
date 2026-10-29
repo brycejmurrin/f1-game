@@ -135,9 +135,16 @@ test("a stopped loop does not expire its tally on a later quiet clean", () => {
 
 // ── #3510 stall watchdog ────────────────────────────────────────────────────
 /** LoopHealth with the browser surfaces the watchdog acts through. */
-function loadStall({ webdriver = false, search = "", reloadsSpent = null, ua = "Mozilla/5.0" } = {}) {
+function loadStall(opts = {}) {
+  const {
+    webdriver = false, search = "", reloadsSpent = null, ua = "Mozilla/5.0",
+    softwareGL = false, swRaceShed = true, handoffCover = false, introBudgetLeft = 0,
+    loadingPhase = "", envProbeOff = false, perChunkOff = false,
+  } = opts;
   const clock = { t: 0 }, calls = { tier: [], reload: 0 }, ls = new Map(), ss = new Map();
   if (reloadsSpent != null) ss.set("apex26.stallReloads", String(reloadsSpent));
+  if (envProbeOff) ls.set("apex26.envProbeOff", "1");
+  if (perChunkOff) ls.set("apex26.perChunkOff", "1");
   const store = (m) => ({ getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) });
   const listeners = {};
   const cover = { hidden: true };
@@ -151,14 +158,22 @@ function loadStall({ webdriver = false, search = "", reloadsSpent = null, ua = "
     performance: { now: () => clock.t }, Date: { now: () => clock.t }, Math, console,
     navigator: { webdriver, userAgent: ua }, document: doc, location: { search, reload: () => { calls.reload++; } },
     localStorage: store(ls), sessionStorage: store(ss),
-    PerfGov: { setUserTier: (n) => calls.tier.push(n) },
+    PerfGov: { setUserTier: (n) => calls.tier.push(n), softwareRaster: () => softwareGL },
+    PostCommon: { softwareRaceShed: (gl, nav, knob) => gl && !(knob === "0") && (knob === "1" || (nav && !nav.webdriver && !/apex-game-vm/.test(nav.userAgent || ""))) },
+    G: { state: "menu" },
+    RaceEntryProfile: {
+      stallHandoffCover: () => opts.handoffCover === true,
+      introBudgetLeft: () => introBudgetLeft,
+    },
+    loadingScreen: { phase: () => loadingPhase },
   };
+  if (swRaceShed === false) ctx.PostCommon.softwareRaceShed = () => false;
   vm.createContext(ctx);
   seedLog(ctx);
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/perf/loop-health.js") });
   const frames = (n, ms) => { for (let i = 0; i < n; i++) { clock.t += ms; ctx.LoopHealth.clean(); } };
   const hide = (hidden) => { doc.visibilityState = hidden ? "hidden" : "visible"; listeners.visibilitychange && listeners.visibilitychange(); };
-  return { LoopHealth: ctx.LoopHealth, frames, hide, calls, ls, ss, cover, carsetup };
+  return { LoopHealth: ctx.LoopHealth, frames, hide, calls, ls, ss, cover, carsetup, ctx };
 }
 
 test("stall: a glacial loop sheds at SHED_RUN, then reloads once to the menu notice", () => {
@@ -273,4 +288,38 @@ test("stall: off in the node game VM (webdriver false, apex-game-vm UA)", () => 
   h.frames(20, 3000);
   assert.deepEqual(h.calls.tier, []);
   assert.equal(h.LoopHealth.state().stall.watching, false);
+});
+
+test("stall: software race shed skips reload with act budget-sw", () => {
+  const h = loadStall({ softwareGL: true });
+  h.frames(1, 16);
+  h.frames(4, 2500);
+  h.frames(6, 2500);
+  assert.equal(h.calls.reload, 0);
+  assert.equal(h.LoopHealth.state().stall.act, "budget-sw");
+  assert.equal(h.ss.get("apex26.stallReloads"), undefined);
+});
+
+test("stall: hardware path still reloads once after the shed", () => {
+  const h = loadStall({ softwareGL: false });
+  h.frames(1, 16);
+  h.frames(10, 2500);
+  assert.equal(h.calls.reload, 1);
+  assert.equal(h.LoopHealth.state().stall.act, "reload");
+});
+
+test("stall: count state uses the relaxed 30-frame reload budget", () => {
+  const h = loadStall({ handoffCover: true });
+  h.frames(1, 16);
+  h.frames(29, 2500);
+  assert.equal(h.calls.reload, 0, "twenty-nine glacial frames during countdown are not enough");
+  h.frames(1, 2500);
+  assert.equal(h.calls.reload, 1, "thirty glacial frames under handoff cover still recover once");
+});
+
+test("stall: lighter renderer already latched skips a second reload", () => {
+  const h = loadStall({ envProbeOff: true, perChunkOff: true });
+  h.frames(11, 2500);
+  assert.equal(h.calls.reload, 0);
+  assert.equal(h.LoopHealth.state().stall.act, "budget");
 });

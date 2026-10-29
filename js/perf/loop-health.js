@@ -42,7 +42,9 @@ const LoopHealth = (() => {
   //                reload once per tab session (apex26.stallReloads, the
   //                ctxLostReloads shape), which hands the player back a working
   //                menu with the "Graphics reset" notice. With the budget spent
-  //                it only records and logs.
+  //                it only records and logs. On software GL with the race-entry
+  //                render shed already pinned (#4180), a reload lands on the same
+  //                renderer and frame cost — act "budget-sw" skips it.
   // A race entry on a weak phone is a few multi-second tasks between frames, so
   // while the loading cover (#loading) is up the shed waits and the reload needs
   // LOAD_RELOAD_RUN frames: a cover stuck over a glacial build still recovers.
@@ -104,8 +106,31 @@ const LoopHealth = (() => {
   }
   // Race entry uses #loading; garage / race-settings sheets and MenuTeardown quit
   // cover share the relaxed reload budget (#3510 / live garage-close repro).
+  function softwareRaceShedActive() {
+    try {
+      if (typeof PerfGov === "undefined" || !PerfGov.softwareRaster || !PerfGov.softwareRaster()) return false;
+      if (typeof PostCommon === "undefined" || !PostCommon.softwareRaceShed) return false;
+      let knob = null;
+      try { knob = localStorage.getItem("apex26.swRaceShed"); } catch (_) { /* blocked storage */ }
+      const nav = typeof navigator !== "undefined" ? navigator : null;
+      return PostCommon.softwareRaceShed(true, nav, knob);
+    } catch (_) { return false; }
+  }
+  function reloadAlreadyLatched() {
+    try {
+      return localStorage.getItem("apex26.envProbeOff") === "1" && localStorage.getItem("apex26.perChunkOff") === "1";
+    } catch (_) { return false; }
+  }
+  // Countdown, pit intro and the first race presents after the loading cover drops.
+  function raceEntryHandoffCover() {
+    try {
+      if (typeof RaceEntryProfile !== "undefined" && RaceEntryProfile.stallHandoffCover) return RaceEntryProfile.stallHandoffCover();
+    } catch (_) { /* harness */ }
+    return false;
+  }
   function slowPathCover() {
     if (loading()) return true;
+    if (raceEntryHandoffCover()) return true;
     try {
       if (typeof MenuTeardown !== "undefined" && MenuTeardown.cover()) return true;
     } catch (_) { /* harness */ }
@@ -130,6 +155,16 @@ const LoopHealth = (() => {
     if (spent >= RELOAD_BUDGET) {
       stallAct = "budget";
       Log.warn("game", `stall watchdog: still ${slowRun} frames over ${SLOW_MS} ms after the shed; reload budget spent`);
+      return;
+    }
+    if (softwareRaceShedActive()) {
+      stallAct = "budget-sw";
+      Log.warn("game", `stall watchdog: still glacial after the shed (worst ${Math.round(worstMs)} ms) — reload skipped on software race shed`);
+      return;
+    }
+    if (reloadAlreadyLatched()) {
+      stallAct = "budget";
+      Log.warn("game", `stall watchdog: still glacial after the shed (worst ${Math.round(worstMs)} ms); lighter renderer already latched`);
       return;
     }
     stallReloads++; stallAct = "reload";
@@ -205,7 +240,7 @@ const LoopHealth = (() => {
         // null, NOT 0: no frame has completed, so there is nothing to be stale
         staleMs: lastCleanAt ? Math.round(now() - lastCleanAt) : null,
         // The stall watchdog: slowRun is the live run of SLOW_MS frames, act
-        // the last response ("shed" | "reload" | "budget" | "")
+        // the last response ("shed" | "reload" | "budget" | "budget-sw" | "")
         stall: { watching: watching(), slowRun, slowFrames, worstMs: Math.round(worstMs), sheds, reloads: stallReloads, act: stallAct, slowMs: SLOW_MS, shedRun: SHED_RUN, reloadRun: RELOAD_RUN,
           syncWorstMs: Math.round(syncWorstMs), syncEvents, syncLastLabel },
       };
