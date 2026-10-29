@@ -52,7 +52,7 @@ const EPISODE_TRANSIENTS = ["rank", "kCur", "wasArmed", "_vmaxNow", "accSm", "on
   "wheelLock", "exhaustPop", "contactT", "_pushD", "_secIdx", "_secT0", "_secValid",
   "_lapTimeAtLine", "_recross", "incidentInvalidLap", "passSide", "passBest", "offroad", "queueT", "_qOf", "trailT", "_trOf", "_trYT", "_trYS",
   "towing", "wake", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "brakeStab", "uslipDwell", "slipFactor", "flatSpot", "_aeroGrip", "_bandNow", "skidIntensity",
-  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking", "_dmgAxF", "_dmgAxR",
+  "kerbSndT", "kerbHapT", "_cueConditionGrip", "_cueCornering", "_cueBraking",
   // #1628 wheel state: rim speeds and slip ratios re-seed from c.speed (WheelState.ensure) on the next step.
   "vwF", "vwR", "kappaF", "kappaR", "_wsV",
   // The AI brake look-ahead cache (perf hunt 2 S6): one object per car, keyed on
@@ -610,8 +610,8 @@ const api = {
       wake: +(G.player.wake || 0).toFixed(3),       // dirty air 0..1 — the grip penalty, positions-only
       aeroGrip: +(G.player._aeroGrip || 0).toFixed(4),
       // DAMAGE → HANDLING (#1578): per-axle grip ratio from damage (1 = none; always 1 with the opt-in OFF).
-      damageAxF: G.player._dmgAxF != null ? +G.player._dmgAxF.toFixed(4) : 1,
-      damageAxR: G.player._dmgAxR != null ? +G.player._dmgAxR.toFixed(4) : 1,
+      damageAxF: typeof DamageHandling !== "undefined" ? +DamageHandling.axles().f.toFixed(4) : 1,
+      damageAxR: typeof DamageHandling !== "undefined" ? +DamageHandling.axles().r.toFixed(4) : 1,
       damageHandling: typeof DamageHandling !== "undefined" && DamageHandling.isEnabled(),
       aeroDf: +G.aeroDfMult(G.player).toFixed(3),
       aeroLoad: +(G.player.aeroLoad != null ? G.player.aeroLoad : 0.5).toFixed(3),

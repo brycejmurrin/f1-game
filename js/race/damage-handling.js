@@ -30,7 +30,7 @@ const DamageHandling = (function () {
 
   let enabled = false;
   // One pooled result: PlayerForces reads it synchronously inside step() and keeps nothing.
-  const out = { aeroF: 1, aeroR: 1, grip: 1 };
+  const out = { aeroF: 1, aeroR: 1, grip: 1, axF: 1, axR: 1 };
 
   const clamp01 = (v) => (v > 0 ? (v < 1 ? v : 1) : 0);
 
@@ -50,11 +50,19 @@ const DamageHandling = (function () {
     return factors(Damage.get(c), out);
   }
 
-  function setEnabled(on) { enabled = on === true; }
+  /** Applied per-axle grip ratios of the last step (physState telemetry); 1 with the option OFF. */
+  const none = { f: 1, r: 1 }, applied = { f: 1, r: 1 };
+  function axles() {
+    if (!enabled) return none;
+    applied.f = out.axF; applied.r = out.axR;
+    return applied;
+  }
+
+  function setEnabled(on) { enabled = on === true; if (!enabled) { out.axF = 1; out.axR = 1; } }
   function isEnabled() { return enabled; }
   /** Boot / settings refresh: the stored choice (default OFF). */
   function fromStore(store) { setEnabled(!!store && store.get(KEY, false) === true); return enabled; }
 
-  return Object.freeze({ KEY, FW_AERO, RW_AERO, FLOOR_AERO, KNOCK_GRIP, factors, forCar, setEnabled, isEnabled, fromStore });
+  return Object.freeze({ KEY, FW_AERO, RW_AERO, FLOOR_AERO, KNOCK_GRIP, factors, forCar, axles, setEnabled, isEnabled, fromStore });
 })();
 Object.freeze(DamageHandling);

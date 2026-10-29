@@ -165,7 +165,7 @@ const PlayerForces = (function () {
       dmgF = (1 + load * dmg.aeroF) / (1 + load) * dmg.grip;
       dmgR = (1 + load * dmg.aeroR) / (1 + load) * dmg.grip;
     }
-    c._dmgAxF = dmgF; c._dmgAxR = dmgR;
+    if (dmg) { dmg.axF = dmgF; dmg.axR = dmgR; }   // applied ratios, kept on the pooled record (no car fields)
     const surfMu = surfaceMu;
     // B3 (marbles-affect-grip, flag apex26.marbleGrip): an EXTERNAL grip scalar
     // for a player sitting on a settled off-line marble cluster, fed in ALONGSIDE
