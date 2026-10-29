@@ -1,6 +1,6 @@
 ---
 name: f1-animation-cameras
-description: "Use when changing camera or animation code: chase, broadcast or Flyby cameras, follow blends, jumpy cuts, pit-crew arrivals, or replay cameras that snap or keep a stale follow anchor after a seek. Not for: measuring lag or stills → playwright-probe; handling → tune-physics; replay data → data-hub."
+description: "Use when changing camera or animation motion: garage pit-work arrivals, chase, broadcast or Flyby cameras, camera tuners, follow blends, jumpy cuts, replay cameras that snap or keep a stale follow anchor after a seek. Not measuring lag or stills → playwright-probe; handling → tune-physics."
 ---
 
 # Animation and cameras in f1-game

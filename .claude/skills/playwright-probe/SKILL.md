@@ -1,6 +1,6 @@
 ---
 name: playwright-probe
-description: "Use when you need batch headless screenshots or evals, GLX vs TLX comparisons, flicker clips, frame-time profiles, CAR STUDIO livery and sponsors captures, or camera modes (cockpit, chase) and camera lag. Not for: the parts catalogue → garage-parts-livery; the whole-UI review → survey-ui-matrix; the live canvas → mcp-probe."
+description: "Use when you need batch headless screenshots or evals, GLX vs TLX comparisons, flicker or z-fighting clips, CPU/frame-time profiles, CAR STUDIO livery and sponsors capture, camera modes (cockpit, chase) and camera lag. Not the parts catalogue → garage-parts-livery; the live canvas → mcp-probe."
 ---
 
 # Headless Playwright probing

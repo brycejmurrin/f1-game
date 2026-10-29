@@ -1,6 +1,6 @@
 ---
 name: asset-pack
-description: "Use when road or grass textures look garbled or wrong, PBR materials (MAT layers, assets/pack) differ between renderers, or checking a GLB model or a procedural Blender room. Not for: exposure → lighting-tuner; liveries → garage-parts-livery; other render bugs → renderer-debug."
+description: "Use when tarmac or grass textures look garbled or wrong, PBR materials (MAT layers, assets/pack, matTexMix) differ between GLX/TLX/WGX, or checking a GLB model or procedural Blender room. Not exposure → lighting-tuner; liveries → garage-parts-livery; other render bugs → renderer-debug."
 ---
 
 # Baked asset pack

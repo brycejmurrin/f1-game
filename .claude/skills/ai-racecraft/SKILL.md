@@ -1,6 +1,6 @@
 ---
 name: ai-racecraft
-description: "Use when AI cars race badly: overtakes too aggressive or timid, wrong braking or line, ERS use, AI stuck in traffic, walls or the pit lane, or driver ratings. Not for: the player's car → tune-physics; flags or crashes → race-incidents-control; career → career-mode."
+description: "Use when AI cars or rivals race wrong: overtakes/dive-bombs too aggressive or passive, brake targets, preferred lane, ERS deploy, AI stuck in traffic, wall or pit lane, driver ratings craft/awareness, ai-drive.js. Not the player's car → tune-physics; flags/crashes → race-incidents-control."
 ---
 
 # AI racecraft — `AiDrive`, not the bicycle model

@@ -1,6 +1,6 @@
 ---
 name: new-track
-description: "Use when adding a circuit or changing a circuit's layout, geometry, elevation or metadata in js/circuits/, or the in-game TRACK DESIGNER. Not for: diagnosing corners or grade → agent-view; matching the real place → survey-track; props → scenery-dress."
+description: "Use when adding a circuit or changing its layout, geometry, metadata, bridges or elevation (hill, crest, dip) in js/circuits/, or the in-game TRACK DESIGNER. Not corner/grade diagnosis → agent-view; matching the real place → survey-track; props → scenery-dress."
 ---
 
 # Author or edit a track

@@ -1,6 +1,6 @@
 ---
 name: agent-view
-description: "Use when reading or driving the game without screenshots: __apex hooks (world, field, rollout), headless laps, telemetry, grip, gaps, sector times, or track geometry (corners, grade, curvature, groundY). Not for: fixing geometry → new-track; handling → tune-physics; AI → ai-racecraft."
+description: "Use when reading or driving the game without screenshots: __apex hooks (world, field, rollout), headless laps, telemetry, grip, gaps, sector times, or track geometry (corners, grade, curvature, map/bounds, wallStats, groundY, scan, terrain-over-road). Read-only. Not fixing geometry → new-track; AI → ai-racecraft."
 ---
 
 # Agent view — perceive and drive the game as text

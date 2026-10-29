@@ -1,6 +1,6 @@
 ---
 name: race-weekend
-description: "Use when changing the race weekend: tyre wear and compounds, pit stops, the strategy HUD, qualifying and results sheets, start lights, weather, or sporting rules. Not for: handling → tune-physics; flags and safety car → race-incidents-control; the calendar → season-mode."
+description: "Use when changing tyre wear/compounds (tyre-model.js), pit stop time and pit lane (pit-lane.js), the strategy HUD, quali or results sheets, start lights, weather, or sporting rules (two-compound rule, penalty). Not handling → tune-physics; flags → race-incidents-control; calendar → season-mode."
 ---
 
 # Race weekend — tyres, pits, quali, start, weather, regs

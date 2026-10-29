@@ -1,6 +1,6 @@
 ---
 name: js-debugger
-description: "Use when you need a real JavaScript debugger: breakpoints, stepping, scopes and locals, pausing on exceptions, or CPU and heap profiling while attached. Not for: poking the live page → mcp-probe; batch screenshots → playwright-probe; the deployed site → deploy-research."
+description: "Use when debugging JavaScript via js-debugger: conditional source breakpoints, stepping into/over, call frame scopes, locals, pause tokens, exception pauses, heap/CPU/hitch profiling. Not poking the live page → mcp-probe."
 ---
 
 # Source debugging with the separate debugger MCP
