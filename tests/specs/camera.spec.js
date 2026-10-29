@@ -152,3 +152,59 @@ test.describe("Apex 26 — player camera modes", () => {
     expect(r.after).toBe("far");
   });
 });
+
+test.describe("mobile helmet visor budget", () => {
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true, deviceScaleFactor: 3 });
+
+  test("severe load suspends reflection and world refraction, then restores while paused", async ({ page, loadTrack }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem("apex26.forceMobileTier", "1");
+      localStorage.setItem("apex26.gfxBackend", "webgl2");
+      localStorage.setItem("apex26.gfxPreset", JSON.stringify("medium"));
+    });
+    await loadTrack("monza", "day", "dry", { headless: true });
+    const result = await page.evaluate(() => {
+      __apex.camera("helmet");
+      CockpitOpts.setVisor("clear");
+      CockpitOpts.setVisorReflections("light");
+      CockpitOpts.setVisorRefraction("medium");
+      PerfGov.setUserTier(2);
+      VisorOptics.tick(1 / 60, true, 30, false);
+      const port = document.body.style.getPropertyValue("--visor-port");
+      const read = () => ({
+        paints: VisorOptics.stats().paints, shed: VisorOptics.stats().shed,
+        hidden: document.getElementById("fx-visor").hidden,
+        filter: getComputedStyle(document.getElementById("game")).filter,
+        portUnchanged: document.body.style.getPropertyValue("--visor-port") === port,
+        visor: CockpitOpts.visor(), refraction: CockpitOpts.visorRefraction(),
+      });
+      const before = read();
+      // The real governor is frozen. Unit tests drive its pressure inputs; here
+      // exercise the resulting compositor selectors against the shipped CSS.
+      document.body.setAttribute("data-visor-budget", "1");
+      const reducedFilter = read().filter;
+      document.body.setAttribute("data-visor-budget", "2");
+      const minimalFilter = read().filter;
+      document.body.removeAttribute("data-visor-budget");
+      PerfGov.setUserTier(4);   // controlled pressure input; selected preset stays MEDIUM
+      for (let i = 0; i < 600; i++) VisorOptics.tick(1 / 60, true, 30, false);
+      const shed = read();
+      PerfGov.setUserTier(2);
+      VisorOptics.tick(0, true, 30, false);
+      const restored = read();
+      __apex.camera("chase");
+      VisorOptics.tick(0, true, 30, false);
+      return { before, shed, restored, reducedFilter, minimalFilter, mobile: GLX.isMobile, preset: GfxQuality.current(), exitShed: document.body.hasAttribute("data-visor-shed") };
+    });
+    expect([result.mobile, result.preset, result.exitShed]).toEqual([true, "medium", false]);
+    expect(result.before.filter).toContain("visor-bend-medium");
+    expect(result.reducedFilter).toContain("visor-bend-medium");
+    expect(result.minimalFilter).toBe("none");
+    expect([result.shed.paints, result.shed.shed, result.shed.hidden, result.shed.filter]).toEqual([result.before.paints, true, true, "none"]);
+    expect([result.restored.paints, result.restored.shed, result.restored.hidden]).toEqual([result.before.paints + 1, false, false]);
+    expect(result.restored.filter).toContain("visor-bend-medium");
+    for (const state of [result.shed, result.restored]) {
+      expect([state.portUnchanged, state.visor, state.refraction]).toEqual([true, "clear", "medium"]);
+    }
+  });
+});

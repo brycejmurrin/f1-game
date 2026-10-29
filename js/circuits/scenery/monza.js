@@ -6,15 +6,15 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["monza"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, ds, pyMin, place, prop, backdrop, groundYAt, every,
-        onTrack, hash, pine, tree, bush, hedge, ridge, forestEdge, building, motorhome, tower,
+      const { K, lapBounds, out, MAT, n, ds, pyMin, prop, every,
+        onTrack, hash, pine, tree, bush, hedge, ridge, building, motorhome, tower,
         cypress, stonePine, tieredBowl,
         grandstandEx, spectatorHill, broadcastCompound, billboard, gantry, marshalPost,
         wall, fence, guardrail, tyreWall,
         addBox, addCyl, addPrism, anchor, along, vadd,
         modelGroup, overheadSpan, waterSurface, waterBand, groundPatch, groundedSegments,
         terrainYAt,
-        bakedModel, px, pz } = api;
+        bakedModel } = api;
 
       {
         const BRICK = [0.56, 0.40, 0.32];

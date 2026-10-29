@@ -166,9 +166,21 @@ test("real game: road thresholds, drizzle seeding and rendered rain retain separ
     await t.test("initRainDrops keeps static wet drizzle sparse but reserves the full pool for live arcs", () => {
       const seeded = () => {
         A.lightTune({ rainCount: 100, drizzleCount: 0.3 });
-        G.initRainDrops(); P.rainShow(true);
-        P.rainUpdate(0, [0, 1, 0], true); drawn = 0; P.draw();
-        return drawn;
+        // Six random calls per drop: x/y/z, speed, length, alpha. Keep the
+        // eye-relative offsets (4.5, 0, 4.5): dist=sqrt(40.5)>2, and a falling
+        // streak cannot align with this horizontal ray. Alpha is 0.415 before
+        // the real opacity multiplier. This counts the pool, not random culls.
+        const gameMath = vm.runInContext("Math", g.ctx);
+        g.ctx.Math = vm.runInContext(`(() => {
+          const values = [0.75, 0.375, 0.75, 0.5, 0.5, 0.75];
+          let i = 0;
+          return Object.assign(Object.create(Math), { random: () => values[i++ % values.length] });
+        })()`, g.ctx);
+        try {
+          G.initRainDrops(); P.rainShow(true);
+          P.rainUpdate(0, [0, 1, 0], true); drawn = 0; P.draw();
+          return drawn;
+        } finally { g.ctx.Math = gameMath; }
       };
       A.weatherArc(null); A.weather("wet");
       assert.equal(seeded(), 30, "static wet uses the drizzle pool");

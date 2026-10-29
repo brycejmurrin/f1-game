@@ -1359,6 +1359,15 @@
       "twinned": false
     },
     {
+      "id": "perf-session",
+      "script": "test:perf-session",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-session-budgets.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "phone-recorder",
       "script": "test:phone-recorder",
       "kind": "browser",
