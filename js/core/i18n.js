@@ -152,34 +152,6 @@ const I18n = (function () {
     return fmtCache[k].format(d);
   }
 
-  function rel(value, unit, opts) {
-    const lang = activeLang;
-    const k = cacheKey(lang, "rel:" + JSON.stringify(opts || {}));
-    if (!fmtCache[k]) fmtCache[k] = new Intl.RelativeTimeFormat(baseLang(lang), opts);
-    return fmtCache[k].format(value, unit);
-  }
-
-  function list(arr, opts) {
-    const lang = activeLang;
-    const k = cacheKey(lang, "list:" + JSON.stringify(opts || {}));
-    if (!fmtCache[k]) fmtCache[k] = new Intl.ListFormat(baseLang(lang), opts);
-    return fmtCache[k].format(arr);
-  }
-
-  function country(code, opts) {
-    const lang = activeLang;
-    const k = cacheKey(lang, "country:" + JSON.stringify(opts || {}));
-    if (!fmtCache[k]) fmtCache[k] = new Intl.DisplayNames([baseLang(lang)], { type: "region", ...opts });
-    return fmtCache[k].of(code);
-  }
-
-  function compare(a, b, opts) {
-    const lang = activeLang;
-    const k = cacheKey(lang, "cmp:" + JSON.stringify(opts || {}));
-    if (!fmtCache[k]) fmtCache[k] = new Intl.Collator(baseLang(lang), opts);
-    return fmtCache[k].compare(a, b);
-  }
-
   function notify() {
     for (const fn of listeners) {
       try { fn(activeLang); } catch (e) {
@@ -296,7 +268,7 @@ const I18n = (function () {
   }
 
   return {
-    t, raw, n, date, rel, list, country, compare,
+    t, raw, n, date,
     lang, set, ready, onChange, dir, boot,
     pluralCategories,
     _installCatalog, _resetForTest, _detect: resolveDetectOrder,

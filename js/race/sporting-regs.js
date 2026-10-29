@@ -294,12 +294,13 @@ const SportingRegs = (function () {
     return { tick, reset, info };
   }
 
+  // Compound / caution / blue-flag scalars stay module-local. compoundsRun,
+  // compoundVerdict, passPenaltyS and blueFlagCar stay module-local too: the
+  // short/apply/watch APIs own them; only unit tests used to call them directly.
   return Object.freeze({
-    compoundsRun, compoundShort, compoundVerdict, applyCompoundRule,
-    passPenaltyS, exempt, createPassWatch, champOrder,
-    blueFlagCar, createBlueFlagWatch,
-    DRY, WET, SUSPENDED_PEN_S, DSQ_WHY, GIVE_BACK_S, CAUTION_MIN,
-    BLUE_GAP_S, BLUE_VFLOOR, BLUE_WARN_S, BLUE_HOLD_S, BLUE_PEN_S,
+    compoundShort, applyCompoundRule,
+    exempt, createPassWatch, champOrder,
+    createBlueFlagWatch,
     jumpStartEarlyThrottle, jumpStartFastLaunch,
     JUMP_START_THROTTLE, JUMP_START_REACT_S, JUMP_START_SPEED_VREF,
     JUMP_START_PEN_S, JUMP_START_WHY,
