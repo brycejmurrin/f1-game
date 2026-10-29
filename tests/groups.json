@@ -551,6 +551,8 @@
     "tests/unit/launch-gate.test.mjs",
     "tests/unit/layers-anyopen-memo.test.mjs",
     "tests/unit/layers-nav-memo.test.mjs",
+    "// Width tiers: --bp-* in tokens.css, the media-query copies, and UiScale.layoutOf stay one list.",
+    "tests/unit/layout-tokens.test.mjs",
     "// getContext TDZ before G exists: gesture listeners and restoreOnEngine must not throw or latch early.",
     "tests/unit/lazy-bundles-getcontext.test.mjs",
     "tests/unit/lazy-bundles-prefetch.test.mjs",
@@ -709,10 +711,14 @@
     "tests/unit/pause-taps.test.mjs",
     "tests/unit/perf-frametime.test.mjs",
     "tests/unit/perf-governor.test.mjs",
+    "// Hot-function microbench in the game VM (step, physState, nodeAt): 6x the checked-in per-call baseline, and a 4x within-run window spread.",
+    "tests/unit/perf-hot-bench.test.mjs",
     "// Source guards for the 2026-10-29 perf sweep: TLX noise gates, puddle gate, fog varying, godray reject, audio suspend, bay cap, strategy stagger. ~0.1 s.",
     "tests/unit/perf-hunt-4.test.mjs",
     "tests/unit/perf-race-entry.test.mjs",
     "tests/unit/perf-sentinel.test.mjs",
+    "// Session hang ceilings vs recorded phone lines (garage, grid, frames, quit heap). No browser.",
+    "tests/unit/perf-session-budgets.test.mjs",
     "// PerfSpans ring/percentiles/off-switch + __apex.perf() in the game VM; profile lib noise rule; apex_profile argv pins.",
     "tests/unit/perf-spans.test.mjs",
     "tests/unit/perf-try.test.mjs",
@@ -2052,6 +2058,12 @@
     "test:perf-race-entry": {
       "files": [
         "tests/specs/perf-race-entry.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:perf-session": {
+      "files": [
+        "tests/specs/perf-session-budgets.spec.js"
       ],
       "kind": "browser"
     },

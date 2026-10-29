@@ -6,10 +6,10 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["sochi"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack, px, pz,
-        tree, bush, hedge, ridge, building, grandstandEx, spectatorHill,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, along, anchor, vadd, onTrack,
+        tree, bush, hedge, ridge, building, grandstandEx,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, groundPatch, modelGroup, waterSurface,
+        fence, guardrail, tyreWall, groundPatch, modelGroup,
         cameraTower, sponsorHoarding, signBoard, cypress, terrainYAt,
         addBox, addCyl, addCone, addFrustum } = api;
 

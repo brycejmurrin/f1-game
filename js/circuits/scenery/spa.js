@@ -6,9 +6,9 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["spa"] =
   function (api) {
-      const { K, lapBounds, out, MAT, seat, n, px, pz, pyMin, hash, every, place, backdrop, pal,
+      const { K, lapBounds, out, MAT, seat, n, pyMin, hash, every, backdrop, pal,
               addBox, addCyl, addCone, addPrism, addFrustum, addPyramid, vadd, anchor,
-              mountain, pine, tree, forestEdge, building, motorhome,
+              mountain, pine, forestEdge, building, motorhome,
               marshalPost, gantry, fence, guardrail, tyreWall, wall,
               modelGroup, overheadSpan, groundPatch, circuitKit, ATM, onTrack,
               grandstandEx, spectatorHill, broadcastCompound, sponsorHoarding,

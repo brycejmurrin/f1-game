@@ -14457,6 +14457,9 @@
       "softwareGlowScale": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "softwareRaceShed": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "sunScreen": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],
@@ -15062,6 +15065,9 @@
       "pinSkyMaterial": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/tlx-fail-scope.test.mjs"
+      ],
+      "pinSoftwareRaceShed": [
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "postFailure": [
         "tests/unit/render-final-contracts.test.mjs"
@@ -16572,6 +16578,7 @@
     },
     "js/ui/captions.js": {
       "push": [
+        "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
       ],
       "radioWho": [
@@ -16581,6 +16588,7 @@
         "tests/unit/captions.test.mjs"
       ],
       "setMode": [
+        "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
       ],
       "setPos": [
@@ -16676,6 +16684,9 @@
         "tests/unit/dock-layout.test.mjs"
       ],
       "setEditing": [
+        "tests/unit/dock-layout.test.mjs"
+      ],
+      "usablePad": [
         "tests/unit/dock-layout.test.mjs"
       ]
     },
@@ -17763,6 +17774,9 @@
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
+      ],
+      "layoutOf": [
+        "tests/unit/layout-tokens.test.mjs"
       ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
