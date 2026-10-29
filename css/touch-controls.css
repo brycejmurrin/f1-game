@@ -814,7 +814,9 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   }
   body.mirror-controls.steer-buttons #btn-throttle,
   body.mirror-controls.steer-buttons #btn-brake,
-  body.mirror-controls.steer-buttons #btn-boost,
+  body.mirror-controls.steer-buttons #btn-boost {
+    right: auto; left: calc(16px + var(--sal));
+  }
   body.mirror-controls.steer-buttons #btn-ot,
   body.mirror-controls.steer-buttons #btn-aero {
     right: auto; left: calc(16px + var(--sal));
