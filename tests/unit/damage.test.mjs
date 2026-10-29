@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
 import { gameSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -18,7 +19,7 @@ const HUD_SRC = read("js/ui/hud-damage.js");
 
 function load() {
   const ctx = {};
-  vm.createContext(ctx);
+  vm.createContext(ctx); withI18n(ctx);
   vm.runInContext(SRC + "\n" + HUD_SRC + "; this.Damage = Damage; this.HudDamage = HudDamage;", ctx);
   return ctx;
 }

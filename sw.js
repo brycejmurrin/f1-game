@@ -316,7 +316,6 @@ async function precacheAssetLists() {
     "assets/fonts/titillium-web-latin-600-normal.woff2",
     "assets/fonts/titillium-web-latin-700-normal.woff2",
     "assets/fonts/titillium-web-latin-700-italic.woff2",
-    "assets/fonts/barlow-condensed-latin-500-normal.woff2",
     "assets/fonts/barlow-condensed-latin-600-normal.woff2",
     "assets/fonts/barlow-condensed-latin-700-normal.woff2",
     "assets/fonts/saira-apex26-800-italic.woff2",
@@ -476,6 +475,7 @@ async function precacheAssetLists() {
     "js/race/marshal-panels.js",
     "js/race/flying-start.js",
     "js/race/jump-start-penalty.js",
+    "js/race/cooldown-lap.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",

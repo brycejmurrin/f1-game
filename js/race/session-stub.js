@@ -49,13 +49,12 @@ var RadioLines = {
 
 var RaceFacts = {
   _stub: true,
-  K: {}, HOLD_S: 0, BATTLE_GAP: 0,
   create: () => ({ update: function () {}, reset: function () {}, snapshot: () => ({}) }),
 };
 
 var Spotter = {
   _stub: true,
-  KEYS: {}, OVERLAP_ARC: 0, SIDE_MIN: 0, SIDE_MAX: 0, DEBOUNCE_S: 0, CLEAR_S: 0, STILL_S: 0, GAP_S: 0,
+  KEYS: {}, GAP_S: 0,
   create: () => ({ update: function () {}, occupied: () => false, status: () => ({}) }),
   step: function () {}, occupancy: () => 0, fresh: () => false,
 };
@@ -101,17 +100,13 @@ var PitLane = {
 
 var RaceEngineer = {
   _stub: true,
-  WEAR_STEPS: [], AXLE_SPLIT: 0.5, GRAIN_CALL: 0, BLISTER_CALL: 0, COLD_CALL: 0, QUIET_S: 0,
+  WEAR_STEPS: [], AXLE_SPLIT: 0.5, COLD_CALL: 0, QUIET_S: 0,
   DIRECTIONAL: {}, BOX_CALLS: {},
   create: () => ({ update: function () {}, reset: function () {}, callFor: function () {}, senseOf: () => null }),
 };
 
 var RaceRadio = {
   _stub: true,
-  CHAT: ["off", "key", "normal", "chatty"],
-  COMM: ["off", "tv", "on"],
-  GAP_S: [Infinity, 18, 9, 5],
-  TV_CAMS: ["heli", "side", "cinematic", "low", "overhead"],
   // AudioPanel.init() (and its sync) reads chat()/comm() while the stub is still
   // live if ensureAudio races ensureRaceSession — match the real create() surface.
   create: () => ({
@@ -130,7 +125,6 @@ var RaceRadio = {
 
 var SessionRecords = {
   _stub: true,
-  PHYS: "",
   create: () => ({
     _stub: true,
     begin: function () {}, current: () => null, config: () => ({}), sample: function () {}, sampleInput: function () {},
@@ -151,9 +145,7 @@ var MarshalPanels = {
 
 var FlyingStart = {
   _stub: true,
-  HANDOVER_S: 0, MARGIN_S: 0, MIN_RUN_M: 0, MAX_RUN_FRAC: 0,
   create: () => ({ update: function () {}, stop: function () {}, owns: () => false, active: () => false }),
-  runUpMetres: () => 0,
 };
 
 var JumpStartPenalty = {

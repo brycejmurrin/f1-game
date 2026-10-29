@@ -381,6 +381,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `marshal-panels.js` | `MarshalPanels` | LAZY_RACE_SESSION | marshal light panels. |
 | `flying-start.js` | `FlyingStart` | LAZY_RACE_SESSION | FLYING START: qualifying and time trial begin at speed, the way a Data Hub JUMP IN does (js/race/real-race.js). |
 | `jump-start-penalty.js` | `JumpStartPenalty` | LAZY_RACE_SESSION | FALSE START (FIA 2026 SR B5.11.1; js/race/sporting-regs.js): throttle at green or a launch faster than the minimum reaction window. |
+| `cooldown-lap.js` | `CooldownLap` | LAZY_RACE_SESSION | COOLDOWN LAP (CooldownLap): post-flag drive beat for the ceremony flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). |
 
 **`js/workers/`**
 

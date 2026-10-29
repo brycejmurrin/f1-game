@@ -157,8 +157,9 @@ const HudInputs = (function () {
     const data = snapshot(), samples = data.samples, c = reviewCanvas.getContext("2d");
     reviewCanvas.hidden = !samples.length;
     reviewNote.textContent = samples.length
-      ? "Last continuous " + data.durationS.toFixed(2) + " s · lap " + data.lap + " · gear " + (data.gear > 0 ? data.gear : "N") + ". T: throttle · B: brake · S: steering (+ right). Reading does not resume or change driving."
-      : "No continuous input samples. Enable INPUTS in Settings → Display → HUD and drive in Standard view, then pause to review.";
+      ? I18n.t("hud.inputs.review", { dur: data.durationS.toFixed(2), lap: data.lap, gear: data.gear > 0 ? data.gear : "N" },
+        "Last continuous {dur} s · lap {lap} · gear {gear}. T: throttle · B: brake · S: steering (+ right). Reading does not resume or change driving.")
+      : I18n.t("hud.inputs.reviewEmpty", null, "No continuous input samples. Enable INPUTS in Settings → Display → HUD and drive in Standard view, then pause to review.");
     if (!c || !samples.length) return;
     const w = reviewCanvas.clientWidth || 640, h = 180;
     const dpr = Math.max(1, Math.min(3, win && win.devicePixelRatio || 1));
@@ -182,7 +183,7 @@ const HudInputs = (function () {
     const host = doc.querySelector("#pausemenu .sheet-body");
     if (!host) return false;
     review = doc.createElement("details"); review.className = "input-review";
-    const summary = doc.createElement("summary"); summary.className = "adv-more-btn"; summary.textContent = "REVIEW INPUTS";
+    const summary = doc.createElement("summary"); summary.className = "adv-more-btn"; summary.textContent = I18n.t("hud.inputs.reviewTitle", null, "REVIEW INPUTS");
     reviewNote = doc.createElement("p"); reviewNote.className = "adv-help";
     reviewCanvas = doc.createElement("canvas"); reviewCanvas.width = 640; reviewCanvas.height = 180; reviewCanvas.className = "input-review-canvas";
     reviewCanvas.setAttribute("role","img");
@@ -246,8 +247,12 @@ const HudInputs = (function () {
     labelT -= DRAW_MS;
     if (labelT <= 0) {
       labelT = LABEL_MS;
-      cv.setAttribute("aria-label", "Inputs: throttle " + pct(thr) + "%, brake " + pct(brk) + "%, steering "
-        + Math.round(Math.abs(str) * 100) + "% " + (str > 0.02 ? "right" : str < -0.02 ? "left" : "centre") + ", gear " + (gear > 0 ? gear : "neutral"));
+      const dirKey = str > 0.02 ? "right" : str < -0.02 ? "left" : "centre";
+      cv.setAttribute("aria-label", I18n.t("hud.inputs.label", {
+        thr: pct(thr), brk: pct(brk), steer: Math.round(Math.abs(str) * 100),
+        dir: I18n.t("hud.inputs." + dirKey, null, dirKey),
+        gear: gear > 0 ? gear : I18n.t("hud.inputs.neutral", null, "neutral"),
+      }, "Inputs: throttle {thr}%, brake {brk}%, steering {steer}% {dir}, gear {gear}"));
     }
   }
 

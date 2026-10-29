@@ -20,7 +20,7 @@ const RealRace = (function () {
   const clamp = M4.clamp;   // js/core/mat4.js — bound at eval (HARD_EDGES pair in tools/manifest.cjs)
 
   const {
-    KP, MUL_MIN, MUL_MAX, COMPOUND,
+    KP, MUL_MIN, MUL_MAX,
     realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor,
     properName, situation, mapField, fieldAt, paceMul, classOf,
   } = RealRacePace;
@@ -642,6 +642,6 @@ const RealRace = (function () {
   const isWatch = () => !!live && live.isWatch();   // hot audio guards need no formatted field snapshot
   const replay = () => (live ? live.replay : null);   // the replay's controls (follow / setSpeed / seek / skip) for page probes
 
-  return { create, launch, status, isWatch, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, situation, properName, paceMul, dropSpeed, seatOnRoad, COMPOUND, KP, MUL_MIN, MUL_MAX };
+  return { create, launch, status, isWatch, replay, realLapFor, simLapFor, paceTable, cumTable, planFor, dnfAtFor, cautionsFor, mapField, fieldAt, situation, properName, paceMul, dropSpeed, seatOnRoad, KP, MUL_MIN, MUL_MAX };
 })();
 Object.freeze(RealRace);

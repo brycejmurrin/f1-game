@@ -1359,6 +1359,15 @@
       "twinned": false
     },
     {
+      "id": "perf-session",
+      "script": "test:perf-session",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-session-budgets.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "phone-recorder",
       "script": "test:phone-recorder",
       "kind": "browser",
@@ -1469,6 +1478,7 @@
         "tests/unit/legends-team.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
         "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/quali-persist.test.mjs",
@@ -3906,6 +3916,11 @@
       "path": "js/race/car-fields.js",
       "global": "CarFields",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/cooldown-lap.js",
+      "global": "CooldownLap",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/daily-challenge.js",

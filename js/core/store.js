@@ -869,7 +869,8 @@ const GameStore = (function () {
     return SaveMigrate.migrateSeasonPoints(store, season);
   }
 
-  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttRead, ttParseBoard,
+  // ttRead stays module-private (ttBoard / ttBoardAdd* / ttParseBoard cover callers).
+  return { store, ttBoard, ttBoardAdd, ttBoardAddResult, ttBoardSaveResult, ttParseBoard,
            hexToRgb, rgbToHex, seasonDriverId,
            migrateSeasonPoints,
            migrateCareer: SaveMigrate.migrateCareer,

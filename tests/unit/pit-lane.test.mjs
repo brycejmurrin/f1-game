@@ -33,6 +33,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { createRequire } from "node:module";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -1783,6 +1784,7 @@ test("HUD plan and actual Strategy share one caution field scan and preserve vis
   const root = mk(); root.hidden = true;
   ctx.document = { body: { classList: { contains: () => false } }, getElementById: id => id === "hud-strat" ? root : null, createElement: mk };
   ctx.HudElements = { isOn: () => true };
+  withI18n(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/ui/hud-strategy.js"), "utf8"), ctx, { filename: absSrc("js/ui/hud-strategy.js") });
   const S = vm.runInContext("HudStrategy", ctx);
   const view = () => JSON.stringify([root.children, root.attrs]);

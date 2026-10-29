@@ -29,7 +29,9 @@ var JumpStartPenalty = (function () {
     function fine(c) {
       if (!c || c.jumpStartFined || c.retired || c.finished || !standingRace()) return;
       c.jumpStartFined = true;
-      c.penalty += SportingRegs.JUMP_START_PEN_S;
+      // SportingRegs.applyCompoundRule / race-control use (penalty || 0); keep the
+      // same belt so a stub car without an initialised field cannot NaN the total.
+      c.penalty = (c.penalty || 0) + SportingRegs.JUMP_START_PEN_S;
       c.penaltyWhy = c.penaltyWhy ? c.penaltyWhy + "; " + SportingRegs.JUMP_START_WHY : SportingRegs.JUMP_START_WHY;
       Log[c.isPlayer ? "info" : "debug"]("game", "Jump start car=" + c.code + " +5s total=" + c.penalty + "s");
       if (!c.isPlayer) return;

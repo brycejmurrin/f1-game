@@ -68,7 +68,7 @@ A timing sleep alone does not prove presented pixels.
 | Floodlight masts invisible | `floodEmit === 0` | Night emissive in `buildProps`; `lightTune({floodEmitMul})` |
 | Dawn sun too high | `sunY` close to 1.0 | `lightTune({sunElev: -N})`; structural default in `applyRaceSettings` |
 | Washed out / bloom too strong | `exposure` / bloom knobs hot | `lightTune({exposureMul, bloomMul, threshOff, bloomKnee})`; check shipped presets |
-| Night washed out (milky, lifted blacks) | `ambientSky/Ground` high, `exposure` up | Read BOTH rows in `presets.js` — the shared `"*\|night\|dry"` stamp and the track's row; a knob the track row does not pin is the stamp's (Singapore's `nightAmbLift` is the stamp's 1.45). One-track fix → the track row; the stamp is fleet-wide (SKILL.md §Which layer). |
+| Night washed out (milky, lifted blacks) | `ambientSky/Ground` high, `exposure` up | Read BOTH rows in `presets.js` — the shared `"*\|night\|dry"` stamp and the track's row; a knob the track row does not pin is the stamp's (read the stamp's `nightAmbLift` in presets.js; `lightTune()` gives the resolved value). One-track fix → the track row; the stamp is fleet-wide (SKILL.md §Gotchas). |
 | Night washed out: which knob | night knob order | Pull `nightAmbLift` ("how dark is night" master; read the RESOLVED value with `lightTune()` — higher = a lifted night), then `mistDensity`/`fogDensityMul`, `bloomMul`/`bloomKnee`, `cityGlowMul`/`cityGlowTint`, `exposureMul`. `node tools/lighting/slider-effect.mjs --gate night` lists the night knobs (no browser) |
 | Ambient wash | `ambientGround` too bright | `lightTune({ambientMul})`; night branch caps ambient |
 | Lamps too bright / dim | pool blow-out or dark valleys | `lightTune({lampLevel, poolEnergy, bleedMul})` |
