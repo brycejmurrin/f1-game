@@ -1526,6 +1526,7 @@ function debug() {
            geomKey, previewMeshes: previewMeshes.size, previewHulls: previewHulls.size };
 }
 
+  // FIXTURES / LED_DROP / hangerSpan stay public — garage-personality pins the LED hangers.
   return { init, buildStatic, BACKDROP, SKYLIGHT, AMB_SKY, AMB_GROUND, lights, live, glareStr, mood, setMood, moodDef, moodCtx, MOODS, hangerSpan, FIXTURES, LED_DROP, CEIL_Y, draw, framingHull, recentre,
            previewMesh, dropPreviewMeshes, pulse, spot, debug, seatDriverAt, ctxKey, prepare, prepared, release };
 })();
