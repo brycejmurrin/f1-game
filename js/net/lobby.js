@@ -25,6 +25,7 @@ const NetLobby = (function () {
     let pendingId = null;
     const MAX_GUESTS = 3;
     let role = null;
+    let backBtn = null;                  // the lobby's BACK, built beside CLOSE by wire()
     const EVICT_GRACE_MS = 1500;         // removeGuest: wait this long for the guest's close (its ack)
     const hostEvictingIds = new Set();   // guest ids the host is removing (stay in room, fresh code)
     let hostRemovedMe = false;           // guest: host sent LEFT { evicted } before the transport died
@@ -100,6 +101,9 @@ const NetLobby = (function () {
     function show(step) {
       const e = els();
       for (const k of ["pick", "hosting", "joining", "room", "code"]) if (e[k]) e[k].hidden = (k !== step);
+      // BACK is offered wherever there is a step to go back to: any
+      // HOST/JOIN/code sub-step, and the pick INVITE ANOTHER shows in a room.
+      if (backBtn) backBtn.hidden = step === "room" || (step === "pick" && !transports.size);
       focusInto(e[step]);
     }
     const shownStep = (e) => ["pick", "hosting", "joining", "room", "code"].map((k) => e[k]).find((x) => x && !x.hidden);
@@ -2159,23 +2163,36 @@ const NetLobby = (function () {
         return handOff({ title: "Apex 26", text: "Race me on Apex 26 — " + (NetRendezvous.usingPrivateRelay() ? "private room token " : "room code ") + c }, c);
       });
       on("vs-start", tiltToo(startFromRoom));
+      // In a room, a sub-step steps back to the room: abandon the half-built
+      // invite, keep the guests. A camera never outlives the step that opened it.
+      const backToRoom = () => {
+        invalidateOperations(); stopScan(); dropPending(); stopCodeWait();
+        if (codeParked) { codeReopen = codeParked; codeParked = null; reopenRoom(transports.size < MAX_GUESTS); }
+        show("room"); renderRoom(); say("");
+      };
       on("vs-close", () => {
         const e = els();
-        const inRoom = transports.size > 0;
-        const onSubStep = !!(e.roomStep && e.roomStep.hidden);
-        if (inRoom && onSubStep) {
-          invalidateOperations();
-          stopScan();         // a camera never outlives the step that opened it
-          dropPending();      // abandon the half-built invite, keep the room
-          stopCodeWait();
-          if (codeParked) { codeReopen = codeParked; codeParked = null; reopenRoom(transports.size < MAX_GUESTS); }
-          show("room");
-          renderRoom();
-          say("");
-          return;
-        }
+        if (transports.size > 0 && e.roomStep && e.roomStep.hidden) { backToRoom(); return; }
         cancel();
       });
+      // BACK from a HOST / JOIN / code step with nobody connected: tear down
+      // only this attempt (cancel() minus the close) and return to the choice.
+      // Built beside CLOSE at wire time (the renderer-picker addBtn pattern);
+      // show() owns its visibility.
+      const close = $("vs-close");
+      if (!backBtn && close && close.parentNode) {
+        backBtn = document.createElement("button");
+        backBtn.type = "button"; backBtn.id = "vs-back"; backBtn.className = "bigbtn alt"; backBtn.textContent = "BACK";
+        backBtn.hidden = true;
+        close.parentNode.insertBefore(backBtn, close);
+      }
+      if (backBtn) backBtn.onclick = () => {
+        if (transports.size > 0) { backToRoom(); return; }
+        invalidateOperations(); stopScan(); stopCodeWait();
+        codeReopen = null; codeParked = null;
+        teardown(); role = null; resetSteps();
+        show("pick"); say("");
+      };
       // A paste straight into the box runs too, so all four routes in behave
       // the same. Deferred a tick because the value is not in the textarea yet
       // while the paste event is being dispatched.

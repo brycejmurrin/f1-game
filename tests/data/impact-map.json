@@ -3863,6 +3863,7 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "active": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"

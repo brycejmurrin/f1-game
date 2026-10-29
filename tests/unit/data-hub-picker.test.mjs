@@ -822,3 +822,18 @@ for (const origin of ["live", "results", "telemetry"]) test(`a pending year sele
   assert.ok(h.content().find((n) => n.tagName === "BUTTON" && n.textContent === String(year) && n.classList.contains("active")));
   h.DataHub.close();
 });
+
+// UI hunt 2026-10-29 #11: WATCH opens the hub on "race"; the DATA door then
+// reopened on WATCH & DRIVE because both doors shared one tab memory.
+test("a door's requested tab does not replace the DATA door's remembered tab", async () => {
+  const h = harness();
+  const selected = () => ["schedule", "standings", "race"].find((id) => h.root.find((n) => n.id === "dh-tab-" + id).getAttribute("aria-selected") === "true");
+  h.DataHub.open("race"); await h.drain(); h.DataHub.close();
+  h.DataHub.open(); await h.drain();
+  assert.equal(selected(), "schedule", "DATA after WATCH opens the default tab");
+  h.tab("standings"); await h.drain(); h.DataHub.close();
+  h.DataHub.open("race"); await h.drain(); h.DataHub.close();
+  h.DataHub.open(); await h.drain();
+  assert.equal(selected(), "standings", "the player's own last pick is still remembered");
+  h.DataHub.close(); await h.drain();
+});
