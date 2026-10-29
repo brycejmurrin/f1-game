@@ -514,6 +514,7 @@
     "tests/unit/hw-zones.test.mjs",
     "// i18n contribution lint + migrated-file guard (Slice 2 / #1601): fixtures + ship locales + --guard.",
     "tests/unit/i18n-lint.test.mjs",
+    "tests/unit/i18n-number-format.test.mjs",
     "tests/unit/i18n-parts-career.test.mjs",
     "tests/unit/i18n.test.mjs",
     "tests/unit/image-grade-shaders.test.mjs",

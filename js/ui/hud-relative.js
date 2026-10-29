@@ -327,10 +327,14 @@ const HudRelative = (function () {
   /** The words a screen reader says for one row. */
   function rowLabel(pos, code, self, gap, ahead, tyre, laps) {
     const g = gap.slice(1);
-    const dist = g === "--" ? "gap unknown" : (g === "99+" ? "over 99 seconds " : g + " seconds ") + (ahead ? "ahead" : "behind");
-    const lapWord = (n) => n + (n === 1 ? " lap" : " laps");
-    return pos + " " + (code || "") + (self ? ", you" : ", " + dist)
-      + ", tyre " + tyre + (laps > 0 ? ", " + lapWord(laps) + " up" : laps < 0 ? ", " + lapWord(-laps) + " down" : "");
+    const side = ahead ? "ahead" : "behind";
+    const dist = g === "--" ? I18n.t("hud.rel.gapUnknown", null, "gap unknown")
+      : g === "99+" ? I18n.t("hud.rel.over99." + side, null, "over 99 seconds " + side)
+      : I18n.t("hud.rel.gap." + side, { s: g }, "{s} seconds " + side);
+    const lapWord = (n) => I18n.t("hud.rel.laps", { n }, "{n, plural, one {# lap} other {# laps}}");
+    return pos + " " + (code || "") + (self ? ", " + I18n.t("hud.rel.you", null, "you") : ", " + dist)
+      + ", " + I18n.t("hud.rel.tyre", { tyre }, "tyre {tyre}")
+      + (laps > 0 ? ", " + I18n.t("hud.rel.up", { laps: lapWord(laps) }, "{laps} up") : laps < 0 ? ", " + I18n.t("hud.rel.down", { laps: lapWord(-laps) }, "{laps} down") : "");
   }
 
   /** Re-fit only when something fitKey sees moved since the last fit (or when forced). */

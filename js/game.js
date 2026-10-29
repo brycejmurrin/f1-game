@@ -9212,10 +9212,8 @@ els.resNext.onclick = () => {
   }
   if (isChampionship()) {
     if (season.round >= SeasonCal.rounds()) {
-      // First click: build the champion panel and STAY on the results screen. The
-      // panel's own DOM lives in js/ui/results-sheet.js with every other results
-      // builder; "MAIN MENU" on the button is the sentinel that it is already up.
-      if (els.resNext.textContent !== "MAIN MENU") { buildChampion(); return; }
+      // Older builders lack the marker, so keep their literal-only contract.
+      if (!(els.results.dataset.resultsView === "champion" || (els.results.dataset.resultsView === undefined && els.resNext.textContent === "MAIN MENU"))) { buildChampion(); return; }
       // Second click: go to menu, reset season
       const cleared = SeasonCal.clear();
       season = cleared.ok ? null : SeasonCal.load();

@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { fileURLToPath } from "node:url";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { fnSource } from "../helpers/fn-source.mjs";
@@ -317,6 +318,7 @@ function loadSheet({ dom = false } = {}) {
   };
   vm.createContext(ctx);
   seedLog(ctx);
+  withI18n(ctx);
   if (dom) vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/dom.js"), "utf8").replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/dom.js") });
   vm.runInContext(SHEET_SRC.replace(/^const\b/gm, "var"), ctx, { filename: absSrc("js/ui/quali-sheet.js") });
   return { sheet: ctx.QualiSheet.create(G), els, refreshed: () => refreshed };
