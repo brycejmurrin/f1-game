@@ -1930,7 +1930,8 @@ body.lt-open:not(.pc-nopanel) .pc-fovlab { font-size: var(--fs-micro); }
 body.lt-open:not(.pc-nopanel) .pc-fovlab input[type="range"] { width: 70px; }
 body.lt-open:not(.pc-nopanel) #pc-exit,
 body.lt-open:not(.pc-nopanel) #pc-panel,
-body.lt-open:not(.pc-nopanel) #pc-hud {
+body.lt-open:not(.pc-nopanel) #pc-hud,
+body.lt-open:not(.pc-nopanel) #pc-line {
   padding: 5px 10px; font-size: var(--fs-micro);
 }
 .pc-hint { font-size: var(--fs-micro); color: rgba(255,255,255,0.66); letter-spacing: 0.02em; }
@@ -1938,7 +1939,7 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 /* Free-cam FOV — same painted --slider hit as every menu range, so UI SIZE
    zoom does not shrink this one below the SETTINGS / tuner tracks. */
 .pc-fovlab input[type="range"] { width: 110px; margin-left: calc(var(--gap) * 0.5); height: var(--slider); min-height: var(--slider); }
-#pc-exit, #pc-panel, #pc-hud {
+#pc-exit, #pc-panel, #pc-hud, #pc-line {
   width: auto; margin: 0; padding: 7px 16px; border-radius: var(--r-md);
   font-size: var(--fs-micro); font-weight: 800; letter-spacing: 0.06em;
   /* The three pc-* controls the earlier --tap-min pass missed: padding-driven
@@ -1949,12 +1950,12 @@ body.lt-open:not(.pc-nopanel) #pc-hud {
 /* Compact, but not under the touch floor (#2158): the padding above painted
    the three buttons (lt-open) 40 tall and the FOV track 32 at 844x390. */
 @media (pointer: coarse) {
-  body.lt-open:not(.pc-nopanel) :is(#pc-exit, #pc-panel, #pc-hud),
+  body.lt-open:not(.pc-nopanel) :is(#pc-exit, #pc-panel, #pc-hud, #pc-line),
   .pc-fovlab input[type="range"] { min-height: var(--tap-paint); }
   .pc-fovlab input[type="range"] { height: var(--tap-paint); }
 }
 #pc-exit { background: var(--red); color: #fff; border: 1px solid var(--red); }
-#pc-panel, #pc-hud { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
+#pc-panel, #pc-hud, #pc-line { background: var(--plate-hover); color: var(--text); border: 1px solid var(--plate-line); }
 /* the FREE CAMERA launch buttons in the lighting tuner and the flyby editor */
 #pc-toggle, #fb-freecam {
   width: auto; margin: 0; padding: calc(var(--gap) * 0.75) calc(var(--gap) * 7 / 6); border-radius: var(--r-md);

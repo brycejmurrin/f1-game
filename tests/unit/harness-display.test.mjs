@@ -4,15 +4,57 @@
  * canvas.getContext("webgl2") return null, so game.js never finished and
  * garage-angles timed out waiting for __apex. Unsetting the var restored GL.
  */
+import "../helpers/git-fixture-env.mjs";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { EventEmitter } from "node:events";
+import { execFileSync } from "node:child_process";
+import vm from "node:vm";
 import { join, dirname } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "../..");
 const harnessPath = join(ROOT, "tools/lib/harness.mjs");
+
+test("static server builds missing and stale metadata from an alternate source checkout, but leaves staged roots alone", async () => {
+  const { startStaticServer } = await import(pathToFileURL(harnessPath).href);
+  const dir = mkdtempSync(join(ROOT, "scratch", "server-source-"));
+  const target = join(dir, "js/track/circuit-meta.js");
+  let server;
+  try {
+    mkdirSync(join(dir, "tools"));
+    mkdirSync(join(dir, "js/circuits"), { recursive: true });
+    mkdirSync(join(dir, "js/track"));
+    writeFileSync(join(dir, "tools/manifest.cjs"), 'throw new Error("a staged manifest must not execute");\n');
+    writeFileSync(target, "staged bytes");
+    server = await startStaticServer(dir);
+    assert.equal(await (await fetch(server.url + "js/track/circuit-meta.js")).text(), "staged bytes");
+    await server.close(); server = null;
+
+    execFileSync("git", ["init", "-q"], { cwd: dir });
+    writeFileSync(join(dir, "tools/manifest.cjs"), 'module.exports = { CIRCUITS: ["other"], circuitPath: id => "js/circuits/" + id + ".js" };\n');
+    writeFileSync(join(dir, "js/circuits", "other.js"), 'window.TrackDefs.push({ id: "other", name: "Alternate source", country: "ZZ", path: [[0, 0], [1, 1]] });\n');
+    for (const before of ["missing", "stale"]) {
+      if (before === "missing") rmSync(target);
+      else writeFileSync(target, "stale bytes");
+      server = await startStaticServer(dir);
+      const bytes = await (await fetch(server.url + "js/track/circuit-meta.js")).text();
+      const sandbox = { window: { TrackDefs: [] } };
+      vm.runInNewContext(bytes, sandbox, { filename: join(dir, "js/track/circuit-meta.js") });
+      assert.deepEqual(Array.from(sandbox.window.TrackDefs, (entry) => ({ ...entry })), [
+        { id: "other", name: "Alternate source", country: "ZZ", _metaOnly: true },
+      ], `${before}: only metadata from the selected source is served`);
+      assert.equal(readFileSync(target, "utf8"), bytes);
+      await server.close(); server = null;
+    }
+    writeFileSync(join(dir, "js/circuits", "other.js"), 'throw new Error("bad alternate source");');
+    await assert.rejects(startStaticServer(dir), /bad alternate source/, "build failure prevents a listener from starting");
+  } finally {
+    if (server) await server.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test("harness exports display helpers and clears a dead DISPLAY for headless", async () => {
   const src = readFileSync(harnessPath, "utf8");

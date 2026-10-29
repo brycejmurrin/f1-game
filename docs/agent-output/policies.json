@@ -991,6 +991,11 @@
       "presentation": "native",
       "preserve": "@c4"
     },
+    "tools/gen/ensure-built.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c4"
+    },
     "tools/gen/garage-defaults.mjs": {
       "action": "keep-native",
       "presentation": "native",

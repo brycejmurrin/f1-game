@@ -3918,6 +3918,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/cooldown-lap.js",
+      "global": "CooldownLap",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/daily-challenge.js",
       "global": "DailyChallenge",
       "roster": "tag"

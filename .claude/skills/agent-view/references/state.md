@@ -1,4 +1,4 @@
-# State & telemetry debug hooks (folded from the debug-state skill)
+# State & telemetry debug hooks
 
 Verified live (`tools/shot/apex-eval.mjs`). Debug-hooks-first: assert relative
 behaviour, not brittle magnitudes.

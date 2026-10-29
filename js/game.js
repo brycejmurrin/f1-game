@@ -6107,16 +6107,16 @@ function updateCarBicycle(c, dt, ranked, S) {
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
     const assistDelta = -driveTune.ROAD_FOLLOW * (driveTune.WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * kPath * yawEase * offAssistFade;
-    // Racing-line slider. TrackLine.at is the AI's line; lineW is 0 on a
-    // straight so the raw offset there is not a target. Front tyre, not c.x.
+    // Racing-line slider. TrackLine.at is the AI's line; lineW (0 on a straight) scales the PULL, never the target:
+    // a target of x·w steered every straight toward the centre at full strength. Front tyre, not c.x.
     let lineDelta = 0;
     if (raceLineAssist !== 0 && track.line) {
       const look = clamp(Math.abs(c.speed) * 0.9, 25, 90);
       const ln = TrackLine.at(track, wrapS(c.s + look));
       const edge = Math.max(0, hw - 0.6);
-      const lineX = clamp(ln.x * ln.w, -edge, edge);
+      const lineX = clamp(ln.x, -edge, edge);
       const Ld = clamp(Math.abs(c.speed) * 1.2, 22, 70);
-      lineDelta = raceLineAssist * LINE_PURSUIT * driveTune.WHEELBASE * 2 * (lineX - c.x) / (Ld * Ld) * offAssistFade;
+      lineDelta = raceLineAssist * LINE_PURSUIT * driveTune.WHEELBASE * 2 * ln.w * (lineX - c.x) / (Ld * Ld) * offAssistFade;
     }
     // delta filled inside PlayerForces after muF (GripSteer caps driverDelta).
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
@@ -7288,7 +7288,9 @@ function render(dt) {
   // in front of the player the instant race settings opens.
   // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too. A present that only starts a program warm paints nothing — refund that frame (prebuild.js).
   if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { const owed = _menuGate.garageWarm; _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; else if (gfx.warming && gfx.warming()) _menuGate.garageWarm = owed; return; }
-  if (menuBlank && !(track && _menuGate.warm > 0)) return;
+  // A queued rig job of the CURRENT menu world still needs a present to start (awaitIntroWarm waits on it), even with no warm frame owed.
+  const warmQueuedHere = !!(track && menuWorld() && gfx.warmQueued && gfx.warmQueued());
+  if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;
   // The last hidden warm frame is the one observable "this world has drawn":
   // tools/lib/mem-census.mjs waits on this record (a census taken before it read
   // 10 render objects on llvmpipe, CI run 37330132243), and __apex is off-limits

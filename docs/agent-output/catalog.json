@@ -1911,6 +1911,18 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/gen/ensure-built.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--quiet"
+      ],
+      "npmScripts": [
+        "prepare"
+      ]
+    },
+    {
       "path": "tools/gen/garage-defaults.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -2800,7 +2812,8 @@
       "outputPolicy": "artifact-first",
       "interpreter": "python3",
       "nativeOutputFlagMentions": [
-        "--out"
+        "--out",
+        "--quiet"
       ]
     },
     {
@@ -4170,7 +4183,7 @@
     },
     {
       "name": "prepare",
-      "command": "git config core.hooksPath .githooks || true"
+      "command": "git config core.hooksPath .githooks || true && node tools/gen/ensure-built.mjs"
     },
     {
       "name": "rtc:e2e",

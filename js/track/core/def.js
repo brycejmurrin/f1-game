@@ -306,6 +306,8 @@ const TrackDef = (function () {
     return pts;
   }
 
-  return { dayPal, nightPal, elevationAt, hasRealElevation, realPoints, applyHwZones, fromRaw, materializeListPoints };
+  // dayPal / nightPal / realPoints / applyHwZones / materializeListPoints stay
+  // module-local (fromRaw only); elevation readers + fromRaw stay public.
+  return { elevationAt, hasRealElevation, fromRaw };
 })();
 Object.freeze(TrackDef);

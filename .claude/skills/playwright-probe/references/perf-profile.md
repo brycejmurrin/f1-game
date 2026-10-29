@@ -1,4 +1,4 @@
-# CPU profiling — headless Playwright + CDP (folded from the perf-profile skill)
+# CPU profiling — headless Playwright + CDP
 
 **Start with `tools/perf/profile.mjs`** — one CLI for `--mode spans|cpu|hitch|trace|step`, with `--repeat N`
 (noise floor: a delta inside the spread is noise, under 3 repeats every verdict is "unproven") and

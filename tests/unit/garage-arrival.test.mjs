@@ -1297,3 +1297,10 @@ test('arrival-poses.mjs (the Blender previz feed) samples the same poses, parked
   const last = sample(A, { dir: 'in' }).frames.at(-1);
   assert.deepEqual([last.x, last.z, last.yaw], [0, 0, 0]);
 });
+
+test('a covered PREP menu with no owed warm frames still presents for a queued warm of the current menu world', () => {
+  const body = introGameSource.slice(introGameSource.indexOf('function render(dt) {'));
+  const q = body.indexOf('const warmQueuedHere = !!(track && menuWorld() && gfx.warmQueued && gfx.warmQueued());');
+  const guard = body.indexOf('if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;');
+  assert.ok(q > 0 && guard > q && body.indexOf('!(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0') > guard);
+});
