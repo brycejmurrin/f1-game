@@ -181,6 +181,6 @@ const Forecast = (function () {
   function publish(f) { latest = f || null; }
   function current() { return latest; }
 
-  return { compute, timeline, wetAt, errBound, confidenceFor, publish, current, TAU_WET, TAU_DRY, ERR_FRAC, ERR_MIN };
+  return { compute, timeline, wetAt, errBound, confidenceFor, publish, current, TAU_WET, TAU_DRY };
 })();
 Object.freeze(Forecast);

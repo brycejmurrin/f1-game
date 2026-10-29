@@ -827,10 +827,12 @@ test("scQueueFrac and holdCap read the per-tick snapshot, so cars[] order cannot
   const vTop = 80;
   const frac = (order) => { const w = mk(); return R.scQueueFrac(w.me, order.map((k) => w[k]), total, null, vTop); };
   assert.equal(frac(["me", "ahead"]), frac(["ahead", "me"]));
+  // SC_* stay module-local on RaceControl; pin the documented pace thresholds here.
+  const SC_PACE = 0.45, SC_CATCH = 0.6, SC_QUEUE_GAP = 1.0;
   const w = mk();
-  const live = ((w.ahead.prog - w.me.prog) % total) / (R.SC_PACE * vTop);
-  const snap = ((w.ahead._snapProg - w.me.prog) % total) / (R.SC_PACE * vTop);
-  const t = (g) => R.SC_PACE + (R.SC_CATCH - R.SC_PACE) * Math.min(1, Math.max(0, g - R.SC_QUEUE_GAP));
+  const live = ((w.ahead.prog - w.me.prog) % total) / (SC_PACE * vTop);
+  const snap = ((w.ahead._snapProg - w.me.prog) % total) / (SC_PACE * vTop);
+  const t = (g) => SC_PACE + (SC_CATCH - SC_PACE) * Math.min(1, Math.max(0, g - SC_QUEUE_GAP));
   assert.equal(R.scQueueFrac(w.me, [w.me, w.ahead], total, null, vTop), t(snap));
   assert.notEqual(t(snap), t(live), "the fixture must distinguish snapshot from live");
   // The leader pick (leader out of the queue) rides the snapshot too.
@@ -853,15 +855,16 @@ test("settleLineStep with no or one entry never sorts, and the comparator is not
 });
 
 test("SOLO: a finished player waits for the AI still running, bounded by the post-finish cap", () => {
-  const { finishDelay, POST_FINISH_CAP } = load({ active: () => false, hazards: () => hazards(0, 0) });
-  assert.equal(POST_FINISH_CAP, 75);
+  const { finishDelay } = load({ active: () => false, hazards: () => hazards(0, 0) });
+  // POST_FINISH_CAP stays module-local; pin the documented seconds here.
+  const POST_FINISH_CAP = 75;
   const you = { human: true, finished: true, retired: false, finishT: 100 };
   const ai = { human: false, finished: false, retired: false };
   const solo = { solo: true, since: -1 };
   assert.equal(finishDelay([you, ai], 101, 3, 0, solo), 0, "an AI still on track: keep counting, no 2.2 s countdown");
   assert.equal(solo.since, 101, "the wait is timed from the first tick the player was done");
-  assert.equal(finishDelay([you, ai], 101 + 74, 3, 0, solo), 0, "still inside the cap");
-  assert.equal(finishDelay([you, ai], 101 + 75, 3, 0, solo), 0.1, "the cap ends it: endRace classifies the runners by progress");
+  assert.equal(finishDelay([you, ai], 101 + (POST_FINISH_CAP - 1), 3, 0, solo), 0, "still inside the cap");
+  assert.equal(finishDelay([you, ai], 101 + POST_FINISH_CAP, 3, 0, solo), 0.1, "the cap ends it: endRace classifies the runners by progress");
   assert.equal(finishDelay([you, { ...ai, finished: true, finishT: 110 }], 111, 3, 0, { solo: true, since: -1 }), 2.2,
     "the whole field home: today's 2.2 s");
   assert.equal(finishDelay([you, { ...ai, retired: true }], 101, 3, 0, { solo: true, since: -1 }), 2.2, "a retired AI is not waited for");

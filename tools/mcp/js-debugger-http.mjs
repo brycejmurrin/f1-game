@@ -3,7 +3,7 @@ import http from "node:http";
 import { DebugSession } from "./js-debugger-session.mjs";
 import { handleRpc, TOOLS } from "./js-debugger-mcp.mjs";
 
-export const DEFAULT_PORT = 3714;
+const DEFAULT_PORT = 3714;
 export function debuggerPort(raw = process.env.APEX_DEBUGGER_PORT) {
   if (raw === undefined) return DEFAULT_PORT;
   if (!/^\d+$/.test(String(raw)) || Number(raw) < 0 || Number(raw) > 65535) throw Error("APEX_DEBUGGER_PORT must be 0..65535 (0 only for serve-http)");

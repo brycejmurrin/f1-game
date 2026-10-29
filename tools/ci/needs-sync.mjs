@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * @doc Verdict line: does a PR branch need a deploy-tip sync? conflict | stale-red | no (sync only when you must).
+ * @doc Verdict line: does a PR branch need a deploy-tip sync? conflict | stale-red | distance | no (sync only when you must).
  * @section runner
  * @skill steward
  *
@@ -15,10 +15,15 @@
  *              a commit after that run started: a re-run re-tests the stale merge ref,
  *              only a new head can clear it. A heuristic (a flake looks the same): name
  *              the failing job in the PR, and never re-run twice.
- *   no         up to date, or merely behind with no conflict and no red: a green PR
- *              merges as it stands, and a clean refresh buys a full tier that repeats
- *              the old verdict.
- * Exit: 0 sync needed (conflict | stale-red), 1 no sync needed, 2 bad args, 3 could not
+ *   distance   the head's `gate` commit status is a refusal whose ONLY failing row is
+ *              `distance` (merge-gate.mjs: merge-base more than MAX_BEHIND game merges
+ *              behind the tip). Merely behind is still `no`, but the gate will not arm a
+ *              PR it refuses, and land.yml AUTO-SYNC is throttled (SYNC_MAX), so a
+ *              branch you own may sync itself. Needs the API: offline / unreadable = `no`.
+ *   no         up to date, or merely behind with no conflict, no red and no distance
+ *              refusal: a green PR merges as it stands, and a clean refresh buys a full
+ *              tier that repeats the old verdict.
+ * Exit: 0 sync needed (conflict | stale-red | distance), 1 no sync needed, 2 bad args, 3 could not
  * decide (fetch / git / merge-tree failed). The API half degrades: no token or an API
  * error leaves ci "unknown", so only `conflict` can fire (the line says so).
  * Needs the merge base: a shallow clone must be deep enough for `git merge-tree`.
@@ -30,15 +35,17 @@ import { fileURLToPath } from "node:url";
 import { DEPLOY } from "./github-api.mjs";
 import { createSnapshot } from "../lib/pr-snapshot.mjs";
 import { ciState } from "./pr-board.mjs";
+import { distanceOnlyRefusal } from "./dispatch.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-export const VERDICTS = ["conflict", "stale-red", "no"];
+export const VERDICTS = ["conflict", "stale-red", "distance", "no"];
 
 /**
  * The verdict from the facts. Pure.
- * @param {{ behind: boolean, conflict: boolean, ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null }} f
- *   tipNewestAt = committer date of the newest commit on the tip that the branch lacks.
- * @returns {{ verdict: "conflict"|"stale-red"|"no", why: string }}
+ * @param {{ behind: boolean, conflict: boolean, ci?: string, runStartedAt?: string|null, tipNewestAt?: string|null, distance?: boolean }} f
+ *   tipNewestAt = committer date of the newest commit on the tip that the branch lacks;
+ *   distance = the head's `gate` status refuses on the distance row alone.
+ * @returns {{ verdict: "conflict"|"stale-red"|"distance"|"no", why: string }}
  */
 export function decideSync(f) {
   if (!f.behind) return { verdict: "no", why: "the branch already contains the deploy tip" };
@@ -47,6 +54,7 @@ export function decideSync(f) {
   if (f.ci === "failure" && ran && tipAt && tipAt > ran) {
     return { verdict: "stale-red", why: "ci.yml is red on the head and the tip has moved since that run started" };
   }
+  if (f.distance) return { verdict: "distance", why: "the gate refuses on the distance row alone: the merge-base is too many game merges behind the tip" };
   const red = f.ci === "failure" ? "ci red but the tip has not moved since" : f.ci === "unknown" ? "ci state unknown" : `ci ${f.ci || "none"}`;
   return { verdict: "no", why: `behind with no conflict (${red}): clean-behind is not a reason` };
 }
@@ -78,7 +86,7 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
     if (m.code !== 0 && m.code !== 1) return { ok: false, error: `git merge-tree failed (${m.code}): ${m.err || m.out}` };
     conflict = m.code === 1;
   }
-  let ci = "unknown", runStartedAt = null, note = null;
+  let ci = "unknown", runStartedAt = null, note = null, distance = false;
   if (behind && !conflict && !offline) {
     const r = request(`actions/workflows/ci.yml/runs?head_sha=${head.out}&per_page=20`);
     snap?.save();
@@ -90,10 +98,15 @@ export function needsSync(branch, { fetch = true, offline = false, readGit = git
       const run = runs.find((x) => x.id === s.runId);
       runStartedAt = run?.run_started_at || run?.created_at || null;
     }
+    // `gate` is a commit STATUS (land.yml), invisible to the ci.yml runs above. An unreadable status is simply not a distance refusal.
+    const gs = request(`commits/${head.out}/status`);
+    snap?.save();
+    const gate = (gs.json?.statuses || []).filter((x) => x.context === "gate")[0];
+    distance = !gs.error && !!gate && (gate.state === "failure" || gate.state === "error") && distanceOnlyRefusal(gate.description);
   } else if (offline) note = "offline: CI state not read, only a conflict can be detected";
   const tipNewestAt = behind ? readGit(["log", "-1", "--format=%cI", `${head.out}..${tip.out}`]).out || null : null;
-  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt });
-  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, ...d, note };
+  const d = decideSync({ behind, conflict, ci, runStartedAt, tipNewestAt, distance });
+  return { ok: true, branch, head: head.out, tip: tip.out, behind, conflict, ci, distance, ...d, note };
 }
 
 /** The one verdict line. */
@@ -107,7 +120,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (argv.includes("--help") || !branch || bad || argv.filter((a) => !a.startsWith("--")).length !== 1) {
     console.error(`usage: node tools/ci/needs-sync.mjs <branch> [--json] [--offline]${bad ? `\nunknown arg: ${bad}` : ""}
 verdict line: ${VERDICTS.map((v) => `= sync needed: ${v}`).join(" | ")}
-exit: 0 sync needed (conflict|stale-red), 1 no, 2 bad args, 3 could not decide`);
+exit: 0 sync needed (conflict|stale-red|distance), 1 no, 2 bad args, 3 could not decide`);
     process.exit(argv.includes("--help") ? 0 : 2);
   }
   const v = needsSync(branch, { offline: argv.includes("--offline") });

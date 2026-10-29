@@ -194,8 +194,6 @@ function measureIn(win, ms) {
   });
 }
 
-// One thing off per phase. `set` runs in the game window; `restore` puts it back
-// so the next phase starts from BASELINE again rather than compounding.
 // One thing off per phase. Each phase declares the lightTune KEYS it touches;
 // the runner snapshots their LIVE values before setting and puts exactly those
 // back afterwards, so the next phase starts from BASELINE again.
