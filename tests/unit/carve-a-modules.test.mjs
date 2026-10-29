@@ -84,26 +84,103 @@ test("StormFlash in the rain: a strike sets exposure FROM the base, thunder foll
 });
 
 test("GradeTint keeps a neutral tint neutral and LightTuneEdit clears the chunk latch on a rising edge", () => {
-  const GradeTint = load("../../js/fx/grade-tint.js", "GradeTint");
+  const GradeTint = load("../../js/fx/grade-tint.js", "GradeTint", {
+    M4: { clamp: (v, a, b) => Math.min(b, Math.max(a, v)) },
+  });
   const neutral = GradeTint.hue([1, 1, 1], 40);
   assert.ok(neutral.every((c) => Math.abs(c - 1) < 1e-9), JSON.stringify(neutral));
+  // CSS hue-rotate can go out of gamut; the grade path must not hand the post a negative channel.
+  const spun = GradeTint.hue([1, 0, 0], 90);
+  assert.ok(spun.every((c) => c >= 0), "hue clamps out-of-gamut channels: " + JSON.stringify(spun));
+  assert.ok(spun[1] > spun[0] && spun[1] > spun[2], "90° on red leans toward green");
   const sat = GradeTint.sat([1, 0, 0], 0);
   assert.ok(sat[0] > 0 && sat[1] > 0 && sat[2] > 0);
+  // Paint presets are frozen shared bases; carPaint copies into one scratch per call.
+  for (const k of ["PAINT_WET_NIGHT", "PAINT_WET_DAY", "PAINT_DRY_NIGHT", "PAINT_DRY_DAY"]) {
+    assert.ok(Object.isFrozen(GradeTint[k]), `${k} must be frozen (a mutation would stick for every car)`);
+  }
+  const LT = { carGloss: 1, carMetal: 1, carSpecular: 1, carClearcoat: 1, carGlow: 1 };
+  const day = GradeTint.carPaint(GradeTint.PAINT_DRY_DAY, LT);
+  assert.equal(day.roughness, 0.22);
+  assert.equal(day.emissive, 0, "day paint has no emissive");
+  assert.equal(day.carFinish, true);
+  assert.equal(day.doubleSided, true);
+  const night = GradeTint.carPaint(GradeTint.PAINT_WET_NIGHT, LT);
+  assert.equal(day, night, "one scratch object across cars in a frame");
+  assert.equal(night.emissive, 0.20, "night wet writes over the previous day scratch");
+  assert.equal(night.roughness, 0.16);
+  assert.equal(GradeTint.PAINT_DRY_DAY.roughness, 0.22, "preset untouched after carPaint");
   const removed = [];
   // The module reads the GLOBAL localStorage (setting ctx.localStorage did nothing): record its removeItem.
   const LightTuneEdit = load("../../js/race/light-tune-edit.js", "LightTuneEdit",
     { localStorage: { removeItem: (k) => removed.push(k) } });
-  const LT = { perChunkLights: 0, carEnvCube: 0 };
+  // LTe (not LT): GradeTint.carPaint scratch above already binds LT.
+  const LTe = { perChunkLights: 0, roadChunkLamps: 0, carEnvCube: 0 };
   let stored = null;
   const ctx = {
-    LT, ltStore: { set(id, v) { stored = [id, v]; return true; } }, gfx: { invalidateSoftPresent() {} },
+    LT: LTe, ltStore: { set(id, v) { stored = [id, v]; return true; } }, gfx: { invalidateSoftPresent() {} },
     get perChunkOff() { return this._off; }, set perChunkOff(v) { this._off = v; }, _off: true,
-    envProbeOff: false,
+    get envProbeOff() { return this._env; }, set envProbeOff(v) { this._env = v; }, _env: true,
   };
   LightTuneEdit.set("perChunkLights", 1, ctx);
   assert.equal(ctx.perChunkOff, false);
   assert.deepEqual(removed, ["apex26.perChunkOff"], "the persisted latch is cleared too");
   assert.deepEqual(stored, ["perChunkLights", 1]);
+  // PER-CHUNK ROAD: the tuner note covers BOTH knobs; rising edge must clear the same latch.
+  ctx.perChunkOff = true; removed.length = 0; LTe.roadChunkLamps = 0;
+  LightTuneEdit.set("roadChunkLamps", 1, ctx);
+  assert.equal(ctx.perChunkOff, false, "roadChunkLamps 0→>0 clears the chunk latch");
+  assert.deepEqual(removed, ["apex26.perChunkOff"]);
+  // ENV REFLECTION: same gesture for the env-probe latch.
+  removed.length = 0; LTe.carEnvCube = 0;
+  LightTuneEdit.set("carEnvCube", 1, ctx);
+  assert.equal(ctx.envProbeOff, false, "carEnvCube 0→>0 clears apex26.envProbeOff");
+  assert.deepEqual(removed, ["apex26.envProbeOff"]);
+  assert.deepEqual(stored, ["carEnvCube", 1]);
+});
+
+test("JumpStartPenalty fines throttle at green and a fast launch; auto-throttle is exempt; unset penalty cannot NaN", () => {
+  const SportingRegs = load("../../js/race/sporting-regs.js", "SportingRegs");
+  const announced = [], pens = [];
+  const JumpStartPenalty = load("../../js/race/jump-start-penalty.js", "JumpStartPenalty", {
+    SportingRegs, Log: { info() {}, debug() {} },
+    Input: { throttleLevel: () => 0 },
+    GameAudio: { penalty: () => pens.push(1) },
+  });
+  const G = {
+    session: "race", track: { id: "monza" }, raceT: 0, resultT: 1,
+    vTop: () => 80, announce: (m) => announced.push(m),
+  };
+  const js = JumpStartPenalty.create(G, {
+    autoThrottle: () => false,
+    inputOf: (c) => c._inp,
+    launchT0: () => 0,
+    soundOn: () => true,
+    isQuali: () => false,
+    isTimeTrial: () => false,
+  });
+  const player = { human: true, isPlayer: true, code: "TST", retired: false, finished: false, speed: 0 };
+  // Unset penalty: the belt must seed 0, not NaN.
+  player._inp = { throttle: true, throttleLevel: 1 };
+  js.tickAtGreen(player);
+  assert.equal(player.jumpStartFined, true);
+  assert.equal(player.penalty, SportingRegs.JUMP_START_PEN_S);
+  assert.ok(Number.isFinite(player.penalty));
+  assert.match(announced[0], /FALSE START/);
+  assert.equal(pens.length, 1);
+  // Second call is a no-op (already fined).
+  js.tickAtGreen(player);
+  assert.equal(player.penalty, SportingRegs.JUMP_START_PEN_S);
+  // Auto-throttle exempt through the reaction window.
+  const auto = { human: true, isPlayer: true, code: "AUT", retired: false, finished: false, speed: 10, penalty: 0 };
+  const jsAuto = JumpStartPenalty.create(G, {
+    autoThrottle: () => true, inputOf: () => null, launchT0: () => 0,
+    soundOn: () => false, isQuali: () => false, isTimeTrial: () => false,
+  });
+  G.raceT = 0.05;
+  jsAuto.tickReaction(auto);
+  assert.equal(auto.jumpStartFined, undefined);
+  assert.equal(auto.penalty, 0);
 });
 
 test("AnnounceBanner holds the floor: a higher card queues instead of replacing the one on screen", () => {

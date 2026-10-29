@@ -290,11 +290,14 @@ function buildResults(order, race) {
       fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null });
     if (story) els.resultsTable.appendChild(story);
   }
-  if (!watched && !G.practice && order.length && typeof ShareCardChips !== "undefined") {
-    ShareCardChips.append(els.resultsTable, "res-race-card", () => ShareCardData.fromRace(order, { dnfOf, points: table,
+  if (!watched && !G.practice && order.length && typeof ShareCardChips !== "undefined" && ShareCardChips.available()) {
+    // Plain data built now, not at tap: a chip closure over `order` (the cars) and G.track kept the
+    // finished race's built track reachable after the next circuit was built (race-cycle-memory.spec.js).
+    const raceCard = ShareCardData.fromRace(order, { dnfOf, points: table,
       title: sprint ? "SPRINT RESULT" : G.seasonMode ? "ROUND " + season.round + " RESULT" : "RACE RESULT",
       trackId: track.def.id, trackName: track.def.name, color: (c) => seatColor(G, c),
-      fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null }), "race-" + track.def.id);
+      fastestLap: !sprint && G.seasonMode && season ? season.lastFl : null });
+    ShareCardChips.append(els.resultsTable, "res-race-card", () => raceCard, "race-" + raceCard.trackId);
   }
   const playerPlace = order.findIndex((c) => c.isPlayer);
   if (playerPlace >= 0 && !watched) {
@@ -623,8 +626,10 @@ function buildTTResults() {
       }, () => { btn.textContent = text; });
     };
     els.resultsTable.appendChild(btn);
-    if (typeof G.daily.shareCard === "function" && typeof ShareCardChips !== "undefined") {
-      els.resultsTable.appendChild(ShareCardChips.chip("res-card-share", () => G.daily.shareCard()));
+    if (typeof G.daily.card === "function" && typeof ShareCardChips !== "undefined") {
+      let daily = null;   // one card() per tap: the builder and the share text read the same result
+      ShareCardChips.append(els.resultsTable, "res-card-share", () => (daily = G.daily.card()).model,
+        () => daily ? daily.name : "daily", () => daily ? daily.text : "");
     }
     if (typeof ShareCode !== "undefined" && ShareCode.encode) {
       const codeBtn = document.createElement("button");
@@ -653,11 +658,12 @@ function buildTTResults() {
       context: Ghost.context(),
       day: activeDaily && activeDaily.day ? activeDaily.day : null,
     };
+    const trackId = track.def.id, trackName = track.def.name;   // strings: the chip must not hold G.track
     if (typeof ShareCardChips !== "undefined") ShareCardChips.append(els.resultsTable, "res-ghost-card", () => {
-      const lap = typeof ShareCode !== "undefined" ? ShareCode.encode("lap", { track: track.def.id, day: shareOpts.day, time: shareGhost.time }) : {};
-      return ShareCardData.fromGhost(shareGhost, guestGhost ? GhostShare.guest().ghost : null, { trackId: track.def.id,
-        trackName: track.def.name, day: shareOpts.day, link: lap.ok ? lap.url : null, rivalName: guestGhost ? "RIVAL" : "" });
-    }, "lap-" + track.def.id);
+      const lap = typeof ShareCode !== "undefined" ? ShareCode.encode("lap", { track: trackId, day: shareOpts.day, time: shareGhost.time }) : {};
+      return ShareCardData.fromGhost(shareGhost, guestGhost ? GhostShare.guest().ghost : null, { trackId,
+        trackName, day: shareOpts.day, link: lap.ok ? lap.url : null, rivalName: guestGhost ? "RIVAL" : "" });
+    }, "lap-" + trackId);
     const encoded = GhostShare.encode(shareGhost, shareOpts);
     const fallback = (btn, value, label) => {
       const box = document.createElement("textarea");
@@ -841,10 +847,12 @@ function buildChampion() {
   sorted.forEach((c, i) => {
     rankRow(driverRanking, i, seatColor(G, c), c.code, ptsLabel(season, c.driverId), c.isPlayer ? " you" : "");
   });
-  if (typeof ShareCardChips !== "undefined") ShareCardChips.append(els.resultsTable, "res-champion-card",
-    () => ShareCardData.fromSeason(sorted.map((c) => ({ code: c.code, name: c.name, teamColor: seatColor(G, c),
-      value: ptsLabel(season, c.driverId), you: !!c.isPlayer })), { round: season.round, rounds: SeasonCal.rounds(),
-      headline: champ.code + " IS WORLD CHAMPION" }), "champion");
+  if (typeof ShareCardChips !== "undefined") {
+    const champRows = sorted.map((c) => ({ code: c.code, name: c.name, teamColor: seatColor(G, c),
+      value: ptsLabel(season, c.driverId), you: !!c.isPlayer }));   // plain rows: the chip must not hold the cars
+    const champOpts = { round: season.round, rounds: SeasonCal.rounds(), headline: champ.code + " IS WORLD CHAMPION" };
+    ShareCardChips.append(els.resultsTable, "res-champion-card", () => ShareCardData.fromSeason(champRows, champOpts), "champion");
+  }
   els.resNext.textContent = "MAIN MENU";
   G.announce(`${champ.code} IS WORLD CHAMPION!`, 4);
   // endRace already played the finish fanfare; a second finish() here stacked blips on the season finale.

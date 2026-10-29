@@ -2,7 +2,7 @@
 
 Markdown agents with YAML frontmatter under `.claude/agents/`. Claude Code and
 Cursor both load this path (Cursor also accepts `.cursor/agents/`; we keep the
-single Claude tree to avoid drift). Eleven agents. Folded away:
+single Claude tree to avoid drift). Twelve agents. Folded away:
 `worktree-regression-check` into **verify-agent** `--base`;
 `doc-drift-auditor` into the `total-audit` workflow's `docs-ref` / `docs-idx`
 lenses (`.claude/workflows/README.md`); `release-auditor` into
@@ -12,6 +12,7 @@ deleted 2026-10-26 with the retired Merge Desk (PR sweeps: skill `steward` and
 
 | Agent | Use when |
 |---|---|
+| **Explore** | Open-ended codebase search: files by pattern, keyword greps, a JS symbol through apex-lsp, "where / how does X work" with `path:line` evidence, at the thoroughness the caller names (quick / medium / very thorough). Named to override Claude Code's built-in Explore, which inherits the session's model; this one runs on Haiku at `effort: medium` and, like the built-in, without CLAUDE.md (2026-10-28, https://code.claude.com/docs/en/sub-agents). Read-only by `tools:`; its Bash is read-only by prompt, as the built-in's is (it is not in `protect-files.py`'s READONLY_AGENTS). |
 | **deploy-research** | Post-deploy liveness, shipped-JS marker checks, exact-byte asset hashes and headers, public-web / track reference research via the host fetch tool (WebFetch / hosted TinyFish). Read-only; no Chrome, no Playwright, never the in-repo tinyfish wrapper (egress-blocked). |
 | **verify-agent** | Run `tools/ci/verify-change.mjs --fast` against the current tree and report the JSON verdict; `--base <ref>` repeats it on an ephemeral worktree at the session SHA / deploy tip and answers "same-red / new-on-session / already-red-on-ref". WGX edits also get `wgx-validate.mjs --static`. Read-only; never starts Playwright / `--wait` / `test-solo`; names leftover `batches` as notRun. |
 | **track-surveyor** | Survey + improve ONE circuit with the track CLIs (not the `apex_*` MCP wraps, which read the main checkout): writes only circuit def + scenery files (hook-enforced through `agent_type`), in its own worktree (`isolation: worktree` — parallel surveyors never share a checkout; it commits, never pushes, and the parent merges the fork's branch), verifies with `verify-track.cjs`, reports baseline deltas instead of moving them. No browser runs. |
@@ -24,7 +25,8 @@ deleted 2026-10-26 with the retired Merge Desk (PR sweeps: skill `steward` and
 | **finding-verifier** | Re-reads up to 15 `file:line — claim` rows on the current tree and returns `CONFIRMED / STALE / REFUTED / NEEDS-BROWSER` with evidence, then `refuted: k/N stale: k/N`. Run it before acting on any hunt, survey, review or audit finding; never fixes. |
 | **worker** | ONE scoped change handed off by the parent, with an explicit `tools:` list naming each connected MCP server as `mcp__<server>` (the six in `.mcp.json` plus GitHub, Claude sessions, Context7, Docs, TinyFish, BrowserStack; the local browser servers are listed but `mcp-browser-guard.sh` refuses them in a subagent, browserstack is not matched). Its own worktree (`isolation: worktree`), node-only verification, commits on its branch, coordinates mid-task with `SendMessage` (`main` for blocked / question / collision / scope / checkpoint, a named peer only for an interface it moves). The spawn prompt names goal, OWNED, FORBIDDEN, verify command, peers, and whether it pushes. Never merges, arms, readies or cancels; no browser runs. Ends with a fixed `WORKER <name>:` report. |
 
-**Token routing:** prefer these over attaching fat skills. Deploy/version →
+**Token routing:** prefer these over attaching fat skills. Codebase search →
+`Explore` (Haiku), not a general-purpose agent. Deploy/version →
 `deploy-research` (not full `mcp-probe`). Pre-push verify → `verify-agent`;
 same-red on tip → `verify-agent --base <ref>`. One circuit →
 `track-surveyor`. Stale prose → the `total-audit` workflow (`docs-ref` /
@@ -56,10 +58,11 @@ and `background: true` keeps a Claude Code agent off the foreground;
 `readonly: true` and `is_background: true` are the Cursor equivalents
 (`https://cursor.com/docs/subagents`) — Claude Code ignores both. readonly is
 Cursor's switch; `disallowedTools: Write, Edit, NotebookEdit` is Claude Code's,
-so the eight read-only reporters carry both (system audit 4, 2026-10-26). `model:` is a TIER, pinned by
+so the eight read-only reporters and Explore carry both (system audit 4, 2026-10-26). `model:` is a TIER, pinned by
 `tests/unit/skill-progressive.test.mjs`: `haiku` for scan-and-report agents
-(verify-agent, deploy-research, prior-art-scout), `sonnet` for log triage,
+(verify-agent, deploy-research, prior-art-scout, Explore), `sonnet` for log triage,
 refactor and reachability judgement (ci-red-triage, bloat-auditor, physics-contract-auditor, finding-verifier, agent-surface-reviewer),
-`opus` for the one agent whose product is depth (code-hunter), `inherit` for track-surveyor and worker. Every agent carries `maxTurns`; the two that run repeatedly
+`opus` for the one agent whose product is depth (code-hunter), `inherit` for track-surveyor and worker. Only Explore sets `effort:`
+(a per-call `effort` or `CLAUDE_CODE_EFFORT_LEVEL` overrides it). Every agent carries `maxTurns`; the two that run repeatedly
 carry `memory: project` (`.claude/agent-memory/<name>/MEMORY.md`, tracked, one
 line per remembered fact with a SHA). The test asserts all of it.

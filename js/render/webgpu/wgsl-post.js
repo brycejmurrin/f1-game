@@ -1448,19 +1448,7 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
   return vec4<f32>(reflCol, amt);
 }`;
 
-  // Human-readable pass order for the wgx.js render-target allocator.
-  const PASS_ORDER = [
-    "SSAO",        // half-res  <- sceneDepth
-    "BLUR",        // half-res  SSAO denoise + god-ray soften (separable 5-tap)
-    "GODRAY",      // half-res  <- depth + sun/lamp shadows
-    "BLOOM_DOWN",  // mip chain (mip0 bright-pass, mip1 Karis, mips 2..N plain) <- sceneHDR
-    "BLOOM_UP",    // mip chain upsample, additive blend -> bloom mip0
-    "SSR",         // HALF-res  <- sceneHDR + sceneDepth (full-res)  -> ssrTex (rgba, .a=mix)
-    "COMPOSITE",   // full-res LDR <- sceneHDR, bloom, ssao, godray (+ image FX; ssrTex optional)
-    "FXAA",        // full-res -> swapchain (or aaTex when SGSR follows) <- LDR composite
-    "SGSR",        // present-size <- FXAA/LDR at render size (opt-in spatial upscale)
-  ];
-
+  // PASS_ORDER was a documentation-only export; wgx.js never read it.
   return {
     // shaders
     BLOOM_DOWN,
@@ -1485,8 +1473,6 @@ fn fs_main(in : VOut) -> @location(0) vec4<f32> {
     FXAA_UNIFORM_BYTES: 16,         // FxaaU
     SGSR_UNIFORM_BYTES: 16,         // SgsrU (viewport vec4)
     SSR_UNIFORM_BYTES: 208,         // SsrU  (2×mat4 128 + 5×vec4 80)
-    // chain description
-    PASS_ORDER,
   };
 })();
 

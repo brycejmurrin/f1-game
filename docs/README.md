@@ -37,6 +37,7 @@ your change touches → the skill that drives it.
 | [UI-MAP.md](UI-MAP.md) / [UI-EXPLORER.md](UI-EXPLORER.md) / [ui-experience-studio.md](ui-experience-studio.md) | Navigation web and screens; browser exploration toolkit; appearance and Photo Studio contracts. |
 | [COMPONENTS.md](COMPONENTS.md) / [CODE-STANDARDS.md](CODE-STANDARDS.md) | CSS class families and owners; JavaScript house style. |
 | [TRACK-DESIGNER.md](TRACK-DESIGNER.md) | Player guide to the in-game track designer. |
+| [STREAMING.md](STREAMING.md) | Streamer guide to `overlay.html`: the OBS setup, page options, accessibility. |
 | [PLATFORM.md](PLATFORM.md) / [PACKAGING.md](PACKAGING.md) | iOS/Safari and static-host limits; Electron and Capacitor packaging. |
 | [BUGS.md](BUGS.md) | The current verified bug shortlist. |
 | [CAPTURE-REVIEW.md](CAPTURE-REVIEW.md) | Car capture matrices and portable site exports. |

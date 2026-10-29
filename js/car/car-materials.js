@@ -206,12 +206,14 @@ const CarMaterials = (function () {
   // Re-exported so Car3D and tests reach one table; shaders stay hand-ported.
   const SHADE = (typeof CarMaterialShade !== "undefined") ? CarMaterialShade : null;
 
+  // Module-local only (finishPass / applyFinish / applyZones readers): applyZones,
+  // PAINT_ZONES, ZONE_FINISH. No external js/ or test readers of the public names.
   return {
     SURFACES, FINISH_SURFACE, FINISH_RESERVED, SHADE, finishOf,
     DARK, CARBON, VISOR, PANEL, TYRE, RIM, HUB, INTAKE, HALO, EXHAUST,
     TYRE_BAND, BRAKE_CALIPER,
     TCAM_IDS, tcamColour,
-    smoothSkin, applyBodySplit, applyFinish, applyZones, PAINT_ZONES, ZONE_FINISH, zoneColour,
+    smoothSkin, applyBodySplit, applyFinish, zoneColour,
     PH_HALO, PH_HOOP, PH_MIRROR, PH_RIM, FINISH_FIELDS, finishPass, refinish,
   };
 })();

@@ -165,7 +165,9 @@ const HITCH_JS = `
     try { const ms = GLX.__tlx.memState(); miss = H.miss0 == null ? null : ms.matMiss - H.miss0; H.miss0 = ms.matMiss;
       keys = (ms.matMissKeys || []).filter((k) => !(H.keys0 || []).includes(k)); H.keys0 = (ms.matMissKeys || []).slice(); } catch (_) {}
     const spans = H.ring.filter((r) => r[2] >= t - dt && r[2] <= t).map((r) => r[0] + (r[1] ? ">" : "<") + Math.round(r[2] - (t - dt)));
-    H.rows.push({ at: Math.round(t - t0), dt: Math.round(dt), state: st, spans: spans.slice(0, 24), miss, keys }); };`;
+    // active: the PerfSpans stages still open when the frame stalled (begun, not ended, before its end) — the stage it landed in.
+    const open = []; for (const r of H.ring) { if (r[2] > t) break; if (!r[1]) open.push(r[0]); else { const j = open.lastIndexOf(r[0]); if (j >= 0) open.splice(j, 1); } }
+    H.rows.push({ at: Math.round(t - t0), dt: Math.round(dt), state: st, active: open.slice(-4), spans: spans.slice(0, 24), miss, keys }); };`;
 // Page-side probes. Each is a function body for WebDriver execute/sync (returns JSON-able data).
 const PROBE = `
   const R = typeof RendererPicker !== "undefined" ? RendererPicker : null;
@@ -427,16 +429,16 @@ const RENDER_RATE_SAMPLE = `
       skipped: a && b && !reset ? b.skipped - a.skipped : null,
       approvedHz: drawn !== null && elapsedMs > 0 ? Math.round(drawn * 10000 / elapsedMs) / 10 : null };
   };`;
-const HITCH_ARM = `
+const HITCH_ARM = `${HITCH_JS}
   ${RENDER_RATE_SAMPLE}
   window.__dfFrames = null;
   const t0 = performance.now(); let last = 0, started = 0; const d = [];
   const tick = (t) => {
     let st = null; try { st = __apex.info().state; } catch (_) {}
-    if (st === "race") { if (!started) started = t; else d.push(t - last); last = t; sampleRate(t); }
+    if (st === "race") { if (!started) started = t; else { d.push(t - last); if (t - last > 100) hitch(t, t - last, started); } last = t; sampleRate(t); }
     if (started && t - started > 15000) { d.sort((a, b) => a - b);
       window.__dfFrames = { metric: "raf-callback", callbackHz: Math.round(d.length * 10000 / (t - started)) / 10, renderRate: finishRate(t), n: d.length, max: Math.round(d[d.length - 1] || 0), p99: Math.round(d[Math.floor(d.length * 0.99)] || 0),
-        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, n100: d.filter((x) => x > 100).length }; return; }
+        n33: d.filter((x) => x > 33).length, n50: d.filter((x) => x > 50).length, n100: d.filter((x) => x > 100).length, hitches: H.rows }; return; }
     if (performance.now() - t0 < 240000) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick); return true;`;
@@ -929,7 +931,8 @@ async function run() {
           for (const sc of scenario.split(",")) {
             // --visor-pins / --soak-pins: the visor delta shows only where frames are not pinned at 60 Hz (iPhone 14
             // WebGL2, ledger rows 1-4); #3479's before-numbers are WebGPU.
-            try { if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
+            try { if (sc === "tracks") { await exec(ctx.base, ctx.sid, PIN(pins[0])); await tracksScenario(ctx, opt("tracks", "monza:day").split(","), report, out); }
+              else if (sc === "visor") await visorScenario(ctx, opt("url", SITE), opt("visor-pins", "webgl2,webgpu").split(","), report, out);
               else if (sc === "lsab") await lsabScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "opus") await opusScenario(ctx, opt("url", SITE), report, out);
               else if (sc === "coldrace") await coldraceScenario(ctx, opt("url", SITE), report, out);

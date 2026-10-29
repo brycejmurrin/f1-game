@@ -595,8 +595,10 @@ var GameAudioRadioFx = (function () {
     }
     playWatchMediaFn = radioMediaClip;
 
+    // radioMediaClip stays create-local: playWatchMediaFn holds it for the
+    // module-level playWatchMedia; no create()-return reader exists.
     return {
-      decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx, setRadioPreset, radioMediaClip,
+      decodeClip, radioVoice, radioSting, radioStingStop, setRadioFx, setRadioPreset,
       radioPreset: () => radioPreset,
       radioPresets: () => Object.entries(RADIO_PRESETS).map(([id, p]) => [id, p.name]),
       radioVoicesLive: () => voicesLive,
@@ -614,7 +616,6 @@ var GameAudioRadioFx = (function () {
         return 0.03 + ch.tune.reduce((a, n) => a + (n && n[1] > 0 ? n[1] : 0), 0);
       },
       radioFxMax: () => RADIO_FX_MAX,
-      radioChannels: () => Object.keys(RADIO_CH),
       resetContext() {
         radioStingStop();
         for (const w of _watchClips) w.teardown();

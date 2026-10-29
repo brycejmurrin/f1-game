@@ -132,33 +132,13 @@ const NetPlay = (function () {
     return Number.isFinite(t) && t > (total > 0 ? total / SPEED_LIMIT : 0) && t < QUALI_MAX_S;
   }
 
-  // ONE VALIDATION SITE for a peer's qualifying time. Both receivers — the
-  // lobby's (qualifying runs while the LOBBY still holds the connection) and
-  // this file's bindSession — share it: a bare `d.t > 0` passes "70" and
-  // `true`, and quali-model.js throws on `.toFixed` of the stored value.
-  // Coerced here, bounded to a lap a human can drive
-  // (20 s .. 1 h), and handed on as a NUMBER.
-  const QUALI_MIN_S = 20, QUALI_MAX_S = 3600;
-  // NO TIME (every lap deleted for track limits) crosses as {noTime: true}
-  // and arrives as t = Infinity — quali-model's own "drove, no valid lap"
-  // value — never as the synthetic back-of-grid time the local sheet made.
-  function validQuali(d) {
-    if (!d || typeof d !== "object" || d.driverId == null) return null;
-    if (d.noTime === true) return Object.assign({}, d, { t: Infinity, noTime: true });
-    const t = Number(d.t);
-    if (!(Number.isFinite(t) && t > QUALI_MIN_S && t < QUALI_MAX_S)) return null;
-    return Object.assign({}, d, { t });
-  }
-  // QLIVE never reaches the classification — it is a clock on somebody
-  // else's screen — so it is bounded rather than refused.
-  function validQualiLive(d) {
-    if (!d || typeof d !== "object" || d.driverId == null) return null;
-    const t = Number(d.t), frac = Number(d.frac);
-    return Object.assign({}, d, {
-      t: Number.isFinite(t) && t >= 0 ? Math.min(t, QUALI_MAX_S) : 0,
-      frac: Number.isFinite(frac) ? Math.min(Math.max(frac, 0), 1) : 0,
-    });
-  }
+  // ONE VALIDATION SITE lives in QualiWire. create(EV) runs while this file
+  // evaluates, so the manifest edge loads it first. The names stay here: the
+  // lobby calls NetPlay.bindQuali / qualiReporters, and lapTimeOk reads QUALI_MAX_S.
+  const {
+    validQuali, validQualiLive, rateGate, bindQuali, qualiReporters,
+    QUALI_MIN_S, QUALI_MAX_S, QUALI_RATE, EVENT_WINDOW_MS,
+  } = QualiWire.create(EV);
   function validClassification(rows, cars) {
     if (!Array.isArray(rows) || !Array.isArray(cars) || rows.length !== cars.length) return false;
     const ids = new Set(cars.map((c) => c.driverId));
@@ -174,130 +154,11 @@ const NetPlay = (function () {
     }
     return true;
   }
-  // QUALI + QLIVE flood cap, shared by the lobby and the in-race relay: per
-  // connection, rolling window. A real client sends ~2.5 QLIVE/s plus one QUALI.
-  const QUALI_RATE = 12, EVENT_WINDOW_MS = 1000;
-  function rateGate(limit, windowMs = EVENT_WINDOW_MS) {
-    const times = [];
-    return () => {
-      const now = performance.now();
-      while (times.length && now - times[0] > windowMs) times.shift();
-      if (times.length >= limit) return false;
-      times.push(now);
-      return true;
-    };
-  }
-  // Register the QUALI/QLIVE receivers on a session. `ownsDriver(d)` is the
-  // caller's sender binding — the lobby keys it on the HELLO profile filed
-  // under the connection, NetPlay on the remote car it seated — because the
-  // two phases hold different truths about who a connection speaks for.
-  // Rate limiting lives in the caller (lobby / bindSession) via rateGate so
-  // QUALI and QLIVE share one window per connection (#1414).
-  function bindQuali(s, ownsDriver, G, onAccepted) {
-    s.onEvent(EV.QUALI, (d) => {
-      const q = validQuali(d);
-      if (q && ownsDriver(q)) {
-        if (G.onPeerQuali) G.onPeerQuali(q);
-        if (onAccepted) onAccepted(EV.QUALI, q);
-      }
-    });
-    s.onEvent(EV.QLIVE, (d) => {
-      const q = validQualiLive(d);
-      if (q && ownsDriver(q)) {
-        if (G.onPeerQualiLive) G.onPeerQualiLive(q);
-        if (onAccepted) onAccepted(EV.QLIVE, q);
-      }
-    });
-  }
-  // The senders, one shape for both phases. A driven lap rides the reliable
-  // channel: a lost qualifying time is a wrong grid for the whole race, not
-  // one stuttered frame. The lap IN PROGRESS is allowed to be wrong, late or
-  // lost, so it is fire-and-forget and never gated on anything.
-  function qualiReporters(broadcast, live) {
-    return {
-      reportQuali(driverId, t) {
-        if (!live() || !(t > 0)) return false;
-        if (t === Infinity) return broadcast(EV.QUALI, { driverId, t: null, noTime: true });
-        return broadcast(EV.QUALI, { driverId, t: +Number(t).toFixed(3) });
-      },
-      reportQualiLive(driverId, t, frac) {
-        if (!live() || !(t >= 0)) return false;
-        return broadcast(EV.QLIVE, { driverId, t: +Number(t).toFixed(2), frac: +(Number(frac) || 0).toFixed(3) });
-      },
-    };
-  }
-
-  const STRATEGY_VERSION = 1;
+  // The tyre/pit codec is StrategyWire. modelRevision is read at call time
+  // (PhysicsConsts may load later). epochSerial stays here: it numbers this
+  // peer's race epochs, not the payload.
   let epochSerial = 0;
-  const modelRevision = () => typeof PhysicsConsts !== "undefined" ? PhysicsConsts.REVISION : "2026-09-coherence-1";
-  const STRATEGY_FIELDS = { tyreWear: [0, 3], tyreWearF: [0, 3], tyreWearR: [0, 3], tyreTs: [0, 250], tyreTb: [0, 250],
-    tyreGrain: [0, 1], tyreBlister: [0, 1], tyreLap0: [0, 1000], tyreStints: [0, 1000], pitStops: [0, 1000], pitT: [0, 30],
-    tyreLapAdj: [0, 1], pitWorked: [0, 30], pitOutT: [0, 30] };
-  const STINT_MAX = 256, COMPOUND_CODES = ["S", "M", "H", "I", "W"];
-  const colourFor = (r) => Array.isArray(r.colour) && r.colour.length === 3
-    ? r.colour.map(v => Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.5) : [0.5, 0.5, 0.5];
-  function strategyTyre(r) {
-    if (!r || typeof r.id !== "string" || !Number.isInteger(r.tread) || r.tread < 0 || r.tread > 2
-        || !Number.isFinite(r.life) || r.life < 0.3 || r.life > 1.2) return null;
-    const mods = {};
-    for (const k of ["speed", "accel", "cornering", "braking"]) if (r.mods && Number.isFinite(r.mods[k])) mods[k] = Math.max(0.5, Math.min(1.5, r.mods[k]));
-    return { id: r.id.slice(0, 64), code: String(r.code || "?").slice(0, 4), life: r.life, tread: r.tread,
-      off: Number.isFinite(r.off) ? Math.max(-0.2, Math.min(0.2, r.off)) : 0, colour: colourFor(r), mods };
-  }
-  function strategyLog(log) {
-    if (!Array.isArray(log)) return null;
-    const rows = [];
-    for (const e of log) {
-      if (!e || !COMPOUND_CODES.includes(e.code) || typeof e.id !== "string" || !Number.isFinite(e.lap0)
-          || e.lap0 < 0 || e.lap0 > 1000 || (e.lap1 !== null && (!Number.isFinite(e.lap1) || e.lap1 < 0 || e.lap1 > 1000))) return null;
-      rows.push({ code: e.code, id: e.id.slice(0, 64), colour: colourFor(e), lap0: e.lap0, lap1: e.lap1 });
-    }
-    return rows;
-  }
-  function boundedLog(log) {
-    if (!Array.isArray(log)) return [];
-    if (log.length <= STINT_MAX) return strategyLog(log) || [];
-    // Keep each compound's first evidence as well as the recent strip. Simply
-    // taking the tail could erase a wet exemption or the second dry compound.
-    const first = new Set(COMPOUND_CODES.map(code => log.findIndex(e => e && e.code === code)));
-    return strategyLog(log.filter((e, i) => first.has(i) || i >= log.length - (STINT_MAX - COMPOUND_CODES.length))) || [];
-  }
-  function strategyState(c, wire, track) {
-    const fields = {};
-    for (const k of Object.keys(STRATEGY_FIELDS)) if (Number.isFinite(c[k])) fields[k] = c[k];
-    return { version: STRATEGY_VERSION, physics: modelRevision(), wire, track, fields,
-      tyre: strategyTyre(c.tyre), tread: c.tread, pitState: c.pitState || "none", pitArmed: !!c.pitArmed,
-      pitFitted: !!c.pitFitted, pitNext: strategyTyre(c.pitNext), tyreClass: ["soft", "medium", "hard", "inter", "wet"].includes(c.tyreClass) ? c.tyreClass : null,
-      tyreLog: boundedLog(c.tyreLog), compoundShortAtFinish: typeof c.compoundShortAtFinish === "boolean" ? c.compoundShortAtFinish : null,
-      tyrePhysicalOffset: Number.isFinite(c.tyrePhysicalOffset) ? Math.max(-1000, Math.min(1000, c.tyrePhysicalOffset)) : null };
-  }
-  function applyStrategy(c, d) {
-    if (!c || !d || d.version !== STRATEGY_VERSION || d.physics !== modelRevision() || !d.fields) return false;
-    const tyre = strategyTyre(d.tyre), next = strategyTyre(d.pitNext);
-    const log = d.tyreLog === undefined ? null : Array.isArray(d.tyreLog) && d.tyreLog.length <= STINT_MAX ? strategyLog(d.tyreLog) : null;
-    // Extensions are optional for older v1 senders, and validate BEFORE any
-    // mutation. Never merge stale pending sets/history into a newer full state.
-    if ((d.pitFitted !== undefined && typeof d.pitFitted !== "boolean") || (d.pitNext !== undefined && d.pitNext !== null && !next)
-        || (d.tyreLog !== undefined && !log) || (d.tyreClass !== undefined && d.tyreClass !== null && !["soft", "medium", "hard", "inter", "wet"].includes(d.tyreClass))
-        || (d.compoundShortAtFinish !== undefined && d.compoundShortAtFinish !== null && typeof d.compoundShortAtFinish !== "boolean")
-        || (d.tyrePhysicalOffset !== undefined && d.tyrePhysicalOffset !== null && (!Number.isFinite(d.tyrePhysicalOffset) || Math.abs(d.tyrePhysicalOffset) > 1000))) return false;
-    if (tyre) {
-      c.tyre = tyre;
-      c.tread = c.tyre.tread;
-    } else if (Number.isInteger(d.tread) && d.tread >= 0 && d.tread <= 2) c.tread = d.tread;
-    for (const [k, range] of Object.entries(STRATEGY_FIELDS)) {
-      if (Number.isFinite(d.fields[k])) c[k] = Math.max(range[0], Math.min(range[1], d.fields[k]));
-    }
-    if (["none", "lane", "box", "out"].includes(d.pitState)) c.pitState = d.pitState;
-    c.pitArmed = d.pitArmed === true;
-    if (d.pitFitted !== undefined) c.pitFitted = d.pitFitted;
-    if (d.pitNext !== undefined) c.pitNext = next;
-    if (d.tyreClass != null) c.tyreClass = d.tyreClass;
-    if (log) c.tyreLog = log;
-    if (d.compoundShortAtFinish !== undefined) c.compoundShortAtFinish = d.compoundShortAtFinish;
-    if (d.tyrePhysicalOffset !== undefined) c.tyrePhysicalOffset = d.tyrePhysicalOffset;
-    return true;
-  }
+  const { strategyState, applyStrategy, STRATEGY_VERSION, modelRevision } = StrategyWire.create();
 
   function create(G) {
     G_lapsTarget = () => G.lapsTarget;
@@ -1477,8 +1338,10 @@ const NetPlay = (function () {
     };
   }
 
-  return { create, EV, PUBLISH_HZ, INTERP_DELAY_MS, strategyState, applyStrategy, STRATEGY_VERSION,
-    clampWire, validQuali, validQualiLive, bindQuali, qualiReporters, QUALI_MIN_S, QUALI_MAX_S,
-    QUALI_RATE, EVENT_WINDOW_MS, rateGate };
+  // PUBLISH_HZ / INTERP_DELAY_MS / STRATEGY_VERSION / validQualiLive / QUALI_MIN_S /
+  // QUALI_MAX_S / rateGate stay module-local (QualiWire / StrategyWire still own them).
+  return { create, EV, strategyState, applyStrategy,
+    clampWire, validQuali, bindQuali, qualiReporters,
+    QUALI_RATE, EVENT_WINDOW_MS };
 })();
 Object.freeze(NetPlay);

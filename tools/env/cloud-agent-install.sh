@@ -124,6 +124,16 @@ fi
 # Always cure before any npm use (install-browsers.sh, MCP clones).
 ensure_npm_prefix
 
+# Arm the commit gate (2026-10-28 split: .githooks/pre-commit is the one owner of
+# test:guards for every host). install-browsers.sh installs with --ignore-scripts,
+# so package.json "prepare" never ran on a Cloud VM and core.hooksPath stayed
+# unset (docs/notes/AGENT-GUARDS-2026-10-14.md). Relative, so each worktree runs
+# its own copy; bash-guard.sh refuses a commit while no pre-commit hook would run.
+if [[ -f "$ROOT/.githooks/pre-commit" && "$(git -C "$ROOT" config --get core.hooksPath 2>/dev/null || true)" != ".githooks" ]]; then
+  git -C "$ROOT" config core.hooksPath .githooks && echo "core.hooksPath set to .githooks (the commit gate)" \
+    || echo "WARN: could not set core.hooksPath=.githooks — commits will be refused until npm run prepare" >&2
+fi
+
 need_pkg() {
   dpkg -s "$1" >/dev/null 2>&1
 }

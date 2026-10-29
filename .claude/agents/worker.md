@@ -74,7 +74,7 @@ Worktree facts the brief may not know:
   and say so in your first `SendMessage` and the final report.
 - A fresh worktree has no `node_modules`. Plain `node` resolves packages from
   the main checkout's `node_modules` (Node walks up the parent directories),
-  so `node --test` usually works as is, and `bash-guard.sh` links it itself
+  so `node --test` usually works as is, and the git pre-commit hook links it itself
   when you commit; for `npm run`/`npx` or a "Cannot find module", symlink it once:
   `ln -s /home/user/f1-game/node_modules node_modules` (gitignored; never
   commit it). `npm install` only when the brief changes `package-lock.json`.
@@ -136,7 +136,7 @@ the worker loop below only supplies the scoped handoff behavior.
    run. Anything over ~2 min goes in a background Bash task with a `Monitor`
    on its log (rule 4).
 3. Commit each verified checkpoint: `git add` and `git commit` as two
-   commands (bash-guard runs the guards on the working tree when `git commit` is typed). Generated
+   commands (the git pre-commit hook runs the guards inside `git commit`). Generated
    files come from `npm run gen`, never a hand edit.
 4. Push `git push -u origin <branch>` only when the brief says you own the
    branch or its PR, or before any wait over ~10 min (rule 12). Every

@@ -31,7 +31,10 @@ const SoakRun = (function () {
   const LAPS = 40;                     // far more than 15 min of racing: the flag never ends the soak
   const DISTS = []; for (let d = 5; d <= 160; d += 6) DISTS.push(d);
   const VMAX = 94, KP = 2.4;
-  const A_LAT_WET = 9, A_BRAKE_WET = 16;   // the autopilot spec's 13/24 are dry numbers
+  // Autopilot envelope (tests/specs/autopilot.spec.js): dry 13/24, wet 9/16.
+  // GPU TEST / lap bench pass weather:"dry"; AUTO SOAK defaults to wet.
+  const A_LAT_DRY = 13, A_BRAKE_DRY = 24;
+  const A_LAT_WET = 9, A_BRAKE_WET = 16;
 
   let _G = null;
   let _run = null;                     // { raf, t0, started, ... } while active
@@ -49,20 +52,28 @@ const SoakRun = (function () {
     return { x: P.x, angle, k: Tracks.curvature(T, P.s), hw: smp.hw, speed: P.speed, s: P.s };
   }
 
+  // Wet family (atmosphere wxWet): wet / rain / storm. Everything else is dry grip.
+  function envelope(G) {
+    const w = G && G.raceWeather;
+    if (w === "wet" || w === "rain" || w === "storm") return { aLat: A_LAT_WET, aBrake: A_BRAKE_WET };
+    return { aLat: A_LAT_DRY, aBrake: A_BRAKE_DRY };
+  }
+
   // One control frame: returns the _testInput to hold until the next frame.
   function control(G, st, dt) {
     const p = probe(G);
     if (!p) return null;
     const T = G.track, P = G.player;
+    const { aLat, aBrake } = envelope(G);
     let kSteer = p.k;
     const steerLook = Math.max(9, p.speed * 0.4);
-    let vT = Math.abs(p.k) > 1e-4 ? Math.sqrt(A_LAT_WET / Math.abs(p.k)) : VMAX;
+    let vT = Math.abs(p.k) > 1e-4 ? Math.sqrt(aLat / Math.abs(p.k)) : VMAX;
     for (let j = 0; j < DISTS.length; j++) {
       const d = DISTS[j];
       const k = Tracks.curvature(T, G.wrapS(P.s + d));
       if (d <= steerLook) kSteer = k;
-      const vCorner = Math.abs(k) > 1e-4 ? Math.sqrt(A_LAT_WET / Math.abs(k)) : VMAX;
-      const vAllow = Math.sqrt(vCorner * vCorner + 2 * A_BRAKE_WET * d);
+      const vCorner = Math.abs(k) > 1e-4 ? Math.sqrt(aLat / Math.abs(k)) : VMAX;
+      const vAllow = Math.sqrt(vCorner * vCorner + 2 * aBrake * d);
       if (vAllow < vT) vT = vAllow;
     }
     vT = Math.max(11, Math.min(VMAX, vT));
@@ -153,8 +164,9 @@ const SoakRun = (function () {
     }, () => { finish("start-failed"); return false; });
   }
 
+  // probe stays module-local (start/control use it). SOAK_MIN / TRACK_ID stay exported for harness.
   return {
-    SOAK_MIN, TRACK_ID, control, probe,
+    SOAK_MIN, TRACK_ID, control,
     create(G) { _G = G; return this; },
     start, stop: (why) => finish(why || "stopped"),
     active: () => !!_run,

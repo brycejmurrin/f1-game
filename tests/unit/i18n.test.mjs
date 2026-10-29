@@ -140,3 +140,38 @@ test("plain English does not fetch a locale file", async () => {
   await I18n.boot("en");
   assert.equal(fetches, 0, "English inline defaults — no locale fetch");
 });
+
+test("I18nDom restores English defaults when set back to en (review F1)", () => {
+  const attrs = new Map();
+  const el = {
+    textContent: "SETTINGS",
+    getAttribute(name) { return attrs.has(name) ? attrs.get(name) : null; },
+    setAttribute(name, value) { attrs.set(name, String(value)); },
+  };
+  attrs.set("data-i18n", "settings.title");
+  attrs.set("data-i18n-attr", "aria-label:settings.title");
+  el.setAttribute("aria-label", "SETTINGS");
+  const nodes = [el];
+  const ctx = loadI18n({
+    document: {
+      documentElement: { lang: "en", dir: "ltr", setAttribute() {} },
+      addEventListener() {},
+      querySelectorAll(sel) {
+        if (String(sel).includes("data-i18n")) return nodes;
+        return [];
+      },
+    },
+  });
+  const { I18n, I18nDom } = ctx;
+  I18n._resetForTest();
+  I18n._installCatalog("de", { "settings.title": "EINSTELLUNGEN" });
+  I18nDom.apply();
+  assert.equal(el.textContent, "EINSTELLUNGEN");
+  assert.equal(el.getAttribute("aria-label"), "EINSTELLUNGEN");
+  assert.equal(el.getAttribute("data-i18n-default"), "SETTINGS");
+  assert.equal(el.getAttribute("data-i18n-default-aria-label"), "SETTINGS");
+  I18n._installCatalog("en", {});
+  I18nDom.apply();
+  assert.equal(el.textContent, "SETTINGS", "text restores from data-i18n-default");
+  assert.equal(el.getAttribute("aria-label"), "SETTINGS", "attr restores from data-i18n-default-<attr>");
+});

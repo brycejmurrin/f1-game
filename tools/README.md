@@ -174,6 +174,7 @@ Static guards over the source — a red exit here is a defect, not a report.
 | **check/ai-tactics.mjs** | AI racecraft over N laps: intervals in s, stuck-behind-slower, attack conversion, swap-backs (+ --mode human). | ai-racecraft |
 | **check/audio-test.cjs** | Objective engine-audio pitch test — we cannot listen headless, so it measures the synthesised pitch instead. | audio-debug |
 | **check/bloat-scan.mjs** | Size report for slim-bloat: ratchets.json line-ceiling slack, SKILL.md / agent line counts. `--json`; never edits. | slim-bloat |
+| **check/brake-cue-calibrate.mjs** | Brake-cue calibration (VM): cue call point vs AiDrive.brakeTarget, dry/rain on slicks, conditionCues off/on. | tune-physics |
 | **check/check-gctx.mjs** | Holds `types/game-ctx.d.ts` to the real `G` façade and every module's use of `G` to the `.d.ts` (espree, optional tsc). | check-changes |
 | **check/check-js-types.mjs** | Type-checks the JS files that opt in with `// @ts-check` (JSDoc + the repo's local tsc, noEmit). | check-changes |
 | **check/check-physics.mjs** | Physics stability probes: `check-physics.mjs <bank\|grip\|roadfollow\|steer>` — no-NaN, forward motion, steering authority. | tune-physics |
@@ -345,6 +346,7 @@ The profiler: per-subsystem spans, CPU profile, hitch scan, Perfetto trace, and 
 | **perf/devicefarm-opus-probe.mjs** | A·H18's Opus decodeAudioData probe (#3710): the function devicefarm-iphone.mjs `opus` serialises into Safari. | — |
 | **perf/devicefarm-syslog.mjs** | Device Farm iOS syslog -> WebContent footprint dumps, process memory limits, jetsam/kill and GPU-buffer lines. | — |
 | **perf/diagnostics.mjs** | Bounded diagnostic plans and saved summaries for heap, GPU allocation and VM lifecycle censuses. | renderer-debug / mcp-probe |
+| **perf/first-race-census.mjs** | First-race pipeline census: TLX WebGPU on Lavapipe, one driven first lap; every createRenderPipeline after | — |
 | **perf/garage-census.mjs** | Garage perf census (#B·L24): frame CPU, draws/tris/programs, heap, DOM, Car3D.build ms per body style. | mcp-probe |
 | **perf/idle-pipeline-census.mjs** | Idle pipeline-churn census: three createRenderPipeline per equal idle race window (GAS held, no BOOST). | — |
 | **perf/lib.mjs** | Aggregation + A/B diff for tools/perf/profile.mjs (median of repeats, spread, win/regress/noise verdict). | — |
@@ -644,6 +646,7 @@ Container bootstrap: browsers and the Cursor Cloud install.
 | **env/apex-memory.mjs** | List, show, and retire `.claude/memory` topic files from any host; no assume-unchanged. | agent-config |
 | **env/chat-mcp-service.mjs** | Idempotent private tunnel startup, bounded restart supervision and environment readiness diagnostics. | mcp-probe |
 | **env/cloud-agent-install.sh** | Cursor Cloud dashboard `install`: best-effort mesa/vulkan/xvfb, then `install-browsers.sh`, then the MCP clones. | check-changes |
+| **env/codex-cloud-history.py** | Export archived or selected Codex Cloud transcripts and native subagents through read-only history APIs. | — |
 | **env/configure-chat-mcp.mjs** | Derive a full-gateway private runtime profile from an existing tunnel profile without changing identities. | mcp-probe |
 | **env/ensure-mcp-ready.sh** | MCP bootstrap: Playwright chrome symlink, chrome-devtools clone, browser cache env, mcp-smoke (no Chromium). | check-changes |
 | **env/install-browsers.sh** | Idempotent Chromium bootstrap: reuse an installed browser or choose a writable Playwright cache; --plan never installs. | — |
@@ -707,7 +710,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/junit-failed.mjs** | Spec files with a failed/errored testcase in `artifacts/test-results-*/junit.xml`, for `select-specs --failed-from`. |
 | **ci/launch-gate.mjs** | Quota gate for create_session: saved get_session page -> launch-gate receipt (rate_limit allowed, or typed override). |
 | **ci/merge-gate.mjs** | Landing gate (`gate` check): open, no `hold`, Plan closed, CI green, gen:check + ratchets on the merge, base distance. |
-| **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| no (sync only when you must). |
+| **ci/needs-sync.mjs** | Verdict line: does a PR branch need a deploy-tip sync? conflict \| stale-red \| distance \| no (sync only when you must). |
 | **ci/node-plan.mjs** | Per-PR plan for ci.yml's node-suites job: slow VM scripts run only when pick-tests routes the diff to their group. |
 | **ci/pages-live-sha.sh** | Prints the live site's `apex-sha` (the commit stamped into index.html), or nothing if unreadable; never fails. |
 | **ci/pages-publishable.sh** | Pages monotonic guard: true when the live apex-sha is an ancestor of the given commit, else false. |
@@ -745,8 +748,8 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 |---|---|
 | **assets/procedural-room.example.json** | `tests/unit/free-design-tools.test.mjs` |
 | **check/skill-smoke-recipes.json** | `check/skill-smoke.mjs`, `tests/unit/skill-progressive.test.mjs` |
-| **ci/dispatch.json** | `ci/dispatch.mjs`, `tests/unit/dispatch.test.mjs` |
-| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `lib/generated-paths.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/bash-guard-hardening.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-staging.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
+| **ci/dispatch.json** | `ci/dispatch.mjs`, `environment/plugin-sources/f1-dev-tools/skills/f1-agent-coordination/references/transports.md`, `tests/unit/dispatch.test.mjs` |
+| **environment/.gitignore** | `gen/gen-tools-readme.mjs`, `lib/generated-paths.mjs`, `tests/unit/agent-config.test.mjs`, `tests/unit/cross-tool-guards.test.mjs`, `tests/unit/deploy-staging.test.mjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/desktop-builder-config.test.mjs`, `tests/unit/desktop-notices.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/inputs-hash.test.mjs`, `tests/unit/mobile-config.test.mjs`, `tests/unit/pre-commit-guards.test.mjs`, `tests/unit/publish-evidence.test.mjs`, `tests/unit/queue-depth.test.mjs`, `tests/unit/tools-runnable.test.mjs`, `tests/unit/workflow-harness.test.mjs` |
 | **environment/ENVIRONMENT.md** | `environment/MCP-STARTUP-SKILL.md`, `environment/bind-canonical.sh`, `environment/plugin-sources/f1-cloud-mcp/skills/f1-cloud-mcp/SKILL.md`, `environment/plugin-sources/f1-dev-tools/skills/f1-dev-tools/references/environment.md` |
 | **environment/MCP-STARTUP-SKILL.md** | `environment/ENVIRONMENT.md`, `environment/bind-canonical.sh`, `environment/install-environment.sh` |
 | **environment/PLUGIN-BUILD.md** | `environment/bind-canonical.sh` |
@@ -774,7 +777,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **mcp/apex-tools-mcp.json** | `manifest.cjs`, `tests/unit/agent-surface.test.mjs`, `tests/unit/apex-tools-mcp.test.mjs` |
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-transport.test.mjs` |
 | **perf/baselines/vm-alloc.json** | `perf/vm-alloc-census.mjs`, `tests/unit/perf-vm-alloc-budget.test.mjs` |
-| **shot/scenery-locations.json** | `ci/deploy.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
+| **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/dijon-clips-coplanar.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |

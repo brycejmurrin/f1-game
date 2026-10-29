@@ -9,8 +9,8 @@ const QualiNet = (function () {
   // hidden tab keeps the connection (and the 6 s silence timeout) alive but
   // never posts a time. After GATE_TIMEOUT_MS everyone's gate opens and the
   // missing seat is gridded from the model; the HOST may skip the wait earlier,
-  // after OVERRIDE_AFTER_MS ("START ANYWAY"). WAIT_MS is the same bound under
-  // the Flow B name (MENU leave / unit harness).
+  // after OVERRIDE_AFTER_MS ("START ANYWAY"). create() exposes WAIT_MS as the
+  // same bound under the Flow B name (MENU leave / unit harness).
   const OVERRIDE_AFTER_MS = 15000;
   const GATE_TIMEOUT_MS = 60000;
   const WAIT_MS = GATE_TIMEOUT_MS;
@@ -254,6 +254,8 @@ const QualiNet = (function () {
     };
   }
 
-  return { create, WAIT_MS, GATE_TIMEOUT_MS, OVERRIDE_AFTER_MS };
+  // Module surface is create only — WAIT_MS lives on the instance; the other
+  // two timeouts are internal (no QualiNet.X reader outside this file).
+  return { create };
 })();
 Object.freeze(QualiNet);
