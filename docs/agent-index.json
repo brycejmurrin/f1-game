@@ -3928,6 +3928,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/damage-handling.js",
+      "global": "DamageHandling",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/damage.js",
       "global": "Damage",
       "roster": "LAZY_RACE_SESSION"
@@ -3986,6 +3991,11 @@
       "path": "js/race/pace-math.js",
       "global": "PaceMath",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/parc-ferme.js",
+      "global": "ParcFerme",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/pit-geom.js",

@@ -461,6 +461,7 @@ async function precacheAssetLists() {
     // LAZY_RACE_SESSION — pit/radio/reliability behind startRace (title boots stub)
     "js/race/reliability.js",
     "js/race/damage.js",
+    "js/race/damage-handling.js",
     "js/race/duel.js",
     "js/race/session-records.js",
     "js/race/pit-geom.js",
@@ -476,6 +477,7 @@ async function precacheAssetLists() {
     "js/race/jump-start-penalty.js",
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
+    "js/race/parc-ferme.js",
     "js/race/cooldown-lap.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",

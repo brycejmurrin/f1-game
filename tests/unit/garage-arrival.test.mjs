@@ -1279,3 +1279,10 @@ test('a slow entry frame or a short hitch cannot skip the arrival (#3511 review)
   assert.ok(arrival.state.seconds <= 0.1 + 2.5 + 1e-9, `hitch credited ${arrival.state.seconds}s`);
   assert.equal(arrival.state.active, true);
 });
+
+test('a covered PREP menu with no owed warm frames still presents for a queued warm of the current menu world', () => {
+  const body = introGameSource.slice(introGameSource.indexOf('function render(dt) {'));
+  const q = body.indexOf('const warmQueuedHere = !!(track && menuWorld() && gfx.warmQueued && gfx.warmQueued());');
+  const guard = body.indexOf('if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;');
+  assert.ok(q > 0 && guard > q && body.indexOf('!(gfx.warmQueued && gfx.warmQueued()) && --_menuGate.warm === 0') > guard);
+});
