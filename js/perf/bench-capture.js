@@ -337,7 +337,8 @@ const BenchCapture = (function () {
   }
   function clearCrumb() { safe(() => { const s = typeof GameStore !== "undefined" && GameStore.store; if (s) s.rawDel(CRUMB); else localStorage.removeItem(CRUMB); }, null); }
 
-  return { VERSION, CRUMB, CAP, GAPS, sampleLogs, gapStats, passTimes, compileStats, budget, clean,
+  // GAPS / clean stay module-local (gapStats + log/error paths use them; no external callers).
+  return { VERSION, CRUMB, CAP, sampleLogs, gapStats, passTimes, compileStats, budget,
     legStart, step, legEnd, recover, active: () => !!_leg };
 })();
 

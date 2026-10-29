@@ -492,6 +492,6 @@ const Broadcast = (function () {
     return { start, stop, tick, refresh, onCut, manual, setAuto, setLocked, resetTiming, autoOn, status, isOn: () => on };
   }
 
-  return { create, towerAt, towerSample, crossAt, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S, MANUAL_S };
+  return { create, towerAt, towerSample, battles, nextEvent, pipPick, shotFor, fmtGap, SHOTS, SHOT_MIN_S, SHOT_MAX_S };
 })();
 Object.freeze(Broadcast);

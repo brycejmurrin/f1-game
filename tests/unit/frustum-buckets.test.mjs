@@ -167,7 +167,11 @@ test("radialCulled: the hard radius always wins, and no fog is no fog cull", () 
     assert.equal(culled(box(5000, 0.5), 0, fog), false, "no density: nothing culled without a hard radius");
     assert.equal(culled(box(5000, 0.5), 900, fog), true, "…and the hard radius alone with one");
   }
-  assert.equal(Frustum.FOG_CULL_FD, 3, "exp(-9): 99.99 % fogged at the cull");
+  // FOG_CULL_FD (= 3) is module-local: at density 0.01 the eye-level fog wall
+  // is r = 3 / 0.01 = 300 m. box(x) centres at x with half-width 10, so the
+  // nearest face is x - 10 — match the tall/low fixture convention (near = r + 10).
+  assert.equal(culled(box(300 + 10 + 1, 0.5), 0, [0.01, 0]), true, "past 3/dens at eye level");
+  assert.equal(culled(box(300 + 10 - 1, 0.5), 0, [0.01, 0]), false, "inside 3/dens at eye level");
 });
 
 test("every backend's chunk loop culls through radialCulled, and game.js feeds it the fog the shader renders", () => {

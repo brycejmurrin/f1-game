@@ -28,6 +28,23 @@ else
   status+=("node_modules: fresh")
 fi
 
+# THE COMMIT GATE IS GIT'S HOOK (2026-10-28, Bryce: "Yes, split it"):
+# .githooks/pre-commit runs test:guards for every host, so it must be armed even
+# when node_modules was fresh and npm's "prepare" did not run. RELATIVE, so each
+# linked worktree runs its own tree's copy (an absolute path into the main
+# checkout ran ITS hook for every worktree; red-team R15). bash-guard.sh refuses
+# an agent's own core.hooksPath write; this hook is the sanctioned setter.
+if [ -f .githooks/pre-commit ]; then
+  hp=$(git config --get core.hooksPath 2>/dev/null || true)
+  if [ "$hp" != ".githooks" ]; then
+    if git config core.hooksPath .githooks 2>/dev/null; then
+      status+=("hooksPath: .githooks (was ${hp:-unset})")
+    else
+      status+=("hooksPath: FAILED to set .githooks (${hp:-unset}) — commits will be refused; run npm run prepare")
+    fi
+  fi
+fi
+
 # Reuse the same executable as the harness and MCP wrapper, including system
 # Chromium on PATH. The installer chooses a writable cache if none is present.
 CHROMIUM="$(node "$ROOT/tools/lib/chromium-path.mjs" --path 2>/dev/null || true)"

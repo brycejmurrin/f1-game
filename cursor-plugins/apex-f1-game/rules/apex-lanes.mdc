@@ -13,4 +13,5 @@ The contract is `docs/WORKERS.md` (one session, one issue, one PR); this rule on
   second hand-off format.
 - Subsystem boundaries follow the issue's `area:*` label: UI chrome (menus, HUD, garage sheets) vs car meshes and
   liveries vs track scenery vs perf. A path in an OPEN PR's diff belongs to that PR (AGENTS.md §Git branch & deploy).
-- GitHub lands PRs (`land` label, `land.yml`); no agent merges or arms. Model Auto/`default` only.
+- GitHub lands PRs (`land` label, `land.yml`); no agent merges or arms. Model:
+  `composer-2.5` routine; Grok 7 hard only (slug at launch); never `default`/Auto.

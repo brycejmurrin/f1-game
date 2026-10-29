@@ -272,10 +272,11 @@ const ResultsCam = (function () {
     };
   }
 
+  // ORBIT_RADIUS / ORBIT_HEIGHT / HIGHLIGHT_* / FRAME_DT / enabled /
+  // chequeredExtra stay module-local — no external readers (tests pin
+  // create / orbitPose / highlightsReel / CHEQ_S / ORBIT_PERIOD_S).
   return {
-    create, CHEQ_S, ORBIT_PERIOD_S, ORBIT_RADIUS, ORBIT_HEIGHT,
-    HIGHLIGHT_CLIP_S, HIGHLIGHT_MAX_S, FRAME_DT,
-    enabled, chequeredExtra, orbitPose, highlightsReel,
+    create, CHEQ_S, ORBIT_PERIOD_S, orbitPose, highlightsReel,
   };
 })();
 Object.freeze(ResultsCam);

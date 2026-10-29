@@ -15,6 +15,21 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
 - **`dispatch:pause` stops launches, not workers.** A running worker carries on to `land` or its cap; the label
   changes nothing for it. A session Bryce starts by hand may still take a `ready` issue.
 
+## Issue dependencies
+
+For an issue blocked by another issue, record the relationship with GitHub's native
+`GET` / `POST /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by` REST API.
+Read both issue scopes and existing relationships first; the POST body takes the blocking issue's numeric
+`id` as `issue_id`, not its issue number. Add only a real prerequisite, not a test-only relationship.
+The authenticated cloud route was verified on 2026-10-29: #3971 is blocked by #1578 (HTTP 201 and GET readback).
+
+The native relation records the issue-to-issue dependency. Keep the `blocked` label as a compatibility
+projection while the dispatcher and ready search above still filter labels; neither reads native blockers.
+The label also covers gates without a blocking issue, such as an explicit maintainer deferral. Check the
+actual prerequisite before removing a stale label. Do not replace complete label lists or remove another
+owner's relationship merely to make an issue launchable. Evidence and reproducible counts:
+[the two-week backlog check-in](notes/AGENT-WORK-TRACKING-2026-10-14.md).
+
 ## The contract
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. If an older claim comment
@@ -91,7 +106,7 @@ starts from this block and the Plan; it reads nothing else.
 |---|---|---|
 | `ready` | issue | backlog, unclaimed |
 | `claimed` | issue | a worker owns it; the claim comment names the session |
-| `blocked` | issue | waits on another issue (`Blocked by #n`) |
+| `blocked` | issue | dispatcher/search projection of an open native dependency, or a documented non-issue gate |
 | `needs-decision` | issue, PR | waits on Bryce; the options are in a comment |
 | `priority` | issue, PR | Bryce's one steering word: launched or landed first |
 | `run-ci` | draft PR | run the fast tier on the draft |
@@ -116,11 +131,14 @@ dispatcher) until a sync job exists again.
 script cannot call the session tools, so it only PLANS: GitHub writes (labels, launch comments, the Board
 comment) happen with `--apply`, and every session action is printed as a `CREATE_SESSION <json>` or
 `NUDGE_SESSION <id> <message>` or `ARCHIVE_SESSION <id>` line that the running agent executes (`send_message`,
-`archive_session`). One cycle, in order: `list_sessions` (every page,
-saved for `--sessions`) → `get_session` (its `rate_limit_info.status` is `--quota`) → `dispatch.mjs --apply` → per
+`archive_session`). One cycle, in order: `dispatch.mjs --children` → `get_session` for every named child
+(save each result for `--sessions`) → `get_session` without an id (its `rate_limit_info.status` is `--quota`)
+→ `dispatch.mjs --apply` → per
 `CREATE_SESSION` line: `get_session` (must complete; `launch-gate.py` refuses `create_session` without that fresh
 quota receipt) → `create_session` → run the printed `RECORD_LAUNCH` line, which posts the launch comment after the
-launch. Live workers are `role:worker` sessions that are RUNNING or WORKING; nothing else counts against the caps.
+launch. Live workers are `role:worker` sessions that are RUNNING or WORKING, plus recent launch comments
+whose sessions are not represented in the fetched records; those claims count until `launchClaimHours` expires
+or the session is known to have ended. The script's header holds the exact cycle and launch-gate commands.
 
 It runs in ONE persistent session per Claude account, woken hourly by a scheduled task bound to that session. A
 fresh scheduled session (`create_new_session_on_fire`) lacks `get_session`, `list_sessions` and `create_session`,
@@ -130,18 +148,20 @@ comment is the lock (younger than `launchClaimHours` = a live launch), and each 
 archive scope are its own; one account cannot archive or message the other's sessions. Its rules:
 
 1. A `ready` issue with no `claimed`, `blocked` or `needs-decision` gets one worker (`priority` first), up to the
-   caps, when the account's quota allows. The script reads one page of 100 open issues (a known gap; a hand
-   search with `search_issues` sees them all). Landing backpressure: while `landQueueMax` (tools/ci/dispatch.json,
+   caps, only when the account's quota is `allowed`; `allowed_warning`, rejected or unknown quota launches nothing.
+   The script paginates list endpoints in pages of 100, capped at 50 pages. Landing backpressure: while `landQueueMax` (tools/ci/dispatch.json,
    15) or more open non-draft PRs carry `land`, it starts no issue worker and records one skip line ("issue
    launches paused: N PRs waiting to land"); rules 2 and 3 still launch, since they drain the queue.
 2. An open PR whose `updated_at` is older than 2 h (6 h for `lane:codex`), or that already carries `needs-owner`
    (its worker stopped at the cap: no 2 h wait), with no `hold` or `needs-decision`, gets `needs-owner` and ONE
    takeover worker launched with `CONTINUE PR #<n>` (contract step 8). Never re-owned: a
-   `land` PR with no red check, no failed (or > 2 h pending) `gate` status and no conflict (GitHub is landing it),
+   `land` PR with no red check, no failed (or stale pending) `gate` status and no conflict (GitHub is landing it;
+   `dispatch:merge-pause` makes a pending gate an expected wait),
    a PR a RUNNING or WORKING `role:worker` session names, and bot PRs.
 3. When the latest COMPLETED `pages.yml` run on the deploy branch is red, it labels the Board `deploy:red` and
    launches one fixer unless an open PR already carries `deploy:red`.
-4. A session whose PR merged or closed more than `archiveAfterMinutes` (tools/ci/dispatch.json) ago is archived. Never archived: a session tagged
+4. A session whose every referenced PR and issue is known closed, with the youngest closure more than
+   `archiveAfterMinutes` (tools/ci/dispatch.json) ago, is archived. Never archived: a session tagged
    `no-archive` or `role:dispatcher`, an untagged one, one without a claim comment, and one that is RUNNING, WORKING
    or BLOCKED.
 5. A child that is BLOCKED, REVIEW_READY or idle for 20 min, whose PR or issue is open and not labelled `land`,

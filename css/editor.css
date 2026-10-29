@@ -660,7 +660,7 @@
 }
 
 /* The editor follows the workflow, while collection and help get full pages. */
-#trackdesigner [data-role="mode-bar"] { display: flex; flex-direction: row; align-items: center; gap: calc(var(--gap) / 2); min-width: 0; }
+#trackdesigner [data-role="mode-bar"] { display: flex; flex-direction: row; align-items: center; gap: calc(var(--gap) / 2); }
 #trackdesigner [aria-label="Designer mode"] { flex: 1; display: flex; flex-wrap: nowrap; }
 #trackdesigner [aria-label="Designer mode"] > button { flex: 1 0 auto; white-space: nowrap; }
 #trackdesigner [aria-label="Designer mode"] > button::before { content: attr(data-step); color: var(--dim); margin-inline-end: calc(var(--gap) / 3); }
