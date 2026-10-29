@@ -119,6 +119,6 @@ var BattleEarcon = (function () {
     }
     return Object.freeze({ prepare, ready, busy, play, stop });
   }
-  return Object.freeze({ create, select, pcmFor, stopAll, KEYS });
+  return Object.freeze({ create, select, stopAll });
 })();
 Object.freeze(BattleEarcon);

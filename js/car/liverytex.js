@@ -2663,14 +2663,16 @@ const LiveryTex = (function () {
   // contrast/inkOn are exported for the GARAGE crest wall (js/garage/scene.js),
   // which has to make the same "is this mark legible on this field, and if not
   // what ink separates it" decision buildAtlas makes for the car.
+  // CREST_DISC stays internal: crestKeepsPlate / markPalette / crestExtent and
+  // LiveryCrests.create consume it; nothing outside this file reads LiveryTex.CREST_DISC.
   return { SIZE, SIZE_H, atlasDiv, playerHiResDeferred, IS_MOBILE, IS_PHONE, atlasMobile, REGIONS, SPONSORS, SPONSOR_PACKS, buildAtlas, drawCrest, markBase, markPalette,
            MARK_FLOOR, numCrestBox, paintTeamMark, paintSwatch, swatchCanvas, swatchStats,
            drawLogoImage, contrast, inkOn, onMarkChange, markSlots, setTeamLogo, LOGOS,
            markOnField, ALT_INSIDE, sunColour, FLANK, FLANK_H, FLANK_MARK, flankMarkStation, FLANK_SEEN,
-           CRESTS, CREST_DISC, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
+           CRESTS, crestKeepsPlate, CREST_MARGIN, STROKE_MIN, TEXT_MIN,
            NUM_FONT_IDS, SPONSOR_PACK_IDS, TAIL_STYLE_IDS, tailStyleOf, CREST_STYLE_IDS: EMBLEM_IDS, CREST_TONE_IDS, CREST_FRAME_IDS, FIN_BADGE_IDS, SPINE_LOGO_IDS, SPINE_SIDE_IDS,
            FILL_SURFACES, fillInert,
-           airboxMeshColour, resolveFinPaint,
+           airboxMeshColour, resolveFinPaint, driverCode,
            hasFlankBull: (teamId) => !!bullPath(teamId) };
 })();
 if (typeof window !== "undefined") window.LiveryTex = LiveryTex;

@@ -600,6 +600,67 @@
     // RETURNED n is the contract (every caller loops j < n), entries past it are
     // stale references to a live world's chunks, and free() still empties it.
     const _visList = [];
+    const _ic = new Int32Array(1024);
+    // One geometry per pass slot (0 main, 1 mirror) holding the visible chunks'
+    // indices. The chunks already share vertex attributes, so concatenating
+    // indices draws the same triangles. A repeated visible set returns the
+    // cached geometry and does not touch the index buffer.
+    function mergeVisible(mesh, n, slot) {
+      const vis = _visList;
+      if (!(n > 1) || !mesh || !mesh.chunks) return null;
+      const slots = mesh._tlxMv || (mesh._tlxMv = []);
+      const si = slot | 0;
+      let s = slots[si];
+      if (s && s.n === n) {
+        let same = true;
+        for (let i = 0; i < n; i++) if (s.ids[i] !== vis[i]) { same = false; break; }
+        if (same) return s.geo;
+      }
+      let cnt = 0, Ctor = null;
+      const ic = n <= _ic.length ? _ic : new Int32Array(n);
+      for (let i = 0; i < n; i++) {
+        const ix = vis[i] && vis[i].geo && vis[i].geo.index, a = ix && ix.array;
+        if (!a) return null;
+        const c = ix.count != null ? ix.count : (a.length / (ix.itemSize || 1));
+        ic[i] = c; cnt += c;
+        if (!Ctor || a.BYTES_PER_ELEMENT > Ctor.BYTES_PER_ELEMENT) Ctor = a.constructor;
+      }
+      if (!s) s = slots[si] = { n: 0, ids: [], geo: null, arr: null };
+      const g = s.geo || (s.geo = new THREE.BufferGeometry());
+      if (!g.boundingSphere) {
+        g.boundingSphere = new THREE.Sphere();
+        const src = vis[0].geo;
+        for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
+      }
+      if (!s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor) {
+        s.arr = new Ctor(cnt);
+        g.setIndex(new THREE.BufferAttribute(s.arr, 1));
+      }
+      let o = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+      const dst = s.arr;
+      for (let i = 0; i < n; i++) {
+        const ch = vis[i], a = ch.geo.index.array, c = ic[i];
+        if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
+        else for (let k = 0; k < c; k++) dst[o + k] = a[k];
+        o += c; s.ids[i] = ch;
+        const mn = ch.min, mx = ch.max;
+        if (!mn || !mx) continue;
+        if (mn[0] < x0) x0 = mn[0]; if (mn[1] < y0) y0 = mn[1]; if (mn[2] < z0) z0 = mn[2];
+        if (mx[0] > x1) x1 = mx[0]; if (mx[1] > y1) y1 = mx[1]; if (mx[2] > z1) z1 = mx[2];
+      }
+      s.n = n;
+      g.setDrawRange(0, o);
+      const attr = g.index, r = attr.__tlxRange || (attr.__tlxRange = { start: 0, count: 0 });
+      r.count = o;
+      const ur = attr.updateRanges || (attr.updateRanges = []);
+      if (!(ur.length === 1 && ur[0] === r)) { ur.length = 0; ur.push(r); }
+      attr.needsUpdate = true;
+      const bs = g.boundingSphere, cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5, cz = (z0 + z1) * 0.5;
+      const ct = bs.center || (bs.center = new THREE.Vector3());
+      ct.x = cx; ct.y = cy; ct.z = cz;
+      bs.radius = Math.hypot(x1 - cx, y1 - cy, z1 - cz) || 0;
+      return g;
+    }
     function cull(mesh, vp, eye, cullDist, fog) {
       const chunks = mesh && mesh.chunks;
       if (!chunks || !vp) return 0;
@@ -689,6 +750,17 @@
 
     function free(mesh) {
       if (!mesh) return;
+      const mv = mesh._tlxMv;
+      if (mv) {
+        mesh._tlxMv = null;
+        for (let i = 0; i < mv.length; i++) {
+          const g = mv[i] && mv[i].geo;
+          if (!g) continue;
+          // Vertex attributes are the chunks'. Drop only this geometry's index.
+          for (const k in g.attributes) delete g.attributes[k];
+          try { g.dispose(); } catch (_) { /* already gone */ }
+        }
+      }
       _visList.length = 0;   // the last cull's list may be this mesh's chunks: a dropped world must not sit in module scratch
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
@@ -704,7 +776,7 @@
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }
-    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free };
+    return { build, prepareConfig, cull, visList: _visList, releaseMirrors, free, mergeVisible };
   }
 
   // THE ROAD SPLIT (B·H10, docs/notes/LIVE-FRAME-H10-2026-10-20.md). TLX draws the road as ONE mesh

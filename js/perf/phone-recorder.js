@@ -512,7 +512,7 @@ const PhoneRecorder = (function () {
   init();
 
   return {
-    KEY, SCHEMA, QUICK_MS, HOWTO_AB, HOWTO_GPU, SAMPLE_MS, WINDOW_FRAMES, CADENCE_FRAMES, MAX_SAMPLES, HOWTO,
+    SCHEMA, SAMPLE_MS, WINDOW_FRAMES, CADENCE_FRAMES, MAX_SAMPLES, HOWTO,
     create, liveEnv, numericLeaves, fileName, share, copy, download, mount,
     start: () => { const ok = recorder().start(); kick(); paintBadge(); paintUI(); return ok; },
     stop: () => { const ok = recorder().stop(); paintBadge(); paintUI(); return ok; },

@@ -741,7 +741,7 @@ var RadioVoice = (function () {
       current = tok;
       if (GameAudio && GameAudio.setRadioDuck) GameAudio.setRadioDuck(true);
       if (!audition) armSquelch(p);
-      deadline = setTimeout(stop, p.leadMs + p.budgetMs + 400);
+      deadline = setTimeout(stop, p.leadMs + p.budgetMs + PACK_STOP_TAIL_S * 1000);
       return true;
     }
     function speakPlanned(p) {
@@ -1024,9 +1024,11 @@ var RadioVoice = (function () {
     };
   }
 
+  // hashSeed / PACK_STOP_TAIL_S stay module-local (speakPack deadline +
+  // radioBand/squelchPlan seeds); no outside caller reaches for them.
   return { create, inert, plan, spokenLang, hasVoiceFor, speakable, cardDurS, cardLifeS, PACK_VOICE, estimate, toneFor, SPEAKERS, TONE, SAMPLE, REMOTE_OK,
            PITCH_MIN, PITCH_MAX, RATE_MIN, RATE_MAX, LEAD_RESERVE_S, WORDS_PER_S,
-           ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S, PACK_STOP_TAIL_S,
-           radioBand, squelchPlan, hashSeed, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
+           ANN_CARD_PAD_S, ANN_CARD_MIN_S, RADIO_LEAD_S, CONTROL_LEAD_S,
+           radioBand, squelchPlan, RADIO_LO, RADIO_HI, SQUELCH_MS_MIN, SQUELCH_MS_MAX };
 })();
 Object.freeze(RadioVoice);

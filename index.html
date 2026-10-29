@@ -2165,7 +2165,7 @@
 <!-- main menu. data-intro ships in the shell so the first paint is already
      the title intro's start state; js/ui/title-fx.js takes it off after one
      pass (css/menus.css THE TITLE INTRO). -->
-<div id="overlay" class="grain" data-intro>
+<div id="overlay" class="grain" data-intro role="main" aria-label="Title menu">
   <!-- THE TITLE CAR — decorative, static, and deliberately not a renderer.
        #game is visibility:hidden on this screen, so the title costs no GL boot;
        drawing the hero in SVG keeps it that way. STATIC because WCAG SC 2.2.2
@@ -2301,9 +2301,9 @@
          the chrome rooms (standings + controller when shown). -->
     <div id="menu-explore" class="balanced-row">
     <button id="mb-watch" class="bigbtn" type="button" aria-label="Watch — Broadcast / real races"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="20" height="15" x="2" y="3" rx="2" ry="2"/><polyline points="8 21 12 17 16 21"/></svg><span>WATCH <span class="mb-sub" data-i18n="title.watch.sub">BROADCAST / REAL RACES</span></span></button>
-    <button id="mb-practice" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M18 12A6 6 0 1 0 6 12A6 6 0 1 0 18 12Z M14 12A2 2 0 1 0 10 12A2 2 0 1 0 14 12Z"/></svg><span>PRACTICE <span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
-    <button id="mb-photo" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z M15 13a3 3 0 1 0-6 0a3 3 0 1 0 6 0z"/></svg><span>PHOTO STUDIO <span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
-    <button id="mb-garage" class="bigbtn" type="button"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>GARAGE <span class="mb-sub">SETUP &amp; LIVERY</span></span></button>
+    <button id="mb-practice" class="bigbtn" type="button" aria-label="Practice — Goals &amp; checkpoints"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12A10 10 0 1 0 2 12A10 10 0 1 0 22 12Z M18 12A6 6 0 1 0 6 12A6 6 0 1 0 18 12Z M14 12A2 2 0 1 0 10 12A2 2 0 1 0 14 12Z"/></svg><span>PRACTICE <span class="mb-sub">GOALS &amp; CHECKPOINTS</span></span></button>
+    <button id="mb-photo" class="bigbtn" type="button" aria-label="Photo Studio — Capture &amp; backgrounds"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z M15 13a3 3 0 1 0-6 0a3 3 0 1 0 6 0z"/></svg><span>PHOTO STUDIO <span class="mb-sub">CAPTURE &amp; BACKGROUNDS</span></span></button>
+    <button id="mb-garage" class="bigbtn" type="button" aria-label="Garage — Setup &amp; livery"><svg class="btn-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg><span>GARAGE <span class="mb-sub">SETUP &amp; LIVERY</span></span></button>
     </div>
     <!-- SECONDARY: everything that is not a way to play. Half-height,
          two across, so the rooms never compete with the modes for the eye. -->
@@ -3713,6 +3713,7 @@
 <script defer crossorigin="anonymous" src="js/track/circuit-meta.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-stub.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/session-entry.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/session-phys.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/circuit-elevations.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/tracks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/track/build-client.js?v=dev"></script>
@@ -3733,6 +3734,7 @@
 <script defer crossorigin="anonymous" src="js/input/bindings.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/pad-menu.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/haptics.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/input/pedal-travel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/hold-buttons.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/controller-profiles.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/input/input.js?v=dev"></script>
@@ -3760,12 +3762,14 @@
 <script defer crossorigin="anonymous" src="js/lighting/lamp-bake.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/lighting.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/lighting/profiles.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/car/cockpit-rig.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/car/car-mesh.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/experience.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-prims.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-equipment.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-live.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/scene-dress.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/garage/crew-draw.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-motion.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-service.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/garage/crew-choreo.js?v=dev"></script>
@@ -3794,12 +3798,14 @@
 <script defer crossorigin="anonymous" src="js/physics/wheel-state.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/vehicle.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/player-forces.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/physics/ai-strategy.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-drive.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-band.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/physics/ai-corridor.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/offsets.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/extra-rigs.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-sight.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/flyby-clear.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/flyby-seq.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-avoid.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/trackside.js?v=dev"></script>
@@ -3817,6 +3823,7 @@
 <script defer crossorigin="anonymous" src="js/ui/flags.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/save-health.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/select-screen.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/ui/loading-card.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/loading-screen.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/survey-hud.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/scroll-fade.js?v=dev"></script>
@@ -3837,6 +3844,7 @@
 <script defer crossorigin="anonymous" src="js/fx/grade-tint.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/skidmarks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/fx/car-fx.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/wx-hash.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/storm.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/wind.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/race-control.js?v=dev"></script>
@@ -3853,13 +3861,17 @@
 <script defer crossorigin="anonymous" src="js/race/tv-graphics.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/broadcast.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/overlay/render.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/overlay/bridge.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/overlay/publisher.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/director.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/watch-transport.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-replay.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/race/real-race-pace.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/real-race.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/rain-cells.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/weather-arc.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/race/forecast.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/photo-looks.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-kit.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/free-cam.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/photo-cam.js?v=dev"></script>
@@ -3888,9 +3900,8 @@
 <script defer crossorigin="anonymous" src="js/camera/cockpit-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-finishes.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cockpit-preview.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-chase.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-broadcast.js?v=dev"></script>
-<script defer crossorigin="anonymous" src="js/camera/drive-onboard.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/fov-mode.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/drive-lens.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/feel.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/driving-line-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/ui/cvd-palette.js?v=dev"></script>
@@ -3921,7 +3932,9 @@
 <script defer crossorigin="anonymous" src="js/perf/bench-run.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/cam-comfort.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/fov-fit.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/vantage-ride.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/vantage.js?v=dev"></script>
+<script defer crossorigin="anonymous" src="js/camera/cam-picker.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/camera/mode-switch.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-opts.js?v=dev"></script>
 <script defer crossorigin="anonymous" src="js/xr/xr-boot.js?v=dev"></script>

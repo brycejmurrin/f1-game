@@ -363,6 +363,6 @@ const TrackCodec = (function () {
     return null;
   }
 
-  return { MAGIC, VERSION, VERSION_PROPS, FLAG, ZONE_CAPS, MAX_CODE, MAX_BYTES, KERB_STYLES, surfaceByte, encodeBytes, decodeBytes, encode, decode, inflate, b64url, unb64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
+  return { MAGIC, FLAG, ZONE_CAPS, surfaceByte, encodeBytes, decodeBytes, encode, decode, inflate, b64url, fnv16, shareUrl, fromHash, withoutTrack, fileEnvelope, fromFile, FILE_FORMAT };
 })();
 Object.freeze(TrackCodec);

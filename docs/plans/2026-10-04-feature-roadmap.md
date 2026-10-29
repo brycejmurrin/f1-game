@@ -57,7 +57,7 @@ other large UI work.
 | Pit strategy panel and rival windows | [pit guidance plan](../research/PIT-GUIDANCE-STRATEGY-PLAN-2026-09.md): written, unbuilt. Tyre severity is authored for only ~7 of 52 circuits ([strategy and career depth](2026-09-30-strategy-career-depth.md)), which caps how good strategy can be |
 | Mechanics backlog: brake temperature and fade, true lock-up and wheelspin, handling damage | [mechanics survey](../research/MECHANICS-OPPORTUNITY-SURVEY-2026-09-14.md), [racing depth](2026-09-15-racing-depth.md) |
 | Distinct AI personalities and visible mistakes | [AI personality plan](2026-09-30-ai-personality.md). Check what already merged before planning |
-| Manual pit-stop mini-game; cooldown lap, parc fermé and podium flow | Repeatedly requested in the EA F1 25 forum wishlist (seen as a search snippet only) |
+| Manual pit-stop mini-game; cooldown lap, parc fermé and podium flow | Cooldown / parc fermé / podium plan: [2026-10-27-cooldown-podium.md](2026-10-27-cooldown-podium.md) (#1584). Manual pit-stop mini-game stays deferred (separate later issue). Wishlist origin: EA F1 25 forum (search snippet only). |
 | Spectate a friend's race | Send only car state over the existing friend connection and render locally |
 | Online play on track-designer circuits | Documented as unsupported in `docs/TRACK-DESIGNER.md` ("Limits", may be stale) |
 | Fair-play online: reduced collisions and a clean-racing score | F1 25's online collisions are a top complaint (secondary source). Plan: [fair-play online](2026-10-19-fair-play-online.md) (#1588) |

@@ -13,7 +13,8 @@ fetched into a private ref when its objects are missing), and every
 first-parent commit in baseline..tip whose author email is not this
 checkout's `user.email`, or whose Claude-Session trailer names another session
 than CLAUDE_CODE_REMOTE_SESSION_ID (every Claude session shares one email), is
-a foreign commit. A branch with no tracking ref
+a foreign commit — except land.yml's AUTO-SYNC: a clean two-parent merge of the
+deploy branch with GitHub's update-branch subject (`_auto_sync`). A branch with no tracking ref
 (a first push) passes; a remote that cannot be read or matched to a configured
 remote passes with a WARNING on stderr. A fetch, pull or merge does not clear the refusal: the next push after
 the owner confirmed the branch, with APEX_FOREIGN_PUSH_OK=1, moves the baseline.
@@ -102,7 +103,7 @@ def foreign_commits(where, remote, branch):
         fetched = True
     try:
         rc, out = _git(where, "log", "--first-parent",
-                       "--format=%H%x09%ae%x09%an%x09%s%x09%(trailers:key=Claude-Session,valueonly,separator=%x20)",
+                       "--format=%H%x09%ae%x09%an%x09%s%x09%P%x09%(trailers:key=Claude-Session,valueonly,separator=%x20)",
                        tip, "^" + base)
     finally:
         if fetched:
@@ -112,9 +113,24 @@ def foreign_commits(where, remote, branch):
     # another session is foreign too (this session: CLAUDE_CODE_REMOTE_SESSION_ID).
     mine = _sid(os.environ.get("CLAUDE_CODE_REMOTE_SESSION_ID"))
     # _git strips the output, so the last row can lose its empty trailer field: pad it back.
-    rows = [(ln.split("\t", 4) + [""])[:5] for ln in out.splitlines() if ln.count("\t") >= 3] if rc == 0 else []
+    rows = [(ln.split("\t", 5) + [""])[:6] for ln in out.splitlines() if ln.count("\t") >= 4] if rc == 0 else []
     return [tuple(r[:4]) for r in rows
-            if r[1].lower() != me or (mine and _sid(r[4]) and _sid(r[4]) != mine)]
+            if (r[1].lower() != me or (mine and _sid(r[5]) and _sid(r[5]) != mine))
+            and not _auto_sync(where, r[0], r[3], r[4])]
+
+
+# land.yml's AUTO-SYNC calls GitHub's update-branch API, which commits a merge of the deploy branch as the token's
+# owner (Bryce), so every auto-synced branch read as foreign and the next push of its owner was refused (#3993, #3964,
+# 2026-10-28). Such a commit is not another session's work: it is a two-parent merge with GitHub's update-branch
+# subject and an empty combined diff (a clean merge; a conflict resolved by hand shows up there and stays foreign).
+DEPLOY_BRANCH = "claude/f1-game-project-26h3ng"   # the same name as shellparse.DEPLOY_BRANCH
+
+
+def _auto_sync(where, sha, subject, parents):
+    if not subject.startswith(f"Merge branch '{DEPLOY_BRANCH}' into ") or len(parents.split()) != 2:
+        return False
+    rc, out = _git(where, "diff-tree", "--cc", "--no-commit-id", "-r", sha)
+    return rc == 0 and out == ""
 
 
 def check(where, remote, branch):

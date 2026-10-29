@@ -24,7 +24,7 @@ export function diagnosticsJobSpec(kind, args, ctx) {
   const { kind: _k, op: _o, ...options } = args;
   return { ...plan, argv: [process.execPath, resolve(ctx.ROOT, 'tools/perf/diagnostics.mjs'), kind, JSON.stringify(options)] };
 }
-export const DIAGNOSTIC_CAPABILITIES = {
+const DIAGNOSTIC_CAPABILITIES = {
   jobs: DIAGNOSTIC_JOB_KINDS,
   memory: 'Post-GC heap/retained track/three object/audio census. At least 3 cycles. Growth is a lead; retaining paths and repeated equivalent lifecycles are needed to establish a leak.',
   runtimeMemory: 'tools/perf/runtime-memory.mjs: feature-detected Runtime.getHeapUsage, Memory.getDOMCounters and Performance.getMetrics on an existing parent-owned CDP session; no forced GC or worker termination.',
