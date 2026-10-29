@@ -4317,6 +4317,7 @@ function stashCtxLostNotice() {
 function quitToMenuAfterCtxLost() {
   clearRaceEntrySoften();
   stashCtxLostNotice();
+  if (gfxContextLost() && typeof GfxEscalation !== "undefined" && GfxEscalation.stashInPageRecoverFlags) GfxEscalation.stashInPageRecoverFlags();
   loadingScreen.stop();
   quitToMenu();
   try {
@@ -4768,7 +4769,7 @@ const _aiWantX = { armed: true, team: null, seat: 0, stats: null, energy: 0, cat
 // PlayerForces.step's ctx, pooled like _wallCtx (updateCar's player bicycle model fills it every step).
 const _pfCtx = { dt: 0, driverDelta: 0, assistDelta: 0, lineDelta: 0, onThrottle: false, throttleLvl: 0, gearMult: 0, deploy: 0, braking: false, axTarget: 0,
   surfaceMu: 0, kerbGrip: 0, bankMu: 0, modsCornering: 0, modsBraking: 1, loadF: 0, loadR: 0, vertLoad: 0, af: 0, ar: 0, sp: 0, steer: 0,
-  weatherGrip: 0, aeroDf: 0, dirtyMul: 0, coastCut: 0, vTopNow: 0, tyres: null };
+  weatherGrip: 0, aeroDf: 0, dirtyMul: 0, coastCut: 0, vTopNow: 0, tyres: null, damage: null };
 const _aiOtPull = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, blockerSpeed: 0, blockerGap: 0, roomL: 0, roomR: 0, other: null, kAhead: 0, lane: 0, freeSpeed: 0, blockerVmax: 0, vTop: 0, blockerAccel: 0, attackQ: 0, toTurnIn: 0, kTurn: 0, calm: 0, roll: 0.5, queueT: 0, trailT: 0 }, ["freeSpeed", "queueT", "kTurn", "trailT"]);
 const _aiDefend = CarFields.warmDoubles({ street: false, traits: null, speed: 0, team: null, seat: 0, stats: null, chaser: false, chaserGap: 0, chaserSpeed: 0, kA: 0, roomL: 0, roomR: 0, other: null, blocker: null, blockerGap: 0, kTurn: 0, toTurnIn: 0, roadL: 0, roadR: 0, x: 0, vTop: 0 }, ["speed", "chaserGap", "chaserSpeed", "kA", "roomL", "roomR", "x", "vTop", "blockerGap", "kTurn", "toTurnIn", "roadL", "roadR"]);
 const _aiBoxed = { contactT: 0, roomL: 0, roomR: 0, blocker: null, blockerGap: 0, street: false };
@@ -6107,16 +6108,16 @@ function updateCarBicycle(c, dt, ranked, S) {
       if (ratio > 1) yawEase = clamp(1 - (ratio - 1) * 0.6, 0.3, 1);
     }
     const assistDelta = -driveTune.ROAD_FOLLOW * (driveTune.WHEELBASE + ASSIST_KUS * c.speed * c.speed * brakeFade) * kPath * yawEase * offAssistFade;
-    // Racing-line slider. TrackLine.at is the AI's line; lineW is 0 on a
-    // straight so the raw offset there is not a target. Front tyre, not c.x.
+    // Racing-line slider. TrackLine.at is the AI's line; lineW (0 on a straight) scales the PULL, never the target:
+    // a target of x·w steered every straight toward the centre at full strength. Front tyre, not c.x.
     let lineDelta = 0;
     if (raceLineAssist !== 0 && track.line) {
       const look = clamp(Math.abs(c.speed) * 0.9, 25, 90);
       const ln = TrackLine.at(track, wrapS(c.s + look));
       const edge = Math.max(0, hw - 0.6);
-      const lineX = clamp(ln.x * ln.w, -edge, edge);
+      const lineX = clamp(ln.x, -edge, edge);
       const Ld = clamp(Math.abs(c.speed) * 1.2, 22, 70);
-      lineDelta = raceLineAssist * LINE_PURSUIT * driveTune.WHEELBASE * 2 * (lineX - c.x) / (Ld * Ld) * offAssistFade;
+      lineDelta = raceLineAssist * LINE_PURSUIT * driveTune.WHEELBASE * 2 * ln.w * (lineX - c.x) / (Ld * Ld) * offAssistFade;
     }
     // delta filled inside PlayerForces after muF (GripSteer caps driverDelta).
     // --- axle geometry and per-axle vertical load. Longitudinal weight transfer
@@ -6162,7 +6163,7 @@ function updateCarBicycle(c, dt, ranked, S) {
     pf.surfaceMu = surfaceMu; pf.kerbGrip = kerbGrip; pf.bankMu = bankMu; pf.modsCornering = mods.cornering; pf.modsBraking = mods.braking;
     pf.loadF = loadF; pf.loadR = loadR; pf.vertLoad = vertLoad; pf.af = af; pf.ar = ar; pf.sp = sp; pf.steer = steer;
     pf.weatherGrip = gmC; pf.aeroDf = aeroDfMult(c); pf.dirtyMul = dirtyAirMul(c.wake || 0, c.speed);
-    pf.coastCut = xCoastCut(c); pf.vTopNow = vT; pf.tyres = tyres;
+    pf.coastCut = xCoastCut(c); pf.vTopNow = vT; pf.tyres = tyres; pf.damage = typeof DamageHandling !== "undefined" ? DamageHandling.forCar(c) : null;   // #1578: null unless the opt-in is ON
     playerForces.step(c, pf);
     if (Wind.latA()) c.vLat += Wind.latA() * vT / VMAX * dt;   // crosswind side force (js/race/wind.js; capped)
     const fx = Math.sin(c.head), fz = Math.cos(c.head);
@@ -7288,7 +7289,9 @@ function render(dt) {
   // in front of the player the instant race settings opens.
   // ...and the garage pre-warm (garagePrewarm): its frames drawn hidden too. A present that only starts a program warm paints nothing — refund that frame (prebuild.js).
   if (menuBlank && _menuGate.garageWarm > 0 && state === "menu") { const owed = _menuGate.garageWarm; _menuGate.garageWarm--; if (renderSetupPreview(dt)) _menuGate.garageReady = true; else if (gfx.warming && gfx.warming()) _menuGate.garageWarm = owed; return; }
-  if (menuBlank && !(track && _menuGate.warm > 0)) return;
+  // A queued rig job of the CURRENT menu world still needs a present to start (awaitIntroWarm waits on it), even with no warm frame owed.
+  const warmQueuedHere = !!(track && menuWorld() && gfx.warmQueued && gfx.warmQueued());
+  if (menuBlank && !(track && _menuGate.warm > 0) && !warmQueuedHere) return;
   // The last hidden warm frame is the one observable "this world has drawn":
   // tools/lib/mem-census.mjs waits on this record (a census taken before it read
   // 10 render objects on llvmpipe, CI run 37330132243), and __apex is off-limits

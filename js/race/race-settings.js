@@ -72,6 +72,26 @@ const RaceSettings = (function () {
       ersRows.push(row);
     }
   }
+  /** DAMAGE (#1578, js/race/damage-handling.js) after RELIABILITY, injected like AI PACE. */
+  function ensureDamageRow($) {
+    if ($("rs-damage") || typeof DamageHandling === "undefined") return;
+    const reliab = $("rs-reliab");
+    if (!reliab || !reliab.parentNode) return;
+    const row = document.createElement("div");
+    row.id = "rs-damage";
+    row.className = "set-row";
+    row.setAttribute("role", "group");
+    row.setAttribute("aria-labelledby", "rs-damage-label");
+    row.innerHTML =
+      '<span class="tune-label" id="rs-damage-label">DAMAGE</span>' +
+      "<div>" +
+      '<button id="rs-damage-prev" type="button" data-step="-1" aria-label="Previous damage mode">&lsaquo;</button>' +
+      '<select id="rs-damage-sel" aria-labelledby="rs-damage-label" aria-describedby="rs-damage-help"></select>' +
+      '<button id="rs-damage-next" type="button" data-step="1" aria-label="Next damage mode">&rsaquo;</button>' +
+      "</div>" +
+      '<p id="rs-damage-help" class="adv-help">DISPLAY shows damage on the HUD only. HANDLING: a broken wing or floor costs your car grip in fast corners, until a pit stop repairs it.</p>';
+    reliab.parentNode.insertBefore(row, reliab.nextSibling);
+  }
   /** WIND (js/race/wind.js, off/real) after DIRTY AIR, injected like AI PACE:
    *  wind moves top speed ±4 km/h and a phone player has no other way off. */
   function ensureWindRow($) {
@@ -109,6 +129,9 @@ const RaceSettings = (function () {
   const duelValue = (getDuel, getDuelLegend) =>
     !getDuel() ? "off" : ((getDuelLegend && getDuelLegend()) || "on");
   const RS_RELIAB = [["off", "OFF"], ["low", "LOW"], ["real", "REAL"]];
+  // DAMAGE (#1578, js/race/damage-handling.js): DISPLAY = the HUD readout only (shipped);
+  // HANDLING = a broken wing/floor or a knocked suspension also costs the player's car grip.
+  const RS_DAMAGE = [["off", "DISPLAY"], ["on", "HANDLING"]];
   // TYRE WEAR (js/physics/tyre-model.js). Same three-rung shape as RELIABILITY
   // and for the same reason — OFF is the shipped default, and the middle rung
   // exists so a player can have the mechanic without it deciding the race.
@@ -194,6 +217,7 @@ const RaceSettings = (function () {
       qualiResults, openQuali, enableTilt, getSteerMode, buildStandings, raceIntro, previewWxPlan,
     } = deps;
     if (typeof EnergyPlan !== "undefined") EnergyPlan.fromStore(store);   // #1580: the stored sector plan, default MANUAL ×3
+    if (typeof DamageHandling !== "undefined") DamageHandling.fromStore(store);   // #1578: the stored DAMAGE choice, default DISPLAY
     const isTimeTrial = () => G.session === "tt";
     const isChampionship = () => G.flow === "season" || G.flow === "career";
     const gridFromQuali = () => (isChampionship() ? SeasonCal.quali() : (G.raceQuali && !isTimeTrial()));
@@ -214,6 +238,7 @@ const RaceSettings = (function () {
       ensureAiPaceRow($);
       ensureWindRow($);
       ensureErsRows($);
+      ensureDamageRow($);
       const qualifies = !isTimeTrial() && !qualiResults() &&
         (isChampionship() ? SeasonCal.qualiNext(G.season) : gridFromQuali());
       const qName = isChampionship() && SeasonCal.qualiLabel ? SeasonCal.qualiLabel(G.season) : "QUALIFYING";
@@ -278,6 +303,7 @@ const RaceSettings = (function () {
       SettingRow.paint("rs-caution", G.cautionInfo().enabled ? "on" : "off", RS_ONOFF);
       $("rs-reliab").hidden = tt;
       SettingRow.paint("rs-reliab", G.raceReliability, RS_RELIAB);
+      if (typeof DamageHandling !== "undefined" && $("rs-damage")) { $("rs-damage").hidden = tt; SettingRow.paint("rs-damage", DamageHandling.isEnabled() ? "on" : "off", RS_DAMAGE); }
       // Hidden in a time trial for the same reason the model forces it off
       // there: a lap against the clock is not a set anybody is asked to manage.
       $("rs-tyres").hidden = tt;
@@ -444,6 +470,7 @@ const RaceSettings = (function () {
       });
       wire("rs-caution", () => (G.cautionInfo().enabled ? "on" : "off"), (v) => setCautionEnabled(v === "on"));
       wire("rs-reliab", () => G.raceReliability, (v) => { G.raceReliability = v; store.set("reliability", v); });
+      if (typeof DamageHandling !== "undefined" && $("rs-damage")) wire("rs-damage", () => (DamageHandling.isEnabled() ? "on" : "off"), (v) => { DamageHandling.setEnabled(v === "on"); store.set("damageHandling", v === "on"); });
       wire("rs-tyres", () => G.raceTyreWear, (v) => { G.raceTyreWear = v; });
       ersRows.forEach((row, i) => wire(row.id, () => EnergyPlan.plan()[i], (v) => {
         const p = EnergyPlan.plan(); p[i] = v;

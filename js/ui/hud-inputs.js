@@ -180,10 +180,11 @@ const HudInputs = (function () {
   }
   function mountReview() {
     if (review || !doc || !doc.querySelector) return !!review;
-    const host = doc.querySelector("#pausemenu .sheet-body");
+    // A RACE TOOLS tile beside REWIND & RETRY (css/experience.css), the sheet body when there is no tray
+    const tray = doc.querySelector("#pausemenu #pm-quick-doors"), host = tray || doc.querySelector("#pausemenu .sheet-body");
     if (!host) return false;
     review = doc.createElement("details"); review.className = "input-review";
-    const summary = doc.createElement("summary"); summary.className = "adv-more-btn"; summary.textContent = I18n.t("hud.inputs.reviewTitle", null, "REVIEW INPUTS");
+    const summary = doc.createElement("summary"); if (!tray) summary.className = "adv-more-btn"; summary.textContent = I18n.t("hud.inputs.reviewTitle", null, "REVIEW INPUTS");
     reviewNote = doc.createElement("p"); reviewNote.className = "adv-help";
     reviewCanvas = doc.createElement("canvas"); reviewCanvas.width = 640; reviewCanvas.height = 180; reviewCanvas.className = "input-review-canvas";
     reviewCanvas.setAttribute("role","img");

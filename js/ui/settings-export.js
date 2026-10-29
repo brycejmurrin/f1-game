@@ -270,6 +270,7 @@ const SPEC = [
   { k: "ersPlan", lane: "json", group: "driving", def: ["manual", "manual", "manual"], src: "js/race/race-settings.js ERS SECTOR rows → EnergyPlan (#1580)",
     // Self-contained (EnergyPlan.POLICIES' three names): settings-export loads without the race modules.
     normalize: (v) => (Array.isArray(v) && v.length === 3 && v.every((p) => p === "manual" || p === "deploy" || p === "save") ? v.slice() : undefined) },
+  { k: "damageHandling", lane: "json", group: "driving", def: false, src: "js/race/race-settings.js DAMAGE row → DamageHandling.setEnabled (#1578)" },
   { k: "raceGrid", lane: "json", group: "driving", def: "random", src: "js/game.js" },
   { k: "champGrid", lane: "json", group: "driving", def: "champ", src: "js/game.js", oneOf: ["champ", "tier", "revchamp", "random"] },
   { k: "reliability", lane: "json", group: "driving", def: "off", src: "js/game.js" },

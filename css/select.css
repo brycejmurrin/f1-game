@@ -61,6 +61,12 @@
      and a content-sized sheet would collapse it to its min-height. */
   height: 100%;
 }
+@media (min-width: 1680px) {
+  #sel-inner { --sheet-w: min(var(--menu-fit-sheet, 1180px), calc(100vw - 64px)); }
+}
+@media (min-width: 2400px) {
+  #sel-inner { --sheet-w: min(var(--menu-fit-sheet-wide, 1360px), calc(100vw - 80px)); }
+}
 #sel-car { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: calc(var(--gap) * 0.15); min-width: 0; }
 #sel-car small { font-size: var(--fs-micro); font-style: normal; color: var(--dim); max-width: 100%; overflow-wrap: anywhere; white-space: normal; text-align: center; }
 #sel-track-count { letter-spacing: var(--ls-2); }

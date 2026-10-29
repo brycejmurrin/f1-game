@@ -65,3 +65,35 @@ An open, flat foldable is one segment; the width tiers cover it.
 when two exist. `html[data-fold]="horizontal"|"vertical"` is the same answer
 for a rule that cannot use the media feature. One screen matches neither,
 so the value stays unset.
+
+## Menu fit caps
+
+Shared overlay and sheet widths. Declared on `:root` in `css/tokens.css`.
+Some screens still repeat a pixel in a `@media` query when the breakpoint
+cannot read a custom property; `tests/unit/layout-tokens.test.mjs` locks the
+width-tier copies only — fit caps are documented here and asserted where a
+unit test pins the consuming rule.
+
+| Token | Role |
+|---|---|
+| `--menu-fit-sheet` | Results / standings sheet on large monitors (1180px) |
+| `--menu-fit-sheet-wide` | Same on ultrawide (1360px) |
+| `--menu-fit-pause` | Pause menu sheet cap (480px) |
+| `--menu-fit-room-min` | Compact-wide utility tile floor (6.75rem in `css/menus.css`; token next) |
+| `--menu-fit-card` | Default hub / appearance card (760px in `css/data.css`) |
+| `--menu-fit-card-wide` | Data Hub desktop seven-tab row (920px in `css/data.css`) |
+| `--menu-fit-card-ultra` | Data Hub card from 1600px (1080px in `css/data.css`) |
+| `--menu-fit-brand` | Title wide brand column (34rem in `css/menu-destinations.css`) |
+| `--menu-fit-doors` | Title wide door column (40rem in `css/menu-destinations.css`) |
+| `--cs-sheet-floor` | Garage sheet minimum (410px in `css/carsetup.css`) |
+| `--cs-sheet-cap` | Garage default cap (420px in `css/carsetup.css`) |
+| `--cs-sheet-wide-cap` | Garage cap from 1800px (560px in `css/carsetup.css`) |
+| `--cs-sheet-livery-cap` | Livery editor cap (520px in `css/carsetup.css`) |
+| `--cs-car-reserve-ultra` | Car reserve at 1800px (640px in `css/carsetup.css`) |
+| `--cs-car-reserve-livery` | Livery reserve (720px in `css/carsetup.css`) |
+| `--ps-panel-w` | Photo Studio dock (340px in `css/photo-studio.css`) |
+| `--ps-panel-narrow` | Photo Studio short-landscape dock (300px in `css/photo-studio.css`) |
+
+These `#4187` sizes stay as literals in their sheets until the layout unit pins
+accept `var()` without growing the blocking CSS budget; the names here are the
+contract to migrate next.

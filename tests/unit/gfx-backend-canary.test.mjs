@@ -1081,6 +1081,9 @@ test("clearRendererStorage drops backend crash flags and leaves GRAPHICS quality
     // not crash state — RESET RENDERER must not wipe the player's SGSR choice.
     // spatialUpscaleGather is an A/B escape pin (tools/bench only writes "0").
     "apex26.spatialUpscale", "apex26.spatialUpscaleGather",
+    // Hand-set race-scale override (backend.swRaceShed). "0" keeps full res,
+    // "1" forces the software-GL cut. RESET RENDERER must not wipe it.
+    "apex26.swRaceShed",
   ]);
   // LANE-AWARE: clearRendererStorage removes each list from ITS OWN store, so a
   // key written to localStorage but listed only in RENDERER_SS_KEYS would pass
@@ -4555,6 +4558,24 @@ test("softwareGlowScale tier-4 knee follows lookPostShed on software GL (watchdo
   assert.equal(softwareGlowScale(1), 0.55, "healthy look post keeps the softer ×0.55 knee");
 });
 
+test("softwareRaceShed is half-res on a real software GL player and full-res under automation", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/render/shared/post-common.js"), ctx, { filename: absSrc("js/render/shared/post-common.js") });
+  const { softwareRaceShed } = vm.runInContext("PostCommon", ctx);
+  const player = { webdriver: false, userAgent: "Mozilla/5.0" };
+  assert.equal(softwareRaceShed(false, player, null), false, "hardware stays full-res");
+  assert.equal(softwareRaceShed(true, player, null), true, "a software-GL player sheds");
+  assert.equal(softwareRaceShed(true, { webdriver: true, userAgent: "" }, null), false, "webdriver pixel specs stay full-res");
+  assert.equal(softwareRaceShed(true, { webdriver: false, userAgent: "apex-game-vm" }, null), false, "the node game VM stays full-res");
+  assert.equal(softwareRaceShed(true, { webdriver: true, userAgent: "" }, "1"), true, "apex26.swRaceShed=1 forces the cut");
+  assert.equal(softwareRaceShed(true, player, "0"), false, "apex26.swRaceShed=0 keeps full-res");
+  const tlx = read("js/render/three/tlx.js");
+  assert.ok(tlx.includes("PostCommon.softwareRaceShed") && tlx.includes("_swRaceShedPinned") && tlx.includes("PerfGov.setAutoRes") && tlx.includes("PerfGov.setUserTier"));
+  assert.ok(tlx.includes("renderScale = 0.5"), "the pin uses the renderer's existing 0.5 floor");
+  assert.ok(tlx.includes("opts.bloom = 0") && tlx.includes("opts.godray = 0") && tlx.includes("opts.reflect = 0"));
+  assert.ok(tlx.includes('typeof _swRaceShed !== "undefined" && _swRaceShed && typeof _warmWhere !== "undefined" && _warmWhere !== "menu"') && tlx.includes("pinSoftwareRaceShed(opts)"), "a race-entry program warm pins before compile; a menu warm stays full-res");
+});
+
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
   // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
   // quotes. 0a31155 compared the raw string to "ultra", so every desktop that
@@ -4857,7 +4878,7 @@ test("the flyby plays on the pre-race loading screen only; the picker pre-builds
     "RACE! goes through the loading screen; the QUALIFYING branch above it does not (sheet to sheet)");
   assert.match(game, /function clearMenuScreens\(\) \{\s*cancelIntro\(\);\s*loadingScreen\.stop\(\);/,
     "the screen is disarmed before the sweep hides it, or its pending timer fires into a running race");
-  assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\)\) return;/);
+  assert.match(game, /if \(menuBlank && !\(track && _menuGate\.warm > 0\) && !warmQueuedHere\) return;/);
   assert.match(game, /if \(state === "results"(?: && !resultsCam\.live\(\))?\) return;/,
     "results keeps the last race present — physics already stopped, re-drawing is unpaid (ResultsCam.live is the orbit/highlights exception)");
   // endRace's OWN call: over all of game.js the match began at startRaceBody's

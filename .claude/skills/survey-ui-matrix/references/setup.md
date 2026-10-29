@@ -1,6 +1,6 @@
 # UI-matrix setup ritual and screen enumeration
 
-Load this before the first measurement. The SKILL.md index is the axes only.
+Load this before the first MCP measurement.
 
 ## The setup ritual — all four steps, in order
 
@@ -40,13 +40,15 @@ await new Promise(r => setTimeout(r, 500));
 
 1. **`headless(true)` first.** The 3D scene starves the compositor.
 2. **Hide `#game` before any screenshot.** MCP captures are correct once the
-   WebGL canvas is hidden (`docs/archive/research/UI-SCALE-AND-ZOOM.md`
-   blamed the MCP; re-measured 2026-08-08, the canvas was the problem).
+   WebGL canvas is hidden; a visible canvas paints black regions that look
+   like layout bugs.
 3. **Hard-reload after CSS/JS edits** (committed tags stay `?v=dev`). Prefer
    css-play `?play=` hot-swap for one-screen work. Do not hand-bump numeric
-   `?v=N` / `version.json` — see check-changes `references/bump.md`.
+   `?v=N` / `version.json` (cache-bust rules: check-changes bump.md, linked
+   from SKILL.md §References).
 4. **Park the browser (`navigate_page about:blank`) before starting
-   Playwright.** A live game page in the MCP browser held 21.7% CPU.
+   Playwright.** A live game page in the MCP browser contends with the run
+   and produces false timeouts.
 
 ### Verify the instrument
 
@@ -76,9 +78,9 @@ on a desktop pointer. `build` is the shell's `apex-build` meta; script tags read
 **Chrome `resize_page` does not reliably take on this page** — use `emulate`
 with the full descriptor string, or Playwright MCP `browser_resize`.
 
-**Serve on a port the test suite is not using** (3457) so a survey cannot
-interfere with a run in flight. Chrome setup / park-before-Playwright:
-`mcp-probe` `references/traps.md` §1.
+**Serve on a port the test suite is not using** (3457; tests default to 3456)
+so a survey cannot interfere with a run in flight. Chrome setup /
+park-before-Playwright: mcp-probe traps.md §1, linked from SKILL.md §References.
 
 ## Enumerate screens FROM SOURCE
 

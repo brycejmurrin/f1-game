@@ -8,8 +8,12 @@ API. Environment compute and any existing hosting plan remain separate costs.
 
 Install the locked development dependencies with `npm ci --include=dev` and use
 `bash tools/env/install-browsers.sh` for the supported Chromium installation.
-Blender, FFmpeg and Inkscape are optional system packages provided by the image;
-the setup tool reports missing packages rather than silently installing them.
+FFmpeg and Inkscape are optional system packages; the setup tool reports
+missing packages rather than silently installing them. The cloud image does not
+ship Blender: `bash tools/env/install-blender.sh` installs the pinned 4.2.23 LTS
+(the version the crew exporters were authored with) after checking the official
+SHA-256 list. Headless Workbench/EEVEE renders also need Mesa's EGL
+(`apt-get install -y libegl1 libgl1 libegl-mesa0`); Cycles renders without it.
 
 ```sh
 node tools/env/chat-mcp-service.mjs doctor
@@ -118,6 +122,27 @@ validator grants approval. Runtime fit, textures, lighting, collision, performan
 support, clearances and Runtime approval still gate publication. Existing Build
 3D Game Rooms doctrine and review requirements continue to apply; this adapter
 does not certify those checks automatically.
+
+## Garage arrival and drive-out previz
+
+The garage in / out shows are analytic poses in `js/garage/arrival.js`
+(`GarageArrival.pose` / `poseOut`); the crews are Blender-authored key tables
+(`tools/gen/blender/crew-choreo.py` → `js/garage/crew-choreo.js`). To see or
+redesign the car path and camera in Blender:
+
+```sh
+node tools/garage/arrival-poses.mjs --angle cut --out artifacts/garage-previz/poses.json
+blender -b --factory-startup --python tools/gen/blender/garage-previz.py -- \
+    --poses artifacts/garage-previz/poses.json --output-dir artifacts/garage-previz --render --step 2
+```
+
+The first samples the real JS in a Node VM (no port of the maths); the second
+builds `garage-previz.blend` (scenes `garage-in` / `garage-out`: the
+`TrackPit.BAY` room, shutter, car proxy with a red nose, camera keyed from
+eye / aim / vertical fov, captions as timeline markers) and, with `--render`,
+844x390 Workbench MP4s and contact sheets (~100 s for both clips at step 2).
+Edit there, then port the change into `arrival.js`; the parked-pose and
+sampler contracts are `tests/unit/garage-arrival.test.mjs`.
 
 ## Validate and optimize glTF
 

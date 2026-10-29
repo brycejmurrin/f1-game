@@ -1,6 +1,6 @@
 ---
 name: check-changes
-description: "Use when asked did I break anything, pick the minimum tests, validate/pre-push, verify track edits, js/css shell/cache policy, or Playwright timeout triage. Red Actions → ci-red-triage; landing on the deploy branch → ship."
+description: "Use when asked did I break anything, pick the minimum tests, validate/pre-push, verify track edits, js/css shell/cache version bump, the deploy's own checks on a dirty tree, or Playwright timeout triage. Not red Actions → ci-red-triage; landing → ship."
 ---
 
 # Validate changes before committing/pushing
@@ -17,6 +17,8 @@ Live selection, run when the skill loads (Claude Code expands the line; Cursor a
 Codex run the command by hand — it is `pick-tests`, 0.1 s, read-only):
 
 !`node tools/ci/pick-tests.mjs 2>&1 | head -24`
+
+PR status only → **check**; diagnosing or fixing a failed PR → **steward**.
 
 ## Prerequisites
 

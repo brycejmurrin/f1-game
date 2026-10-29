@@ -1,6 +1,6 @@
 # Renderer probe recipes
 
-**Use when:** this recipe family is the narrowest match for the question.
+**Read when:** choosing renderer probe flags or confirming WebGPU/Three boot and presentation evidence.
 
 **Verification:** record the exact command, the local target, and returned evidence (the deployed site → agent `deploy-research`).
 

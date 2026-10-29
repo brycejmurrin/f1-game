@@ -1,7 +1,5 @@
 # Keyboard leaks, touch and tilt
 
-Moved out of `SKILL.md` on 2026-10-26 to keep the skill body an index.
-
 ## Keyboard leaks into a menu (or a menu eats the wheel)
 
 Trace, in order: `onKey` (`js/input/input.js`) computes `typing` (focused
