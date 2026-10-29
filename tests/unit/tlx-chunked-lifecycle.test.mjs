@@ -528,6 +528,7 @@ test("mergeVisible concatenates chunk indices once and reuses the geometry while
   assert.equal(g.disposals, 1);
   assert.equal(g.attributes.position, undefined, "free does not keep the shared vertex attribute on the merged geometry");
   assert.equal(released.length, 4, "both merge geometries and both chunk geometries are released");
-  assert.ok(released.includes(g), "the main merge geometry is released, not only disposed");
-  assert.ok(released.includes(other), "the mirror merge geometry is released, not only disposed");
+  let sawMerge = 0;
+  for (let i = 0; i < released.length; i++) if (released[i] === g || released[i] === other) sawMerge++;
+  assert.equal(sawMerge, 2, "both merge geometries are released, not only disposed");
 });

@@ -5877,6 +5877,12 @@ const TLX = (function () {
           if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
+        // The in-flight program/rig/mirror compile. A track free during it only
+        // queues the depth caster (isWarming), and present() never runs while
+        // warming() is true, so the caster's render object outlives the circuit.
+        // Callers await this, then cancelWarmRetry(), then free.
+        warmSettled() { return _warmPending || Promise.resolve(); },
+        cancelWarmRetry() { _warmRequested = false; },
         warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
