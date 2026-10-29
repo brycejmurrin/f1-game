@@ -243,8 +243,28 @@ export function sessionRefs(s) {
 /** Closing declarations in prose for this repository; comments and code examples do not reserve work.
  * Syntax: https://docs.github.com/en/issues/tracking-your-work-with-issues/using-issues/linking-a-pull-request-to-an-issue */
 function closingIssues(body, repo = DEFAULT_CONFIG.repo) {
-  const text = String(body || "").replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/```[\s\S]*?```|~~~[\s\S]*?~~~/g, "")
+  let fence = null, paragraph = false, listIndent = 0;
+  const prose = String(body || "").replace(/<!--[\s\S]*?-->/g, "").split(/\r?\n/).map((line) => {
+    if (fence) {
+      const close = line.match(/^ {0,3}(`{3,}|~{3,})[ \t]*$/);
+      if (close && close[1][0] === fence[0] && close[1].length >= fence.length) fence = null;
+      paragraph = false;
+      return "";
+    }
+    const open = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+    if (open && (open[1][0] !== "`" || !open[2].includes("`"))) { fence = open[1]; paragraph = false; return ""; }
+    if (!line.trim()) { paragraph = false; return ""; }
+    const expanded = line.replace(/^\t+/, (tabs) => "    ".repeat(tabs.length));
+    const indent = expanded.match(/^ */)[0].length;
+    if (indent < listIndent) listIndent = 0;
+    const item = expanded.match(/^ {0,3}(?:[-+*]|\d+[.)])[ \t]+/);
+    if (item) listIndent = item[0].length;
+    // Indented code cannot interrupt prose. List continuation indentation belongs to the list, not its code.
+    if (!paragraph && !item && indent >= listIndent + 4) return "";
+    paragraph = !/^ {0,3}(?:#{1,6}\s|(?:[-*_]\s*){3,}$)/.test(line);
+    return line;
+  }).join("\n");
+  const text = prose
     .replace(/(?<!`)(`+)(?!`)[\s\S]*?(?<!`)\1(?!`)/g, "")
     .replace(/https:\/\/github\.com\/([\w.-]+\/[\w.-]+)\/issues\/(\d+)\b/gi, "$1#$2");
   const ids = new Set();

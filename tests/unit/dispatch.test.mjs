@@ -608,6 +608,15 @@ test("ready issues with an open PR closing them do not launch duplicate workers"
     ["Example: `Closes #10`", false], ["Example: ``Closes #10``", false],
     ["`Example `` Closes #10`", false], ["``Example ` Closes #10``", false],
     ["Example: ``Closes #99``. Closes #10", true],
+    ["Example:\n\n    Closes #10", false], ["Example:\n\n\tCloses #10", false],
+    ["````markdown\n```\nCloses #10\n```\n````", false],
+    ["```markdown\nCloses #10", false], ["~~~markdown\nCloses #10", false],
+    ["````\n```\nCloses #99\n```\n````\nCloses #10", true],
+    ["~~~\nCloses #99\n~~~~\nCloses #10", true],
+    ["Example:\n\n    Closes #99\n\nCloses #10", true],
+    ["Implementation complete.\n    Closes #10", true],
+    ["- Implementation complete.\n\n    Closes #10", true],
+    ["- Example:\n\n      Closes #10", false],
   ];
   for (const [body, linked] of bodies) {
     const p = planDispatch(state({ issues: [board(), issue(10, ["ready"]), issue(12, ["ready"])],
