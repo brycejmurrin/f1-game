@@ -547,3 +547,29 @@ test('WATCH pause omits driving strategy copy and restores the strategy door for
   assert.equal(dom.byId('pm-strategy').disabled, false);
   assert.match(Array.from(dom.byId('pm-race-context').children, el => el.textContent).join(' '), /AUTO will fit/);
 });
+test('pause LINE tile cycles the DRIVING LINE in-race, saves it like the RACE SETTINGS row and sits in the tray', () => {
+  const dom = makeDom({ tagFor: id => id === 'practice-goal' ? 'select' : id === 'pm-checkpoint' ? 'details' : 'div' });
+  let mode = 'full'; const saved = [];
+  const DrivingLine = { mode: () => mode, setMode(m) { mode = ['off', 'corner', 'full'].includes(m) ? m : 'off'; return mode; } };
+  const sandbox = { document: dom.document, MutationObserver: class { observe() {} }, DrivingLine,
+    HomeWorld: { create: () => ({ end() {}, active: () => false, state: () => ({}) }) },
+    GameStore: { store: { get: (_key, value) => value, set(k, v) { saved.push([k, v]); } } }, TitleFx: { mode: () => 'on' },
+    AppearanceStudio: { scene: () => ({ mode: 'garage', motion: 'still' }), homeCamera: () => 'auto', onSceneChange() {} },
+    addEventListener() {} };
+  sandbox.window = sandbox;
+  sandbox.RaceInsights = { DRILLS: {}, needsRivals: () => false };   // a stub: the practice goal list is not under test here
+  const local = vm.createContext(sandbox);
+  vm.runInContext(code + ';globalThis.api=UiExperience;', local);
+  const tray = dom.byId('pm-quick-doors'), rewind = dom.byId('pm-checkpoint');
+  tray.appendChild(rewind);
+  local.api.create({ $: dom.byId, state: 'race', setupPreviewOn: false }, { coach: { paint() {}, practiceGoal: () => 'free', setPracticeGoal() {} }, trackReady: () => true });
+  const tile = dom.byId('pm-line');
+  assert.equal(tile.parentNode, tray, 'a RACE TOOLS tile');
+  assert.equal(tray.children.indexOf ? tray.children.indexOf(tile) : Array.from(tray.children).indexOf(tile), Array.from(tray.children).indexOf(rewind) - 1, 'just before REWIND & RETRY');
+  assert.equal(tile.textContent, 'LINE: FULL');
+  tile.onclick(); assert.equal(mode, 'off'); assert.equal(tile.textContent, 'LINE: OFF');
+  tile.onclick(); assert.equal(tile.textContent, 'LINE: CORNERS');
+  tile.onclick(); assert.equal(tile.textContent, 'LINE: FULL');
+  assert.deepEqual(saved, [['drivingLine', 'off'], ['drivingLine', 'corner'], ['drivingLine', 'full']], 'the RACE SETTINGS row\'s store key');
+  assert.match(tile.getAttribute('aria-label'), /Driving line FULL/);
+});

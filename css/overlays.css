@@ -1054,20 +1054,17 @@ body:has(> :where(#datahub) > dialog:modal) #update-chip { display: none; }
    peek lasts — js/ui/screen-looks.js flushes the box away when it ends. */
 #pausemenu:not([open]) { display: none; }
 #trackdesigner:not([open]) { display: none; }   /* restated for the PEEK reveal below (css-layers guard); css/editor.css owns the open look */
-/* Short phone (≤400px tall): RACE TOOLS as a 2-col grid with no empty cell.
-   experience.css's #pm-quick-doors is 3-col in this same overlays layer; the
-   #pausemenu id prefix wins on specificity. An odd leftover (REWIND & RETRY
-   alone, or RECOVER when REPLAY is absent) spans the row so the tray never
-   shows a hole. Floors stay at --tap (HUD survey bc-b3058e3a). */
+/* Short phone (≤400px tall): RACE TOOLS two tiles to a row. experience.css's
+   #pm-quick-doors is a 3-up flex row in this same overlays layer; the
+   #pausemenu id prefix wins on specificity. The tiles grow, so an odd
+   leftover fills its row and the tray never shows a hole. Floors stay at
+   --tap (HUD survey bc-b3058e3a). */
 @media (max-height: 400px) {
   #pausemenu #pm-quick-doors {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  #pausemenu #pm-quick-doors > :last-child:nth-child(odd) {
-    grid-column: 1 / -1;
+    --tray-cols: 2;
   }
   #pausemenu #pm-quick-doors button,
-  #pausemenu #pm-checkpoint summary {
+  #pausemenu #pm-quick-doors > details > summary {
     min-height: var(--tap);
   }
 }

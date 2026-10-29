@@ -2489,7 +2489,7 @@ body.desktop #hud-inputs:not([data-hl-user]) {
 }
 :root:root[data-appearance-peek="hud"] :is(#hud-rel, #hud-strat, #hud-inputs) { visibility: visible; }
 /* Pause review is a still, labelled chart independent of the live HUD scale. */
-#pausemenu .input-review { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }
+#pausemenu .sheet-body > .input-review { grid-column: 1 / -1; flex-basis: 100%; min-width: 0; width: 100%; }   /* outside the RACE TOOLS tray only: in it, a tile (css/experience.css) */
 .input-review-canvas { display: block; width: 100%; max-width: 100%; height: auto; }
 /* PHONE TEST recorder (js/perf/phone-recorder.js): a tiny non-interactive REC
    badge low-left inside the safe area, and the how-to + buttons in the METRICS fold. */

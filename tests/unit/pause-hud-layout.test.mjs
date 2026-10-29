@@ -85,8 +85,12 @@ test("short phone pause (≤400px) caps the sheet and uses a 2-col tray with no 
   assert.match(dialogs, /@media\s*\(max-height:\s*400px\)[\s\S]*?#pausemenu\s*>\s*\.sheet\s*\{[^}]*max-height:\s*min\(100%,\s*calc\(100\s*\*\s*var\(--svhz\)/);
   assert.match(dialogs, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+\.sheet-body\.stack\s*>\s*button:not\(\.as-tbtn\)\s*\{[^}]*min-height:\s*var\(--tap\)/);
   const overlays = fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8");
-  assert.match(overlays, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+#pm-quick-doors\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1fr\)/);
-  assert.match(overlays, /#pausemenu\s+#pm-quick-doors\s*>\s*:last-child:nth-child\(odd\)\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/);
+  // two tiles to a row; no holes because the tray is a wrapping flex row whose tiles grow
+  assert.match(overlays, /@media\s*\(max-height:\s*400px\)\s*\{[\s\S]*?#pausemenu\s+#pm-quick-doors\s*\{[^}]*--tray-cols:\s*2/);
+  const exp = fs.readFileSync(path.join(ROOT, "css/experience.css"), "utf8");
+  assert.match(exp, /#pm-quick-doors\s*\{[^}]*display:\s*flex;[^}]*flex-wrap:\s*wrap/);
+  assert.match(exp, /#pm-quick-doors\s*>\s*\*\s*\{[^}]*flex:\s*1\s+1\s+calc\(/, "every tile grows, so a short last row fills the tray");
+  assert.match(exp, /#pm-quick-doors\s*>\s*details\[open\]\s*\{[^}]*flex-basis:\s*100%/, "an open disclosure tile takes the tray's full width");
 });
 
 test("a queued INFO card older than ANN_STALE_MS is dropped at the drain; a warning never is", () => {
