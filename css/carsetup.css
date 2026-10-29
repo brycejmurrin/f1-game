@@ -1296,7 +1296,11 @@ body:not(.desktop) #cs-options.cs-liv-grid .cs-liv-del { opacity: 0.95; }
 @media (hover: hover) and (pointer: fine) {
   #cs-cam:hover, #cs-photo:hover { color: #fff; border-color: rgba(255,255,255,0.3); }
 }
-body:not(.desktop) #cs-photo { min-height: var(--tap); min-width: var(--tap); }
+body:not(.desktop) #cs-photo {
+  /* Match #cs-cam painted height only — a min-width: var(--tap) bar squeezed
+     CAMERA off-screen on the landscape toolbar (garage-aero.spec.js). */
+  min-width: 0;
+}
 .cs-cam-caret { font-size: var(--fs-micro); line-height: 1; transition: transform 0.15s ease; }
 #cs-cam[aria-expanded="true"] {
   background: rgba(0,204,136,0.18); color: #0c8;
@@ -1415,8 +1419,14 @@ body:not(.desktop) #cs-photo { min-height: var(--tap); min-width: var(--tap); }
   #carsetup #cs-cam-panel {
     top: auto; bottom: calc(100% + var(--gap));
     left: 0; right: auto; width: 100%; max-width: 100%;
+    max-height: min(32vh, 128px);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
   }
 }
+/* PHOTO stays on the bar at rest; hide it while the camera drawer is open so
+   the chip row matches the bounded layout garage-aero.spec.js measures. */
+#carsetup:has(#cs-cam-panel:not([hidden])) #cs-photo { display: none; }
 /* CAMERA / ACTIVE AERO / Z-MODE sit over the garage canvas, outside #hud.
    A dim sheet (teampicker, customize) must stand them down — they painted
    through the scrim on landscape garage. Garage itself is `.screen` without
@@ -1865,8 +1875,13 @@ body:not(.desktop) #carsetup #cs-customize {
     width: 100%; max-width: none;
     min-height: 0;
   }
+  #cs-stack #cs-bar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
   #cs-cam-panel {
-    max-height: min(30vh, 220px);
+    max-height: min(20vh, 142px);
     overflow-y: auto;
     overscroll-behavior-y: contain;
   }
