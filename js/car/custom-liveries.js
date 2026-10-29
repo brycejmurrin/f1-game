@@ -183,9 +183,10 @@ const CustomLiveries = (function () {
       return liv.wingCarbon === "carbon" ? CarMaterials.CARBON : (liv.wing || liv.c2 || team.color2);
     }
 
+    // migrateLivery stays local: resolveLivery calls it; no caller reads api.migrateLivery.
     return {
       getLiveryId, saveLiveryId, getCustomLiveries, setCustomLiveries,
-      getLiveries, resolveLivery, wingColorOf, pickLivery, migrateLivery,
+      getLiveries, resolveLivery, wingColorOf, pickLivery,
       get livDraftOverride() { return livDraftOverride; },
       set livDraftOverride(v) { livDraftOverride = v; },
     };

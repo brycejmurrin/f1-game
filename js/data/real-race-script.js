@@ -437,6 +437,6 @@ const DataRealRaceScript = (function () {
     return out;
   }
 
-  return { build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, passesFor, incidentFor, incidentsFor, gridFor, lapBoard, timingConfidence, raceBook, fmtLap, fmtGap, pitDuel, traceDetails, SCRIPT_V };
+  return { build, trackIdFor, todFor, weatherFor, rainByLap, cautionsFor, gridFor, lapBoard, raceBook, fmtLap, fmtGap, pitDuel, traceDetails, SCRIPT_V };
 })();
 Object.freeze(DataRealRaceScript);
