@@ -410,14 +410,17 @@ window.TopModal = (function () {
   /* GHOST-TAP SHIELD. The second tap of a fast double tap landed on whatever
      the NEW screen put under the thumb: RACE changed circuit, TRACK DESIGNER
      fired its RACE button, results MENU opened CAREER (UI hunt 2026-10-29 #3).
-     A layer shown right after a pointer click swallows, for SHIELD_MS, a
-     pointer click inside it near that same spot. Keyboard activation
-     (detail 0) and a script's el.click() (untrusted) always pass. */
-  const SHIELD_MS = 350, SHIELD_PX = 32, TAP_RECENT_MS = 1000;
+     A layer shown right after a pointer click swallows a pointer click inside
+     it near that same spot until SHIELD_MS after the OPENING tap — the
+     double-tap interval. Timed from the show instead, a slow screen swap
+     (a second on a software renderer) swallowed a deliberate tap on the next
+     screen's primary, which sits where the last one was (multiplayer-room
+     EDIT RACE: #sel-go then #rs-go). Keyboard activation (detail 0) and a
+     script's el.click() (untrusted) always pass. */
+  const SHIELD_MS = 350, SHIELD_PX = 32;
   let lastTap = null, shield = null;
   function shieldLayer(layer) {
-    const now = Date.now();
-    if (lastTap && now - lastTap.at < TAP_RECENT_MS) shield = { layer, until: now + SHIELD_MS, x: lastTap.x, y: lastTap.y };
+    if (lastTap && Date.now() - lastTap.at < SHIELD_MS) shield = { layer, until: lastTap.at + SHIELD_MS, x: lastTap.x, y: lastTap.y };
   }
   function onClickShield(e) {
     if (!e.isTrusted || e.detail === 0) return;
