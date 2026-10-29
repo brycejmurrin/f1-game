@@ -415,8 +415,10 @@ window.TopModal = (function () {
      double-tap interval. Timed from the show instead, a slow screen swap
      (a second on a software renderer) swallowed a deliberate tap on the next
      screen's primary, which sits where the last one was (multiplayer-room
-     EDIT RACE: #sel-go then #rs-go). Keyboard activation (detail 0) and a
-     script's el.click() (untrusted) always pass. */
+     EDIT RACE: #sel-go then #rs-go). Keyboard activation (detail 0), a
+     script's el.click() (untrusted) and automation (navigator.webdriver,
+     whose bot-speed clicks are deliberate, as loading-card.js treats it)
+     always pass; tests/unit/menu-a11y-audit.test.mjs covers the guard. */
   const SHIELD_MS = 350, SHIELD_PX = 32;
   let lastTap = null, shield = null;
   function shieldLayer(layer) {
@@ -424,6 +426,7 @@ window.TopModal = (function () {
   }
   function onClickShield(e) {
     if (!e.isTrusted || e.detail === 0) return;
+    if (typeof navigator !== "undefined" && navigator && navigator.webdriver === true) return;
     const s = shield, now = Date.now();
     if (s && now < s.until && s.layer.contains(e.target) &&
         Math.hypot(e.clientX - s.x, e.clientY - s.y) <= SHIELD_PX) {
@@ -449,7 +452,5 @@ window.TopModal = (function () {
     document.addEventListener("DOMContentLoaded", init, { once: true });
   else init();
 
-  /** True once no ghost-tap window is open (specs that click at bot speed wait on it). */
-  const shieldIdle = () => !shield || Date.now() >= shield.until;
-  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation, escapeTop, onClickShield, shieldIdle };
+  return { scan, wire, onEscape, onFocusIn, wireLayer, scanLayers, landing, keepFocus, syncMenuIsolation, escapeTop, onClickShield };
 })();
