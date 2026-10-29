@@ -1496,4 +1496,13 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
 body[data-density="compact"] #ceremony-podium { padding: calc(var(--pad) * 0.55); }
 body[data-density="compact"] #ceremony-podium .sheet-foot { margin-top: calc(var(--pad) * 0.45); }
 
+/* A FINGER GRABS THE TITLE-LAYOUT HANDLE: 22px is the dot, not the target. On
+   a coarse pointer a transparent ::before overhangs it by 11px a side (44px
+   box); #tl-handle is position:fixed (responsive.css), so it is the box. Here,
+   not in responsive.css: the editor opens after load, and the blocking-CSS
+   budget (css-critical-path.test.mjs) has no room for it. */
+@media (pointer: coarse) {
+  :root[data-tl-edit] #tl-handle::before { content: ""; position: absolute; inset: -11px; border-radius: 50%; }
+}
+
 } /* @layer components */
