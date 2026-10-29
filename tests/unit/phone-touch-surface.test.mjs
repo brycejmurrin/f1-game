@@ -408,6 +408,42 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
   );
 });
 
+test("pedals are squircles, portrait left-hand swaps columns, the race hides the install tip", () => {
+  const ov = css("css/touch-controls.css");
+  const src = read("css/touch-controls.css");
+  assert.equal(decl(ov, ".touchbtn.pedal", "border-radius"), "var(--touch-pedal-radius)");
+  assert.match(src, /--touch-pedal-radius:\s*28%/);
+  assert.match(src, /--touch-tablet-btn:\s*96px/);
+  assert.match(src, /--touch-tablet-steer:\s*108px/);
+  assert.equal(decl(ov, "body.in-race #ios-install", "display"), "none",
+    "the Home Screen tip must not cover GAS or the steer arrows during a race");
+  // Position only. A fill on a body-class pedal rule outranks :active.
+  const pedals = ruleFor(ov, /body\.mirror-controls\.steer-buttons #btn-throttle/, "left",
+    { context: /orientation:\s*portrait/ });
+  assert.ok(pedals, "portrait left-hand moves the buttons-mode pedal column");
+  assert.equal(pedals.decls.get("left"), "calc(16px + var(--sal))");
+  assert.equal(pedals.decls.get("right"), "auto");
+  assert.equal(pedals.decls.has("background"), false);
+  const steer = ruleFor(ov, /body\.mirror-controls #btn-steer-right/, "right",
+    { context: /orientation:\s*portrait/ });
+  assert.ok(steer, "the steer pair's right arrow sits on the right edge");
+  assert.match(steer.decls.get("right"), /var\(--sar\)/);
+  assert.doesNotMatch(steer.decls.get("right"), /var\(--steer\)/,
+    "the right arrow is the outer one; the left arrow keeps the inboard slot");
+  const tablet = rulesFor(ov, ":root").find((r) => r.decls.get("--btn") === "var(--touch-tablet-btn)"
+    && r.context.some((c) => /min-width:\s*744px/.test(c)));
+  assert.ok(tablet, "a portrait tablet grows the fixed ladder; phones stay on 76px");
+  const clear = ruleFor(ov, "body.steer-buttons .hud-bottom", "bottom",
+    { context: /min-width:\s*744px/ });
+  assert.ok(clear, "the cluster clearance grows with the tablet pedals");
+  assert.match(clear.decls.get("bottom"), /var\(--btn\)/);
+  assert.match(clear.decls.get("bottom"), /\/ var\(--hud-z\)/);
+  const plate = rulesFor(ov, /#grp-steer/).find((r) => r.decls.has("background")
+    && r.context.some((c) => /orientation:\s*landscape/.test(c)));
+  assert.ok(plate, "landscape groups the steer arrows with a plate");
+  assert.equal(plate.decls.has("padding"), false, "the plate must not widen the dock");
+});
+
 test("non-HUD menu hosts pad with the safe-area tokens", () => {
   const overlay = decl(css("css/title.css"), "#overlay", "padding");
   for (const t of ["--safe-t", "--safe-r", "--safe-b", "--safe-l"]) {
@@ -458,7 +494,7 @@ function bootInput({ DeviceOrientationEvent, pads, console: con = console, debug
   if (DeviceOrientationEvent) sb.DeviceOrientationEvent = DeviceOrientationEvent;
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/tilt-roll.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   Input.init({ addEventListener() {} }, {});
   const count = (type) => (listeners.get(type) || []).length;

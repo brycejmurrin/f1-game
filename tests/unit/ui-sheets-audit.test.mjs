@@ -33,6 +33,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { cssRules, decl } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { seedDom } from "../helpers/seed-dom.mjs";
@@ -87,7 +88,7 @@ test("fold summaries preserve identical DOM, including normalized entities, and 
 });
 
 /* ── RESULTS / STANDINGS on the real SeasonCal ─────────────────────────── */
-function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = null }) {
+function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true, globals = null, catalogue = null }) {
   const dom = makeDom();
   const tracks = ["bahrain", "jeddah", "melbourne"].map((id) => ({ id, name: id.toUpperCase(), gp: id + " GP", classic: false }));
   const sb = {
@@ -96,13 +97,15 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
     GameStore: { store: stubStore() },
     Tracks: { LIST: tracks, SEASON: tracks },
     Teams: { POINTS, LIST: [{ id: "red", name: "RED", color: [1, 0, 0] }, { id: "blue", name: "BLUE", color: [0, 0, 1] }] },
-    Ghost: { hasGhost: () => false, bestTime: () => Infinity, clear() {} },
+    GhostShare: { hasGuest: () => false },
+    Ghost: { snapshot: () => null, hasGhost: () => false, bestTime: () => Infinity, clear() {} },
     Career: { objectiveLabel: () => "", OBJ_BONUS: 0 },
     GameAudio: { finish() {} },
     ...globals,
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
+  if (catalogue) { withI18n(ctx); ctx.I18n._installCatalog("de", catalogue); }
   seedLog(ctx);
   seedDom(ctx);
   seedSaveMigrate(ctx);   // season-cal delegates roundMap/finishMap to SaveMigrate
@@ -111,7 +114,7 @@ function bootResults({ state = "menu", season, cars, netPlay, seasonMode = true,
   vm.runInContext(src("js/ui/results-story.js"), ctx, { filename: absSrc("js/ui/results-story.js") });
   vm.runInContext(src("js/ui/results-sheet.js"), ctx, { filename: absSrc("js/ui/results-sheet.js") });
   const SeasonCal = vm.runInContext("SeasonCal", ctx);
-  const els = { resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next"), resMenu: dom.byId("res-menu") };
+  const els = { results: dom.byId("results"), resultsTable: dom.byId("results-table"), resultsTitle: dom.byId("results-title"), resNext: dom.byId("res-next"), resMenu: dom.byId("res-menu") };
   const G = {
     $: (id) => dom.byId(id), els, season, cars, state, seasonMode, track: { def: tracks[0] },
     cssCol: (c) => "rgb(" + c.join(",") + ")", announce() {}, soundOn: false, careerSettlement: null,
@@ -891,8 +894,7 @@ test("CONSTRUCTORS ties break like Career.teamStandings (points, then tier), not
 // used G.fmtTime, the two-decimal HUD clock, so two board entries 0.004 s apart
 // printed as the same time. The sheets use Dom.fmtLap; the HUD keeps its clock.
 test("the TIME TRIAL sheet prints YOUR BEST and the board to the thousandth", () => {
-  const h = bootResults({ season: null, cars: [], seasonMode: false,
-    globals: { GhostShare: { hasGuest: () => false }, Ghost: { hasGhost: () => false, bestTime: () => Infinity, clear() {}, snapshot: () => null } } });
+  const h = bootResults({ season: null, cars: [], seasonMode: false });
   Object.assign(h.G, {
     player: { best: 81.1634 }, ttNewRecord: false, ttSessionTs: 10, fmtTime: (t) => t.toFixed(2),
     records: { board: () => [{ t: 81.1634, code: "AAA", name: "Alpha", teamId: "red", ts: 11 }, { t: 81.1674, code: "BBB", name: "Bravo", teamId: "blue", ts: 1 }] },
@@ -973,8 +975,11 @@ test("friend-race labels do not outlive the race: the next solo build restores M
   live = false; clear(h.els.resultsTable);
   h.api.buildResults(cars.slice());
   assert.equal(h.els.resMenu.textContent, "MENU");
-  // buildTTResults needs the whole ghost stack to run here; pin its reset at the source.
-  assert.match(read("js/ui/results-sheet.js"), /function buildTTResults\(\) \{[\s\S]{0,400}resMenu\.textContent = "MENU"/);
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  clear(h.els.resultsTable);
+  h.api.buildTTResults();
+  assert.equal(h.els.resMenu.textContent, "MENU", "TT clears the previous friend-room action label");
 });
 
 test("RESULTS scrolls .res-row.you into view when the sheet builds", () => {
@@ -1058,4 +1063,100 @@ test("career settlement displays final sponsor target, MET/MISSED and reason wit
   assert.ok(met.includes("Sponsor target — " + target + " | MET · Target met"));
   assert.equal(met.filter(text => text === "Sponsor bonus | +125 cr").length, 1);
   assert.deepEqual(build(null), build(undefined), "legacy and absent verdict keep the existing debrief");
+});
+
+
+test("translated results views expose stable navigation state and replace stale champion state", () => {
+  const { season, cars } = tiedSeason();
+  const h = bootResults({ season, cars, catalogue: {
+    "results.worldChampion": "WELTMEISTER", "results.finalStandings": "ENDSTAND",
+    "results.points": "{points} Punkte", "results.championAnnouncement": "{code} IST WELTMEISTER!",
+    "results.mainMenu": "HAUPTMENÜ",
+  } });
+  let announcement;
+  h.G.announce = (text) => { announcement = text; };
+  h.api.buildChampion();
+  assert.equal(h.els.resultsTitle.textContent, "WELTMEISTER");
+  assert.equal(h.els.resultsTable.children[0].textContent, "BBB  Bravo");
+  assert.equal(rowsOf(h.els.resultsTable)[0].children.find(c => c.classList.contains("res-pts")).textContent, "25 Punkte");
+  assert.equal(announcement, "BBB IST WELTMEISTER!");
+  assert.equal(h.els.resNext.textContent, "HAUPTMENÜ");
+  assert.equal(h.els.results.dataset.resultsView, "champion", "navigation reads the view, independent of translated copy");
+  h.api.buildStandings();
+  assert.equal(h.els.results.dataset.resultsView, "champion", "the separate standings panel preserves the active champion view");
+  clear(h.els.resultsTable);
+  h.G.seasonMode = false;
+  h.api.buildResults(cars.slice());
+  assert.equal(h.els.results.dataset.resultsView, "race", "race results replace a previous champion marker");
+  h.G.seasonMode = true;
+  clear(h.els.resultsTable); h.api.buildResults(cars.slice(), { sprint: true });
+  assert.equal(h.els.results.dataset.resultsView, "race", "sprint results cannot retain the champion action");
+  clear(h.els.resultsTable);
+  h.api.buildChampion();
+  assert.equal(h.els.results.dataset.resultsView, "champion");
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  clear(h.els.resultsTable);
+  h.api.buildTTResults();
+  assert.equal(h.els.results.dataset.resultsView, "tt", "time trial replaces a previous champion marker");
+});
+
+
+test("resNext uses the results view through translated first and second champion clicks", () => {
+  const { season, cars } = tiedSeason();
+  season.round = 3;
+  const h = bootResults({ season, cars, catalogue: { "results.mainMenu": "HAUPTMENÜ" } });
+  const source = read("js/game.js");
+  const start = source.indexOf("els.resNext.onclick = () => {");
+  assert.ok(start >= 0);
+  const end = source.indexOf("\n};", start);
+  assert.ok(end > start);
+  let championBuilds = 0, cleared = 0, menus = 0;
+  const ctx = vm.createContext({
+    els: h.els, season,
+    resultsCam: { reset() {} }, announcer: { stop() {} },
+    isCareer: () => false, isChampionship: () => true,
+    SeasonCal: { rounds: () => 3, clear: () => { cleared++; return { ok: true }; } },
+    buildChampion: () => { championBuilds++; h.api.buildChampion(); },
+    quitToMenu: () => { menus++; },
+  });
+  vm.runInContext(source.slice(start, end + 3), ctx);
+  // A stale English label must not turn an explicitly marked race view into
+  // the second click. The real builder supplies the translated next action.
+  h.els.results.dataset.resultsView = "race";
+  h.els.resNext.textContent = "MAIN MENU";
+  h.els.resNext.onclick();
+  assert.equal(championBuilds, 1);
+  assert.equal(menus, 0);
+  assert.equal(cleared, 0);
+  assert.equal(h.els.results.dataset.resultsView, "champion");
+  assert.equal(h.els.resNext.textContent, "HAUPTMENÜ");
+  h.els.resNext.onclick();
+  assert.equal(championBuilds, 1, "translated second click must not rebuild the champion panel");
+  assert.equal(cleared, 1);
+  assert.equal(menus, 1);
+  assert.equal(ctx.season, null);
+  assert.equal(h.els.resultsTitle.style.color, "");
+});
+
+
+test("translated stint accessibility and craft debrief localise prose ranges and counts", () => {
+  const { cars } = tiedSeason();
+  const h = bootResults({ season: null, cars, seasonMode: false, catalogue: {
+    "results.tyre.S": "Weich", "results.stints.range": "{compound} — Runden {from}-{to}",
+    "results.stints.tooltip": "{code} — Runden {from}-{to}", "results.stints.label": "Reifen: {stints}",
+    "results.craftCount": "{label}: {count}", "results.craftLaps": "Runde {laps}",
+  } });
+  h.G.tyres = { on: () => true, stints: () => [{ code: "S", lap0: 1000, lap1: 2000, laps: 1000, colour: [1, 0, 0] }] };
+  h.G.careerSettlement = { money: 500, rep: 50, craft: .9 };
+  h.G.coach = { insights: { settle: () => [], debrief: () => [{ label: "Bremse", count: 1000, laps: [1000, 2000] }] } };
+  h.api.buildResults(cars.slice());
+  const row = rowsOf(h.els.resultsTable)[0], strip = row.children.find(e => e.classList.contains("res-stints"));
+  assert.equal(strip.getAttribute("aria-label"), "Reifen: Weich — Runden 1.000-2.000");
+  assert.equal(strip.children[0].title, "S — Runden 1.000-2.000");
+  const detail = row.children.find(e => e.classList.contains("res-name")).children.find(e => e.getAttribute("data-stint-details") != null);
+  assert.equal(detail.children[1].textContent, "Weich — Runden 1.000-2.000");
+  const box = h.els.resultsTable.children.find(e => e.classList.contains("res-settle"));
+  const debrief = box.children.find(e => e.classList.contains("craft"));
+  assert.deepEqual(debrief.children.map(e => e.textContent), ["Bremse: 1.000", "Runde 1.000, 2.000"]);
 });

@@ -121,6 +121,6 @@ const XRPlan = (function () {
     return webgl2Armed(reasons, fallbacks);
   }
 
-  return { resolve, normXr, normBackend, PATH_WEBGL2, PATH_WEBGPU };
+  return { resolve, normXr, normBackend };
 })();
 Object.freeze(XRPlan);

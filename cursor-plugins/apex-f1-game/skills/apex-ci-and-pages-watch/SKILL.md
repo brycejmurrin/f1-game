@@ -44,7 +44,7 @@ Sync by **merging** `origin/claude/f1-game-project-26h3ng` (`sync-pr.mjs`), neve
 |---|---|---|
 | Selected specs: `caution().enabled` expected true, got false | `js/data/settings-defaults.js` ships `"caution": false`; Playwright still asserts ON | Pinning WebGL2 / bumping `BOOT_MS` / flake re-run |
 | Per-circuit geometry sweeps: `debris-hazard-hint` float ULP | Suzuka arc `assert.equal` on floats | Blaming the last feature PR blindly |
-| Boot / `__apex` timeout under CI | Three/TLX default under llvmpipe, or dead `DISPLAY` | Reverting player default without checking fixtures |
+| Boot / `__apex` timeout under CI | Three/TLX default (WebGPU path) under llvmpipe, or dead `DISPLAY` | Reverting player default without checking fixtures |
 | PR green, Pages red | Pages `before_sha` selects specs not in the PR matrix | Merging then ignoring Pages |
 | `tooling-fast` green locally, Pages red | Pages runs more node suites + sweeps than tooling-fast | Treating the local floor as the whole gate |
 

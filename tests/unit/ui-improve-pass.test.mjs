@@ -96,9 +96,11 @@ test("CssZoom exports its API surface", () => {
   vm.runInNewContext(src("js/ui/css-zoom.js"), sb, { filename: absSrc("js/ui/css-zoom.js") });
   const Z = sb.CssZoom;
   assert.ok(Z, "window.CssZoom is assigned");
-  for (const name of ["of", "viewportRect", "localRect", "localBox", "toLocalDelta", "rectsAreVisual"]) {
+  for (const name of ["of", "viewportRect", "localBox", "toLocalDelta"]) {
     assert.equal(typeof Z[name], "function", `CssZoom.${name}`);
   }
+  assert.equal(Z.localRect, undefined, "localRect was unused and removed");
+  assert.equal(Z.rectsAreVisual, undefined, "rectsAreVisual is module-local");
 });
 
 test("data hub card carries UI SIZE zoom (fit-capped like a sheet)", () => {
@@ -1233,7 +1235,7 @@ function bootInput() {
   };
   sb.window = sb;
   const ctx = vm.createContext(sb);
-  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
+  for (const f of ["js/core/log.js", "js/core/mat4.js", "js/input/bindings.js", "js/input/pad-menu.js", "js/input/haptics.js", "js/input/pedal-travel.js", "js/input/hold-buttons.js", "js/input/input.js"]) vm.runInContext(src(f), ctx, { filename: absSrc(f) });
   const Input = vm.runInContext("Input", ctx);
   const pad = (ax, buttons = [], ax2 = 0) => ({
     connected: true, axes: [ax, 0, ax2, 0],

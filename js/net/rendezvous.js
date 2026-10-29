@@ -348,7 +348,7 @@ const NetRendezvous = (function () {
   }
 
   function nostrExchange(o) {
-    return NetNostr.exchange({
+    return NetNostr.directExchange({
       code: o.code, send: o.mine, reply: o.reply, token: o.token, onTick: o.onTick,
     });
   }
@@ -360,7 +360,7 @@ const NetRendezvous = (function () {
         message: "Room codes on a private relay take one guest. Use the invite link for the others." });
     }
     Log.info("net", "room host");
-    return NetNostr.exchange({
+    return NetNostr.directExchange({
       code: o.code, send: o.mine, mintOffer: o.mintOffer, onJoiner: o.onJoiner,
       token: o.token, onTick: o.onTick,
       onFail: o.onFail,
@@ -443,8 +443,9 @@ const NetRendezvous = (function () {
     }
   }
 
+  // PRIVATE_CODE_LEN / DEFAULT_URL / ENVELOPE_TAG stay module-local.
   return {
-    ALPHABET, CODE_LEN, PRIVATE_CODE_LEN, POLL_TIMEOUT_MS, HOST_POLL_TIMEOUT_MS, PROTOCOL, topic, privateRoomId, STORE_KEY, DEFAULT_URL, ENVELOPE_TAG,
+    ALPHABET, CODE_LEN, POLL_TIMEOUT_MS, HOST_POLL_TIMEOUT_MS, PROTOCOL, topic, privateRoomId, STORE_KEY,
     configured, usingPrivateRelay, setUrl, setSessionUrl, baseUrl, swap, hostRoom,
     seal, open, sealPrivate, openPrivate, verifyCode, verifyFor, VERIFY_LEN,
     makeCode, normalise, valid,

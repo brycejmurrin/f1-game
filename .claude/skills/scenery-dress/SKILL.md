@@ -1,6 +1,6 @@
 ---
 name: scenery-dress
-description: "Use when adding or editing track scenery — buildings, trees, grandstands, barriers, mountains, billboards, floodlights, a denser Spa — fixing floating/sunken/missing props, a circuit scenery(api) callback, or TrackGraph.instance migration, graph parity, batches()/bakeOnly. Survey-first accuracy pass → survey-track."
+description: "Use when adding or fixing track scenery: buildings, trees, grandstands, barriers, billboards, floodlight masts, props that float, sink or vanish, a circuit scenery(api) callback, TrackGraph.instance migration, graph parity, batches()/bakeOnly. Not lamps → lighting-tuner; real-place accuracy → survey-track."
 ---
 
 # Dress a circuit's scenery

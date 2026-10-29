@@ -2,7 +2,7 @@
 
 Load from SKILL.md when `env.backend` reads `webgpu` (or you expected it and
 got `webgl2`). Shipped defect classes and the device-loss ladder are in
-[wgx-defects.md](wgx-defects.md).
+wgx-defects.md (linked from SKILL.md).
 
 ## Contents
 - 1. First probe — static, then Dawn
@@ -32,7 +32,7 @@ full Dawn pass launches Chromium — parent session only. The container adapter 
 `rg11b10ufloat-renderable`; without `--no-rg11b10` the fallback is never
 exercised.
 
-**The ceiling, corrected 2026-08-17:** SwiftShader-Dawn EXECUTES
+**The ceiling:** SwiftShader-Dawn EXECUTES
 shader work here. Two narrower limits remain: the **native swapchain** never
 composites (hidden WebGPU canvas stays black), and the FIRST
 `getCurrentTexture()` call permanently breaks `mapAsync` on that device — WGX

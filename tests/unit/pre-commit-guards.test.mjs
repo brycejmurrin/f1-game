@@ -83,10 +83,10 @@ function spawnTests(files, cwd) {
   });
 }
 
-test("OK_REL and FRESH_MS match bash-guard's shared verdict cache (#2889)", () => {
+test("OK_REL and FRESH_MS define the git hook verdict cache (#2889)", () => {
   assert.equal(OK_REL, "artifacts/pre-commit-guards.ok");
   assert.equal(FRESH_MS, 10 * 60 * 1000);
-  const bash = fs.readFileSync(path.join(ROOT, ".claude/hooks/bash-guard.sh"), "utf8");
+  const bash = fs.readFileSync(HOOK, "utf8");
   assert.ok(/guards-verdict\.mjs check/.test(bash));
   assert.ok(/apex\.guardTimeout/.test(bash));
 });
@@ -286,99 +286,28 @@ esac
   }
 });
 
-test("bash-guard skips the suite on a guards-verdict cache hit and honours git config apex.guardTimeout", () => {
-  const repo = scratchRepo("guards-bash-");
-  const BASH_HOOK = path.join(ROOT, ".claude/hooks/bash-guard.sh");
-  try {
-    const env = cleanEnv({
-      PATH: path.join(repo.dir, "bin") + path.delimiter + (process.env.PATH || ""),
-    });
-    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });
-    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
-    fs.mkdirSync(path.join(repo.dir, "tools/gen"), { recursive: true });
-    fs.mkdirSync(path.join(repo.dir, "node_modules"));
-    fs.mkdirSync(path.join(repo.dir, "bin"));
-    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
-    fs.writeFileSync(path.join(repo.dir, "tools/gen/targets.mjs"), "process.exit(0);\n");
-    fs.writeFileSync(
-      path.join(repo.dir, "tools/ci/guards-verdict.mjs"),
-      `#!/usr/bin/env node
-import { spawnSync } from "node:child_process";
-const cmd = process.argv[2];
-if (cmd === "check") {
-  if (process.env.APEX_FIXTURE_CACHE_HIT === "1") {
-    const tree = spawnSync("git", ["write-tree"], { encoding: "utf8" }).stdout.trim();
-    console.log("guards: cache hit " + tree);
-    process.exit(0);
-  }
-  console.error("guards: cache miss fixture");
-  process.exit(1);
-}
-process.exit(2);
-`,
-    );
-    fs.writeFileSync(
-      path.join(repo.dir, "bin/npm"),
-      `#!/usr/bin/env bash
-echo "npm $*" >> "${repo.dir}/npm-calls.log"
-case "$*" in
-  *test:guards*) sleep 30; exit 0 ;;
-  *) exit 0 ;;
-esac
-`,
-    );
-    fs.chmodSync(path.join(repo.dir, "bin/npm"), 0o755);
-    fs.writeFileSync(
-      path.join(repo.dir, "package.json"),
-      JSON.stringify({ scripts: { "test:guards": "sleep 30" } }),
-    );
-    fs.writeFileSync(path.join(repo.dir, "code.js"), "v1\n");
-    fs.writeFileSync(path.join(repo.dir, ".gitignore"), "artifacts/\nnode_modules/\nnpm-calls.log\n");
-    repo.g("add", "-A");
-    repo.g("commit", "-qm", "init");
-
-    fs.writeFileSync(path.join(repo.dir, "code.js"), "v2\n");
-    repo.g("add", "code.js");
-
-    const commit = (extra = {}) =>
-      spawnSync("bash", [BASH_HOOK], {
-        input: JSON.stringify({ tool_name: "Bash", tool_input: { command: "git commit -m x" } }),
-        cwd: repo.dir,
-        encoding: "utf8",
-        env: { ...env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "", ...extra },
-      });
-
-    let r = commit({ APEX_FIXTURE_CACHE_HIT: "1" });
-    assert.equal(r.status, 0, r.stderr + r.stdout);
-    assert.ok(/guards: cache hit/.test(r.stderr));
-    assert.equal(fs.existsSync(path.join(repo.dir, "npm-calls.log")), false);
-
-    repo.g("config", "apex.guardTimeout", "1");
-    r = commit({ APEX_FIXTURE_CACHE_HIT: "0" });
-    assert.equal(r.status, 2, r.stderr + r.stdout);
-    assert.ok(/npm run test:guards did not finish within 1 s/.test(r.stderr));
-    assert.ok(/apex\.guardTimeout/.test(r.stderr));
-  } finally {
-    repo.rm();
-  }
+test("bash-guard never runs the commit suite, even when guard cache is absent", () => {
+ const repo=scratchRepo("guards-fast-");
+ try {
+  const r=spawnSync("bash",[path.join(ROOT,".claude/hooks/bash-guard.sh")],{
+    input:JSON.stringify({tool_name:"Bash",tool_input:{command:"git commit -m x"}}),cwd:repo.dir,encoding:"utf8",env:repo.env});
+  assert.equal(r.status,0,r.stderr);assert.equal(fs.existsSync(path.join(repo.dir,"artifacts/pre-commit-guards.log")),false);
+ }finally{repo.rm();}
 });
-
-test("shipped pre-commit still early-exits on APEX_SKIP_GUARDS and CLAUDECODE", () => {
+test("shipped pre-commit honours explicit bypass and runs for Claude Code", () => {
   const src = fs.readFileSync(HOOK, "utf8");
   assert.match(src, /APEX_SKIP_GUARDS/);
-  assert.match(src, /CLAUDECODE/);
+  assert.doesNotMatch(src, /\[ -n "\$\{CLAUDECODE:-\}" \] && exit 0/);
   assert.ok(/guards-verdict\.mjs check/.test(src));
   assert.ok(/apex\.guardTimeout/.test(src));
   assert.ok(/timeout -k 5/.test(src));
 });
 
-test("shipped bash-guard shares guards-verdict check and apex.guardTimeout with pre-commit", () => {
-  const src = fs.readFileSync(path.join(ROOT, ".claude/hooks/bash-guard.sh"), "utf8");
-  assert.ok(/guards-verdict\.mjs check/.test(src));
-  assert.ok(/apex\.guardTimeout/.test(src));
-  assert.ok(/timeout -k 5/.test(src));
+test("shipped bash-guard delegates guard cache and timeout to git pre-commit", () => {
+ const src=fs.readFileSync(path.join(ROOT,".claude/hooks/bash-guard.sh"),"utf8");
+ assert.doesNotMatch(src,/node .*guards-verdict\.mjs check/);
+ assert.doesNotMatch(src,/APEX_COMMIT_GATE|APEX_GUARD_PROBE|flock -/);
 });
-
 
 test("a passing subset cannot certify the full guards roster; a complete rerun recovers", (t) => {
   const repo = scratchRepo("guards-subset-");
@@ -739,4 +668,67 @@ test("pre-existing untracked ratchet inputs refuse before generation and are nev
   assert.equal(repo.g("write-tree"), index);
   assert.equal(repo.g("ls-files", "--", untracked), "");
   assert.equal(fs.existsSync(path.join(repo.dir, repo.topic)), false);
+});
+
+// The paths previously certified in PreToolUse now execute in Git's hook.
+function splitFixture(prefix) {
+  const repo=scratchRepo(prefix);
+  const put=(rel,text)=>{fs.mkdirSync(path.dirname(path.join(repo.dir,rel)),{recursive:true});fs.writeFileSync(path.join(repo.dir,rel),text);};
+  put('.gitignore','node_modules/\nartifacts/\ncalls.log\n');
+  put('tools/check/ratchets.mjs','process.exit(0);\n');
+  put('tools/gen/targets.mjs','console.log("tools/README.md");\n');
+  put('tools/ci/guards-verdict.mjs','process.exit(1);\n');
+  put('tests/unit/docs-integrity.test.mjs','import {test} from "node:test";test("docs",()=>{});\n');
+  put('tests/data/ratchets.json','{}\n');
+  put('package.json',JSON.stringify({scripts:{'test:guards':'node -e "require(\'fs\').appendFileSync(\'calls.log\',\'guards\\n\')"'}}));
+  put('code.js','v1\n');put('docs/PHYSICS.md','note\n');put('tools/README.md','generated\n');
+  fs.mkdirSync(path.join(repo.dir,'node_modules'));
+  repo.g('add','-A');repo.g('commit','-qm','fixture');
+  const run=(cwd=repo.dir,extra={})=>spawnSync('bash',[HOOK],{cwd,encoding:'utf8',env:{...repo.env,CLAUDECODE:'1',...extra}});
+  return {...repo,put,run};
+}
+
+test('git hook classifies docs, survey assets, generated docs and code; runs under Claude Code',()=>{
+ const r=splitFixture('split-paths-');
+ try{
+  for(const rel of ['docs/PHYSICS.md','artifacts/shots/tracks/spa/t1.png','artifacts/shots/gallery/index.html','artifacts/track-survey/spa/report.json']){
+   r.put(rel,'changed\n');r.g('add','-f',rel);
+   const out=r.run();assert.equal(out.status,0,out.stderr);assert.match(out.stderr,/docs-only commit/);
+   assert.equal(fs.existsSync(path.join(r.dir,'calls.log')),false,'docs never run full guards');
+   r.g('commit','-qm','docs');
+  }
+  for(const rel of ['code.js','tools/README.md','assets/pack/x.png','artifacts/shots/other/x.png','artifacts/track-survey/spa/run.js']){
+   r.put(rel,'changed\n');r.g('add','-f',rel);
+   const before=fs.existsSync(path.join(r.dir,'calls.log'))?fs.readFileSync(path.join(r.dir,'calls.log'),'utf8'):'';
+   const out=r.run();assert.equal(out.status,0,out.stderr);assert.match(out.stderr,/code commit/);
+   assert.equal(fs.readFileSync(path.join(r.dir,'calls.log'),'utf8'),before+'guards\n',rel);
+   r.g('commit','-qm','code');
+  }
+ }finally{r.rm();}
+});
+
+test('git hook refuses unstaged tracked bytes and actual git -a reconciles its index',()=>{
+ const r=splitFixture('split-index-');
+ try{
+  r.put('docs/PHYSICS.md','staged\n');r.g('add','docs/PHYSICS.md');r.put('code.js','unstaged\n');
+  const out=r.run();assert.equal(out.status,1,out.stderr);assert.match(out.stderr,/does not match the commit index/);assert.match(out.stderr,/code.js/);
+  fs.mkdirSync(path.join(r.dir,'.githooks'));fs.copyFileSync(HOOK,path.join(r.dir,'.githooks/pre-commit'));fs.chmodSync(path.join(r.dir,'.githooks/pre-commit'),0o755);
+  r.g('add','.githooks');r.g('config','core.hooksPath','.githooks');
+  const commit=spawnSync('git',['commit','-am','actual hook'],{cwd:r.dir,encoding:'utf8',env:{...r.env,CLAUDECODE:'1'}});
+  assert.equal(commit.status,0,commit.stderr);assert.match(commit.stderr,/code commit/);assert.equal(r.g('status','--porcelain'),'');
+ }finally{r.rm();}
+});
+
+test('git hook borrows dependencies only in a linked worktree and skips asset-only trees without tools',()=>{
+ const r=splitFixture('split-linked-'),wt=r.dir+'-linked';
+ try{
+  r.g('worktree','add','-q','-b','linked',wt);assert.equal(fs.existsSync(path.join(wt,'node_modules')),false);
+  fs.writeFileSync(path.join(wt,'docs/PHYSICS.md'),'linked\n');execFileSync('git',['add','docs/PHYSICS.md'],{cwd:wt,env:r.env});
+  let out=r.run(wt);assert.equal(out.status,0,out.stderr);assert.equal(fs.realpathSync(path.join(wt,'node_modules')),fs.realpathSync(path.join(r.dir,'node_modules')));
+  fs.rmSync(path.join(r.dir,'node_modules'),{recursive:true});r.put('docs/PHYSICS.md','main\n');r.g('add','docs/PHYSICS.md');
+  out=r.run();assert.equal(out.status,1,out.stderr);assert.match(out.stderr,/node_modules is missing/);
+  r.g('reset','--hard','HEAD');fs.rmSync(path.join(r.dir,'tools'),{recursive:true});r.g('add','-A');r.g('commit','-qm','asset branch');
+  r.put('assets/new.png','asset');r.g('add','assets');out=r.run();assert.equal(out.status,0,out.stderr);assert.match(out.stderr,/guards skipped.*no tools/);
+  r.put(path.posix.join('js','new.js'),'code');r.g('add','js');out=r.run();assert.equal(out.status,1,out.stderr);assert.doesNotMatch(out.stderr,/guards skipped/);
+ }finally{spawnSync('git',['worktree','remove','--force',wt],{cwd:r.dir,env:r.env});r.rm();}
 });

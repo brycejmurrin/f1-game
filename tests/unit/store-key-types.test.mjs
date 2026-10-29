@@ -42,18 +42,9 @@ import vm from "node:vm";
 import * as espree from "espree";
 import { seedSaveMigrate } from "../helpers/seed-save-migrate.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { walk } from "../helpers/store-key-scan.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-function walk(node, fn) {
-  if (!node || typeof node !== "object") return;
-  if (Array.isArray(node)) { for (const n of node) walk(n, fn); return; }
-  if (typeof node.type === "string") fn(node);
-  for (const k of Object.keys(node)) {
-    if (k === "type" || k === "loc" || k === "range" || k === "parent") continue;
-    walk(node[k], fn);
-  }
-}
 
 // The literal type a written value has, or null when it is not a literal we can
 // judge. A computed expression says nothing, so it is not evidence either way.

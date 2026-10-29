@@ -33,6 +33,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { createRequire } from "node:module";
 import { seedLog } from "../helpers/seed-log.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
@@ -1298,6 +1299,7 @@ test("windowOf names a rival's window for the gap chips: P<lap> within three lap
 function strategySession(laps) {
   const s = commitSession();
   const { ctx, G } = s;
+  vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-strategy.js"), "utf8") + "\n;globalThis.AiStrategy = AiStrategy;", ctx, { filename: absSrc("js/physics/ai-strategy.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/physics/ai-drive.js"), "utf8") + "\n;globalThis.AiDrive = AiDrive;", ctx, { filename: absSrc("js/physics/ai-drive.js") });
   vm.runInContext(readFileSync(join(ROOT, "js/race/sporting-regs.js"), "utf8") + "\n;globalThis.SportingRegs = SportingRegs;", ctx, { filename: absSrc("js/race/sporting-regs.js") });
   ctx.TyreModel.AI_CLASS = {
@@ -1782,6 +1784,7 @@ test("HUD plan and actual Strategy share one caution field scan and preserve vis
   const root = mk(); root.hidden = true;
   ctx.document = { body: { classList: { contains: () => false } }, getElementById: id => id === "hud-strat" ? root : null, createElement: mk };
   ctx.HudElements = { isOn: () => true };
+  withI18n(ctx);
   vm.runInContext(readFileSync(join(ROOT, "js/ui/hud-strategy.js"), "utf8"), ctx, { filename: absSrc("js/ui/hud-strategy.js") });
   const S = vm.runInContext("HudStrategy", ctx);
   const view = () => JSON.stringify([root.children, root.attrs]);

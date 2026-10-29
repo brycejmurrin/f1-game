@@ -93,7 +93,7 @@ function clean(snapshot, manifest, objectFormat) {
 }
 function appendExclusive(file, row) { fs.appendFileSync(file, JSON.stringify(row) + "\n", { encoding: "utf8", flag: "a" }); }
 
-export function createSnapshot({ repo, runDir, sha = "HEAD" }) {
+function createSnapshot({ repo, runDir, sha = "HEAD" }) {
   if (fs.existsSync(runDir)) throw fail(`run directory already exists; refusing to append or resume: ${runDir}`);
   const originalSha = git(repo, ["rev-parse", `${sha}^{commit}`]);
   fs.mkdirSync(runDir, { recursive: true });
@@ -114,7 +114,7 @@ export function createSnapshot({ repo, runDir, sha = "HEAD" }) {
   }
 }
 
-export function validatePlan(plan) {
+function validatePlan(plan) {
   if (!plan || !Array.isArray(plan.workers) || !plan.workers.length) throw fail("plan.workers must be a non-empty array");
   const ids = new Set(), known = new Set([...Object.keys(TOOL_SCHEMAS), ...LSP_TOOLS.map(x => x.name)]);
   for (const w of plan.workers) {

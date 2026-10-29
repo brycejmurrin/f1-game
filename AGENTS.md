@@ -77,7 +77,7 @@ Session shape — thirteen rules that control wall time, waiting and handoff:
 11. Never hand-edit a generated file: the `@gen-shell` blocks of `index.html` and `sw.js`, `version.json`, `package.json`'s test scripts (source `tests/groups.json`), `tools/README.md`, `js/roster.js`, `tools/carview.html`, `js/track/circuit-meta.js`, `CHANGELOG.md` (fragments go in `docs/changelog.d/`), `tests/data/ratchets.json` and `ratchets.d/*.json` (`protect-files.sh` enforces it).
     Edit the SOURCE, then `npm run gen` (`gen:check` names drift). No doc quotes the ladder's sizes — `node tools/gen/gen-ladder-figures.mjs` prints them.
 12. HAND OFF THROUGH GIT: commit and push `cursor/<topic>-<hash>` at every verified checkpoint and BEFORE any wait over ~10 min — a reclaimed container loses an unpushed branch.
-    Commit in two calls: stage in its own command, then `git commit` in the next — the commit hook reads the index as it is when `git commit` is typed, while `test:guards` reads the working tree, so the two agree only when nothing is left unstaged; never chain an edit or a `git add` into the commit call. Push with `git push -u origin <branch>` alone, no output pipe.
+    Commit in two calls: stage in its own command, then `git commit` in the next. The git pre-commit hook owns `test:guards` for every host and reads the working tree against the commit index; keep them identical. Give the commit call `timeout: 300000`, or run `npm run test:guards` first (a green verdict for that staged tree is reused for 10 min). Never chain an edit or `git add` into the commit call. Push with `git push -u origin <branch>` alone, no output pipe.
     Open a DRAFT PR into the deploy branch at the FIRST commit, before the work is verified (GitHub MCP, `draft: true`, labels and `Closes #<n>` per `docs/WORKERS.md` §2; a draft gets CI only with the `run-ci` label, ready the full tier). Not `deploy.mjs --pr`: it opens a NON-draft PR with no Plan or Hand-off.
     The body (`.github/pull_request_template.md`) IS the session log, written for an agent arriving cold: Goal, Plan (a `- [ ]` checklist, one verifiable step per item, exactly one marked now:), Verified / Not run, and the Hand-off block (`docs/WORKERS.md` §The Hand-off block).
     Keep the Plan live with `update_pull_request` (no push needed): tick an item with its evidence (sha, verdict line), add discovered work, strike a dropped item with why, never delete one; refresh the Hand-off block at every push. The Plan's last item is the template's gate-exempt `- [ ] land: …` line, never a "merge" step. A wait on something outside the PR is a Plan item, never a hold.
@@ -144,10 +144,10 @@ subagent you message mid-task → agent `worker`.
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence.
 
 Hooks (full list: `.claude/rules/claude-config.md`): `session-start.sh` installs deps; `protect-files.sh` blocks generated-file
-and live-run source edits (`touch .claude/allow-protected` lifts the generated-file rules only); `bash-guard.sh` runs
-`test:guards` before a commit (rule 12) and refuses `pkill -f`, PID kills, run cancels, force pushes and deploy-branch
+and live-run source edits (`touch .claude/allow-protected` lifts the generated-file rules only); `bash-guard.sh` keeps fast, fail-closed refusals; `.githooks/pre-commit` runs
+`test:guards` inside a commit (rule 12) and refuses `pkill -f`, PID kills, run cancels, force pushes and deploy-branch
 pushes. Codex runs `.codex/hooks.json` instead: `shell-guard.sh` on every shell call and `mcp-guard.sh` on merge, auto-merge,
-PR-update and workflow-dispatch calls (an "ask" there is a deny), plus the git pre-commit guard; the rest is convention.
+PR-update and workflow-dispatch calls (an "ask" there is a deny), plus the git pre-commit guard (the sole `test:guards` owner); the rest is convention.
 
 ## Cursor Cloud specific instructions
 `.cursor/environment.json` bootstraps every Cloud VM (`mcpServerAllowlist` = `.mcp.json`'s six servers; plugin MCPs use

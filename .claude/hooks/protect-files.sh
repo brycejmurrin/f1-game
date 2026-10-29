@@ -38,6 +38,21 @@
 # at the repo root and retry (remove it when done). It lifts rules 1 and 3
 # only — rule 2 (a live Playwright run) holds regardless. Exit 2 blocks; the
 # reason on stderr reaches the model.
+#
+# FAIL CLOSED (2026-10-28): a missing python3, a crash (exit 1, a traceback) or
+# any exit but 0/2 is a refusal here, whatever the host's hook runner does with
+# it (Claude Code passes such a call unless onFailure is "block":
+# https://code.claude.com/docs/en/hooks §Block the action when a hook fails).
 
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "BLOCKED: protect-files needs python3 to read the call; none of its rules ran, so it is refused (fail closed)." >&2
+  exit 2
+fi
 # Keep payloads on stdin; exporting full files hits the OS per-variable limit.
-exec python3 "$(dirname "$0")/protect-files.py"
+python3 "$(dirname "$0")/protect-files.py"
+rc=$?
+case "$rc" in
+  0|2) exit "$rc" ;;
+  *) echo "BLOCKED: protect-files.py failed with exit $rc, so its rules did not finish and this call is refused (fail closed). Report the hook error; do not work around it." >&2
+     exit 2 ;;
+esac

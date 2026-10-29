@@ -560,7 +560,8 @@ COMMIT_SHORT_ARG = set("mFcCt")
 
 def commit_info(text):
     """Every `git … commit …` in the command: [{all, paths, include, dry,
-    skip, gitdir}]. `skip` is APEX_SKIP_GUARDS=1 on that command. Raises ParseError when the
+    noverify, skip, gitdir}]. `skip` is APEX_SKIP_GUARDS=1 on that command, `noverify`
+    a --no-verify / -n that skips .githooks/pre-commit. Raises ParseError when the
     text cannot be tokenised (main() prints `null`, the shell then falls back
     to its regex: fail closed)."""
     found = []
@@ -574,7 +575,7 @@ def commit_info(text):
             gitdir = _abs(gitdir, cwd)
         elif cwd and os.path.normpath(cwd) != os.path.normpath(start):
             gitdir = cwd
-        info = {"all": False, "paths": [], "include": False, "dry": False,
+        info = {"all": False, "paths": [], "include": False, "dry": False, "noverify": False,
                 "skip": env.get("APEX_SKIP_GUARDS") == "1", "gitdir": gitdir}
         j = i + 1
         dashdash = False
@@ -594,18 +595,26 @@ def commit_info(text):
             elif a == "--dry-run":
                 info["dry"] = True
             elif a.startswith("--"):
+                # git takes any unambiguous prefix: `--no-veri` is --no-verify (`--no-ve` is ambiguous with
+                # --no-verbose and git refuses it). 2026-10-28 split: the git hook is the gate, so skipping it is refused.
+                if len(a) >= 8 and "--no-verify".startswith(a.split("=", 1)[0]):
+                    info["noverify"] = True
                 if a in COMMIT_WITH_ARG:
                     j += 1
             else:
-                # a short cluster: -am, -qm "msg", -mfoo
+                # a short cluster: -am, -qm "msg", -mfoo, -nm (no-verify); -S/-u take the rest of the cluster
                 for k, ch in enumerate(a[1:]):
                     if ch == "a":
                         info["all"] = True
                     if ch in ("i", "o"):
                         info["include"] = True
+                    if ch == "n":
+                        info["noverify"] = True
                     if ch in COMMIT_SHORT_ARG:
                         if k == len(a) - 2:
                             j += 1
+                        break
+                    if ch in ("S", "u"):
                         break
             j += 1
         found.append(info)
@@ -853,7 +862,7 @@ def closed_pr_refusal(dests, root):
         try:
             cmd = shlex.split(os.environ["APEX_PR_STATE_CMD"]) if os.environ.get("APEX_PR_STATE_CMD") else \
                 ["node", "--input-type=module", "-e", PR_STATE_JS]
-            r = subprocess.run(cmd + ["brycejmurrin:" + branch], cwd=root, capture_output=True, text=True, timeout=30)
+            r = subprocess.run(cmd + ["brycejmurrin:" + branch], cwd=root, capture_output=True, text=True, timeout=5)
             prs = json.loads(r.stdout) if r.returncode == 0 else None
         except Exception:
             prs = None
@@ -1485,6 +1494,7 @@ def surveyor_targets(text, cwd):
 
 # ---- pass-4 red-team additions (2026-10-26) ----------------------------------------
 CONFIG_WRITE_KEYS = re.compile(r"^(core\.hookspath|push\.default|remote\.[^.]+\.(push|mirror|pushurl)|include\.path|includeif\..*\.path|alias\.(push|commit|merge))$", re.I)
+CONFIG_OPT_ARG = {"-f", "--file", "--blob", "--type", "--default", "--comment", "--value", "--url"}
 
 
 def config_issues(text):
@@ -1505,8 +1515,27 @@ def config_issues(text):
         if i < len(argv) and argv[i] == "config":
             args = argv[i + 1:]
             reading = any(a in ("--get", "--get-all", "--get-regexp", "--list", "-l", "--show-origin", "--show-scope") for a in args)
-            keys = [a for a in args if not a.startswith("-")]
-            if not reading and keys and CONFIG_WRITE_KEYS.match(keys[0]):
+            # 2026-10-28 (commit-hook split: core.hooksPath now carries the whole commit gate): skip option VALUES
+            # (`--file .git/config core.hooksPath x` read `.git/config` as the key) and read git 2.46's subcommand
+            # form (`git config set|unset|replace-all <key>`); removing or renaming the `core` section drops it too.
+            keys, k = [], 0
+            while k < len(args):
+                a = args[k]
+                if a in CONFIG_OPT_ARG:
+                    k += 2
+                    continue
+                if not a.startswith("-"):
+                    keys.append(a)
+                k += 1
+            if keys and keys[0] in ("get", "list"):
+                reading = True
+            elif keys and keys[0] in ("set", "unset", "replace-all", "add"):
+                keys = keys[1:]
+            section = keys[1:2] if keys and keys[0] in ("remove-section", "rename-section") else (
+                keys[:1] if any(a in ("--remove-section", "--rename-section") for a in args) else [])
+            if not reading and section and section[0].lower() == "core":
+                why.append("git config removes or renames the core section (core.hooksPath)")
+            elif not reading and keys and CONFIG_WRITE_KEYS.match(keys[0]):
                 why.append(f"git config {keys[0]} is a write")
         if why:
             found.append({"cmd": " ".join(argv), "why": sorted(set(why))})
@@ -1587,6 +1616,7 @@ def guard(payload, root):
         gd = next((x["gitdir"] for x in c if x.get("gitdir")), "") or "-"
         print(len(allc), "1" if c else "0", "1" if any(x.get("all") for x in c) else "0", gd, " ".join(paths))
     except ParseError:
+        allc = []
         print("NULL")
     dests = []
     try:
@@ -1632,6 +1662,16 @@ def guard(payload, root):
     if cfgw:
         sys.stderr.write("BLOCKED: `" + cfgw[0]["cmd"] + "` — " + "; ".join(cfgw[0]["why"]) + " (pass-4 red-team R2: it "
                          "switches git's hooks or push targets off for every worktree and later session in this container).\n")
+        return 2
+    # 2026-10-28 commit-hook split, step 1 (Bryce: "Yes, split it"; docs/plans/2026-10-27-landing-and-agent-ops.md
+    # §4): .githooks/pre-commit is the commit gate for Cursor and Codex today and becomes the one owner of
+    # test:guards for every host, so `git commit --no-verify` / `-n` (any unambiguous `--no-veri…` prefix, in a
+    # short cluster, through an alias) is refused. APEX_SKIP_GUARDS=1 stays the sanctioned bypass (both gates honour it).
+    unverified = [x for x in allc if x.get("noverify") and not x.get("dry")]
+    if unverified:
+        sys.stderr.write("BLOCKED: `git commit --no-verify` / `-n` skips .githooks/pre-commit, the git commit gate "
+                         "(test:guards, docs-integrity, the ratchet auto-raise; AGENTS.md rule 12). Commit without it; "
+                         "if the guards themselves are the change, prefix APEX_SKIP_GUARDS=1 instead.\n")
         return 2
     wrapped = wrapped_issues(cmd)
     if wrapped:
