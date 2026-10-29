@@ -192,7 +192,6 @@
         "tests/unit/light-store-perchunk-pin.test.mjs",
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
-        "tests/unit/race-ceremony.test.mjs",
         "tests/unit/storm-weather.test.mjs",
         "tests/unit/three-inspector.test.mjs"
       ],
@@ -12063,11 +12062,17 @@
       "afterClassify": [
         "tests/unit/race-ceremony.test.mjs"
       ],
+      "apexCall": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
       "create": [
         "tests/unit/race-ceremony.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "eligible": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "finishThrough": [
         "tests/unit/race-ceremony.test.mjs"
       ],
       "reset": [

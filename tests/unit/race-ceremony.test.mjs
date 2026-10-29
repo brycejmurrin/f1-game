@@ -137,12 +137,21 @@ test("tick auto-advances parcFerme after DUR", () => {
   assert.equal(api.status().phase, "podium");
 });
 
-test("source: finishRace default stays instant; ceremony opt-in wired", () => {
-  const apex = fs.readFileSync(path.join(ROOT, "js/agent/apex.js"), "utf8");
-  assert.match(apex, /finishRace\(opts\)/);
-  assert.match(apex, /ceremony\(arg\)/);
-  assert.match(apex, /RaceCeremony\.finishThrough/);
-  assert.match(apex, /RaceCeremony\.apexCall/);
+test("finishThrough: default stays instant, {ceremony:true} arms; apexCall is idle-safe", () => {
+  const { R } = boot();
+  const mk = () => ({ raceT: 40, state: "race", cars: [{}, { retired: true }] });
+  const run = (opts) => {
+    const G = mk(); let ended = null;
+    R.finishThrough(G, (o) => { ended = o; }, (c) => c, opts);
+    return { G, ended, armed: R.want() };
+  };
+  let r = run();
+  assert.equal(r.armed, false, "default finishRace does not arm the ceremony");
+  assert.equal(r.G.cars[0].finishT, 40); assert.equal(r.G.cars[1].finished, undefined, "a retirement never crosses the line");
+  assert.equal(r.ended, r.G.cars);
+  assert.equal(run({ ceremony: true }).armed, true);
+  R.want(false);
+  assert.equal(R.apexCall("skip"), false, "no live ceremony: skip is refused");
 });
 
 test("want + afterClassify: armed eligible defers sheet; default shows it", () => {
