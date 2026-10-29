@@ -10,6 +10,7 @@
  *
  * 2026-10-28: tip 320 + PedalTravel + GarageCrewDraw + AiStrategy → 323; #4056 OverlayBridge +
  * OverlayPublisher → 325 so the game page can hear overlay.html heartbeats without growing game.js.
+ * 2026-10-29: #4067 RaceCeremony → 326; game.js calls RaceCeremony.create(G) at eval time, so it cannot be lazy.
  *
  * Run: node --test tests/unit/boot-load-budget.test.mjs
  */
@@ -24,8 +25,8 @@ const ROOT = new URL("../../", import.meta.url);
 const read = (p) => readFileSync(new URL(p, ROOT), "utf8");
 const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 
-// 325: tip PedalTravel + GarageCrewDraw + AiStrategy (323) + OverlayBridge + OverlayPublisher (#4056).
-const MAX_EAGER_SCRIPTS = 325;
+// 325: tip PedalTravel + GarageCrewDraw + AiStrategy (323) + OverlayBridge + OverlayPublisher (#4056); 326: + RaceCeremony (#4067).
+const MAX_EAGER_SCRIPTS = 326;
 const MAX_EAGER_BYTES = 8_200_000;
 
 function eagerScripts() {

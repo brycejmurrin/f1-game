@@ -194,8 +194,7 @@
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/race-ceremony.test.mjs",
         "tests/unit/storm-weather.test.mjs",
-        "tests/unit/three-inspector.test.mjs",
-        "tests/unit/ui-sheets-audit.test.mjs"
+        "tests/unit/three-inspector.test.mjs"
       ],
       "settled": [
         "tests/specs/camera-hooks.spec.js",
@@ -12065,13 +12064,18 @@
         "tests/unit/race-ceremony.test.mjs"
       ],
       "create": [
-        "tests/unit/race-ceremony.test.mjs"
+        "tests/unit/race-ceremony.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "eligible": [
         "tests/unit/race-ceremony.test.mjs"
       ],
+      "reset": [
+        "tests/unit/ui-sheets-audit.test.mjs"
+      ],
       "resetLive": [
-        "tests/unit/race-ceremony.test.mjs"
+        "tests/unit/race-ceremony.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "seek": [
         "tests/unit/race-ceremony.test.mjs"
@@ -12086,7 +12090,8 @@
         "tests/unit/race-ceremony.test.mjs"
       ],
       "tick": [
-        "tests/unit/race-ceremony.test.mjs"
+        "tests/unit/race-ceremony.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
       ],
       "want": [
         "tests/unit/race-ceremony.test.mjs"
