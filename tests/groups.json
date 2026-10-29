@@ -258,6 +258,7 @@
     "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
     "// Context-loss menu notice + reload budget cleared at lights-out.",
     "tests/unit/ctx-lost-notice.test.mjs",
+    "tests/unit/ctx-lost-retry-reload.test.mjs",
     "tests/unit/cursor-agents.test.mjs",
     "tests/unit/curvature-channels.test.mjs",
     "// The track designer's registry (js/editor/custom-tracks.js + track-themes.js):",
@@ -748,6 +749,8 @@
     "tests/unit/platform-session-install.test.mjs",
     "// PlayerForces carve (carve-headroom A): combined-slip / Fy / yaw from updateCar.",
     "tests/unit/player-forces.test.mjs",
+    "// #4070 podium beat: PodiumBeat overlay + RacePodium CONTINUE/timer → #results. ~0.05 s.",
+    "tests/unit/podium-beat.test.mjs",
     "tests/unit/poll-live-shell.test.mjs",
     "// CI Watch board: every open PR with its SUGGESTION, GET-only, no ready-PR cap.",
     "tests/unit/pr-board.test.mjs",
@@ -779,6 +782,8 @@
     "// Push hold: queued + running Actions JOBS by OS vs the 40 Linux / 5 macOS slots, never runs. Fixtures.",
     "tests/unit/queue-depth.test.mjs",
     "tests/unit/quick-validate.test.mjs",
+    "// RaceCeremony SM (js/race/ceremony.js): eligibility, seek/skip, data-ceremony-phase (#4067). ~0.05 s.",
+    "tests/unit/race-ceremony.test.mjs",
     "tests/unit/race-control.test.mjs",
     "tests/unit/race-entry-profile.test.mjs",
     "tests/unit/race-insights.test.mjs",
@@ -1374,6 +1379,7 @@
         "tests/specs/carview-parts.spec.js",
         "tests/specs/custom-team.spec.js",
         "tests/specs/garage-aero.spec.js",
+        "tests/specs/garage-close-before-load.spec.js",
         "tests/specs/garage-close-one-click.spec.js",
         "tests/specs/garage-first-frame.spec.js",
         "tests/specs/garage-livery-churn.spec.js",
@@ -1801,6 +1807,7 @@
     },
     "test:gfx": {
       "files": [
+        "tests/specs/ctx-lost-retry.spec.js",
         "tests/specs/hud-mirror.spec.js",
         "tests/specs/image-grade-visual.spec.js",
         "tests/specs/instanced-draw.spec.js",
@@ -2119,6 +2126,12 @@
     "test:smoke": {
       "files": [
         "tests/specs/smoke.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:stall-reload-sw": {
+      "files": [
+        "tests/specs/stall-reload-sw.spec.js"
       ],
       "kind": "browser"
     },

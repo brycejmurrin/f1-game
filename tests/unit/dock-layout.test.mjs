@@ -30,7 +30,7 @@ function loadDock() {
   vm.runInContext(fs.readFileSync(path.join(ROOT, "js/ui/css-zoom.js"), "utf8"), ctx, { filename: absSrc("js/ui/css-zoom.js") });
   ctx.CssZoom = ctx.window.CssZoom;
   vm.runInContext(SRC.replace(/^const\b/gm, "var"), ctx);
-  return ctx.DockLayout;
+  return Object.assign({ __doc: ctx.document }, ctx.DockLayout);
 }
 const DL = loadDock();
 assert.ok(DL && DL.clampXY, "DockLayout IIFE must assign the global");
@@ -125,6 +125,24 @@ test("apply divides the translate by the dock's own CSS zoom", () => {
   DL.apply("buttons", bag, { L: plain, R: zoomed });
   assert.equal(plain.style.transform, "translate(100.0px, -80.0px)");
   assert.equal(zoomed.style.transform, "translate(-50.0px, -40.0px)", "zoom 2 halves both axes");
+});
+
+// MIRROR CONTROLS (body.mirror-controls) row-reverses #hud-dock: #dock-left paints on
+// the RIGHT edge, so its inboard +x must translate LEFT (and #dock-right's RIGHT).
+test("apply flips both docks' inboard direction under MIRROR CONTROLS", () => {
+  const doc = DL.__doc;
+  const left = dockEl(), right = dockEl();
+  const bag = DL.normalize({});
+  bag.buttons.L = { x: 0.25, y: 0 };
+  bag.buttons.R = { x: 0.25, y: 0 };
+  doc.body = { classList: { contains: (c) => c === "mirror-controls" } };
+  try {
+    DL.apply("buttons", bag, { L: left, R: right });
+    assert.equal(left.style.transform, "translate(-100.0px, 0.0px)", "mirrored left dock moves left (inboard)");
+    assert.equal(right.style.transform, "translate(100.0px, 0.0px)", "mirrored right dock moves right (inboard)");
+  } finally { delete doc.body; }
+  DL.apply("buttons", bag, { L: left, R: right });
+  assert.equal(left.style.transform, "translate(100.0px, 0.0px)", "unmirrored left dock moves right");
 });
 
 test("switching scheme applies that scheme's offsets only", () => {

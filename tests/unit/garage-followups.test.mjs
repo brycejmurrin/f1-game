@@ -211,7 +211,7 @@ test('deferred garage builds cannot run after hide or clear a newer visit busy s
   const c = vm.createContext({ document: dom.document, $: id => dom.byId(id), Log: { info() {} },
     els: { select: dom.byId('select'), overlay: dom.byId('overlay') }, G: { teamIdx: 0 }, Teams: { LIST: [{ id: 'haas' }] },
     tuneExperiments: { visit() {} }, SetupTune: { get: () => ({ arbF: 5 }) }, csVisitGeneration: 0, csVisitTunes: new Map(), csTuneExperiments: new Map(),
-    requestAnimationFrame: cb => queue.push(cb), buildSetup: () => builds++,
+    requestAnimationFrame: cb => queue.push(cb), buildSetup: () => builds++, syncGarageExitChrome() {},
   });
   vm.runInContext(sheet.slice(sheet.indexOf('function openSetup()'), sheet.indexOf('// THE PAINT EDITOR DOES NOT OUTLIVE')), c);
   c.openSetup(); queue.shift()(); const old = queue.shift();

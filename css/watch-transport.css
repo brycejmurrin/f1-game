@@ -34,6 +34,11 @@
 .watch-transport [data-wt="timeline"] { display: flex; align-items: center; gap: var(--gap); margin-top: var(--gap); }
 .watch-transport [data-wt="track"] { flex: 1; position: relative; min-width: 0; }
 .watch-transport [data-wt="seek"] { display: block; width: 100%; margin: 0; height: 32px; accent-color: var(--red); cursor: pointer; }
+/* A THUMB SCRUBS THE TIMELINE: 32px sat under the --tap floor the buttons
+   above already meet. Coarse pointers only, so a mouse keeps the slim bar;
+   the markers overlay is inset:0 on the track and the timeline row centres
+   its items, so the taller hit box does not move them. */
+@media (pointer: coarse) { .watch-transport [data-wt="seek"] { height: max(32px, var(--tap)); } }
 .watch-transport [data-wt="markers"] { position: absolute; inset: 0 calc(var(--gap) * 2 / 3); pointer-events: none; }
 .watch-transport [data-wt="markers"] i { position: absolute; top: 0; height: 5px; width: 2px; background: var(--dim); }
 .watch-transport [data-kind="pit"], .watch-transport [data-kind="fastest"] { background: var(--sec-best) !important; }

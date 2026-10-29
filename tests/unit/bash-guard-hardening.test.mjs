@@ -1498,6 +1498,31 @@ if [ "$2" = guard ]; then printf '0 0 0 -\\n0\\n%s\\n' "$FIXTURE_DECISION"; else
 });
 
 
+test("escape-hatch notices go to stderr so stdout stays empty or one JSON object (H5, 2026-10-29)", () => {
+  const repo = scratchRepo("hook-hatch-stderr-");
+  try {
+    fs.mkdirSync(path.join(repo.dir, ".claude"), { recursive: true });
+    const run = (command) => hook("bash-guard.sh", bashCall(command), { cwd: repo.dir });
+    const assertStdout = (stdout) => {
+      const t = stdout.trim();
+      if (t === "") return;
+      assert.equal(t.split("\n").filter(Boolean).length, 1, "stdout must be at most one JSON object");
+      JSON.parse(t);
+    };
+    for (const h of ["allow-protected", "allow-context-cap", "allow-stop"]) {
+      const hatch = path.join(repo.dir, ".claude", h);
+      fs.writeFileSync(hatch, "");
+      const r = run("git status");
+      assert.equal(r.status, 0, `${h}: ${r.stderr}`);
+      assertStdout(r.stdout);
+      assert.match(r.stderr, new RegExp(`hatch active: \\.claude/${h.replace(/-/g, "\\-")}`));
+      fs.unlinkSync(hatch);
+    }
+  } finally {
+    repo.rm();
+  }
+});
+
 test('bash-guard refuses an active legacy hook that skips Claude Code; split hook passes',()=>{
  const repo=scratchRepo('split-legacy-');
  try{

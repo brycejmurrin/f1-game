@@ -125,4 +125,11 @@ body.photo-mode.photo-studio-open .pc-look-wrap { left: auto; right: calc((var(-
   #ps-panel { width: calc(34 * var(--vwz)); }
   body.photo-studio-open { --ps-dock-px: calc(34vw + var(--safe-r)); }
 }
+/* Phone landscape: the side dock was ~34vw and the shot/aspect row overflowed
+   its own edge. Wrap those chips; keep the dock from eating the car. */
+@media (max-height: 430px) and (orientation: landscape) {
+  #ps-panel { width: min(300px, calc(38 * var(--vwz))); }
+  #ps-panel .balanced-row { flex-wrap: wrap; }
+  body.photo-studio-open { --ps-dock-px: calc(min(300px, 38vw) + var(--safe-r)); }
+}
 }

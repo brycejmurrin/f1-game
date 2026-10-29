@@ -146,6 +146,16 @@ function boot(opts = {}) {
   return { dom, els, player, G, sb, hud, bgLog, mapLog, timers, tick: () => hud.updateHud(true) };
 }
 
+// UI hunt 2026-10-29 H1: #captions sits outside #hud, so a new race must drop
+// the last spotter call itself (its 2.5 s hold is the backstop).
+test("resetRace clears the spotter caption strip", () => {
+  const { sb, hud } = boot();
+  let cleared = 0;
+  sb.Captions = { clear: () => { cleared++; } };
+  hud.resetRace();
+  assert.equal(cleared, 1);
+});
+
 test("the tach redline latches with hysteresis instead of flickering on the 92 % line", () => {
   const { els, player, tick } = boot();
   const on = () => els.tach.classList.contains("redline");

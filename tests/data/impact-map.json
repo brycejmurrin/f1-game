@@ -193,8 +193,7 @@
         "tests/unit/loading-card.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/storm-weather.test.mjs",
-        "tests/unit/three-inspector.test.mjs",
-        "tests/unit/ui-sheets-audit.test.mjs"
+        "tests/unit/three-inspector.test.mjs"
       ],
       "settled": [
         "tests/specs/camera-hooks.spec.js",
@@ -3870,6 +3869,7 @@
         "tests/unit/career-settle.test.mjs"
       ],
       "active": [
+        "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/store-cross-tab.test.mjs"
@@ -7320,7 +7320,6 @@
         "tests/specs/scenery-kits.spec.js",
         "tests/specs/smoke.spec.js",
         "tests/unit/assets-pack.test.mjs",
-        "tests/unit/ctx-lost-notice.test.mjs",
         "tests/unit/flyby-lighting.test.mjs",
         "tests/unit/game-round2-vm.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
@@ -8269,6 +8268,9 @@
         "tests/unit/livery-design.test.mjs"
       ],
       "renderStatBars": [
+        "tests/unit/garage-followups.test.mjs"
+      ],
+      "syncGarageExitChrome": [
         "tests/unit/garage-followups.test.mjs"
       ],
       "*": [
@@ -10293,6 +10295,9 @@
       "nextReloadCount": [
         "tests/unit/gfx-escalation.test.mjs"
       ],
+      "noteCleanMenuBoot": [
+        "tests/unit/gfx-escalation.test.mjs"
+      ],
       "onReloadBudgetExceeded": [
         "tests/unit/gfx-escalation.test.mjs"
       ],
@@ -12059,6 +12064,50 @@
         "tests/unit/car-fields-vm.test.mjs"
       ]
     },
+    "js/race/ceremony.js": {
+      "afterClassify": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "apexCall": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "create": [
+        "tests/unit/race-ceremony.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "eligible": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "finishThrough": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "reset": [
+        "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "resetLive": [
+        "tests/unit/race-ceremony.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "seek": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "skip": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "start": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "status": [
+        "tests/unit/race-ceremony.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/race-ceremony.test.mjs",
+        "tests/unit/ui-sheets-audit.test.mjs"
+      ],
+      "want": [
+        "tests/unit/race-ceremony.test.mjs"
+      ]
+    },
     "js/race/cooldown-lap.js": {
       "aiPolicy": [
         "tests/unit/cooldown-lap.test.mjs"
@@ -12711,6 +12760,26 @@
         "tests/unit/ai-strategy.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
         "tests/unit/ratchets.test.mjs"
+      ]
+    },
+    "js/race/podium-beat.js": {
+      "create": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "eligible": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "finish": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "start": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "status": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "tick": [
+        "tests/unit/podium-beat.test.mjs"
       ]
     },
     "js/race/quali-model.js": {
@@ -16685,6 +16754,12 @@
       ]
     },
     "js/ui/captions.js": {
+      "clear": [
+        "tests/unit/captions.test.mjs"
+      ],
+      "onSpotter": [
+        "tests/unit/captions.test.mjs"
+      ],
       "push": [
         "tests/unit/announcer.test.mjs",
         "tests/unit/captions.test.mjs"
@@ -16815,6 +16890,7 @@
         "tests/unit/career-round2.test.mjs",
         "tests/unit/data-hub-offline.test.mjs",
         "tests/unit/data-hub-picker.test.mjs",
+        "tests/unit/podium-beat.test.mjs",
         "tests/unit/quali-persist.test.mjs",
         "tests/unit/setup-screens-state.test.mjs",
         "tests/unit/track-designer-dom.test.mjs"
@@ -17606,6 +17682,9 @@
       "landing": [
         "tests/unit/menu-a11y-audit.test.mjs"
       ],
+      "onClickShield": [
+        "tests/unit/menu-a11y-audit.test.mjs"
+      ],
       "onEscape": [
         "tests/unit/menu-a11y-audit.test.mjs",
         "tests/unit/uilayers-modal-order.test.mjs"
@@ -17764,6 +17843,23 @@
         "tests/unit/pause-key-tools.test.mjs"
       ]
     },
+    "js/ui/podium-beat.js": {
+      "dismount": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "eligible": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "mount": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "phaseAttr": [
+        "tests/unit/podium-beat.test.mjs"
+      ],
+      "visible": [
+        "tests/unit/podium-beat.test.mjs"
+      ]
+    },
     "js/ui/post-fx-opts.js": {
       "applyLookShed": [
         "tests/unit/frame-hotpath-alloc.test.mjs",
@@ -17857,6 +17953,7 @@
         "tests/unit/career-experience.test.mjs"
       ],
       "*": [
+        "tests/unit/podium-beat.test.mjs",
         "tests/unit/ui-sheets-audit.test.mjs"
       ]
     },
@@ -17961,6 +18058,7 @@
       "create": [
         "tests/unit/async-lifecycle.test.mjs",
         "tests/unit/ctx-lost-notice-menu-exit.test.mjs",
+        "tests/unit/ctx-lost-retry-reload.test.mjs",
         "tests/unit/custom-tracks.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/hud-readouts.test.mjs",

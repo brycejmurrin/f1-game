@@ -21,6 +21,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -533,9 +534,21 @@ test("UpdateCheck is wired: #update-chip in the shell, the visibility hook, the 
 test("UPDATE READY and the save warning stand down under a modal dialog", () => {
   const css = read("css/overlays.css");
   // Scoped to body's dialogs plus the telemetry popup inside #datahub (css-has-scope.test.mjs).
-  assert.match(css, /body:has\(> dialog:modal\) #update-chip,\s*body:has\(> :where\(#datahub\) > dialog:modal\) #update-chip \{ display: none; \}/);
+  // INSTALL APP shares the chip's z and corner logic, so it shares the pair (C2).
+  assert.match(css, /body:has\(> dialog:modal\) :is\(#update-chip, #install-chip\),\s*body:has\(> :where\(#datahub\) > dialog:modal\) :is\(#update-chip, #install-chip\) \{ display: none; \}/);
   assert.match(css, /body:has\(> dialog\[open\]\) #save-warning,\s*body:has\(> :where\(#datahub\) > dialog\[open\]\) #save-warning \{ display: none; \}/);
   assert.doesNotMatch(css, /Above every\s+menu sheet/, "the comment no longer promises what the top layer forbids");
+});
+
+// C1/C2: #select, #career and #carsetup are div screens (no top layer), so the
+// z 9000 chips sat over their bottom-right primary (#sel-go, #cs-done) and a
+// mis-tap on UPDATE READY reloaded the game. Both chips stand down there; the
+// title keeps them (the rule names only those three screens).
+test("UPDATE READY and INSTALL APP stand down over the select, career and garage screens", () => {
+  const css = read("css/overlays.css");
+  assert.equal(decl(cssRules(css), "body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #install-chip)", "display"), "none");
+  const html = read("index.html");
+  for (const id of ["select", "career", "carsetup"]) assert.match(html, new RegExp(`\\n<div id="${id}" class="screen"`), `#${id} is a <body> child, so the :has(> …) scope matches`);
 });
 
 // Ports are private to the queried controller; replacements and a worker that

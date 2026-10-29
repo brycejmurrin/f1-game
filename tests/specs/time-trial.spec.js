@@ -97,6 +97,7 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
       expect(await armedFit(page, "pm-restart")).toEqual({ clipped: false, hit: [] });
       expect(await page.evaluate(() => window.__apex.timing().lap)).toBe(2);
       await expect(page.locator("#pausemenu")).toBeVisible();
+      await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 });   // a younger real tap is a double tap
       await page.locator("#pm-restart").tap();
       await expect.poll(() => page.evaluate(() => window.__apex.timing()?.lap), { timeout: BOOT_MS }).toBe(0);
       await expect(page.locator("#pausemenu")).toBeHidden();
@@ -116,6 +117,7 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
       expect(await armedFit(page, "pm-quit")).toEqual({ clipped: false, hit: [] });
       await expect(page.locator("#pausemenu")).toBeVisible();
       await expect(page.locator("#overlay")).toBeHidden();
+      await page.waitForFunction(() => PauseOpts.armAge() >= PauseOpts.ARM_MIN_MS, null, { polling: 100, timeout: 5000 });   // a younger real tap is a double tap
       await page.locator("#pm-quit").tap();
       await expect(page.locator("#overlay")).toBeVisible();
       for (const selector of ["#pausemenu", "#loading", "#results", "#race-settings", "#select"])

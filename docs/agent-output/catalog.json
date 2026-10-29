@@ -1219,6 +1219,7 @@
         "test:results-flow",
         "test:shimmer",
         "test:smoke",
+        "test:stall-reload-sw",
         "test:tiny",
         "test:ui",
         "test:webkit",
@@ -1495,6 +1496,12 @@
     },
     {
       "path": "tools/env/ensure-mcp-ready.sh",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "bash"
+    },
+    {
+      "path": "tools/env/install-blender.sh",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "bash"
@@ -1852,6 +1859,15 @@
       ]
     },
     {
+      "path": "tools/garage/arrival-poses.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
+    },
+    {
       "path": "tools/garage/author-crew-motion.py",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
@@ -1880,6 +1896,15 @@
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
       "interpreter": "python3"
+    },
+    {
+      "path": "tools/gen/blender/garage-previz.py",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "python3",
+      "nativeOutputFlagMentions": [
+        "--out"
+      ]
     },
     {
       "path": "tools/gen/compress-audio.mjs",
@@ -2313,6 +2338,12 @@
       "path": "tools/gfx/ssr-probe.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "artifact-first",
+      "interpreter": "node"
+    },
+    {
+      "path": "tools/gfx/stall-reload-sw-oracle.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
       "interpreter": "node"
     },
     {
@@ -4204,7 +4235,7 @@
     },
     {
       "name": "test:car",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/car-effects.spec.js tests/specs/carview-parts.spec.js tests/specs/custom-team.spec.js tests/specs/garage-aero.spec.js tests/specs/garage-close-one-click.spec.js tests/specs/garage-first-frame.spec.js tests/specs/garage-livery-churn.spec.js tests/specs/garage-livery-fit.spec.js tests/specs/garage-out-before-card.spec.js tests/specs/garage-pick-cost.spec.js tests/specs/garage-prebuild.spec.js tests/specs/livery-sidewall.spec.js tests/specs/livery-wheels.spec.js tests/specs/parts-*.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/car-effects.spec.js tests/specs/carview-parts.spec.js tests/specs/custom-team.spec.js tests/specs/garage-aero.spec.js tests/specs/garage-close-before-load.spec.js tests/specs/garage-close-one-click.spec.js tests/specs/garage-first-frame.spec.js tests/specs/garage-livery-churn.spec.js tests/specs/garage-livery-fit.spec.js tests/specs/garage-out-before-card.spec.js tests/specs/garage-pick-cost.spec.js tests/specs/garage-prebuild.spec.js tests/specs/livery-sidewall.spec.js tests/specs/livery-wheels.spec.js tests/specs/parts-*.spec.js"
     },
     {
       "name": "test:circuits",
@@ -4260,7 +4291,7 @@
     },
     {
       "name": "test:gfx",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/hud-mirror.spec.js tests/specs/image-grade-visual.spec.js tests/specs/instanced-draw.spec.js tests/specs/lighting-ab.spec.js tests/specs/lighting-tuner-grade.spec.js tests/specs/race-cycle-memory.spec.js tests/specs/render-boot.spec.js tests/specs/tlx-probes.spec.js tests/specs/track-switch-memory.spec.js tests/specs/webgl-probes.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/ctx-lost-retry.spec.js tests/specs/hud-mirror.spec.js tests/specs/image-grade-visual.spec.js tests/specs/instanced-draw.spec.js tests/specs/lighting-ab.spec.js tests/specs/lighting-tuner-grade.spec.js tests/specs/race-cycle-memory.spec.js tests/specs/render-boot.spec.js tests/specs/tlx-probes.spec.js tests/specs/track-switch-memory.spec.js tests/specs/webgl-probes.spec.js"
     },
     {
       "name": "test:graph-parity",
@@ -4353,6 +4384,10 @@
     {
       "name": "test:smoke",
       "command": "node tools/ci/run-playwright.mjs tests/specs/smoke.spec.js"
+    },
+    {
+      "name": "test:stall-reload-sw",
+      "command": "node tools/ci/run-playwright.mjs tests/specs/stall-reload-sw.spec.js"
     },
     {
       "name": "test:state-unit",

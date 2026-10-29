@@ -86,6 +86,14 @@ const DockLayout = (function () {
     return (typeof CssZoom !== "undefined" && CssZoom.of) ? CssZoom.of(el) : 1;
   }
 
+  // +x = toward centre from each dock's home edge. MIRROR CONTROLS reverses
+  // #hud-dock (row-reverse), so #dock-left then sits on the RIGHT edge.
+  function inboard(side) {
+    const b = typeof document !== "undefined" && document.body;
+    const m = !!(b && b.classList && b.classList.contains("mirror-controls"));
+    return (side === "L") !== m ? 1 : -1;
+  }
+
   function apply(schemeName, bag, docks) {
     const scheme = (bag && bag[schemeName]) || emptyScheme();
     const root = (typeof document !== "undefined") ? document.documentElement : null;
@@ -98,8 +106,8 @@ const DockLayout = (function () {
         el.style.removeProperty("transform");
         continue;
       }
-      // +x = toward centre from each dock's home edge; +y = up from the bottom.
-      const sx = side === "L" ? 1 : -1;
+      // +x = inboard (inboard() above); +y = up from the bottom.
+      const sx = inboard(side);
       const z = zoomOf(el);
       const tx = (p.x * pad.w * sx / z).toFixed(1);
       const ty = (-p.y * pad.h / z).toFixed(1);
@@ -257,7 +265,7 @@ const DockLayout = (function () {
     function onPointerMove(e) {
       if (!drag || e.pointerId !== drag.pid) return;
       const pad = usablePad(document.documentElement);
-      const sx = drag.side === "L" ? 1 : -1;
+      const sx = inboard(drag.side);
       const dx = ((e.clientX - drag.startX) / pad.w) * sx;
       const dy = -((e.clientY - drag.startY) / pad.h);
       bag[drag.scheme][drag.side] = clampXY({

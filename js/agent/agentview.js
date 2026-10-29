@@ -1952,7 +1952,7 @@ const AgentView = (function () {
           catalog: "tracks() teams() info()",
         },
         control: {
-          stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()',
+          stage: 'race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)',
           reproduce: "seed(n) sets the sim seed; same seed + same inputs => same "
                    + "result. Pin it before any A/B or the comparison is noise",
           drive: "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()",

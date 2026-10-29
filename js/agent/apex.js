@@ -1275,22 +1275,15 @@ const api = {
     const ok = !!(G.redFlagRestart && G.redFlagRestart());
     return ok ? { state: G.state } : false;
   },
-  // Trigger the race-results screen cleanly, as if all cars crossed the line.
-  finishRace() {
+  // Trigger results as if all cars finished. Default = today's instant sheet;
+  // {ceremony:true} arms RaceCeremony when eligible (js/race/ceremony.js).
+  // A retirement never crosses the line (finishThrough); finishT only when raceT > 0.5.
+  finishRace(opts) {
     if (!G.track || G.state === "results" || G.state === "menu") return false;
-    // A retirement never crosses the line: it stays unfinished and classifies
-    // behind everyone who did, which is the order endRace() builds for a real
-    // flag. Waving one home here would hand a parked car a finish and points.
-    // go() floors raceT at 0.5 s; stamping that as finishT prints
-    // OFFICIAL WINNER ELAPSED 0:00.500 on every harness open. Only attach a
-    // finish clock when the race has actually run past that floor — finishT
-    // 0 omits the official elapsed line (results-sheet correctedFinish).
-    const ran = Number.isFinite(G.raceT) ? G.raceT : 0;
-    const clock = ran > 0.5 ? ran : 0;
-    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = clock; } });
-    endRace(raceOrder(G.cars));
-    return { state: G.state };
+    return RaceCeremony.finishThrough(G, endRace, raceOrder, opts);
   },
+  // RaceCeremony status / seek / skip (Esc = SKIP once the host UI wires it).
+  ceremony(arg) { return RaceCeremony.apexCall(arg); },
 
   freeze(v) {
     if (v === undefined) return G.frozen;
