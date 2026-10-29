@@ -148,7 +148,7 @@ const DriverRatings = (function () {
     return sum / 4;
   }
 
-  return { AXES, STYLE_AXES, STYLE_SCALE, BASE, HIRES, get, overall, fromTier, style01,
-           buildPace, hash32: Hash32.fnv1a, skill, SKILL_BASE, SKILL_SPAN, SKILL_JITTER };
+  return { AXES, STYLE_AXES, BASE, HIRES, get, overall, fromTier, style01,
+           buildPace, hash32: Hash32.fnv1a, skill };
 })();
 Object.freeze(DriverRatings);

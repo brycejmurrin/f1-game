@@ -76,4 +76,5 @@ function checkHandler(origin) {
     allowed(permission, requestingOrigin || (details && details.requestingUrl) || "", origin, details, true);
 }
 
-module.exports = { ALLOWED, allowed, isAppOrigin, requestHandler, checkHandler };
+// allowed / isAppOrigin stay private — tests drive requestHandler / checkHandler.
+module.exports = { ALLOWED, requestHandler, checkHandler };

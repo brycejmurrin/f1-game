@@ -224,7 +224,7 @@ export const RULES = [
   [/^js\/input\/controller-profiles\.js$/, ["steering-unit"], "controller-profiles.test.mjs — per-device maps, legacy migration and input-owner release"],
   // PHONE AS CONTROLLER: its node suite (phone-pad.test.mjs) is in steering-unit,
   // and the roll math it shares with input.js is asserted there too.
-  [/^js\/input\/(phone-pad|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],
+  [/^js\/input\/(phone-pad(?:-codec|-page)?|pedal-travel|tilt-roll)\.js/, ["steering-unit"], "phone-pad.test.mjs — the wire, the roll math and the remote source over loopback"],
   // WebXR Phase 0: seated-rig math + controller remoteSample mapping + session
   // lifecycle. Pure Node suite (xr-phase0.test.mjs) in steering-unit / tooling-fast;
   // the optional iwer Playwright smoke is test:xr (not selected by path alone).
@@ -307,6 +307,9 @@ export const RULES = [
   [/^js\/net\/scan\.js/, ["lifecycle-unit"], "camera cancellation is an async ownership boundary"],
   [/^js\/net\//, ["net-unit", "net"], "wire logic first (1 s), then the browser session"],
   [/^vendor\/trystero-[^/]+\//, ["net-unit"], "vendored action framing, payload bounds and peer cleanup — net-trystero-api.test.mjs"],
+  // Same-named suite: real-race-script.test.mjs lives in state-unit. The
+  // directory rule below names hooks and lifecycle-unit, which do not run it.
+  [/^js\/data\/real-race-script\.js$/, ["state-unit"], "real-race-script.test.mjs — the OpenF1 script builder"],
   [/^js\/data\//, ["hooks", "lifecycle-unit"], "the hook contracts (data-lifecycle + telemetry-compare ride test:hooks) and the async-lifecycle twins"],
   [/^sw\.js|^manifest\.json/, ["service-worker"], ""],
   [/^worker\//, ["net-unit"], "the rendezvous Durable Object"],
