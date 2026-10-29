@@ -548,6 +548,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/diagnostics-tools.mjs** | Typed background diagnostics and bounded report queries for Apex MCP. | renderer-debug / mcp-probe |
 | **mcp/doctor-catalog.mjs** | Doctor catalog: canonical F1 environment and plugin support. | — |
 | **mcp/garage-plan.mjs** | Browser-free bounded garage matrix planning over canonical cameras and livery fields. | garage-parts-livery |
+| **mcp/ios-console.mjs** | CLI: tail the console of an iPhone Safari tab via ios-webkit-debug-proxy (status, tabs, console); needs phone and cable. | — |
 | **mcp/job-admission.mjs** | Atomic cross-owner admission and complete manifests for durable Apex jobs. | — |
 | **mcp/js-debugger-boot.cjs** | Child-process auto-attach bootloader for debugger_node_test (NODE_OPTIONS=--require): every Node | — |
 | **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
