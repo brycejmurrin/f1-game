@@ -1098,6 +1098,7 @@ const LAZY_RACE_SESSION = [
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
   "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
+  "js/race/ceremony.js", // RaceCeremony: post-flag cooldown → parc fermé → podium → results (#4067); session-stub.js holds the title-time stub
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat

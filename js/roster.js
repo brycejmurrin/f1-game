@@ -225,7 +225,8 @@
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
-    "js/race/cooldown-lap.js"
+    "js/race/cooldown-lap.js",
+    "js/race/ceremony.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [

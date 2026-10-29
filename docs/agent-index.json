@@ -359,22 +359,22 @@
       "summary": "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)"
     },
     {
+      "name": "ceremony",
+      "group": "control",
+      "signature": "ceremony(phase|skip)",
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+    },
+    {
       "name": "clearInput",
       "group": "control",
       "signature": "clearInput()",
       "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
-      "name": "finishRace",
-      "group": "control",
-      "signature": "finishRace()",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
-    },
-    {
       "name": "go",
       "group": "control",
       "signature": "go()",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "headless",
@@ -386,25 +386,25 @@
       "name": "jump",
       "group": "control",
       "signature": "jump(frac,speed,x)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "park",
       "group": "control",
       "signature": "park(f)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "race",
       "group": "control",
       "signature": "race(id)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "reset",
       "group": "control",
       "signature": "reset(f,v,x,seed)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "seed",
@@ -3927,6 +3927,11 @@
       "path": "js/race/car-fields.js",
       "global": "CarFields",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/ceremony.js",
+      "global": "RaceCeremony",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/cooldown-lap.js",
