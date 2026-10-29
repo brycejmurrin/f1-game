@@ -12,9 +12,15 @@ Use when launching a Cursor cloud agent for the Apex (f1-game) repo. The lane co
 - Repo: `https://github.com/brycejmurrin/f1-game`
 - **Cloud environment (required):** repo-linked **Apex 26** — [819b740b-ac05-11f1-b532-320a589b8025](https://cursor.com/dashboard/cloud-agents/environments/e/819b740b-ac05-11f1-b532-320a589b8025). Agents must boot from a **successful environment build** (`environment-info` → `build.resolution: "resolved"`). Do not launch against a blank/default environment (that skips `install` and misses `node_modules`, Chromium, MCP clones).
 - **MCP (required for attached tools):** register all six repo servers (**apex-tools**, **playwright-official**, **chrome-devtools**, **js-debugger**, **apex-lsp**, **browserstack**) under [Integrations & MCP](https://cursor.com/agents) using the repo `bash tools/mcp/*` wrappers (see `.mcp.json`). Enable each in the launch MCP dropdown. `mcpServerAllowlist` must list a full launch pattern per name (`*bash tools/mcp/<wrapper>.sh …`) — not bare `bash` or `npx` for playwright. Optional **browser-use** plugin MCP uses `mcpPluginServerAllowlist` (Integrations plugin + launch toggle). If the catalog is empty, use CLI fallbacks (`docs/AGENT-SURFACE.md` §Bootstrap).
+- **Renderer:** default is three.js (TLX, WebGPU path), not WebGL2. Pass backend
+  `"three"` to apex MCP tools (several default to webgl2). Software/headless probes
+  force three onto GL with `apex26.tlxForceGL=1`.
 - Ship branch / `starting_ref`: `claude/f1-game-project-26h3ng` (builds and config read `.cursor/environment.json` from this ref unless you override the ref in the environment dashboard).
 - Topic heads: `cursor/<topic>-<hash>`. No new `claude/<topic>` feature branches.
-- Model: `default` for a manual launch. A dispatcher launch uses `hosts.cursor.model` in `tools/ci/dispatch.json`. Do not invent a model id. If the chosen model is blocked, tell the user and stop.
+- Model: `composer-2.5` for routine/cheap manual launches; Grok 7 for hard jobs only
+  (confirm its exact Cursor slug at launch — do not invent one); never `default` or
+  Auto. A dispatcher launch uses `hosts.cursor.model` in `tools/ci/dispatch.json`.
+  If the chosen model is blocked, tell the user and stop.
 - `hosts.cursor.enabled` is often false. Prefer `node tools/ci/dispatch.mjs` when it is true. Otherwise Bryce must have named this launch in chat.
 - Launch caps and quota: `docs/WORKERS.md` §The dispatcher and `tools/ci/dispatch.json`. `queue-depth.mjs` is informational and returns exit 0 for either queue verdict; its output does not block a launch or push.
 - At most 6 launches per 10 minutes. One owner per wave for `tools/manifest.cjs`, `tests/groups.json`, and `tests/data/frozen-globals.json`. No twin for an open PR that already touches the same paths.

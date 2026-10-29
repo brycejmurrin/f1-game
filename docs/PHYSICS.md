@@ -212,6 +212,18 @@ real trade, and the reason the two ends are worth choosing between.
 `physState()` reports `aeroLoad`, `xVmaxGain`, `xDfLoss`, `vmaxNow`, `aeroGrip`
 and `aeroDf`, so none of this has to be read out of `updateCar` again.
 
+**DAMAGE → HANDLING (#1578, opt-in, Race Settings › DAMAGE: HANDLING; ships
+DISPLAY).** `js/race/damage-handling.js` is the one setting-gated read of the
+Damage readout. ON, the local car's broken front wing scales the FRONT axle's
+share of the aero-load term above (up to −60 %), the rear wing the rear (−60 %),
+floor damage both (−30 %), and a suspension knock costs both axles 5 % of their
+mechanical grip. PlayerForces multiplies `muF`/`muR` by the resulting ratios
+(`physState().damageAxF/damageAxR`). With the option OFF, `ctx.damage` is null
+and both ratios are exactly 1. Aero load scales with v², so a broken wing is
+felt at speed: in the VM skidpad at 72 m/s and 0.8 lock, a lost front wing takes
+ay from 3.63 to 2.79 g, and at 20 m/s it barely moves it. A completed pit stop
+repairs it. AI cars keep the readout-only contract.
+
 `c.aeroX` is the FLAP TRAVEL (0..1) and is what every consumer reads — physics,
 HUD and the wings' own moveable ELEMENTS. Per the 2026 rules every element
 except each mainplane rotates, and both wings actuate together: at the default
@@ -734,7 +746,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   entirely and the AI's pace comes off the same `TyreModel` curve the player is
   driving, so a strategy fight is fought on one model (§Wear, and the stop), and
   the STARTING compound comes from the car's own plan rather than the class draw.
-- **The field races a strategy** (`AiDrive.stintPlan` / `pitNow`, executed by
+- **The field races a strategy** (`AiDrive.stintPlan` / `pitNow`, bodies in `js/physics/ai-strategy.js`, executed by
   `PitLane.planFor` / `think`), when TYRE WEAR is on. Each car enumerates every
   0-, 1- and 2-stop plan over the three dry compounds and keeps the cheapest
   under `Σ stint costs + stops × pit loss` — the formulation strategists
@@ -990,9 +1002,13 @@ corner-speed model showed no such gap. Dry pace is untouched by construction.
 ### Wheel state: torque-balanced lock-up and wheelspin (opt-in, #1628)
 
 `js/physics/wheel-state.js` gives the player's axles a rim speed (`vwF`/`vwR`)
-and slip ratio (`kappaF`/`kappaR`). It is **opt-in and default OFF**
-(`WheelState.setEnabled(true)` or `apex26.wheelState = "1"`): OFF never enters
-the branch, so `physics-characterization` stays bit-identical to its baseline.
+and slip ratio (`kappaF`/`kappaR`). It is **opt-in and default OFF by decision**
+(option B, 2026-10-27; turning it on by default is #3983)
+(`WheelState.setEnabled(true)` or `apex26.wheelState = "1"`; a session-only dev
+toggle is `__apex.setPhysics({wheelState})`, read back by `tuning().wheelState`):
+OFF never enters the branch, so `physics-characterization` stays bit-identical to
+its baseline. The rim fields are `EPISODE_TRANSIENTS` and CarFields-registered, so
+`__apex.reset()` clears them and `WheelState.ensure` re-seeds them from `c.speed`.
 
 ON, PlayerForces bills each axle's brake or drive demand against its tyre's
 longitudinal capacity on the same circle the legacy `axFracF`/`axFracR` charge

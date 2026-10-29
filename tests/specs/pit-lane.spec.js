@@ -358,6 +358,16 @@ test.describe("pit lane", () => {
     await armedAt(page, { track: "bahrain", solo: true });
     const out = await page.evaluate(async () => {
       const A = window.__apex;
+      const started = performance.now(), crewWaits = [];
+      const phase = (name, frames = 0, maxFrames = 0, drawn = 0) => {
+        const row = { phase: name, frames, maxFrames, drawn, elapsedMs: Math.round(performance.now() - started) };
+        window.__pitCrewWait = row;
+        // Retained by the existing failure hook's apex-logs attachment, including
+        // a timeout before this evaluation can return its diagnostic rows.
+        if (window.Log) window.Log.info("test", "pit-crew " + JSON.stringify(row));
+        return row;
+      };
+      phase("prepare");
       A.tyres({ fit: "hard" });
       const before = A.tyres();
       // Find the working-lane box.
@@ -424,37 +434,46 @@ test.describe("pit lane", () => {
       }
 
       // Render path: chase cam, not headless, so drawPitCrew actually runs.
+      // pit() drains crewDrawn. Resolve with the observed positive snapshot,
+      // or the final snapshot at the ORIGINAL frame limit so assertions refuse.
+      const waitForCrew = (name, maxFrames) => new Promise((resolve) => {
+        let frames = 0;
+        phase(name, frames, maxFrames);
+        const tick = () => {
+          const snapshot = A.pit();
+          const row = phase(name, ++frames, maxFrames, snapshot.crewDrawn);
+          if (snapshot.crewDrawn > 0 || frames >= maxFrames) {
+            crewWaits.push(row);
+            resolve(snapshot);
+          } else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      phase("chase-cut");
       A.headless(false);
       A.camera("chase");
       if (A.snapCam) A.snapCam();
       A.pit(); // clear the draw counter
-      await new Promise((r) => {
-        let n = 0;
-        const tick = () => { if (++n >= 12) r(); else requestAnimationFrame(tick); };
-        requestAnimationFrame(tick);
-      });
-      const afterFrames = A.pit();
+      const afterFrames = await waitForCrew("chase", 12);
 
       // Cockpit must also submit the crew (the regression that skipped it).
+      phase("cockpit-cut");
       A.camera("cockpit");
       if (A.snapCam) A.snapCam();
       A.pit();
-      await new Promise((r) => {
-        let n = 0;
-        const tick = () => { if (++n >= 8) r(); else requestAnimationFrame(tick); };
-        requestAnimationFrame(tick);
-      });
-      const cockpitFrames = A.pit();
+      const cockpitFrames = await waitForCrew("cockpit", 8);
 
       // Finish the stop so the car is released with a fresh set. Back to headless: the crew-draw
       // frames above were the rendered part; a 300-step release loop rendered on SwiftShader ran
       // 123-135 s against the 120 s test timeout (RC2-22) and measured rendering, not the stop.
+      phase("release");
       A.headless(true);
       for (let i = 0; i < 60 * 5; i++) {
         A.step(1 / 60, 1);
         if (A.pit().state === "out" || A.pit().state === "none") break;
       }
       const after = A.tyres();
+      phase("complete");
       return {
         before: { code: before.code || before.id, colour: before.colour, wear: before.wear },
         early,
@@ -462,12 +481,16 @@ test.describe("pit lane", () => {
         chaseDrawn: afterFrames.crewDrawn,
         chaseCrew: afterFrames.crew,
         cockpitDrawn: cockpitFrames.crewDrawn,
+        crewWaits,
         after: { code: after.code || after.id, wear: after.wear, stints: after.stints },
         stops: A.pit().stops,
         people: typeof CarMesh !== "undefined" ? CarMesh.CREW_PEOPLE : null,
       };
     });
 
+    await test.info().attach("pit-crew-waits", {
+      body: JSON.stringify({ crewWaits: out.crewWaits ?? null }), contentType: "application/json",
+    });
     expect(out.error, out.error ? `${out.error} ${JSON.stringify(out.pit || {})}` : "").toBeUndefined();
     expect(out.people, "CarMesh.CREW_PEOPLE must name the six figures").toBe(6);
     expect(out.mid.crew, "crew mesh must build during the stop").toBeTruthy();

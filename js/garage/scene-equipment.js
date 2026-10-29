@@ -4,7 +4,7 @@ const GarageEquipment = (function () {
   const { Z_BACK, STEEL, DARK, block, cyl, tube, hose, MAT, scale, rgb, tile } = GaragePrims;
 
 const RUBBER = [0.045, 0.045, 0.050];
-const HOSE = [0.12, 0.14, 0.20];
+const HOSE = [0.12, 0.14, 0.20];   // module-local paint colour (hoseReel / serviceRig)
 const FAN = [4.5, 3.32];
 const SCREEN = [2.9, 3.30, 5.15];   // shared with the blades and the live atlas quad
 const COMPOUND = [[0.85, 0.12, 0.12], [0.92, 0.80, 0.10], [0.88, 0.88, 0.90],
@@ -369,6 +369,8 @@ function buildEquipment(g, liv, ctx) {
 }
 
 
-  return { RUBBER, HOSE, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, wheelDolly, build: buildEquipment };
+  // HOSE stays module-local (hoseReel / serviceRig paint). COMPOUND + starterCart /
+  // tyreTrolley / rearJack stay exported — garage-mesh unit seams.
+  return { RUBBER, FAN, SCREEN, COMPOUND, noseTrolley, wheelGunDock, radioRack, starterCart, tyreTrolley, toolChest, rearJack, wheelGun, hoseReel, wingRack, extinguisher, rollingStool, floorFan, serviceRig, wheelDolly, build: buildEquipment };
 })();
 if (typeof window !== "undefined") window.GarageEquipment = GarageEquipment;

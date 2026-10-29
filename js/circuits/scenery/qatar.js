@@ -6,8 +6,8 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["qatar"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, px, pz, pyMin, night, hash, vadd, every,
-        place, backdrop, anchor, addBox, addCyl, addFrustum, seat,
+      const { K, lapBounds, out, MAT, n, pyMin, night, hash, vadd, every,
+        place, anchor, addBox, addCyl, addFrustum, seat,
         palm, building, fence, wall, mountain, guardrail, tyreWall,
         billboard, marshalPost, gantry, tower, bush, along,
         modelGroup, groundPatch, floodMast, floodMastRing, circuitKit,

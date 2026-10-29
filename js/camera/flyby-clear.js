@@ -139,7 +139,7 @@ const FlybyClear = (function () {
 
   return {
     isSolid, blockers, insideProp, onRoadPose, clearEye, groundAt, floorEye,
-    boxGrid, nearBoxes, MIN_FILL, MIN_H, CLEAR_M,
+    boxGrid, nearBoxes, CLEAR_M,
   };
 })();
 Object.freeze(FlybyClear);

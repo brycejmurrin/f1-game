@@ -311,11 +311,10 @@ const ApexGpuCapture = (function () {
     }
   }
 
-  function hooks() {
-    return { gpuCapture: function (a) { return api(a); } };
-  }
-
-  return { api, boot, wanted, status, hooks, disable, enable };
+  // wanted/status/disable/enable stay module-local except the three unit tests
+  // in wgx-labels.test.mjs that race enable vs disable; apex.js wires only api().
+  // hooks() was never spread — apex.js registers gpuCapture via ApexGpuCapture.api.
+  return { api, boot, status, disable, enable };
 })();
 
 if (typeof window !== "undefined") {

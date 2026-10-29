@@ -1245,6 +1245,7 @@
         "tests/specs/career-season.spec.js",
         "tests/specs/career.spec.js",
         "tests/specs/jump-start.spec.js",
+        "tests/specs/overlay-live.spec.js",
         "tests/specs/quali.spec.js",
         "tests/specs/real-race.spec.js",
         "tests/specs/season-format.spec.js",
@@ -1358,6 +1359,15 @@
       "twinned": false
     },
     {
+      "id": "perf-session",
+      "script": "test:perf-session",
+      "kind": "browser",
+      "files": [
+        "tests/specs/perf-session-budgets.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "phone-recorder",
       "script": "test:phone-recorder",
       "kind": "browser",
@@ -1443,6 +1453,7 @@
         "tests/unit/career-data-audio-improvements.test.mjs",
         "tests/unit/career-determinism.test.mjs",
         "tests/unit/career-legends.test.mjs",
+        "tests/unit/career-planning.test.mjs",
         "tests/unit/career-readslot-quota.test.mjs",
         "tests/unit/career-regulations.test.mjs",
         "tests/unit/career-seat-rollover.test.mjs",
@@ -1475,6 +1486,8 @@
         "tests/unit/legend-parts-seed.test.mjs",
         "tests/unit/legends-team.test.mjs",
         "tests/unit/overlay-feed.test.mjs",
+        "tests/unit/overlay-publisher.test.mjs",
+        "tests/unit/overlay-render.test.mjs",
         "tests/unit/pause-opts.test.mjs",
         "tests/unit/post-fx-opts.test.mjs",
         "tests/unit/quali-persist.test.mjs",
@@ -3144,6 +3157,16 @@
       "roster": "LAZY_DATA"
     },
     {
+      "path": "js/data/real-race-fetch.js",
+      "global": "DataRealRaceFetch",
+      "roster": "LAZY_DATA"
+    },
+    {
+      "path": "js/data/real-race-script.js",
+      "global": "DataRealRaceScript",
+      "roster": "LAZY_DATA"
+    },
+    {
       "path": "js/data/real-race-tab.js",
       "global": "DataRealRace",
       "roster": "LAZY_DATA"
@@ -3354,6 +3377,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/garage/crew-draw.js",
+      "global": "GarageCrewDraw",
+      "roster": "tag"
+    },
+    {
       "path": "js/garage/crew-motion.js",
       "global": "GarageCrewMotion",
       "roster": "tag"
@@ -3482,6 +3510,21 @@
       "path": "js/input/pad-menu.js",
       "global": "InputPadMenu",
       "roster": "tag"
+    },
+    {
+      "path": "js/input/pedal-travel.js",
+      "global": "PedalTravel",
+      "roster": "tag"
+    },
+    {
+      "path": "js/input/phone-pad-codec.js",
+      "global": "PhonePadCodec",
+      "roster": "LAZY_NET"
+    },
+    {
+      "path": "js/input/phone-pad-page.js",
+      "global": "PhonePadPage",
+      "roster": "LAZY_NET"
     },
     {
       "path": "js/input/phone-pad.js",
@@ -3644,8 +3687,18 @@
       "roster": "LAZY_NET"
     },
     {
+      "path": "js/overlay/bridge.js",
+      "global": "OverlayBridge",
+      "roster": "tag"
+    },
+    {
       "path": "js/overlay/feed.js",
       "global": "OverlayFeed",
+      "roster": "tag"
+    },
+    {
+      "path": "js/overlay/publisher.js",
+      "global": "OverlayPublisher",
       "roster": "tag"
     },
     {
@@ -3774,6 +3827,11 @@
       "roster": "tag"
     },
     {
+      "path": "js/physics/ai-strategy.js",
+      "global": "AiStrategy",
+      "roster": "tag"
+    },
+    {
       "path": "js/physics/body-attitude.js",
       "global": "BodyAttitude",
       "roster": "tag"
@@ -3869,9 +3927,19 @@
       "roster": "tag"
     },
     {
+      "path": "js/race/cooldown-lap.js",
+      "global": "CooldownLap",
+      "roster": "LAZY_RACE_SESSION"
+    },
+    {
       "path": "js/race/daily-challenge.js",
       "global": "DailyChallenge",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/damage-handling.js",
+      "global": "DamageHandling",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/damage.js",
@@ -3932,6 +4000,11 @@
       "path": "js/race/pace-math.js",
       "global": "PaceMath",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/parc-ferme.js",
+      "global": "ParcFerme",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/pit-geom.js",

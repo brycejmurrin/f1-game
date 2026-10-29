@@ -58,7 +58,7 @@ const CarFields = (function () {
     ["player force model (js/physics/player-forces.js) and its HUD/coach readouts",
       ["vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_coachAssisted", "_aeroGrip", "slipFactor", "lateralAccel", "slipFront", "slipRear",
         "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear", "frontUtil", "rearUtil", "skidIntensity",
-        "_cueConditionGrip", "_cueCornering", "_cueBraking"]],
+        "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV"]],
     ["AI overtake planner (game.js ai-drive pass plan/side/best)",
       ["passPlan", "passSide", "passBest"]],
     ["player under-/over-slip dwell timer (player-forces.js)",
@@ -106,7 +106,7 @@ const CarFields = (function () {
       "_planLap", "_recutLap", "_stuckFrom", "vertLoad", "axFrac", "axFracF", "axFracR", "_dirtyAirMul", "_aeroGrip", "slipFactor",
       "lateralAccel", "slipFront", "slipRear", "steerAngle", "gripFront", "gripRear", "forceFront", "forceRear",
       "frontUtil", "rearUtil", "uslipDwell", "brakeStab", "oslipHapT", "lastLap", "uslipHapT", "lockHapT",
-      "_cueConditionGrip", "_cueCornering", "_cueBraking"]],
+      "_cueConditionGrip", "_cueCornering", "_cueBraking", "vwF", "vwR", "kappaF", "kappaR", "_wsV"]],
   ];
   const WARM = [];
   for (const g of WARM_GROUPS) for (const k of g[1]) WARM.push(k);
@@ -209,6 +209,11 @@ const CarFields = (function () {
     if (!("_cueConditionGrip" in c)) c._cueConditionGrip = undefined;
     if (!("_cueCornering" in c)) c._cueCornering = undefined;
     if (!("_cueBraking" in c)) c._cueBraking = undefined;
+    if (!("vwF" in c)) c.vwF = undefined;
+    if (!("vwR" in c)) c.vwR = undefined;
+    if (!("kappaF" in c)) c.kappaF = undefined;
+    if (!("kappaR" in c)) c.kappaR = undefined;
+    if (!("_wsV" in c)) c._wsV = undefined;
     if (!("passPlan" in c)) c.passPlan = undefined;
     if (!("passSide" in c)) c.passSide = undefined;
     if (!("passBest" in c)) c.passBest = undefined;

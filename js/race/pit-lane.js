@@ -63,7 +63,7 @@ var PitLane = (function () {
 
   const clamp = M4.clamp;
   const {
-    ENTRY_M, ENTRY_MIN, EXIT_M, BOX_M, PIT_K, entryRunM, LIMIT_FRAC, STRAIGHT_V, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC, BOX_TOL, BOX_BRAKE, PIT_SIDE, LANE_W, LANE_MIN, MIN_RACING, laneWidth, laneWidthOn, teamRow, BOX_LAT, BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M, pitch, GRID_POLE_M, COMMIT_M, CUE_M, CUE_WEAR, COMMIT_CLEAR, GRID_CLEAR, COMMIT_S, COMMIT_V, COMMIT_IN, ABORT_S, CRAWL_V, APPROACH_M, ENTRY_BRAKE, ROAD_IN, WORK_IN_M, EXIT_WALL_W, zoneOf, inWindow, inSpan, throughM,
+    ENTRY_M, ENTRY_MIN, EXIT_M, PIT_K, entryRunM, LIMIT_FRAC, STRAIGHT_V, LIMIT_FRAC_STREET, BOX_SPEED_FRAC, BOX_TOL, BOX_BRAKE, PIT_SIDE, LANE_W, LANE_MIN, MIN_RACING, laneWidth, laneWidthOn, teamRow, BOX_LAT, BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M, pitch, GRID_POLE_M, COMMIT_M, CUE_M, CUE_WEAR, COMMIT_CLEAR, GRID_CLEAR, COMMIT_S, COMMIT_V, COMMIT_IN, ABORT_S, CRAWL_V, APPROACH_M, ENTRY_BRAKE, ROAD_IN, WORK_IN_M, EXIT_WALL_W, zoneOf, inWindow, inSpan, throughM,
   } = PitGeom;
 
 
@@ -1506,13 +1506,27 @@ var PitLane = (function () {
     // stepBegin/stepEnd; nothing inside that loop finishes or retires a car
     // (finishes settle in settleLineStep after it), so every think() in it reads
     // the same answer. Outside the bracket (tests, dev hooks) it scans live.
-    let _flagStep = false, _flagMemo = null;
-    function stepBegin() { _flagStep = true; _flagMemo = null; }
-    function stepEnd() { _flagStep = false; _flagMemo = null; }
+    let _flagStep = false, _flagMemo = null, _pitReads = 0, _cautionMemo = 0, _treadMemo = 0;
+    function stepBegin() { _flagStep = true; _flagMemo = null; _pitReads = 0; }
+    function stepEnd() { _flagStep = false; _flagMemo = null; _pitReads = 0; }
     function flagNow() {
       if (_flagStep && _flagMemo !== null) return _flagMemo;
       const out = typeof RaceControl !== "undefined" && RaceControl.flagOut(G.cars);
       if (_flagStep) _flagMemo = out;
+      return out;
+    }
+    // Weather and caution tick before the car loop. Read lazily so human,
+    // finished and red-flag guards keep their short-circuits; dev calls stay live.
+    function cautionNow() {
+      if (_flagStep && (_pitReads & 1)) return _cautionMemo;
+      const out = cautionLevel();
+      if (_flagStep) { _cautionMemo = out; _pitReads |= 1; }
+      return out;
+    }
+    function treadNow() {
+      if (_flagStep && (_pitReads & 2)) return _treadMemo;
+      const out = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      if (_flagStep) { _treadMemo = out; _pitReads |= 2; }
       return out;
     }
     function think(c) {
@@ -1527,13 +1541,13 @@ var PitLane = (function () {
       // engineer has the same finalLap guard). A lapped AI still boxed for wets.
       if ((G.lapsTarget > 0 && (c.lap || 0) >= G.lapsTarget) || flagNow()) return "";
       // A red flag (4) is not a pit window: the field is held and the restart clears arms.
-      if (cautionLevel() >= 4) return "";
+      if (cautionNow() >= 4) return "";
       let stopsLeft = plan.stops - (c.pitStops || 0);
       const nextAt = plan.lapsAt[c.pitStops || 0];
       // WRONG TYRE FOR THE CONDITIONS, in either direction: slicks in the rain
       // AND wets on a drying track. This is the recourse docs/PHYSICS.md said a
       // dry->rain arc did not have.
-      const wantTread = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
+      const wantTread = treadNow();
       const wrongTread = !!c.tyre && (c.tyre.tread || 0) !== wantTread;
       // ON THE RIGHT WET TYRE THE DRY PLAN'S LAPS MEAN NOTHING: plan.lapsAt was
       // cut for slicks, and every stop in a wet race refits the wet class
@@ -1558,7 +1572,7 @@ var PitLane = (function () {
       // CAUTION stop: pulled up to CAUTION_REACH laps forward onto a set that
       // cannot reach the flag, the "free" stop bought a second one. Bahrain,
       // 12 laps, SC on lap 2: 19 of 21 one-stop plans ran two stops, 2 ran three.
-      const caution = cautionLevel();
+      const caution = cautionNow();
       let fits = true;
       if (near || (caution >= 2 && caution < 4 && stopsLeft > 0 && lapsToStop <= AiDrive.STRAT.CAUTION_REACH)) {
         // (On a wet run the next set is the wet class, run to the flag.)
@@ -1731,10 +1745,13 @@ var PitLane = (function () {
 
     // Race teardown: the zone cache keys on the track object, and kept the last race's track until the next z().
     function releaseTrack() { zone = null; zoneFor = null; }
-    return { zoneOf: () => z(), releaseTrack, limit, toBox, approachV, entryV, exitV, stopAnim, inLane, held, roadOf, inWindow: inWindowOf,
-             arm, update, reset, clearArm, info, setNext, serviceCar, planFor, think, stepBegin, stepEnd,
-             pickFor, ownedTyres, choices, selectNext, estimate, committing, commitFrac, toEntry, cue,
-             worthStopping, canWork, addWork, workS: WORK_S, boxBusy,
+    // toBox / roadOf / committing / boxBusy / setNext / inWindow stay module-
+    // local (create internals + tests via PitLane.inWindow); nothing outside
+    // reads them on the instance. session-stub may still stub extras.
+    return { zoneOf: () => z(), releaseTrack, limit, approachV, entryV, exitV, stopAnim, inLane, held,
+             arm, update, reset, clearArm, info, serviceCar, planFor, think, stepBegin, stepEnd,
+             pickFor, ownedTyres, choices, selectNext, estimate, commitFrac, toEntry, cue,
+             worthStopping, canWork, addWork, workS: WORK_S,
              cueM: CUE_M, boxCueM: BOX_CUE_M, moveM: MOVE_M,
              boxTol: BOX_TOL, squareByM: SQUARE_BY_M, squareLat: BOX_SQUARE_LAT,
              servedS: SERVED_S, mergeS: MERGE_S, lastCue: () => _lastCue,
@@ -1745,12 +1762,15 @@ var PitLane = (function () {
              boxThroughFor: (c) => { const zz = z(); return zz && G.track ? boxThroughFor(c, zz, G.track.total) : -1; } };
   }
 
+  // Module surface kept to what tests / always-loaded call sites actually read.
+  // BOX_BRAKE, COMMIT_V, CUE_WEAR, CUE_M, BOX_SQUARE_*, SQUARE_BY_M stay
+  // destructured for create() internals (instance fields like cueM / squareByM);
+  // they are not frozen here. BOX_M / BOX_S never had an external reader on PitLane.
   return { create, zoneOf, inWindow, throughM,
-           ENTRY_M, EXIT_M, BOX_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_S, BOX_SPEED_FRAC,
-           BOX_TOL, BOX_BRAKE, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_V, COMMIT_CLEAR,
+           ENTRY_M, EXIT_M, LIMIT_FRAC, LIMIT_FRAC_STREET, BOX_SPEED_FRAC,
+           BOX_TOL, PIT_SIDE, COMMIT_M, COMMIT_S, COMMIT_CLEAR,
            GRID_POLE_M,
-           CUE_M, CUE_WEAR, LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
-           BOX_SQUARE_LAT, BOX_SQUARE_RAD, SQUARE_BY_M,
+           LANE_W, LANE_MIN, MIN_RACING, BOX_LAT,
            get BOX_PITCH() { return pitch(); }, laneWidth, teamRow, ENTRY_MIN, PIT_K, entryRunM };
 })();
 Object.freeze(PitLane);

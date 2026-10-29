@@ -41,9 +41,9 @@ function loadCamFeel(disk, extra) {
   vm.runInNewContext(
     ["fov-mode.js", "drive-lens.js", "feel.js"]
       .map((f) => fs.readFileSync(path.join(root, "js/camera", f), "utf8")).join("\n")
-      + "\nthis.exported = CamFeel;",
+      + "\nthis.exported = CamFeel; this.DriveLens = DriveLens;",
     ctx);
-  return { CamFeel: ctx.exported, store };
+  return { CamFeel: ctx.exported, DriveLens: ctx.DriveLens, store };
 }
 
 test("follow is exact with no dt and eases when a frame has one", () => {
@@ -187,6 +187,16 @@ test("buzz / free-look scope tables stay aligned", () => {
   assert.equal(CamFeel.isBuzzMode("helmet"), true);
   assert.equal(CamFeel.isFreeLookMode("helmet"), true);
   for (const sp of [0, 0.5, 1]) assert.equal(CamFeel.modeFov("helmet", sp, 1), CamFeel.modeFov("cockpit", sp, 1));
+});
+
+test("DriveLens public surface is apply only; family helpers stay internal", () => {
+  const { DriveLens } = loadCamFeel();
+  assert.deepEqual(Object.keys(DriveLens).sort(), ["apply"]);
+  const ctx0 = { sp: 0.5, yaw: 0.2, brake: 0.1, slip: 0 };
+  assert.equal(DriveLens.apply("chase", null, null, ctx0), 4 * 0.5 + 2 * 0.2 + 2 * 0.1);
+  assert.equal(DriveLens.apply("heli", null, null, ctx0), 8 * 0.5 + 3 * 0.2);
+  assert.equal(DriveLens.apply("cockpit", null, null, ctx0), 1.5 * 0.5 + 1 * 0.1);
+  assert.equal(DriveLens.apply("unknown", null, null, ctx0), null);
 });
 
 test("helmet drive rates match cockpit so a mode switch does not retune the lens", () => {

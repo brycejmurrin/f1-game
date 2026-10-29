@@ -6,8 +6,8 @@
 // `$(( a << b ))` shift (the heredoc scanner swallowed everything after it)
 // and for an unbalanced quote, so test:guards, the ratchet auto-raise and the
 // unstaged-tree check were all skipped. These are RUN against the real hook
-// (APEX_GUARD_PROBE=1 stops it after the commit has been classified), the way
-// agent-config.test.mjs runs the plain forms.
+// against a project fixture with no executable git hook. The git-hook tests
+// cover staged-tree classification and suite execution after the split.
 //
 // Run: node --test tests/unit/bash-guard-hardening.test.mjs   (npm run test:tooling-fast)
 import "../helpers/git-fixture-env.mjs"; // FIRST: scrubs the GIT_DIR & co. a git hook exports (#1807)
@@ -32,6 +32,25 @@ function scratchRepo(prefix) {
   fs.writeFileSync(path.join(dir, "docs/PHYSICS.md"), "note\n");
   g("add", "-A"); g("commit", "-qm", "init");
   return { dir, g, rm: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+
+// Commit recognition now guards hook reachability, not an in-PreToolUse suite.
+function missingHook(repo, command) {
+  fs.mkdirSync(path.join(repo.dir, ".githooks"), { recursive: true });
+  fs.writeFileSync(path.join(repo.dir, ".githooks/pre-commit"), "#!/bin/sh\nexit 0\n");
+  return spawnSync("bash", [HOOK], {
+    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir },
+  });
+}
+function assertCommitReachability(repo, commands, prose = []) {
+  for (const command of commands) {
+    const r = missingHook(repo, command);
+    assert.equal(r.status, 2, command + "\n" + r.stderr);
+    assert.match(r.stderr, /no pre-commit hook would run/, command);
+  }
+  for (const command of prose) { const r=missingHook(repo, command); assert.equal(r.status, 0, command+"\n"+r.stderr); }
 }
 
 const commitJson = (command) => spawnSync("python3", [PARSE, "commit"], { input: command, encoding: "utf8" }).stdout.trim();
@@ -69,33 +88,13 @@ test("shellparse says `null` (not `[]`) for text it cannot tokenise, and `[]` fo
   assert.equal(commitJson("cat <<EOF\ngit commit -m inside\nEOF\ngit commit -m real").match(/"all"/g).length, 1);
 });
 
-test("the guard SEES a commit behind compound syntax or an unparseable line, and still ignores prose", () => {
+test("the guard SEES commits behind compound and unparseable syntax, and ignores prose", () => {
   const repo = scratchRepo("hook-compound-");
-  const run = (command) => spawnSync("bash", [HOOK], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
-    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
-  });
-  try {
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
-    repo.g("add", "docs/PHYSICS.md");
-    for (const cmd of ["git commit -m x", ...COMPOUND, ...UNPARSEABLE]) {
-      const r = run(cmd);
-      assert.equal(r.status, 0, `${JSON.stringify(cmd)}: ${r.stderr}`);
-      assert.match(r.stderr, /bash-guard probe: commit/, `the guard must SEE this commit: ${JSON.stringify(cmd)}`);
-    }
-    // the parser reads the compound forms exactly (a docs-only stage stays docs-only); only unparseable text is the conservative -a path
-    for (const cmd of COMPOUND) assert.match(run(cmd).stderr, /probe: commit docs-only/, cmd);
-    for (const cmd of UNPARSEABLE) assert.match(run(cmd).stderr, /probe: commit code/, cmd);
-    // prose that merely names a commit is still not one
-    for (const cmd of ["echo 'if x; then git commit; fi'", "git log --oneline", "git commit --dry-run -m x",
-      "cat <<EOF\nif x; then git commit; fi\nEOF", "APEX_SKIP_GUARDS=1 git commit -m x", "git status && echo done"]) {
-      const r = run(cmd);
-      assert.equal(r.status, 0, cmd);
-      assert.doesNotMatch(r.stderr, /probe: commit/, `not a guarded commit: ${JSON.stringify(cmd)}`);
-    }
+  try { assertCommitReachability(repo, ["git commit -m x", ...COMPOUND, ...UNPARSEABLE],
+    ["echo 'if x; then git commit; fi'", "git log --oneline", "git commit --dry-run -m x",
+     "cat <<EOF\nif x; then git commit; fi\nEOF", "APEX_SKIP_GUARDS=1 git commit -m x", "git status && echo done"]);
   } finally { repo.rm(); }
 });
-
 test("the pkill guard blocks -f however the flags are spelled (M36)", () => {
   const run = (command) => spawnSync("bash", [HOOK], {
     input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
@@ -197,7 +196,7 @@ test("settings.json registers bash-guard once, without unsupported per-step filt
     .filter((entry) => entry.command.includes("bash-guard.sh"));
   assert.equal(hooks.length, 1, "one Bash call must start one imported Claude bash-guard");
   assert.equal(Object.hasOwn(hooks[0], "if"), false, "Cursor does not document Claude hook-step `if` filters");
-  assert.equal(hooks[0].timeout, 360);
+  assert.equal(hooks[0].timeout, 30);
   assert.equal(hooks[0].onFailure, "block");
 });
 
@@ -282,44 +281,25 @@ test("shellparse reads a commit inside a heredoc a shell runs; a plain heredoc s
   assert.equal(JSON.parse(commitJson("git commit -F - <<EOF\nthe message\nEOF")).length, 1);
 });
 
-test("the guard SEES a commit in a shell heredoc, even one the parser cannot tokenise (15-F6)", () => {
+test("the guard SEES a commit in shell heredocs, including unparseable text (15-F6)", () => {
   const repo = scratchRepo("hook-heredoc-");
-  const run = (command) => spawnSync("bash", [HOOK], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
-    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
-  });
-  try {
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
-    repo.g("add", "docs/PHYSICS.md");
-    for (const cmd of [...SHELL_HEREDOCS, "bash <<'EOF'\ngit commit -m \"unbalanced\nEOF"]) {
-      const r = run(cmd);
-      assert.equal(r.status, 0, `${JSON.stringify(cmd)}: ${r.stderr}`);
-      assert.match(r.stderr, /bash-guard probe: commit/, `the guard must SEE this commit: ${JSON.stringify(cmd)}`);
-    }
-    // a heredoc fed to a non-shell is still prose
-    assert.doesNotMatch(run("cat <<EOF\ngit commit -m x\nEOF").stderr, /probe: commit/);
-    assert.doesNotMatch(run("python3 - <<EOF\nprint('git commit -m x')\nEOF").stderr, /probe: commit/);
+  try { assertCommitReachability(repo, [...SHELL_HEREDOCS, "bash <<'EOF'\ngit commit -m \"unbalanced\nEOF"],
+    ["cat <<EOF\ngit commit -m x\nEOF", "python3 - <<EOF\nprint('git commit -m x')\nEOF"]);
   } finally { repo.rm(); }
 });
-
-test("`cd <other tree> && git commit` guards THAT tree, not the hook's own (15-F6)", () => {
-  const target = scratchRepo("hook-cd-target-"), home = scratchRepo("hook-cd-home-");
-  const run = (command) => spawnSync("bash", [HOOK], {
-    input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: home.dir }),
-    cwd: home.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: home.dir, APEX_GUARD_PROBE: "1" },
-  });
+test("commit hook reachability follows the target worktree (15-F6)", () => {
+  const target = scratchRepo("hook-target-"), home = scratchRepo("hook-home-");
   try {
-    // only the TARGET tree has a staged (docs) change; the hook's own tree has nothing staged
-    fs.writeFileSync(path.join(target.dir, "docs/PHYSICS.md"), "note 2\n");
-    target.g("add", "docs/PHYSICS.md");
-    assert.match(run(`cd ${target.dir} && git commit -m x`).stderr, /probe: commit docs-only/);
-    assert.match(run(`git -C ${target.dir} commit -m x`).stderr, /probe: commit docs-only/);
-    assert.match(run(`cd ${path.dirname(target.dir)} && git -C ${path.basename(target.dir)} commit -m x`).stderr, /probe: commit docs-only/);
-    // no cd: the hook's own (empty) tree, so not docs-only
-    assert.match(run("git commit -m x").stderr, /probe: commit code/);
+    missingHook(target, "git status");
+    const run = command => spawnSync("bash", [HOOK], { input: JSON.stringify({tool_name:"Bash",tool_input:{command}}),
+      cwd:home.dir, encoding:"utf8", env:{...process.env,CLAUDE_PROJECT_DIR:home.dir} });
+    for (const command of [`cd ${target.dir} && git commit -m x`, `git -C ${target.dir} commit -m x`,
+      `cd ${path.dirname(target.dir)} && git -C ${path.basename(target.dir)} commit -m x`]) {
+      const r=run(command); assert.equal(r.status,2,r.stderr); assert.match(r.stderr,/no pre-commit hook/);
+    }
+    assert.equal(run("git commit -m x").status,0,"a non-project scratch repo stays outside the project hook rule");
   } finally { target.rm(); home.rm(); }
 });
-
 test("the pkill guard sees through timeout / xargs / setsid wrappers (15-F7)", () => {
   const run = (command) => spawnSync("bash", [HOOK], {
     input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
@@ -396,47 +376,13 @@ const hook = (script, payload, opts = {}) => spawnSync("bash", [path.join(ROOT, 
     .filter(([k]) => k !== "NODE_TEST_CONTEXT")),
 });
 
-test("a commit guard that outlives its time cap BLOCKS (rc 124 → exit 2), for test:guards and docs-integrity", () => {
-  const repo = scratchRepo("hook-timeout-");
-  try {
-    // A tree whose guard steps are stubs: ratchets passes, test:guards and docs-integrity hang.
-    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
-    fs.mkdirSync(path.join(repo.dir, "tests/unit"), { recursive: true });
-    fs.mkdirSync(path.join(repo.dir, "node_modules"), { recursive: true });
-    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
-    fs.writeFileSync(path.join(repo.dir, "package.json"), JSON.stringify({ scripts: { "test:guards": "sleep 30" } }));
-    fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "setTimeout(() => {}, 30000);\n");
-    repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
-    const commit = () => hook("bash-guard.sh", { tool_name: "Bash", tool_input: { command: "git commit -m x" }, cwd: repo.dir },
-      { cwd: repo.dir, env: { APEX_GUARD_TIMEOUT: "1", APEX_GUARD_PROBE: "" } });
-    fs.writeFileSync(path.join(repo.dir, "a.js"), "1;\n");
-    repo.g("add", "a.js");
-    let t = Date.now(), r = commit();
-    assert.equal(r.status, 2, r.stderr);
-    assert.match(r.stderr, /npm run test:guards did not finish within 1 s/);
-    assert.ok(Date.now() - t < 15000, "the cap, not the stub, ended the run");
-    repo.g("reset", "-q");
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 3\n");
-    repo.g("add", "docs/PHYSICS.md");
-    r = commit();
-    assert.equal(r.status, 2, r.stderr);
-    assert.match(r.stderr, /docs-integrity did not finish within 1 s/);
-  } finally { repo.rm(); }
-  const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
-  const bg = settings.hooks.PreToolUse.flatMap((g) => g.hooks).find((h) => h.command.includes("bash-guard.sh"));
-  const hookSrc = fs.readFileSync(HOOK, "utf8");
-  assert.ok(/GUARD_T=160/.test(hookSrc), "default inner guard cap");
-  const inner = 160;
-  assert.ok(inner + 15 <= bg.timeout, `inner guard cap ${inner} s must sit below the hook timeout ${bg.timeout} s`);
-  // A budget gate, not a safety guard: a crashed launch-gate must not block
-  // every launch (A·W58, 2026-10-26), so it fails OPEN; launch-gate.test pins it.
-  const FAIL_OPEN = /\/\.claude\/hooks\/launch-gate\.py"$/;
-  for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks)) {
-    if (FAIL_OPEN.test(h.command)) continue;
-    assert.equal(h.onFailure, "block", `${h.command}: a PreToolUse guard that crashes or times out must block`);
+test("PreToolUse guards fit the 30-second budget and block host-level failures", () => {
+  const settings=JSON.parse(fs.readFileSync(path.join(ROOT,".claude/settings.json"),"utf8"));
+  for(const h of settings.hooks.PreToolUse.flatMap(g=>g.hooks)) {
+    assert.equal(h.onFailure,"block",h.command);
+    if(h.command.includes("bash-guard.sh")) assert.ok(h.timeout<=30);
   }
 });
-
 test("a subagent cannot boot Chromium through the capture CLIs either (tools/shot, tools/ui audits, gfx-probe)", () => {
   const run = (command, sub = true) => hook("bash-guard.sh", { tool_name: "Bash", tool_input: { command }, ...(sub ? { agent_id: "a1", agent_type: "x" } : {}) });
   const browser = [
@@ -530,19 +476,11 @@ test("protect-files scopes agent-surface-reviewer to its scratch/**.md report an
   } finally { repo.rm(); }
 });
 
-test("guards that fail open say so on stderr; the MCP browser guard fails CLOSED (round 2)", () => {
-  const r = hook("protect-files.sh", "not json");
-  assert.equal(r.status, 0);
-  assert.match(r.stderr, /WARNING .*did NOT run/, "protect-files must warn when it cannot read the payload");
-  // an unreadable payload cannot say whether a subagent sent it: refuse the browser tool
-  const m = hook("mcp-browser-guard.sh", "not json");
-  assert.equal(m.status, 2);
-  assert.match(m.stderr, /BLOCKED: mcp-browser-guard could not read the hook payload/);
-  assert.match(fs.readFileSync(path.join(ROOT, ".claude/hooks/protect-files.py"), "utf8"),
-    /except Exception as e:\s*\n(\s*#.*\n)*\s*sys\.stderr\.write\(f"protect-files: WARNING shellparse failed/,
-    "a shellparse crash must warn before failing open");
+test("file and browser guards refuse unreadable input (fail closed)", () => {
+  for(const name of ["protect-files.sh","mcp-browser-guard.sh"]){
+    const r=hook(name,"not json"); assert.equal(r.status,2,r.stderr); assert.match(r.stderr,/BLOCKED/);
+  }
 });
-
 test("github-mcp-guard: merge commits only, merge/arm denied outright, a live-head receipt before the draft→ready flip, passes other PR edits", () => {
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-gate-"));
   const head = "e".repeat(40);
@@ -591,7 +529,10 @@ test("github-mcp-guard: merge commits only, merge/arm denied outright, a live-he
     for (const input of [{ pullNumber: 1, body: "x" }, { pullNumber: 1, title: "t" }, { pullNumber: 1, draft: true }])
       assert.equal(decision(run("mcp__github__update_pull_request", input)), null, `silent pass: ${JSON.stringify(input)}`);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  assert.equal(decision(hook("github-mcp-guard.sh", "not json")).permissionDecision, "ask", "an unreadable payload asks");
+  const malformed = hook("github-mcp-guard.sh", "not json");
+  assert.equal(malformed.status, 2, "an unreadable payload is refused");
+  assert.equal(malformed.stdout, "");
+  assert.match(malformed.stderr, /BLOCKED: github-mcp-guard could not read the hook payload.*refused \(fail closed\)/);
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   assert.ok(!settings.permissions.deny.includes("mcp__github__merge_pull_request"), "the hook denies merges with the land.yml reason; a bare settings deny would drop it");
   const g = settings.hooks.PreToolUse.find((x) => x.hooks.some((h) => h.command.includes("github-mcp-guard.sh")));
@@ -747,20 +688,41 @@ test("round 2 push: refspec DWIM, @, globs, --prune, config, abbreviations, alia
   } finally { repo.rm(); }
 });
 
-test("round 2 commit detection: wrapped commits and aliases still run the guards", () => {
-  const repo = scratchRepo("hook-commit2-");
-  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+test("round 2 commit detection: wrappers and aliases require the git hook", () => {
+  const repo=scratchRepo("hook-commit2-");
+  try { assertCommitReachability(repo,["git -c alias.ci=commit ci -m x", "bash <<< 'git commit -m x'", "echo 'git commit -m x' | sh",
+    "bash -o pipefail -c 'git commit -m x'", "setsid git commit -m x", "flock /tmp/l git commit -m x", "sh -ec 'git commit -m x'",
+    "bash -c -- 'git commit -m x'", "env -S 'git commit -m x'"],
+    ["echo 'git commit -m x'", "git commit --dry-run -m x", "echo 'git commit -m x' | cat", "git log -1"]);
+  } finally {repo.rm();}
+});
+// 2026-10-28 commit-hook split, step 1 (Bryce: "Yes, split it"): .githooks/pre-commit is the git commit gate, so the
+// two ways around it — `--no-verify`/`-n` and a core.hooksPath write — are refused in every shape the parser reads.
+test("2026-10-28: a commit that skips the git pre-commit hook is refused in every shape, and so is every core.hooksPath write form", () => {
+  const repo = scratchRepo("hook-noverify-");
+  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
   try {
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 3\n");
+    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 4\n");
     repo.g("add", "docs/PHYSICS.md");
-    for (const c of ["git -c alias.ci=commit ci -m x", "bash <<< 'git commit -m x'", "echo 'git commit -m x' | sh",
-      "bash -o pipefail -c 'git commit -m x'", "setsid git commit -m x", "flock /tmp/l git commit -m x", "sh -ec 'git commit -m x'",
-      "bash -c -- 'git commit -m x'", "env -S 'git commit -m x'"]) {
+    for (const c of ["git commit --no-verify -m x", "git commit -nm x", "git commit -an -m x", "git commit -m x --no-veri",
+      "bash -c 'git commit -n -m x'", "git -c alias.ci='commit --no-verify' ci -m x", "if true; then git commit -n -m x; fi",
+      "APEX_SKIP_GUARDS=1 git commit --no-verify -m x"]) {
       const r = run(c);
-      assert.match(r.stderr, /bash-guard probe: commit/, `the guard must SEE this commit: ${c}`);
+      assert.equal(r.status, 2, `must refuse: ${c}\n${r.stderr}`);
+      assert.match(r.stderr, /--no-verify/, c);
     }
-    for (const c of ["echo 'git commit -m x'", "git commit --dry-run -m x", "echo 'git commit -m x' | cat", "git log -1"])
-      assert.doesNotMatch(run(c).stderr, /probe: commit/, `not a guarded commit: ${c}`);
+    for (const c of ["git config set core.hooksPath x", "git config --file .git/config core.hooksPath x",
+      "git config --remove-section core", "git config unset core.hooksPath", "git config --unset core.hooksPath"]) {
+      const r = run(c);
+      assert.equal(r.status, 2, `must refuse: ${c}\n${r.stderr}`);
+      assert.match(r.stderr, /core/, c);
+    }
+    // a message that says -n, a dry run, the -S/-u attached values and every read form stay open
+    for (const c of ["git commit -m -n", "git commit --dry-run -n -m x", "git commit -Sn -m x", "git commit -uno -m x",
+      "git config --get core.hooksPath", "git config get core.hooksPath", "git config --list", "git commit -m x"]) {
+      const r = run(c);
+      assert.equal(r.status, 0, `must pass: ${c}\n${r.stderr}`);
+    }
   } finally { repo.rm(); }
 });
 
@@ -905,84 +867,16 @@ test("round 2 github-mcp-guard: falsy draft spellings need the ready receipt; ev
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("a PASSING commit tells the model which guard path ran: additionalContext + systemMessage JSON, exit 0", () => {
-  // stderr is hidden on exit 0, so the docs-only vs full-guards path was invisible after a green commit.
-  const repo = scratchRepo("hook-ctx-");
+test("a commit's gh ready denial still wins before hook reachability", () => {
+  const repo=scratchRepo("hook-context-");
   try {
-    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
-    fs.mkdirSync(path.join(repo.dir, "tests/unit"), { recursive: true });
-    fs.mkdirSync(path.join(repo.dir, "node_modules"), { recursive: true });
-    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
-    fs.writeFileSync(path.join(repo.dir, "package.json"), JSON.stringify({ scripts: { "test:guards": "true" } }));
-    fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
-    repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
-    const commit = (command = "git commit -m x") => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }),
-      { cwd: repo.dir, env: { APEX_GUARD_PROBE: "", APEX_MERGE_DESK: "", ...fakeGh(repo.dir, { head: "a".repeat(40) }) } });   // the ready flip reads the live head
-    const out = (r) => { assert.equal(r.status, 0, r.stderr); return JSON.parse(r.stdout); };
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note ctx\n");
-    repo.g("add", "docs/PHYSICS.md");
-    let j = out(commit());
-    assert.equal(j.hookSpecificOutput.hookEventName, "PreToolUse");
-    assert.equal(j.hookSpecificOutput.permissionDecision, undefined, "context only: the allow is unchanged");
-    assert.match(j.hookSpecificOutput.additionalContext, /docs-only commit — ran tests\/unit\/docs-integrity\.test\.mjs only \(green, \d+ s\)/);
-    assert.equal(j.systemMessage, j.hookSpecificOutput.additionalContext);
-    repo.g("reset", "-q"); repo.g("checkout", "--", "docs/PHYSICS.md");
-    fs.writeFileSync(path.join(repo.dir, "a.js"), "1;\n");
-    repo.g("add", "a.js");
-    j = out(commit());
-    assert.match(j.hookSpecificOutput.additionalContext, /code commit — ratchets --auto-raise \(0 raised\/lowered\) then npm run test:guards \(green, \d+ s/);
-    // a commit plus a gh ready without its receipt: the deny wins and the guards never run (no context to carry)
-    j = out(commit("git commit -m x && gh pr ready 12"));
-    assert.equal(j.hookSpecificOutput.permissionDecision, "deny");
-    assert.equal(j.hookSpecificOutput.additionalContext, undefined, "a denied command runs no commit guards");
-    // with the ready receipt the gh part passes silently and the commit context is still reported
-    writeGateReceipt(repo.dir, "ready", 12, "a".repeat(40));
-    j = out(commit("git commit -m x && gh pr ready 12"));
-    assert.equal(j.hookSpecificOutput.permissionDecision, undefined);
-    assert.match(j.hookSpecificOutput.additionalContext, /code commit/);
-    // no commit, no gh: stdout stays empty
-    assert.equal(hook("bash-guard.sh", bashCall("git status", { cwd: repo.dir }), { cwd: repo.dir }).stdout, "");
-  } finally { repo.rm(); }
+    missingHook(repo,"git status");
+    const r=hook("bash-guard.sh",bashCall("git commit -m x && gh pr ready 12"),
+      {cwd:repo.dir,env:{...fakeGh(repo.dir,{head:"a".repeat(40)}),APEX_MERGE_DESK:""}});
+    assert.equal(r.status,0,r.stderr);
+    assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision,"deny");
+  } finally {repo.rm();}
 });
-
-test("a commit in a linked worktree borrows the main checkout's node_modules instead of blocking (2026-10-15)", () => {
-  // EnterWorktree, `isolation: worktree` workers and `git worktree add` make a tree with no
-  // node_modules; every worker commit blocked on it (census session_01CgCjzTvy729SeWsHzuv8eh).
-  const repo = scratchRepo("hook-wt-");
-  const wt = repo.dir + "-wt";
-  try {
-    fs.mkdirSync(path.join(repo.dir, "tools/check"), { recursive: true });
-    fs.mkdirSync(path.join(repo.dir, "tests/unit"), { recursive: true });
-    fs.writeFileSync(path.join(repo.dir, ".gitignore"), "node_modules\n");
-    fs.writeFileSync(path.join(repo.dir, "tools/check/ratchets.mjs"), "process.exit(0);\n");
-    fs.writeFileSync(path.join(repo.dir, "package.json"), JSON.stringify({ scripts: { "test:guards": "true" } }));
-    fs.writeFileSync(path.join(repo.dir, "tests/unit/docs-integrity.test.mjs"), "import { test } from 'node:test'; test('ok', () => {});\n");
-    repo.g("add", "-A"); repo.g("commit", "-qm", "stubs");
-    fs.mkdirSync(path.join(repo.dir, "node_modules/.bin"), { recursive: true });
-    repo.g("worktree", "add", "-q", wt, "-b", "wt-branch");
-    assert.equal(fs.existsSync(path.join(wt, "node_modules")), false, "a fresh worktree has no node_modules");
-    fs.writeFileSync(path.join(wt, "docs/PHYSICS.md"), "note from the worktree\n");
-    spawnSync("git", ["add", "docs/PHYSICS.md"], { cwd: wt });
-    const r = hook("bash-guard.sh", bashCall("git commit -m x", { cwd: wt }), { cwd: wt, env: { APEX_GUARD_PROBE: "" } });
-    assert.equal(r.status, 0, r.stderr);
-    assert.doesNotMatch(r.stderr, /node_modules is missing/);
-    assert.equal(fs.realpathSync(path.join(wt, "node_modules")), fs.realpathSync(path.join(repo.dir, "node_modules")));
-    assert.equal(spawnSync("git", ["status", "--porcelain"], { cwd: wt, encoding: "utf8" }).stdout.includes("node_modules"), false,
-      "the borrowed link is git-ignored");
-    // the main checkout itself is never linked to anything
-    fs.rmSync(path.join(repo.dir, "node_modules"), { recursive: true });
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note main\n");
-    repo.g("add", "docs/PHYSICS.md");
-    const m = hook("bash-guard.sh", bashCall("git commit -m x", { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "" } });
-    assert.equal(m.status, 2, "a main checkout with no install still blocks");
-    assert.match(m.stderr, /node_modules is missing/);
-  } finally {
-    spawnSync("git", ["worktree", "remove", "--force", wt], { cwd: repo.dir });
-    fs.rmSync(wt, { recursive: true, force: true });
-    repo.rm();
-  }
-});
-
 // ── THE CLOG OF 2026-10-15 (docs/notes/CI-CLOG-SURVEY-2026-10-15.md) ────────
 // 306 of 401 PR runs that day ended cancelled, 142 of them in 17 one-minute
 // sweeps under the owner's account, and every sweep was followed by a
@@ -1082,62 +976,6 @@ test("protect-files: a git conflict-side or committed-source restore of a genera
   } finally { repo.rm(); }
 });
 
-test("bash-guard: `git add X && git commit` in one command counts X as staged (census: 7 false blocks)", () => {
-  const repo = scratchRepo("hook-addcommit-");
-  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
-  try {
-    fs.mkdirSync(path.join(repo.dir, "js/core"), { recursive: true });
-    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "1\n");
-    repo.g("add", "-A"); repo.g("commit", "-qm", "code");
-    fs.writeFileSync(path.join(repo.dir, "docs/PHYSICS.md"), "note 2\n");
-    let r = run("git add docs/PHYSICS.md && git commit -m x");
-    assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stderr, /probe: commit docs-only/, "the added doc is the whole commit");
-    fs.writeFileSync(path.join(repo.dir, "js/core/log.js"), "2\n");
-    r = run("git add js/core/log.js && git commit -m x");
-    assert.equal(r.status, 2, "docs/PHYSICS.md is still unstaged");
-    assert.match(r.stderr, /unstaged changes[\s\S]*docs\/PHYSICS\.md/);
-    assert.doesNotMatch(r.stderr, /^\s+js\/core\/log\.js$/m, "the added file is not reported as unstaged");
-    r = run("git add js/core/log.js docs/PHYSICS.md && git commit -m x");
-    assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stderr, /probe: commit code/, "a code path in the add makes it a code commit");
-    for (const c of ["git add -A && git commit -m x", "git add . && git commit -m x", "git add -u; git commit -m x"]) {
-      r = run(c);
-      assert.equal(r.status, 0, `${c}: ${r.stderr}`);
-      assert.match(r.stderr, /probe: commit code/, `${c} stages everything, so it is never docs-only`);
-    }
-    // no add in the command: the unstaged rule is unchanged
-    assert.equal(run("git commit -m x").status, 2);
-    assert.equal(run("echo 'git add js/core/log.js' && git commit -m x").status, 2, "a quoted add is prose");
-  } finally { repo.rm(); }
-});
-
-test("bash-guard: survey images and reports commit on the docs-only path; a code file or an image elsewhere does not", () => {
-  const repo = scratchRepo("hook-survey-");
-  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
-  const put = (rel, body = "x") => { fs.mkdirSync(path.dirname(path.join(repo.dir, rel)), { recursive: true }); fs.writeFileSync(path.join(repo.dir, rel), body); };
-  try {
-    fs.mkdirSync(path.join(repo.dir, "tools/ci"), { recursive: true });   // a tree WITH tools/: the no-tools skip (#2428) is not under test here
-    put("artifacts/shots/tracks/spa/t1.png"); put("artifacts/shots/gallery/index.html");
-    put("artifacts/track-survey/spa-report/report.json"); put("docs/PHYSICS.md", "survey prose\n");
-    repo.g("add", "-f", "artifacts", "docs");
-    let r = run("git commit -m survey");
-    assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stderr, /probe: commit docs-only/, "survey images, reports and prose are the docs-only path");
-    put("js/core/log.js");
-    repo.g("add", "js/core/log.js");
-    r = run("git commit -m survey");
-    assert.match(r.stderr, /probe: commit code/, "a code file in the commit runs the full guards");
-    repo.g("reset", "-q", "js/core/log.js"); fs.rmSync(path.join(repo.dir, "js"), { recursive: true });
-    for (const rel of ["assets/pack/x.png", "artifacts/shots/other/x.png", "artifacts/track-survey/spa-report/run.js"]) {
-      put(rel); repo.g("add", "-f", rel);
-      r = run("git commit -m x");
-      assert.match(r.stderr, /probe: commit code/, `${rel} is not a survey asset`);
-      repo.g("reset", "-q", rel); fs.rmSync(path.join(repo.dir, rel));
-    }
-  } finally { repo.rm(); }
-});
-
 // PostToolUse stdout is debug-log only: "For most events, Claude Code writes stdout to
 // the debug log" — UserPromptSubmit/SessionStart are the exceptions
 // (https://code.claude.com/docs/en/hooks, Exit code 0). The advice must travel as
@@ -1217,25 +1055,14 @@ test("git checkout --theirs/--ours warns when the file has several conflict hunk
 });
 
 // #2428: a tree with no tools/ (track-survey-assets image branches) skips the guards with a note.
-test("a commit in a tree with no tools/ skips the guards unless it stages code", () => {
-  const repo = scratchRepo("hook-notools-");
-  const run = (command) => hook("bash-guard.sh", bashCall(command, { cwd: repo.dir }), { cwd: repo.dir, env: { APEX_GUARD_PROBE: "1" } });
+test("fast hook delegates staged-tree classification and guard execution to git pre-commit", () => {
+  const repo=scratchRepo("hook-fast-");
   try {
-    fs.mkdirSync(path.join(repo.dir, "assets"), { recursive: true });
-    fs.writeFileSync(path.join(repo.dir, "assets/a.png"), "x");
-    repo.g("add", "assets/a.png");
-    let r = run("git commit -m img");
-    assert.equal(r.status, 0, r.stderr);
-    assert.match(r.stderr, /guards skipped: no tools\/ in this tree/);
-    fs.mkdirSync(path.join(repo.dir, "js"), { recursive: true });
-    fs.writeFileSync(path.join(repo.dir, "js/a-fixture.txt"), "var a;\n");
-    repo.g("add", "js/a-fixture.txt");
-    r = run("git commit -m code");
-    assert.doesNotMatch(r.stderr, /guards skipped/, "staged js/ is still guarded");
-    assert.match(r.stderr, /probe: commit code/);
-  } finally { repo.rm(); }
+    const r=hook("bash-guard.sh",bashCall("git commit -m x"),{cwd:repo.dir});
+    assert.equal(r.status,0,r.stderr); assert.equal(r.stdout,"");
+    assert.equal(fs.existsSync(path.join(repo.dir,"artifacts/pre-commit-guards.log")),false);
+  } finally {repo.rm();}
 });
-
 // H4/H5 and the H2 unmark (retro 2026-10-17, hooks H2-H5)
 test("H4: a push over a red tooling-fast run is refused; && chains, green logs and the override pass", () => {
   const repo = scratchRepo("hook-pushred-");
@@ -1319,10 +1146,10 @@ test("H1: stop-hook-git-check.sample treats synced memory and a held push as cle
 
 test("H5: a loaded box gets the longer guard cap, above it sits the hook timeout; H2 unmark runs before git verbs", () => {
   const src = fs.readFileSync(HOOK, "utf8");
-  assert.match(src, /\/proc\/loadavg[^\n]*GUARD_T=300/);
+  assert.doesNotMatch(src, /GUARD_T=300/);
   const settings = JSON.parse(fs.readFileSync(path.join(ROOT, ".claude/settings.json"), "utf8"));
   for (const h of settings.hooks.PreToolUse.flatMap((g) => g.hooks).filter((h) => h.command.includes("bash-guard.sh")))
-    assert.ok(h.timeout >= 300 + 15, `bash-guard hook timeout ${h.timeout} must clear the loaded cap`);
+    assert.ok(h.timeout <= 30, `fast bash-guard timeout ${h.timeout}`);
   const repo = scratchRepo("hook-unmark-");
   try {
     fs.mkdirSync(path.join(repo.dir, ".claude/memory"), { recursive: true });
@@ -1331,7 +1158,7 @@ test("H5: a loaded box gets the longer guard cap, above it sits the hook timeout
     repo.g("update-index", "--assume-unchanged", ".claude/memory/a.md");
     assert.match(repo.g("ls-files", "-v").stdout, /^h \.claude\/memory\/a\.md/m);
     const r = hook("bash-guard.sh", { tool_name: "Bash", tool_input: { command: "git add -A && git commit -m x" }, cwd: repo.dir },
-      { cwd: repo.dir, env: { APEX_MEMORY_SYNC: "1", APEX_GUARD_PROBE: "1" } });
+      { cwd: repo.dir, env: { APEX_MEMORY_SYNC: "1" } });
     assert.notEqual(r.status, null);
     assert.match(repo.g("ls-files", "-v").stdout, /^H \.claude\/memory\/a\.md/m, "unmarked before the git verb");
   } finally { repo.rm(); }
@@ -1507,7 +1334,7 @@ test("a `git stash` while a merge is in progress is refused (MERGE_HEAD would be
   const repo = scratchRepo("hook-stash-merge-");
   const run = (command) => spawnSync("bash", [HOOK], {
     input: JSON.stringify({ tool_name: "Bash", tool_input: { command }, cwd: repo.dir }),
-    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir, APEX_GUARD_PROBE: "1" },
+    cwd: repo.dir, encoding: "utf8", env: { ...process.env, CLAUDE_PROJECT_DIR: repo.dir },
   });
   try {
     repo.g("checkout", "-qb", "side");
@@ -1590,4 +1417,97 @@ test("WP-L4 receipt dirs: Write/Edit and Bash writes into artifacts/{merge,ready
     assert.equal(ok.status, 0, ok.stderr);
     assert.equal(pf(bashCall("echo x > artifacts/launch-notes.txt")).status, 0, "a sibling name is not the directory");
   } finally { repo.rm(); }
+});
+
+test('split guards refuse malformed input and their own helper errors',()=>{
+ const repo=scratchRepo('split-errors-');
+ try{
+  const names=['bash-guard.sh','protect-files.sh','mcp-browser-guard.sh','github-mcp-guard.sh'];
+  for(const name of names){
+   for(const payload of ['not json','[]','{"tool_input":[]}']){
+    const r=hook(name,payload,{cwd:repo.dir});
+    if(r.status!==2) {
+      assert.equal(r.status,0,name+' '+r.stderr);
+      assert.equal(JSON.parse(r.stdout).hookSpecificOutput.permissionDecision,'deny',name+' '+payload);
+    }
+   }
+  }
+  const bin=path.join(repo.dir,'bin');fs.mkdirSync(bin);fs.writeFileSync(path.join(bin,'python3'),'#!/bin/sh\nexit 71\n');fs.chmodSync(path.join(bin,'python3'),0o755);
+  for(const name of names){
+   const r=hook(name,{tool_name:'Bash',tool_input:{command:'git status'}},{cwd:repo.dir,env:{PATH:bin+path.delimiter+process.env.PATH}});
+   assert.equal(r.status,2,name+' helper crash: '+r.stderr);
+  }
+  // A real interpreter executes the shipped entrypoint. Trace faults occur at
+  // main(), outside payload parsing, so only its production crash handler can deny.
+  const faultDir=path.join(repo.dir,'fault');fs.mkdirSync(faultDir);
+  fs.writeFileSync(path.join(faultDir,'sitecustomize.py'),`import os,sys
+wanted=os.environ.get('FAULT_HOOK','')
+def trace(frame,event,arg):
+ if event=='call' and frame.f_code.co_name=='main' and frame.f_code.co_filename.endswith(wanted):
+  raise RuntimeError('fixture internal fault')
+ return trace
+sys.settrace(trace)
+`);
+  for(const name of ['launch-gate.py','context-cap.py']){
+   const invoke=(extra={})=>spawnSync('python3',[path.join(ROOT,'.claude/hooks',name),'--guard'],{
+    input:JSON.stringify({tool_name:'Agent',tool_input:{prompt:'x'}}),cwd:repo.dir,encoding:'utf8',
+    env:{...process.env,CLAUDE_PROJECT_DIR:repo.dir,APEX_CTX_CAP:'',PYTHONPATH:faultDir,FAULT_HOOK:name,...extra}});
+   const r=invoke();assert.equal(r.status,2,name+' internal error: '+r.stderr);assert.match(r.stderr,/fixture internal fault/);
+   if(name==='context-cap.py'){
+    assert.equal(invoke({APEX_CTX_CAP:'off'}).status,0,'explicit cap override survives internal failure');
+    fs.mkdirSync(path.join(repo.dir,'.claude'),{recursive:true});fs.writeFileSync(path.join(repo.dir,'.claude/allow-context-cap'),'');
+    assert.equal(invoke().status,0,'fixture cap hatch survives internal failure');
+   }
+  }
+  const broken=path.join(repo.dir,'broken-guard');fs.mkdirSync(broken);
+  fs.copyFileSync(path.join(ROOT,'.claude/hooks/github-mcp-guard.sh'),path.join(broken,'github-mcp-guard.sh'));
+  fs.writeFileSync(path.join(broken,'merge_policy.py'),'raise RuntimeError("fixture broken policy")\n');
+  const crash=spawnSync('bash',[path.join(broken,'github-mcp-guard.sh')],{input:JSON.stringify({tool_name:'mcp__github__merge_pull_request',tool_input:{pullNumber:1}}),encoding:'utf8',cwd:repo.dir});
+  assert.equal(crash.status,2,crash.stderr);assert.match(crash.stderr,/fixture broken policy/);
+
+ }finally{repo.rm();}
+});
+
+
+test('bash-guard refuses malformed nonempty decisions from its parser',()=>{
+ const repo=scratchRepo('split-decision-');
+ try{
+  const bin=path.join(repo.dir,'bin');fs.mkdirSync(bin);
+  const python=spawnSync('which',['python3'],{encoding:'utf8'}).stdout.trim();
+  fs.writeFileSync(path.join(bin,'python3'),`#!/bin/sh
+if [ "$2" = guard ]; then printf '0 0 0 -\\n0\\n%s\\n' "$FIXTURE_DECISION"; else exec '${python}' "$@"; fi
+`);
+  fs.chmodSync(path.join(bin,'python3'),0o755);
+  const malformed = ['broken', '[]', '{}', '{"hookSpecificOutput":{"permissionDecision":"unexpected"}}',
+   ...[
+    {hookEventName:'PreToolUse'},
+    {hookEventName:'OtherEvent',additionalContext:'advice'},
+    {hookEventName:'PreToolUse',additionalContext:''},
+    {hookEventName:'PreToolUse',additionalContext:[]},
+    {hookEventName:'PreToolUse',additionalContext:null},
+    {hookEventName:'PreToolUse',permissionDecision:'unexpected',additionalContext:'advice'},
+    {hookEventName:'PreToolUse',permissionDecision:null,additionalContext:'advice'},
+    {hookEventName:'PreToolUse',permissionDecision:'deny',permissionDecisionReason:[]},
+    {hookEventName:'PreToolUse',permissionDecision:'deny',additionalContext:42},
+   ].map(hookSpecificOutput=>JSON.stringify({hookSpecificOutput}))];
+  for(const decision of malformed){
+   const r=hook('bash-guard.sh',bashCall('git status'),{cwd:repo.dir,env:{PATH:bin+path.delimiter+process.env.PATH,FIXTURE_DECISION:decision}});
+   assert.equal(r.status,2,decision+' '+r.stderr);assert.match(r.stderr,/could not write its decision JSON/);
+  }
+ }finally{repo.rm();}
+});
+
+
+test('bash-guard refuses an active legacy hook that skips Claude Code; split hook passes',()=>{
+ const repo=scratchRepo('split-legacy-');
+ try{
+  const target=path.join(repo.dir,'.githooks/pre-commit');
+  fs.mkdirSync(path.dirname(target),{recursive:true});
+  fs.writeFileSync(target,'#!/bin/sh\n[ -n "${CLAUDECODE:-}" ] && exit 0\nexit 0\n');fs.chmodSync(target,0o755);
+  repo.g('config','core.hooksPath','.githooks');
+  const run=()=>hook('bash-guard.sh',bashCall('git commit -m x'),{cwd:repo.dir,env:{CLAUDECODE:'1'}});
+  const legacy=run();assert.equal(legacy.status,2,legacy.stderr);assert.match(legacy.stderr,/would run NO guards/);
+  fs.copyFileSync(path.join(ROOT,'.githooks/pre-commit'),target);fs.chmodSync(target,0o755);
+  const split=run();assert.equal(split.status,0,split.stderr);assert.equal(split.stdout,'');
+ }finally{repo.rm();}
 });

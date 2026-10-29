@@ -399,6 +399,6 @@ const TrackFixes = (function () {
     return { design: d, applied, msgs, verdict: v };
   }
 
-  return { ORDER, BRIDGE, LAP, canFix, apply, fixAll };
+  return { ORDER, canFix, apply, fixAll };
 })();
 Object.freeze(TrackFixes);

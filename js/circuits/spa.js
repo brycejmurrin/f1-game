@@ -71,7 +71,7 @@
     // Stations identify bends on the existing built trace, not surveyed GPS
     // apex coordinates. Keep the road, elevation and authored bank centres.
     turns: [0.0350, 0.1307, 0.1430, 0.1615, 0.3260, 0.3370, 0.3595, 0.4168, 0.4500, 0.5225, 0.5567, 0.6230, 0.6505, 0.6855, 0.7150, 0.8152, 0.8653, 0.9435, 0.9515],
-    furniture: { tree: "fir",   fol: [0.14, 0.31, 0.21], lamp: "none" },  // dark Ardennes spruce, blue-green
+    furniture: { tree: "fir", bakedPines: true, fol: [0.14, 0.31, 0.21], lamp: "none" },  // shared authored/forest pine registry
     kit: { marshal: "cabin",     rail: "doubleArmco", fence: "leaning",   tyre: "stack",   board: "panel",     gantry: "truss",      camera: "lattice",   hoarding: "panel" },
     standSet: ["darkSteel", "steel", "concrete"],
     // Real centreline: OSM trace (bacinger/f1-circuits, ODbL) — [x,z] metres,

@@ -12,9 +12,9 @@
  * │ one without. tests/unit/damage.test.mjs greps js/physics/, the AI and    │
  * │ race-control files and fails on any reference to `Damage`.               │
  * │                                                                          │
- * │ A future "damage affects performance" option must be an explicit,        │
- * │ setting-gated read at ONE place (game.js modsFor / aeroDfMult for the    │
- * │ wing levels, the grip path for floor/knock) — never a quiet read here.   │
+ * │ The one exception is the explicit, setting-gated DAMAGE → HANDLING       │
+ * │ option (#1578, default OFF): js/race/damage-handling.js reads the record │
+ * │ and hands PlayerForces axle factors as ctx.damage (null when OFF).       │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Parts, each 0..1: fwL / fwR (front wing halves), rw (rear wing), floor; and
