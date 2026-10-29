@@ -60,16 +60,19 @@ const DockLayout = (function () {
     return true;
   }
 
-  /** Usable pad size in CSS px (viewport minus safe-area insets). */
+  /** Usable pad size in CSS px (visible viewport minus safe-area insets).
+      visualViewport is the area not covered by browser chrome; innerWidth
+      stays the layout viewport and overstates the pad while a toolbar is up. */
   function usablePad(root) {
     const cs = root ? getComputedStyle(root) : null;
     const sal = parseFloat(cs && cs.getPropertyValue("--sal")) || 0;
     const sar = parseFloat(cs && cs.getPropertyValue("--sar")) || 0;
     const sat = parseFloat(cs && cs.getPropertyValue("--sat")) || 0;
     const sab = parseFloat(cs && cs.getPropertyValue("--sab")) || 0;
-    const w = (typeof window !== "undefined" ? window.innerWidth : 390) - sal - sar;
-    const h = (typeof window !== "undefined" ? window.innerHeight : 844) - sat - sab;
-    return { w: Math.max(1, w), h: Math.max(1, h) };
+    const vv = (typeof window !== "undefined" && window.visualViewport) || null;
+    const vw = (vv && +vv.width > 0) ? +vv.width : (typeof window !== "undefined" ? window.innerWidth : 390);
+    const vh = (vv && +vv.height > 0) ? +vv.height : (typeof window !== "undefined" ? window.innerHeight : 844);
+    return { w: Math.max(1, vw - sal - sar), h: Math.max(1, vh - sat - sab) };
   }
 
   // The dock carries `zoom: var(--hud-z-dock, …)` (css/touch-controls.css), and
@@ -299,6 +302,8 @@ const DockLayout = (function () {
     if (typeof window !== "undefined" && window.addEventListener) {
       window.addEventListener("resize", paint, { passive: true });
       window.addEventListener("orientationchange", paint, { passive: true });
+      if (window.visualViewport && window.visualViewport.addEventListener)
+        window.visualViewport.addEventListener("resize", paint, { passive: true });
     }
 
     // Re-apply when the player switches STEERING INPUT (store.set notifies

@@ -82,7 +82,7 @@ test("falls back to the direct draw when no 2d context is available", () => {
 
 // Run the complete module against a recording canvas. Equal sector colours
 // deliberately remove colour as a source of sector identity in these cases.
-function minimap(cues = false) {
+function minimap(cues = false, zones = [], sameInk = false) {
   const canvases = [], targetLog = [], dataset = { cbCues: cues ? "on" : "off" };
   function context(log) {
     let dash = [];
@@ -94,7 +94,7 @@ function minimap(cues = false) {
           log.push([String(k), ...args, ...(k === "stroke" ? [{ dash: [...dash], ink: t.strokeStyle }] : [])]);
         };
       },
-      set(t, k, v) { t[k] = v; log.push(["set:" + String(k), v]); return true; },
+      set(t, k, v) { if (sameInk && k === "strokeStyle") v = "#fff"; t[k] = v; log.push(["set:" + String(k), v]); return true; },
     });
   }
   const target = context(targetLog), style = { getPropertyValue: () => "" };
@@ -114,7 +114,7 @@ function minimap(cues = false) {
         cv.getContext = () => ctx; canvases.push(cv); return cv;
       },
     },
-    TrackMaps: { sectorColors: () => ["#fff", "#fff", "#fff"], drsZones: () => [] },
+    TrackMaps: { sectorColors: () => ["#fff", "#fff", "#fff"], drsZones: () => zones },
     GhostShare: { hasGuest: () => false }, Ghost: { hasGhost: () => true },
   };
   vm.createContext(sb);
@@ -166,4 +166,53 @@ test("toggling colourblind cues rebuilds the background without a layout or trac
   h.dataset.cbCues = "off"; h.map.draw();
   assert.equal(h.canvases.at(-1).log.some((e) => e[0] === "fillText"), false, "OFF removes cached sector labels");
   assert.deepEqual(h.canvases.at(-1).log.filter((e) => e[0] === "stroke").map((e) => e.at(-1).dash), [[], [], []]);
+});
+
+
+test("AERO zones retain the plain OFF highlight and gain cached non-colour identity ON", () => {
+  const zones = [{ a: 0.25, b: 0.5 }];
+  const off = minimap(false, zones, true); off.map.draw();
+  const offBg = off.canvases[0].log;
+  assert.equal(offBg.filter((e) => e[0] === "stroke").length, 4, "three sectors plus original plain zone");
+  assert.equal(offBg.some((e) => e[0] === "fillText"), false);
+  assert.ok(offBg.filter((e) => e[0] === "stroke").every((e) => e.at(-1).dash.length === 0));
+  const on = minimap(true, zones, true); on.map.draw();
+  const bg = on.canvases[0].log;
+  assert.deepEqual(bg.filter((e) => e[0] === "fillText").map((e) => e[1]), ["S1", "S2", "S3", "AERO"]);
+  const strokes = bg.filter((e) => e[0] === "stroke");
+  assert.equal(new Set(strokes.map((e) => e.at(-1).ink)).size, 1, "all strokes deliberately use identical ink");
+  const zoneEnd = bg.indexOf(strokes[3]), hatchEnd = bg.indexOf(strokes[4]);
+  const hatches = bg.slice(zoneEnd + 1, hatchEnd);
+  assert.equal(hatches.filter((e) => e[0] === "moveTo").length, 3, "crossbars span the zone, independently of its colour");
+  assert.equal(hatches.filter((e) => e[0] === "lineTo").length, 3);
+  const starts = hatches.filter((e) => e[0] === "moveTo"), ends = hatches.filter((e) => e[0] === "lineTo");
+  for (let i = 0; i < starts.length; i++) {
+    const p = on.G.track.map[3 + i], next = on.G.track.map[4 + i];
+    const dx = ends[i][1] - starts[i][1], dy = ends[i][2] - starts[i][2];
+    assert.ok(Math.abs(dx * (next[0] - p[0]) + dy * (next[1] - p[1])) < 1e-10, "crossbar crosses the local zone tangent");
+    assert.ok(Math.abs(Math.hypot(dx, dy) - 8) < 1e-10, "hatch spans both sides of the three-pixel zone");
+  }
+  const canvases = on.canvases.length, calls = bg.length;
+  on.map.draw(); on.map.draw();
+  assert.equal(on.canvases.length, canvases);
+  assert.equal(bg.length, calls, "steady draw neither re-hatches nor sets the zone font");
+  assert.equal(on.targetLog.some((e) => e[0] === "fillText" || e[0] === "set:font"), false);
+});
+
+test("wrapped AERO zones label their start and live toggles remove the cached cue", () => {
+  const h = minimap(false, [{ a: 10 / 12, b: 14 / 12 }]); h.map.draw();
+  h.dataset.cbCues = "on"; h.map.draw();
+  const bg = h.canvases[1].log;
+  const label = bg.find((e) => e[0] === "fillText" && e[1] === "AERO");
+  assert.ok(label, "zone crossing the finish line retains its label");
+  const start = h.G.track.map[10];
+  assert.equal(label[2], Math.max(20, Math.min(120, 8 + start[0] * 124)));
+  assert.equal(label[3], Math.max(8, Math.min(132, 8 + start[1] * 124)));
+  const strokes = bg.filter((e) => e[0] === "stroke");
+  const hatch = bg.slice(bg.indexOf(strokes[3]) + 1, bg.indexOf(strokes[4]));
+  assert.equal(hatch.filter((e) => e[0] === "moveTo").length, 4, "hatches continue past the finish line");
+  h.dataset.cbCues = "off"; h.map.draw();
+  const restored = h.canvases.at(-1).log;
+  assert.equal(restored.some((e) => e[0] === "fillText"), false);
+  assert.equal(restored.filter((e) => e[0] === "stroke").length, 4, "OFF restores only the original zone stroke");
 });

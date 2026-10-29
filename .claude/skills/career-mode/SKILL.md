@@ -1,6 +1,6 @@
 ---
 name: career-mode
-description: "Use when DRIVER CAREER, MY TEAM, career saves/slots, contracts, sponsors, R&D economy, career qualifying, DNF money, career hooks/tests change — including season, sprint and quali INSIDE a career save (its stamped calendar, Career.calendar()). Season screen with no career save → season-mode; reliability plans → race-incidents-control."
+description: "Use when changing DRIVER CAREER or MY TEAM: saves and slots, contracts, sponsors, R&D or DNF money, or a season, sprint or qualifying inside a career save. Not for: the Season screen → season-mode; reliability failures → race-incidents-control; parts → garage-parts-livery."
 ---
 
 ## Overview
@@ -24,6 +24,7 @@ Do **not** use this for:
 
 - One-off Grand Prix, standalone Season, or Time Trial unless career state leaks
   into them (standalone Season → **season-mode**).
+- Qualifying/results sheets outside a career save → **race-weekend**.
 - Generic parts physics; use this only for the economy/cap that buys and fits
   parts in career.
 - Race-control/debris incidents and the reliability retirement plan (`Reliability.plan`) → **race-incidents-control**.

@@ -567,11 +567,17 @@ Places a modelled asset from `assets/pack/` — either generated offline by
 `bake-model` / `import-models.mjs` from a glTF. Geometry is the game's own
 vertex format with a `MAT` id per vertex.
 
-`opts`: `{ scale, rotY, lift, tint:[r,g,b], mat }`. Without `rotY` the model is
+`opts`: `{ scale, height, rotY, lift, tint:[r,g,b], mat }`. A positive finite `height`
+sets uniform scale from the model's measured height, overriding `scale`. Without `rotY` the model is
 yawed to face the track (a model authored facing **+Z** looks at the road from
 either side). `tint` multiplies the baked vertex colour; `mat` overrides the
 baked per-vertex material id, so one mesh can be dressed as concrete on one
 circuit and rusted metal on another.
+
+`def.furniture.bakedPines: true` routes all `pine` calls (including deferred
+`forestEdge` ranks) through the shared tree occupancy registry before placing
+`pine_lod0` at the requested height. Missing models keep the procedural fallback;
+circuits without the opt-in retain their existing geometry.
 
 **It returns `false` and emits nothing when the pack has no such model** — which
 is the state of a fresh checkout, since no models ship by default. Treat it as an

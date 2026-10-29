@@ -1,6 +1,6 @@
 ---
 name: ui-menu-a11y
-description: "Use when menus, settings, dialogs, Escape/back (incl. pause behind a sheet), keyboard navigation, screen readers, scroll affordances, UI scale, touch layout or a cramped screen (short landscape phone) misbehave. Named-element tweak, restructure or tokens → css-play; full matrix → survey-ui-matrix; driving input → input-controls."
+description: "Use when menus, settings or dialogs misbehave: Escape or back, focus, keyboard navigation, screen readers, scrolling, UI scale, touch layout, or a cramped landscape phone screen. Not for: one element's styling → css-play; the whole-UI review → survey-ui-matrix; driving input → input-controls."
 ---
 
 # Menu / HUD accessibility

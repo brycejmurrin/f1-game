@@ -28,7 +28,7 @@ Cuts ease ~0.35 s; onboard (cockpit/hood/tcam) lock instantly.
 
 ## Measuring lag (fixes belong to f1-animation-cameras)
 
-Lag is MEASURED here and FIXED in skill f1-animation-cameras (the rig code). One boot, no pixels:
+Lag is measured with this reference; fixes to the rig code live in skill f1-animation-cameras. One boot, no pixels:
 drive (`race()`, `go()`, throttle via `step()`), and each step record the distance from `camState().eye`
 to the car (`physState().px`/`pz`) next to `physState().speed`; compare with the snapped distance
 (`snapCam()` once: chase eye ≈ 5.8 m, docs/DEBUG-HOOKS.md §snapCam). Report p50/p95 of the excess
@@ -53,7 +53,3 @@ framing; you get a free-orbit shot.
 Inspectors: `camState()` → `{eye, tgt, fov, debug}`; `viewState()` is the
 full scene/camera snapshot. Capture → **playwright-probe**.
 
-## Load on demand
-
-- Free-cam table, `previewCam`, `look:"in"` vs `roadside()` look set, recipes →
-  [references/debug-cameras-framing.md](debug-cameras-framing.md).

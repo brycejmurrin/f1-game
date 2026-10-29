@@ -13,7 +13,7 @@
 const XrInput = (function () {
   const BTN_TRIGGER = 0;
   // BTN_SQUEEZE (1) is intentionally unmapped — squeeze must not snap the seated gaze.
-  const BTN_STICK = 3;      // thumbstick click: exported for diagnostics, not mapped
+  // BTN_STICK (3) thumbstick click is unmapped (no consumer).
   const BTN_PRIMARY = 4;    // A (right) / X (left)
   const BTN_SECONDARY = 5;  // B (right) / Y (left)
   const AXIS_STICK_X = 2;
@@ -127,10 +127,6 @@ const XrInput = (function () {
     return true;
   }
 
-  return {
-    mapFrame, inject,
-    BTN_TRIGGER, BTN_STICK, BTN_PRIMARY, BTN_SECONDARY,
-    AXIS_STICK_X, AXIS_STICK_Y,
-  };
+  return { mapFrame, inject };
 })();
 Object.freeze(XrInput);

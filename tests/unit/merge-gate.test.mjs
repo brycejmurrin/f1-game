@@ -653,14 +653,15 @@ function runStep(script, env, files = {}) {
     `    *" --method PUT "*) echo "token=\${GH_TOKEN:-}" >> "$GH_LOG"`,
     `      case " \${GH_PUT_FAIL:-} " in *" $(sed -n 's#.*/pulls/\\([0-9]*\\)/update-branch.*#\\1#p' <<<"\${args[*]}") "*) echo "gh: merge conflict (HTTP 422)" >&2; return 1 ;; esac`,
     `      echo '{"message":"Updating pull request branch."}'; return 0 ;;`,
-    `    *"/issues"*) echo "\${PAUSED:-false}"; return 0 ;;`,
-    `    *"/branches/"*) echo "\${NOW_TIP:-}"; return 0 ;;`,
-    `    *" pr merge "*) return 0 ;;`,
+    `    *"/issues"*) if [ "$(grep -c '/issues' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pause ] || return 31; echo "\${PAUSED_AFTER-\${PAUSED:-false}}"; else echo "\${PAUSED:-false}"; fi; return 0 ;;`,
+    `    *"/branches/"*) if [ "$(grep -c '/branches/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != tip ] || return 31; echo "\${NOW_TIP_AFTER-\${NOW_TIP:-}}"; else echo "\${NOW_TIP:-}"; fi; return 0 ;;`,
+    `    *" pr merge "*) [ -z "\${GH_MERGE_STDERR:-}" ] || printf '%s\\n' "$GH_MERGE_STDERR" >&2; return "\${GH_MERGE_RC:-0}" ;;`,
     `    *" pr list "*) data=\${FAKE_LANDS:-[]} ;;`,
     `    *"/statuses"*) data=$(jq -c --arg h "$(sed -n 's#.*commits/\\([0-9a-f]*\\)/statuses.*#\\1#p' <<<"\${args[*]}")" 'if type == "object" then (.[$h] // []) else . end' <<<"\${FAKE_STATUSES:-[]}") ;;`,
     `    *"/check-runs"*) data=\${FAKE_CHECKS:-'{"check_runs":[]}'} ;;`,
     `    *"/runs?"*) data=\${FAKE_RUNS:-'{"workflow_runs":[]}'} ;;`,
     `    *) data=\${FAKE_PR:-'{}'}`,
+    `       if [[ " \${args[*]} " == *"/pulls/"* ]] && [ "$(grep -c '/pulls/' "$GH_LOG")" -gt 1 ]; then [ "\${GH_ARM_RECHECK_FAIL:-}" != pr ] || return 31; data=\${FAKE_PR_AFTER-$data}; fi`,
     `       if [ -n "\${FAKE_PRS:-}" ]; then data=$(jq -c --arg n "$(sed -n 's#.*/pulls/\\([0-9]*\\).*#\\1#p' <<<"\${args[*]}")" '.[$n] // {}' <<<"$FAKE_PRS"); fi ;;`,
     `  esac`,
     `  if [ -n "$q" ]; then jq -r "$q" <<<"$data"; else echo "$data"; fi; }`,
@@ -723,6 +724,49 @@ test("land.yml arm: a tip that moved is the ONLY skip handed to retry; any other
   r = go(pr7(), TIP_A);
   assert.equal(r.out.retry, undefined);
   assert.ok(r.calls.some((c) => c.includes(`pr merge 7 --repo o/r --auto --merge --match-head-commit ${HEAD7}`)), "same tip: arms as before");
+});
+
+test("land.yml arm: only a proven base-modified race re-gates after a failed single merge call", () => {
+  const run = LAND.jobs.arm.steps.find((s) => s.id === "arm").run;
+  const error = "GraphQL: Base branch was modified. Review and try the merge again. (mergePullRequest)";
+  const auth = { LAND_TOKEN: "land-token", GITHUB_TOKEN: "read-token" };
+  const go = (extra = {}) => runStep(run, {
+    ARM: JSON.stringify({ number: 7, head: HEAD7, tip: TIP_A }), FAKE_PR: pr7(), NOW_TIP: TIP_A,
+    NOW_TIP_AFTER: TIP_B, ...auth,
+    GH_MERGE_RC: "17", GH_MERGE_STDERR: error, ...extra,
+  });
+  const singleArm = (r) => assert.equal(r.calls.filter((c) => c.includes("pr merge ")).length, 1, "never retries the merge command");
+  let r = go();
+  assert.equal(r.status, 0, r.stderr);
+  assert.deepEqual(JSON.parse(r.out.retry), { number: 7, head: HEAD7 });
+  assert.equal(r.stderr.split("\n")[0], error, "original failure stays visible verbatim");
+  assert.equal(r.summary, `::notice::not armed #7: deploy tip moved during arm ${TIP_A.slice(0, 12)} -> ${TIP_B.slice(0, 12)}; re-gating within the existing retry budget\n`);
+  singleArm(r);
+  const refusals = [
+    { NOW_TIP_AFTER: TIP_A }, { NOW_TIP_AFTER: "" }, { NOW_TIP_AFTER: "invalid" },
+    { GH_MERGE_STDERR: "GraphQL: Resource not accessible by integration" },
+    { FAKE_PR_AFTER: pr7({ head: { sha: TIP_B } }) }, { FAKE_PR_AFTER: pr7({ draft: true }) },
+    { FAKE_PR_AFTER: pr7({ state: "closed" }) }, { FAKE_PR_AFTER: pr7({ base: { ref: "other" } }) },
+    { FAKE_PR_AFTER: pr7({ labels: [] }) },
+    { FAKE_PR_AFTER: pr7({ labels: [{ name: "land" }, { name: "hold" }] }) },
+    { FAKE_PR_AFTER: "malformed" }, { PAUSED_AFTER: "true" }, { PAUSED_AFTER: "" },
+    ...["tip", "pr", "pause"].map((GH_ARM_RECHECK_FAIL) => ({ GH_ARM_RECHECK_FAIL })),
+  ];
+  for (const extra of refusals) {
+    r = go(extra);
+    assert.equal(r.status, 17, JSON.stringify(extra) + r.stderr);
+    assert.equal(r.out.retry, undefined, JSON.stringify(extra));
+    assert.equal(r.summary, "", "refusal never claims that the PR was armed");
+    assert.equal(r.stderr.split("\n")[0], extra.GH_MERGE_STDERR || error, "original merge error is preserved verbatim");
+    singleArm(r);
+    if (extra.GH_MERGE_STDERR) assert.equal(r.calls.filter((c) => c.includes("/branches/")).length, 1, "unrelated errors never enter recovery");
+  }
+  r = go({ GH_MERGE_RC: "0", GH_MERGE_STDERR: "" });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(r.out.retry, undefined);
+  assert.equal(r.summary, `armed (or merged) #7 @ ${HEAD7.slice(0, 12)} onto ${TIP_A.slice(0, 12)} with ${auth.LAND_TOKEN ? "LAND_TOKEN" : "GITHUB_TOKEN"}\n`);
+  assert.equal(r.calls.filter((c) => c.includes("/branches/")).length, 1, "success has no recovery reads");
+  singleArm(r);
 });
 
 test("land.yml post: the two tip moves (trusted-rows vs land-gate, verdict vs deploy tip) are handed to retry; other errors are not", () => {

@@ -1,126 +1,65 @@
 ---
 name: season-mode
-description: "Use when the standalone Season screen or SETUP changes or a sprint/quali toggle is ignored — calendar, weekend format, lap count, points table, fastest-lap point (flPoint), #season-setup, season-cal.js, season-ui.js. A sprint/quali bug inside a DRIVER CAREER / MY TEAM save → career-mode."
+description: "Use when changing the standalone Season screen or its setup: calendar, weekend format, sprint or qualifying toggles, lap count, or points. Not for: a season inside a career save → career-mode; real F1 data → data-hub; menu layout → ui-menu-a11y."
 ---
 
 # Standalone Season — calendar vs format
 
-`js/career/season-cal.js` is **rules, no DOM**. `js/career/season-ui.js` is
-the SETUP screen. Career is **not** customisable: it races its stamped calendar
-(`Career.calendar()`, `Tracks.SEASON` only when unstamped) — do not wire `SeasonCal`
-calendar reads into a career weekend.
+`js/career/season-cal.js` is **rules, no DOM**. `js/career/season-ui.js` is the SETUP screen.
+Persist at `apex26.seasonCfg` (`CFG_KEY` in `season-cal.js`; `GameStore` adds the prefix). Symbols:
+locate with apex-lsp (skill code-nav).
 
-## Two gates (getting this wrong is a real bug)
+## Gotchas
+
+- Career is **not** customisable: it races its stamped calendar (`Career.calendar()`, `Tracks.SEASON`
+  only when unstamped). Do not wire `SeasonCal` calendar reads into a career weekend, and do not edit
+  career saves or `Career.*` from here → **career-mode**.
+- A **format** gate of "not career" is a bug: it gives a one-off Grand Prix the season sprint distance
+  and points table. Format applies in flow `"season"` only (table below).
+- "Toggle ignored" is usually the frozen config: a live season races `activeCfg`, not the SETUP
+  preferences, so a chip can read ON while the season races OFF. Only APPLY
+  (`SeasonCal.applyConfig`) changes it.
+- SETUP DOM is in `season-ui.js`, never `season-cal.js`.
+- There is no `test:career` group; do not recommend it.
+
+## Two gates
 
 | Kind | When the player's config applies | Neutral otherwise |
 |---|---|---|
 | **Calendar** (`trackIds`, circuit ids, never indices) | flow is **not** `"career"` | career uses `Tracks.SEASON` |
 | **Format** (`quali` / `sprint` / `sprintIds` / `laps` / `points` / `flPoint` / `drop`) | flow is **`"season"`** only | GP / TT / VS FRIEND keep one-off defaults |
 
-A `"not career"` gate on format would give a one-off Grand Prix the
-season sprint distance and its points table. Persist at `apex26.seasonCfg`
-(`CFG_KEY` in `season-cal.js`; `GameStore` adds the prefix).
+## Workflow
 
-## Do not
-
-- Edit career saves or `Career.*` from here → **career-mode**
-- Assume SETUP DOM lives in `season-cal.js`
-- Recommend `test:career` — there is no such group
+1. Classify the change: calendar or format (table above), and confirm the flow gate it needs.
+2. For a toggle bug, run the FIRST CHECK: compare `G.season.config.sprint` / `.sprintIds` / `.quali`
+   with `SeasonCal.config()`. They differ → the APPLY step, not the chip or a consumer. Then follow
+   the sprint or quali chain in `references/config-and-toggles.md`.
+3. For wrong sprint points, start with the unit test `a sprint scores its own table` (a green fixture
+   does not exclude other defects), then inspect `award()`'s return (null = refused: `seasonConflict`
+   or `!canRace`), stage/config (`fmtActive()` gates the format rules), classification and save
+   conflict before the sheet/standings. Sprint points are scored in `SeasonCal.award()`
+   (`SPRINT_POINTS`, `stage()`); the results sheet reads `race.sprint` in `js/ui/results-sheet.js`
+   `buildResults`. Checklist: `references/sprint-scoring.md`.
+4. For a preset, a config value that will not stick, or a points table, check `normalize()` and the
+   preset patch first (`references/presets-normalize-points.md`).
+5. Verify:
 
 ```sh
 node --test tests/unit/season-cal.test.mjs                        # VM, no browser: gates, award(), sprint table
 node tools/ci/test-bg.mjs --spec tests/specs/season.spec.js        # BROWSER, one spec, background (format chips: season-format.spec.js)
 ```
 
-A subagent reports the browser spec as not run. `node tools/ci/test-bg.mjs modes` is the WHOLE group
-(cost: AGENTS.md §Verification) — only when `node tools/ci/pick-tests.mjs` names it, and then preferably
-`node tools/ci/remote-group.mjs modes` on the pushed branch.
+   Subagents never run a browser spec (AGENTS.md Session shape rule 10). `node tools/ci/test-bg.mjs modes`
+   is the WHOLE group (cost: AGENTS.md §Verification) — only when `node tools/ci/pick-tests.mjs` names
+   it, and then preferably `node tools/ci/remote-group.mjs modes` on the pushed branch.
 
-Sprint points are scored in `SeasonCal.award()` (`SPRINT_POINTS`, `stage()`); the
-results sheet reads `race.sprint` in `js/ui/results-sheet.js` `buildResults`.
-Start with `a sprint scores its own table`; a green fixture does not exclude
-other scoring defects. Inspect `award()` return (null = refused: `seasonConflict` or
-`!canRace`), stage/config (`fmtActive()` gates the format rules), classification
-and save conflict before checking the sheet/standings.
+## References
 
-## Config and save lifecycle — read before either on/off chain
-
-`config()` / `setConfig()` are the SETUP PREFERENCES. A live season races its OWN frozen config:
-`activeCfg` (= `season.config`), and every format accessor reads `rulesConfig()`, which returns
-`activeCfg` in flow `"season"`, never the preferences. Only APPLY changes it:
-`#ss-apply` → `SeasonCal.applyConfig(draft)` (returns `{season,ok,durable,reason}`; it sets the
-preferences AND `activeCfg`). Use it rather than `setConfig()` + `restart()` + `save()`.
-- Changed rules on a season in progress only ARM a two-tap confirm ("RESTART? — SEASON IS LOST",
-  `G.armConfirm` in `season-ui.js`); one tap, or BACK (which discards the draft), changes nothing.
-- The SETUP draft opens from `SeasonCal.config()` (preferences), not `G.season.config`: a resumed
-  save freezes its own config, and a foreign `seasonCfg` write reloads the preferences. So a chip can
-  read ON while the live season races OFF.
-- A foreign-save conflict rejects APPLY (`ok:false`); the UI loads the latest save for review.
-  Quota failure may be `ok:true,durable:false` (session-only).
-- `resetWeekend()` resets the last-scored marker; `restart()` creates a blank season. Completed
-  standings remain readable while `canRace()` / `award()` refuse further scoring.
-
-FIRST CHECK for "toggle ignored": compare `G.season.config.sprint` / `.sprintIds` / `.quali` with
-`SeasonCal.config()`. They differ → the APPLY step (above), not the chip or a consumer.
-
-Sprint on/off:
-- Chain: SETUP chip `ss-sprint` (`season-ui.js` buildPool; per-round toggles: `buildCalendar` /
-  `toggleSprint`) -> `draft.sprint` (`false|true|"rounds"`) + `draft.sprintIds` -> APPLY
-  (`applyConfig`: `normalize()` + `setConfig` + `activeCfg = snap`) -> `rulesConfig()` ->
-  `sprintOn(season)` (false unless flow is `"season"`) -> `stage(season)`.
-- A weekend that shows no sprint session: check the flow gate, the frozen config (FIRST CHECK), and
-  `sprintIds` for the round's track. `sprint:"rounds"` with no round marked is `sprintOn` false (the
-  SETUP note counts the marked rounds).
-- Sprint distance: `lapsFor()` divides the race laps (`SPRINT_FRAC`, floor `SPRINT_MIN`) only on the
-  sprint stage; NEXT ROUND's distance is `roundLaps()` (both called from `js/game.js`).
-- Consumers: `js/game.js`, `js/race/pit-lane.js`, `js/audio/announcer.js`, `js/ui/results-sheet.js` `midWeekend`.
-- Wrong sprint points: `references/sprint-scoring.md`.
-
-Quali on/off:
-- Chain: SETUP chip `ss-quali` (`season-ui.js` buildPool) -> `draft.quali` -> APPLY (`applyConfig`; `normalize()`: only an explicit `false` turns it off) -> `rulesConfig().quali` -> `SeasonCal.quali()` / `qualiNext()` / `qualiLabel(season)`. Run the FIRST CHECK above first.
-- `stage()` is `"race"|"sprint"` only and never reads `quali`, so a "qualifying stage" that survives quali-OFF is a consumer, not the SETUP screen.
-- Consumers: `js/race/race-settings.js` (START label, GRID row locked to QUALIFYING when `quali()`), `js/ui/quali-sheet.js`, `js/game.js` (`gridFromQuali`, `openQuali`; locate with apex-lsp `lsp_references` (skill code-nav)).
-- Unit tests: `a season with qualifying off never qualifies` and `a no-qualifying sprint weekend...` in `season-cal.test.mjs`; the chip itself is browser-only (`season.spec.js`, `season-format.spec.js`).
-
-## Presets — "2026 REAL" and the calendar chips
-
-Symbols below are in `js/career/season-cal.js` unless named; locate with apex-lsp `lsp_definition` (skill code-nav).
-
-`PRESETS` (`season-cal.js`; chips `#ss-presets` in `season-ui.js`) →
-`preset(id)` → a draft patch. Only `real2026` ("2026 REAL") sets format too:
-`trackIds` from `REAL_2026` (the frozen 2026 table — count it, venues were still pending; each
-`{id, from, to, sprint}`), `sprint: "rounds"` and `sprintIds` from its sprint
-rows (the `real2026` entry of `PRESETS`). Every other preset is a calendar only (`CLASSICS` = `t.classic`).
-`gpName()` (`REAL_2026_GP`) renames Sepang to "Bahrain GP" and
-Catalunya to "Barcelona-Catalunya GP" only under `fmtActive()` AND an unedited
-calendar (exact ids, in order) — one reorder drops the names, by design.
-Tests: `2026 REAL: every round is a shipped circuit…` and `presets slice the
-championship…` in `season-cal.test.mjs`; `badges.test.mjs` and
-`real-race-script.test.mjs` also read `REAL_2026`. A new 2026 venue needs its
-circuit shipped first (`knownIds` drops an unknown id).
-
-## Config normalisation — old saves still load
-
-`normalize()` keeps only legal values; check it before blaming the UI:
-- `trackIds` / `sprintIds` go through `knownIds()`: unknown ids and repeats
-  are dropped, never fatal (test `normalise drops unknown ids…`); empty →
-  the default calendar.
-- `quali`: only an explicit `false` turns it off. `sprint`: `true`,
-  `"rounds"` or `false` (a pre-per-round save has no `sprintIds` and means
-  what it meant).
-- `laps` must be in `LAP_OPTS`, else the default — a "20 laps" ask needs a
-  new option, not a looser check. `drop` must be in `DROP_OPTS`, `flPoint`
-  must be `=== true`, `points` is
-  `"classic"` or `"modern"`.
-- Old season saves: tests `an OLD mid-weekend save…` and `an old save without
-  roundPts…`. Persisted config is the normalised one (`setConfig persists the
-  NORMALISED config…`).
-
-## Scoring
-
-`pointsTable()`: `CLASSIC_POINTS` (1991-2002) when `fmtActive()` and
-`points === "classic"`, else `Teams.POINTS`; `payTable()` scales short races
-(`SHORT_POINTS`); sprints: `references/sprint-scoring.md`. Standings use
-`netPts(season, id)`: with `drop`, only the best
-`trackIds.length − drop` rounds count (test `DROP WORST 2 ranks on the best
-rounds…`).
+- `references/config-and-toggles.md` — read when a sprint or quali toggle is ignored, a weekend shows
+  the wrong sessions, APPLY/restart/resume behaves oddly, or you need the consumers of `sprintOn` /
+  `quali()`.
+- `references/sprint-scoring.md` — read when sprint points (or the fastest-lap point, or a short-race
+  payout) look wrong.
+- `references/presets-normalize-points.md` — read when touching "2026 REAL" or another calendar preset,
+  `gpName()`, an old save that loads oddly, a lap/drop/points option, or `pointsTable()` / `netPts()`.

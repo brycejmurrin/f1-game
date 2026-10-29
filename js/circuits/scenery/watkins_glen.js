@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["watkins_glen"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, px, pz, seat,
+      const { K, lapBounds, out, MAT, n, pyMin, hash, every, anchor, vadd, onTrack, seat,
         pine, tree, bush, ridge, grandstandEx, spectatorHill, sponsorHoarding,
         broadcastCompound, gantry, marshalPost, waterBand, terrainYAt, foundation,
         indexSolid, fence, guardrail, tyreWall, groundPatch, modelGroup,

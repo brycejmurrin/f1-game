@@ -1,6 +1,6 @@
 ---
 name: check
-description: "Use when the user types \"check\" or asks status: is my PR green, merged/landed, live, still running, branch state? Not fixing reds (steward) or test picks (check-changes)."
+description: "Use when the user types \"check\" or asks for status: is my PR green, merged, live or still running? Not for: fixing a red PR → steward; choosing tests → check-changes."
 user-invocable: true
 ---
 
