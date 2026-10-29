@@ -734,7 +734,7 @@ other or me." Measured with `tools/check/ai-tactics.mjs` (before/after in
   entirely and the AI's pace comes off the same `TyreModel` curve the player is
   driving, so a strategy fight is fought on one model (§Wear, and the stop), and
   the STARTING compound comes from the car's own plan rather than the class draw.
-- **The field races a strategy** (`AiDrive.stintPlan` / `pitNow`, executed by
+- **The field races a strategy** (`AiDrive.stintPlan` / `pitNow`, bodies in `js/physics/ai-strategy.js`, executed by
   `PitLane.planFor` / `think`), when TYRE WEAR is on. Each car enumerates every
   0-, 1- and 2-stop plan over the three dry compounds and keeps the cheapest
   under `Σ stint costs + stops × pit loss` — the formulation strategists
@@ -990,9 +990,13 @@ corner-speed model showed no such gap. Dry pace is untouched by construction.
 ### Wheel state: torque-balanced lock-up and wheelspin (opt-in, #1628)
 
 `js/physics/wheel-state.js` gives the player's axles a rim speed (`vwF`/`vwR`)
-and slip ratio (`kappaF`/`kappaR`). It is **opt-in and default OFF**
-(`WheelState.setEnabled(true)` or `apex26.wheelState = "1"`): OFF never enters
-the branch, so `physics-characterization` stays bit-identical to its baseline.
+and slip ratio (`kappaF`/`kappaR`). It is **opt-in and default OFF by decision**
+(option B, 2026-10-27; turning it on by default is #3983)
+(`WheelState.setEnabled(true)` or `apex26.wheelState = "1"`; a session-only dev
+toggle is `__apex.setPhysics({wheelState})`, read back by `tuning().wheelState`):
+OFF never enters the branch, so `physics-characterization` stays bit-identical to
+its baseline. The rim fields are `EPISODE_TRANSIENTS` and CarFields-registered, so
+`__apex.reset()` clears them and `WheelState.ensure` re-seeds them from `c.speed`.
 
 ON, PlayerForces bills each axle's brake or drive demand against its tyre's
 longitudinal capacity on the same circle the legacy `axFracF`/`axFracR` charge
