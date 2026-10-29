@@ -453,7 +453,7 @@ body[data-width="wide"] .dh-standings { flex-direction: row; align-items: flex-s
 .dh-h2h-alt { background: rgba(255, 255, 255, 0.3); }
 .dh-h2h-labels { display: flex; width: 100%; max-width: 160px; justify-content: space-between; font-size: var(--fs-micro); color: var(--dim); font-weight: 700; letter-spacing: var(--ls-3); }
 
-.dh-pos { font-family: var(--font-hud); font-variant-numeric: tabular-nums; width: 24px; text-align: right; color: var(--dim); flex: 0 0 auto; font-variant-numeric: tabular-nums; }
+.dh-pos { font-family: var(--font-hud); font-variant-numeric: tabular-nums; width: 24px; text-align: right; color: var(--dim); flex: 0 0 auto; }
 .dh-codechip {
   flex: 0 0 auto;
   font-size: var(--fs-2); font-weight: 800;
@@ -1239,12 +1239,12 @@ body[data-density="compact"][data-width="wide"] {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   text-align: right;
   font-size: var(--fs-1); font-weight: 600; font-style: normal;
-  color: var(--dim); font-variant-numeric: tabular-nums; letter-spacing: var(--ls-1);
+  color: var(--dim); letter-spacing: var(--ls-1);
 }
 .dh-tlap { font-family: var(--font-hud); font-variant-numeric: tabular-nums;
   flex: 0 0 auto;
   font-size: var(--fs-2); font-weight: 700; font-style: normal;
-  color: var(--text); font-variant-numeric: tabular-nums;
+  color: var(--text);
 }
 .dh-telem-side {
   display: flex; flex-direction: column; gap: 10px;
