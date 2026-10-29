@@ -1,129 +1,70 @@
 ---
 name: playwright-probe
-description: "Use when batch headless screenshots/evals (shot.mjs, apex-eval, apex-capture), GLX-vs-TLX compares, flicker/z-fighting clips, CPU/frame-time profiles (profile.mjs), CAR STUDIO livery/sponsors capture, camera modes (cockpit/chase), measuring camera lag/framing. Not garage catalog, UI matrix, live canvas (mcp-probe)."
+description: "Use when you need batch headless screenshots or evals, GLX vs TLX comparisons, flicker or z-fighting clips, CPU/frame-time profiles, CAR STUDIO livery and sponsors capture, camera modes (cockpit, chase) and camera lag. Not the parts catalogue → garage-parts-livery; the live canvas → mcp-probe."
 ---
 
 # Headless Playwright probing
 
-The parent owns one browser session and serialized captures. Subagents may inspect
-source, plan recipes or review artifacts; they never launch a browser (AGENTS.md rule 10, hook-enforced).
-Write captures under `artifacts/` and return paths plus explicit unverified cells.
+Drive the real game and `__apex` from Node under SwiftShader (deterministic headless) to validate
+cameras, modes, tracks and physics, and capture screenshots that prove it. The parent owns one
+browser session and serializes captures; subagents plan recipes or review artifacts but never
+launch a browser (AGENTS.md rule 10, hook-enforced).
 
-## Prerequisites
+## Gotchas
 
-The SessionStart hook installs deps and the headless shell (AGENTS.md
-§Verification 1); `browserType.launch: Executable doesn't exist` means it did
-not run — `bash tools/env/cloud-agent-install.sh`. A multi-minute capture (a GLX
-`webgl2` boot, `backend-compare`, `motion-capture`, `profile.mjs --repeat`) runs as ONE
-`run_in_background` task logging to `artifacts/logs/`, after the loadavg check and never
-beside a test-bg run or a live chrome-devtools / `browser_*` session (AGENTS.md rules 4, 5, 7). Backend pinning, the
-soft-present (`#game-soft`) capture rule and a dead `DISPLAY`:
-[references/recipes.md](references/recipes.md) §Backends and display.
+- `orbit()` then `snapCam()` breaks the shot: `snapCam()` is for `park` (chase) only. A chase
+  eye hundreds of metres from the car means a missing `snapCam()`, not a short wait (cameras.md).
+- A still frame cannot show shimmer (headless rAF freezes at 0 fps), and a CPU chart cannot see
+  fill-bound work: use `motion-capture.mjs` (trust p90) or `profile.mjs --repeat 3`.
+- Inside a tunnel bore use cam `eye` at a mid-bore frac, never `park` (the chase rig).
+- `--gpu llvmpipe` / `APEX_GL=llvmpipe` is CI-only here: it fails fast, never falls back.
+- Before/after: rule 2 forbids source edits during a capture; use `git stash apply <sha>`, never
+  `pop` (the stash stack is shared).
+- `browserType.launch: Executable doesn't exist` means the SessionStart install did not run:
+  `bash tools/env/cloud-agent-install.sh`.
 
-Interactive resize / DOM / CSS survey is the **playwright-official** MCP
-(`browser_*`, skill `survey-ui-matrix`), not this batch harness.
-One-screen CSS edit + hot-swap + structured DOM dump is **css-play**
-(`tools/ui/css-play.mjs` / `playwright-mcp.sh play|dom`).
+## Workflow
 
-The renderer runs deterministically headless under SwiftShader, so you can drive
-the real game and the `__apex` API from Node to validate cameras, modes, tracks,
-and physics — and capture screenshots to prove it visually. Two committed tools
-cover most needs; drop to a custom harness for bespoke sweeps.
+1. Pick the tool: one `__apex` value → `tools/shot/apex-eval.mjs`; one framed still →
+   `tools/shot/shot.mjs`; mode/track fanout → `tools/shot/apex-capture.mjs`; GLX vs TLX →
+   `tools/shot/backend-compare.mjs`; flicker → `tools/shot/motion-capture.mjs`; frame time →
+   `tools/perf/profile.mjs`; car only → `tools/car/render-car.mjs`. Menus/DOM resize surveys are
+   the `browser_*` MCP (skill `survey-ui-matrix`); one-screen CSS is skill `css-play`.
+2. Find the place with no browser first: `frac` from `turns:` in `js/circuits/<id>.js`, or
+   `node tools/shot/flicker-gate.mjs --list` for tunnel/bridge sites.
+3. A multi-minute capture (GLX `webgl2` boot, `backend-compare`, `motion-capture`,
+   `profile.mjs --repeat`) runs as ONE `run_in_background` task logging to `artifacts/logs/`
+   (AGENTS.md rules 4, 5, 7 hold the rest).
+4. Write captures under `artifacts/` (or the tool's `scratch/` default); for A/B use
+   `artifacts/cmp/{before,after}/` with the SAME args in both states.
+5. Check the output: blank-frame / `free-cam inactive` warnings, the capture manifest, and
+   console errors; view images within the image budget (recipes.md §Galleries and image budget).
+6. Return paths plus every cell left unverified.
 
-## Committed tools (use these first)
+## References
 
-`apex_viewer` (MCP) opens the car/circuit viewer page (`tools/carview.html`) for a framed look.
-
-```sh
-# Same CLIs via MCP (takes scratch/apex-browser.lock; apex_status first):
-#   ./tools/mcp/apex-tools-mcp.sh call apex_eval '{"track":"monza","expr":"a.info()"}'
-#   ./tools/mcp/apex-tools-mcp.sh call apex_shot '{"track":"monza","frac":0.1}'
-#   ./tools/mcp/apex-tools-mcp.sh call apex_hud_shot '{"cam":"cockpit","preset":"clean"}'   # race HUD: shot + boxes + findings (survey-ui-matrix)
-# Plain CLIs (no MCP wrap): tools/car/carshot.mjs, tools/check/quick-validate.mjs. The wraps cannot pin a backend.
-# One-off: boot the game, evaluate an __apex expression, print JSON.
-node tools/shot/apex-eval.mjs <track> "<expr>"        # `a` = __apex; async ok; --raw for full JSON
-node tools/shot/apex-eval.mjs monaco "a.camera()"
-node tools/shot/apex-eval.mjs spa    "({c:a.corners().length, w:a.wallStats()})"
-node tools/shot/apex-eval.mjs monaco "a.info()" --backend webgl2   # pin a backend (recipes.md §Backends)
-
-# Parallel screenshot validation (writes PNGs + a blank/fail manifest):
-node tools/shot/apex-capture.mjs cameras [track] [outdir]
-node tools/shot/apex-capture.mjs modes   [outdir]
-node tools/shot/apex-capture.mjs tracks  [outdir] [id ...]
-
-# SAME framed scene on GLX vs TLX (+ numeric pixel diff, per-backend console errors):
-# Inside a bore use `eye` at a mid-bore frac (flicker-gate --list), never `park` (the chase rig):
-node tools/shot/backend-compare.mjs monaco 0.47 eye --backends webgl2,three --out artifacts/cmp/before --label tunnel-mid
-```
-
-## Single framed screenshot (`shot.mjs`)
-
-```sh
-node tools/shot/shot.mjs <trackId> <frac> [cam] [out.png|out.jpg] \
-  [--az N] [--el N] [--dist N] [--side -1|1] [--tod day|dusk|dawn|night] [--hud] \
-  [--weather dry|wet|rain|overcast|fog] [--gpu swiftshader] \
-  [--team <id>] [--wait <s>] [--jpeg] [--raster]   # BROWSER (one Chromium; --help ok)
-# --gpu llvmpipe / APEX_GL=llvmpipe is CI-only (needs /dev/dri): here it fails fast, never falls back.
-# Many frames, one boot (JSON array / {jobs} / JSONL); same track reuses race():
-node tools/shot/shot.mjs --batch jobs.json [--jpeg] [--raster]
-```
-
-`cam` = `park` (the in-game **chase** rig: snapCam, no free-cam) | `eye` | `orbit`
-(default) | `cinematic` | `trackside`. Default out
-`scratch/captures/playwright-probe/<track>-<pct>-<cam>.png`; `.jpg` / `--jpeg`
-writes JPEG q85 (human review); `--raster` writes `__apex.render` JSON only
-(no pixels). It warns on blank frames and `free-cam inactive`. Find `frac` first
-(no browser: `turns:` in `js/circuits/<id>.js`; Spa Eau Rouge compression ~0.075).
-Speed notes: `docs/notes/SCREENSHOT-TOOL-SPEED-2026-10-10.md`.
-
-`trackside` here is the free-cam `view({look:"in"})`, not the `trackside` CAM_MODES rig.
-`turns:` has no tunnel/bridge entries: read the circuit file's comments (Monaco bore
-racing 0.449-0.524) or `node tools/shot/flicker-gate.mjs --list` (sites carry racing/scenery fracs).
-
-**Before/after:** the tools serve the working tree, and rule 2 forbids source edits while a
-capture runs. Edit already made: `git stash push -m pp-<tag>`, `git stash list --format='%H %gs'` (its sha) → shoot BEFORE → `git stash apply <sha>`
-(never `pop`; the stack is shared) → shoot AFTER with the SAME args. Name the out path per state:
-`artifacts/cmp/{before,after}/<track>-T1.png`. Several corners: one `--batch` file per state,
-`[{"track":"bahrain","frac":0.1038,"cam":"park","out":"artifacts/cmp/before/bahrain-T1.png"}, …]`
-(one boot each). `backend-compare` diffs GLX vs TLX within one run, not A vs B; compare the two
-runs' PNGs/manifests (`<label>-manifest.json`) yourself. Recipe: [references/recipes.md](references/recipes.md)
-§Tunnel before/after. Car-only: `garage-angles.mjs --against=<git ref>` does both in one run.
-
-## Motion and profiling (still this harness)
-
-```sh
-node tools/shot/motion-capture.mjs monaco 4 50      # driven clip → per-frame flicker score (trust p90)
-node tools/perf/profile.mjs singapore --mode spans --repeat 3              # THE profiler: per-subsystem p50/p95/p99 + noise floor
-node tools/perf/profile.mjs singapore --mode spans --repeat 3 --base HEAD  # A/B delta table (inside the spread = noise)
-node tools/shot/profile-gameloop.mjs singapore render        # raw .cpuprofile only (profile.mjs --mode cpu wraps it)
-```
-
-`node tools/shot/flicker-gate.mjs` (still camera, fixed SITES, `--list` is no-browser) and
-`tools/track/coplanar-audit.cjs <id>` (no browser) are the z-fight pair
-motion-capture's reference points at. A still frame cannot show shimmer and a CPU chart cannot see fill-bound work —
-both references say what the numbers mean before you A/B on them.
-
-**Image budget** (Read caps, JPEG width, when to switch to `apex_shot_survey`) →
-[references/recipes.md §Galleries and image budget](references/recipes.md#galleries-and-image-budget).
-
-## Load on demand
-
-- UI/DOM shots, camera fanout, env gotchas, harness skeletons →
-  [references/recipes.md](references/recipes.md).
-- Car-only garage/angle grids (`garage-angles`, `garage-angles-fetch`) → [references/car-studio.md](references/car-studio.md).
-- Flicker / z-fighting / shadow shimmer while driving — why headless rAF
-  freezes, the `recordVideo` fix, reading `p90` →
-  [references/motion-capture.md](references/motion-capture.md).
-- Frame-budget hog (`tools/perf/profile.mjs --mode spans|cpu|step`), GC jitter, slow track build,
-  flame-chart symbols → [references/perf-profile.md](references/perf-profile.md).
-- **Car studio** — track-free look at just the car (`tools/carview.html`,
-  `tools/car/render-car.mjs`, team/livery/part audits) →
-  [references/car-studio.md](references/car-studio.md), preset views and the
-  `CARVIEW` API in
-  [references/car-viewer-presets.md](references/car-viewer-presets.md).
-- **Camera semantics** — the built-in modes (`CAM_MODES`, `js/camera/mode-switch.js`), `orbit()` vs `snapCam()` (the
-  trap that costs a shot), `camState()`/`viewState()`, measuring lag (measured here, FIXED in
-  f1-animation-cameras) →
-  [references/cameras.md](references/cameras.md), free-cam table and framing
-  recipes in
-  [references/debug-cameras-framing.md](references/debug-cameras-framing.md).
+- [references/commands.md](references/commands.md) — read when you need exact command lines:
+  the committed tools and their MCP wraps, `shot.mjs` flags and cams, the stash-based
+  before/after procedure, motion and profiling one-liners.
+- [references/recipes.md](references/recipes.md) — read when shooting UI/DOM screens, fanning
+  out cameras, pinning a backend or fixing soft-present (`#game-soft`) / dead `DISPLAY`
+  capture (§Backends and display), budgeting images
+  ([§Galleries and image budget](references/recipes.md#galleries-and-image-budget)), writing a
+  custom harness, or doing the Monaco tunnel before/after.
+- [references/motion-capture.md](references/motion-capture.md) — read when chasing flicker,
+  z-fighting or shadow shimmer while driving: why headless rAF freezes, the `recordVideo` fix,
+  reading p90, kerb shimmer with `coplanar-audit` and `flicker-gate`.
+- [references/perf-profile.md](references/perf-profile.md) — read when hunting a frame-budget
+  hog (`tools/perf/profile.mjs --mode spans|cpu|step`), GC jitter, a slow track build, or
+  reading flame-chart symbols.
+- [references/car-studio.md](references/car-studio.md) — read for a track-free look at just the
+  car (`tools/carview.html`, `tools/car/render-car.mjs`), team/livery/part audits, and angle
+  grids (`tools/shot/garage-angles.mjs`, `tools/garage-angles-fetch.mjs`).
+- [references/car-viewer-presets.md](references/car-viewer-presets.md) — read for car-viewer
+  preset views, named shot sets, CLI options, the `CARVIEW` API and decal handedness.
+- [references/cameras.md](references/cameras.md) — read for the built-in camera modes
+  (`CAM_MODES`, `js/camera/mode-switch.js`), `orbit()` vs `snapCam()`, `camState()` /
+  `viewState()`, and measuring camera lag (fixes live in skill f1-animation-cameras).
+- [references/debug-cameras-framing.md](references/debug-cameras-framing.md) — read when framing
+  a shot with the free debug camera: the free-cam table, `previewCam`, `look:"in"` vs
+  `roadside()`, framing recipes.

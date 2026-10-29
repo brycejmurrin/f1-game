@@ -1,6 +1,6 @@
 # Chrome DevTools MCP recipes
 
-**Use when:** this recipe family is the narrowest match for the question.
+**Read when:** attaching Chrome, navigating the local game, or collecting DOM, heap and CPU evidence.
 
 **Verification:** record the exact command, the local target, and returned evidence (the deployed site → agent `deploy-research`).
 
