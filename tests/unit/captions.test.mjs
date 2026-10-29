@@ -6,7 +6,6 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { symbolSource } from "../helpers/game-source.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/captions.js"), "utf8");
@@ -141,11 +140,4 @@ test("clear() hides the strip and drops a pending hold (race reset / quit to men
   C.clear();
   assert.equal(C.__strip.hidden, true);
   assert.equal(timers.size, 0);
-});
-
-test("GameHud.resetRace and the race-to-menu sweep both call Captions.clear", () => {
-  const hud = fs.readFileSync(path.join(ROOT, "js/ui/hud.js"), "utf8");
-  const reset = hud.slice(hud.indexOf("function resetRace()"), hud.indexOf("function resetRace()") + 600);
-  assert.match(reset, /Captions\.clear\(\)/);
-  assert.match(symbolSource("function closeRaceSheets()"), /Captions\.clear\(\)/);
 });

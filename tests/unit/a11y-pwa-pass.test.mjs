@@ -21,6 +21,7 @@ import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules, decl } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
@@ -545,7 +546,7 @@ test("UPDATE READY and the save warning stand down under a modal dialog", () => 
 // title keeps them (the rule names only those three screens).
 test("UPDATE READY and INSTALL APP stand down over the select, career and garage screens", () => {
   const css = read("css/overlays.css");
-  assert.match(css, /body:has\(> :is\(#select, #career, #carsetup\):not\(\[hidden\]\)\) :is\(#update-chip, #install-chip\) \{ display: none; \}/);
+  assert.equal(decl(cssRules(css), "body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #install-chip)", "display"), "none");
   const html = read("index.html");
   for (const id of ["select", "career", "carsetup"]) assert.match(html, new RegExp(`\\n<div id="${id}" class="screen"`), `#${id} is a <body> child, so the :has(> …) scope matches`);
 });
