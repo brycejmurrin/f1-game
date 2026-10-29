@@ -626,3 +626,24 @@ test("bloat-scan reports ratchet slack and skill sizes as JSON", () => {
   assert.ok(skill, "scan missed slim-bloat SKILL.md");
   assert.equal(skill.kind, "skill");
 });
+
+test("long skill files open with a table of contents", () => {
+  // Claude may preview a long file with `head` and miss what is below the fold, so the skill best practices ask
+  // reference files over 100 lines to start with a table of contents
+  // (https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices, read 2026-10-28).
+  // Bryce (2026-10-28): SKILL.md and each reference start with one when longer than ~200 lines.
+  const missing = [];
+  for (const d of fs.readdirSync(SKILLS, { withFileTypes: true }).filter((e) => e.isDirectory())) {
+    const files = [["SKILL.md", 200]];
+    const refs = path.join(SKILLS, d.name, "references");
+    if (fs.existsSync(refs)) for (const f of fs.readdirSync(refs)) if (f.endsWith(".md")) files.push([`references/${f}`, 100]);
+    for (const [rel, max] of files) {
+      const p = path.join(SKILLS, d.name, rel);
+      if (!fs.existsSync(p)) continue;
+      const lines = fs.readFileSync(p, "utf8").split("\n");
+      if (lines.length > max && !lines.slice(0, 20).some((l) => /^##\s+(Contents|Table of contents)\b/i.test(l)))
+        missing.push(`${d.name}/${rel} (${lines.length} lines)`);
+    }
+  }
+  assert.deepEqual(missing, [], "add a `## Contents` list of the file's `##` headings in its first 20 lines");
+});
