@@ -157,5 +157,5 @@ var Spotter = (() => {
     return { update, occupied: () => occupied !== 0 || st.cur !== 0, side: () => occupied };
   }
 
-  return Object.freeze({ create, step, occupancy, fresh, KEYS, OVERLAP_ARC, SIDE_MIN, SIDE_MAX, DEBOUNCE_S, CLEAR_S, STILL_S, GAP_S });
+  return Object.freeze({ create, step, occupancy, fresh, KEYS, GAP_S });
 })();

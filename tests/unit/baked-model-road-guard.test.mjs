@@ -42,6 +42,7 @@ const { buildContext } = require(path.join(ROOT, "tools", "lib", "track-build-vm
 
 const PACK = path.join(ROOT, "assets", "pack");
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(PACK, "manifest.json"), "utf8"));
+const MODEL_INDEX = JSON.parse(fs.readFileSync(path.join(ROOT, "data", "packs", "model-index.json"), "utf8"));
 
 const { parseModel, readModel } = require(path.join(ROOT, "tools", "lib", "pack-assets.cjs"));
 
@@ -86,8 +87,16 @@ function monza({ assets }) {
 }
 
 test("the mirrored pack decoder agrees with the manifest on every model", () => {
-  const ids = Object.keys(MANIFEST.models || {});
-  assert.ok(ids.length >= 30, `the pack should carry its models; manifest lists ${ids.length}`);
+  const ids = Object.keys(MANIFEST.models || {}).sort();
+  const indexIds = Object.keys(MODEL_INDEX.models || {}).sort();
+  const binIds = fs.readdirSync(path.join(PACK, "models"))
+    .filter((f) => f.endsWith(".bin"))
+    .map((f) => f.slice(0, -4))
+    .sort();
+  assert.deepEqual(ids, indexIds,
+    "manifest.models must match data/packs/model-index.json after pack hygiene (#4113 prunes both together)");
+  assert.deepEqual(ids, binIds,
+    "every manifest model must have a models/*.bin on disk");
   const bad = [];
   for (const id of ids) {
     const rec = MANIFEST.models[id], m = readModel(rec);

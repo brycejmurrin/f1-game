@@ -15,6 +15,21 @@ no agent merges. The design and its evidence: `docs/plans/2026-10-27-orchestrati
 - **`dispatch:pause` stops launches, not workers.** A running worker carries on to `land` or its cap; the label
   changes nothing for it. A session Bryce starts by hand may still take a `ready` issue.
 
+## Issue dependencies
+
+For an issue blocked by another issue, record the relationship with GitHub's native
+`GET` / `POST /repos/{owner}/{repo}/issues/{issue_number}/dependencies/blocked_by` REST API.
+Read both issue scopes and existing relationships first; the POST body takes the blocking issue's numeric
+`id` as `issue_id`, not its issue number. Add only a real prerequisite, not a test-only relationship.
+The authenticated cloud route was verified on 2026-10-29: #3971 is blocked by #1578 (HTTP 201 and GET readback).
+
+The native relation records the issue-to-issue dependency. Keep the `blocked` label as a compatibility
+projection while the dispatcher and ready search above still filter labels; neither reads native blockers.
+The label also covers gates without a blocking issue, such as an explicit maintainer deferral. Check the
+actual prerequisite before removing a stale label. Do not replace complete label lists or remove another
+owner's relationship merely to make an issue launchable. Evidence and reproducible counts:
+[the two-week backlog check-in](notes/AGENT-WORK-TRACKING-2026-10-14.md).
+
 ## The contract
 
 1. **Claim.** Comment `claims #<n> — <host>:<session id>` on the issue and add `claimed`. If an older claim comment
@@ -91,7 +106,7 @@ starts from this block and the Plan; it reads nothing else.
 |---|---|---|
 | `ready` | issue | backlog, unclaimed |
 | `claimed` | issue | a worker owns it; the claim comment names the session |
-| `blocked` | issue | waits on another issue (`Blocked by #n`) |
+| `blocked` | issue | dispatcher/search projection of an open native dependency, or a documented non-issue gate |
 | `needs-decision` | issue, PR | waits on Bryce; the options are in a comment |
 | `priority` | issue, PR | Bryce's one steering word: launched or landed first |
 | `run-ci` | draft PR | run the fast tier on the draft |

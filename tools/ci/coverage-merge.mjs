@@ -36,7 +36,6 @@ import { fileURLToPath } from "node:url";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const ARTIFACTS = path.join(ROOT, "artifacts");
-const NODE_DIR = path.join(ARTIFACTS, "coverage-node");
 const REPORT_DIR = path.join(ARTIFACTS, "coverage-report");
 
 /** Directories a default merge reads: coverage-<port>/ (browser) + coverage-node/. */

@@ -499,9 +499,10 @@ const ShareCode = (function () {
     return null;
   }
 
+  // KINDS / LAST_KEY / UNDO_KEY stay module-local (codec + undo bag).
   return {
-    KINDS, encode, decode, apply, undo, consumeHash, withoutShare, messageFor,
-    recordSession, lastSession, continueHint, LAST_KEY, UNDO_KEY,
+    encode, decode, apply, undo, consumeHash, withoutShare, messageFor,
+    recordSession, lastSession, continueHint,
   };
 })();
 Object.freeze(ShareCode);
