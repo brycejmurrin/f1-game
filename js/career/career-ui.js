@@ -1775,6 +1775,7 @@ function create(G) {
            openHistory, closeHistory, openGuide, closeGuide };
 }
 
-return { create, STARTER_TIER_MIN };
+// STARTER_TIER_MIN stays module-local (starterTeams filter only).
+return { create };
 })();
 Object.freeze(CareerScreen);
