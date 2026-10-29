@@ -112,8 +112,9 @@ const Regulations = (function () {
   }
 
   return {
+    // eraAt / eraIndexFor stay module-local (eraFor / bannedIds only).
     ERAS, ERA_SEASONS, BAN_TOP,
-    eraAt, eraFor, eraIndexFor, seasonsLeft, bannedIds, isLegal, legalityFor,
+    eraFor, seasonsLeft, bannedIds, isLegal, legalityFor,
   };
 })();
 Object.freeze(Regulations);

@@ -3,7 +3,6 @@
 const CareerUI = (function () {
 "use strict";
 
-const STARTER_TIER_MIN = 3;
 let _load = null;
 
 function ensureScreen() {
@@ -125,6 +124,7 @@ function create(G) {
   };
 }
 
-return { create, STARTER_TIER_MIN, ensureScreen };
+// ensureScreen stays module-local (create / ensure only).
+return { create };
 })();
 Object.freeze(CareerUI);

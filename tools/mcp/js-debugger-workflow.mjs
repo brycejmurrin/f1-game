@@ -5,7 +5,7 @@ const clip = (s, max = 2000) => String(s ?? "").slice(0, max);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 /** One-line value for a Runtime.RemoteObject: primitives by value, objects by V8 preview or description. */
-export function valueSummary(v) {
+function valueSummary(v) {
   if (!v) return undefined;
   if (Object.hasOwn(v, "value") && (v.value === null || typeof v.value !== "object")) return typeof v.value === "string" ? clip(v.value, 200) : v.value;
   if (v.unserializableValue) return v.unserializableValue;

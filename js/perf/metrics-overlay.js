@@ -1204,9 +1204,10 @@ function frametimeBenchSnapshot() {
   };
 }
 
+// KEY / POS_KEY / SIZE_KEY / POSITIONS / SIZES are unit-test seams for persistence pins.
+// PAGE_KEY / LOG_* / PAGES / LOG_NS / LOG_LVLS stay module-local (overlay UI only).
 return {
-  KEY, PAGE_KEY, POS_KEY, SIZE_KEY, LOG_NS_KEY, LOG_LVL_KEY,
-  PAGES, POSITIONS, SIZES, LOG_NS, LOG_LVLS,
+  KEY, POS_KEY, SIZE_KEY, POSITIONS, SIZES,
   on, set, toggle, page, setPage, nextPage,
   pos, setPos, nextPos, resolvePos,
   size, setSize, nextSize,
