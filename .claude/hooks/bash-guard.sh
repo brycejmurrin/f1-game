@@ -363,7 +363,7 @@ fi
 HOOKDIR="$(cd "$(dirname "$0")" && pwd)"
 # pass 4 (H5): an escape hatch that exists is announced on every guarded call, so it cannot stay lifted unnoticed.
 for _h in allow-protected allow-context-cap allow-stop; do
-  [ -e "$ROOT/.claude/$_h" ] && echo "bash-guard: hatch active: .claude/$_h — remove it when the assigned edit is done."
+  [ -e "$ROOT/.claude/$_h" ] && echo "bash-guard: hatch active: .claude/$_h — remove it when the assigned edit is done." >&2
 done
 GUARD_RC=0
 GUARD_OUT=$(printf '%s' "$INPUT" | python3 "$HOOKDIR/shellparse.py" guard "$ROOT") || GUARD_RC=$?
