@@ -16669,6 +16669,9 @@
       ],
       "setEditing": [
         "tests/unit/dock-layout.test.mjs"
+      ],
+      "usablePad": [
+        "tests/unit/dock-layout.test.mjs"
       ]
     },
     "js/ui/dom.js": {
@@ -17755,6 +17758,9 @@
         "tests/unit/appearance-studio.test.mjs",
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/scale-defaults.test.mjs"
+      ],
+      "layoutOf": [
+        "tests/unit/layout-tokens.test.mjs"
       ],
       "setScale": [
         "tests/unit/appearance-studio.test.mjs",
