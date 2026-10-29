@@ -188,6 +188,7 @@ const CareerAiDev = (function () {
     }
   }
 
-  return { developWinter, fittedOf, teamCap, pickStep, scoreMods, scrubFitted, worksSetup };
+  // scoreMods stays module-local (pickStep / scrubFitted only).
+  return { developWinter, fittedOf, teamCap, pickStep, scrubFitted, worksSetup };
 })();
 Object.freeze(CareerAiDev);

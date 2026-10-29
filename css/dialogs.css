@@ -183,7 +183,6 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
 }
 #pm-quit {
   color: color-mix(in oklab, var(--red) 62%, #fff);
-  margin-top: calc(var(--gap) * 0.5);
   border-top-color: var(--plate-line);
   position: relative;
 }

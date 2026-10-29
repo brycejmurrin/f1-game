@@ -155,6 +155,7 @@ const CareerPlanning = (function () {
     return { protection: ctx.protection, adopt: ctx.adopt, comparison, factory, cash, transition,
       stake, chooseStake, escrow, sponsorOffers, chooseSponsor, lastSponsor };
   }
-  return { create, protect, missing, remapWeekend, STAKE };
+  // STAKE stays module-local (remapWeekend / create stake helpers).
+  return { create, protect, missing, remapWeekend };
 })();
 Object.freeze(CareerPlanning);

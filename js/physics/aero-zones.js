@@ -251,10 +251,10 @@ function create(G) {
   return { build, at, ahead, get zones() { return zones; } };
 }
 
+  // X_ZONE_* / X_STRAIGHT_T / runForTurnPair stay file-local: zonesFor + the
+  // tables are the public surface (tests/ui hard-code the metre constants).
   return {
-    create, zonesFor, X_ZONE_K, X_ZONE_MIN, X_ZONE_VREF, X_STRAIGHT_T,
-    // turnsBounding is internal to runForTurnPair; it had no external reader.
-    ZONE_COUNT, AERO_ZONE_TURNS, runForTurnPair,
+    create, zonesFor, ZONE_COUNT, AERO_ZONE_TURNS,
   };
 })();
 Object.freeze(AeroZones);
