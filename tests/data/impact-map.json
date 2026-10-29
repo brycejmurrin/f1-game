@@ -4628,6 +4628,11 @@
         "tests/unit/pick-unit-slices.test.mjs"
       ]
     },
+    "js/circuits/bahrain.js": {
+      "*": [
+        "tests/unit/track-shot-survey.test.mjs"
+      ]
+    },
     "js/circuits/cota.js": {
       "*": [
         "tests/unit/changed-files.test.mjs",
@@ -4705,7 +4710,8 @@
     },
     "js/circuits/scenery/bahrain.js": {
       "*": [
-        "tests/unit/circuit-corner-anchors.test.mjs"
+        "tests/unit/circuit-corner-anchors.test.mjs",
+        "tests/unit/track-shot-survey.test.mjs"
       ]
     },
     "js/circuits/scenery/baku.js": {
@@ -15972,7 +15978,8 @@
         "tests/unit/perf-try.test.mjs",
         "tests/unit/photo-studio.test.mjs",
         "tests/unit/scene-live.test.mjs",
-        "tests/unit/scenery-api-contract.test.mjs"
+        "tests/unit/scenery-api-contract.test.mjs",
+        "tests/unit/track-shot-survey.test.mjs"
       ]
     },
     "js/track/core/hidden-faces.js": {

@@ -380,7 +380,7 @@ const CURSOR_OPTIONS = {
   cancel: ["confirm", "run"],
   delete: ["confirm"],
 };
-export function cursorAgentsArgv(args) {
+function cursorAgentsArgv(args) {
   const verb = args.verb;
   if (!CURSOR_VERBS.includes(verb)) badArgs(`verb must be one of ${CURSOR_VERBS.join(", ")} (got ${JSON.stringify(verb)})`);
   const o = args.options == null ? {} : args.options;
@@ -1618,7 +1618,7 @@ function hudCommonArgv(args, kind) {
   argv.push("--out", assertSafeOut(args.out || `artifacts/hud-survey/mcp-${kind}-${hudStamp()}`));
   return argv;
 }
-export function hudShotArgv(args) {
+function hudShotArgv(args) {
   const argv = hudCommonArgv(args, "shot");
   // --device and --cam always: one-cell mode is any cell flag, so the CLI can
   // never fall back to the quick matrix behind a single-shot tool.
@@ -1637,7 +1637,7 @@ export function hudShotArgv(args) {
   }
   return argv;
 }
-export function hudSurveyArgv(args) {
+function hudSurveyArgv(args) {
   const argv = hudCommonArgv(args, "survey");
   const m = args.matrix == null || args.matrix === "" ? "quick" : String(args.matrix);
   let shard = null;
@@ -1672,7 +1672,7 @@ export function hudSurveyArgv(args) {
   return argv;
 }
 const HUD_MOCK_TOOL = "shot/hud-mock.mjs";
-export function hudMockArgv(args) {
+function hudMockArgv(args) {
   const argv = [...nodeTool(HUD_MOCK_TOOL), "--json"];
   const csv = (k, fl) => { if (Array.isArray(args[k]) && args[k].length) argv.push(fl, [...new Set(args[k].map(String))].join(",")); };
   csv("devices", "--devices"); csv("cams", "--cams"); csv("sets", "--sets");
@@ -1686,7 +1686,7 @@ export function hudMockArgv(args) {
   return argv;
 }
 /** hud-mock.mjs --json → structuredContent + its text copy + a summary + resource_links (sheet first). */
-export function hudMockResult(result, args = {}) {
+function hudMockResult(result, args = {}) {
   let body;
   try { body = JSON.parse(result.content[0].text); } catch { return result; }
   const sum = body.out;
@@ -1757,7 +1757,7 @@ const HUD_TIMEOUT_MS = (name, args) => {
 /** The CLI's --json summary → an MCP result: structuredContent, its serialized
  *  copy as the FIRST text block (cmdCall and older clients read content[0]),
  *  a human summary, and resource_links to the files on disk. */
-export function hudResult(name, result, args = {}) {
+function hudResult(name, result, args = {}) {
   let body;
   try { body = JSON.parse(result.content[0].text); } catch { return result; }
   const sum = body.out;

@@ -180,7 +180,7 @@ async function instrument(cdp, conn, report, opts, file, state) {
 }
 
 /** Run one file; resolves with the per-file report. `spawnNode`/`open` are injectable for tests. */
-export async function runNodeFile(file, opts = {}, { spawnNode = spawn, open = Cdp.open } = {}) {
+async function runNodeFile(file, opts = {}, { spawnNode = spawn, open = Cdp.open } = {}) {
   const { probes = [], timeoutMs = 120000, testNamePattern, runner = "direct" } = opts;
   const children = runner === "test" || !!opts.children;
   const abs = repoFile(file), started = Date.now();
