@@ -475,7 +475,6 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/pu-harvest-audio.test.mjs",
         "tests/unit/radio-voice.test.mjs",
@@ -526,7 +525,6 @@
         "tests/unit/lazy-bundles-getcontext.test.mjs",
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
@@ -576,7 +574,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
@@ -641,7 +638,6 @@
         "tests/unit/engine-note-quality.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/pu-harvest-audio.test.mjs",
         "tests/unit/results-cam.test.mjs",
@@ -666,7 +662,6 @@
         "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs",
         "tests/unit/mix-duck-radio.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/radio-voice.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs",
@@ -8150,8 +8145,7 @@
         "tests/unit/car-mesh-crew-cache.test.mjs",
         "tests/unit/car-multi-shot-tools.test.mjs",
         "tests/unit/garage-mesh.test.mjs",
-        "tests/unit/image-grade-shaders.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs"
+        "tests/unit/image-grade-shaders.test.mjs"
       ]
     },
     "js/garage/setup-experiments.js": {
@@ -9852,9 +9846,6 @@
         "tests/unit/net-start-arming.test.mjs",
         "tests/unit/net-stub-surface.test.mjs",
         "tests/unit/netplay-resilience.test.mjs"
-      ],
-      "*": [
-        "tests/unit/perf-hunt-4.test.mjs"
       ]
     },
     "js/net/nostr.js": {
@@ -13978,7 +13969,6 @@
         "tests/unit/lamp-bake.test.mjs",
         "tests/unit/light-grid.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",
@@ -15297,7 +15287,6 @@
       ],
       "*": [
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/surface-id-parity.test.mjs",
         "tests/unit/tlx-glow-instancing.test.mjs"
       ]
@@ -15341,7 +15330,6 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",
@@ -15357,7 +15345,6 @@
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/image-grade-shaders.test.mjs",
         "tests/unit/light-grid.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
@@ -15430,7 +15417,6 @@
         "tests/unit/light-grid.test.mjs",
         "tests/unit/livery-finish-contract.test.mjs",
         "tests/unit/perf-governor.test.mjs",
-        "tests/unit/perf-hunt-4.test.mjs",
         "tests/unit/perf-try.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/puddles.test.mjs",

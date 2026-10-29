@@ -221,6 +221,7 @@ var GameAudio = (function () {
   }
   let engineOn = false;
   let engineWanted = false;          // a race wants the engine graph but SFX are off: built when they come on (perf hunt 4)
+  let sfxOffArmed = false;           // field contact was armed when SFX OFF tore the graph down
   let mutedSuspended = false;        // the context was suspended BY setEnabled(false), not by iOS or a hidden tab
   let engineActionGeneration = 0;   // every explicit start/stop transfers engine ownership
   // Node batches from stopEngine() that still sit on sfxBus until their
@@ -1458,7 +1459,7 @@ var GameAudio = (function () {
   }
 
   function stopEngine() {
-    ++engineActionGeneration; resumeEngine = null; engineWanted = false;
+    ++engineActionGeneration; resumeEngine = null; engineWanted = false; sfxOffArmed = false;
     stopEngineGraph();
   }
   function stopEngineGraph() {
@@ -2998,8 +2999,12 @@ var GameAudio = (function () {
     // A race that started with SFX off wanted rain but built no nodes
     // (startRain returns on !sfxOk()); turning SFX on must start it.
     if (sfxEnabled && rainWanted && !rainSrc) startRain();
-    if (sfxEnabled && engineWanted && !engineOn) startEngineGraph();
-    else if (!sfxEnabled && engineOn) { engineWanted = true; stopEngineGraph(); }
+    if (sfxEnabled && engineWanted && !engineOn) {
+      startEngineGraph();
+      // The teardown below cleared fieldArmed; a race that was armed stays armed (setRivals's gate).
+      if (engineOn && sfxOffArmed && rivalVoices.length) fieldArmed = true;
+      sfxOffArmed = false;
+    } else if (!sfxEnabled && engineOn) { engineWanted = true; sfxOffArmed = fieldArmed; stopEngineGraph(); }
     // setEngine() owns the rev-keyed music duck and stops running the instant
     // SFX go off (sfxOk()), so release it here the way stopEngine() does.
     // musicGain hangs off master, not sfxBus: without this the music stayed up

@@ -208,15 +208,20 @@ test("an explicit dry stop while hidden cancels rain resume; ordinary hide prese
 });
 
 test("turning SOUND EFFECTS on mid-race starts the rain the race asked for", async () => {
-  const { A, started } = boot();
-  A.init(); await flush();
-  A.setSfxEnabled(false);
-  A.startEngine();
-  A.startRain();
-  const before = started.filter((n) => n.kind === "src" && n.loop).length;
-  A.setSfxEnabled(true);
-  await flush();
-  assert.equal(started.filter((n) => n.kind === "src" && n.loop).length - before, 1);
+  // SFX ON also builds the engine graph a music-only race skipped (perf hunt 4), so the rain is
+  // the difference against the same toggle with no rain asked for.
+  const loopsOnSfx = async (rain) => {
+    const { A, started } = boot();
+    A.init(); await flush();
+    A.setSfxEnabled(false);
+    A.startEngine();
+    if (rain) A.startRain();
+    const before = started.filter((n) => n.kind === "src" && n.loop).length;
+    A.setSfxEnabled(true);
+    await flush();
+    return started.filter((n) => n.kind === "src" && n.loop).length - before;
+  };
+  assert.equal(await loopsOnSfx(true) - await loopsOnSfx(false), 1);
 });
 
 test("a track that cannot be decoded moves the playlist on instead of going silent", async () => {
