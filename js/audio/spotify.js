@@ -329,7 +329,7 @@ window.SpotifyMusic = (function () {
       const u = new URL(location.href);
       ["code", "state", "error"].forEach((k) => u.searchParams.delete(k));
       const q = u.searchParams.toString();
-      history.replaceState(null, "", u.pathname + (q ? "?" + q : "") + u.hash);
+      history.replaceState(history.state, "", u.pathname + (q ? "?" + q : "") + u.hash);
     } catch (e) { /* no history API — harmless */ }
   }
 
