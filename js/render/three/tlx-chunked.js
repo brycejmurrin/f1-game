@@ -756,9 +756,17 @@
         for (let i = 0; i < mv.length; i++) {
           const g = mv[i] && mv[i].geo;
           if (!g) continue;
+          // The merged draw's wrapper is keyed on THIS geometry, not a chunk.
+          // three r186 drops a RenderObject only when the object or the material
+          // dispatches "dispose" (a geometry dispose only clears vertex state),
+          // so geometry.dispose() alone left the wrapper in the pool and the
+          // previous circuit's merge slot in renderer._objects on the next race.
+          releaseGeometry(g);
           // Vertex attributes are the chunks'. Drop only this geometry's index.
-          for (const k in g.attributes) delete g.attributes[k];
+          const names = Object.keys(g.attributes);
+          for (let k = 0; k < names.length; k++) delete g.attributes[names[k]];
           try { g.dispose(); } catch (_) { /* already gone */ }
+          mv[i].geo = null;
         }
       }
       _visList.length = 0;   // the last cull's list may be this mesh's chunks: a dropped world must not sit in module scratch

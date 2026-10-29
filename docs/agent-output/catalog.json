@@ -4229,7 +4229,7 @@
     },
     {
       "name": "test:gfx",
-      "command": "node tools/ci/run-playwright.mjs tests/specs/hud-mirror.spec.js tests/specs/image-grade-visual.spec.js tests/specs/instanced-draw.spec.js tests/specs/lighting-ab.spec.js tests/specs/lighting-tuner-grade.spec.js tests/specs/race-cycle-memory.spec.js tests/specs/render-boot.spec.js tests/specs/tlx-probes.spec.js tests/specs/track-switch-memory.spec.js tests/specs/webgl-probes.spec.js"
+      "command": "node tools/ci/run-playwright.mjs tests/specs/hud-mirror.spec.js tests/specs/image-grade-visual.spec.js tests/specs/instanced-draw.spec.js tests/specs/lighting-ab.spec.js tests/specs/lighting-tuner-grade.spec.js tests/specs/race-cycle-memory.spec.js tests/specs/render-boot.spec.js tests/specs/session-quit-memory.spec.js tests/specs/tlx-probes.spec.js tests/specs/track-switch-memory.spec.js tests/specs/webgl-probes.spec.js"
     },
     {
       "name": "test:graph-parity",
