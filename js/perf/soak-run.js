@@ -164,8 +164,9 @@ const SoakRun = (function () {
     }, () => { finish("start-failed"); return false; });
   }
 
+  // probe stays module-local (start/control use it). SOAK_MIN / TRACK_ID stay exported for harness.
   return {
-    SOAK_MIN, TRACK_ID, control, probe,
+    SOAK_MIN, TRACK_ID, control,
     create(G) { _G = G; return this; },
     start, stop: (why) => finish(why || "stopped"),
     active: () => !!_run,

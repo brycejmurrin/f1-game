@@ -971,7 +971,9 @@ if (typeof document !== "undefined") {
   else init();
 }
 
-return { BACKENDS, init,
+// BACKENDS stays module-local (stepBackend uses it). clearGfxBootRecovery stays
+// public for recovery probes.
+return { init,
   nextBackend, prevBackend, applyBackend, backendLabel, readBackend, liveBackend, clearRendererStorage,
   showUnavailable, setUnavailableDefaults, clearGfxBootRecovery,
   RENDERER_LS_KEYS, RENDERER_SS_KEYS,
