@@ -4555,6 +4555,23 @@ test("softwareGlowScale tier-4 knee follows lookPostShed on software GL (watchdo
   assert.equal(softwareGlowScale(1), 0.55, "healthy look post keeps the softer ×0.55 knee");
 });
 
+test("softwareRaceShed is half-res on a real software GL player and full-res under automation", () => {
+  const ctx = vm.createContext({});
+  vm.runInContext(read("js/render/shared/post-common.js"), ctx, { filename: absSrc("js/render/shared/post-common.js") });
+  const { softwareRaceShed } = vm.runInContext("PostCommon", ctx);
+  const player = { webdriver: false, userAgent: "Mozilla/5.0" };
+  assert.equal(softwareRaceShed(false, player, null), false, "hardware stays full-res");
+  assert.equal(softwareRaceShed(true, player, null), true, "a software-GL player sheds");
+  assert.equal(softwareRaceShed(true, { webdriver: true, userAgent: "" }, null), false, "webdriver pixel specs stay full-res");
+  assert.equal(softwareRaceShed(true, { webdriver: false, userAgent: "apex-game-vm" }, null), false, "the node game VM stays full-res");
+  assert.equal(softwareRaceShed(true, { webdriver: true, userAgent: "" }, "1"), true, "apex26.swRaceShed=1 forces the cut");
+  assert.equal(softwareRaceShed(true, player, "0"), false, "apex26.swRaceShed=0 keeps full-res");
+  const tlx = read("js/render/three/tlx.js");
+  assert.ok(tlx.includes("PostCommon.softwareRaceShed") && tlx.includes("_swRaceShedPinned") && tlx.includes("PerfGov.setAutoRes") && tlx.includes("PerfGov.setUserTier"));
+  assert.ok(tlx.includes("renderScale = 0.5"), "the pin uses the renderer's existing 0.5 floor");
+  assert.ok(tlx.includes("opts.bloom = 0") && tlx.includes("opts.godray = 0") && tlx.includes("opts.reflect = 0"));
+});
+
 test("GLX MSAA cap decodes the JSON-encoded gfxPreset (ULTRA 4×, HIGH 2×, unset 2×)", () => {
   // GameStore JSON-encodes every value: the key holds "\"ultra\"" WITH the
   // quotes. 0a31155 compared the raw string to "ultra", so every desktop that

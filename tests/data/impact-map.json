@@ -14448,6 +14448,9 @@
       "softwareGlowScale": [
         "tests/unit/gfx-backend-canary.test.mjs"
       ],
+      "softwareRaceShed": [
+        "tests/unit/gfx-backend-canary.test.mjs"
+      ],
       "sunScreen": [
         "tests/unit/tlx-hunt4b.test.mjs"
       ],

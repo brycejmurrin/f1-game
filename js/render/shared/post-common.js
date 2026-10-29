@@ -186,6 +186,21 @@ const PostCommon = (function () {
     return str * (PerfGov.lookPostShed && PerfGov.lookPostShed() ? 0.22 : 0.55);
   }
 
+  // Software-rasterizer race present. A full-res three/WebGL2 frame at 844×390
+  // measured ~12 s of GPU time on SwiftShader (2026-10-29); the same view at
+  // render scale 0.5 measured a 19 ms frame. Shedding bloom did not move the
+  // 12 s gap, so the cut is resolution, not the look-post stack. Off under
+  // webdriver and the node game VM so pixel specs stay full-res. Knob
+  // "1" / "0" is apex26.swRaceShed (force on / force off).
+  function softwareRaceShed(softwareGL, nav, knob) {
+    if (!softwareGL) return false;
+    if (knob === "0") return false;
+    if (knob === "1") return true;
+    if (!nav || nav.webdriver) return false;
+    if (/apex-game-vm/.test(nav.userAgent || "")) return false;
+    return true;
+  }
+
   function roadReflection(opts, wetness, strength, tier, autoTier, transition, nowMs, emergency) {
     const wet = wetness > 0.01, target = autoTier >= 4 ? 0 : 1;
     let available = target;
@@ -210,6 +225,6 @@ const PostCommon = (function () {
     opts.ssrQuality = tier >= 3 ? 2 : (tier >= 2 ? 1 : 0);
   }
 
-  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, roadReflection, softwareGlowScale };
+  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, roadReflection, softwareGlowScale, softwareRaceShed };
 })();
 Object.freeze(PostCommon);
