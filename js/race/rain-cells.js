@@ -149,6 +149,6 @@ const RainCells = (function () {
     return out;
   }
 
-  return { SEGS, LOCAL_ODDS, forPlan, covered, strength, flips, segWet, segFrac, sample, sectors, h01 };
+  return { SEGS, forPlan, strength, segWet, segFrac, sample, sectors, h01 };
 })();
 Object.freeze(RainCells);

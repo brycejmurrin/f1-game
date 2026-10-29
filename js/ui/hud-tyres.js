@@ -83,6 +83,7 @@ const HudTyres = (function () {
     return true;
   }
 
-  return { BAND_FRAC, NAMES, band, state, label, compoundChip, paint };
+  // BAND_FRAC / NAMES stay module-local — paint/label/band cover the chip API.
+  return { band, state, label, compoundChip, paint };
 })();
 Object.freeze(HudTyres);

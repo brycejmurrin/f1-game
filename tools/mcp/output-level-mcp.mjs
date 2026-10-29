@@ -128,7 +128,7 @@ function inputWithLevel(schema, parameter) {
   }
 }
 
-export function runGateway({ server, command, args = [], root = process.cwd() }) {
+function runGateway({ server, command, args = [], root = process.cwd() }) {
   const processTree = spawnAgentProcess(command, args, { env: process.env, stdio: ['pipe', 'pipe', 'pipe'], cleanupOnExit: true });
   const { child } = processTree;
   const pending = new Map(), internal = new Map(), schemas = new Map();
