@@ -1,6 +1,6 @@
 ---
 name: ship
-description: "Use when the user says ship it, push this, push to the deploy branch, open the draft PR, mark it ready or land it. Lands via PR."
+description: "Use when the user says ship it, push this, open the draft PR, mark it ready or land it; work lands through a PR. Not for: a red or conflicting PR → steward; picking tests → check-changes."
 user-invocable: true
 ---
 

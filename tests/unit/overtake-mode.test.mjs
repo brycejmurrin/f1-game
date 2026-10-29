@@ -254,7 +254,8 @@ test("LOW GRIP (B7.2.2(d)): treaded-tyre conditions switch Overtake off and say 
 
 test("NO PASSING UNDER A CAUTION, AI TOO: the car ahead in the running order is a speed ceiling once close", () => {
   const { RC } = load();
-  const H = RC.HOLD_M;
+  // HOLD_M is module-local on RaceControl; pin the documented metres threshold here.
+  const H = 12;
   const lead = { prog: 1000, speed: 40 }, mid = { prog: 1000 - H * 0.75, speed: 50 }, tail = { prog: 1000 - H * 0.75 - H * 1.5, speed: 60 };
   const ranked = [lead, mid, tail];
   assert.equal(RC.holdCap(lead, ranked), Infinity, "the leader holds behind nobody");
@@ -273,34 +274,36 @@ test("NO PASSING UNDER A CAUTION, AI TOO: the car ahead in the running order is 
 
 test("SAFETY CAR QUEUE (B5.13): the leader runs SC pace, a car > 1 s adrift closes up faster, a queued car holds", () => {
   const { RC } = load();
-  const vTop = 90, q = RC.SC_PACE * vTop;   // metres per second of SC-pace gap
+  // SC_* stay module-local on RaceControl; pin the documented pace thresholds here.
+  const SC_PACE = 0.45, SC_CATCH = 0.6;
+  const vTop = 90, q = SC_PACE * vTop;   // metres per second of SC-pace gap
   const leader = { prog: 10000 };
   const mk = (gapS, ahead) => ({ prog: ahead.prog - gapS * q });
   const p2 = mk(0.8, leader), p3 = mk(3, p2), p4 = mk(1.5, p3);
   const cars = [leader, p2, p3, p4];
-  assert.equal(RC.scQueueFrac(leader, cars, 5000, leader, vTop), RC.SC_PACE, "the leader follows the SC");
-  assert.equal(RC.scQueueFrac(p2, cars, 5000, leader, vTop), RC.SC_PACE, "inside 1 s: hold the queue");
-  assert.equal(RC.scQueueFrac(p3, cars, 5000, leader, vTop), RC.SC_CATCH, "3 s adrift: the catch-up cap");
+  assert.equal(RC.scQueueFrac(leader, cars, 5000, leader, vTop), SC_PACE, "the leader follows the SC");
+  assert.equal(RC.scQueueFrac(p2, cars, 5000, leader, vTop), SC_PACE, "inside 1 s: hold the queue");
+  assert.equal(RC.scQueueFrac(p3, cars, 5000, leader, vTop), SC_CATCH, "3 s adrift: the catch-up cap");
   const mid = RC.scQueueFrac(p4, cars, 5000, leader, vTop);
-  assert.ok(Math.abs(mid - (RC.SC_PACE + RC.SC_CATCH) / 2) < 1e-9, `1.5 s: blended, no step to chatter on (${mid})`);
-  assert.ok(RC.SC_CATCH > RC.SC_PACE);
+  assert.ok(Math.abs(mid - (SC_PACE + SC_CATCH) / 2) < 1e-9, `1.5 s: blended, no step to chatter on (${mid})`);
+  assert.ok(SC_CATCH > SC_PACE);
   // Retired, finished and skipped (pit lane) cars are not the car you queue behind.
   const gone = { prog: p3.prog + 0.5 * q, retired: true };
-  assert.equal(RC.scQueueFrac(p3, [...cars, gone], 5000, leader, vTop), RC.SC_CATCH);
+  assert.equal(RC.scQueueFrac(p3, [...cars, gone], 5000, leader, vTop), SC_CATCH);
   const lane = { prog: p3.prog + 0.5 * q };
-  assert.equal(RC.scQueueFrac(p3, [...cars, lane], 5000, leader, vTop, (o) => o === lane), RC.SC_CATCH);
-  assert.equal(RC.scQueueFrac(p3, [...cars, lane], 5000, leader, vTop), RC.SC_PACE, "unskipped, it is the car ahead");
+  assert.equal(RC.scQueueFrac(p3, [...cars, lane], 5000, leader, vTop, (o) => o === lane), SC_CATCH);
+  assert.equal(RC.scQueueFrac(p3, [...cars, lane], 5000, leader, vTop), SC_PACE, "unskipped, it is the car ahead");
   // Pace-free: the same field at half the OVERALL SPEED gives the same fractions.
   const half = cars.map((c) => ({ prog: leader.prog - (leader.prog - c.prog) / 2 }));
-  assert.equal(RC.scQueueFrac(half[2], half, 5000, half[0], vTop / 2), RC.SC_CATCH);
+  assert.equal(RC.scQueueFrac(half[2], half, 5000, half[0], vTop / 2), SC_CATCH);
   const bumper = { prog: p3.prog + 0.4 };
   const far = { prog: p3.prog + 3 * q };
-  assert.equal(RC.scQueueFrac(p3, [p3, bumper, far], 5000, leader, vTop), RC.SC_PACE, "0.4 m ahead: already queued");
+  assert.equal(RC.scQueueFrac(p3, [p3, bumper, far], 5000, leader, vTop), SC_PACE, "0.4 m ahead: already queued");
   // The LEADER pits: the first car on track is the front of the queue, not a
   // car chasing the tail of the field a lap away.
   const inLane = (o) => o === leader;
-  assert.equal(RC.scQueueFrac(p2, cars, 5000, leader, vTop, inLane), RC.SC_PACE, "P2 leads the queue while P1 pits");
-  assert.equal(RC.scQueueFrac(p3, cars, 5000, leader, vTop, inLane), RC.SC_CATCH, "the rest still close up");
+  assert.equal(RC.scQueueFrac(p2, cars, 5000, leader, vTop, inLane), SC_PACE, "P2 leads the queue while P1 pits");
+  assert.equal(RC.scQueueFrac(p3, cars, 5000, leader, vTop, inLane), SC_CATCH, "the rest still close up");
 });
 
 test("two-phase OT charges this tick's actual thrust and pauses coast/brake immediately", () => {

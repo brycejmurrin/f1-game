@@ -6,7 +6,7 @@
 "use strict";
 (window.TrackScenery = window.TrackScenery || {})["redbull"] =
   function (api) {
-      const { K, lapBounds, out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, prop, place, addBox, vadd, mountain, peak, ridge, pine, tree, bush, hedge, grandstand, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, addPyramid, addFrustum, onTrack, groundYAt, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
+      const { K, lapBounds, out, MAT, n, px, pz, py, pyMin, hw, ds, hash, every, addBox, vadd, mountain, hedge, grandstandEx, spectatorHill, bleacher, scaffoldStand, broadleafFall, building, motorhome, tower, billboard, marshalPost, fence, guardrail, tyreWall, wall, anchor, along, addCyl, addCone, addPrism, onTrack, forestEdge, ATM, pal, groundPatch, modelGroup, overheadSpan, cameraTower, broadcastCompound } = api;
       // backdrop() culls at its anchor point with onTrack(x, z, sz[0]/2 + 6).
       // Ask the same question first, so a hill that overlaps a parallel stretch
       // is skipped instead of staged and dropped (295 per build here

@@ -51,9 +51,11 @@ const WheelState = (function () {
   /** Live opt-in. Default OFF. Tests / __apex use setEnabled. */
   function enabled() { return resolveEnabled(); }
 
-  function setEnabled(v) {
+  /** `persist` false = this session only (__apex.setPhysics({wheelState})); default persists. */
+  function setEnabled(v, persist = true) {
     _resolved = true;
     _enabled = !!v;
+    if (!persist) return;
     // Writer for apex26.wheelState (store-registry ratchet). Persistence is
     // best-effort; private mode keeps the in-memory flag for the session.
     try {
@@ -270,9 +272,9 @@ const WheelState = (function () {
     return _results;
   }
 
+  // ensure/sync/kappaOf + the KAPPA_*/WHEEL_J/LOCK_*/SPIN_*/RESYNC_* knobs are
+  // stepPlayer internals — tests drive axleStep / stepPlayer / enabled only.
   return Object.freeze({
-    enabled, setEnabled, ensure, sync, kappaOf, axleStep, stepPlayer,
-    KAPPA_PEAK, KAPPA_MAX, KAPPA_VMIN,
-    KAPPA_RELAX_M, WHEEL_J, LOCK_KAPPA, SPIN_KAPPA, LOCK_SPAN, RESYNC_A,
+    enabled, setEnabled, axleStep, stepPlayer,
   });
 })();

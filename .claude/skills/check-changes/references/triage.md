@@ -1,4 +1,4 @@
-# Triage a test timeout — machine, wait, budget, or bug? (folded from the test-timeout-triage skill)
+# Triage a test timeout — machine, wait, budget, or bug?
 
 A timeout on this suite usually measures the MACHINE, not the code: every
 Playwright worker is a full SwiftShader Chromium, and past ~4 busy cores they
@@ -70,8 +70,7 @@ paths conflicted (`package.json` test scripts, `docs/agent-index.json`, ratchet
 deltas) — run **`npm run gen`**, then **`npm run gen:check`**, commit ONLY the
 generated outputs (never hand-edit them; `protect-files.sh`), run
 `npm run test:tooling-fast`, push. Generators: the `gen` chain in `package.json`.
-Do not re-dispatch CI until gen is clean. (Folded from the gen-regen skill,
-2026-10-26.)
+Do not re-dispatch CI until gen is clean.
 
 ## One red shard outside the diff — flake or base red?
 
@@ -80,7 +79,7 @@ Before one re-run (AGENTS.md §Coordination: at most once, timeout/infra,
 confirm the sibling shards on the same `head_sha` are green, and check the deploy
 tip — the same test red there is base red, not your flake; an unselected or unread
 base result is UNKNOWN, not green. A pass that needed the retry is still a red
-(rule 9): list it in the PR. (Folded from the flake-rerun skill, 2026-10-26.)
+(rule 9): list it in the PR.
 
 ## Rules that prevent the class
 

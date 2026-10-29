@@ -131,9 +131,8 @@ test("Daily Challenge exposes a delivery hook built from its canonical result", 
   assert.match(delivered[0][1], /^apex26-daily-2026-10-17\.png$/);
 });
 
-// render(): the REAL ShareCardLayout + NetQr + ShareCard over a recording
-// OffscreenCanvas. No test called render, ensureFonts or the QR painter before.
-test("render waits on both card fonts, paints the layout with a real QR, encodes PNG and frees the canvas", async () => {
+// render(): the REAL ShareCardLayout + NetQr + ShareCard over a recording OffscreenCanvas.
+test("render awaits the card font, paints the layout with a real QR, encodes PNG and frees the canvas", async () => {
   const fills = [], texts = [], fontsAsked = [], canvases = [];
   const ctx2d = {
     save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {}, stroke() {},
@@ -155,7 +154,7 @@ test("render waits on both card fonts, paints the layout with a real QR, encodes
     rows: [], link, displayName: "DRIVER 7" };
   const doc = { fonts: { load: (f) => { fontsAsked.push(f); return Promise.resolve([]); } } };
   const blob = await card.render(model, "portrait", { document: doc });
-  assert.deepEqual(fontsAsked, ["700 48px 'Barlow Condensed'", "600 24px 'Titillium Web'"], "both card fonts are awaited");
+  assert.deepEqual(fontsAsked, ["700 48px 'Barlow Condensed'"], "the paint face is awaited");
   assert.equal(blob.type, "image/png");
   assert.equal(blob.size, 1080 * 1350, "encoded at the portrait spec's size");
   assert.deepEqual([canvases[0].width, canvases[0].height], [0, 0], "the canvas is released after encoding");
@@ -170,7 +169,7 @@ test("render waits on both card fonts, paints the layout with a real QR, encodes
   assert.ok([...bySize.values()].some((n) => n === dark), `a fillRect per dark QR module (${dark}) — sizes ${JSON.stringify([...bySize])}`);
   // Fonts are awaited once per page: a second render does not reload them.
   await card.render(model, "square", { document: doc });
-  assert.equal(fontsAsked.length, 2);
+  assert.equal(fontsAsked.length, 1);
 });
 
 test("a solo share card loads only the QR encoder before painting its link", async () => {

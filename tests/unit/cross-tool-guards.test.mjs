@@ -219,13 +219,12 @@ test("pre-push refuses the deploy branch, deletes and rewrites; passes a fast-fo
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("pre-commit stands aside for Claude Code (its PreToolUse hook already ran the gate) and on APEX_SKIP_GUARDS=1", () => {
-  for (const env of [{ CLAUDECODE: "1" }, { CLAUDECODE: "", APEX_SKIP_GUARDS: "1" }]) {
-    const r = spawnSync("bash", [path.join(ROOT, ".githooks/pre-commit")], { cwd: ROOT, encoding: "utf8", env: { ...process.env, ...env } });
-    assert.equal(r.status, 0, JSON.stringify(env));
-  }
+test("pre-commit only honours the explicit guards-maintenance bypass", () => {
+  const r=spawnSync("bash",[path.join(ROOT,".githooks/pre-commit")],{cwd:ROOT,encoding:"utf8",env:{...process.env,CLAUDECODE:"1",APEX_SKIP_GUARDS:"1"}});
+  assert.equal(r.status,0,r.stderr);
+  const src=fs.readFileSync(path.join(ROOT,".githooks/pre-commit"),"utf8");
+  assert.doesNotMatch(src,/\[ -n "\$\{CLAUDECODE:-\}" \] && exit 0/);
 });
-
 test("a real worktree commit isolates guard fixtures while preserving its branch and staged index", () => {
   fs.mkdirSync(path.join(ROOT, "artifacts"), { recursive: true });
   const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "precommit-context-"));

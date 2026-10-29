@@ -1,0 +1,1 @@
+Improved: On phones, helmet-visor optics adapt gradually to rendering pressure: fewer decorative highlights and slower repaints, then reduced refraction, with a pause under severe load. The visor frame and saved choices stay intact as the rendering budget changes.

@@ -19,7 +19,7 @@ uses its own lane/floor rule.
 A kerb is NOT off-road (`c.offroad = … && !c.onKerb` in game.js): a car wedged on a kerb
 never counts as `beachedAt`, so only the `speed < 5` rescue branch (after `stuckT` / dig-out)
 fires; kerb drag is only `kerbGripSm` (0.7 grip, ~6 m/s² cut). "Stuck on the kerb" is therefore
-usually a dive/contact problem (see Brake target and Traffic tactics), not a rescue bug.
+usually a dive/contact problem (brake target or traffic tactics), not a rescue bug.
 Use `cars()` / `field()` to identify the car, then `__apex.carAt(idx)` for
 `stuckT` / `rescueT`; `field()` contains no `stuckS`. Record track, seed, car,
 timers, `pitState`, `pits.inLane(c)` and room left/right. VM behavioral checks:

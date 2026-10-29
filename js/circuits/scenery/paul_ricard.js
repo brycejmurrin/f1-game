@@ -7,9 +7,9 @@
 (window.TrackScenery = window.TrackScenery || {})["paul_ricard"] =
   function (api) {
       const { K, lapBounds, out, MAT, n, ds, pyMin, hash, every, along, anchor, vadd, onTrack,
-        pine, tree, bush, ridge, building, grandstandEx, spectatorHill,
+        pine, tree, bush, ridge, building, spectatorHill,
         broadcastCompound, billboard, gantry, marshalPost, motorhome,
-        fence, guardrail, tyreWall, modelGroup, prop, runoffApron,
+        fence, guardrail, modelGroup, prop,
         cameraTower, sponsorHoarding, signBoard, terrainYAt, recordBarrier,
         addBox, addCyl, addCone, addFrustum, addPrism } = api;
 

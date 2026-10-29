@@ -41,6 +41,15 @@
      #btn-boost: this is the IDLE rung, and it is applied as element opacity
      rather than as a fill alpha so it can never touch a label's contrast. */
   --btn-a: 0.68;
+  /* Local stand-ins for the responsive-foundation tokens. No draft of that
+     PR was open on 2026-10-29 (searched open PRs), so the touch ladder names
+     its own until those land and these can alias them.
+     Pedals are squircles; BOOST / OT / AERO stay circles. Phones keep the
+     76 / 84 ladder; a portrait tablet (the rotate gate stops at 743px) grows
+     it. */
+  --touch-pedal-radius: 28%;
+  --touch-tablet-btn: 96px;
+  --touch-tablet-steer: 108px;
 }
 /* PLAYER BUTTON OPACITY rides the dock GROUPS, never the buttons. The ladder
    inside (--btn-a idle, opacity 1 for live states, .dead below idle) is a
@@ -103,6 +112,14 @@
    rather than glanced at, and they sit over the road rather than over the
    cockpit. .steerbtn keeps its own fill. */
 :where(#btn-throttle, #btn-brake, #btn-boost, #btn-ot, #btn-aero) { opacity: var(--btn-a); }
+
+/* HELD PEDALS ARE NOT THE SAME SHAPE AS A TAP. GAS and BRAKE are what a
+   thumb rests on for a whole stint; BOOST, OT and AERO are glances. A
+   squircle against a circle is readable before the label is (Apple HIG,
+   game controls: the control should say what it does). Width and height
+   stay on --btn / --hold, so the pitch and the dock's width budget do
+   not move, and the input mapping is untouched. */
+.touchbtn.pedal { border-radius: var(--touch-pedal-radius); }
 
 /* LEFT thumb column: GAS (bottom) + BRAKE (above) — always.
    RIGHT thumb column: BOOST + OT by default; in MANUAL mode the gearbox
@@ -265,6 +282,13 @@
    The dock groups carry the same restatement a few rules up for the same
    reason. Caught by steering.spec.js, whose every click timed out. */
 #ios-install[hidden] { display: none; }
+/* IN A RACE the bottom edge is the thumb row and the instrument cluster.
+   The title park (bottom: safe area) covers GAS and the steer arrows on a
+   phone and a tablet — measured on the before shots (phone portrait,
+   phone landscape, iPhone SE, tablet portrait, 2026-10-29). The nudge
+   stays on the menus, which is where Share is. A qualified selector, so
+   the bare `#ios-install { display: flex }` / `[hidden]` pair is unchanged. */
+body.in-race #ios-install { display: none; }
 
 /* LEFT-HANDED LAYOUT. F1 Mobile ships right- and left-handed wheel configs as
    first-class, separately enumerated control schemes, and mirroring is the
@@ -347,20 +371,6 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
 
 /* ---------- LANDSCAPE: short viewport, lots of width ---------- */
 @media (orientation: landscape) {
-  /* HUD becomes a short horizontal strip at the very bottom so the big gear
-     no longer floats up over the car */
-  .hud-bottom { flex-direction: row; }
-  /* Positioning (left/right/bottom) now lives entirely in the INSTRUMENT
-     CLUSTER grid block below (`position: static`, `display: grid`) — this
-     rule only sets what that block does not: how the strip compacts when it
-     does not fit. Measured: the strip wants 467px. An iPhone SE landscape
-     leaves 467 here, 383 in manual and 287 in buttons mode — so it also has
-     to COMPACT, and wrap rather than collide when even that is not enough. */
-  .hud-bottom {
-    transform: none;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
   /* Landscape sizes the readouts DOWN. Portrait can afford a 58px gear because
      the screen is tall and the HUD owns the bottom third; landscape has ~390px
      of height total and the road is the thing you are actually looking at.
@@ -454,6 +464,14 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body.desktop .dock .dock-grp.col { flex-direction: column; align-items: center; }
   body:not(.desktop) .dock-grp.row,
   body.desktop .dock .dock-grp.row { flex-direction: row; align-items: flex-end; }
+  /* The two arrows are one steering control. The plate fills the gap
+     between them. No padding: a pad would spend the buttons-mode width
+     budget and bring the wrap back. */
+  body:not(.desktop) #grp-steer,
+  body.desktop .dock #grp-steer {
+    background: color-mix(in oklab, var(--look-hud-bg) 92%, transparent);
+    border-radius: 999px;
+  }
   /* `display:flex` above outranks the UA's [hidden] rule, so restate it — an
      empty group left visible still holds the dock's gap open. */
   body:not(.desktop) .dock-grp[hidden],
@@ -600,7 +618,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     grid-template-areas:
       "gear speed  ot"
       "gear energy aero";
-    align-items: start; justify-items: center;
+    align-items: start; justify-items: center; justify-content: center;
     gap: var(--gap) calc(var(--gap) * 2 / 3);
     min-width: 0;                  /* may shrink before it pushes a dock */
     pointer-events: none;
@@ -627,9 +645,13 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   /* The AERO chip's text is a live COUNTDOWN — "AERO 240m", "NO AERO ZONE" —
      so it changes width every frame. Wrapping it to two lines made the whole
      cluster jump a row taller and back as the car approached a zone. */
+  /* font-size already on #hud-ot / #hud-aero in css/hud.css. Padding is the
+     same 5px 10px there too, but dropping it here lowers tree rawSpacing and
+     that ceiling is owned outside this lane — keep the px until a ratchet
+     carve can land with it. nowrap is the only non-restate. */
   #hud-ot,
   #hud-aero {
-    white-space: nowrap; font-size: var(--fs-micro); padding: 5px 10px;
+    white-space: nowrap; padding: 5px 10px;
   }
 
   /* ---- DESKTOP: THE SAME PARTS, LAID OUT FLAT ----
@@ -752,6 +774,61 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   body.steer-touch #btn-brake { bottom: calc(12px + var(--sab)); }
 }
 
+/* PORTRAIT TABLET + LEFT HAND. Phones in portrait are the rotate gate
+   (max-width 743px). A tablet is wide enough to race, and the 76px phone
+   ladder looks lost on an 820px slab. 96px still leaves the five-high
+   buttons column under half the 1180px height. The cluster's clearance
+   was a literal 112 (16 + 76 + 20); it has to grow with --btn or GAS
+   meets the readout. The safe-area term stays divided by --hud-z. */
+@media (orientation: portrait) and (min-width: 744px) {
+  :root {
+    --btn: var(--touch-tablet-btn);
+    --steer: var(--touch-tablet-steer);
+  }
+  body.steer-buttons .hud-bottom {
+    bottom: calc(16px + var(--btn) + 20px + var(--sab) / var(--hud-z));
+  }
+  .touchbtn { font-size: max(16px, var(--touch-label-floor)); }
+  .steerbtn { font-size: 32px; }
+}
+/* LEFT-HANDED PORTRAIT. Landscape already swaps the docks with
+   flex-direction: row-reverse (the groups keep brake-above-gas). Portrait
+   paints the ladder with position:fixed, so row-reverse does nothing there
+   and a left-handed player still got the right-hand columns. These rules
+   live in portrait only: an id beats the landscape dock's inset:auto, and
+   a fixed left/right on a static button is ignored today but would fight
+   the flex the day that changes. Vertical order stays — mirroring it would
+   put BRAKE under GAS. The steer PAIR moves to the right edge with the
+   left arrow still left of the right arrow. Position only, never a fill. */
+@media (orientation: portrait) {
+  body.mirror-controls:not(.steer-buttons) #btn-throttle,
+  body.mirror-controls:not(.steer-buttons) #btn-brake {
+    left: auto; right: calc(16px + var(--sar));
+  }
+  body.mirror-controls:not(.steer-buttons) #btn-boost,
+  body.mirror-controls:not(.steer-buttons) #btn-ot,
+  body.mirror-controls:not(.steer-buttons) #btn-aero,
+  body.mirror-controls #shift-up,
+  body.mirror-controls #shift-down {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls.steer-buttons #btn-throttle,
+  body.mirror-controls.steer-buttons #btn-brake,
+  body.mirror-controls.steer-buttons #btn-boost {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls.steer-buttons #btn-ot,
+  body.mirror-controls.steer-buttons #btn-aero {
+    right: auto; left: calc(16px + var(--sal));
+  }
+  body.mirror-controls #btn-steer-right {
+    left: auto; right: calc(16px + var(--sar));
+  }
+  body.mirror-controls #btn-steer-left {
+    left: auto; right: calc(16px + var(--steer) + var(--btn-gap) + var(--sar));
+  }
+}
+
 #pausebtn {
   position: fixed;
   top: calc(8px + var(--sat));
@@ -770,6 +847,12 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
   background: var(--look-hud-bg);
   color: var(--look-hud-ink);
   border: 1px solid var(--look-hud-dim);
+}
+/* A thumb finds a circle faster than the small rounded square. The hit
+   box stays --tap-hud (width and height are pinned). A fine pointer keeps
+   the square so PAUSE still matches the CAM pill beside it. */
+@media (pointer: coarse) {
+  #pausebtn { border-radius: 50%; }
 }
 /* ABOVE 150 % BUTTON SIZE, PAUSE keeps growing with the docks (up to 200 %) — DOWN only, into its own column:
    its width and CAM stay on the --tap-hud band (css/hud.css, capped at 150 %), so the top row never gets wider

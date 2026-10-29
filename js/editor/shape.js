@@ -352,7 +352,7 @@ const TrackShape = (function () {
     return false;
   }
 
-  return { TAU, wrapI, mod2pi, wrapAngle, heading, polyLen, centroid, signedArea, straightPts, arcPts, arcSteps, clothoidPts, dubins, dubinsWords, dubinsSample,
+  return { wrapI, mod2pi, wrapAngle, heading, polyLen, centroid, signedArea, straightPts, arcPts, arcSteps, clothoidPts, dubins, dubinsWords, dubinsSample,
     rdp, resample, catmull, menger, rotate, project, enforceSpacing, convexHull, segIntersect, crossings, clearance, rng, spanIndices, inSpan };
 })();
 Object.freeze(TrackShape);

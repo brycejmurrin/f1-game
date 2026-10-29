@@ -1,0 +1,1 @@
+Improved: Pack model keys are classified in `data/packs/model-index.json` (placed / kit_catalog / nature_bake), and a remembered pack index can be pruned of dead keys and stale md5s via `js/assets/pack-index.mjs` without touching the GPU load path.

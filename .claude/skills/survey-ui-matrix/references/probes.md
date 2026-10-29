@@ -1,20 +1,22 @@
 # UI-matrix probes, routes, diagnosis, mistakes
 
-Load this when a measurement looks wrong, when reaching a screen, or when a CSS change 'did nothing'. Setup ritual + screen enumeration: [setup.md](setup.md). Axes live in code, not prose: viewports (with injected iPhone safe-area insets) in `tools/ui/menu-screens.mjs` `VIEWPORTS`, screens in its `SCREENS`, and the scale axis (40–200 %) in `tools/ui/ui-scale-axis.mjs`.
-**Use when:** a screen/viewport measurement is wrong or a CSS change appears ineffective.
-
-**Inputs:** the route, viewport/scale cell, pointer mode, and the observed geometry or style symptom.
-
-**Verification:** capture the measured cell, DOM/CSS evidence, and whether the result came from the UI matrix or a focused screen probe.
-
-**Writes/ownership:** read-only diagnosis; CSS edits stay with `css-play` and menu ownership stays with `ui-menu-a11y`.
 ## Contents
 - 1. The probe — four questions, each with its trap
 - 2. Reaching each screen, and resetting between them
 - 3. Diagnosing "my CSS change did nothing"
 - 4. What to do with the findings
 - Common mistakes
-- Capture CLI boundaries
+
+Load this when a hand-rolled measurement looks wrong, when reaching a screen, or when a CSS change "did
+nothing". Axes live in code, not prose: viewports (with injected iPhone safe-area insets) in
+`tools/ui/menu-screens.mjs` `VIEWPORTS`, screens in its `SCREENS`, and the scale axis (40–200 %) in
+`tools/ui/ui-scale-axis.mjs`.
+
+**Inputs:** the route, viewport/scale cell, pointer mode, and the observed geometry or style symptom.
+
+**Verification:** capture the measured cell, DOM/CSS evidence, and whether the result came from the UI matrix or a focused screen probe.
+
+**Writes/ownership:** read-only diagnosis; CSS edits stay with `css-play` and menu ownership stays with `ui-menu-a11y`.
 
 ## 1. The probe — four questions, each with its trap
 
@@ -25,7 +27,7 @@ the naive version produced a wrong answer.
 // (a) CLIPPED — content escaping a box that cannot scroll to it.
 // TRAP: a .pane with `overflow-y: auto; overflow-x: hidden` is NOT clipping
 // vertically — that is what scrolling IS. Exempt the axis the clipper SCROLLS,
-// or you get ~56 false positives on a long help screen (measured).
+// or you get dozens of false positives on a long help screen.
 function clippedIn(root) {
   const out = [];
   for (const e of root.querySelectorAll('*')) {
@@ -66,8 +68,7 @@ function truncIn(root) {
 // (c) TAP TARGETS.
 // TRAP 1: read --tap off <body>, NOT :root. The touch ladder is declared
 //   `body:not(.desktop) { --tap: 52px }`. Asking documentElement returns the
-//   44px DESKTOP floor on every device — this bug was live in
-//   tools/ui/layout-audit.mjs and undercounted every phone cell it ever produced.
+//   44px DESKTOP floor on every device and undercounts every phone cell.
 // TRAP 2: the activation target is the UNION of a control and its wrapping
 //   <label>; measuring a bare checkbox reports 13x13 for something you tap at
 //   342x16.
@@ -78,10 +79,10 @@ function truncIn(root) {
 //   in `js/ui/scale.js`; 1.0 on a desktop pointer, so the arithmetic bites on
 //   touch and whenever a player dials UI SIZE up, which the matrix does.)
 // TRAP 4: DO NOT SCORE ON min(width, height). Height is the thumb dimension; a
-//   full-height tab that is merely NARROW is not a small target. Scoring on the
-//   minimum produced two false alarms out of three findings in one sweep —
-//   `.dh-tab-live` at 44x52 (fine: a short label on a full-height tab) and
-//   `.sel-chip` at 85x45 (fine: --chip-h is deliberately one step below --tap).
+//   full-height tab that is merely NARROW is not a small target. Examples that
+//   read as false alarms on the minimum: `.dh-tab-live` at 44x52 (fine: a short
+//   label on a full-height tab) and `.sel-chip` at 85x45 (fine: --chip-h is
+//   deliberately one step below --tap).
 //   Report BOTH dimensions and judge height against the ladder; use the
 //   min only for the WCAG 24x24 test, which really is both-axes.
 function tapsIn(root) {
@@ -148,8 +149,7 @@ The authoritative enumeration is `SCREENS` in `tools/ui/menu-screens.mjs` (`node
 starts no browser; `OVERLAY_IDS` there is the reset list above); `index.html`
 holds the `<dialog>` roots (`grep -c '^<dialog' index.html`). Sweeping
 the seven or eight you can reach from the title in two clicks is the easy half
-and is NOT the survey — the defects this session found were on the shapes and
-screens nobody had opened.
+and is NOT the survey — defects hide on the shapes and screens nobody opens.
 
 | root | route |
 |---|---|
@@ -195,8 +195,7 @@ in-race screens with `__apex.race(id)` + `go()` + `jump()`, not by reloading.
 
 ## 3. Diagnosing "my CSS change did nothing"
 
-Before re-editing, prove the browser has the rule. This exact check saved two
-wasted rounds:
+Before re-editing, prove the browser has the rule:
 
 ```js
 let found = null;
@@ -230,11 +229,11 @@ Sort by **failure mode, not by count**:
   preference between 24 and `--tap`
 - **document h-overflow** — always a defect here
 - **dead space beside cramped space in one composition** — a design finding, not
-  a bug; feed it to `css-play` (`references/restructure.md`)
+  a bug; feed it to `css-play` (its restructure.md, linked from SKILL.md §References)
 
 Re-measure after every fix **in the shape you fixed it in and at least one other**
-— this session, a fix that was correct in landscape put a centred element hard
-against the left edge in portrait, and only the portrait sweep caught it.
+— a fix correct in landscape can push a centred element hard against the left
+edge in portrait, and only a portrait sweep catches it.
 
 Then run the batch instrument to cover what you did not: `node tools/ui/layout-audit.mjs`
 (add `--shots` for a PNG per cell, `--scale=100,130,150` to add the scale axis).
@@ -250,7 +249,7 @@ re-bless them deliberately rather than by reflex.
 
 - Reading `--tap` from `:root` — returns the desktop floor on every device.
 - Scoring a tap target on `min(width, height)` — a full-height tab that is merely
-  narrow reads as a small target. Two of three findings in one sweep were this.
+  narrow reads as a small target.
 - Treating a scroller as a clipper — mass false positives.
 - Comparing a `getBoundingClientRect()` height against a CSS-px token without
   dividing by `currentCSSZoom` — everything inside `.sheet` looks 15% too big.
@@ -261,12 +260,4 @@ re-bless them deliberately rather than by reflex.
 - Leaving the MCP browser on a live game page while Playwright runs — contention
   that produces false timeouts.
 - Testing only at UI scale 100 — players can still dial 115–150 via SETTINGS,
-  and several layout bugs historically only showed above 100%.
-
-## Capture CLI boundaries
-
-`layout-audit.mjs --report` reads the standard gallery manifest by default.
-One-screen capture forwards its chosen scale; multiple scales are rejected for
-single-cell mode rather than silently dropped. Gallery mode expands scale cells.
-A readiness/transition timeout records the cell/root and failure; incomplete
-or skipped cells remain absent evidence in the report, never full matrix green.
+  and some layout bugs only show above 100%.
