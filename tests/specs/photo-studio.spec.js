@@ -279,6 +279,7 @@ test("Two tabs atomically retain six durable photos after concurrent saves", asy
       await tab.addScriptTag({ url: "/js/ui/setting-row.js" });
       await tab.addScriptTag({ url: "/js/ui/photo-studio.js" });
       await tab.evaluate((i) => {
+        window.DrivingLine = { shown: () => true, setPhoto: () => {} };   // this bare page loads no render modules
         window.studio = PhotoStudio.create({ $: (id) => document.getElementById(id), setTimeOfDay: () => "day", weather: () => "dry" }, { garage: {} });
         window.studio.open({ source: "garage", metadata: { title: `Tab ${i}` } });
       }, i);
