@@ -54,10 +54,6 @@
 }
 #results     { --sheet-w: 760px; --fit-at: 300px; }
 #standings   { --sheet-w: 760px; --fit-at: 300px; }
-/* Large-monitor measure. The responsive-foundation draft was not open
-   (2026-10-29); these stay local until that sheet owns the tokens.
-   After the 760px caps: a later unconditional id rule would win. */
-:root { --menu-fit-sheet: 1180px; --menu-fit-sheet-wide: 1360px; --menu-fit-pause: 480px; }
 @media (min-width: 1680px) {
   #results, #standings { --sheet-w: min(var(--menu-fit-sheet), calc(100vw - 80px)); }
   #pausemenu { --sheet-w: min(var(--menu-fit-pause), calc(100vw - 48px)); }
