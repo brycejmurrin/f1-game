@@ -447,9 +447,7 @@ const FULL = [
   "js/ui/hud-radio-lane.js", // HudRadioLane: the radio card's top slot, corner and dock lane GameHud places (#3261)
   "js/ui/hud.js",
   "js/ui/results-story.js",
-  "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4)
   "js/ui/results-sheet.js",
-  "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
   "js/race/quali-model.js",
   "js/share/share-card-data.js",
   "js/share/share-card-layout.js",
@@ -823,8 +821,6 @@ const HARD_EDGES = [
   ["js/camera/director.js", "js/game.js"],          // game.js calls Director.create(G) at eval time
   ["js/camera/replay-buf.js", "js/game.js"],         // game.js calls ReplayBuf.create(G) at eval time
   ["js/camera/results-cam.js", "js/game.js"],        // game.js calls ResultsCam.create(G) at eval time
-  ["js/ui/results-story.js", "js/ui/podium-beat.js"], // PodiumBeat.mount calls ResultsStory.render
-  ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat
   ["js/garage/prebuild.js", "js/game.js"],           // game.js calls GaragePrebuild.create(G) at eval time
   ["js/data/teams.js", "js/game.js"],            // game.js destructures Teams (DEFAULT_CUSTOM, TIER_V) at eval
   ["js/physics/consts.js", "js/game.js"],  // game.js destructures PhysicsConsts at eval
@@ -1084,8 +1080,11 @@ const LAZY_RACE_SESSION = [
   "js/race/marshal-panels.js",
   "js/race/flying-start.js",
   "js/race/jump-start-penalty.js",
+  "js/ui/podium-beat.js",   // PodiumBeat: ceremony podium overlay (#4070 slice 4); ResultsStory is FULL
+  "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
 ];
 const LAZY_RACE_SESSION_EDGES = [
+  ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat
   ["js/race/pit-geom.js", "js/race/pit-lane.js"],
   ["js/race/radio-lines.js", "js/race/race-radio.js"],
   ["js/race/race-facts.js", "js/race/race-radio.js"],

@@ -265,7 +265,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `hud-radio-lane.js` | `HudRadioLane` | tag | HUD RADIO LANE: where the radio card (#announce) sits during a race — the top-row slot right of the tower, the top-right corner by CAM, or the dock lane… |
 | `hud.js` | `GameHud` | tag | in-race HUD + minimap for js/game.js. |
 | `results-story.js` | `ResultsStory` | tag | ResultsStory: a short classification reveal from the SAME canonical verdict and points rules as GameResults. |
-| `podium-beat.js` | `PodiumBeat` | tag | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 | `results-sheet.js` | `GameResults` | tag | results / time-trial / championship-standings DOM builders for js/game.js. |
 | `appearance-studio.js` | `AppearanceStudio` | tag | AppearanceStudio — visual presets, named profiles and a readable preview. |
 | `home-world.js` | `HomeWorld` | tag | Home's prepared circuit: camera ownership and a bounded render budget only. |
@@ -283,6 +282,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `controller-profile-controls.js` | `ControllerProfileControls` | tag | Explicit current-device reset; Input owns automatic per-device selection. |
 | `condition-cue-controls.js` | `ConditionCueControls` | tag | Cue targets that account for current driving conditions: ON by default since the #2177 calibration (docs/notes/BRAKE-CUE-CALIBRATION-2026-10-27.md); the… |
 | `race-mix-controls.js` | `RaceMixControls` | tag | A short explicit audition, with the same live sound settings as the race. |
+| `podium-beat.js` | `PodiumBeat` | LAZY_RACE_SESSION | PodiumBeat: ceremony podium overlay (#4070 / plan slice 4). |
 
 **`js/track/core/`**
 
@@ -359,7 +359,6 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `rain-cells.js` | `RainCells` | tag | LOCALIZED RAIN (RainCells): a shower that covers a WINDOW of the lap and drifts along it, instead of F1 24/25's uniform "blanket" rain. |
 | `weather-arc.js` | `WeatherArc` | tag | LIVE WEATHER + the DYNAMIC WEATHER ARC (WeatherArc.create(G, deps)): the one path a session's weather changes through, and the optional per-race progression… |
 | `forecast.js` | `Forecast` | tag | WEATHER FORECAST (Forecast): what the pit wall KNOWS about a dynamic-weather race, as a timed, located-in-laps statement with honest uncertainty. |
-| `podium-beat.js` | `RacePodium` | tag | RacePodium: ceremony podium beat + results handoff (#4070 slice 4). |
 | `quali-model.js` | `Quali` | tag | QUALIFYING: one flying lap, and the simulated times it is measured against. |
 | `daily-challenge.js` | `DailyChallenge` | tag | DAILY CHALLENGE: one time-trial plan per UTC day, derived from the date alone (circuit, weather, time of day, sim seed), with a per-day best, a streak and a… |
 | `quali-net.js` | `QualiNet` | tag | FRIEND-RACE QUALIFYING: wait for every rival's lap before gridding up. |
@@ -380,6 +379,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `marshal-panels.js` | `MarshalPanels` | LAZY_RACE_SESSION | marshal light panels. |
 | `flying-start.js` | `FlyingStart` | LAZY_RACE_SESSION | FLYING START: qualifying and time trial begin at speed, the way a Data Hub JUMP IN does (js/race/real-race.js). |
 | `jump-start-penalty.js` | `JumpStartPenalty` | LAZY_RACE_SESSION | FALSE START (FIA 2026 SR B5.11.1; js/race/sporting-regs.js): throttle at green or a launch faster than the minimum reaction window. |
+| `podium-beat.js` | `RacePodium` | LAZY_RACE_SESSION | RacePodium: ceremony podium beat + results handoff (#4070 slice 4). |
 
 **`js/workers/`**
 

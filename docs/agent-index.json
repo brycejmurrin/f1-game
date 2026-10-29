@@ -3937,7 +3937,7 @@
     {
       "path": "js/race/podium-beat.js",
       "global": "RacePodium",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/quali-model.js",
@@ -4702,7 +4702,7 @@
     {
       "path": "js/ui/podium-beat.js",
       "global": "PodiumBeat",
-      "roster": "tag"
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/ui/post-fx-opts.js",

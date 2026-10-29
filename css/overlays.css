@@ -1489,9 +1489,7 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
   margin: var(--pad) auto 0; max-width: min(720px, 100%); width: 100%;
 }
 #ceremony-podium .bigbtn { min-height: var(--tap); min-width: min(240px, 100%); }
-@media (orientation: landscape) and (max-height: 500px) {
-  #ceremony-podium { padding: calc(var(--pad) * 0.55); }
-  #ceremony-podium .sheet-foot { margin-top: calc(var(--pad) * 0.45); }
-}
+body[data-density="compact"] #ceremony-podium { padding: calc(var(--pad) * 0.55); }
+body[data-density="compact"] #ceremony-podium .sheet-foot { margin-top: calc(var(--pad) * 0.45); }
 
 } /* @layer components */
