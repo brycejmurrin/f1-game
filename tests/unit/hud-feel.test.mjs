@@ -1080,6 +1080,94 @@ test("an empty timing tower still fits the bottom band and writes the dock cap",
   assert.equal(none.refit()["--hud-z-dock"], "", "an empty layout is a retry, not a fit");
 });
 
+/* BUTTON SIZE past the pedal column's cap (owner report: 245 % "does nothing"). 844x390 landscape,
+ * insets 47/47/0/21, buttons-mode intrinsics at zoom 1: the right dock is the 3-high taps column
+ * (236 px) beside BRAKE/GAS, the left one row of steer arrows (72 px). The right cap is the
+ * joint height solve, 329 / (236 + 44) = 1.175 — measured live as 85 px pedals from 150 % up. */
+function dockHarness(btn, opts = {}) {
+  const W = opts.portrait ? 390 : 844, H = opts.portrait ? 844 : 390;
+  const b = boot({ innerWidth: W });
+  b.sb.innerHeight = H;
+  const { dom } = b, root = dom.documentElement;
+  if (opts.mirror) dom.body.classList.add("mirror-controls");
+  root.style.setProperty("--hud-scale", "1");
+  root.style.setProperty("--hud-btn-scale", String(btn));
+  const mk = (cls, parent) => { const e = dom.document.createElement("div"); e.className = cls; (parent || dom.body).appendChild(e); return e; };
+  const top = mk("hud-top"), bottom = mk("hud-bottom"), bar = dom.document.createElement("div");
+  bar.id = "hud-dock"; dom.body.appendChild(bar);
+  const elL = dom.byId("dock-left"), elR = dom.byId("dock-right");
+  for (const d of [elL, elR]) { dom.body.removeChild(d); bar.appendChild(d); }
+  // Painted sides: MIRROR puts #dock-left (steer) on the right and #dock-right on the left.
+  const steer = elL, pedals = elR, sL = opts.mirror ? pedals : steer, sR = opts.mirror ? steer : pedals;
+  const R = (left, top_, w, h) => ({ left, top: top_, right: left + w, bottom: top_ + h, width: w, height: h });
+  const gear = mk("g", bottom), energy = mk("e", bottom), grpSteer = mk("st", steer), taps = mk("tp", pedals), ped = mk("pd", pedals);
+  const by = H - 21 - 236, rows = new Map([
+    [top, R(W / 2 - 150, 8, 300, 54)], [b.els.minimap, R(57, 8, 110, 110)], [b.els.hudSectors, R(W - 147, 70, 90, 72)],
+    [gear, R(W / 2 - 120, H - 81, 120, 60)], [energy, R(W / 2, H - 81, 120, 60)],
+    [bar, R(47, by, W - 94, 236)], [sL, R(47, by, opts.mirror ? 134 : 152, 236)], [sR, R(W - 47 - (opts.mirror ? 152 : 134), by, opts.mirror ? 152 : 134, 236)],
+    [grpSteer, R(opts.mirror ? W - 199 : 47, H - 93, 152, 72)],
+    [taps, R(opts.mirror ? 47 : W - 181, by, 54, 236)], [ped, R(opts.mirror ? 109 : W - 119, by + 84, 72, 152)],
+  ]);
+  for (const [el, r] of rows) el._rect = r;
+  const ins = { "--sal": "47px", "--sar": "47px", "--sat": "0px", "--sab": "21px", "--hud-btn-floor": "0.82" };
+  b.sb.getComputedStyle = () => ({ getPropertyValue: (k) => ins[k] || ALL_TOKENS[k] || "", columnGap: "8px", rowGap: "8px", position: "static", transform: "none" });
+  if (opts.portrait) b.sb.matchMedia = (q) => ({ matches: /portrait/.test(q) });
+  for (let i = 0; i < 4; i++) { b.sb.GameHud.invalidateFit(); b.tick(); }
+  const pv = (k) => root.style.getPropertyValue(k);
+  const want = Math.max(0.82, btn);
+  const zR = +pv("--hud-z-dock") || want, zL = +pv("--hud-z-dock-l") || zR, zBot = +pv("--hud-z-bot") || 1;
+  return { pv, zR, zL, zBot, W, H, want };
+}
+
+test("BUTTON SIZE: the steer dock follows the slider past the pedal column's cap; the pedals keep theirs", () => {
+  let prevL = 0, prevR = 0;
+  for (const btn of [0.6, 1, 1.25, 1.5, 2, 2.45, 3]) {
+    const h = dockHarness(btn), tag = `BUTTON ${btn * 100}%`;
+    if (h.want <= 1.175) {
+      assert.equal(h.pv("--hud-z-dock"), "", `${tag}: fits, no cap written`);
+      assert.equal(h.pv("--hud-z-dock-l"), "", `${tag}: and no steer cap either`);
+    } else {
+      assert.equal(h.pv("--hud-z-dock"), "1.175", `${tag}: the right dock's cap is today's joint height solve`);
+      assert.ok(h.pv("--hud-z-dock-l") !== "", `${tag}: the steer value is explicit whenever the pedal cap is`);
+    }
+    assert.ok(h.zL >= h.zR - 1e-9, `${tag}: steer ${h.zL} >= pedals ${h.zR}`);
+    assert.ok(h.zL >= prevL - 1e-9 && h.zR >= prevR - 1e-9, `${tag}: a bigger slider never paints a smaller button`);
+    prevL = h.zL; prevR = h.zR;
+    // Nothing offscreen: each column fits under the safe area with its top button, and the bar's row
+    // (steer + cluster + pedals + air) fits its width.
+    const room = h.H - 21 - 40;
+    assert.ok(72 * h.zL + 44 * Math.min(1.5, Math.max(1, h.zR)) <= room + 1e-6, `${tag}: steer + CAM fit the height`);
+    assert.ok(236 * h.zR + 44 * Math.min(2, Math.max(1, h.zR)) <= room + 1e-6, `${tag}: taps + PAUSE fit the height`);
+    assert.ok(152 * h.zL + 134 * h.zR + 240 * h.zBot + 2 * 8 + 20 <= h.W - 94 + 1, `${tag}: steer, cluster and pedals share the bar (1 px: --hud-z-bot ceils onto 0.01 at 245 %)`);
+    assert.ok(h.zBot >= 10 / 14 - 1e-9, `${tag}: the gear/speed cluster keeps its readable floor (${h.zBot})`);
+  }
+  const owner = dockHarness(2.45), max = dockHarness(3);
+  assert.equal(owner.zL, 2.45, "the owner's 245 % paints 245 % steer arrows");
+  assert.ok(max.zL > 2.45 && max.zL < 3, `300 % stops at the bar's width budget (${max.zL})`);
+});
+
+test("BUTTON SIZE: MIRROR CONTROLS grows #dock-left on the right side; portrait keeps the shared cap", () => {
+  const m = dockHarness(2.45, { mirror: true });
+  assert.equal(m.pv("--hud-z-dock"), "1.175");
+  assert.ok(m.zL > 1.175, `mirrored steer dock still follows the slider (${m.zL})`);
+  const p = dockHarness(2.45, { portrait: true });
+  assert.equal(p.pv("--hud-z-dock-l"), p.pv("--hud-z-dock"), "portrait: the steer dock rides the shared cap");
+});
+
+test("BUTTON SIZE readout names the size the fit paints when the dock is capped", () => {
+  const sb = { window: {}, document: {} };
+  vm.runInNewContext(src("js/ui/scale.js") + "\nthis.UiScale = UiScale;", sb, { filename: absSrc("js/ui/scale.js") });
+  const f = sb.UiScale.btnFitLabel;
+  assert.equal(f("245%", 245, "1.175"), "245% · fits 118%");
+  assert.equal(f("100%", 100, ""), "100%", "no cap written: the player's number");
+  assert.equal(f("100%", 100, "1.175"), "100%", "a cap above the value is not a limit");
+  assert.equal(f("118%", 117.5, "1.175"), "118%", "at the cap: nothing to explain");
+  const css = cssRules(readCssSource("css/touch-controls.css"));
+  const zoom = decl(css, /^body:not\(\.desktop\) #dock-left,/, "zoom");
+  assert.equal(zoom, "min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))", "the steer dock has its own zoom rule, min()ed with the slider like the pedal dock");
+  assert.equal(decl(css, /^body:not\(\.desktop\) #dock-left,/, "--touch-label-z"), zoom, "labels divide their floor by the same zoom");
+});
+
 test("GameHud.invalidateFit forces the next tick to re-fit; HudElements.apply calls it", () => {
   const h = fitHarness(), base = h.snap();
   const u = h.U.get(h.gear);

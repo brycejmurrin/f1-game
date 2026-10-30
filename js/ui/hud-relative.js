@@ -223,6 +223,9 @@ const HudRelative = (function () {
     const el = doc.documentElement;
     k += "|" + (el && el.style && el.style.getPropertyValue ? el.style.getPropertyValue("--hud-z-top") : "");
     k += "|" + (doc.body ? doc.body.className : "");
+    // The MOVE & SIZE set is an attribute (body[data-hl-set]): HELMET → chase moves GEAR / SPEED
+    // without a class change, and the 1 Hz net alone left REL slid for the helmet's chips.
+    k += "|" + (doc.body && doc.body.getAttribute ? doc.body.getAttribute("data-hl-set") || "" : "");
     return k + clearSig();
   }
   // Also clear the bottom cluster / radio card: at HUD 150% REL sat on GEAR /
@@ -242,7 +245,9 @@ const HudRelative = (function () {
    *  outermost occupied rows until it fits. CSS max-height can miss TILT
    *  (no steer-* class; BRAKE sits in the map column). */
   function fitRows() {
-    fitRowsNow();
+    // A measured fit stripped HudLayout's clearance (below): re-place the readouts from
+    // this slide, so STRATEGY never keeps a spot chosen around a stale REL (HUD SIZE 150 → 100 swap).
+    if (fitRowsNow() && typeof HudLayout !== "undefined" && HudLayout.clearReadouts) HudLayout.clearReadouts();
     geoSeen = built ? geoKey() : null;   // the fitted geometry the 1 Hz net compares against
   }
   function fitRowsNow() {
@@ -257,13 +262,19 @@ const HudRelative = (function () {
     }
     if (root.style && root.style.removeProperty) {
       root.style.removeProperty("left"); root.style.removeProperty("max-height");
+      // HudLayout.clearReadouts' translate and compact rows are its output too: measuring
+      // through them made the slide depend on the previous fit's scale (UI-HUNT-2-HUD).
+      root.style.removeProperty("--hud-clear-x"); root.style.removeProperty("--hud-clear-y");
     }
+    if (root.removeAttribute) { root.removeAttribute("data-col-compact"); root.removeAttribute("data-col-drop"); root.removeAttribute("data-fit-drop"); }
     // An edited card keeps all occupied rows and the geometry the player chose.
     // Restore any rows a previous automatic fit hid before handing ownership back.
     if (root.hasAttribute && root.hasAttribute("data-hl-user")) return;
     const b = doc && doc.body;
     if (b && b.classList && b.classList.contains("desktop")) return;
+    let measured = false;
     if (root.getBoundingClientRect && doc.getElementById && root.style) {
+      measured = true;
       const rootEl = doc.documentElement;
       // The zoom the card paints at: var(--hud-z-top, var(--hud-scale))
       // (css/hud.css). fitHud REMOVES --hud-z-top whenever the cap fits, so
@@ -326,12 +337,25 @@ const HudRelative = (function () {
         if (Number.isFinite(cap) && cap > 0) root.style.maxHeight = cap.toFixed(1) + "px";
       }
     }
-    if (!(root.clientHeight > 0)) return;
+    if (!(root.clientHeight > 0)) return measured;
+    // Never down to the player's row alone: it carries no gap (HUD 150 % / TEXT LARGER in
+    // HELMET). When one neighbour + self still clip here, undo this slide and cap and hand
+    // the whole card to HudLayout.clearReadouts (a free slot, else one row, else none);
+    // with no allocator the card stands down (css/hud.css data-fit-drop).
     const order = [0, 4, 1, 3];
-    for (let k = 0; k < order.length && root.scrollHeight > root.clientHeight + 1; k++) {
+    let shown = 0;
+    for (let i = 0; i < ROWS; i++) if (!built[i].el.hidden) shown++;
+    for (let k = 0; k < order.length && shown > 2 && root.scrollHeight > root.clientHeight + 1; k++) {
       const dom = built[order[k]];
-      if (dom && !dom.el.hidden) { dom.el.hidden = true; dropped[order[k]] = true; }
+      if (dom && !dom.el.hidden) { dom.el.hidden = true; dropped[order[k]] = true; shown--; }
     }
+    if (root.scrollHeight > root.clientHeight + 1) {
+      if (typeof HudLayout !== "undefined" && HudLayout.clearReadouts && measured) {
+        for (let i = 0; i < ROWS; i++) if (dropped[i]) { dropped[i] = false; built[i].el.hidden = false; }
+        if (root.style && root.style.removeProperty) { root.style.removeProperty("left"); root.style.removeProperty("max-height"); }
+      } else if (root.setAttribute) root.setAttribute("data-fit-drop", "");
+    }
+    return measured;
   }
   /** The words a screen reader says for one row. */
   function rowLabel(pos, code, self, gap, ahead, tyre, laps) {

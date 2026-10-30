@@ -39,7 +39,7 @@ function load(stored) {
 }
 
 const GOLDEN_OFF = {
-  good: "#a3e635", warn: "#f6d200", bad: "#ff3b30", best: "#dfa3ff", you: "#aeea00",
+  good: "#5fe88a", warn: "#f6d200", bad: "#ff3b30", best: "#dfa3ff", you: "#aeea00",
   zone: "#26a5f5", ghost: "#78dcff",
   sec1: "#ffd700", sec2: "#c0c0c0", sec3: "#cd9b5a",
   cmpS: "#e8002d", cmpM: "#f6d200", cmpH: "#f0f0f0", cmpI: "#3fb950", cmpW: "#1e90ff",

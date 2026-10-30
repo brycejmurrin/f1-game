@@ -1119,7 +1119,8 @@ const WGX = (function () {
     let pSkid = null, skidUBO = null, skidFxBG = null, skidVBO = null,
         _skidCap = 0, _skidScratch = null;
     let pLine = null, lineUBO = null, lineFxBG = null, lineVBO = null, _lineCap = 0;   // DRIVING LINE ribbon
-    const _lineU = new Float32Array(24);   // LineU: viewProj (16) + params (4) + params2 (4)
+    const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];   // opts.cols fallback (F1 GREEN)
+    const _lineU = new Float32Array(36);   // LineU: viewProj (16) + params (4) + params2 (4) + 3 colour vec4 (12)
     let pGlow = null, glowUBO = null, glowFxBG = null, glowVBO = null,
         _glowCap = 0, _glowScratch = null;
     let pDecal = null, decalUBO = null, fxDecalLayout = null;
@@ -3021,7 +3022,8 @@ const WGX = (function () {
         _allocFail("createTexMesh", e);
         return { _wgx: "texmesh", _phase: 4 };
       }
-      return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16" };
+      // pos / uv / idx kept: drawMirrorGlass bounds the glass's mirror LOD from them (perf hunt 6, PostCommon.mipFootprintLod).
+      return { _wgx: "texmesh", vbuf, ibuf, count: idx.length, indexFormat: idx instanceof Uint32Array ? "uint32" : "uint16", pos, uv, idx };
     }
 
     // Chunked mesh: spatial XZ cells with AABBs (port of GLX.createChunkedMesh).
@@ -4042,7 +4044,14 @@ const WGX = (function () {
     // the composite reads at the level params.z names, through _mirSamp
     // (mipmapFilter linear — linearSampler has none). _generateMips rebuilds the
     // chain after each mirror submit.
-    let mirSampleView = null, _mirSamp = null;
+    // Perf hunt 6 (the WGX twin of hunt 5 F1): mipLevelCount is what a tap reads, not the full chain. The inset's
+    // explicit lod reads floor(lod)..floor(lod)+1; the glass's implicit LOD, bounded per draw by
+    // PostCommon.mipFootprintLod (_mirGlassLod: session max), reads up to ceil(lod + 0.25) + 1. Unbounded twice in
+    // a row (or no CPU arrays) latches the full chain; one unbounded frame does not; a zero viewProj is no bound.
+    // Grow-only: mirrorBegin re-allocates when the count it needs exceeds the target's. As on TLX, the frame that
+    // first raises the need (a glass's first bound, a rect change on a skipped mirror frame) reads the old count once.
+    let mirSampleView = null, _mirSamp = null, _mirGlassLod = -Infinity, _mirGlassInf = 0;
+    const _mirBox = [0, 0, 0, 0];
     let _mirPassSeq = 0;   // bumped per mirrorBegin: a batch's mirror instance view is valid only for the pass that culled it
     let _mirEncoder = null, _mirDead = false, _mirRect = null, _mirRenders = 0, _mirComposites = 0, _mirFlip = true;   // flip false: the broadcast PiP
     let _mirInPass = 0, _mirDone = false;   // P2: insets drawn inside the final pass; this frame's inset is already drawn
@@ -4056,16 +4065,34 @@ const WGX = (function () {
       try { if (mirDepthTex) mirDepthTex.destroy(); } catch (_) { /* already invalid */ }
       mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; _mirGlassBG = null; mirW = mirH = 0; _mirRenders = 0;
     }
+    // The inset's pixel rect in the present target (the composite's viewport), or null when none is drawn.
+    function _mirInsetBox() {
+      if (!_mirRect) return null;
+      const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
+      const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
+      const w = Math.min(cw - x, Math.round(_mirRect[2] * cw)), h = Math.min(ch - y, Math.round(_mirRect[3] * ch));
+      if (w < 2 || h < 2 || x < 0 || y < 0) return null;
+      _mirBox[0] = x; _mirBox[1] = y; _mirBox[2] = w; _mirBox[3] = h;
+      return _mirBox;
+    }
+    const _mirLodFor = (tw, th, b) => Math.max(0, Math.log2(Math.max(tw / b[2], th / b[3])));
+    function _mirLevels(w, h) {
+      const full = Math.floor(Math.log2(Math.max(w, h))) + 1, b = _mirInsetBox();
+      if (_mirGlassLod === Infinity) return full;
+      let need = b ? Math.floor(_mirLodFor(w, h, b)) + 2 : 1;
+      if (_mirGlassLod > -Infinity) need = Math.max(need, Math.ceil(_mirGlassLod + 0.25) + 1);
+      return Math.max(1, Math.min(full, need));
+    }
     function mirrorBegin(frame, w, h) {
       // litPass/encoder set = begin() already ran this frame (or a probe face
       // is open): refuse rather than steal the pass.
       if (_lost || WGX_MINIMAL || _mirDead || !skyPipeline || litPass || encoder) return false;
       w = Math.max(16, Math.min(1024, w | 0)); h = Math.max(8, Math.min(512, h | 0));
-      if (!mirTex || w !== mirW || h !== mirH) {
-        _mirrorFree();
+      const lv = _mirLevels(w, h);
+      if (!mirTex || w !== mirW || h !== mirH || lv > mirTex.mipLevelCount) {
+        _mirrorFree();   // a grow drops the views, both bind groups and (with the texture) its __wgxMipLadder
         try {
-          mirTex = device.createTexture({ size: [w, h], format: SCENE_FORMAT,
-            mipLevelCount: Math.floor(Math.log2(Math.max(w, h))) + 1,
+          mirTex = device.createTexture({ size: [w, h], format: SCENE_FORMAT, mipLevelCount: lv,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
           mirView = mirTex.createView({ baseMipLevel: 0, mipLevelCount: 1 });
           mirSampleView = mirTex.createView();
@@ -4124,16 +4151,15 @@ const WGX = (function () {
       if (pass && !_insetInPass) return;
       if (_mirDone) return;
       if (!_mirRect || !mirSampleView || !_mirRenders || !blitPipeline || !currentView || !encoder) return;
-      const cw = wantSpatialUpscale() ? presentW : width, ch = wantSpatialUpscale() ? presentH : height;
-      const x = Math.round(_mirRect[0] * cw), y = Math.round(_mirRect[1] * ch);
-      const w = Math.min(cw - x, Math.round(_mirRect[2] * cw)), h = Math.min(ch - y, Math.round(_mirRect[3] * ch));
-      if (w < 2 || h < 2 || x < 0 || y < 0) return;
+      const b = _mirInsetBox();
+      if (!b) return;
+      const x = b[0], y = b[1], w = b[2], h = b[3];
       if (!_mirUBO) _mirUBO = device.createBuffer({ size: BLIT_BYTES, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
       if (!_mirSamp) _mirSamp = device.createSampler({ magFilter: "linear", minFilter: "linear", mipmapFilter: "linear" });
       if (!_mirBG) _mirBG = device.createBindGroup({ layout: blitPipeline.getBindGroupLayout(0), entries: [
         { binding: 0, resource: mirSampleView }, { binding: 1, resource: _mirSamp }, { binding: 2, resource: { buffer: _mirUBO } }] });
       // z = the mip level for this minification (target texels per rect pixel, log2).
-      const lod = Math.max(0, Math.log2(Math.max(mirW / w, mirH / h)));
+      const lod = _mirLodFor(mirW, mirH, b);
       _blitParams(_mirData, exposure, T);
       _mirData[1] = _mirFlip ? 1 : 0; _mirData[2] = lod;   // y = flip left-right (0: the broadcast PiP)
       if (o) {
@@ -4190,6 +4216,12 @@ const WGX = (function () {
       _setIB(litPass, mesh.ibuf, mesh.indexFormat);
       litPass.drawIndexed(mesh.count);
       _mirGlass++;
+      if (_mirGlassLod < Infinity && (frameVPGpu[11] !== 0 || frameVPGpu[15] !== 0)) {   // Z01 leaves the x/y/w rows as GL's
+        const l = !mesh.pos || !mesh.uv ? Infinity
+          : PostCommon.mipFootprintLod(mesh.pos, mesh.uv, mesh.idx, model, frameVPGpu, width, height, mirW, mirH);
+        if (l < Infinity) { _mirGlassInf = 0; _mirGlassLod = Math.max(_mirGlassLod, l); }
+        else if (++_mirGlassInf >= 2 || !(l === l) || !mesh.pos) _mirGlassLod = Infinity;
+      }
       return true;
     }
 
@@ -5364,8 +5396,12 @@ const WGX = (function () {
       _lineU[16] = (opts && opts.speed) || 0;
       _lineU[17] = opts && opts.cornersOnly ? 1 : 0;
       _lineU[18] = 1.6;                     // emissive strength: a constant, no producer sends one
-      _lineU[19] = opts && opts.palette ? 1 : 0;   // colour-blind palette (params.w)
+      _lineU[19] = 0;                              // params.w spare (was the 0|1 palette flag)
       _lineU[20] = (opts && opts.opacity) || 1;    // LINE OPACITY (params2.x)
+      // LINE COLOUR (DrivingLine.PALETTES): onPace / lift / brake rgb into the
+      // colOnPace / colLift / colBrake vec4s at floats 24 / 28 / 32; F1 GREEN when absent.
+      const lc = (opts && opts.cols) || LINE_COLS_F1;
+      for (let k = 0; k < 3; k++) { const o = 24 + k * 4; _lineU[o] = lc[k * 3]; _lineU[o + 1] = lc[k * 3 + 1]; _lineU[o + 2] = lc[k * 3 + 2]; }
       device.queue.writeBuffer(lineUBO, 0, _lineU);
       _setPipe(litPass, pLine);
       _setBG0(litPass, lineFxBG);
@@ -5919,7 +5955,8 @@ const WGX = (function () {
       mirrorEnd,
       mirrorRect(r, flip) { _mirRect = r && r.length === 4 ? [+r[0] || 0, +r[1] || 0, +r[2] || 0, +r[3] || 0] : null; _mirFlip = flip !== false; },
       mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
-        renders: _mirRenders, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip }),
+        renders: _mirRenders, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip,
+        mips: mirTex ? mirTex.mipLevelCount : 0, glassLod: _mirGlassLod }),
       drawMirrorGlass,
       envProbeReady() { return _envProbeLive; },
       envProbeReset,

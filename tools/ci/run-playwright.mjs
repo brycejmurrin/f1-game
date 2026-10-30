@@ -233,6 +233,10 @@ const env = {
   ...process.env,
   APEX_PORT: port,
   ...(managed ? { APEX_MANAGED_SERVER: "1" } : {}),
+  // playwright.config adds the webkit project from argv in the MAIN process only; the
+  // worker processes re-evaluate the config with no --project flag and need the env,
+  // or every run dies with 'Project "webkit" not found in the worker process'.
+  ...(args.some((a) => a === "--project=webkit" || /^--project=([^,]*,)*webkit(,|$)/.test(a)) ? { APEX_WEBKIT: "1" } : {}),
 };
 
 let stopping = false;

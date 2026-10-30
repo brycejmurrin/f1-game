@@ -12,7 +12,7 @@ draft → ready → `land` steps; steward §12 points here.
 The user's "push" / "ship" IS the grant to push the branch and open or update a
 PR into `claude/f1-game-project-26h3ng` (never pushed directly: branch protection refuses it). It is not a grant
 to merge or arm: `land.yml` posts the `gate` COMMIT STATUS (not a check run; the ruleset's one required check) and
-arms auto-merge once `land` is on a ready PR; `gate` itself requires `CI` green on the head (docs/WORKERS.md §5).
+arms auto-merge once `land` is on a ready PR; `gate` itself requires `CI` green on the head (skill `worker` `references/land.md`).
 
 1. **Draft PR first** (AGENTS.md rule 12; docs/WORKERS.md §2): no PR yet → commit, `git push -u origin
    cursor/<topic>-<hash>`, open a DRAFT PR (`draft: true`, template body: Goal, Plan with exactly one `now:` item and
@@ -31,7 +31,12 @@ arms auto-merge once `land` is on a ready PR; `gate` itself requires `CI` green 
    (`node tools/ci/sync-pr.mjs <branch>`). Then `node tools/ci/ready-gate.mjs --pr <n>` exits 0 on the draft head you
    are about to flip. It refuses an already-ready PR (`not-draft`): that one only needs the `land` label.
 6. **Land**: flip the PR ready, add `land` (the `gh api` route above), refresh the Hand-off block, end the turn.
-   Then follow docs/WORKERS.md §5 and AGENTS.md rule 13 for what happens after `land` — the session stays
+   One route for steps 5–6: `node tools/ci/ship-pr.mjs --pr <n>` runs ready-gate and, on a pass, prints the two calls:
+   the GitHub MCP `update_pull_request` `draft:false` (the hook needs a ready-gate receipt under 10 min old; older, re-run
+   it), then `gh api -X POST repos/<o>/<r>/issues/<n>/labels -f 'labels[]=land'`. The script flips and labels nothing.
+   `land` on a DRAFT does nothing (`gate` says "draft: flip ready first"); a stale `gate` re-gates on removing and
+   re-adding `land`, on a body edit, or at the next stale-gate sweep.
+   Then follow skill `worker` contract item 5 and AGENTS.md rule 13 for what happens after `land` — the session stays
    subscribed (re-subscribe after the ready flip) until the dispatcher archives it; read their wording there.
 
 "Skip the gate" / "skip the tests": do it, and record it in the PR body under

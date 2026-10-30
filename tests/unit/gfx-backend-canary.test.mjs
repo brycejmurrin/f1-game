@@ -4699,16 +4699,34 @@ test("all three backends carry the driving line's colour-blind palette", () => {
   // colour-blind-safe triple instead. A backend that forgot it would signal a
   // DIFFERENT thing to the same player depending on which renderer they got —
   // the exact class of drift the parity snapshot exists for (2026-09-08).
-  // Pinned by the safe triple's blue, which no other fx colour uses.
-  for (const [what, file] of [["GLX", "js/render/glx/shaders/glsl-fx.js"],
-                              ["WGX", "js/render/webgpu/wgsl-fx.js"],
-                              ["TLX", "js/render/three/tsl-fx.js"]]) {
-    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
-    assert.match(src, /0\.392,\s*0\.561,\s*1\.0/,
-      `${what} (${file}) must carry the colour-blind-safe ON-PACE blue`);
-    assert.match(src, /0\.863,\s*0\.149,\s*0\.498/,
-      `${what} (${file}) must carry the colour-blind-safe BRAKE magenta`);
+  // Since 2026-10-30 the palette is DATA: the triples live once in
+  // DrivingLine.PALETTES and every backend shades with the three colours it is
+  // handed (opts.cols), so no backend can carry a private copy that drifts.
+  const dl = read("js/render/shared/driving-line.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(dl, /0\.392,\s*0\.561,\s*1\.0/, "the palette table carries the colour-blind-safe ON-PACE blue");
+  assert.match(dl, /0\.863,\s*0\.149,\s*0\.498/, "the palette table carries the colour-blind-safe BRAKE magenta");
+  // Each backend's shader names the three colours, its draw sets them from
+  // opts.cols, and neither keeps the old 0/1 flag or a private triple.
+  for (const [what, file, host, names, flag] of [
+    ["GLX", "js/render/glx/shaders/glsl-fx.js", "js/render/glx/glx.js", ["uOnPace", "uLift", "uBrake"], "uPalette"],
+    ["WGX", "js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js", ["colOnPace", "colLift", "colBrake"], "opts.palette"],
+    ["TLX", "js/render/three/tsl-fx.js", "js/render/three/tlx.js", ["lineOnPace", "lineLift", "lineBrake"], "linePalette"]]) {
+    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, ""), drawer = read(host).replace(/^[ \t]*\/\/.*$/gm, "");
+    // One list of everything wrong with this backend, so a drift names all of it at once.
+    const problems = [
+      ...names.filter((n) => !src.includes(n)).map((n) => `${file} lacks ${n}`),
+      ...(drawer.includes("opts && opts.cols") ? [] : [`${host} does not upload opts.cols`]),
+      ...((src + drawer).includes(flag) ? [`still carries the 0/1 flag ${flag}`] : []),
+      ...(/0\.392,\s*0\.561/.exec(src) ? [`${file} keeps a private colour-blind triple`] : []),
+    ];
+    assert.deepEqual(problems, [], `${what} must shade with the palette it is handed`);
   }
+  // WGX LineU grew three vec4 colours: the writer's Float32Array and the
+  // buffer size are one number, or the colours land past the end of the UBO.
+  const bytes = +read("js/render/webgpu/wgsl-fx.js").match(/LINE_UNIFORM_BYTES:\s*(\d+)/)[1];
+  const floats = +read("js/render/webgpu/wgx.js").match(/_lineU = new Float32Array\((\d+)\)/)[1];
+  assert.equal(bytes, 144, "LineU = mat4 + params + params2 + 3 colour vec4");
+  assert.equal(floats * 4, bytes, "_lineU is sized to LINE_UNIFORM_BYTES");
 });
 
 test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {
@@ -6584,6 +6602,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
   const bareStale = () => false;   // a dressed world (#3570: session-entry-vm covers the bare one)
+  const kicks = [], kickRaceBundles = (audio) => kicks.push(audio);   // perf hunt 7: the race bundles start while the picker is up
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -6594,6 +6613,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   trackIdx = 1; schedule(true); trackIdx = 0; schedule(true); const latest = fire();
   requests.shift().resolve(); await old; assert.deepEqual(builds, [], "A-B-A cannot revive old work");
   requests.shift().resolve(); await latest; assert.deepEqual(builds, [0]);
+  assert.ok(kicks.length > 0 && kicks.every((a) => a === false), "the open picker starts the race bundles, never LAZY_AUDIO (#1135)");
   schedule(); const reuse = fire(); requests.shift().resolve(); await reuse;
   assert.deepEqual(builds, [0], "NEXT reuses the prepared world");
   assert.equal(_menuGate.warm, 2, "NEXT resumes hidden warming interrupted by rescheduling");
@@ -6638,6 +6658,7 @@ test("selector retains a different circuit during compilation, then releases it 
   const ensureTrackBuild = async () => true;
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
   const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
+  const kickRaceBundles = () => {};
   const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
   let flybyBuildTimer = 0, timerId = 0;
   const timers = new Map(), setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout = id => timers.delete(id);

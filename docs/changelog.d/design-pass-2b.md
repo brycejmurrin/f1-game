@@ -1,0 +1,1 @@
+Improved: on a phone in landscape the career hub header is one line (team colour as a stripe, all five shortcuts fit), the settings home shows six doors instead of two, and the garage's part comparison takes one row so more parts are on screen (#4239).
