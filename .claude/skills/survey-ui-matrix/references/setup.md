@@ -7,7 +7,7 @@ Load this before the first MCP measurement.
 Playwright MCP (preferred for resize / a11y / CSS):
 
 ```
-browser_navigate   http://127.0.0.1:3457/index.html
+browser_navigate   http://127.0.0.1:3457/index.html?stallwatch=0
 browser_resize     width: 844, height: 390
 browser_evaluate   hide #game + __apex.headless(true)  (body below)
 browser_snapshot   boxes: true
@@ -17,10 +17,10 @@ Chrome DevTools MCP (emulate string; `resize_page` is unreliable here):
 
 ```
 mcp__chrome-devtools__emulate      viewport: "844x390x3,mobile,touch,landscape"
-mcp__chrome-devtools__navigate_page  http://localhost:3457/index.html
+mcp__chrome-devtools__navigate_page  http://localhost:3457/index.html?stallwatch=0
 ```
 
-Start the server first on 3457, a port the test suite does not use (`python3 -m http.server 3457`;
+Start the server first on 3457 (`?stallwatch=0`: neither MCP browser is `navigator.webdriver`, so the stall watchdog would reload a software-GL race), a port the test suite does not use (`python3 -m http.server 3457`;
 see below), then in
 `browser_evaluate` / `evaluate_script`:
 
