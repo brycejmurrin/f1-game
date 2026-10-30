@@ -376,6 +376,7 @@ export function main(argv, { request = api, resolve = resolveSha, judge = evalua
   if (asJson) log(JSON.stringify({ ...v, pr: resolved.pr || null }, null, 2));
   else {
     if (v.planWarning) say(`warning: ${v.planWarning}`);
+    if (resolved.pr && v.code === 0) say("note: this receipt is good for 10 min; flip (update_pull_request draft:false), then add `land`; if it ages out, re-run ready-gate");
     // ADVISORY, never a block: the probe merges the deploy tip and runs the ratchets (preflip-probe.mjs).
     if (resolved.pr) say(preflipAdvisory(readProbeReceipt(resolved.pr), v.sha, resolved.pr));
     say(verdictLine(v));

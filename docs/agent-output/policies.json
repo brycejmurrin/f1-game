@@ -801,6 +801,11 @@
       "presentation": "shared-levels",
       "preserve": "Quota folding counts; hook errors always show; transcript is data warning"
     },
+    "tools/ci/ship-pr.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "ready-gate's own exit code and its = ready-gate line; the two next calls printed only on exit 0"
+    },
     "tools/ci/spec-staleness.mjs": {
       "action": "keep-native",
       "presentation": "native",

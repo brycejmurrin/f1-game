@@ -52,6 +52,7 @@ const GLXPost = (function () {
     let compProg = null, compU = null;
     let sceneFBO = null, sceneTex = null, sceneDepth = null;
     let colorType = null;        // HALF_FLOAT if renderable, else UNSIGNED_BYTE
+    let r11Ok = false;           // R11F_G11F_B10F renderable: EXT_color_buffer_float only (half_float does not cover it)
     // Mip-chain bloom: progressive downsample levels (half res, /4, /8, …), then
     // additive tent upsample back to level 0 — wide multi-octave glow.
     const BLOOM_DIV = 2;         // level 0 at half resolution
@@ -147,6 +148,11 @@ const GLXPost = (function () {
       const ext = gl.getExtension("EXT_color_buffer_float")
         || gl.getExtension("EXT_color_buffer_half_float");
       colorType = ext ? gl.HALF_FLOAT : gl.UNSIGNED_BYTE;
+      // A device exposing only EXT_color_buffer_half_float (some WebKit/ANGLE builds)
+      // renders RGBA16F but NOT R11F_G11F_B10F: bloom level 0 came back incomplete,
+      // post switched itself off and the frame went untonemapped. TLX gates the same
+      // way (tlx-post.js); the slim format now waits for the float extension.
+      r11Ok = !!gl.getExtension("EXT_color_buffer_float");
 
       // One parallel batch, like the core programs (glx.js beginLinks): read
       // straight after each link, these eight compiled in strict series.
@@ -320,14 +326,14 @@ const GLXPost = (function () {
       // Slimmer formats where full RGBA16F is waste (bandwidth is the tiled-GPU
       // frame cost): SSAO stores one scalar (sampled .r) -> R8; bloom + godray
       // are alpha-less positive HDR colour -> R11F_G11F_B10F (half the bytes;
-      // renderable under the same EXT_color_buffer_float the HDR path requires).
+      // renderable under EXT_color_buffer_float only; half-float-only keeps RGBA16F).
       // LDR fallback keeps RGBA8 everywhere.
       const hdrOk = colorType === gl.HALF_FLOAT;
       const mk = (w, h, fmt) => {
         const tex = gl.createTexture();
         gl.bindTexture(gl.TEXTURE_2D, tex);
         if (fmt === "r8") gl.texImage2D(gl.TEXTURE_2D, 0, gl.R8, w, h, 0, gl.RED, gl.UNSIGNED_BYTE, null);
-        else if (fmt === "hdr3" && hdrOk) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R11F_G11F_B10F, w, h, 0, gl.RGB, colorType, null);
+        else if (fmt === "hdr3" && hdrOk && r11Ok) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R11F_G11F_B10F, w, h, 0, gl.RGB, colorType, null);
         else gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, gl.RGBA, colorType, null);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);

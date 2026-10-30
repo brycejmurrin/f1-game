@@ -1479,6 +1479,7 @@
         "tests/unit/duel.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",

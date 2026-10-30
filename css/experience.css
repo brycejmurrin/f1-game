@@ -40,45 +40,13 @@
   #pm-quick-doors > details > summary::-webkit-details-marker { display: none; }
   #pm-checkpoint button { font-size: var(--fs-micro); }
   /* Short landscape phone (the compact pause card, css/dialogs.css): tighter tray
-     gap and the ONE tray tile floor (it was here AND, at ≤400px, a bare --tap in
-     css/overlays.css). Here, after the base rules above, because this layer
-     outranks the components layer the card's other short-landscape rules sit in.
-     TWO PANES on the default layout (no PAUSE MENU LAYOUT, no CARD WIDTH look):
-     a 420px card on 844x390 spent the width on margins and made QUIT a scroll
-     away. Left, two columns: race context (now the header — the PAUSED head is
-     visually hidden, kept for aria-labelledby="dlg-pause"), RESUME, RESTART |
-     SETTINGS, STANDINGS | SKIP, QUIT — always on-card. Right, the RACE TOOLS
-     tray spans every row and scrolls on its own; `contain: size` keeps it from
-     sizing the rows, so the left column alone decides the card's height. */
+     gap and the --tap-paint floors. Here, after the base rules above, because
+     this layer outranks the components layer the card's other short-landscape
+     rules sit in. */
   @media (orientation: landscape) and (max-height: 500px) {
     #pm-quick-doors { gap: 2px; }
-    #pausemenu #pm-quick-doors button,
-    #pausemenu #pm-quick-doors > details > summary { min-height: max(34px, var(--tap-paint)); padding-block: 2px; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu { --sheet-w: 780px; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu .sheet > .sheet-body {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.4fr);
-      grid-template-areas: "ctx ctx tray" "resume resume tray" "restart settings tray" "standings skip tray" "quit quit tray";
-    }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-race-context { grid-area: ctx; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-resume { grid-area: resume; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-restart { grid-area: restart; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-settings { grid-area: settings; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-standings { grid-area: standings; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-skip-results { grid-area: skip; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-quit { grid-area: quit; }
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-quick-doors {
-      --tray-cols: 3;
-      grid-area: tray; align-self: stretch; align-content: start;
-      contain: size; overflow-y: auto; overscroll-behavior: contain;
-    }
-    /* Visually hidden, in flow (height 0): the sheet's grid rows are positional,
-       so an absolute head would hand row 1 to the body. clip-path: inset(50%)
-       as #announce-live (css/hud.css) — still read by assistive tech. */
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu .sheet-head {
-      height: 0; min-height: 0; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap;
-    }
-    /* css/dialogs.css hides the detail line here; as the header it says what is paused. */
-    :root:not([data-pause-layout]):not([data-look-pause-w]) #pausemenu #pm-race-context > span { display: block; }
+    #pm-quick-doors button,
+    #pm-quick-doors > details > summary { min-height: max(34px, var(--tap-paint)); padding-block: 2px; }
   }
   #practice-brief { background: var(--plate-on); border: 1px solid var(--red); border-radius: var(--r-md); padding: var(--gap); margin-bottom: var(--gap); font-size: var(--fs-micro); color-scheme: dark; }
   #practice-brief p { margin-block: calc(var(--gap) / 2); color: var(--dim); }

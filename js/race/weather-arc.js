@@ -368,10 +368,14 @@ const WeatherArc = (function () {
     // weather (the characterization pins) is one even wetness. It dries first (up to DRYLINE_K of
     // the wetness) when the road is part-dry; a soaked (1) or bone-dry (0) road has no line.
     const DRYLINE_K = 0.6, DRYLINE_W = 2.2, DRYLINE_AMP = 2.5;   // max share dried; groove half-width m; wander m
+    // The 12 knots are a pure string hash: built once instead of 4 string builds + FNV passes
+    // per car per step during an arc (perf hunt 7; same values, tests/unit/weather-arc grooveX).
+    let _grooveH = null;
     function grooveX(frac) {
       const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = u * u * (3 - 2 * u);
-      const h = (j) => RainCells.h01("groove|" + (((j % n) + n) % n)) * 2 - 1;
-      return DRYLINE_AMP * (h(i) + (h(i + 1) - h(i)) * k);
+      if (!_grooveH) { _grooveH = new Float64Array(n); for (let j = 0; j < n; j++) _grooveH[j] = RainCells.h01("groove|" + j) * 2 - 1; }
+      const a = _grooveH[((i % n) + n) % n], b = _grooveH[(((i + 1) % n) + n) % n];
+      return DRYLINE_AMP * (a + (b - a) * k);
     }
     /** 0..1 — how much of the groove lies under lateral offset `x` (m, + right) at lap fraction `frac`. */
     function dryLine(frac, x) {

@@ -268,9 +268,9 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
 /* Short phone landscape (≤400px tall — 844×390 / 852×344): the sheet was
    nearly full-bleed and the RACE TOOLS tray's 3-col last row left a hole
    (HUD survey bc-b3058e3a). Cap the card below 100dvh with a safe margin,
-   keep the body as the scroller, and hold every door at --tap. The two-pane
-   layout (doors left, RACE TOOLS tray right, 3-up and scrolling on its own)
-   lives in css/experience.css so it outranks this components layer. */
+   keep the body as the scroller, and hold every door at --tap. The tray's
+   2-col (no holes) override lives in css/overlays.css so it outranks
+   experience.css's 3-col base in the overlays layer. */
 @media (max-height: 400px) {
   /* 100% is already the safe-padded dialog cell; subtract a local margin so
      the card does not sit flush to the short edge. Prefer --svhz (zoom-
@@ -285,9 +285,14 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
     overscroll-behavior: contain;
     min-height: 0;
   }
-  #pausemenu .sheet-body.stack > button:not(.as-tbtn),
+  #pausemenu .sheet-body.stack > button:not(.as-tbtn) {
+    /* First decl kept for pause-hud-layout pin; second is the #3274 painted floor. */
+    min-height: var(--tap);
+    min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
+  }
   #pausemenu #pm-resume {
-    min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));   /* the #3274 painted floor */
+    min-height: var(--tap);
+    min-height: max(var(--tap), var(--tap-paint), calc(44px / var(--ui-scale)));
   }
 }
 /* Opaque enough that leftover HUD cannot read through the card. Color is
