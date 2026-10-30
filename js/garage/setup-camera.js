@@ -189,7 +189,7 @@ function stepDriveOut(held = false) {
   driveOut.last = now;
   if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed * GarageArrival.rate(driveOut.cfg, "out", driveOut.t);
   const pose = Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg, reducedMotion()), { active: true });
-  if (typeof GarageDepartureMotion !== "undefined") {
+  if (typeof GarageDepartureMotion !== "undefined" && driveOut.cfg.angle === "cut") {
     const T = GarageArrival.timeline(driveOut.cfg, "out"), delay = GarageArrival.duration(driveOut.cfg, "out") - T.base;
     const go = T.door + T.hold + delay, rolling = T.settle - T.door - T.hold;
     const u = Math.max(0, Math.min(1, (driveOut.t - go) / rolling));
@@ -197,7 +197,11 @@ function stepDriveOut(held = false) {
     pose.x = motion.x; pose.z = motion.z; pose.yaw = motion.yaw;
     pose.distance = motion.distance;
     // Explicit tuner cameras keep their framing; the shipped shot uses the authored rig.
-    if (driveOut.cfg.angle === "cut" && !reducedMotion()) {
+    if (reducedMotion()) {
+      motion.eye[0] = -4 * pose.side; motion.eye[1] = 3.2; motion.eye[2] = 15.7;
+      motion.aim[0] = 3.5 * pose.side; motion.aim[1] = .65; motion.aim[2] = 7;
+      pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = 75;
+    } else {
       pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = motion.fov + driveOut.cfg.fov - 54;
     }
     driveOut.motion = motion;
