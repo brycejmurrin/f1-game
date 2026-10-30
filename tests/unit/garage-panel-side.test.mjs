@@ -22,7 +22,7 @@ test('garage held camera controls release only their owning pointer, or window b
   for (const end of ['pointerup', 'pointercancel', 'lostpointercapture', 'blur']) {
     const handlers = {}, win = {}, rates = { az: 1 }; let steps = 0;
     const el = { addEventListener(t, f) { (handlers[t] ||= []).push(f); }, setPointerCapture() {} };
-    const sb = { $: () => el, G: { setupPreviewOn: true }, preview: false, arrival: {}, spHeld: null, setupGestureResets: [],
+    const sb = { $: () => el, G: { setupPreviewOn: true }, driveOut: null, preview: false, arrival: {}, spHeld: null, setupGestureResets: [],
       window: { addEventListener(t, f) { (win[t] ||= []).push(f); } } };
     vm.runInNewContext(fn + ';holdSetupCtl("left", rates, step);', Object.assign(sb, { rates, step: () => steps++ }));
     const fire = (list, type, id) => { for (const f of list[type] || []) f({ type, pointerId: id, preventDefault() {} }); };
@@ -50,7 +50,7 @@ test('garage gesture lifecycle drops old fingers and held owners without breakin
     const observers = new Map(), zooms = [], rates = { az: 1 }; let steps = 0;
     const c = vm.createContext({ window: win, document: doc, G: { setupPreviewOn: true, soundOn: false }, home: { active: false },
       $: id => ({ game: canvas, left: control, carsetup: garage, 'photo-studio': photo })[id] || null,
-      preview: false, arrival: { cancel() {} }, spHeld: null, setupPreviewAz: 0, setupPreviewEl: 0,
+      driveOut: null, preview: false, arrival: { cancel() {} }, spHeld: null, setupPreviewAz: 0, setupPreviewEl: 0,
       SP_EL_MIN: 0, SP_EL_MAX: 1.5, SP_EL_DEF: .5, SP_DIST_DEF: 8, SP_ORBIT_DEF: [0, 0, 0], SP_TGT_DEF: [0, 0, 0], setupPreviewPan: [0, 0, 0],
       setSetupSpin() {}, endHome() {}, setupZoom: value => zooms.push(value), clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)),
       GarageExperience: { canOrbit: (on, _home, _photo, blocked) => on && !blocked },

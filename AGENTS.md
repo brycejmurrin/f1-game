@@ -16,7 +16,7 @@ node tools/ci/pick-tests.mjs          # 1. which GROUPS does this change need? (
 #                                       2. make ALL edits, then verify ONCE (rule 2); a new test file = a tests/groups.json group + a TESTING.md §5 row + `npm run gen`
 node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet   # 3. diff-aware check; with ONE spec it is the pre-push floor (rule 3)
 node tools/ci/test-bg.mjs <group>     # 4. optional, Bryce-attended: ONE browser group in the background → artifacts/logs/<group>.log (rule 5)
-node tools/ci/test-bg.mjs --wait --timeout 45   # 5. its waiter, as ONE background task (rule 4); the verdict is the log's `= run …` line
+node tools/ci/test-bg.mjs --wait --timeout 45   # 5. its waiter, as ONE background task (rule 4; pass the Bash call timeout 2700000: the 30-min default kills it); the verdict is the log's `= run …` line
 node tools/ci/deploy.mjs --gate-only  # 6. optional: the deploy's node suites, to reproduce a gate-only red (rule 3)
 git commit && git push -u origin cursor/<topic>-<hash>   # 7. commit runs test:guards; push, refresh the DRAFT PR's Plan + Hand-off (rule 12)
 ```

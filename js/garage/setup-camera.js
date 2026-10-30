@@ -149,7 +149,7 @@ const reducedMotion = () => {
   if (mv === "reduce") return true;
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 };
-const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview }));
+const arrival = GarageArrival.create($, reducedMotion, GarageArrival.bindSettings($, G.store, { preview: startArrivalPreview, changed: () => refreshPreview() }));
 // THE PRE-RACE DRIVE-OUT (GarageArrival.poseOut): this room, the car rolling out,
 // played by js/game.js on every RACE! with no card up (LoadingScreen.garage) while
 // the circuit builds. Its pose stays "active" until stopDriveOut(), so the camera
@@ -158,6 +158,8 @@ let driveOut = null;
 function startDriveOut() {
   const cfg = GarageArrival.settings(G.store.get("garageArrival", null));
   endHome();
+  driveOutEngine(false);   // repeated launch releases its previous audio graph
+  if (typeof clearSetupGestures === "function") clearSetupGestures();
   driveOut = null;
   if (!cfg.enabled) return 0;
   // AUTOMATION skips it (LoadingScreen.isAutomation, the one gate #1294's 700 ms
@@ -170,7 +172,7 @@ function startDriveOut() {
   // sped-up cut and never skipped — Start Race awaits this before the race/session
   // card (js/game.js studioDone → afterGarageOut → raceIntro).
   const play = Object.assign({}, cfg, { enabled: true });
-  driveOut = { t: 0, cfg: play };
+  driveOut = { t: 0, cfg: play, motion: { eye: [0, 0, 0], aim: [0, 0, 0] } };
   driveOutEngine(true);
   return Math.round(GarageArrival.wallSeconds(play, "out") * 1000 / play.speed);   // SLOW-MO included
 }
@@ -187,6 +189,23 @@ function stepDriveOut(held = false) {
   driveOut.last = now;
   if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed * GarageArrival.rate(driveOut.cfg, "out", driveOut.t);
   const pose = Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg, reducedMotion()), { active: true });
+  if (typeof GarageDepartureMotion !== "undefined" && driveOut.cfg.angle === "cut") {
+    const T = GarageArrival.timeline(driveOut.cfg, "out"), delay = GarageArrival.duration(driveOut.cfg, "out") - T.base;
+    const go = T.door + T.hold + delay, rolling = T.settle - T.door - T.hold;
+    const u = Math.max(0, Math.min(1, (driveOut.t - go) / rolling));
+    const motion = GarageDepartureMotion.sample(u, pose.side, driveOut.motion);
+    pose.x = motion.x; pose.z = motion.z; pose.yaw = motion.yaw;
+    pose.distance = motion.distance;
+    // Explicit tuner cameras keep their framing; the shipped shot uses the authored rig.
+    if (reducedMotion()) {
+      motion.eye[0] = -4 * pose.side; motion.eye[1] = 3.2; motion.eye[2] = 15.7;
+      motion.aim[0] = 3.5 * pose.side; motion.aim[1] = .65; motion.aim[2] = 7;
+      pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = 75;
+    } else {
+      pose.eye = motion.eye; pose.aim = motion.aim; pose.fov = motion.fov + driveOut.cfg.fov - 54;
+    }
+    driveOut.motion = motion;
+  }
   driveOutSound(pose, gap);
   return pose;
 }
@@ -220,36 +239,122 @@ function driveOutSound(pose, gap) {
   } catch (_) { /* audio is decoration here */ }
 }
 // THE ARRIVAL PREVIEW (#garrival's PREVIEW IN / OUT): the tuner's saved settings
-// played once in this room, from the settings page — the title screen or a paused
+// played in this room, from the settings page — the title screen or a paused
 // race — so a speed, angle or lens is judged by eye. An explicit click, so it plays
 // with PLAY ARRIVAL off or reduced motion on. Its own clock on the render dt, as the
 // WORK ON CAR arrival runs; it never calls arrival.start()/chrome(), whose sheet is
-// not up. It ends by itself, on STOP PREVIEW or on Escape. The playback stop is
-// outside the hidden panel so touch and keyboard users retain an exit.
+// not up. Played straight through it ends by itself, or on STOP PREVIEW or Escape.
+// The playback controls are outside the hidden panel so touch and keyboard users
+// retain an exit.
+// THE EDITING TRANSPORT around STOP: PAUSE / PLAY, a frame back and forward, a
+// SCRUB over the whole show with its time and caption, LOOP (play it again rather
+// than end), and EDIT, which holds the frame and brings the panel back over the
+// room: a setting changed there (angle, lens, crew, speed) re-poses the held frame
+// at once (bindSettings' `changed`), and PREVIEW IN / OUT switch direction without
+// leaving. A scrubbed or paused show holds its frame at the end instead of closing.
+// Built here, once, around the shell's STOP, as arrival.js builds its angle map
+// (index.html's DOM is at its shellNodes ceiling).
+const FRAME_S = 1 / 24;
 let preview = null;
+const previewCfg = () => Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
+const previewLen = (p) => GarageArrival.duration(p.cfg, p.dir);
+const previewPose = (p) => GarageArrival.poseFor(p.dir)(Math.min(p.t, previewLen(p)), p.cfg, reducedMotion());
+function transport() {
+  const stop = $("ga-preview-stop");
+  if (typeof document === "undefined" || !stop || !stop.insertAdjacentHTML || $("ga-transport")) return;
+  stop.insertAdjacentHTML("beforebegin", '<div id="ga-transport" role="group" aria-label="Preview playback" hidden>'
+    + '<button id="ga-play" type="button" aria-pressed="false">PAUSE</button>'
+    + '<button id="ga-back" type="button" aria-label="Back one frame">&lsaquo;</button>'
+    + '<input id="ga-scrub" type="range" min="0" max="1000" step="1" value="0" aria-label="Preview time">'
+    + '<button id="ga-fwd" type="button" aria-label="Forward one frame">&rsaquo;</button>'
+    + '<output id="ga-time"></output>'
+    + '<button id="ga-loop" type="button" aria-pressed="false">LOOP</button>'
+    + '<button id="ga-edit" type="button" aria-pressed="false">EDIT</button></div>');
+  $("ga-transport").appendChild(stop);
+  $("ga-play").onclick = () => previewPause(!(preview && preview.paused));
+  $("ga-back").onclick = () => previewSeek(preview ? preview.t - FRAME_S : 0);
+  $("ga-fwd").onclick = () => previewSeek(preview ? preview.t + FRAME_S : 0);
+  $("ga-scrub").oninput = (e) => previewSeek(preview ? Number(e.target.value) / 1000 * previewLen(preview) : 0);
+  $("ga-loop").onclick = () => { if (preview) { preview.loop = !preview.loop; previewSync(); } };
+  $("ga-edit").onclick = () => previewEdit(!(preview && preview.editing));
+}
+// The bar's readout: the play state, the scrub position, the time and the caption.
+function previewSync() {
+  const p = preview;
+  if (!p) return;
+  const len = previewLen(p), t = Math.min(p.t, len), set = (el, k, v) => { if (el && el[k] !== v) el[k] = v; };
+  const press = (el, on) => { if (el && el.setAttribute) el.setAttribute("aria-pressed", String(on)); };
+  const play = $("ga-play");
+  set(play, "textContent", p.paused ? "PLAY" : "PAUSE"); press(play, p.paused);
+  press($("ga-loop"), p.loop); press($("ga-edit"), p.editing);
+  set($("ga-scrub"), "value", String(Math.round(t / (len || 1) * 1000)));
+  set($("ga-time"), "textContent", t.toFixed(1) + " / " + len.toFixed(1) + " s \u00b7 " + previewPose(p).label);
+  const bar = $("ga-transport"); if (bar && bar.toggleAttribute) bar.toggleAttribute("data-editing", p.editing);
+}
+function previewPause(on) {
+  if (!preview) return;
+  preview.paused = !!on;
+  if (!on) { if (preview.t >= previewLen(preview)) preview.t = 0; if (preview.editing) previewEdit(false); }
+  previewSync();
+}
+function previewSeek(t) {
+  if (!preview) return;
+  preview.paused = true;
+  preview.t = Math.max(0, Math.min(previewLen(preview), Number.isFinite(t) ? t : 0));
+  previewSync();
+}
+// EDIT: hold the frame and show the panel over the room; off hides it again.
+function previewEdit(on) {
+  if (!preview) return;
+  preview.editing = !!on;
+  if (on) preview.paused = true;
+  const inner = $("garrival-inner");
+  if (inner) inner.hidden = !on;
+  previewSync();
+}
+/** bindSettings' `changed`: a setting edited mid-preview re-poses the held frame. */
+function refreshPreview() {
+  if (!preview) return;
+  preview.cfg = previewCfg();
+  preview.t = Math.min(preview.t, previewLen(preview));
+  previewSync();
+}
 function startArrivalPreview(dir, btn) {
   if (!dir) return stopPreview();
+  const d = dir === "out" || dir === "home" ? dir : "in";
+  // From EDIT, PREVIEW IN / OUT switch the running preview's direction.
+  if (preview && preview.editing) {
+    Object.assign(preview, { dir: d, t: 0, btn: btn || preview.btn });
+    previewEdit(false); previewPause(false);
+    return true;
+  }
   endHome();
   const cs = $("carsetup");
   if (preview || driveOut || (cs && !cs.hidden)) return false;   // the garage or the RACE! drive-out owns the room
-  const cfg = Object.assign(GarageArrival.settings(G.store.get("garageArrival", null)), { enabled: true });
-  preview = { t: 0, cfg, dir: dir === "out" || dir === "home" ? dir : "in", was: G.setupPreviewOn, btn };
+  transport();
+  preview = { t: 0, cfg: previewCfg(), dir: d, was: G.setupPreviewOn, btn, paused: false, loop: false, editing: false };
   Log.info("game", "SetupCamera.preview " + preview.dir);
   G.setupPreviewOn = true;
   const inner = $("garrival-inner");
   if (inner) inner.hidden = true;
+  const bar = $("ga-transport");
+  if (bar) bar.hidden = false;
   const stop = $("ga-preview-stop");
   if (stop) { stop.hidden = false; if (stop.focus) stop.focus(); }
+  previewSync();
   return true;
 }
 function stepPreview(dt) {
-  preview.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * preview.cfg.speed * GarageArrival.rate(preview.cfg, preview.dir, preview.t);
-  const pose = GarageArrival.poseFor(preview.dir)(preview.t, preview.cfg, reducedMotion());
+  const p = preview;
+  if (!p.paused) p.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * p.cfg.speed * GarageArrival.rate(p.cfg, p.dir, p.t);
+  if (p.loop && !p.paused && p.t >= previewLen(p)) p.t = 0;
+  const pose = previewPose(p);
+  previewSync();
   if (pose.active) return pose;
-  stopPreview();
-  // This frame still holds the last pose, not the turntable's; its mood and bars
+  if (!p.paused) stopPreview();   // a paused or scrubbed show holds its last frame
+  // This frame still holds the last pose, not the turntable's; when the show closed, its mood and bars
   // are gone already (stopPreview restored them, and no garage frame follows).
-  return Object.assign(pose, { active: true, mood: null, bars: false });
+  return p.paused ? Object.assign(pose, { active: true }) : Object.assign(pose, { active: true, mood: null, bars: false });
 }
 function stopPreview() {
   if (!preview) return false;
@@ -261,6 +366,8 @@ function stopPreview() {
   if (inner) inner.hidden = false;
   const stop = $("ga-preview-stop");
   if (stop) stop.hidden = true;
+  const bar = $("ga-transport");
+  if (bar) bar.hidden = true;
   if (p.btn && p.btn.focus) p.btn.focus();
   // A PAUSED RACE renders nothing while no tuner is open, so the garage would
   // stay on the canvas: one more frame, outside the render this may be called from.
@@ -270,8 +377,13 @@ function stopPreview() {
 const previewStop = $("ga-preview-stop");
 if (previewStop) previewStop.onclick = stopPreview;
 window.addEventListener("keydown", (e) => {
-  if (e.key !== "Escape" || !preview) return;
-  stopPreview();
+  if (!preview) return;
+  // Space plays / pauses and the arrows step a frame, unless a control has the key.
+  const own = e.target && /^(INPUT|SELECT|TEXTAREA|BUTTON)$/.test(e.target.tagName || "");
+  if (e.key === " " && !own) previewPause(!preview.paused);
+  else if ((e.key === "ArrowLeft" || e.key === "ArrowRight") && !own && !preview.editing) previewSeek(preview.t + (e.key === "ArrowLeft" ? -FRAME_S : FRAME_S));
+  else if (e.key === "Escape") stopPreview();
+  else return;
   e.preventDefault();
   e.stopPropagation();   // not the settings page's door as well
 }, true);
@@ -542,7 +654,7 @@ function resetSetupCam() {
 // Rebuild-on-change only (not per-frame): keyed by team + resolved parts tiers,
 // mirroring the playerBodyMesh/cockpitBodyMesh cache-key pattern. The meshes
 // live in GarageScene's six-slot LRU, which frees what it evicts — no leak.
-let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null;
+let _spMesh = null, _spMeshKey = "", _spHull = null, _spBase = null, departureWheels = null;
 // The key carries the livery ID, not its colours: a paint edit drops EVERY cached car.
 // The wings are drawn beside the mesh (drawAeroFlaps), from CarMesh's flap caches
 // keyed on colour and finish: the old paint job's flaps go too, or a session of
@@ -576,16 +688,17 @@ function previewKey() {
 function getSetupPreviewMesh() {
   const team = Teams.LIST[G.teamIdx];
   const seat = garageSeat();
-  const key = previewKey();
+  const split = !!driveOut && typeof GarageDepartureWheels !== "undefined";
+  const key = previewKey() + (split ? "|departure" : "");
   if (key !== _spMeshKey) {
     const liv = resolveLivery(team);
-    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv);
+    const hullKey = hullKeyOf(team.id, partsVisualKey(team.id), seatTag(team, seat), liv) + (split ? "|departure" : "");
     // A FINISH tap changes surface ids only: when every other build input matches the last build, re-finish
     // its kept pre-finish surfaces (Car3D.refinish, a full build's output) instead of rebuilding the car.
     const skip = new Set(Car3D.FINISH_FIELDS), baseKey = key + "|" + (typeof CarShade !== "undefined" && CarShade.on(team.id)) + "|" + JSON.stringify(liv, function (k, v) { return this === liv && skip.has(k) ? undefined : v; });
     const ent = GarageScene.previewMesh(key, hullKey, () => _spBase && _spBase.key === baseKey ? Car3D.refinish(_spBase.data, liv)
       : (_spBase = { key: baseKey, hullKey, data: Car3D.build(liv.c1, liv.c2, {
-        livery: liv, refinish: true,
+        livery: liv, refinish: true, noWheels: split,
         // Same hull key = same geometry (a colour-only livery change): the last build's smoothing prep carries
         // over (Car3D.build shadeKeep), ~60% of a first-visit build. No extra cache: _spBase already holds it.
         shadeKeep: _spBase && _spBase.hullKey === hullKey && _spBase.data._refinish ? _spBase.data._refinish.keep : undefined,
@@ -594,6 +707,10 @@ function getSetupPreviewMesh() {
         helmetKey: team.legends && seat ? seat.code : undefined,   // the legend's own lid, not a shared #1
         parts: Parts.getVisualTiers(getTeamParts(team.id), team),
       }) }).data);
+    if (split) {
+      if (!departureWheels) departureWheels = GarageDepartureWheels.create(gfx);
+      departureWheels.prepare(key, liv, Parts.getVisualTiers(getTeamParts(team.id), team));
+    }
     _spMesh = ent.mesh; _spHull = ent.hull;   // hull: silhouette proxy for the turntable re-centre
     _spMeshKey = key;
   }
@@ -735,6 +852,10 @@ function sequenceLook(p) {
   }
   const bars = on && !!p.bars;
   if (bars !== _seqBars && typeof document !== "undefined" && document.body) { _seqBars = bars; document.body.toggleAttribute("data-ga-bars", bars); }
+}
+function drawDepartureReflection(matrix, material) {
+  if (driveOut && departureWheels) departureWheels.draw(matrix, driveOut.motion.distance || 0,
+    -.45 * Math.sin(2 * (driveOut.motion.yaw || 0)), material);
 }
 function renderSetupPreview(dt, holdDriveOut = false) {
   // SETUP bay only (not title Home): wait out an in-flight material-pack upload
@@ -930,8 +1051,11 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   arrivalCar[12] = (arriving && arriving.x) || 0; arrivalCar[14] = arriving ? arriving.z : 0;
   const team = Teams.LIST[G.teamIdx];
   const carMesh = getSetupPreviewMesh();
+  context.departureWheels = driveOut && departureWheels ? drawDepartureReflection : null;
   GarageScene.draw(team, liv, eye, getTeamParts, G.driverIdx, context, carMesh, arriving, arrivalCar);
   gfx.draw(carMesh, arrivalCar, spMat);
+  if (driveOut && departureWheels && arriving) departureWheels.draw(arrivalCar, arriving.distance || 0,
+    -.45 * Math.sin(2 * arriving.yaw), spMat);
   // Rolling in or out at NIGHT or in the WET, the rain light is on, as it is on
   // the grid (js/game.js drawRearLights); parked in the bay it stays dark. The
   // tuner's REAR LIGHT can force it on, off or flashing (GarageArrival.rearLightOn).
@@ -1050,7 +1174,7 @@ function holdSetupCtl(id, rates, step) {
   };
   setupGestureResets.push(() => release());
   el.addEventListener("pointerdown", (e) => {
-    if (!G.setupPreviewOn || preview || (arrival.state && arrival.state.active)) return;
+    if (!G.setupPreviewOn || driveOut || preview || (arrival.state && arrival.state.active)) return;
     if (pointerId !== null) return;
     e.preventDefault();
     pointerId = e.pointerId;
@@ -1101,7 +1225,7 @@ $("cs-aero").onclick = () => { setSetupAero(!setupPreviewXOn); if (G.soundOn) Ga
     const r = panel && ((window.CssZoom && CssZoom.viewportRect(panel)) || panel.getBoundingClientRect());
     const inPanel = r && e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
     return GarageExperience.canOrbit(G.setupPreviewOn, home.active, photoOpen,
-      !!preview || !!(arrival.state && arrival.state.active) || !!inPanel
+      !!driveOut || !!preview || !!(arrival.state && arrival.state.active) || !!inPanel
         || !!(e.target && e.target.closest && e.target.closest("#ps-panel")));
   }
   if (canvas) {
@@ -1181,7 +1305,7 @@ return {
   captureCamera, restoreCamera,
   // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
   startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { arrival.cancel(); sequenceLook(null); }, noteResult, startHome,
-  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); sequenceLook(null); },
+  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); clearSetupGestures(); if (departureWheels) departureWheels.release(); _spMeshKey = ""; sequenceLook(null); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },

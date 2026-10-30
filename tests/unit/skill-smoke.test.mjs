@@ -28,3 +28,10 @@ test('smoke progress CLI keeps stdout as one complete JSON and stderr opt-in',as
     if(progress)assert.equal(events.at(-1).phase,'completed');
   }
 });
+
+test('smoke rejects a real Node zero-match file wrapper',async()=>{
+  const recipe={...loadRecipes().find(r=>r.skill==='agent-view'),pattern:'^NONEXISTENT_CONTRACT_8e41$'};
+  const result=await checkRecipe(recipe);
+  assert.equal(result.status,'failed');
+  assert.equal(result.failure,'No named subtest matched the recipe pattern');
+});

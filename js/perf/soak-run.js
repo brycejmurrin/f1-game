@@ -168,6 +168,14 @@ const SoakRun = (function () {
   return {
     SOAK_MIN, TRACK_ID, control,
     create(G) { _G = G; return this; },
+    // GPU TEST's boost phase (gpu-test-run.js): BOOST on/off for the driven car, set directly (no tap, so the
+    // touch/audio-unlock path stays out of the reading). Returns whether the player is deploying right now.
+    boost(on) {
+      const p = _G && _G.player;
+      if (!p) return false;
+      if (typeof on === "boolean") p.boostOn = on;
+      return !!p.deploying;
+    },
     start, stop: (why) => finish(why || "stopped"),
     active: () => !!_run,
     status: () => Object.assign({}, _last, _run ? { state: _run.started ? "racing" : "starting",

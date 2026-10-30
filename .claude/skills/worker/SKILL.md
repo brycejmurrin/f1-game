@@ -26,14 +26,14 @@ Load order: this skill, then `steward` once the PR has a head to drive, `ship` a
 3. **Work.** AGENTS.md §The loop: all edits first, then verify once to the pre-push floor (AGENTS.md rule 3 is its one
    home). `run-ci` runs the fast tier on the draft; the full tier runs once ready; `gate` runs on the merge result.
    `ready-gate` needs `Structural guards` green on your head, so let the fast tier finish once before landing.
-4. **Watch.** Before ending a turn while CI runs on your head, `subscribe_pr_activity` (AGENTS.md rule 13). No sleep
-   or poll loops. The one timer allowed is a bounded safety check-in: one `send_later` per watched PR about 50 min
-   after its last activity, re-armed at most 3 times, cancelled on merge or close (a subscription does not wake on a
-   stale `gate`, a conflict or another author's push). A red on your head is work now (skill `steward`); a red
-   elsewhere is not yours. **If the subscribe fails** (it has, on #3970, #3981, #4062) keep ONE background
-   `node tools/ci/ci-watch.mjs --sha <head> --timeout 30` and tell the dispatcher in one `send_message`. Events you
-   caused (your subscribe, ready flip, push) need no tool call: end the turn. A sync runs with
-   `run_in_background: true, timeout: 7200000`.
+4. **Watch.** Follow AGENTS.md rule 13 and `docs/WORKERS.md` §Per vendor for the
+   actual host's subscription and stopping behavior. Discover exposed controls
+   before subscribing; a native child is not an independent provider session.
+   If the required subscription is unavailable, record that gap in the PR's
+   Hand-off block and return the next action to the parent through the exposed
+   native messaging control (or the final hand-back). Do not invent a timer or
+   provider session API. A red on your head is work now (skill `steward`); a red
+   elsewhere is not yours. Events you caused need no acknowledgement call.
 5. **Land.** `node tools/ci/ready-gate.mjs --pr <n>` exits 0 → flip ready, add `land`, refresh the Hand-off block,
    end the turn. The steps and what `land.yml` does: skill `ship`, and [`references/land.md`](references/land.md).
    You stay subscribed (re-subscribe after the flip) until the dispatcher archives you. A red or conflict after

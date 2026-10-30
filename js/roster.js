@@ -207,6 +207,8 @@
     "js/lighting/presets.js"
   ],
     LAZY_RACE_SESSION: [
+    "js/data/garage-departure-motion.js",
+    "js/garage/departure-wheels.js",
     "js/race/reliability.js",
     "js/race/damage.js",
     "js/race/damage-handling.js",
@@ -778,6 +780,7 @@
     ]
   ],
     LAZY_UI_PRESETS: [
+    "js/ui/look-avail.js",
     "js/ui/layout-presets.js"
   ],
     LAZY_UI_PRESETS_EDGES: [],
