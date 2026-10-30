@@ -96,14 +96,14 @@ function laneSafeInsets(root) {
 // A card the player MOVED (MOVE & SIZE / ARRANGE HUD x or y) is out of the slots and the lane:
 // css/hud.css anchors it at a fixed point so the offset is where it sits (body[data-radio-placed]).
 const radioPlaced = () => { const b = document.body; return !!(b && b.hasAttribute && b.hasAttribute("data-radio-placed")); };
-function announceLane(root) {
+function announceLane(root, paintedBand) {
   if (radioPlaced()) { const a = document.getElementById("announce"); if (a && a.toggleAttribute) a.toggleAttribute("data-lane-collapsed", false); return; }
   const t = top() ? laneRect(top()) : null;
   const W = vpW(), H = vpH() || 0;
   const y0 = t ? t.bottom : 0, mid = W / 2;
   const under = (el) => { if (!el || el.hidden) return 0; const r = laneRect(el); return r && r.width && r.height ? r.bottom : 0; };
   // Under a caution the card steps below the flag chip too (css/hud.css: the caution rules).
-  const bandTop = Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = bandTop + LANE_ROWS;
+  const bandTop = paintedBand ? paintedBand.top : Math.max(y0, under(document.getElementById("hud-mirror")), under(document.getElementById("hud-mirror-chip")), under(els.flag)) + RADIO_TOP_GAP, bandBot = paintedBand ? paintedBand.bottom : bandTop + LANE_ROWS;
   const { sal, sar } = laneSafeInsets(root);
   let left = sal, right = W - sar, any = false;
   const clip = (r, counts) => {
@@ -124,7 +124,7 @@ function announceLane(root) {
   // Clip the RIGHT to sectors without setting `any` — desktop empty docks must
   // still clear the lane vars (CSS falls back to centred). Phone docks set
   // `any` via the group loop above.
-  if (secR && secR.width && secR.height) right = Math.min(right, secR.left);
+  if (secR && secR.width && secR.height && (!paintedBand || (secR.top < bandBot && secR.bottom > bandTop))) right = Math.min(right, secR.left);
   clip(els.minimap && !els.minimap.hidden ? laneRect(els.minimap) : null, false);
   const gaps = document.querySelector(".hud-gaps");
   clip(gaps && !gaps.hidden ? laneRect(gaps) : null, false);
@@ -295,7 +295,7 @@ function radioPaintedCollapse(root) {
   if (annPaint && annPaint.hasAttribute("data-lane-collapsed") && !document.body.classList.contains("hud-radio-top")
     && root.style.getPropertyValue("--announce-lane-w") === "0px" && root.style.getPropertyValue("--announce-lane-shift") === "0%") return;
   if (annPaint && !annPaint.hidden) {
-    const a = annPaint.getBoundingClientRect();
+    let a = annPaint.getBoundingClientRect();
     const hit = (el) => {
       if (!el || el.hidden) return false;
       const r = el.getBoundingClientRect();
@@ -306,7 +306,17 @@ function radioPaintedCollapse(root) {
     const tower = top() || (typeof document !== "undefined" ? document.querySelector(".hud-top") : null);
     const gear = typeof document !== "undefined" ? document.getElementById("hud-gearbox") : null;
     const speed = typeof document !== "undefined" ? document.getElementById("hud-speed") : null;
-    if (hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed) || hit(els.flag) || hit(els.hudLimits) || hit(els.tyre)) {
+    const controls = [els.btnCam, els.pausebtn];
+    for (const dock of docks()) if (dock) controls.push(...dock.children);
+    if (controls.some(hit)) {
+      // Enlarged steering can meet the painted card below its predicted band.
+      // Re-budget that real row before hiding a call: a central gap may still fit.
+      hToggle(document.body, "hud-radio-top", false); document.body.removeAttribute("data-radio-corner");
+      for (const prop of ["--announce-lane-w", "--hud-clear-x", "--hud-clear-y"]) hUnstyle(annPaint, prop);
+      dropLaneRects(); announceLane(root, a);
+      a = annPaint.getBoundingClientRect();
+    }
+    if (controls.some(hit) || hit(els.hudSectors) || hit(tower) || hit(gear) || hit(speed) || hit(els.flag) || hit(els.hudLimits) || hit(els.tyre)) {
       hToggle(document.body, "hud-radio-top", false);
       if (document.body.removeAttribute) document.body.removeAttribute("data-radio-corner");
       const salPx = (() => { try { return parseFloat(getComputedStyle(root).getPropertyValue("--sal")) || 0; } catch (_) { return 0; } })();

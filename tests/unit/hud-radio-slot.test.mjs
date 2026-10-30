@@ -241,4 +241,20 @@ test("landscape radio prefers a readable outer lane and preserves a crowded fall
     assert.equal(els.announce.hasAttribute("data-lane-collapsed"), true, `${key} stays readable when messages compete`);
     obstacle.hidden = true;
   }
+  // Current tracked-export cockpit at844×390: BUTTON245 enlarges the steer
+  // pair into the outer card's actual row, below the lane's predicted band.
+  group._rect = R(59, 159.8, 365.9, 176.4);
+  els.hudSectors._rect = R(542, 64, 255, 72);
+  const pedals = dom.document.createElement("div"); pedals._rect = R(599, 80, 188, 256); dock.appendChild(pedals);
+  els.announce.getBoundingClientRect = () => w() < 200 ? R(x(), 151.9, w(), 75) : R(55, 151.9, 282.4, 50.7);
+  root.style.setProperty("--announce-lane-w", "282.4px");
+  els.announce.toggleAttribute("data-lane-collapsed", false);
+  lane.radioPaintedCollapse(root);
+  assert.ok(x() >= 425 && x() + w() <= 599, "painted steering bounds recover the free central lane");
+  assert.ok(Math.abs(w() - 158.1) < 0.2, "sectors ending above the card do not steal its 158px central fallback");
+  assert.equal(els.announce.hasAttribute("data-lane-collapsed"), false, "the pit call stays visible in the available gap");
+  dom.body.setAttribute("data-radio-placed", "");
+  root.style.setProperty("--announce-lane-w", "282.4px");
+  lane.radioPaintedCollapse(root);
+  assert.equal(w(), 282.4, "explicit manual radio placement bypasses automatic control recovery");
 });

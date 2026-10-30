@@ -82,7 +82,12 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
   // Check the actual camera change as well as the independent driving contact.
   const cdp = await page.context().newCDPSession(page);
   const contact = async (id, pointerId) => { const h = await hitTarget(id); return { x: h.x, y: h.y, id: pointerId }; };
-  const touch = (type, points) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points });
+  let contactOpen = false;
+  const touch = async (type, points) => {
+    await cdp.send("Input.dispatchTouchEvent", { type, touchPoints: points });
+    if (type === "touchStart") contactOpen = true;
+    if (type === "touchCancel") contactOpen = false;
+  };
   try {
     const gas = await contact("btn-throttle", 1), cam = await contact("btn-cam", 2);
     const before = await page.evaluate(() => window.__apex.camera().index);
@@ -106,6 +111,6 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
     expect(await page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
     await pointerClick("pm-resume");
     await expect(page.locator("#pausemenu")).toBeHidden();
-  } finally { await touch("touchCancel", []); await cdp.detach(); }
+  } finally { if (contactOpen) await touch("touchCancel", []); await cdp.detach(); }
 });
 
