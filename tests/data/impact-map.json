@@ -17663,7 +17663,8 @@
       ],
       "*": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/ui-reset-tap-floor.test.mjs"
       ]
     },
     "js/ui/layout-presets.js": {
@@ -17802,6 +17803,14 @@
         "tests/unit/audio-recovery.test.mjs",
         "tests/unit/garage-personality.test.mjs",
         "tests/unit/loading-card.test.mjs"
+      ]
+    },
+    "js/ui/look-avail.js": {
+      "whyKnob": [
+        "tests/unit/screen-looks.test.mjs"
+      ],
+      "*": [
+        "tests/unit/layout-presets.test.mjs"
       ]
     },
     "js/ui/menu-nav.js": {
@@ -18211,10 +18220,8 @@
       "save": [
         "tests/unit/player-tools-ui.test.mjs"
       ],
-      "whyKnob": [
-        "tests/unit/screen-looks.test.mjs"
-      ],
       "*": [
+        "tests/unit/boot-load-budget.test.mjs",
         "tests/unit/save-schema-registry.test.mjs"
       ]
     },

@@ -50,6 +50,8 @@ node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet
 ```
 
 `tests/specs/ui-audit.spec.js` asserts nothing — it is a capture harness.
+FLOWS (door/Escape, double-tap bleed, focus return, Back, persistence, search reset, rotation, D-pad reach) at
+844×390 touch: `node tools/ui/flows.mjs [--checks=…] [--diff=<old flows.json>]` (parent-only browser; `--list`/`--help` none).
 Deep refs: `docs/research/PLATFORM-INPUT-NOTES.md`,
 `docs/notes/ARCHITECTURE-REVIEW.md`. First tap silent on iPhone (audio unlock on a user gesture) → **audio-debug**.
 
