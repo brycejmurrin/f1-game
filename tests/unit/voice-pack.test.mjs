@@ -397,7 +397,7 @@ test("every tyre and pit call the engineer (js/race/engineer.js) makes composes 
 
 test("the positions, gaps and spotter calls a line can carry are all recorded", () => {
   for (let p = 1; p <= 22; p++) assert.ok(hasKey("p " + p), "P" + p);
-  for (const g of [0.1, 0.9, 1.4, 5.5, 9.9]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g);
+  for (const g of [0.1, 0.9, 1.4, 5.5, 9.9, 9.96, 9.99, 10]) assert.ok(hasKey(RadioLines.gapText(g)), "gap " + g + " -> " + RadioLines.gapText(g));
   for (const k of Object.keys(Spotter.KEYS)) assert.ok(hasKey(k), "spotter: " + k);
 });
 

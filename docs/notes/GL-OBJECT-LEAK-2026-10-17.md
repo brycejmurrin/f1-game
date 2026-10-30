@@ -24,7 +24,7 @@ A residual +1 on monza per cycle was not chased; the first draft of the patch (w
 drifted +8 per cycle, which is what found the missing release.
 
 ## Fix
-`vendor/three-0.186.1/PATCHES.md` §15: backport of three #34601 (program/shader/pipeline deletion) and a reduced #34610
+`vendor/three-0.187.0/PATCHES.md` §15: backport of three #34601 (program/shader/pipeline deletion) and a reduced #34610
 (VAOs keep their attribute-id key, plus a reference count released on render-object dispose, geometry dispose and
 `setGeometry`; compute VAOs are pinned). Retire at the r187 bump (not published; npm latest is 0.186.1).
 

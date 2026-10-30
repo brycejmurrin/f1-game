@@ -789,7 +789,7 @@ const HudLayout = (function () {
         && mapBox.top < r.bottom - 0.5 && mapBox.bottom > r.top + 0.5;
     });
     const blocks = [];
-    for (const el of doc.querySelectorAll(".touchbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
+    for (const el of doc.querySelectorAll(".touchbtn, .steerbtn, .shiftbtn, #pausebtn, #btn-cam, #hud-gearbox, #hud-tyre, #hud-energy, #hud-ot, #hud-aero, #hud-bb, .hud-top, #minimap, .hud-gaps, #hud-sectors, #hud-flag, #hud-mirror")) {
       if (autoMap && el === mapEl) continue;
       const r = box(el); if (r) blocks.push(r);
     }
@@ -855,6 +855,22 @@ const HudLayout = (function () {
         el.style.setProperty("--announce-lane-w", Math.max(0, bounds.right - bounds.left) + "px");
         r = box(el);
         best = r && findSlot(r);
+        if (!best && r) {
+          // Wrapping can fit a call between enlarged controls when its normal
+          // width cannot. Derive a few real gaps, not repeated global shrink steps.
+          const intervals = blocks.filter(b => b.top - EDGE < r.bottom && b.bottom + EDGE > r.top)
+            .map(b => [Math.max(bounds.left, b.left - EDGE), Math.min(bounds.right, b.right + EDGE)])
+            .filter(([left, right]) => right > left).sort((a, b) => a[0] - b[0]);
+          const widths = []; let cursor = bounds.left;
+          for (const [left, right] of intervals) { if (left - cursor >= 96) widths.push(left - cursor); cursor = Math.max(cursor, right); }
+          if (bounds.right - cursor >= 96) widths.push(bounds.right - cursor);
+          for (const width of [...new Set(widths)].sort((a, b) => b - a)) {
+            el.style.setProperty("--announce-lane-w", width + "px");
+            const wrapped = box(el), slot = wrapped && findSlot(wrapped);
+            if (slot) { r = wrapped; best = slot; break; }
+          }
+        }
+        if (!best) { el.setAttribute("data-lane-collapsed", ""); continue; }
       }
       if (!best && id === "inputs") { el.setAttribute("data-col-drop", ""); continue; }
       if (!best && id === "damage") {

@@ -16,13 +16,14 @@ function boot({ ensure, stub = true, onSelect = () => {} }) {
   const dom = makeDom();
   const audio = dom.byId("audioset"); audio.hidden = true;
   dom.byId("pm-audio"); dom.byId("pm-settings-index"); dom.byId("dlg-settings");
-  const calls = { ensure: 0 };
+  const calls = { ensure: 0 }, said = [];
   const GameAudio = { _stub: stub };
   const ctx = vm.createContext({ document: dom.document, window: {}, Log: { info() {}, warn() {} }, GameAudio,
+    LiveRegion: { say: (text, kind) => said.push([text, kind]) },
     AudioPanel: { _ensure: () => { calls.ensure++; return ensure(GameAudio); } } });
   vm.runInContext(source, ctx);
   const nav = ctx.SettingsNav.create(null, onSelect);
-  return { nav, dom, audio, calls, ctx };
+  return { nav, dom, audio, calls, ctx, said };
 }
 
 test("MUSIC & SOUND: a bundle that fails to load is asked once per click and the page still reveals", async () => {
@@ -38,6 +39,23 @@ test("MUSIC & SOUND: a bundle that fails to load is asked once per click and the
   dom.byId("pm-audio").onclick();
   await tick(); await tick(); await tick();
   assert.equal(calls.ensure, 2);
+});
+
+// uihunt4-flows-1030 #2: a role=status note filled in the same step it is inserted is
+// not announced, so the note is spoken through LiveRegion (the open modal's twin) once per showing.
+test("MUSIC & SOUND: the offline note is spoken once when it appears, not on every repeat", async () => {
+  const { nav, dom, said } = boot({ ensure: () => Promise.resolve(false) });
+  dom.byId("pm-audio").onclick();
+  await tick(); await tick(); await tick();
+  assert.equal(said.length, 1);
+  assert.deepEqual(said[0], ["AUDIO ENGINE DID NOT LOAD — CHECK YOUR CONNECTION OR RELOAD", "hud"]);
+  dom.byId("pm-audio").onclick();
+  await tick(); await tick(); await tick();
+  assert.equal(said.length, 1, "a note already showing is not re-spoken");
+  dom.byId("audioset-offline").hidden = true;
+  nav.show("audio", false);
+  await tick(); await tick(); await tick();
+  assert.equal(said.length, 2, "a note shown again after hiding is spoken again");
 });
 
 test("MUSIC & SOUND: a rejecting _ensure behaves like false, programmatic show() included", async () => {
