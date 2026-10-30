@@ -130,3 +130,19 @@ test("setRenderSizeOverride changes getSize via resize", () => {
   assert.equal(h.GLX.height, 256);
   h.GLX.setRenderSizeOverride(null);
 });
+
+test("a half-float-only device keeps bloom/godray targets on RGBA16F; R11F_G11F_B10F waits for EXT_color_buffer_float (iPhone GLX report)", () => {
+  // EXT_color_buffer_half_float makes RGBA16F renderable but not R11F_G11F_B10F. Allocating
+  // the slim format there left bloom level 0 incomplete, so post switched off untonemapped.
+  const run = (extensions) => {
+    const h = bootGlx({ extensions });
+    h.GLX.begin(h.frame());
+    return { h, r11: h.count("texImage2D", (a) => a[2] === h.gl.R11F_G11F_B10F), f16: h.count("texImage2D", (a) => a[2] === h.gl.RGBA16F) };
+  };
+  const half = run(["EXT_color_buffer_half_float"]);
+  assert.equal(half.r11, 0, "no R11F_G11F_B10F target without EXT_color_buffer_float");
+  assert.ok(half.f16 > 1, "bloom/godray fall back to RGBA16F");
+  assert.equal(half.h.GLX.hdrMode(), true, "post stays on, HDR, on half-float-only");
+  const full = run(["EXT_color_buffer_float"]);
+  assert.ok(full.r11 > 0, "with the float extension the slim format is still used");
+});

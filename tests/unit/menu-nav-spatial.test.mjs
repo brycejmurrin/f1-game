@@ -330,6 +330,21 @@ test("step(): the pane's foot never beats an in-band successor, and Down from th
   assert.equal(step(back, 0, 1, [top, mid, last, back]).id, "first", "BACK (no pane) wraps as before");
 });
 
+// UI hunt 2026-10-29 #10: the Data Hub's roving tab rail is one stop (the
+// selected tab, far left); the head's ✕ sits top-right in no tab's band.
+test("step(): Up from a tab rail reaches the sheet head's close, not the wrap to the bottom", () => {
+  const { step } = loadMenuNav();
+  const tab = (id, x) => el(id, x, 60, 110, 44, { getAttribute: (k) => (k === "role" ? "tab" : null) });
+  const close = el("dh-close-btn", 780, 8, 44, 44);
+  const schedule = tab("dh-tab-schedule", 14, 0), standings = tab("dh-tab-standings", 300, 0);
+  const row = el("row", 14, 130, 400, 40), foot = el("foot", 14, 340, 400, 40);
+  assert.equal(step(schedule, 0, -1, [close, schedule, row, foot]).id, "dh-close-btn");
+  assert.equal(step(standings, 0, -1, [close, standings, row, foot]).id, "dh-close-btn");
+  assert.equal(step(row, 0, -1, [close, schedule, row, foot]).id, "dh-tab-schedule", "content Up still lands on the rail");
+  const plain = el("plain", 14, 60, 110, 44);
+  assert.equal(step(plain, 0, -1, [close, plain, row, foot]).id, "foot", "a non-tab keeps the in-band wrap (Zandvoort trap)");
+});
+
 test("MenuNav.activeLayer refuses freecam with the other fly-cam layers", () => {
   // freecam joins photo-controls / tl-editor so photo-cam arrows are not stolen.
   assert.equal(/t\.id === "photo-controls" \|\| t\.id === "freecam" \|\| t\.id === "tl-editor"/.test(SRC), true);

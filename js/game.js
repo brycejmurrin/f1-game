@@ -2278,6 +2278,7 @@ function scheduleFlybyTrack(settle) {
       // its scene/targets must wait. ensureScenery shares in-flight requests.
       await ensureScenery(want);
       if (!current()) return;
+      if (!els.select.hidden || !$("race-settings").hidden) kickRaceBundles(false);   // picker/sheet up: RACE! is next (not the title warm)
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
       // Car assets BEFORE the warm frames: prepareMenuCarAssets slices the
       // mesh/livery work; a warm frame drawn first
@@ -2736,6 +2737,10 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 const _customTrackStarts = new WeakSet();
+// Perf hunt 7: startRaceBody awaited the race-session, lighting and audio bundles one after another, and only once
+// startRace's scenery prep resolved (TLX census 40838027433: `resets` 4.4 s). All three are memoised; start them together.
+// LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
+function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
   pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
@@ -2756,6 +2761,7 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
+  kickRaceBundles(true);
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = () => key === entrySettings();
