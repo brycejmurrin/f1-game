@@ -170,7 +170,7 @@
      #loading runs its own phases. Off under both reduced-motion gates. Lives
      in this deferred sheet: no screen changes before it has loaded. */
   @media (prefers-reduced-motion: no-preference) {
-    :root:not([data-motion="reduce"]) body:not(.desktop) .screen:not(.dim, #loading) { animation: screen-in var(--dur-1) linear; }
+    :root:not([data-motion="reduce"]):not(:has(> body.desktop)) .screen:not(.dim, #loading) { animation: screen-in var(--dur-1) linear; }
   }
   /* GARAGE SHELL WHILE IT BUILDS. SetupUI.openSetup shows #carsetup with
      aria-busy and builds the tabs and options two frames later; on a phone
