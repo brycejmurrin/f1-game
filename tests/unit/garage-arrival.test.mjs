@@ -111,7 +111,7 @@ test('reduce-motion Start Race plays the drive-out at the tuner\'s own pace: no 
   const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
   const out = cam.slice(cam.indexOf('function startDriveOut()'), cam.indexOf('function driveOutLeft()'));
   assert.ok(!/reducedMotion\(\)/.test(out), 'startDriveOut reads no motion flag: reduce plays the same drive-out');
-  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.duration\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed');
+  assert.match(out, /const play = Object\.assign\(\{\}, cfg, \{ enabled: true \}\);\s*driveOut = \{ t: 0, cfg: play \};\s*driveOutEngine\(true\);\s*return Math\.round\(GarageArrival\.wallSeconds\(play, "out"\) \* 1000 \/ play\.speed\);/, 'wall ms at cfg.speed, SLOW-MO included');
   assert.match(out, /if \(!cfg\.enabled\) return 0;/, 'only the tuner can turn it off for a player');
   // Player pace: speed 1 (the default) → OUT_DURATION, ~10.6 s, never trimmed.
   assert.ok(Math.abs(Arrival.OUT_DURATION * 1000 / Arrival.settings(null).speed - 10600) <= 400, 'the default drive-out is the tuned ~10.6 s');
@@ -1548,4 +1548,28 @@ test('REAR LIGHT: AUTO keeps the night-or-wet rule; ON, OFF and FLASH override i
   assert.deepEqual(blink, [true, false, true, false], 'FLASH blinks at ~4 Hz');
   assert.equal(Arrival.poseOut(2, Arrival.settings({ rearLight: 'on' })).rearLight, 'on', 'the race start too');
   assert.equal(Arrival.poseHome(2, Arrival.settings({ rearLight: 'flash' })).rearLight, 'flash');
+});
+
+test('SLOW-MO AT THE DOOR slows the door crossing only; the wall clock and the RACE! wait account for it', () => {
+  const none = { enterCrew: 'none', leaveCrew: 'none', homeCrew: 'none' };
+  const off = Arrival.settings(none), half = Arrival.settings(Object.assign({ slowmo: 0.5 }, none));
+  assert.equal(Arrival.slowWindow(off, 'in'), null);
+  assert.equal(Arrival.wallSeconds(off, 'out'), Arrival.duration(off, 'out'), 'off: wall = show time');
+  for (const dir of ['in', 'out', 'home']) {
+    const w = Arrival.slowWindow(half, dir), d = Arrival.duration(half, dir);
+    assert.ok(w && w[0] > 0 && w[1] < d, dir + ': inside the sequence');
+    const z = Arrival.poseFor(dir)((w[0] + w[1]) / 2, half, true).z;
+    assert.ok(z > 4.5 && z < 8.5, `${dir}: the window is at the door (z ${z.toFixed(2)})`);
+    assert.equal(Arrival.rate(half, dir, w[0] - 0.01), 1); assert.equal(Arrival.rate(half, dir, (w[0] + w[1]) / 2), 0.5);
+    assert.ok(Math.abs(Arrival.wallSeconds(half, dir) - (d + 1.2)) < 1e-9, dir + ': 1.2 s at half speed costs 1.2 s more');
+    assert.ok(Math.abs(Arrival.wallLeft(half, dir, w[1]) - (d - w[1])) < 1e-9, 'past the window, wall = show time');
+    assert.ok(Math.abs(Arrival.wallLeft(half, dir, (w[0] + w[1]) / 2) - (d - (w[0] + w[1]) / 2 + 0.6)) < 1e-9, 'half the window left');
+  }
+  // The WORK ON CAR player integrates the rate: a half-speed window takes 1.2 s longer to reach the end.
+  let wall = 0;
+  const { $ } = harness(), player = Arrival.create($, () => false, () => Object.assign({ slowmo: 0.5 }, none), () => wall);
+  player.start(); let n = 0;
+  while (player.state.active && n < 2000) { wall += 0.05; player.step(0.05); n++; }
+  assert.ok(Math.abs(n * 0.05 - Arrival.wallSeconds(half, 'in')) < 0.11, `played in ${(n * 0.05).toFixed(2)} s`);
+  assert.deepEqual([Arrival.settings({ slowmo: 0.25 }).slowmo, Arrival.settings({ slowmo: 1 }).slowmo, Arrival.settings({ slowmo: -1 }).slowmo], [0.25, 0, 0]);
 });

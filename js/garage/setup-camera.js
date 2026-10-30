@@ -172,12 +172,12 @@ function startDriveOut() {
   const play = Object.assign({}, cfg, { enabled: true });
   driveOut = { t: 0, cfg: play };
   driveOutEngine(true);
-  return Math.round(GarageArrival.duration(play, "out") * 1000 / play.speed);
+  return Math.round(GarageArrival.wallSeconds(play, "out") * 1000 / play.speed);   // SLOW-MO included
 }
 // Wall ms of the drive-out still to play: stepDriveOut advances on the wall clock
 // (gap capped at 0.1 s), so a stalled frame delays it rather than skipping it.
 function driveOutLeft() {
-  return driveOut ? Math.max(0, (GarageArrival.duration(driveOut.cfg, "out") - driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
+  return driveOut ? Math.max(0, GarageArrival.wallLeft(driveOut.cfg, "out", driveOut.t) * 1000 / driveOut.cfg.speed) : 0;
 }
 // Stepped on the WALL clock, not the render dt the menu loop caps at 1/20 s: under
 // 20 fps that cap played the car in slow motion. A gap over 0.1 s (a synchronous
@@ -185,7 +185,7 @@ function driveOutLeft() {
 function stepDriveOut(held = false) {
   const now = performance.now(), gap = driveOut.last ? (now - driveOut.last) / 1000 : 0;
   driveOut.last = now;
-  if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed;
+  if (!held) driveOut.t += Math.min(0.1, Math.max(0, gap)) * driveOut.cfg.speed * GarageArrival.rate(driveOut.cfg, "out", driveOut.t);
   const pose = Object.assign(GarageArrival.poseOut(driveOut.t, driveOut.cfg, reducedMotion()), { active: true });
   driveOutSound(pose, gap);
   return pose;
@@ -243,7 +243,7 @@ function startArrivalPreview(dir, btn) {
   return true;
 }
 function stepPreview(dt) {
-  preview.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * preview.cfg.speed;
+  preview.t += Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0)) * preview.cfg.speed * GarageArrival.rate(preview.cfg, preview.dir, preview.t);
   const pose = GarageArrival.poseFor(preview.dir)(preview.t, preview.cfg, reducedMotion());
   if (pose.active) return pose;
   stopPreview();

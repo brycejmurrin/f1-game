@@ -7590,6 +7590,9 @@
         "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-crew.test.mjs"
       ],
+      "rate": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "rearLightOn": [
         "tests/unit/garage-arrival.test.mjs"
       ],
@@ -7604,6 +7607,9 @@
       "shotsFor": [
         "tests/unit/garage-arrival.test.mjs"
       ],
+      "slowWindow": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
       "start": [
         "tests/unit/garage-arrival.test.mjs"
       ],
@@ -7611,6 +7617,9 @@
         "tests/unit/garage-arrival.test.mjs"
       ],
       "timeline": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "wallLeft": [
         "tests/unit/garage-arrival.test.mjs"
       ]
     },

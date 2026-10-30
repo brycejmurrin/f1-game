@@ -6,7 +6,7 @@ const GarageArrival = (function () {
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix",
     shots: Object.freeze(["left", "right", "right"]), height: 0, door: DOOR_S, hold: null, carSpeed: 1, endBeat: 0,
     afterRace: true, homeCrew: "auto", result: "win",
-    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false, rearLight: "auto" });
+    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false, rearLight: "auto", slowmo: 0 });
   /* THE CAMERAS (bay metres, the car parked at the origin nose to the door at
    * z +6.4): LEFT / RIGHT are the two shipped interior eyes; HIGH a ceiling
    * corner over the back-left (under the ceiling truss, whose 4.6 m beam filled
@@ -118,7 +118,8 @@ const GarageArrival = (function () {
       light: v.light === "asset" || moodIds().includes(v.light) ? v.light : DEFAULT.light,
       homeLight: v.homeLight === "auto" || v.homeLight === "asset" || moodIds().includes(v.homeLight) ? v.homeLight : DEFAULT.homeLight,
       swell: number("swell", 0, 2), captions: v.captions !== false, bars: v.bars === true,
-      rearLight: REAR.includes(v.rearLight) ? v.rearLight : DEFAULT.rearLight };
+      rearLight: REAR.includes(v.rearLight) ? v.rearLight : DEFAULT.rearLight,
+      slowmo: typeof v.slowmo === "number" && v.slowmo > 0 && v.slowmo < 1 ? Math.max(0.1, v.slowmo) : 0 };
   }
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
@@ -170,6 +171,7 @@ const GarageArrival = (function () {
     ["ga-hold", "HOLD BEAT", [["auto", "AUTO"], ["0", "NONE"], ["0.5", "0.5 S"], ["1", "1 S"], ["2", "2 S"], ["3", "3 S"]]],
     ["ga-carspeed", "CAR SPEED", [["0.5", "CRAWL · 0.5×"], ["0.75", "EASY · 0.75×"], ["1", "PIT LIMITER · 1×"], ["1.5", "BRISK · 1.5×"], ["2", "QUICK · 2×"]]],
     ["ga-endbeat", "END BEAT", [["0", "NONE"], ["0.5", "0.5 S"], ["1", "1 S"], ["2", "2 S"], ["3", "3 S"]]],
+    ["ga-slowmo", "SLOW-MO AT THE DOOR", [["0", "OFF"], ["0.5", "HALF SPEED"], ["0.25", "QUARTER SPEED"]]],
     "LIGHTING AND LOOK. SEQUENCE LIGHTING holds a garage lighting mood while a sequence plays (the garage's own comes back after); DOOR GLOW is the team-colour flood as the shutter lifts; CINEMA BARS letterbox the shot.",
     ["ga-light", "SEQUENCE LIGHTING", () => [["asset", "AS THE GARAGE"]].concat(moodOpts())],
     ["ga-swell", "DOOR GLOW", [["0", "OFF"], ["0.5", "SOFT"], ["1", "NORMAL"], ["2", "BIG"]]],
@@ -228,9 +230,9 @@ const GarageArrival = (function () {
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out"), height: $("ga-height"), door: $("ga-door"), hold: $("ga-hold"),
       carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result"),
       move: $("ga-move"), sway: $("ga-sway"), zoom: $("ga-zoom"), light: $("ga-light"), swell: $("ga-swell"),
-      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear") };
+      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home"), rearLight: $("ga-rear"), slowmo: $("ga-slowmo") };
     const shotEls = [$("ga-shot1"), $("ga-shot2"), $("ga-shot3")];
-    const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell"], CHECK = ["enabled", "afterRace", "captions", "bars"];
+    const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell", "slowmo"], CHECK = ["enabled", "afterRace", "captions", "bars"];
     // MIX and the Blender crews (GarageCrewChoreo) join each crew picker from
     // their own table, once: the static five stay index.html's.
     const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; return o; };
@@ -518,7 +520,7 @@ const GarageArrival = (function () {
         const now = clock(), gap = last ? now - last : 0;
         last = now;
         const capped = Math.min(0.1, Math.max(0, Number.isFinite(dt) ? dt : 0));
-        time += Math.max(capped, gap > 0 && gap <= duration(config, dir) / config.speed ? Math.min(gap, MAX_GAP_S) : 0) * config.speed;
+        time += Math.max(capped, gap > 0 && gap <= wallSeconds(config, dir) / config.speed ? Math.min(gap, MAX_GAP_S) : 0) * config.speed * rate(config, dir, time);
         state = posed(time, config);
         if (label.textContent !== state.label) label.textContent = state.label;
         if (!state.active) finish();
@@ -529,6 +531,39 @@ const GarageArrival = (function () {
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }
+  /* SLOW-MO AT THE DOOR: SLOW_S seconds of show time around the car crossing the
+   * door plane play at config.slowmo of PLAYBACK SPEED (0 = off). Coming in, the
+   * back-in arc meets z 6.4 at ease(k) = 1 - 6.4 / OUT_PATH (k ~ 0.565 of IN_BACK);
+   * going out, just after the doorway (z 6 m). The steppers multiply their clock
+   * by rate(); wallSeconds() is the playback's length at speed 1, for RACE!. */
+  const SLOW_S = 1.2;
+  function slowWindow(config, dir) {
+    const f = config && config.slowmo;
+    if (!(f > 0 && f < 1)) return null;
+    let mid;
+    if (dir === "out") {
+      const T = timeline(config, "out"), go = T.door + T.hold + (duration(config, "out") - T.base);
+      mid = go + (6 <= T.v * T.accel / 2 ? Math.sqrt(2 * T.accel * 6 / T.v) : 6 / T.v + T.accel / 2) + 0.2;
+    } else {
+      const T = timeline(config, dir), target = 1 - 6.4 / OUT_PATH;
+      let lo = 0, hi = 1;
+      for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (ease(m) < target) lo = m; else hi = m; }
+      mid = T.door + T.lane + T.pause + lo * T.back;
+    }
+    return [mid - SLOW_S / 2, mid + SLOW_S / 2, f];
+  }
+  function rate(config, dir, t) {
+    const w = slowWindow(config, dir);
+    return w && t >= w[0] && t < w[1] ? w[2] : 1;
+  }
+  /** Wall seconds (at speed 1) from show time t to the end; wallSeconds = wallLeft(…, 0). */
+  function wallLeft(config, dir, t = 0) {
+    const w = slowWindow(config, dir), d = duration(config, dir), from = Math.max(0, Math.min(d, t));
+    if (!w) return d - from;
+    const slow = Math.max(0, Math.min(d, w[1]) - Math.max(from, w[0]));
+    return d - from + slow * (1 / w[2] - 1);
+  }
+  const wallSeconds = (config, dir) => wallLeft(config, dir, 0);
   /** Whether the rain light shows on this pose: REAR LIGHT, else night / wet (`wet`). */
   function rearLightOn(p, wet) {
     const m = p && p.rearLight || "auto";
@@ -536,6 +571,6 @@ const GarageArrival = (function () {
     if (m === "flash") return Math.floor((p.seconds || 0) * 8) % 2 === 0;   // ~4 Hz
     return m === "auto" && !!wet;
   }
-  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, crewFor, lightFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
+  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, rate, wallSeconds, wallLeft, slowWindow, crewFor, lightFor, rearLightOn, angleMap, shotsFor, resultKind, MOVES, REAR,
     CAMS, CAM_IDS, ANGLES, RESULTS, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();
