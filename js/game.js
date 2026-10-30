@@ -3452,7 +3452,8 @@ const G = {
   cameraDampingState() {
     return { eye: camEye.slice(), target: camTgt.slice(), fov: camFov,
       previousAnchor: [camAncX, camAncZ], nextAnchor: [camAncNX, camAncNZ],
-      renderFrame: _frameNo, simulationTime: raceT, renderTime: _skyT };
+      renderFrame: _frameNo, simulationTime: raceT, renderTime: _skyT,
+      warming: !!((gfx.warming && (gfx.warming() || (gfx.warmQueued && gfx.warmQueued()))) || mirrorPass.preparing()), liveTicks: PerfGov.ticks() };   // tickBody's holds; PerfGov.tick runs only on the live race frames (__apex.info())
   },
   get ttDistance() { return TT_LAPS; },   // the time-trial distance a daily session stages (lapRec.ttLaps is the session's lap list)
   // CHANGEABLE conditions: the weather walks from the chip's start to a
