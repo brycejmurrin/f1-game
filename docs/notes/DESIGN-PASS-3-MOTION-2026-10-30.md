@@ -43,8 +43,12 @@ The home-backdrop swap 2c saw at ~17.5 s did not happen within 30 s: with this t
 - **Touch enter** (`experience.css`): `body:not(.desktop) .screen:not(.dim, #loading)` gets `screen-in`
   (opacity, `--dur-1`, LINEAR), gated on both reduce settings. Linear because lane 3E's filmstrip (#4299)
   measured the ease-out version at 0 % diff by 40 ms: it read as the cut it replaces. Deferred sheet: no screen change happens before it loads.
-- **Garage skeleton** (`experience.css`): `#carsetup[aria-busy="true"]` paints ghost chips/rows in `--panel`;
-  `aria-busy` is set and cleared by `SetupUI.openSetup` (js/garage/setup-sheet.js), so no JS change.
+- **Garage skeleton** (`experience.css`): `#carsetup[aria-busy="true"] #cs-options:empty` PAINTS ghost chips and
+  rows (theme ink at 7 %); `aria-busy` is set and cleared by `SetupUI.openSetup` (js/garage/setup-sheet.js), so no
+  JS change. Paint only: the first cut gave the empty panes a `min-height`, the sheet's shape pass measured it and
+  the portrait tab strip stopped scrolling (`ui-button-touch.spec`, 3/3 red; deploy tip 4/4 green; paint-only
+  green 5/5). `--panel` was too faint on the plate (0 % diff), and `#cs-body` is `display: contents` once the
+  title prebuild has set compact density.
 - **Pre-boot doors** (`title.css`): filter-only dim; the transition is `filter` alone (fewer blocking bytes).
 - **Stray icon** (`responsive.css`, blocking): `body:not(.hud-hidden) #hud-restore { display: none }`.
 - **Install tip** (`experience.css`): on the landscape title `#ios-install` docks at `bottom: var(--safe-b)`.

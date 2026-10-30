@@ -176,19 +176,20 @@
      aria-busy and builds the tabs and options two frames later; on a phone
      those frames are the garage's first 3D frames (~1.3 s), so the sheet sat
      empty. Static ghosts of the compact layout (two tab rows, option rows)
-     show its structure at once. No shimmer: it is a wait, not motion. */
-  #carsetup[aria-busy="true"] { --cs-ghost: var(--panel); }   /* the plate tint: follows the light theme */
-  #carsetup[aria-busy="true"] #cs-tabs {
-    min-height: calc(2 * var(--chip-h) + var(--gap) * 0.5);
+     show its structure at once. No shimmer: it is a wait, not motion.
+     PAINT ONLY, on #cs-options while it is still empty (#cs-body is display:contents in the compact sheet): an earlier
+     version gave the empty panes a min-height, the sheet's shape pass
+     measured it, and the portrait tab strip stopped scrolling sideways
+     (ui-button-touch.spec, #4283). Nothing here may change layout. */
+  #carsetup[aria-busy="true"] { --cs-ghost: color-mix(in oklab, var(--text) 7%, transparent); }   /* theme ink, faint: follows the light theme */
+  #carsetup[aria-busy="true"] #cs-options:empty {
+    --cs-row: calc(var(--chip-h) + var(--gap) * 0.5);
     background:
       repeating-linear-gradient(to right, var(--cs-ghost) 0 5.5em, transparent 0 calc(5.5em + var(--gap) * 0.5)) 0 0 / 100% var(--chip-h) no-repeat,
-      repeating-linear-gradient(to right, var(--cs-ghost) 0 4.5em, transparent 0 calc(4.5em + var(--gap) * 0.5)) 0 100% / 100% var(--chip-h) no-repeat;
+      repeating-linear-gradient(to right, var(--cs-ghost) 0 4.5em, transparent 0 calc(4.5em + var(--gap) * 0.5)) 0 var(--cs-row) / 100% var(--chip-h) no-repeat,
+      repeating-linear-gradient(to bottom, var(--cs-ghost) 0 var(--chip-h), transparent 0 var(--cs-row)) 0 calc(2 * var(--cs-row) + var(--gap) * 0.5) / 100% 100% no-repeat;
   }
-  #carsetup[aria-busy="true"] #cs-options {
-    min-height: calc(3 * var(--chip-h));
-    background: repeating-linear-gradient(to bottom, var(--cs-ghost) 0 var(--chip-h), transparent 0 calc(var(--chip-h) + var(--gap) * 0.5));
-  }
-  @media (forced-colors: active) { #carsetup[aria-busy="true"] :is(#cs-tabs, #cs-options) { background: none; } }
+  @media (forced-colors: active) { #carsetup[aria-busy="true"] #cs-options { background: none; } }
   /* THE iOS INSTALL TIP ON THE LANDSCAPE TITLE docks at the foot of the brand
      column. touch-controls.css lifts it 4.5rem, which on a phone lands on the
      disclaimer (live film, ~24 s, design pass 3); down here it sits over the
