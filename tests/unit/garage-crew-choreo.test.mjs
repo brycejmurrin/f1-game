@@ -102,7 +102,9 @@ test("one playback reads one crew; the next playback takes the next one", () => 
 
 test("settings accept each direction's own variants only", () => {
   const { Arrival, Choreo } = load();
-  for (const id of Choreo.IDS.in) assert.equal(Arrival.settings({ enterCrew: id }).enterCrew, id);
+  // A result clip (CLIPS[id].result) is timed on the AFTER THE RACE drive: never a pit-stop crew.
+  for (const id of Choreo.IDS.in) assert.equal(Arrival.settings({ enterCrew: id }).enterCrew, Choreo.CLIPS[id].result ? "mix" : id);
+  for (const id of Choreo.IDS.in) assert.equal(Arrival.settings({ homeCrew: id }).homeCrew, id, "AFTER-RACE CREW offers every arrival crew");
   for (const id of Choreo.IDS.out) assert.equal(Arrival.settings({ leaveCrew: id }).leaveCrew, id);
   assert.equal(Arrival.settings({ enterCrew: Choreo.IDS.out[0] }).enterCrew, "mix", "a leave crew cannot meet the car");
   assert.equal(Arrival.settings({ leaveCrew: "pit" }).leaveCrew, "mix");
@@ -125,7 +127,7 @@ test("every crew picker option, static or filled from the clips, is a crew the s
   for (const [id, key, dir] of [["ga-crew-in", "enterCrew", "in"], ["ga-crew-out", "leaveCrew", "out"]]) {
     const v = els[id].options.map((o) => o.value);
     assert.equal(v[0], "mix", `${id} leads with MIX`); assert.equal(v[v.length - 1], "none", `${id} ends with NO CREW`);
-    for (const c of Choreo.IDS[dir]) assert.equal(v.filter((x) => x === c).length, 1, `${id} offers ${c} once`);
+    for (const c of Choreo.IDS[dir]) assert.equal(v.filter((x) => x === c).length, Choreo.CLIPS[c].result ? 0 : 1, `${id} offers ${c} once (a result clip never)`);
     for (const x of v) assert.equal(Arrival.settings({ [key]: x })[key], x, `${id} ${x}`);
   }
 });
@@ -260,9 +262,10 @@ test("without the garage modules the stop falls back to the static crew", () => 
 
 test("the garage draws a Blender crew without rebuilding meshes mid-playback", () => {
   const { Crew, Arrival, Choreo, draws, meshes } = load();
-  for (const dir of ["in", "out"]) for (const id of Choreo.IDS[dir]) {
-    const cfg = Arrival.settings({ [dir === "in" ? "enterCrew" : "leaveCrew"]: id }), end = Arrival.duration(cfg, dir);
-    const pose = (t) => (dir === "in" ? Arrival.pose : Arrival.poseOut)(t, cfg, false);
+  for (const d of ["in", "out"]) for (const id of Choreo.IDS[d]) {
+    const r = Choreo.CLIPS[id].result, dir = r ? "home" : d;   // a result clip plays after the race
+    const cfg = Arrival.settings(r ? { homeCrew: id, result: r } : { [d === "in" ? "enterCrew" : "leaveCrew"]: id }), end = Arrival.duration(cfg, dir);
+    const pose = (t) => Arrival.poseFor(dir)(t, cfg, false);
     draws.length = 0; Crew.draw({ c1: [1, 0, 0], c2: [1, 1, 1] }, [-3, 2, -4], pose(0.5), {});
     assert.ok(draws.length > 12 * Choreo.CLIPS[id].actors.length, `${id}: every member drawn`);
     const n = meshes.length;
@@ -277,4 +280,13 @@ test("pit-lane.js and car-draw.js: the hook is a read-only delegate", () => {
   assert.ok(fn.indexOf("PitCrewAnim") < fn.indexOf("getCrewMesh"), "...before the static mesh");
   const src = read("js/garage/pit-crew.js").replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, "");
   assert.ok(!/\bc\.\w+\s*=[^=]|pitT\s*=[^=]|G\.\w+\s*=[^=]/.test(src), "PitCrewAnim writes nothing on the car or G");
+});
+
+test("AFTER-RACE CREW BY RESULT deals the Blender result clips; their extra seconds stretch the sequence", () => {
+  const { Arrival, Choreo } = load();
+  const home = (result) => Arrival.crewFor(Arrival.settings({ result }), "home");
+  assert.deepEqual(["win", "podium", "points", "finish", "dnf"].map(home), ["celebrate", "applause", "current", "console", "recover"]);
+  for (const id of ["celebrate", "applause", "console", "recover"]) assert.equal(Choreo.CLIPS[id].result !== undefined, true, id + " is a result clip");
+  const bare = Arrival.settings({ result: "win", homeCrew: "none" });
+  assert.ok(Math.abs(Arrival.duration(Arrival.settings({ result: "win" }), "home") - (Arrival.duration(bare, "home") + Choreo.extra("celebrate"))) < 1e-9);
 });

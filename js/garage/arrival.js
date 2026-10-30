@@ -33,15 +33,16 @@ const GarageArrival = (function () {
   /* AFTER THE RACE (the "home" sequence): the arrival's shape, flavoured by how
    * the race ended. lane / back scale the drive (a winner idles up the lane, a
    * retired car is PUSHED, smoothstep, no engine), pause and end add beats, crew
-   * and light are AFTER-RACE CREW / LIGHTING's BY RESULT picks (light: a
+   * and light are AFTER-RACE CREW / LIGHTING's BY RESULT picks (crew: lane C's
+   * Blender result clip in crew-choreo.js, crewAlt when that table is absent; light: a
    * GarageScene mood, absent = the garage's own). Captions: arriving, backing
    * in, the held title. */
   const RESULTS = Object.freeze({
-    win: { lane: 1.35, back: 1, pause: 1.4, end: 1.5, crew: "welcome", light: "showroom", cue: "flashes", arrive: "RACE WINNER · COMING HOME", park: "WELCOME BACK, WINNER", title: "RACE WINNER" },
-    podium: { lane: 1.2, back: 1, pause: 0.9, end: 1, crew: "welcome", light: "broadcast", cue: "pulse", arrive: "PODIUM FINISH · COMING HOME", park: "WELCOME BACK", title: "PODIUM FINISH" },
+    win: { lane: 1.35, back: 1, pause: 1.4, end: 1.5, crew: "celebrate", crewAlt: "welcome", light: "showroom", cue: "flashes", arrive: "RACE WINNER · COMING HOME", park: "WELCOME BACK, WINNER", title: "RACE WINNER" },
+    podium: { lane: 1.2, back: 1, pause: 0.9, end: 1, crew: "applause", crewAlt: "welcome", light: "broadcast", cue: "pulse", arrive: "PODIUM FINISH · COMING HOME", park: "WELCOME BACK", title: "PODIUM FINISH" },
     points: { lane: 1, back: 1, pause: 0.4, end: 0.5, crew: "current", arrive: "IN THE POINTS · COMING HOME", park: "BRINGING CAR IN", title: "POINTS FINISH" },
-    finish: { lane: 1, back: 1, pause: 0, end: 0, crew: "current", arrive: "RACE COMPLETE · COMING HOME", park: "BRINGING CAR IN", title: "RACE COMPLETE" },
-    dnf: { lane: 2.2, back: 1.4, pause: 0.3, end: 0.5, crew: "guides", light: "inspection", cue: "beacon", pushed: true, arrive: "RETIRED · CREW RECOVERING CAR", park: "PUSHING CAR IN", title: "RETIRED" },
+    finish: { lane: 1, back: 1, pause: 0, end: 0, crew: "console", crewAlt: "current", arrive: "RACE COMPLETE · COMING HOME", park: "BRINGING CAR IN", title: "RACE COMPLETE" },
+    dnf: { lane: 2.2, back: 1.4, pause: 0.3, end: 0.5, crew: "recover", crewAlt: "guides", light: "inspection", cue: "beacon", pushed: true, arrive: "RETIRED · CREW RECOVERING CAR", park: "PUSHING CAR IN", title: "RETIRED" },
   });
   /** The player's race, as a RESULTS key: retired or disqualified, P1, P2-3, a
    *  points place (top 10; a sprint's top 8), else finished. */
@@ -80,7 +81,11 @@ const GarageArrival = (function () {
   // THE CREWS each way: the shipped five, MIX (a different one every visit) and
   // the Blender-authored variants (GarageCrewChoreo.IDS, js/garage/crew-choreo.js).
   const SHARED = ["mix", "current", "guides", "service", "welcome", "none"];
-  const crewIds = (dir) => SHARED.concat(typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.IDS[dir] : []);
+  // A RESULT clip (CLIPS[id].result: celebrate, applause, recover, console) is timed
+  // on poseHome's slower drive: AFTER-RACE CREW offers it, ENTER CREW does not.
+  const resultClip = (id) => typeof GarageCrewChoreo !== "undefined" && !!(GarageCrewChoreo.CLIPS[id] && GarageCrewChoreo.CLIPS[id].result);
+  const crewIds = (dir, results = false) => SHARED.concat(typeof GarageCrewChoreo !== "undefined"
+    ? GarageCrewChoreo.IDS[dir].filter((id) => results || !resultClip(id)) : []);
   /* MIX, resolved once per playback: the first read of a config object picks
    * the visit's crew and every later read of the same object (pose, poseOut,
    * duration, finish) gets the same one. Each playback reads a fresh object
@@ -100,7 +105,10 @@ const GarageArrival = (function () {
   function crewFor(config, dir) {
     const key = dir === "out" ? "leaveCrew" : dir === "home" ? "homeCrew" : "enterCrew";
     let v = config && config[key];
-    if (dir === "home" && (!v || v === "auto")) v = (RESULTS[config && config.result] || RESULTS.finish).crew;
+    if (dir === "home" && (!v || v === "auto")) {
+      const r = RESULTS[config && config.result] || RESULTS.finish;
+      v = typeof GarageCrewChoreo !== "undefined" && GarageCrewChoreo.has(r.crew) ? r.crew : r.crewAlt;
+    }
     if (v !== "mix") return v || "current";
     if (typeof GarageCrewChoreo === "undefined") return "current";
     let memo = _picked.get(config);
@@ -122,7 +130,7 @@ const GarageArrival = (function () {
       hold: typeof v.hold === "number" && Number.isFinite(v.hold) ? Math.max(0, Math.min(3, v.hold)) : null,
       carSpeed: number("carSpeed", 0.5, 2), endBeat: number("endBeat", 0, 3),
       afterRace: v.afterRace !== false,
-      homeCrew: v.homeCrew === "auto" || crewIds("in").includes(v.homeCrew) ? v.homeCrew : DEFAULT.homeCrew,
+      homeCrew: v.homeCrew === "auto" || crewIds("in", true).includes(v.homeCrew) ? v.homeCrew : DEFAULT.homeCrew,
       result: RESULTS[v.result] ? v.result : DEFAULT.result,
       move: MOVES.includes(v.move) ? v.move : DEFAULT.move, sway: number("sway", 0, 2), zoom: number("zoom", 0, 20),
       light: v.light === "asset" || moodIds().includes(v.light) ? v.light : DEFAULT.light,
@@ -264,7 +272,7 @@ const GarageArrival = (function () {
     // their own table, once: the static five stay index.html's.
     const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; return o; };
     for (const [key, dir] of [["enterCrew", "in"], ["leaveCrew", "out"], ["homeCrew", "in"]]) {
-      const el = fields[key], ids = typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.IDS[dir] : [];
+      const el = fields[key], ids = typeof GarageCrewChoreo !== "undefined" ? GarageCrewChoreo.IDS[dir].filter((id) => key === "homeCrew" || !resultClip(id)) : [];
       if (!el || !el.add || !el.options || typeof document === "undefined" || Array.from(el.options).some((o) => o.value === "mix")) continue;
       el.add(option("mix", "MIX: NEW CREW EACH VISIT"), 0);
       const none = Array.from(el.options).find((o) => o.value === "none") || null;

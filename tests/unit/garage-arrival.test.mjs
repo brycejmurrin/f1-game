@@ -1624,3 +1624,4 @@ test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, t
   }
   assert.ok(Math.abs(Arrival.pose(5, Arrival.settings({ angle: 'crane', fov: 64 })).fov - Arrival.rigSample('crane', 'in', 5 / Arrival.duration(Arrival.settings({ angle: 'crane' }), 'in')).fov - 10) < 1e-6, 'FIELD OF VIEW offsets the rig lens');
 });
+
