@@ -67,7 +67,7 @@
 /* CAM / PAUSE share the dock's effective BUTTON SIZE, capped at 150%.
    Readouts clear their measured rectangles independently of HUD scale. */
 :root {
-  --hud-btn-z: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5);
+  --hud-btn-z: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5);
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
@@ -982,6 +982,9 @@ body.hud-radio-top #announce:not([hidden]) {
   transform: none;
   min-width: 0;
   max-width: calc(var(--radio-top-w) / var(--hud-z));
+  /* The touch base rule's width reads the dock lane, which announceLane still
+     publishes: without this the slot card wrapped in a ~105 px lane (UI-HUNT-2-HUD). */
+  width: min(max-content, calc(var(--radio-top-w) / var(--hud-z)));
   min-height: calc(var(--radio-top-h) / var(--hud-z));
   font-size: var(--fs-micro);
   line-height: 1.15;
@@ -1002,6 +1005,9 @@ body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]
   transform: none;
   min-width: 0;
   max-width: calc(var(--radio-top-w) / var(--hud-z));
+  /* The touch base rule's width reads the dock lane, which announceLane still
+     publishes: without this the slot card wrapped in a ~105 px lane (UI-HUNT-2-HUD). */
+  width: min(max-content, calc(var(--radio-top-w) / var(--hud-z)));
   min-height: calc(var(--radio-top-h) / var(--hud-z));
   font-size: var(--fs-micro);
   line-height: 1.15;
@@ -2116,7 +2122,7 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
   border-radius: var(--r-xs);
 }
 #bc-tower .bc-head {
-  padding: 3px 6px; font-size: 12px; font-weight: 800; letter-spacing: 0.12em;
+  padding: 3px 6px; font-size: max(12px, calc(var(--fs-micro) / 1.4 / var(--hud-z))); font-weight: 800; letter-spacing: 0.12em;
   color: var(--text); border-bottom: 1px solid rgba(255, 255, 255, 0.12); cursor: pointer;
 }
 #bc-tower .bc-rows { list-style: none; margin: 0; padding: 0; }
@@ -2322,7 +2328,8 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 /* Optional panels retain their text size when space only holds one row. */
 #hud-rel[data-col-compact] > div:not([data-col-row]),
 #hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
-body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop]:not([data-hl-user]) { display: none !important; }
+body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop]:not([data-hl-user]),
+body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { display: none !important; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }

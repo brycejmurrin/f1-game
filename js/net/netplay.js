@@ -468,7 +468,9 @@ const NetPlay = (function () {
         if (ownOnly != null && entry.id !== ownOnly) continue;
         // A guest also takes the host's AI (aiRemotes); a host never has any.
         const r = remotes.get(entry.id) || aiRemotes.get(entry.id);
-        if (r && r.interp.push(t - (entry.age || 0), entry, arrival)) {   // an aged (relayed) entry keeps its own stamp
+        // adopt, not push: decodeSnapshot built `entry` for this packet alone
+        // and nothing reads it after this loop, so the buffer keeps it uncopied.
+        if (r && r.interp.adopt(t - (entry.age || 0), entry, arrival)) {   // an aged (relayed) entry keeps its own stamp
           r.heardAt = Number.isFinite(arrival) ? arrival : (G.netNow != null ? G.netNow : r.heardAt);
           r.everHeard = true;
         }

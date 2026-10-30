@@ -823,11 +823,11 @@ test("round 2 subagent ban: decided on the parsed argv, every runner spelling, n
     "node tools/mcp/apex-tools-mcp.mjs call apex_eval '{}'", "echo 'npm test' | bash", "bash <<< 'npx playwright test'",
     "setsid npm test", "flock /tmp/l npm test", "xargs -I{} npm run test:smoke", "env CI=1 npx playwright test",
     "node tools/ci/verify-change.mjs", "npm run test", "npx -c 'playwright test'"];
-  const open = ["npm run test:tooling-fast", "node --test tests/unit/docs-integrity.test.mjs", "node tools/shot/shot.mjs --help",
+  const open = ["npm run test:tooling-fast -- --changed", "node --test tests/unit/docs-integrity.test.mjs", "node tools/shot/shot.mjs --help",
     "node tools/ui/css-play.mjs --plan", "node tools/ci/test-bg.mjs --status", "node tools/ci/test-bg.mjs --tail smoke",
     "node tools/ci/verify-change.mjs --fast", "node tools/shot/frame-report.mjs monza", "echo 'npm test'", "grep -rn 'playwright test' docs",
     "tools/mcp/apex-tools-mcp.sh call apex_status '{}'", "npx playwright install chromium", "cat <<'EOF'\nnpm test\nEOF",
-    "node tools/ci/tooling-fast.mjs --jobs=3", "npm run test:guards"];
+    "node tools/ci/tooling-fast.mjs --changed --jobs=3", "npm run test:guards"];
   for (const c of browser) assert.equal(sub(c).status, 2, `a subagent must not run: ${c}`);
   for (const c of open) assert.equal(sub(c).status, 0, `a subagent may run: ${c} (${sub(c).stderr})`);
   assert.equal(sub("npm t", { agent_type: "verify-agent" }).status, 2, "agent_type alone marks a subagent");
@@ -1102,11 +1102,11 @@ test("H4: a push over a red tooling-fast run is refused; && chains, green logs a
     const log = path.join(repo.dir, "artifacts/logs/tooling-fast-suite.log");
     fs.mkdirSync(path.dirname(log), { recursive: true });
     // chained with ';' the push runs on a red result: refused before the run starts
-    let r = push("node tools/ci/tooling-fast.mjs; git push -u origin x");
+    let r = push("node tools/ci/tooling-fast.mjs --changed; git push -u origin x");
     assert.equal(r.status, 2, r.stderr); assert.match(r.stderr, /tooling-fast \.\.\.; git push/);
-    r = push("npm run test:tooling-fast\ngit push -u origin x");
+    r = push("npm run test:tooling-fast -- --changed\ngit push -u origin x");
     assert.equal(r.status, 2, r.stderr);
-    assert.notEqual(push("node tools/ci/tooling-fast.mjs && git push -u origin x").status, 2, "&& is the safe join");
+    assert.notEqual(push("node tools/ci/tooling-fast.mjs --changed && git push -u origin x").status, 2, "&& is the safe join");
     // newest log red, written after HEAD
     fs.writeFileSync(log, "x\n= run failed (39 passed, 1 failed)\n");
     r = push("git push -u origin x");
@@ -1566,4 +1566,30 @@ test('bash-guard refuses an active legacy hook that skips Claude Code; split hoo
   fs.copyFileSync(path.join(ROOT,'.githooks/pre-commit'),target);fs.chmodSync(target,0o755);
   const split=run();assert.equal(split.status,0,split.stderr);assert.equal(split.stdout,'');
  }finally{repo.rm();}
+});
+
+test("until/while … sleep is refused whatever it watches, and names wait-for / background ci-watch; prose is not a loop (finding 5)", () => {
+  const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env: { APEX_HELD_CHECK: "0", ...env } });
+  for (const c of ["until grep -q done log; do sleep 5; done", "while ! test -f x; do sleep 1; done", "if a; then until b; do sleep 2; done; fi"]) {
+    const r = run(c);
+    assert.equal(r.status, 2, `must refuse: ${c}`);
+    assert.equal(/wait-for\.mjs --log-matches/.test(r.stderr), true, "r.stderr ~ " + /wait-for\.mjs --log-matches/);
+    assert.equal(/ci-watch\.mjs --sha/.test(r.stderr), true, "r.stderr ~ " + /ci-watch\.mjs --sha/);
+  }
+  for (const c of ['git commit -m "docs: ci-watch beats while true; do ci-watch; sleep 5; done"', "echo ci-watch and sleep until done do", "while read -r l; do sleep 1; done < f"])
+    assert.equal(run(c).status, 0, `not a poll loop: ${c}`);
+});
+
+test("a piped or foreground-full tooling-fast, and a piped ready-gate, are refused with the closing line named (finding 4)", () => {
+  const run = (command, input = {}) => hook("bash-guard.sh", { ...bashCall(command), tool_input: { command, ...input } }, { env: { APEX_HELD_CHECK: "0" } });
+  for (const c of ["node tools/ci/tooling-fast.mjs --changed --jobs=3 | tail -3", "node tools/ci/ready-gate.mjs --pr 5 | head", "npm run test:tooling-fast | tail"]) {
+    const r = run(c, { run_in_background: true });
+    assert.equal(r.status, 2, `must refuse: ${c}`);
+    assert.equal(/= tooling-fast passed\|failed/.test(r.stderr), true, "r.stderr ~ " + /= tooling-fast passed\|failed/);
+  }
+  assert.equal(run("node tools/ci/tooling-fast.mjs").status, 2, "foreground full floor");
+  assert.equal(/run_in_background/.test(run("npm run test:tooling-fast").stderr), true, "names run_in_background");
+  for (const [c, bg] of [["node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet", false], ["node tools/ci/tooling-fast.mjs", true],
+    ["node tools/ci/tooling-fast.mjs --print-scope", false], ['echo "tooling-fast | tail"', false]])
+    assert.equal(run(c, { run_in_background: bg }).status, 0, `allowed: ${c}`);
 });

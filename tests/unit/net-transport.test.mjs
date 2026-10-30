@@ -1702,3 +1702,67 @@ test("BYE handling during remote-close drain can locally discard trailing mail",
     assert.deepEqual(got, ["result", "bye", "close"]);
   } finally { h.done(); }
 });
+
+// ── rtc pump double-buffers its inbox ───────────────────────────────────────
+// pump() used to detach the inbox with slice(0) on every frame that had mail.
+// It now swaps two arrays; the detach guarantees above must survive the swap.
+test("rtc pump: a BYE that shuts down mid-batch neither throws nor delivers the rest", () => {
+  const h = pcHarness();
+  try {
+    const got = [];
+    h.ep.onMessage((_, data) => { got.push(data); if (data === "bye") h.ep.close(); });
+    for (const data of ["result", "bye", "model", "lap"]) h.event.onmessage({ data });
+    assert.doesNotThrow(() => h.ep.pump());
+    assert.deepEqual(got, ["result", "bye"]);
+    assert.equal(h.ep.status, "closed");
+    assert.equal(h.ep.pump(), 0, "nothing is left queued after the shutdown");
+  } finally { h.done(); }
+});
+
+test("rtc pump: a message queued by a handler arrives on the NEXT pump, not this one", () => {
+  const h = pcHarness();
+  try {
+    const got = [];
+    let frame = 0;
+    h.ep.onMessage((_, data) => {
+      got.push(frame + ":" + data);
+      if (data === "a") h.state.onmessage({ data: "queued-by-a" });
+    });
+    h.event.onmessage({ data: "a" });
+    h.event.onmessage({ data: "b" });
+    frame = 1; assert.equal(h.ep.pump(), 2);
+    frame = 2; assert.equal(h.ep.pump(), 1);
+    frame = 3; assert.equal(h.ep.pump(), 0);
+    assert.deepEqual(got, ["1:a", "1:b", "2:queued-by-a"]);
+  } finally { h.done(); }
+});
+
+test("rtc pump allocates no batch copy: the inbox alternates between two arrays", () => {
+  const h = pcHarness();
+  const push = Array.prototype.push, slice = Array.prototype.slice;
+  const inboxes = [];
+  let slices = 0, pumping = false;
+  try {
+    let got = 0;
+    h.ep.onMessage(() => got++);
+    Array.prototype.push = function (m) {
+      // The transport's inbox record is the only pushed object with this shape.
+      if (m && typeof m === "object" && "bytes" in m && "channel" in m && "at" in m) inboxes.push(this);
+      return push.apply(this, arguments);
+    };
+    Array.prototype.slice = function () { if (pumping) slices++; return slice.apply(this, arguments); };
+    for (let f = 0; f < 6; f++) {
+      h.state.onmessage({ data: "s" + f });
+      pumping = true; h.ep.pump(); pumping = false;
+    }
+    Array.prototype.push = push; Array.prototype.slice = slice;
+    assert.equal(got, 6);
+    assert.equal(inboxes.length, 6);
+    assert.equal(slices, 0, "pump must not copy the inbox per frame");
+    assert.notEqual(inboxes[0], inboxes[1], "the next frame's mail lands in the other buffer");
+    for (let f = 2; f < 6; f++) assert.equal(inboxes[f], inboxes[f % 2], `frame ${f} reuses buffer ${f % 2}`);
+  } finally {
+    Array.prototype.push = push; Array.prototype.slice = slice;
+    h.done();
+  }
+});

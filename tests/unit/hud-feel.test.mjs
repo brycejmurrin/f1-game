@@ -1164,7 +1164,7 @@ test("BUTTON SIZE readout names the size the fit paints when the dock is capped"
   assert.equal(f("118%", 117.5, "1.175"), "118%", "at the cap: nothing to explain");
   const css = cssRules(readCssSource("css/touch-controls.css"));
   const zoom = decl(css, /^body:not\(\.desktop\) #dock-left,/, "zoom");
-  assert.equal(zoom, "var(--hud-z-dock-l, var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale))))", "the steer dock has its own zoom rule");
+  assert.equal(zoom, "min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))", "the steer dock has its own zoom rule, min()ed with the slider like the pedal dock");
   assert.equal(decl(css, /^body:not\(\.desktop\) #dock-left,/, "--touch-label-z"), zoom, "labels divide their floor by the same zoom");
 });
 
