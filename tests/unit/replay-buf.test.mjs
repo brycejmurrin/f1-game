@@ -668,7 +668,7 @@ test("css/dialogs.css gives #pm-replay-dock safe-area, wrapping and a viewport c
   assert.doesNotMatch(fs.readFileSync(path.join(ROOT, "js/camera/replay-buf.js"), "utf8"), /style\.cssText/);
 });
 
-for (const outcome of ["success", "error", "cancel"]) test("contact sheet restores scrub and camera on " + outcome, async () => {
+for (const outcome of ["success", "error", "cancel"]) test(`contact sheet restores scrub and camera on ${outcome}`, async () => {
   let api, release, active = 0, maximum = 0; const times = [], resets = [];
   const R = boot(undefined, { CamFeel: { resetFollow() { resets.push("follow"); }, resetFreeLook() {}, resetLatch() {} }, GameCams: { resetSmoothing() { resets.push("smooth"); } },
     PhotoStudio: { async contactSheet(ts, seek, cancelled) {
@@ -688,7 +688,7 @@ for (const outcome of ["success", "error", "cancel"]) test("contact sheet restor
   assert.equal(field[0].px, 3); assert.equal(resets.filter((s) => s === "smooth").length, 4);
 });
 
-for (const change of ["mode", "debug identity", "debug pose", "photo pose", "follow", "scrub time", "photo session"]) test("pending contact sheet respects newer " + change + " ownership", async () => {
+for (const change of ["mode", "debug identity", "debug pose", "photo pose", "follow", "scrub time", "photo session"]) test(`pending contact sheet respects newer ${change} ownership`, async () => {
   let resolve, check, lateSeek; const R = boot(undefined, { PhotoStudio: { contactSheet(_times, seek, cancelled) {
     seek(1); check = cancelled; lateSeek = seek; return new Promise((r) => { resolve = r; });
   } } });
