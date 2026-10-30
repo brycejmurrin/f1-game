@@ -20,7 +20,7 @@ const TLX = fs.readFileSync(path.join(ROOT, "js/render/three/tlx.js"), "utf8");
 
 installThreeGlobals();
 if (!globalThis.localStorage) globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
-const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.186.1/three.webgpu.min.js")).href);
+const THREE = await import(pathToFileURL(path.join(ROOT, "vendor/three-0.187.0/three.webgpu.min.js")).href);
 
 const tslice = (from, to) => {
   const a = TLX.indexOf(from), b = TLX.indexOf(to, a);

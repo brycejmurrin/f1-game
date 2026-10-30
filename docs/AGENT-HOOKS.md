@@ -11,7 +11,7 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 | Hook | Signature | Summary |
 |---|---|---|
 | `atmosphere` | `atmosphere()` | WHAT IS THE LIGHT DOING — day/night, sun or moon, floodlights, fog visibility, wet road. Raw values kept for measurement |
-| `awaitPresent` | `awaitPresent(timeoutMs)?` | WAIT FOR THE PIXELS — resolve once the next real frame has reached the screen; a screenshot taken before this resolves can read a stale or black canvas under HeadlessChrome |
+| `awaitPresent` | `awaitPresent(timeoutMs)?` | WAIT FOR THE PIXELS — resolves once a real frame is on screen; screenshot after it (before: stale or black canvas) |
 | `field` | `field({detail})` | THE GRID — race order, gap-to-leader and interval. world().rivals is the egocentric nearest-few |
 | `render` | `render({what,cols,ss,...})` | SHOW IT — the one optional raster, APPROXIMATE. what: 'view'\|'map'\|'circuit'\|'car'. For intuition, not measurement |
 | `scene` | `scene({radius,kinds,limit} \| {visible:true})` | WHAT IS AROUND ME — named scenery by distance and bearing; {visible:true} switches to the camera's on-screen list |
@@ -35,7 +35,8 @@ jq '.hooks[] | select(.name=="physState")' docs/agent-index.json
 
 | Hook | Signature | Summary |
 |---|---|---|
-| `objective` | `objective()` | WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints. Static; read once |
+| `ersPlan` | `ersPlan(plan?)` | sector ERS plan, 3× manual\|deploy\|save; get/set |
+| `objective` | `objective()` | WHAT AM I TRYING TO DO — win condition, the trade-offs (track limits, ERS, overtake, parts budget), hard constraints; read once |
 | `rollout` | `rollout({seconds,dt,input,policy,policyHz,samples})` | drive an interval, return a digest instead of every frame |
 | `terminal` | `terminal()` | {done, reason} — retired\|finished\|wrong_way\|rescued\|null |
 ## fields

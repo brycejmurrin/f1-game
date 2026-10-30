@@ -1897,3 +1897,12 @@ test("mixed-module helper imports propagate through intermediates without select
       [["tests", "specs", "cjs.spec.js"].join("/"), ["tests", "specs", "esm.spec.js"].join("/")]);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("files plans a hypothetical change and names rule 3's floor spec only when the diff evidences one", () => {
+  const pinned = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/career/career-ui.js"] });
+  assert.equal(pinned.changed, 1);
+  assert.ok(SOURCE_AFFECTED.some(([re, spec]) => re.test("js/career/career-ui.js") && spec === pinned.floor), pinned.floor);
+  const routed = select(undefined, DEFAULT_BUDGET_MIN, { files: ["js/ui/hud.js"] });
+  assert.equal(routed.floor, null);
+  assert.equal(routed.floorReason.split(";")[0], "no spec imports or is pinned to these files");
+});

@@ -13,7 +13,7 @@ function preloadThreeVendor(low) {
     try {
       // three.core too: three.webgpu imports it statically and modulepreload does not fetch dependencies,
       // so without it core was found only after webgpu had downloaded and parsed (one more round trip).
-      for (const href of ["vendor/three-0.186.1/three.webgpu.min.js", "vendor/three-0.186.1/three.core.min.js", "vendor/three-0.186.1/three.tsl.min.js"]) {
+      for (const href of ["vendor/three-0.187.0/three.webgpu.min.js", "vendor/three-0.187.0/three.core.min.js", "vendor/three-0.187.0/three.tsl.min.js"]) {
         // querySelector is absent in some VM harnesses — skip the dedupe then.
         if (document.querySelector && document.querySelector('link[rel="modulepreload"][href="' + href + '"]')) continue;
         const el = document.createElement("link");

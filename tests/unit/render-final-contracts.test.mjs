@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { createRequire } from 'node:module';
-import { Matrix4, PerspectiveCamera } from '../../vendor/three-0.186.1/three.core.min.js';
+import { Matrix4, PerspectiveCamera } from '../../vendor/three-0.187.0/three.core.min.js';
 const read = p => fs.readFileSync(new URL('../../' + p, import.meta.url), 'utf8');
 function fn(source, name) {
   const start = source.indexOf('function ' + name + '('); assert.ok(start >= 0, name);

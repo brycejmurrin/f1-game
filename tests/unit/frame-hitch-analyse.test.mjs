@@ -217,10 +217,10 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
     nodes: [
       cpuNode(1, "(root)", "", 0, [2, 4]),
       cpuNode(2, "render", "http://x/js/render/three/tlx.js?v=abc", 3400, [3]),
-      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
+      cpuNode(3, "getNodeBuilderState", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
       cpuNode(4, "endPass", "http://x/js/render/three/tlx-shadow.js?v=abc", 260, [5, 6]),
-      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
-      cpuNode(6, "createBindings", "http://x/vendor/three-0.186.1/three.webgpu.min.js", 5, []),
+      cpuNode(5, "getNodeBuilderState", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
+      cpuNode(6, "createBindings", "http://x/vendor/three-0.187.0/three.webgpu.min.js", 5, []),
     ],
     samples:    [3,      3,      5,       6,      1,     6],
     timeDeltas: [100000, 50000,  150000,  40000,  10000, 60000],
@@ -229,9 +229,9 @@ test("analyseCpu ranks by exact self time and folds a function reached two ways"
   assert.equal(a.totalMs, 410, "total is the sum of the deltas");
   assert.match(a.verdict, /TOP SELF TIME: getNodeBuilderState/);
   assert.equal(a.rows[0].ms, 300, "two parents fold into one 300 ms row");
-  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.186.1/three.webgpu.min.js:6");
+  assert.equal(a.rows[1].site, "createBindings @ vendor/three-0.187.0/three.webgpu.min.js:6");
   assert.equal(a.rows[1].ms, 100);
-  assert.equal(a.files[0].file, "vendor/three-0.186.1/three.webgpu.min.js");
+  assert.equal(a.files[0].file, "vendor/three-0.187.0/three.webgpu.min.js");
   assert.ok(a.files[0].share > 0.97, "the per-file fold attributes 400 of 410 ms to the bundle");
 });
 
