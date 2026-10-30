@@ -202,6 +202,7 @@ test("an unknown preset or knob is skipped with a Log.warn, never thrown", () =>
 });
 
 test("lazy: LAZY_UI_PRESETS, no <script> tag, loaded by SettingsNav on APPEARANCE; layoutPreset is exported", () => {
-  assert.deepEqual(MANIFEST.LAZY_UI_PRESETS, ["js/ui/layout-presets.js"]);
-  assert.equal(new Set(MANIFEST.FULL).has("js/ui/layout-presets.js"), false, "lazy, never eager");
+  assert.deepEqual(MANIFEST.LAZY_UI_PRESETS, ["js/ui/look-avail.js", "js/ui/layout-presets.js"]);
+  const full = new Set(MANIFEST.FULL);
+  assert.deepEqual(MANIFEST.LAZY_UI_PRESETS.filter((f) => full.has(f)), [], "lazy, never eager");
 });
