@@ -3,6 +3,7 @@
 // @skill steward
 // GitHub concurrency docs (read 2026-10-30): pending is a concurrency wait;
 // FIFO uses time entering the group, not workflow creation. Never infer position.
+// queued alone does not identify runner availability or another blocking cause.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -50,8 +51,8 @@ export function explainPrWait(s = {}) {
       const failed = jobs.filter((j) => BAD.has(j.conclusion));
       for (const j of failed) reason("ci-failed", "Job failed; assertion requires its log", { runId: r.id, jobId: j.id, job: j.name });
       for (const j of jobs.filter((j) => j.status !== "completed")) {
-        const state = j.status === "pending" ? "concurrency-wait" : j.status === "queued" ? "runner-wait" : j.status === "in_progress" ? "executing" : "ci-wait";
-        reason(state, state === "concurrency-wait" ? "Job waiting; exact concurrency lane and queue position are not exposed here" : "CI job has not completed", { runId: r.id, jobId: j.id, job: j.name, since: j.started_at || null });
+        const state = j.status === "pending" ? "concurrency-wait" : j.status === "queued" ? "queued" : j.status === "in_progress" ? "executing" : "ci-wait";
+        reason(state, state === "concurrency-wait" ? "Job waiting; exact concurrency lane and queue position are not exposed here" : state === "queued" ? "CI job is queued; the blocking cause is unknown" : "CI job has not completed", { runId: r.id, jobId: j.id, job: j.name, since: j.started_at || null });
       }
       if (!jobs.length) reason("ci-wait", "CI has not completed; job details unavailable", { runId: r.id });
     } else if (BAD.has(r.conclusion)) {

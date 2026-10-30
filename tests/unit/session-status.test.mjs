@@ -232,12 +232,13 @@ test("CLI --summary --json keeps the full JSON contract; default Markdown remain
 const { explainPrWait, collectPrWait } = await import("../../tools/ci/pr-wait.mjs");
 const { comparePaths, collectOverlap } = await import("../../tools/ci/path-overlap.mjs");
 
-test("pr-wait: pending concurrency, runner queue and execution remain distinct without fake position", () => {
+test("pr-wait: pending concurrency, generic queue and execution remain distinct without fake position", () => {
   const snapshot = { complete: true, pr: { number: 7, state: "open", head: { sha: SHA } },
     runs: [{ id: 8, name: "CI", head_sha: SHA, status: "in_progress" }], jobsRunId: 8,
     jobs: [{ id: 1, status: "pending" }, { id: 2, status: "queued" }, { id: 3, status: "in_progress" }] };
   const out = explainPrWait(snapshot);
-  assert.deepEqual(out.reasons.map((r) => r.state), ["concurrency-wait", "runner-wait", "executing"]);
+  assert.deepEqual(out.reasons.map((r) => r.state), ["concurrency-wait", "queued", "executing"]);
+  assert.equal(out.reasons[1].detail, "CI job is queued; the blocking cause is unknown");
   assert.equal(out.queuePosition, null);
   assert.equal(explainPrWait({ ...snapshot, jobsRunId: 9 }).complete, false);
 });

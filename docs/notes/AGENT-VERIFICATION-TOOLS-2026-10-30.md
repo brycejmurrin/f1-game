@@ -42,8 +42,10 @@ node tools/ci/pr-wait.mjs --fixture artifacts/pr-snapshot.json --json
 The GET-only collector reads the PR, current-head CI workflow runs/jobs and gate
 statuses, then rechecks the head. It excludes ignored edit/label runs using their
 `display_title`, even when their workflow name remains `CI`. Output retains all
-observed reasons, job ids and timestamps. Pending concurrency, runner queue,
+observed reasons, job ids and timestamps. Pending concurrency, generic queue,
 execution, real failures, gate refusal/revalidation and landing are distinct.
+A queued status alone does not establish runner starvation, dependency waiting or
+another blocking cause; the tool reports that cause as unknown.
 A merged PR's deployment remains unknown without explicit ancestry evidence.
 Endpoint errors, capped pagination and head drift retain incompleteness; exit 2
 means incomplete/invalid input, not that the PR's tests failed. This is a bounded
@@ -74,6 +76,10 @@ Inspected 2026-10-30:
 - [GitHub workflow concurrency](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency):
   `queue: max` allows up to 100 pending entries; FIFO follows time waiting on the
   concurrency group, not dispatch time. An exact position is not inferred here.
+- [GitHub status-check definitions](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/about-status-checks):
+  `pending` identifies a group-based concurrency limit; `queued` says only that
+  a check run has been queued. The table describes check runs and supplies no
+  exclusive runner-wait guarantee for a workflow job status.
 - [GitHub issue dependencies](https://docs.github.com/en/rest/issues/issue-dependencies):
   useful for a later blocker audit, separate from this path-overlap implementation.
 - [Playwright Trace Viewer](https://playwright.dev/docs/trace-viewer): existing
