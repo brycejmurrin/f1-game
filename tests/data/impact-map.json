@@ -366,6 +366,9 @@
         "tests/unit/crowd-audio.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
+      "clamp01": [
+        "tests/unit/audio-tune.test.mjs"
+      ],
       "detach": [
         "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
@@ -375,17 +378,25 @@
       "fireCheer": [
         "tests/unit/crowd-audio.test.mjs"
       ],
+      "idle": [
+        "tests/unit/audio-tune.test.mjs"
+      ],
       "inspect": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs"
       ],
       "liveOk": [
         "tests/unit/crowd-audio.test.mjs"
       ],
+      "sfxOk": [
+        "tests/unit/audio-tune.test.mjs"
+      ],
       "silence": [
         "tests/unit/crowd-audio.test.mjs"
       ],
       "update": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/crowd-audio.test.mjs",
         "tests/unit/crowd-ctx-rebuild.test.mjs"
       ]
@@ -716,10 +727,14 @@
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "attached": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "builds": [
         "tests/unit/ers-audio-layer.test.mjs"
+      ],
+      "clamp01": [
+        "tests/unit/audio-tune.test.mjs"
       ],
       "cueBoost": [
         "tests/unit/ers-audio-layer.test.mjs"
@@ -740,9 +755,14 @@
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "harvestLevel": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
+      "idle": [
+        "tests/unit/audio-tune.test.mjs"
+      ],
       "inspect": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "isLive": [
@@ -752,6 +772,7 @@
         "tests/unit/ers-audio-layer.test.mjs"
       ],
       "update": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/ers-audio-layer.test.mjs"
       ]
     },
@@ -1012,9 +1033,11 @@
     "js/audio/rivals.js": {
       "attach": [
         "tests/unit/rival-attach-init.test.mjs",
+        "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs"
       ],
       "collect": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs"
@@ -1030,12 +1053,17 @@
         "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-contact-sfx.test.mjs"
       ],
+      "idle": [
+        "tests/unit/audio-tune.test.mjs"
+      ],
       "passByState": [
         "tests/unit/rival-attach-init.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs"
       ],
       "passByVoices": [
+        "tests/unit/audio-tune.test.mjs",
         "tests/unit/rival-attach-init.test.mjs",
+        "tests/unit/rival-audio.test.mjs",
         "tests/unit/rival-passby-pool.test.mjs"
       ],
       "silence": [
