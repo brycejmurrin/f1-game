@@ -1064,3 +1064,62 @@ test("#3115 F8/F9: the per-frame sky update/derive and lit updateFrame mint no c
   for (const head of ["function derive()", "function update(sky)"])
     assert.doesNotMatch(body(sky, head), /(?:=|\|\|)\s*\[\s*[-\d]/, head + " mints a literal array per call");
 });
+
+// Perf hunt 6 (TLX-L1, cars F3/F4): exact-zero gates as REAL control flow in the compiled lit fragment, each body
+// free of derivatives and implicit-LOD samples (WebKit rejects them in non-uniform flow). Bit-identity is by
+// construction (weight 0 / multiplier 0); pixels still need gfx-probe + gpu-census.yml.
+for (const language of ["WGSL", "GLSL"]) test(`hunt 6: pit-lane, sun-disc and weave gates wrap their work in ${language}`, async () => {
+  const fg = makeFakeGL();
+  const renderer = new THREE.WebGPURenderer({ canvas: fg.canvas, context: fg.gl, forceWebGL: true, antialias: false });
+  try {
+    await renderer.init();
+    renderer.backend.utils.getTextureSampleData = () => ({ primarySamples: 1 });
+    const lit = globalThis.TLXShaders.lit(THREE, TSL, { chunks: globalThis.TLXShaders.chunks(THREE, TSL), shadow: null,
+      ssrTag: false, envCube: null, matMaps: null, lampGrid: null, sharedUniforms: true, maxLights: 16 });
+    const g = new THREE.BufferGeometry();
+    for (const [n, k] of [["position", 3], ["normal", 3], ["color", 3], ["mat", 1], ["trk", 3]])
+      g.setAttribute(n, new THREE.BufferAttribute(new Float32Array(k * 3), k));
+    const B = language === "WGSL" ? THREE.WGSLNodeBuilder : THREE.GLSLNodeBuilder;
+    const b = new B(new THREE.Mesh(g, lit.makeMaterial({ clearcoat: 0.8, carPaint: 1 })), renderer);
+    b.camera = new THREE.PerspectiveCamera(); b.scene = new THREE.Scene(); b.build();
+    const lines = b.fragmentShader.split("\n"), stacks = [], stack = [];
+    for (const [i, l] of lines.entries()) {   // the enclosing block headers of every line
+      for (const _ of l.match(/\}/g) || []) stack.pop();
+      stacks.push(stack.slice());
+      for (const _ of l.match(/\{/g) || []) stack.push(i);
+    }
+    const at = (re) => { const i = lines.findIndex(l => re.test(l)); assert.ok(i >= 0, `${language}: ${re}`); return i; };
+    const gate = (i, re) => {
+      const h = stacks[i].find(j => re.test(lines[j]));
+      assert.ok(h !== undefined, `${language}: ${lines[i].trim().slice(0, 90)} sits under ${re}`);
+      return h;
+    };
+    const clean = (h) => {
+      const body = lines.filter((_, k) => stacks[k].includes(h));
+      assert.ok(body.length > 0, `${language}: ${lines[h].trim()} has a body`);
+      const deriv = /\b(?:dpdx|dpdy|fwidth|dFdx|dFdy|textureSample|texture)\s*\(/;
+      assert.deepEqual(body.filter(l => deriv.test(l)), [], `${language}: derivative inside ${lines[h].trim()}`);
+    };
+    // L1: the pit lane runs under the uniform y > 0, its paint under the wrapped-window test.
+    const modRe = /(\w+) = (?:tsl_mod_float|mod)\( \( \( \w+ - ([\w.]+)\.x \) \+ (\w+) \), \3 \)/;
+    const modI = at(modRe), [, through, U] = lines[modI].match(modRe);
+    const lenM = lines[at(new RegExp(`\\w+ = ${U.replace(".", "\\.")}\\.y;`))].trim().split(" ")[0];
+    const lenH = gate(modI, new RegExp(`^\\s*if \\( \\( ${lenM} > 0\\.0 \\) \\)`));
+    for (const c of ["0.1, 0.36, 0.86", "0.15, 0.16, 0.19"])
+      clean(gate(at(new RegExp(`vec3(?:<f32>)?\\( ${c} \\)`)), new RegExp(`^\\s*if \\( \\( ${through} <= ${lenM} \\) \\)`)));
+    clean(lenH);
+    assert.ok(!stacks[at(/vec3(?:<f32>)?\( 0\.95, 0\.95, 0\.97 \)/)].includes(lenH), "white paint stays outside the pit gate");
+    // F4: the clearcoat sun disc runs only when its uniform multiplier is non-zero.
+    const discI = at(/pow\( max\( dot\(.*32\.0 \)/);
+    const glRe = /^\s*if \( \( ([\w.]+) != 0\.0 \) \)\s*\{?$/;
+    const glH = gate(discI, glRe), glint = lines[glH].match(glRe)[1];
+    assert.equal(lines.findIndex(l => l.trim().startsWith(`${glint} =`)), -1, "the disc gate reads a uniform (uniform control flow)");
+    assert.ok(lines[discI].includes(glint), "the gate is the disc's own multiplier");
+    clean(glH);
+    // F3: the carbon weave's sin/cos run only where its distance fade is above 0.
+    const fadeRe = /^\s*if \( \( (nodeVar\d+) > 0\.0 \) \)/;
+    const wvH = gate(at(/190\.0/), fadeRe), fade = lines[wvH].match(fadeRe)[1];
+    at(new RegExp(`${fade} = clamp\\( \\( 1\\.0 - \\( \\( \\w+ - 10\\.0 \\) / 10\\.0`));   // the weave gate is wvFade
+    clean(wvH);
+  } finally { renderer.dispose(); }
+});
