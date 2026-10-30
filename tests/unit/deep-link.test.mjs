@@ -169,6 +169,35 @@ test("BACK IS ESCAPE: one sentinel entry; a back closes the top layer or pauses 
   assert.deepEqual(clicks, ["door"], "a real back off the re-armed sentinel still closes the top layer");
 });
 
+// UI hunt 3: back pressed the door directly, skipping the handlers that take
+// Escape first (circuit search clears, garage camera panel shuts, peek ends).
+test("BACK asks Escape first: an inner handler that claims it keeps the screen; unclaimed falls to the door", () => {
+  const pushes = [], win = {}, clicks = [], seen = [];
+  const history = { state: null, pushState(s) { pushes.push(s); this.state = s; }, replaceState(s) { this.state = s; } };
+  const env = { claim: false, layer: { id: "select" } };
+  class KeyboardEvent { constructor(type, o) { Object.assign(this, o, { type, defaultPrevented: false }); } preventDefault() { this.defaultPrevented = true; } }
+  const focused = { dispatchEvent(ev) { seen.push(ev.key); win.keydown(ev); if (env.claim) ev.preventDefault(); return !ev.defaultPrevented; } };
+  const ctx = vm.createContext({
+    location: { search: "", pathname: "/f1-game/", hash: "" }, history, URLSearchParams, KeyboardEvent,
+    document: { activeElement: focused },
+    UiLayers: { inRace: () => false, top: () => env.layer },
+    TopModal: { escapeTop: () => { clicks.push("door"); return true; } },
+    Log: { info() {} }, setTimeout() {},
+    window: { addEventListener: (t, fn) => { win[t] = fn; } },
+  });
+  vm.runInContext(SRC + ";globalThis.DeepLink = DeepLink;", ctx, { filename: absSrc("js/ui/deep-link.js") });
+  ctx.DeepLink.create({ els: { overlay: { hidden: false } }, $: () => null });
+  const back = () => { history.state = { [ctx.DeepLink.BASE]: 1 }; win.popstate(); };
+  env.claim = true; back();
+  assert.deepEqual(seen, ["Escape"], "the focused element hears Escape");
+  assert.deepEqual(clicks, [], "a claimed Escape does not press the door");
+  assert.equal(pushes.length, 2, "…and still counts as taken: the sentinel re-arms once, not from our own key");
+  env.claim = false; back();
+  assert.deepEqual(clicks, ["door"], "unclaimed: the layer's door, as before");
+  env.layer = null; clicks.length = 0; seen.length = 0; back();
+  assert.deepEqual(seen, [], "no layer up: no synthetic key");
+});
+
 test("a ?go= link keeps the sentinel: the param strip preserves history.state", () => {
   const history = { state: null, pushState(s) { this.state = s; }, replaceState(s) { this.state = s; } };
   const ctx = vm.createContext({

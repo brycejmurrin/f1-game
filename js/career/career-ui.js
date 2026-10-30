@@ -1671,6 +1671,10 @@ function create(G) {
     Log.info("ui", "CareerUI.close");
     ++backupReadGeneration;
     $("career").hidden = true;
+    // A draft abandoned on any route out (a refused START sent it to the picker,
+    // whose BACK lands here with draft already cleared) gives the borrowed EMPTY
+    // slot back: left live, the title showed no career and a reload re-homed it.
+    if (draftFrom && !Career.active()) Career.useSlot(draftFrom.flavour, draftFrom.i);
     draft = null; draftFrom = null; armedDelete = "";
     armedImport = ""; pendingImport = null;
     draftFieldErr = null;

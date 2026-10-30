@@ -367,6 +367,21 @@ window.MenuNav = (function () {
         if (foot) return foot;
       }
     }
+    // Up off a TAB RAIL with nothing above it in its band: the header's ✕ sits
+    // off to one side (the Data Hub's top-right close), so the in-band edge
+    // wrap sent the pad to the bottom of the sheet and no arrow reached the
+    // close. A rail's Up is its only exit upward, so the nearest control above
+    // anywhere wins before the wrap — tabs only, the Zandvoort trap stays shut.
+    if (dy < 0 && from.getAttribute && from.getAttribute("role") === "tab") {
+      const above = [];
+      for (const el of list) {
+        if (el === from) continue;
+        const b = centre(el);
+        if (b.b <= a.t + 1) above.push({ el, x: b.y, y: b.x });
+      }
+      const hit = pickSideways({ x: a.y, y: a.x }, above, -1);
+      if (hit) return hit.el;
+    }
     if (dy && edge) return edge;
     // No band, or a sideways end: DOM / reading order. Wrap so Left from the
     // first item and Right from the last are never a no-op — a pad D-pad press
@@ -633,8 +648,26 @@ window.MenuNav = (function () {
     if (active.getAttribute && active.getAttribute("role") === "tab") e.stopPropagation();
   }
 
+  // A ROTATION KEEPS THE FOCUSED CONTROL ON SCREEN. Landscape → portrait
+  // re-flows a pane (Career's #cr-body grew 765 → 1374 px) while its scrollTop
+  // stays put, so the control the pad was on ends up outside the pane and the
+  // next arrow moves from somewhere the player cannot see (UI hunt 3). One
+  // frame after the resize settles, nudge it back with the same block:"nearest"
+  // focusItem uses; a control already in view does not move.
+  let _resizeFrame = 0;
+  function onResize() {
+    if (_resizeFrame) return;
+    _resizeFrame = requestAnimationFrame(() => {
+      _resizeFrame = 0;
+      const layer = activeLayer(), el = document.activeElement;
+      if (!layer || !el || el === document.body || !layer.contains(el) || !el.scrollIntoView) return;
+      el.scrollIntoView({ block: "nearest", inline: "nearest" });
+    });
+  }
+
   function init() {
     Log.info("ui", "MenuNav.init");
+    window.addEventListener("resize", onResize);
     // passive:false — a redirected wheel must be able to preventDefault, or the
     // page keeps its own (no-op) scroll and the gesture double-counts on the
     // platforms that do rubber-band.
@@ -652,5 +685,5 @@ window.MenuNav = (function () {
   // second copy of the selector to drift out of step with this one.
   // items / currentItem: js/ui/modal.js lands focus on a freshly shown
   // non-dialog screen with the same rule the first arrow press uses.
-  return { activeLayer, nearestPane, onWheel, onKeyDown, FOCUSABLE, step, pickSideways, items, currentItem, ownsArrows };
+  return { activeLayer, nearestPane, onWheel, onKeyDown, onResize, FOCUSABLE, step, pickSideways, items, currentItem, ownsArrows };
 })();

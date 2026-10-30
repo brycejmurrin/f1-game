@@ -77,11 +77,31 @@ test("cancelled lazy audio search cannot steal the next category BACK target", a
   assert.equal(h.dom.document.activeElement, display);
   h.complete(); await tick(); await tick(); assert.equal(h.index.hidden, false); assert.equal(h.dom.document.activeElement, display);
 });
-test("a fresh settings session cancels search-return ownership while preserving query", () => {
+// Product call (UI hunt 3, 2026-10-30): a fresh open starts unfiltered, the same
+// rule as the circuit picker's menu door (select-screen-fixes.test.mjs); BACK
+// inside one session still restores the query (the tests above).
+test("a fresh settings session cancels search-return ownership and clears the query", () => {
   const h = boot(), control = h.el("select", "pm-gears-sel", h.dom.document.querySelector("#pm-panel-controls")); control.value = "auto";
   h.result("manual gears").onclick(); h.nav.showCurrent();
+  assert.equal(h.search.value, "", "a reopened sheet is unfiltered");
+  assert.equal([...h.index.querySelectorAll("button")].filter((b) => b.dataset.settingResult).length, 0, "no stale result rows");
   const display = h.dom.document.querySelector("#pm-open-display"); display.focus(); display.onclick(); h.nav.back();
-  assert.equal(h.dom.document.activeElement, display); assert.equal(h.search.value, "manual gears"); assert.equal(control.value, "auto");
+  assert.equal(h.dom.document.activeElement, display); assert.equal(control.value, "auto");
+});
+test("Escape in a non-empty search clears the query and keeps the sheet; an empty field lets Escape through", () => {
+  const h = boot();
+  h.result("manual gears");
+  const key = (target) => ({ key: "Escape", target, isComposing: false, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } });
+  const first = key(h.search); h.ctx.Search.onEscape(first);
+  assert.equal(h.search.value, ""); assert.equal(first.defaultPrevented, true); assert.equal(first.stopped, true);
+  assert.equal([...h.index.querySelectorAll("button")].filter((b) => b.dataset.settingResult).length, 0, "results repainted");
+  const second = key(h.search); h.ctx.Search.onEscape(second);
+  assert.equal(second.defaultPrevented, false, "empty field: TopModal's Escape closes the sheet as before");
+  // A pad's B arrives at the dialog as `cancel`; the focused field is the target.
+  h.result("manual gears"); h.search.focus();
+  const b = { type: "cancel", target: h.dom.document.querySelector("#pmsettings"), preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+  h.ctx.Search.onEscape(b);
+  assert.equal(h.search.value, ""); assert.equal(b.defaultPrevented, true, "pad B clears the query instead of closing the sheet");
 });
 test("successful lazy search still owns BACK and opens ancestor disclosures", async () => {
   const h = boot({ lazy: true }), fold = h.el("details", "audio-fold", h.dom.document.querySelector("#audioset")), target = h.el("input", "as-mvol", fold); target.value = "42";

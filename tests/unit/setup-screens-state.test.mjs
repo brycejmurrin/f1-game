@@ -355,6 +355,20 @@ test("career: a NEW CAREER draft does not survive leaving the screen", () => {
     "a draft abandoned at MAIN MENU came back as NEW CAREER on openHub()");
 });
 
+// UI hunt 3: a refused START sent the draft to the picker (build() clears the
+// draft), and that picker's BACK reached close() with the EMPTY slot still the
+// live one — the title showed no career and a reload re-homed the save.
+test("career: any exit that abandons a NEW CAREER draft gives the borrowed slot back", () => {
+  const { ui, $, Career } = loadCareerUi();
+  ui.openSlots();
+  assert.deepEqual(Career.slot(), { flavour: "driver", i: 0 });
+  $("cr-left").querySelectorAll(".cr-slot.empty")[0].querySelector(".cr-slot-main").onclick();
+  assert.equal($("cr-title").textContent, "NEW CAREER");
+  assert.notDeepEqual(Career.slot(), { flavour: "driver", i: 0 }, "the empty slot is borrowed while drafting");
+  ui.close();
+  assert.deepEqual(Career.slot(), { flavour: "driver", i: 0 }, "the shared exit restores the player's live slot");
+});
+
 test("career: an armed DELETE? disarms when the screen closes", () => {
   const { dom, ui, $, Career } = loadCareerUi();
   ui.openSlots();

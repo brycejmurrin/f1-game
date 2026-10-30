@@ -247,9 +247,28 @@ const SettingsSearch = (function () {
         return document.activeElement === target;
       },
       cancel() { fromSearch = false; clearFeedback(); },
+      // A fresh open starts unfiltered, as the circuit picker's menu door does;
+      // BACK and returnToSearch inside one session keep the query (UI hunt 3).
+      clear() { if (input.value) { input.value = ""; paint(); } },
       dispose() { subscribers.delete(paint); clearFeedback(); box.remove(); },
       input,
     });
   }
-  return Object.freeze({ CATALOG, register, find, reveal, create });
+  // Escape in a non-empty FIND A SETTING clears the query first, like the
+  // circuit search (select-screen.js): TopModal's document-capture Escape
+  // otherwise closed the whole sheet. Window capture runs ahead of it. A pad's
+  // B reaches a dialog as `cancel` (pad-menu.js padEscape), not a keydown.
+  function onEscape(e) {
+    const cancel = e.type === "cancel";
+    if ((!cancel && e.key !== "Escape") || e.isComposing || e.defaultPrevented) return;
+    const t = cancel ? document.activeElement : e.target;
+    if (!t || !t.value || !t.closest || !t.closest("[data-settings-search]")) return;
+    t.value = ""; if (t.oninput) t.oninput();
+    e.preventDefault(); e.stopPropagation();
+  }
+  if (typeof window !== "undefined" && window.addEventListener) {
+    window.addEventListener("keydown", onEscape, true);
+    window.addEventListener("cancel", onEscape, true);
+  }
+  return Object.freeze({ CATALOG, register, find, reveal, create, onEscape });
 })();

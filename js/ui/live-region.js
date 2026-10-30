@@ -26,8 +26,29 @@ const LiveRegion = (function () {
   const queue = [];
   const now = () => (typeof performance !== "undefined" && performance.now ? performance.now() : Date.now());
 
+  // AN OPEN MODAL MAKES #announce-live INERT. showModal() hides everything
+  // outside the dialog from assistive tech, so a line said while Settings,
+  // the results sheet or any dialog is up went nowhere (UI hunt 3). The line
+  // goes to a polite twin INSIDE the topmost modal, made on first use; the
+  // clear-then-write beat means it is in the tree, empty, before it speaks.
+  function modalRegion() {
+    let top = null;
+    try { const open = document.querySelectorAll(":modal"); top = open.length ? open[open.length - 1] : null; } catch (_) { return null; }
+    if (!top) return null;
+    let r = top.querySelector(":scope > [data-announce-modal]");
+    if (!r) {
+      r = document.createElement("div");
+      r.setAttribute("data-announce-modal", "");
+      r.setAttribute("role", "status"); r.setAttribute("aria-live", "polite"); r.setAttribute("aria-atomic", "true");
+      top.appendChild(r);
+    }
+    return r;
+  }
   function region() {
-    if (!el && typeof document !== "undefined" && document.getElementById) el = document.getElementById("announce-live");
+    if (typeof document === "undefined") return null;
+    const inModal = document.querySelectorAll && modalRegion();
+    if (inModal) return inModal;
+    if (!el && document.getElementById) el = document.getElementById("announce-live");
     return el;
   }
   // radioKind("penalty-hit") -> "penalty"; the radio card's other kinds are radio.

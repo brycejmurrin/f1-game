@@ -32,10 +32,23 @@ function pushSentinel() {
     history.pushState(Object.assign({}, history.state, { [MARK]: 1 }), "");
   } catch (_) { /* sandboxed page */ }
 }
+// BACK ASKS ESCAPE FIRST. Inner handlers take Escape ahead of the layer's door
+// (circuit search clears, the garage camera panel shuts, a peek ends); pressing
+// the door straight away closed the whole screen instead (UI hunt 3). So a
+// layer that is up hears a synthetic Escape at the focused element; only when
+// nobody claims it does escapeTop() run (a nested modal ignores a synthetic key).
+let synthEsc = false;
+function escapeFirst() {
+  if (typeof KeyboardEvent === "undefined" || !(UiLayers.top && UiLayers.top())) return false;
+  const ev = new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true });
+  synthEsc = true;
+  try { (document.activeElement || document.body || document).dispatchEvent(ev); } finally { synthEsc = false; }
+  return ev.defaultPrevented;
+}
 function onBack($) {
   if (onSentinel()) return;                     // forward onto our own entry: nothing to undo
   if (!stateHas(BASE)) return;                  // a fragment navigation, not a back off the sentinel
-  const top = typeof TopModal !== "undefined" && TopModal.escapeTop && TopModal.escapeTop();
+  const top = escapeFirst() || (typeof TopModal !== "undefined" && TopModal.escapeTop && TopModal.escapeTop());
   let took = !!top;
   if (!took && UiLayers.inRace()) { const p = $("pausebtn"); if (p) { p.click(); took = true; } }
   if (took) pushSentinel();
@@ -45,7 +58,7 @@ function guardBack($) {
   pushSentinel();
   window.addEventListener("popstate", () => onBack($));
   window.addEventListener("pointerdown", pushSentinel, true);
-  window.addEventListener("keydown", pushSentinel, true);
+  window.addEventListener("keydown", () => { if (!synthEsc) pushSentinel(); }, true);   // our own Escape is no re-arm
 }
 function create(G) {
   const { $, els } = G;
