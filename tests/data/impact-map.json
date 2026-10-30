@@ -15257,6 +15257,7 @@
       ],
       "prunePool": [
         "tests/unit/tlx-glow-instancing.test.mjs",
+        "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-pipe-pin-warm.test.mjs",
         "tests/unit/tlx-prune-pin.test.mjs"
       ],

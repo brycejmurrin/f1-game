@@ -387,6 +387,64 @@ test("R13: chunk cull never shrinks its scratch list; refuseTab is minted once p
   assert.equal((TLX.match(/const refuseTab = /g) || []).length, 1);
 });
 
+// Hunt 6 lead 1 (REFUTED): particles.js keeps _vertA / _vertB across frames, so the wrapped stream is built ONCE and
+// each dirty frame is one ranged upload of the payload, never a new buffer. Driven the way particles.js draw() calls it.
+// streams(P): memState().churn.streamNew's sum over these slots (slot.builds).
+const streams = (P) => P.partStreams.reduce((n, s) => n + (s.builds | 0), 0);
+test("hunt 6: 600 particle frames on stable arrays build each stream once; only a reallocation re-wraps (churn.streamNew)", () => {
+  const P = bootParticles();
+  const vertA = new Float32Array(256 * 60), vertB = new Float32Array((256 + 72) * 60);
+  let uploadsA = 0, uploadsB = 0;
+  for (let f = 0; f < 600; f++) {
+    const dirtyA = f % 3 === 0, pb = 60 * (1 + (f % 7));
+    const vA = P.partStreams[0].ib ? P.partStreams[0].ib.version : -1, vB = P.partStreams[1].ib ? P.partStreams[1].ib.version : -1;
+    P.api.drawParticles(vertA, 1200, false, dirtyA);
+    P.api.drawParticles(vertB, pb, true, true);
+    if (P.partStreams[0].ib.version !== vA) uploadsA++;
+    if (P.partStreams[1].ib.version !== vB) uploadsB++;
+    assert.equal(P.partStreams[1].ib.updateRanges[0].count, pb, "the additive upload is the payload, not the array");
+  }
+  assert.equal(streams(P), 2, "one wrap per blend group for the whole run");
+  assert.deepEqual(P.disposed, [], "no stream geometry freed");
+  assert.equal(uploadsA, 200, "alpha: one upload per dirty frame only");
+  assert.equal(uploadsB, 600);
+  P.api.drawParticles(new Float32Array((256 + 400) * 60), 1200, false, true);   // rainSeed grew _vertA
+  assert.equal(streams(P), 3, "a reallocation is the one re-wrap");
+  assert.equal(P.disposed.length, 1);
+});
+// Hunt 6 lead 2: the REAL acquireMesh / prunePool. A wrapper is minted per (geo, mat, occurrence) once and reused, so
+// churn.poolNew moves only on a new peak; a pruned wrapper is re-minted (a new three RenderObject) when drawn again.
+test("hunt 6: acquireMesh mints a wrapper once per (geo, mat, occurrence); prune + re-draw is counted (churn.poolNew/poolPruned)", () => {
+  const pruneAt = TLX.indexOf("      const PRUNE_EVERY_MS =");
+  const mk = new Function("THREE", `"use strict";
+    const meshPool = [], meshByGeo = new Map(), scene = new THREE.Scene(), dropped = [];
+    let _poolBatch = 0, _poolNow = 0, _r6 = false, _pruneLast = -Infinity, _pinArmed = true, _kidBatch = -1, _kids = null, _kidN = 0;
+    const fallbackMat = () => null, dropWrapper = (m) => dropped.push(m), poolRoot = null;
+    ${TLX.slice(pruneAt, TLX.indexOf("\n", pruneAt))}
+    ${fnSource(TLX, "function prunePool(now) {")}
+    ${fnSource(TLX, "function acquireMesh(geo, matrixArr, material, rec) {")}
+    return { frame(now, draws) { _poolBatch++; _poolNow = now; prunePool(now); return draws.map(([g, m]) => acquireMesh(g, null, m, null)); },
+      acquireMesh, prunePool, dropped };`);
+  const P = mk(THREE);
+  const geos = [0, 1, 2].map(() => new THREE.BufferGeometry());
+  const mats = [new THREE.MeshBasicNodeMaterial(), new THREE.MeshBasicNodeMaterial()];
+  const draws = [[geos[0], mats[0]], [geos[0], mats[0]], [geos[1], mats[0]], [geos[1], mats[1]], [geos[2], mats[1]]];
+  const first = P.frame(0, draws);
+  assert.equal((P.acquireMesh.n | 0), 5, "one wrapper per occurrence");
+  for (let f = 1; f <= 600; f++) {
+    const got = P.frame(f * 16, f % 2 ? draws : draws.slice(0, 3));   // a draw set that varies frame to frame
+    got.forEach((m, i) => assert.equal(m, first[i], "the same wrapper for the same (geo, mat, occurrence)"));
+  }
+  assert.equal((P.acquireMesh.n | 0), 5, "600 frames, no new wrapper");
+  assert.equal((P.prunePool.n | 0), 0);
+  P.frame(20000, draws.slice(0, 2));   // under 20 s idle: nothing goes
+  assert.equal((P.prunePool.n | 0), 0);
+  P.frame(31000, draws.slice(0, 2));   // > 20 s on: the three wrappers not drawn since ~9.6 s idle out
+  assert.equal((P.prunePool.n | 0), 3);
+  assert.equal(P.dropped.length, 3);
+  P.frame(31016, draws);
+  assert.equal((P.acquireMesh.n | 0), 8, "drawn again after a prune: re-minted, and counted");
+});
 // R6: the REAL pool-root functions (_kidsBegin / _poolShow) and acquireMesh's parenting, driven the way
 // present() / mirrorEnd() drive them, rendered by three r186 over the fake GL: three draws exactly the
 // acquired wrappers and walks nothing else.
