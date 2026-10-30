@@ -746,7 +746,7 @@ test("guards-report lists EVERY failing guard with a fix command, not just the f
   assert.deepEqual(fails.map((f) => f.name), ["pins never grow", "groups.json order"], "file-level wrapper dropped, both reds kept");
   const text = guardsReport(tap);
   assert.equal(/2 failing guards/.test(text), true, "text ~ " + /2 failing guards/);
-  assert.equal(/ratchets\.mjs --update --lower-only/.test(text), true, "text ~ " + /ratchets\.mjs --update --lower-only/);
+  assert.equal(/npm run precommit:fix/.test(text), true, "text ~ " + /npm run precommit:fix/);
   assert.equal(/npm run gen/.test(text), true, "text ~ " + /npm run gen/);
   assert.equal(guardsReport("ok 1 - fine\n"), "");
 });

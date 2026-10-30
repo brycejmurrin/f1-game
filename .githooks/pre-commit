@@ -162,7 +162,7 @@ else
   RATCHET_RED=1
   echo "pre-commit: ratchet check or auto-staging failed (artifacts/pre-commit-ratchets.log); running the guards too so every failure shows at once:" >&2
   tail -15 artifacts/pre-commit-ratchets.log >&2
-  echo "pre-commit: ratchet fix: shrink the growing count, or \`node tools/check/ratchets.mjs --update --fragment --reason=\"<why>\"\` (a count that fell: \`node tools/check/ratchets.mjs --update --lower-only\`)." >&2
+  echo "pre-commit: ratchet fix: shrink the growing count, or \`node tools/check/ratchets.mjs --update --fragment --reason=\"<why>\"\` (a count that fell, or generated drift: \`npm run precommit:fix\`)." >&2
 fi
 # Verdict cache (#2889): a fresh green write-tree match skips the suite.
 # Printed on stdout so agents see the hit line; the suite log stays for misses.
