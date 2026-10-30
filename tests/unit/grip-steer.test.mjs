@@ -129,6 +129,25 @@ test("VX_FLOOR matches the player-forces slip |vx| floor (4 m/s)", () => {
   assert.equal(GS.VX_FLOOR, 4);
 });
 
+test("apply reuses one return bag (no per-tick literal allocation)", () => {
+  const st = { speed: 40, vLat: 0, yawRate: 0, muF: 20, csFront: 130, af: 1.3, ar: 1.5, braking: false, shaped: 1, capSm: 0.05, dt: 1 / 60 };
+  const a = GS.apply(0.4, st, 1);
+  const b = GS.apply(0.4, { ...st, capSm: a.capSm }, 1);
+  assert.equal(a, b, "apply must return the same pooled object");
+});
+
+test("cold capSm seeds to the live cap instead of ramping from zero", () => {
+  const muF = 20, cs = 130;
+  const alphaPk = (Math.PI / 2) * muF / cs * GS.TARGET;
+  const first = GS.apply(0.5, {
+    speed: 30, vLat: 0, yawRate: 0, muF, csFront: cs, af: 1.3, ar: 1.5,
+    braking: false, shaped: 1, capSm: 0, dt: 1 / 60,
+  }, 1);
+  // Old path: capSm ≈ (1−e^(−dt/TAU))·cap ≈ 0.34·αpk on the first frame at speed.
+  assert.ok(first.capSm > alphaPk * 0.85,
+    `capSm should seed near αpk on frame 1 (got ${first.capSm}, αpk=${alphaPk})`);
+});
+
 test("forPlayer is identity at OFF and pools without changing the apply result", () => {
   GS.setLevel(1);
   const c = { vLat: 1, yawRateCur: 0.2, speed: 30, gripSteerCapSm: 0 };

@@ -29,6 +29,8 @@ const GripSteer = (function () {
     braking: false, shaped: 0, capSm: 0, dt: 0,
   };
   const _out = { delta: 0, capSm: 0 };
+  // apply() writes here every call — forPlayer copies into _out after apply.
+  const _applyOut = { delta: 0, capSm: 0 };
 
   // Notch 1 = OFF (k = 0); notch 10 = full (k = 1).
   function assistK(n) {
@@ -69,13 +71,25 @@ const GripSteer = (function () {
    */
   function apply(driverDelta, state, kk) {
     const strength = kk == null ? k : +kk || 0;
-    if (!(strength > 0) || !state) return { delta: driverDelta, capSm: state && state.capSm || 0 };
+    if (!(strength > 0) || !state) {
+      _applyOut.delta = driverDelta;
+      _applyOut.capSm = state && state.capSm || 0;
+      return _applyOut;
+    }
 
     const speed = +state.speed || 0;
-    if (!(speed > 0)) return { delta: driverDelta, capSm: state.capSm || 0 };   // rest + reverse
+    if (!(speed > 0)) {
+      _applyOut.delta = driverDelta;
+      _applyOut.capSm = state.capSm || 0;
+      return _applyOut;
+    }
 
     const blend = strength * smoothstep(V_LO, V_HI, speed);
-    if (!(blend > 0)) return { delta: driverDelta, capSm: state.capSm || 0 };
+    if (!(blend > 0)) {
+      _applyOut.delta = driverDelta;
+      _applyOut.capSm = state.capSm || 0;
+      return _applyOut;
+    }
 
     const vx = Math.max(Math.abs(speed), VX_FLOOR);
     const r = +state.yawRate || 0;
@@ -101,7 +115,10 @@ const GripSteer = (function () {
 
     const dt = Math.max(+state.dt || 1 / 60, 1e-4);
     const a = 1 - Math.exp(-dt / TAU);
-    const capSm = (state.capSm || 0) + (cap - (state.capSm || 0)) * a;
+    const capPrev = state.capSm || 0;
+    // Cold capSm (0 after OFF or a fresh car) used to low-pass from zero and
+    // crush lock for ~TAU on the first metres at speed; seed once to the live cap.
+    const capSm = capPrev === 0 ? cap : capPrev + (cap - capPrev) * a;
 
     const deltaCap = s * Math.min(Math.abs(driverDelta), capSm);
     const shaped = Math.abs(+state.shaped || 0);
@@ -110,7 +127,9 @@ const GripSteer = (function () {
     let self = clamp(-betaR * 0.35, -0.5 * alphaPk, 0.5 * alphaPk) - r * 0.012;
     self *= (1 - 0.7 * Math.min(shaped, 1));
 
-    return { delta: lerp(driverDelta, deltaCap + self, blend), capSm };
+    _applyOut.delta = lerp(driverDelta, deltaCap + self, blend);
+    _applyOut.capSm = capSm;
+    return _applyOut;
   }
 
   /** Call-site helper for updateCar: identity when the slider is OFF. */

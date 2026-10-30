@@ -1,0 +1,1 @@
+Fixed: GRIP STEER no longer allocates a fresh result object every physics tick, and the slip cap no longer ramps from zero on the first frames after the assist engages (smoother turn-in when GRIP is on).
