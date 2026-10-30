@@ -11,12 +11,12 @@ branch, and this table links them.
 
 | lane | issue | scope | owner | PR | status |
 |---|---|---|---|---|---|
-| A | #4258 | contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | session_01BEw9UK2vGqGU75NMHYfS8K (Opus) | — | launched 17:05–17:08Z |
-| B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | session_01BEw9UHQdfwniLm5HtYjdCi (Sonnet) | — | launched 17:05–17:08Z |
-| C | #4257 | ratchet tooling: a topic branch can lower a slack-0 tree metric | Bryce's own session (claimed 17:00Z, first claimant) | — | not launched here |
+| A | #4258 | **priority: POS ink under HIGH CONTRAST** (below); contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | session_01BEw9UK2vGqGU75NMHYfS8K (Opus) | #4300 | launched 17:05–17:08Z |
+| B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | session_01BEw9UHQdfwniLm5HtYjdCi (Sonnet) | #4303 | launched 17:05–17:08Z |
+| C | #4257 | ratchet tooling: a topic branch can lower a slack-0 tree metric | Bryce's own session (claimed 17:00Z, first claimant) | #4305 | not launched here |
 | D | #4281 | career header red ink, disclaimer border, garage tab strip | session_01BEw9UHhUxAcQ1XuHhx3LaL (Sonnet) | — | launched 17:05–17:08Z |
 | D2 | #4282 | layout-audit: the 8 harness-timeout cells | waits for #4225 (owns `tools/ui/layout-audit.mjs`) | — | blocked |
-| E | #4284 | motion and feel: transitions, press feedback, results reveal, tabular numerals; one living gallery | session_01BEw9UGgCHVAFkn5Wwj63iT (Opus) | — | launched 17:05–17:08Z |
+| E | #4284 | motion and feel: transitions, press feedback, results reveal, tabular numerals; one living gallery | session_01BEw9UGgCHVAFkn5Wwj63iT (Opus) | #4299 | launched 17:05–17:08Z |
 
 ## Coordination decisions
 - **#4257 is not relaunched.** A session Bryce started from his phone claimed it at 17:00Z; the first claimant
@@ -35,3 +35,21 @@ branch, and this table links them.
 - **The Codex race-interface lane** (`cursor/race-interface-7c6d11`, Bryce's own tool, 17:09Z) owns HUD layout
   and placement, `css/touch-controls.css` and the input logic. Lane A keeps only the colour tokens and the HUD
   ink/panel-colour values. Lane E keeps the motion block. The split is posted on PR #4286.
+
+## Findings and overlaps after launch
+- **POS unreadable under HIGH CONTRAST (deploy tip `7c6d11c6`, primary race info):** `css/hud.css:2101`
+  `:root[data-ui-contrast="high"] :is(.hud-box, #announce)` takes `#announce`'s id specificity (1,2,0) and
+  beats `body:not(.hud-prof-broadcast) #hud-box-pos` (1,1,1) at `:158`. The light POS plate goes dark and the
+  dark ink from `:162` stays, so POS reads near-black on black. Bryce's own settings export
+  (`tests/data/settings-defaults-export.json`) has `uiContrast: "high"`, so every race on his phone shows it.
+  Traced by the Codex race-interface lane (#4295). It goes to lane A as its first fix, with a regression test.
+- **Blocking-CSS headroom:** lane E measured the six title-critical sheets at 216,248 B on the tip, about
+  22.7 KB under the ceiling. The "~50 B" in the briefs came from pass #1's note and is stale.
+- **Lane E vs #4283:** #4283 ("Design pass #3: motion & first 30 s, round 3", another session, #4275) already
+  builds the touch screen-enter fade. Lane E leaves that rule to it and keeps the exit easing token,
+  press feedback, the results reveal and the tabular numerals.
+- **Lane B vs #4297** (Home destination redesign, Closes #4291): both edit `.mb-sub` in
+  `css/menu-destinations.css`. #4303 is 9 lines and lands first; #4297 syncs after it and re-blesses its
+  Home baselines on the merged tree.
+- **#4257:** the fix is draft PR #4305 by the claimant session, which will report when it merges. Lane A then
+  does `--upgrade` and the rawColor-lowering swaps.
