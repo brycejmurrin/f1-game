@@ -62,6 +62,8 @@ PR → agent `finding-verifier` before you fix any of them.
    only a Bryce-attended session adds a `Monitor` on `node tools/ci/ci-watch.mjs --sha <pushed sha> --timeout 30
    --failures-only` (`--pages` after a deploy-branch push). Live means your commit is an ANCESTOR of the live
    `apex-sha` (agent `deploy-research`). Detail: `references/ci-verdicts.md`.
+   If `subscribe_pr_activity` fails, keep one background `ci-watch.mjs --sha <head> --timeout 30` and tell the dispatcher
+   (docs/WORKERS.md §The contract item 4).
 8. **CI wake** — re-read `headRefOid`, then `ci-watch --once`, and act on the verdict: `references/ci-verdicts.md`
    (also the `gate` commit status, which ci-watch never shows).
 9. **Host-neutral watch** — ownership is the claim comment plus `claimed`, or the Hand-off `owner:` line; watch per
