@@ -263,7 +263,6 @@ const LayoutPresets = (function () {
     const built = SettingRow.build(ROW, "LAYOUT PRESET", values());
     const box = doc.createElement("div");
     box.id = ROW + "-box";
-    box.className = "pm-layoutpreset";
     const note = doc.createElement("p");
     note.id = ROW + "-note";
     note.className = "adv-help";
