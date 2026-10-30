@@ -1984,6 +1984,7 @@ const TrackBuildProps = (function () {
       Object.assign(sceneryApi, TrackModels.drapeKit(sceneryApi));
       sceneryFn(sceneryApi);
     }
+    yield;   // perf hunt 7: the circuit's closure is the build's biggest single step; the venue dressing reads only its finished index
 
     SceneryVenue.build(ctx, sceneryTheme, dressingExcluded);
 
@@ -1992,7 +1993,8 @@ const TrackBuildProps = (function () {
     // treelines queued by forestEdge() during scenery, then the generic roadside
     // scatter deferred out of the FURN pass above.
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
-    for (const a of deferredFoliage) forestEdgeNow.apply(null, a);
+    // One treeline per step (perf hunt 7: 15-28 of them were one ~0.5 s VM step); nothing reads the buffers between them.
+    for (let i = 0; i < deferredFoliage.length; i++) { forestEdgeNow.apply(null, deferredFoliage[i]); yield; }
     yield;   // a step boundary for Tracks.buildSteps (nothing is half-written here)
     plantRoadsideTrees();
 

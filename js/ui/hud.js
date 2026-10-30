@@ -495,7 +495,22 @@ const FIT_CLASH_TRIES = 5;
 // stayed there until the 3 s same-key re-measure (hud-survey 1280x720 cockpit:
 // aero right edge 1297 of 1280). textContent costs no layout; a length that
 // changes re-fits once, and the countdown only does so when a digit rolls over.
-function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const el = _hlEls[i]; k += el.hidden ? "h" : "v" + (el.textContent || "").length + ","; } return k; }
+// A chip css/track-detail.css hides (touch cockpit strip: body[data-hl-set=cockpit]:not(.desktop),
+// not player-placed) counts as hidden too: its ERS glyph / AERO countdown re-ran the full fit
+// ~0.5/s for a box nobody sees (perf hunt 8). Mirrors that selector without a layout read.
+const _HL_CSS_HID = new Set(["hud-energy", "hud-tyre", "hud-ot", "hud-aero", "hud-bb"]);
+let _blueHeld = null;
+function hlKey() {
+  const b = typeof document !== "undefined" ? document.body : null;
+  const strip = !!b && !!b.dataset && b.dataset.hlSet === "cockpit" && !(b.classList && b.classList.contains("desktop"));
+  let k = "";
+  for (let i = 0; i < _hlEls.length; i++) {
+    const el = _hlEls[i];
+    const cssHid = strip && _HL_CSS_HID.has(el.id) && !(el.hasAttribute && el.hasAttribute("data-hl-user"));
+    k += el.hidden || cssHid ? "h" : "v" + (el.textContent || "").length + ",";
+  }
+  return k;
+}
 // THE TWO READS THE FIT MEMO NEVER COVERED. Both getComputedStyle(root) calls
 // in fitHud sat ABOVE its `_fitWait` early return, so the 3 s same-key backoff
 // paced the getBoundingClientRect pass and nothing else: these ran at the full
@@ -518,7 +533,10 @@ function hlKey() { let k = ""; for (let i = 0; i < _hlEls.length; i++) { const e
 // cost depends on a tree this box does not reproduce.
 let _cssRootKey = "", _cssScale = 1, _cssMult = 1;
 function syncComputedRootVars() {
-  const k = vpW() + "x" + vpH() + "|" + document.body.className;
+  // The computed value includes an INLINE --hud-scale / --hud-btn-scale: a camera switch at HUD 150 %
+  // cached 1.5 as the "stylesheet default", so reverting HUD SIZE kept the 150 % caps (UI-HUNT-2-HUD 10c).
+  const rs = document.documentElement.style;
+  const k = vpW() + "x" + vpH() + "|" + document.body.className + "|" + rs.getPropertyValue("--hud-scale") + "|" + rs.getPropertyValue("--hud-btn-scale");
   if (k === _cssRootKey) return;
   _cssRootKey = k;
   // typeof-guarded: this module is exercised in a VM on tests/helpers/mini-dom,
@@ -538,6 +556,23 @@ let _hudTop = null, _hudBottom = null, _dockL = null, _dockR = null;   // the fo
 // reasons in screen sides, so pick each handle by the side it is painted on (re-picked at every fit).
 let _dockMir = null, _deltaShown = false;   // _deltaShown: DELTA has painted a number since it last went pending
 function pickDocks() { const m = document.body.classList.contains("mirror-controls"); if (_dockL && m === _dockMir) return; _dockMir = m; const a = document.getElementById("dock-left"), b = document.getElementById("dock-right"); _dockL = m ? b : a; _dockR = m ? a : b; }
+// fitHud's dock buttons, queried once per dock layout, not per 10 Hz tick: layoutDocks (game.js) re-parents GROUPS and
+// pickDocks swaps the handles, so the cache keys on [dockL, its children…, dockR, …]; invalidateFit drops it too.
+let _dockBtns = null, _dockKids = [];
+function dockKidsSame() {
+  let i = 0;
+  for (const d of [_dockL, _dockR]) {
+    if (_dockKids[i++] !== d) return false;
+    if (d) for (let j = 0; j < d.children.length; j++) if (_dockKids[i++] !== d.children[j]) return false;
+  }
+  return i === _dockKids.length;
+}
+function dockButtons() {
+  if (_dockBtns && dockKidsSame()) return _dockBtns;
+  _dockBtns = []; _dockKids = [];
+  for (const d of [_dockL, _dockR]) if (_dockKids.push(d) && d) { _dockKids.push(...d.children); _dockBtns.push(...d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")); }
+  return _dockBtns;
+}
 // THE BUDGET IS THE UN-MOVED LAYOUT. MOVE & SIZE (js/ui/hud-layout.js) paints a
 // player offset on top of each element with `translate` / `scale` (data-hl,
 // --hl-x/-y in screen %, --hl-s, origin --hl-o), and getBoundingClientRect
@@ -838,7 +873,7 @@ function fitHud() {
   // Which dock buttons are showing is part of the key: showTouchControls hides/unhides BOOST, OT, AERO
   // and the shifts after the first fit, and a taller column under a stale cap overflowed the top.
   let dockSig = "";
-  for (const d of [_dockL, _dockR]) if (d) for (const b of d.querySelectorAll(".touchbtn, .shiftbtn, .steerbtn")) dockSig += b.hidden ? "0" : "1";
+  for (const b of dockButtons()) dockSig += b.hidden ? "0" : "1";   // the list is cached; per tick only `.hidden`
   const head = vpW() + "x" + vpH() + "@" + scale + "+" + btnScale + "|" + gapLen + "." + secRows + "." + dockSig + (_rx.delta && !_rx.delta.hidden ? "d" : "") + "|";
   const tail = "|" + document.body.className;
   const sameKey = head + hlKey() + tail === _fitKey;
@@ -917,8 +952,10 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // divide by pub (hud-pins F-01). Only DOM-less mini-dom harnesses fall back to 1.
   const zTopPub = +root.style.getPropertyValue("--hud-z-top") || scale;
   const zBotPub = +root.style.getPropertyValue("--hud-z-bot") || scale;
-  let zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
-  let zDockPubS = +root.style.getPropertyValue("--hud-z-dock-l") || zDockPub;   // #dock-left (steer) paints at its own cap
+  // The CSS paints min(cap, max(floor, slider)) (css/touch-controls.css): a cap a fit wrote at a larger
+  // BUTTON SIZE never paints a smaller one bigger, so measure with the same min (UI-HUNT-2-HUD).
+  let zDockPub = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));
+  let zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));   // #dock-left (steer) paints at its own cap
   const zoomDiv = (el, pub) => (el && (el.currentCSSZoom > 0 || _noCssZoom) ? (pub || 1) : 1);
   const wide = (el, pub) => {
     if (!el || manualHud(el)) return 0;
@@ -964,8 +1001,8 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   // The dock's painted floor (declared above): read past the nothing-laid-out retry, which a
   // harness without rects takes every tick, so the bail stays free of computed-style passes.
   try { const v = parseFloat(getComputedStyle(root).getPropertyValue("--hud-btn-floor")); if (Number.isFinite(v) && v > 0 && v <= 1) btnFloor = v; } catch (_) { /* mini-dom */ }
-  zDockPub = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
-  zDockPubS = +root.style.getPropertyValue("--hud-z-dock-l") || zDockPub;
+  zDockPub = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));   // the CSS min()
+  zDockPubS = Math.min(+root.style.getPropertyValue("--hud-z-dock-l") || zDockPub, Math.max(btnFloor, btnScale));
   const half = window.innerWidth / 2;
   const map = wide(els.minimap, zTopPub), gaps = wide(els.gapA && els.gapA.parentNode, zTopPub);
   // THE SAFE-AREA INSET IS PART OF THE BUDGET. `.hud-gaps` and `#minimap` are
@@ -1394,7 +1431,9 @@ function fitPass(canon, scale, btnScale, placedSectors) {
         const r = layoutRect(el);
         return sum + r.height / zoomDiv(el, el === els.tyre ? zBotPub : zTopPub);
       }, 6 * FIT_AIR);
-      const cap = Math.max(1 / 1.4, (roomL - gL.h * zDL) / Math.max(1, height));
+      // Floor at 11 painted px over --fs-micro 14 (Apple HIG's 11 pt minimum; the
+      // 10 px READABLE_Z floor painted POS / LAP / TIME at 10.1 px, UI-HUNT-2-HUD).
+      const cap = Math.max(11 / 14, (roomL - gL.h * zDL) / Math.max(1, height));
       capTop = Math.min(capTop, cap); capBot = Math.min(capBot, cap);
     }
 
@@ -1480,7 +1519,7 @@ function fitPass(canon, scale, btnScale, placedSectors) {
   set("--hud-z-dock", capDock, Math.max(btnFloor, btnScale));
   // Earlier tower/sector budgets saw the old CAM/PAUSE footprint. Refit on
   // the next HUD tick only when their clamped, published zoom changed.
-  const dockAfter = +root.style.getPropertyValue("--hud-z-dock") || Math.max(btnFloor, btnScale);
+  const dockAfter = Math.min(+root.style.getPropertyValue("--hud-z-dock") || Infinity, Math.max(btnFloor, btnScale));
   if (Math.abs(Math.min(2, Math.max(1, zDockPub)) - Math.min(2, Math.max(1, dockAfter))) > 1e-6) {
     _fitKey = ""; _fitWait = 0; _fitPending = true;
   }
@@ -1744,8 +1783,8 @@ function speakHud(player, cars, timeTrial) {
   if (caution) {
     if (txt !== _flagSaid) { _flagSaid = txt; if (txt) sayFlag(cn); }
   } else _flagSaid = "";
-  const blueCar = !caution && !timeTrial && _ro && G.track && G.state === "race"
-    ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26) : null;
+  const blueCar = _blueHeld = !caution && !timeTrial && _ro && G.track && G.state === "race"
+    ? _ro.blueFlag(player, cars, G.track.total, G.vTop() * 0.26, _blueHeld) : null;
   if (blueCar) {
     const lapsUp = Math.round(((blueCar.prog || 0) - (player.prog || 0)) / G.track.total);
     if (blueCar !== _blueSaid || lapsUp !== _blueLaps) {
@@ -2259,7 +2298,7 @@ function resetRace() {
 // reads per apply, only once the fit has found the tower; the caps still wait
 // for the tick.
 function invalidateFit() {
-  _fitKey = ""; _fitRetry = 0;
+  _fitKey = ""; _fitRetry = 0; _dockBtns = null;
   _fitPending = true;
   invalidateLaneRects();   // MOVE & SIZE / HUD ELEMENTS / scale — clippers moved
   if (!_hudTop || hudPaintHidden()) return;

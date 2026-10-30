@@ -496,13 +496,15 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     /* Same expression as zoom: when fitHud writes --hud-z-dock the labels
        divide the 10px floor by it so GAS/BRAKE stay readable. Hit boxes
        stay --tap/--hold. */
-    --touch-label-z: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+    --touch-label-z: min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
     /* --hud-z-dock: fitHud's height cap for the pedal/shift columns — the
        raw slider let the 2-high pedal stack outgrow a 390px landscape
        viewport from 150% and put BRAKE off the top edge. Same mechanism as
        the --hud-z-top/bot caps on the readout clusters; absent when the
-       player's setting fits. */
-    zoom: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+       player's setting fits. min(), not a fallback: a cap a fit wrote at a
+       larger BUTTON SIZE must never paint a smaller setting bigger
+       (UI-HUNT-2-HUD: 85 px GAS at 100 % after 300 %). */
+    zoom: min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
   }
   /* THE STEER DOCK HAS ITS OWN CAP. On a landscape phone the 3-high taps
      column binds --hud-z-dock near 118 % while the one-row steer arrows have
@@ -510,8 +512,8 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
      published with it) so BUTTON SIZE keeps growing the side that fits. */
   body:not(.desktop) #dock-left,
   body.desktop #dock-left:has(.touchbtn:not([hidden])) {
-    --touch-label-z: var(--hud-z-dock-l, var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale))));
-    zoom: var(--hud-z-dock-l, var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale))));
+    --touch-label-z: min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+    zoom: min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
   }
   /* …DOWN TO THE 44px RUNG, NOT TO 1. The floor above was a flat 1, so the
      BUTTON SIZE slider (40–300%, index.html) did nothing below 100% — on a
@@ -870,7 +872,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    plate, which stands off --dock-r-w (0 before the first fit: the arm goes negative and PAUSE keeps the band).
    Broadcast keeps the band (#bc-pip hangs under PAUSE). At or under 150 % --tap-btn IS --tap-hud. */
 body:not(.desktop):not(.bc-on) {
-  --hud-btn-zt: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2);
+  --hud-btn-zt: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 2);
   --tap-btn: max(var(--tap-hud), min(calc(var(--tap-hud) / var(--hud-btn-z) * var(--hud-btn-zt)), calc((10px + var(--dock-r-w, 0px)) * var(--hud-z-top, var(--hud-scale)) - 14px)));
 }
 /* CAM mode button sits just left of the pause button (top-right). */

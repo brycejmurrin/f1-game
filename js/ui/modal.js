@@ -335,7 +335,17 @@ window.TopModal = (function () {
     // The app may have placed focus itself (GARAGE, PRACTICE) before this
     // callback: still remember the control it came from, or close dropped
     // focus on <body> (UI hunt 2026-10-29 #4).
-    if (inside(layer, a)) { opener.set(layer, recentOutside(layer)); return; }
+    if (inside(layer, a)) {
+      const from = recentOutside(layer);
+      opener.set(layer, from);
+      // ...and tell the screen it left where to come back to. The GARAGE
+      // focuses inside before the title hides, so the title never saw its
+      // door focused; when a RETURNING plate sits between close and title,
+      // the title's own show restores focus from this, not from <body>.
+      const home = from && homeLayer(from);
+      if (home && home !== layer) lastFocus.set(home, from);
+      return;
+    }
     opener.set(layer, connected(a) && a !== document.body ? a : null);
     const back = lastFocus.get(layer);
     const target = (connected(back) && layer.contains(back) && usable(back)) ? back : landing(layer);
@@ -351,6 +361,11 @@ window.TopModal = (function () {
       if (trail.length > 6) trail.shift();
     }
   }
+  function homeLayer(el) {
+    const ids = (window.UiLayers && window.UiLayers.LAYER_IDS) || [];
+    for (let p = el.parentElement; p; p = p.parentElement) if (p.id && ids.indexOf(p.id) >= 0) return p;
+    return null;
+  }
   function recentOutside(layer) {
     for (let i = trail.length - 1; i >= 0; i--) {
       if (connected(trail[i]) && !layer.contains(trail[i])) return trail[i];
@@ -363,9 +378,17 @@ window.TopModal = (function () {
     if (inside(layer, a)) lastFocus.set(layer, a);
     const back = opener.get(layer);
     opener.delete(layer);
-    if (!connected(back) || !usable(back)) return;      // its screen is not up (a race started)
-    if (a && a !== document.body && !layer.contains(a)) return;   // something else took focus
     const top = window.UiLayers && window.UiLayers.top ? window.UiLayers.top() : null;
+    if (!connected(back) || !usable(back)) {
+      // Its opener's screen is gone (a race started, or a RETURNING plate
+      // opened from inside the GARAGE). If focus fell to <body>, hand it to
+      // what the layer now on top remembers: the title's own show could not,
+      // because the plate was still modal when the title came back.
+      const mem = top && lastFocus.get(top);
+      if ((!a || a === document.body) && connected(mem) && top.contains(mem) && usable(mem)) focusQuiet(mem);
+      return;
+    }
+    if (a && a !== document.body && !layer.contains(a)) return;   // something else took focus
     if (top && !top.contains(back)) return;             // another layer owns the keys now
     focusQuiet(back);
   }

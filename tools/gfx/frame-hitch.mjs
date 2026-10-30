@@ -781,6 +781,38 @@ export function analysePassOps(opsSig, submits) {
   };
 }
 
+// THE UPLOAD SITES (perf hunt 6): gpu-game-check's sampled writeBuffer /
+// createBuffer attribution ({site, n, kb} over the armed window, site =
+// "kind :: label#bytes :: three's functions :: our frames") per window frame.
+// The class reads three's function names — what is uploaded, not who asked.
+// Index before attribute: three's index path is an attribute too. The dump
+// keeps the top 60 sites, so the totals are a floor under gpu.writeBufferKB.
+const UPLOAD_CLASSES = [["uniform", /updateBinding|Bindings|Uniform/i], ["index", /Index/i], ["attribute", /Attribute|Geometr/i]];
+export function analyseUploads(uploads, frames, top = 8) {
+  const ups = (uploads || []).filter((u) => u && u.site && u.n > 0);
+  if (!ups.length || !(frames > 0)) return { note: "no upload sites recorded" };
+  const per = (v) => +(v / frames).toFixed(2);
+  let n = 0, kb = 0;
+  const g = new Map();
+  for (const u of ups) {
+    n += u.n; kb += u.kb || 0;
+    const lib = u.site.split(" :: ")[2] || "";
+    const cls = (UPLOAD_CLASSES.find(([, re]) => re.test(lib)) || ["other"])[0];
+    const r = g.get(cls) || { cls, n: 0, kb: 0 };
+    r.n += u.n; r.kb += u.kb || 0;
+    g.set(cls, r);
+  }
+  const share = (v) => kb > 0 ? +(v / kb).toFixed(3) : 0;
+  const shape = (r) => ({ kbPerFrame: per(r.kb || 0), nPerFrame: per(r.n), share: share(r.kb || 0) });
+  return {
+    frames,
+    kbPerFrame: per(kb),
+    callsPerFrame: per(n),
+    rows: [...ups].sort((a, b) => (b.kb || 0) - (a.kb || 0) || b.n - a.n).slice(0, top).map((u) => ({ site: u.site, ...shape(u) })),
+    groups: [...g.values()].sort((a, b) => b.kb - a.kb || b.n - a.n).map((r) => ({ cls: r.cls, ...shape(r) })),
+  };
+}
+
 // WHAT SURVIVES, by call stack — and NOT where the garbage comes from.
 //
 // This function was built to answer "who allocates the 255 KB a frame", and it

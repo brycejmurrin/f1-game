@@ -137,9 +137,11 @@ const HudReadouts = (function () {
   // BLUE FLAG. The AI yields (AiDrive.letPassCase in js/game.js) to a chaser a
   // HALF LAP or more up in progress inside 9 m; the flag marshal shows it a
   // little earlier, at about a second. Same lapping test, a time window.
-  const BLUE_S = 1.2;
-  /** The car that should be let through, or null. */
-  function blueFlag(player, cars, L, vFloor) {
+  const BLUE_S = 1.2, BLUE_HOLD_S = 1.6;
+  /** The car that should be let through, or null. `held` (the car flagged last tick) keeps
+   *  its flag out to BLUE_HOLD_S: a lapper hovering at 1.2 s blinked the chip every corner,
+   *  and each flip re-ran the HUD fit twice (perf hunt 8). */
+  function blueFlag(player, cars, L, vFloor, held) {
     if (!player || !cars || !(L > 0) || player.finished || player.retired) return null;
     let best = null, bestD = Infinity;
     for (let i = 0; i < cars.length; i++) {
@@ -150,7 +152,7 @@ const HudReadouts = (function () {
       // Metres the lapping car is physically BEHIND the player on the road.
       const back = ((player.prog - o.prog) % L + L) % L;
       if (back <= 0 || back >= bestD) continue;
-      if (back / Math.max(o.speed || 0, vFloor || 1) <= BLUE_S) { best = o; bestD = back; }
+      if (back / Math.max(o.speed || 0, vFloor || 1) <= (o === held ? BLUE_HOLD_S : BLUE_S)) { best = o; bestD = back; }
     }
     return best;
   }
