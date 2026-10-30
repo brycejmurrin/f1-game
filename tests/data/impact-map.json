@@ -4718,6 +4718,7 @@
     },
     "js/circuits/monza.js": {
       "*": [
+        "tests/specs/track-designer.spec.js",
         "tests/unit/bash-guard-hardening.test.mjs",
         "tests/unit/change-driver-tools.test.mjs",
         "tests/unit/deploy-staging.test.mjs",
@@ -6149,7 +6150,8 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "resize": [
-        "tests/unit/designer-profile.test.mjs"
+        "tests/unit/designer-profile.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ],
       "thumb": [
         "tests/unit/designer-canvas.test.mjs"
@@ -6552,7 +6554,8 @@
         "tests/unit/track-designer-dom.test.mjs"
       ],
       "resize": [
-        "tests/unit/designer-profile.test.mjs"
+        "tests/unit/designer-profile.test.mjs",
+        "tests/unit/track-designer-dom.test.mjs"
       ]
     },
     "js/editor/props.js": {

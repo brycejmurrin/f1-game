@@ -845,7 +845,7 @@ const TrackDesigner = (function () {
     cv = DesignerCanvas.create(canvas, {
       rangeSelect: () => selectionMode === "range" && (mode === "edit" || mode === "elevation"),
       extendSelection: () => spanArm,
-      onBegin: () => {},
+      onBegin: () => { ++replacementGeneration; },
       onChange: (pts, kind) => { commit(Object.assign({}, design, { pts }), kind); },
       onLimit: () => message(CustomTracks.LIMITS.ptsMax + " points is the most a circuit holds — delete one first", true),
       onSelect: (i, j) => {
@@ -1959,7 +1959,7 @@ const TrackDesigner = (function () {
       rangeSelect: () => selectionMode === "range",
       extendSelection: () => spanArm,
       onChange: (i, h, live, all) => {
-        if (live) return;
+        if (live) { ++replacementGeneration; return; }
         if (Array.isArray(all)) setHeights(all, i);
         else setNodeHeight(i, h);
       },

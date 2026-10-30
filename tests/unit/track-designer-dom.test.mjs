@@ -1375,6 +1375,58 @@ test("START FROM hydrates a metadata-only pick and revokes stale replacements", 
   b.D.close();
 });
 
+// Hydration may finish between pointermove and pointerup. Exercise the real
+// gesture handlers rather than calling the final commit hooks directly.
+for (const gesture of ["map", "profile", "draw"]) for (const move of [true, false]) test("pending START FROM " + (move ? "yields to an in-progress " : "survives a selection-only ") + gesture + " gesture", async () => {
+  const b = bootScreen(), captured = {}, arcs = [];
+  for (const [global, key] of [["DesignerCanvas", "map"], ["DesignerProfile", "profile"]]) {
+    const real = b.ctx[global];
+    b.ctx[global] = Object.assign({}, real, { create(c, hooks) {
+      captured[key] = { canvas: c };
+      if (key === "profile") {
+        c._rect = { left: 0, top: 0, width: 640, height: 72 };
+        const get = c.getContext;
+        c.getContext = (...args) => { const g = get(...args); return new Proxy(g, { get(target, k) {
+          if (k === "arc") return (x, y, r) => arcs.push({ x, y, r });
+          if (k === "clearRect") return () => { arcs.length = 0; };
+          return target[k];
+        } }); };
+      }
+      const api = real.create(c, hooks); captured[key].api = api; return api;
+    } });
+  }
+  openGreen(b); b.D.setMode(gesture === "profile" ? "elevation" : gesture === "draw" ? "draw" : "edit");
+  b.D.preview();
+  const before = plain(b.D.state().design), undo = b.D.state().undo;
+  const idx = b.Tracks.LIST.findIndex(d => d.id === "monza"), full = b.Tracks.LIST[idx];
+  b.Tracks.LIST[idx] = { id: full.id, name: full.name, _metaOnly: true };
+  let release;
+  b.G.ensureCircuit = () => new Promise(resolve => { release = () => { Object.assign(b.Tracks.LIST[idx], full); delete b.Tracks.LIST[idx]._metaOnly; resolve(); }; });
+  const pending = b.D.startFrom("monza"); await Promise.resolve();
+  const h = captured[gesture === "profile" ? "profile" : "map"];
+  h.api.resize();
+  const fire = (type, x, y) => b.dom.dispatch(h.canvas, { type, pointerId: 1, pointerType: "mouse", button: 0, clientX: x, clientY: y });
+  let x, y;
+  if (gesture === "profile") { const grip = arcs.slice(-before.pts.length)[4]; x = grip.x; y = 36; }
+  else { h.api.fit(); const v = h.api.view(), p = before.pts[4]; x = (p[0] - v.cx) * v.scale + v.w / 2; y = (p[1] - v.cz) * v.scale + v.h / 2; }
+  fire("pointerdown", x, y);
+  if (move) {
+    fire("pointermove", x + 30, y - 15);
+    if (gesture === "draw") fire("pointermove", x + 60, y + 30);
+  }
+  assert.deepEqual(plain(b.D.state().design), before, "live gesture has not committed");
+  release(); assert.equal(await pending, !move, "only a deliberate mutation revokes the pending replacement before pointerup");
+  if (move) assert.deepEqual(plain(b.D.state().design), before);
+  fire("pointerup", x + 60, y + 30);
+  const after = b.D.state();
+  assert.equal(after.design.name, move ? before.name : "MONZA REMIX");
+  assert.equal(after.undo, undo + 1, "one gesture or replacement remains one undo transaction");
+  assert.equal(b.D.undo(), true);
+  assert.deepEqual(plain(b.D.state().design.pts), before.pts);
+  assert.deepEqual(plain(b.D.state().design.heights), before.heights);
+  b.D.close();
+});
+
 // START FROM pinned every shipped circuit's whole centreline (~4 MB) for the page
 // once the panel opened; a card strokes a 160×110 outline, so only that is kept.
 test("START FROM… memoises a small outline per circuit, not its whole centreline", async () => {
