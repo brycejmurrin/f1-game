@@ -2616,6 +2616,21 @@
       "presentation": "native",
       "preserve": "@c2"
     },
+    "tools/ui/tap-floor.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/theme-axis.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
+    "tools/ui/ui-reset.mjs": {
+      "action": "no-direct-output",
+      "presentation": "native",
+      "preserve": "@c2"
+    },
     "tools/ui/ui-scale-axis.mjs": {
       "action": "no-direct-output",
       "presentation": "native",

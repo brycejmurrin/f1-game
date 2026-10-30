@@ -4197,6 +4197,21 @@
       "interpreter": "node"
     },
     {
+      "path": "tools/ui/tap-floor.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/theme-axis.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
+      "path": "tools/ui/ui-reset.mjs",
+      "classification": "ambiguous",
+      "outputPolicy": "no-direct-output"
+    },
+    {
       "path": "tools/ui/ui-scale-axis.mjs",
       "classification": "ambiguous",
       "outputPolicy": "no-direct-output"

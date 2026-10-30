@@ -25,7 +25,12 @@ export function rowFindings(row) {
   return out;
 }
 
-const cellKey = (r) => r.screen + "|" + r.viewport;
+// Identity of one cell: screen | viewport, plus the theme when it is not the
+// default dark (theme-axis.mjs), so a `--theme=dark,light` run's rows neither
+// overwrite nor diff against each other, and every pre-axis row (no `theme`,
+// measured dark) keeps the key it always had.
+export const auditCellKey = (r) => r.screen + "|" + r.viewport + (r.theme && r.theme !== "dark" ? "|" + r.theme : "");
+const cellKey = auditCellKey;
 
 /**
  * Diff two parsed audit.json objects ({rows:[…]}).

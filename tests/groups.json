@@ -1223,6 +1223,8 @@
     "tests/unit/ui-look-diff.test.mjs",
     "// reach-score (UI layout program G5): two-thumb landscape zones, primary pick, dead space over layout-audit dom dumps and explorer inspections. Fixtures, no browser, < 1 s.",
     "tests/unit/ui-reach-score.test.mjs",
+    "// Layout tools (G1/G2/G6, 2026-10-30): one door-first overlay reset, one tap floor, the --theme axis keys. Fake DOM, ~2 s.",
+    "tests/unit/ui-reset-tap-floor.test.mjs",
     "tests/unit/ui-sheets-audit.test.mjs",
     "tests/unit/uilayers-modal-order.test.mjs",
     "tests/unit/validation-cli.test.mjs",

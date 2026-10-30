@@ -510,6 +510,9 @@ Menu geometry and the CSS edit loop, plus the axes (viewport, scale, circuit) th
 | **ui/menu-screens.mjs** | Canonical `SCREENS` + `VIEWPORTS` + `OVERLAY_IDS` (library) for the layout tools. | survey-ui-matrix |
 | **ui/reach-score.mjs** | Offline two-thumb reach + dead-space score per menu screen from layout-audit DOM dumps or explorer inspections. | survey-ui-matrix |
 | **ui/review-captures.mjs** | Build a portable offline screenshot review from a bounded local evidence manifest. | css-play |
+| **ui/tap-floor.mjs** | Shared tap floors (WCAG 24 + body `--tap`) and in-page measure (label union, ÷ zoom) for the layout tools. | survey-ui-matrix |
+| **ui/theme-axis.mjs** | The `--theme=` axis (dark / light) for layout-audit: sets the context colorScheme AND the game's own uiTheme setting. | survey-ui-matrix |
+| **ui/ui-reset.mjs** | Shared door-first overlay reset (resetOverlays, titleUsable): hidden=true only as a logged fallback. | survey-ui-matrix |
 | **ui/ui-scale-axis.mjs** | The `--scale=` axis (40–200 % interface size) shared by layout-audit, menu-fit and fit-audit. | survey-ui-matrix |
 
 ### `tools/lighting/`
