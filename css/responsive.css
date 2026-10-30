@@ -171,6 +171,9 @@
   animation-delay: 0s !important; /* as tokens.css: a staggered row must not wait either */
   transition-duration: 0.01ms !important;
 }
+/* #hud-restore's display:none lives in deferred touch-controls.css; until it
+   lands (~19 s on Slow 4G) the bare button sat top-left over the title. */
+body:not(.hud-hidden) #hud-restore { display: none; }
 /* A hidden tab stops spending frames on a menu nobody can see. */
 #overlay[data-paused] *,
 #overlay[data-paused] *::before,
