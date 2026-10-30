@@ -5750,7 +5750,7 @@ const TLX = (function () {
           _mirGlass++;
           _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the chain to what the glass can sample
           if (_mirGlassLod < Infinity && (_frameVP[11] !== 0 || _frameVP[15] !== 0)) {   // no frame camera yet: no bound
-            const g = mesh.geo, pa = g.attributes.position, ua = g.attributes.uv, st = post && post.sceneTarget ? post.sceneTarget() : null;
+            const g = mesh.geo, pa = g.attributes && g.attributes.position, ua = g.attributes && g.attributes.uv, st = post && post.sceneTarget ? post.sceneTarget() : null;
             const l = !pa || !pa.array || !ua || !ua.array || typeof PostCommon === "undefined" ? Infinity
               : PostCommon.mipFootprintLod(pa.array, ua.array, g.index && g.index.array, model, _frameVP,
                 Math.min(W, st ? st.width : W), Math.min(H, st ? st.height : H), mirRT.width, mirRT.height);
