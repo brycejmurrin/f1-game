@@ -646,7 +646,7 @@ const GarageArrival = (function () {
       dir = home ? "home" : "in"; posed = poseFor(dir);
       config = settings(readSettings());
       // Freeze source ownership for this run: an idle fetch must never swap paths mid-doorway.
-      config._entranceAuthored = typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
+      config._entranceAuthored = (!opts || opts.authored !== false) && typeof GarageEntranceMotion !== "undefined" && GarageEntranceMotion.available();
       if (home) Object.assign(config, { result: RESULTS[home.result] ? home.result : "finish", pos: home.pos });
       time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }

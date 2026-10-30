@@ -71,7 +71,7 @@ test('real arrival delegates entrance transforms to Blender data and preserves h
   }
   assert.ok(changed, 'authored approach differs from procedural baseline');
 });
-test('late data cannot switch an active cold arrival, while the next visit uses the warm data', () => {
+test('late data cannot switch an active cold arrival, and explicit recovery can retain procedural motion when warm', () => {
   const { ctx, arrival } = arrivalContext(false), nodes = new Map();
   const $ = (id) => {
     if (!nodes.has(id)) nodes.set(id, { hidden: true, inert: false, textContent: '',
@@ -89,9 +89,19 @@ test('late data cannot switch an active cold arrival, while the next visit uses 
   run.cancel();
   assert.equal(run.state, null);
   assert.equal(nodes.get('cs-inner').inert, false);
-  run.start();
-  for (let i = 0; i < 30; i++) pose = run.step(.1);
-  assert.deepEqual(xyz(pose), xyz(arrival.pose(pose.seconds, config)), 'repeat run uses now-ready data');
+  const visits = [];
+  for (const opts of [undefined, { authored: false }, { authored: true }]) {
+    run.start(opts);
+    for (let i = 0; i < 30; i++) pose = run.step(.1);
+    visits.push({ transform: xyz(pose), articulated: pose.articulated === true });
+  }
+  const warm = xyz(arrival.pose(pose.seconds, config));
+  const fallback = xyz(arrival.pose(pose.seconds, { ...config, _entranceAuthored: false }));
+  assert.deepEqual(visits, [
+    { transform: warm, articulated: true },
+    { transform: fallback, articulated: false },
+    { transform: warm, articulated: true },
+  ], 'ready data is the default, explicit loader recovery stays procedural, and a later retry can adopt authored motion');
   run.finish();
   assert.equal(run.state.active, false);
   assert.equal(nodes.get('cs-inner').inert, false);
