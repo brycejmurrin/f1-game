@@ -964,6 +964,12 @@
       "outputPolicy": "no-direct-output"
     },
     {
+      "path": "tools/ci/guards-report.mjs",
+      "classification": "entrypoint-candidate",
+      "outputPolicy": "keep-native",
+      "interpreter": "node"
+    },
+    {
       "path": "tools/ci/guards-verdict.mjs",
       "classification": "entrypoint-candidate",
       "outputPolicy": "keep-native",
