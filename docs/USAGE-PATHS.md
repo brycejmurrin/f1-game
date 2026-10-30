@@ -30,9 +30,10 @@ the results camera. Keep qualifying off for this first journey.
 | 5 | Lights out → drive | Race HUD and player control; menu/loading input gates released. |
 | 6 | Pause (`#pausemenu`) → **RESTART RACE** (`#pm-restart`) | With Confirm Quit on, press again to confirm. New grid/countdown for the same session; no garage/flyby replay. |
 | 7 | Select **TV**, then drive to the flag | Hold/right-click CAM to open its picker, or cycle with CAM / C. Choose **TV**, not the separate **TV SIDE** rig. Camera choice does not drive the car for you. |
-| 8 | Finish → let the rest of the field finish | Automatic TV spectating follows the remaining runners in eligible solo sessions, with the player as fallback when no runners remain. During the wait, Enter or Pause → **SKIP TO RESULTS** can advance. |
-| 9 | Results (`#results`) | Eligible GP results use the chequered cut, then orbit; **HIGHLIGHTS** is a separate optional action. Classification appears once. |
-| 10 | **MENU** (`#res-menu`) | Main menu, with the race, replay, pause and loading surfaces torn down. Start a second race to check that no stale state survives. |
+| 8 | Finish → let the rest of the field finish | Automatic TV spectating follows the remaining runners in eligible solo sessions, with the player as fallback when no runners remain. During the wait, Enter or Pause → **SKIP TO RESULTS** can advance (R11). |
+| 9 | Flag → ceremony (when `RaceCeremony` is live) **or** instant results | Eligible solo GP / sprint / season / career: cooldown lap → parc fermé → optional podium → `#results` (R13). SKIP/CONTINUE advances; bare harness `finishRace()` still opens the sheet immediately. Ineligible modes (TT, quali, practice, duel, friend, WATCH) keep today's surface. |
+| 10 | Results (`#results`) | Classification appears once (settled in `endRace`). Eligible GP uses the chequered cut, then orbit; **HIGHLIGHTS** is a separate optional action from the sheet foot. |
+| 11 | **MENU** (`#res-menu`) | Main menu, with the race, replay, pause and loading surfaces torn down. Start a second race to check that no stale state survives. |
 
 ```mermaid
 flowchart TD
@@ -157,27 +158,38 @@ Sources: [`js/game.js`](../js/game.js) (`openQualiBody`, `q-*` handlers,
 | R08 | Solo race → Pause → instant REPLAY → scrub/play/camera → leave replay/resume | Live race snapshot is restored; replay must not settle results or mutate championship progress. Requires recorded frames. |
 | R09 | Pause → PHOTO STUDIO → capture/edit → DONE | Restore the previous paused race and caller; WATCH PHOTO restores its own replay context. |
 | R10 | Caution/VSC/safety car → green; red flag → restart countdown → race | Race-control transitions, not the user's RESTART command. Same session continues. |
-| R11 | Player finishes or retires → TV waiting phase → natural results or SKIP TO RESULTS | Settlement happens once; skip only appears during the post-finish wait. Also quit during that wait to exercise settlement-before-teardown. |
+| R11 | Player finishes or retires → TV waiting phase → natural results or SKIP TO RESULTS | Settlement happens once; skip only appears during the post-finish wait. Also quit during that wait to exercise settlement-before-teardown. Pre-ceremony field wait; not the cooldown drive. |
 | R12 | GP results → HIGHLIGHTS → orbit/results → RACE AGAIN or MENU | Only when eligible and replay data exists; retry/quit clears results-camera and scrub ownership. |
+| R13 | Eligible GP flag → ceremony (`cooldown` → `parcFerme` → optional `podium`) → `#results` | Requires `RaceCeremony` (#1584 slices 1–4). Actual SKIP / CONTINUE controls advance each beat through to results without soft-lock; `ceremony().eligible === false` for TT/quali/practice/duel/friend/WATCH. Phone 844×390: SKIP ≥ `--tap`. Gate: `tests/specs/results-flow.spec.js`. |
+
+R13 acceptance crosses the real finish line and observes automatic progression.
+Debug phase seeks and capability-skipped cases are not acceptance evidence.
+The gate must also exercise actual touch controls, settlement exactly once,
+cleanup, excluded modes, and reduced-motion / performance behavior. The
+integrated production path and complete matrix still require browser verification.
 
 Three camera concepts need separate checks: **TV** while driving, automatic
-**post-finish spectating**, and **ResultsCam** after classification. Real-race
-WATCH has a fourth, independent replay director.
+**post-finish spectating**, and **ResultsCam** after classification. Ceremony adds
+a **cooldown chase** (player still drives) before ResultsCam owns parc fermé /
+podium. Real-race WATCH has a fourth, independent replay director.
 
-| Session / device | Post-finish TV | Results surface and camera | Forward / exit |
-|---|---|---|---|
-| Solo GP / race-form practice / duel | Automatic on finished/retired player | GP results; eligible chequered → orbit, optional highlights | RACE AGAIN / MENU |
-| Standalone season | As solo GP | Race results + championship standings | Next weekend session/round; champion branch at end |
-| Career | As solo GP | Race results + career settlement | Career hub / menu |
-| TT, Daily, title PRACTICE (TT) | Director can activate after finish | TT results; skips `ResultsCam.onFlag` | TRY AGAIN / MENU, plus available ghost/share actions |
-| Qualifying | Director can activate after finish | Completed qualifying sheet; no GP results montage | TO THE GRID / MENU |
-| Friend race | Disabled | Host's classification; no ResultsCam | RACE AGAIN (SOLO), or NEW FRIEND ROOM (teardown → new lobby) |
-| Real-race WATCH | Replay owns the camera | Published classification; no ResultsCam | WATCH AGAIN / MENU |
-| Mobile or `PerfGov.tier() >= 2` | Depends on session as above | ResultsCam disabled; results background stays still | Same session-specific buttons |
+| Session / device | Post-finish TV | Ceremony | Results surface and camera | Forward / exit |
+|---|---|---|---|---|
+| Solo GP / sprint | Automatic on finished/retired player (field wait) | cooldown → parc fermé → optional podium when `RaceCeremony` live | GP results after ceremony (or instant); eligible chequered → orbit, optional highlights | RACE AGAIN / MENU |
+| Solo race-form practice / duel | As solo GP | **off** | GP results; eligible chequered → orbit, optional highlights | RACE AGAIN / MENU |
+| Standalone season | As solo GP | as solo GP | Race results + championship standings (sheet after ceremony) | Next weekend session/round; champion branch at end |
+| Career | As solo GP | as solo GP | Race results + career settlement (award in `endRace`; sheet later) | Career hub / menu |
+| TT, Daily, title PRACTICE (TT) | Director can activate after finish | **off** | TT results; skips `ResultsCam.onFlag` | TRY AGAIN / MENU, plus available ghost/share actions |
+| Qualifying | Director can activate after finish | **off** | Completed qualifying sheet; no GP results montage | TO THE GRID / MENU |
+| Friend race | Disabled | **off** | Host's classification; no ResultsCam | RACE AGAIN (SOLO), or NEW FRIEND ROOM (teardown → new lobby) |
+| Real-race WATCH | Replay owns the camera | **off** | Published classification; no ResultsCam | WATCH AGAIN / MENU |
+| Mobile or `PerfGov.tier() >= 2` | Depends on session as above | timers + SKIP + frozen frame | ResultsCam disabled; results background stays still | Same session-specific buttons |
 
 Sources: [`js/game.js`](../js/game.js), [`pause-opts.js`](../js/ui/pause-opts.js),
 [`director.js`](../js/camera/director.js), [`results-cam.js`](../js/camera/results-cam.js),
-[`replay-buf.js`](../js/camera/replay-buf.js), [`experience.js`](../js/ui/experience.js).
+[`replay-buf.js`](../js/camera/replay-buf.js), [`experience.js`](../js/ui/experience.js),
+[`FLOW.md`](FLOW.md) §Leaving a session, plan
+[`2026-10-27-cooldown-podium.md`](plans/2026-10-27-cooldown-podium.md).
 
 ## 6. Data, online racing, authoring and tools
 

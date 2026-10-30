@@ -6,7 +6,7 @@ in [`AGENTS.md`](../AGENTS.md). This page is the mental model.
 
 ## What you are looking at
 
-Unofficial WebGL F1 fan game. **No bundler, no framework.** Static files on
+Unofficial 3D F1 fan game (three.js on WebGPU or WebGL2; WebGL2 fallback). **No bundler, no framework.** Static files on
 GitHub Pages. Every runtime JS file is a `"use strict"` IIFE that assigns **one
 global**. The file you edit is the file the browser runs.
 

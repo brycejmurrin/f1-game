@@ -9,10 +9,6 @@
 /* HUD HUES (#1595), here because only the race reads them: tyre letters (CvdPalette repaints them per COLOUR VISION mode) and real-world signals (one colour in every mode). */
 :root { --tyre-s: #ff3b3b; --tyre-m: #ffd12e; --tyre-h: #f2f2f2; --tyre-i: #3ccf4e; --tyre-w: #3a8dff;
   --flag-yellow: #ffd600; --flag-amber: #ffb300; --flag-sc: #f4f6ff; --light-on: #ff1a1a; }
-/* GLANCE INK. Labels were --dim, which disappears once a plate is translucent over a day sky.
-   Mixed toward --text so a light theme and HIGH CONTRAST (both remap those two tokens) follow.
-   The responsive-foundation draft was not on the board; this stays local to the race HUD. */
-:root { --hud-glance: color-mix(in oklab, var(--text) 68%, var(--dim)); }
 #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
 
 /* HUD SIZE, on the CLUSTERS rather than on #hud. #hud is the full-screen
@@ -71,7 +67,7 @@
 /* CAM / PAUSE share the dock's effective BUTTON SIZE, capped at 150%.
    Readouts clear their measured rectangles independently of HUD scale. */
 :root {
-  --hud-btn-z: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5);
+  --hud-btn-z: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5);
   --tap-hud: calc(var(--tap) * var(--hud-btn-z));
 }
 /* KNOWN: on :root, var(--tap) is :root's 44px, not the touch body's 52, so CAM
@@ -986,6 +982,9 @@ body.hud-radio-top #announce:not([hidden]) {
   transform: none;
   min-width: 0;
   max-width: calc(var(--radio-top-w) / var(--hud-z));
+  /* The touch base rule's width reads the dock lane, which announceLane still
+     publishes: without this the slot card wrapped in a ~105 px lane (UI-HUNT-2-HUD). */
+  width: min(max-content, calc(var(--radio-top-w) / var(--hud-z)));
   min-height: calc(var(--radio-top-h) / var(--hud-z));
   font-size: var(--fs-micro);
   line-height: 1.15;
@@ -1006,6 +1005,9 @@ body[data-radio-corner][data-radio-corner][data-radio-corner][data-radio-corner]
   transform: none;
   min-width: 0;
   max-width: calc(var(--radio-top-w) / var(--hud-z));
+  /* The touch base rule's width reads the dock lane, which announceLane still
+     publishes: without this the slot card wrapped in a ~105 px lane (UI-HUNT-2-HUD). */
+  width: min(max-content, calc(var(--radio-top-w) / var(--hud-z)));
   min-height: calc(var(--radio-top-h) / var(--hud-z));
   font-size: var(--fs-micro);
   line-height: 1.15;
@@ -1454,10 +1456,27 @@ html[data-caption-pos="bottom"] #captions.cap-strip {
   top: auto;
   bottom: calc(var(--sab, 0px) + 12px / var(--hud-z, 1));
 }
+/* BESIDE MIRROR IS IN THE MIRROR'S ROW, right of the frame. Setting only
+   left/right kept the base bottom anchor, so the strip landed bottom-right
+   over the touch pedals (#dock-right). This element is NOT zoomed, so the
+   mirror's top and width (#hud-mirror above, in its zoom group's units) are
+   re-stated in SCREEN px: each zoom-unit term times --cap-mz, the band's zoom;
+   the vw/svh terms of --mir-w already divide by it, so they appear bare. */
 html[data-caption-pos="mirror"] #captions.cap-strip {
-  left: auto;
-  right: calc(var(--sar, 0px) + 8px / var(--hud-z, 1));
+  --cap-mz: var(--hud-z-top, var(--hud-scale, 1));
+  --cap-mir-top: calc(var(--sat, 0px) + (8px + var(--hud-top-h, 54px) + 8px) * var(--cap-mz));
+  --cap-mir-half: calc(clamp(calc(120px * var(--cap-mz)), min(18vw, 36svh), calc(300px * var(--cap-mz))) / 2);
+  top: var(--cap-mir-top);
+  bottom: auto;
+  left: calc(50% + var(--cap-mir-half) + 8px);
+  right: auto;
+  max-width: min(440px, calc(50% - var(--cap-mir-half) - 16px - var(--sar, 0px)));
   transform: none;
+}
+/* BROADCAST lifts the mirror to the very top (the tower is top-left); only the
+   mirror rule above reads --cap-mir-top, so this needs no caption-pos gate. */
+body.hud-prof-broadcast #captions.cap-strip {
+  --cap-mir-top: calc(var(--sat, 0px) + 8px * var(--cap-mz));
 }
 html[data-captions="off"] #captions.cap-strip { display: none !important; }
 /* ON TOUCH THE CARD STAYS IN THE DOCK LANE. --announce-lane-x / -shift / -w
@@ -1552,7 +1571,8 @@ body:not(.desktop):not(.hud-radio-top):not([data-radio-corner]):not(.hud-mirror-
    the right pedals at HUD 145%. */
 #game-metrics {
   --gm-top: calc(12px + var(--sat, 0px) + min(120px, calc(80px * var(--hud-z-top, var(--hud-scale, 1)))));
-  --gm-dock: max(120px, calc(80px * var(--hud-z-dock, var(--hud-scale, 1)) + var(--sab, 0px)));
+  /* -l: the steer dock's cap (>= --hud-z-dock, published with it) — the tallest dock either side. */
+  --gm-dock: max(120px, calc(80px * var(--hud-z-dock-l, var(--hud-z-dock, var(--hud-scale, 1))) + var(--sab, 0px)));
   /* THE BAND SCALE THIS PANEL LIVES IN — the same expression --gm-top above
      already uses to POSITION itself, and the same one metricsRatio() reads in
      js/perf/metrics-overlay.js to choose the narrow vs wide layout. Sharing it
@@ -1722,6 +1742,10 @@ body:has(> .screen.dim:not([hidden])) #photo-controls { display: none; }
    is the CSS twin so #campicker cannot paint in the dim beside the pause card
    if the hidden attribute lags. Same :has() as #photo-controls above. */
 body:has(> .screen.dim:not([hidden])) #campicker { display: none; }
+/* …and off the race: endRace drops body.in-race, and an open grid painted
+   through the results card (UI hunt 2026-10-29 row 2). cam-picker.js also
+   hides it when #btn-cam hides; this is the twin if that lags. */
+body:not(.in-race) #campicker { display: none; }
 /* Same moment: stand the race chrome down while ANY menu screen is open.
    Measured MCP 852×393 @ UI SIZE 150%: #pm-quit overlapped #hud-speed /
    #hud-gear / #hud-energy (quit bot 401 on vh 393) and the touch pads still
@@ -2098,7 +2122,7 @@ body.bc-on[data-helmet-cam] #hud::before { content: none; }
   border-radius: var(--r-xs);
 }
 #bc-tower .bc-head {
-  padding: 3px 6px; font-size: 12px; font-weight: 800; letter-spacing: 0.12em;
+  padding: 3px 6px; font-size: max(12px, calc(var(--fs-micro) / 1.4 / var(--hud-z))); font-weight: 800; letter-spacing: 0.12em;
   color: var(--text); border-bottom: 1px solid rgba(255, 255, 255, 0.12); cursor: pointer;
 }
 #bc-tower .bc-rows { list-style: none; margin: 0; padding: 0; }
@@ -2304,7 +2328,8 @@ body[data-hud-hide~="damage"] #hud-damage { display: none !important; }
 /* Optional panels retain their text size when space only holds one row. */
 #hud-rel[data-col-compact] > div:not([data-col-row]),
 #hud-strat[data-col-compact] > div:not([data-k="next"]) { display: none; }
-body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop]:not([data-hl-user]) { display: none !important; }
+body:not([data-hud-arrange]) :is(#hud-rel, #hud-strat, #hud-inputs)[data-col-drop]:not([data-hl-user]),
+body:not([data-hud-arrange]) #hud-rel[data-fit-drop]:not([data-hl-user]) { display: none !important; }
 #hud-rel [data-k="gap"] { text-align: right; }
 #hud-rel [data-k="code"] { font-weight: 800; letter-spacing: 0.04em; }
 #hud-rel [data-k="lap"] { font-weight: 800; }

@@ -632,15 +632,41 @@
         const src = vis[0].geo;
         for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
       }
+      // Perf hunt 7 (census 41021778161: index 82 KB/f of TLX WebGPU's uploads): only a fresh array rewrites from
+      // 0; otherwise the leading chunks that did not change keep their bytes and the upload range starts at the
+      // first change.
+      let keep = 0;
       if (!s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor) {
-        s.arr = new Ctor(cnt);
-        g.setIndex(new THREE.BufferAttribute(s.arr, 1));
-      }
-      let o = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+        // A regrowth takes 1.5x headroom (capped at the record's whole index count),
+        // so a widening view replaces the buffer O(log) times, not on every new high.
+        let cap = cnt;
+        if (s.arr && s.arr.constructor === Ctor) {
+          let tot = mesh._tlxIdxTotal;
+          if (!(tot > 0)) {
+            tot = 0;
+            for (const ch of mesh.chunks) { const ix = ch.geo && ch.geo.index; if (ix) tot += ix.count; }
+            mesh._tlxIdxTotal = tot;
+          }
+          cap = Math.max(cnt, Math.min(tot, Math.ceil(s.arr.length * 1.5)));
+        }
+        const old = g.index;
+        s.arr = new Ctor(cap);
+        const ia = new THREE.BufferAttribute(s.arr, 1);
+        // The vendor's narrow-index opt-in (PATCHES §20), as packIndex marks every
+        // chunk's own index: unmarked, three's WebGPU backend swaps ia.array for a
+        // Uint32 copy at creation, every later write below lands in the orphaned
+        // s.arr, and each changed visible set re-uploads the FIRST set's indices.
+        if (s.arr instanceof Uint16Array) ia.__apexUint16Index = true;
+        g.setIndex(ia);
+        // The replaced index's GPU buffer, now held by nothing but the GC.
+        if (old && ctx && ctx.releaseAttribute) ctx.releaseAttribute(old);
+      } else for (const m = Math.min(s.n, n); keep < m && s.ids[keep] === vis[keep];) keep++;
+      let o = 0, from = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
       const dst = s.arr;
       for (let i = 0; i < n; i++) {
         const ch = vis[i], a = ch.geo.index.array, c = ic[i];
-        if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
+        if (i < keep) from = o + c;
+        else if (a.constructor === Ctor) dst.set(c === a.length ? a : a.subarray(0, c), o);
         else for (let k = 0; k < c; k++) dst[o + k] = a[k];
         o += c; s.ids[i] = ch;
         const mn = ch.min, mx = ch.max;
@@ -651,10 +677,13 @@
       s.n = n;
       g.setDrawRange(0, o);
       const attr = g.index, r = attr.__tlxRange || (attr.__tlxRange = { start: 0, count: 0 });
-      r.count = o;
       const ur = attr.updateRanges || (attr.updateRanges = []);
+      // three clears updateRanges after it uploads (both backends): a range still queued is a change that never
+      // reached the GPU (the pass did not draw), so the new one starts no later than it.
+      if (ur.length === 1 && ur[0] === r && r.count > 0) from = Math.min(from, r.start);
+      r.start = from; r.count = o - from;
       if (!(ur.length === 1 && ur[0] === r)) { ur.length = 0; ur.push(r); }
-      attr.needsUpdate = true;
+      if (r.count > 0) attr.needsUpdate = true;   // a set that only lost tail chunks moves the draw range alone
       const bs = g.boundingSphere, cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5, cz = (z0 + z1) * 0.5;
       const ct = bs.center || (bs.center = new THREE.Vector3());
       ct.x = cx; ct.y = cy; ct.z = cz;
@@ -748,31 +777,47 @@
       // carries the same rule and the same reason.
     }
 
-    function free(mesh) {
+    function free(mesh, freedGeos) {
       if (!mesh) return;
+      const mark = (g) => { if (g && freedGeos) freedGeos.add(g); };
+      const dropGeo = (g, stripMergeAttrs) => {
+        if (!g) return;
+        mark(g);
+        releaseGeometry(g);
+        if (freedGeos) return;
+        if (stripMergeAttrs) {
+          const names = Object.keys(g.attributes);
+          for (let k = 0; k < names.length; k++) delete g.attributes[names[k]];
+        }
+        try { g.dispose(); } catch (_) { /* already gone */ }
+      };
       const mv = mesh._tlxMv;
       if (mv) {
         mesh._tlxMv = null;
         for (let i = 0; i < mv.length; i++) {
           const g = mv[i] && mv[i].geo;
           if (!g) continue;
-          // Vertex attributes are the chunks'. Drop only this geometry's index.
-          for (const k in g.attributes) delete g.attributes[k];
-          try { g.dispose(); } catch (_) { /* already gone */ }
+          // The merged draw's wrapper is keyed on THIS geometry, not a chunk.
+          // three r186 drops a RenderObject only when the object or the material
+          // dispatches "dispose" (a geometry dispose only clears vertex state),
+          // so geometry.dispose() alone left the wrapper in the pool and the
+          // previous circuit's merge slot in renderer._objects on the next race.
+          dropGeo(g, true);
+          mv[i].geo = null;
         }
       }
       _visList.length = 0;   // the last cull's list may be this mesh's chunks: a dropped world must not sit in module scratch
       if (mesh.chunks) {
         for (let i = 0; i < mesh.chunks.length; i++) {
           const ch = mesh.chunks[i];
-          if (ch.geo) { releaseGeometry(ch.geo); ch.geo.dispose(); ch.geo = null; }
+          if (ch.geo) { dropGeo(ch.geo, false); ch.geo = null; }
           if (ch.wrap) ch.wrap.geo = null;
         }
         mesh.chunks = null;
         mesh.geo = null;
         return;
       }
-      if (mesh.geo) { releaseGeometry(mesh.geo); mesh.geo.dispose(); mesh.geo = null; }
+      if (mesh.geo) { dropGeo(mesh.geo, false); mesh.geo = null; }
     }
 
     try { Log.info("gfx", "TLX chunked init"); } catch (_) { /* harness */ }

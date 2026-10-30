@@ -116,7 +116,7 @@ test("create: start → tick time/lap/pit/skip exits; camera stays chase", () =>
   const G2 = raceG({ player: { prog: 0 } });
   const progApi = C.create(G2, { inPitLane: () => false, atBox: () => false });
   assert.equal(progApi.start({ lapBudget: 0.25, wallS: 99, force: true }), true);
-  G2.player.prog = 0.25;
+  G2.player.prog = 0.25 * G2.track.total;   // c.prog is cumulative metres
   assert.equal(progApi.tick(0.016), "lap");
 
   // Skip.

@@ -129,12 +129,12 @@ test("the dock's tap rungs clear 44px at both width tiers", () => {
   assert.match(tb, /^max\(var\(--tap-hud\),/, "--tap-btn never paints under the band");
   assert.match(tb, /var\(--dock-r-w, 0px\)/, "--tap-btn stops at the sector plate (it stands off --dock-r-w)");
   assert.equal(decl(ov, /^body:not\(\.desktop\):not\(\.bc-on\)$/, "--hud-btn-zt"),
-    "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
+    "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 2)", "larger PAUSE/CAM typography shares the fitted dock scale up to 200%");
   assert.equal(decl(ov, "#hud-restore", "height"), "var(--tap)", "#hud-restore rides the --tap ladder");
   const hudCss = css("css/hud.css");
   assert.equal(decl(hudCss, ":root", "--tap-hud"), "calc(var(--tap) * var(--hud-btn-z))");
   const topZoom = decl(hudCss, ":root", "--hud-btn-z");
-  assert.equal(topZoom, "clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 1.5)",
+  assert.equal(topZoom, "clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 1.5)",
     "camera and pause share the effective dock cap, falling back to independent BUTTON SIZE");
   assert.doesNotMatch(topZoom, /--hud-(?:scale|z-top|z-bot)\b/,
     "top controls must not depend on a HUD readout scale or fitted band");
@@ -209,7 +209,7 @@ test("the tallest dock column fits a 390px landscape phone at HUD SIZE 200 %, an
   const hud = read("js/ui/hud.js");
   const air = +(/const FIT_AIR = (\d+)/.exec(hud) || [])[1];
   assert.ok(air > 0, "hud.js declares FIT_AIR");
-  assert.equal(dock.decls.get("zoom"), "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+  assert.equal(dock.decls.get("zoom"), "min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
     "the dock zooms by the capped value, its own BUTTON SIZE slider as fallback — floored at --hud-btn-floor (the zoom at which a tap paints 44px) so a setting never shrinks a target under the HIG minimum");
   // And fitHud compares that cap against the SAME slider — against --hud-scale
   // it would either pin a cap that fits or drop one that does not, the moment a
@@ -410,11 +410,11 @@ test("in-race chrome and the blocker are anchored inside the safe area", () => {
 
 test("pedals are squircles, portrait left-hand swaps columns, the race hides the install tip", () => {
   const ov = css("css/touch-controls.css");
-  const src = read("css/touch-controls.css");
+  const tokSrc = read("css/tokens.css");
   assert.equal(decl(ov, ".touchbtn.pedal", "border-radius"), "var(--touch-pedal-radius)");
-  assert.match(src, /--touch-pedal-radius:\s*28%/);
-  assert.match(src, /--touch-tablet-btn:\s*96px/);
-  assert.match(src, /--touch-tablet-steer:\s*108px/);
+  assert.match(tokSrc, /--touch-pedal-radius:\s*28%/);
+  assert.match(tokSrc, /--touch-tablet-btn:\s*96px/);
+  assert.match(tokSrc, /--touch-tablet-steer:\s*108px/);
   assert.equal(decl(ov, "body.in-race #ios-install", "display"), "none",
     "the Home Screen tip must not cover GAS or the steer arrows during a race");
   // Position only. A fill on a body-class pedal rule outranks :active.
@@ -750,14 +750,15 @@ function paintedLabelPx(authoredPx, dockZoom) {
 
 test("dock touch labels keep a 10 CSS-px painted floor under --hud-z-dock", () => {
   const ov = css("css/touch-controls.css");
+  const tk = css("css/tokens.css");
   const land = { context: /orientation:\s*landscape/ };
-  assert.equal(decl(ov, ":root", "--touch-label-floor"), "10px",
+  assert.equal(decl(tk, ":root", "--touch-label-floor"), "10px",
     "--touch-label-floor is the 10 CSS-px painted minimum");
 
   const dock = ruleFor(ov, /body:not\(\.desktop\) \.dock/, "zoom", land);
   assert.ok(dock, "landscape dock publishes zoom");
   assert.equal(dock.decls.get("--touch-label-z"),
-    "var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
+    "min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)))",
     "the label-z token tracks the dock's own zoom (capped or slider)");
 
   const tapFont = decl(ov, /body:not\(\.desktop\) \.dock \.touchbtn/, "font-size", land);

@@ -137,6 +137,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/deploy-child.mjs** | Bounded deploy child supervision, including descendants and cooperative shutdown. | — |
 | **ci/deploy.mjs** | The ONE deploy: fetch, merge, tooling-fast, gate node suites, sweeps if geometry moves, verify-track, then `--pr`. | — |
 | **ci/geometry-paths.mjs** | Single source for "which sweeps does this diff need?": the fleet trigger (from TRACK_VM) and the targeted-suite table. | — |
+| **ci/guards-report.mjs** | Names EVERY failing guard in a `node --test` TAP log with its fix command (efficiency review 2026-10-30, finding 4). | — |
 | **ci/guards-verdict.mjs** | Commit-gate verdict cache for test:guards (#2889 slice 1). | check-changes |
 | **ci/live-run-check.mjs** | Prints WARN if this branch has in-progress ci.yml runs (3 s API lookup); exit 0 always. | check-changes |
 | **ci/nightly-group.mjs** | Pick the browser GROUP tonight's scheduled ci.yml run should cover. | — |
@@ -150,6 +151,7 @@ The test runner and the release pipeline: what to run, how to run it in the back
 | **ci/run-group.mjs** | PR-only topical runner: drop TOOLING_FAST_FILES so the always-on riders (vm-a1 / vm-a2 / slow arms) do not double-bill. | — |
 | **ci/session-status.mjs** | Prints the branch's handoff block (sessions, commits, dirty/unpushed, verdicts, live run); `--pr` adds live PR state. | check-changes |
 | **ci/session-transcript.mjs** | Digest saved `list_events` pages into a timeline: prompts, replies, commands, MCP calls, subagents, errors. | steward |
+| **ci/ship-pr.mjs** | Runs ready-gate on a draft PR; on a pass prints the two calls that land it (MCP draft:false flip, `land` label). | ship |
 | **ci/sweep-shards.mjs** | Deterministic measured-time packing for the geometry sweep CI matrix. | — |
 | **ci/sync-pr.mjs** | Syncs a PR branch to the deploy tip (fetch, merge, verify). Without --push: no push, HEAD left on sync-pr-<branch>. | check-changes |
 | **ci/twinned-specs.mjs** | Browser specs whose assertions a VM twin replays on the fast gate. `--json`; exits 1 if a twin drifted. | — |
@@ -232,6 +234,7 @@ Author-time generation: the generated doc blocks, the shell, and the asset bakes
 | **gen/assets.mjs** | Author-time asset bake CLI: `bake-synthetic[-models]`, `bake-atlas`, `bake-model`, `verify` (licence + md5 + budget). | asset-pack |
 | **gen/bake-elevation.mjs** | Offline elevation baker — precomputes per-track elevation profiles into a `CircuitElevations` global. | new-track |
 | **gen/bake-flyby.mjs** | Bakes a copied `window.FlybyShots = [...]` blob into js/camera/flyby-seq.js's DEFAULT shot list. | playwright-probe |
+| **gen/blender/crew-body.py** | Blender-authors the pit crew body (overalls, full-face helmet, gloves, pit shoes) into js/garage/crew-draw.js. | — |
 | **gen/blender/crew-choreo.py** | Blender-authors garage enter/leave crew variants and the in-race pit crew into js/garage/crew-choreo.js. | — |
 | **gen/blender/garage-previz.py** | Editable Blender previz of the garage arrival / drive-out (bay, shutter, car, keyed camera) from arrival-poses JSON. | — |
 | **gen/compress-audio.mjs** | Cap soundtrack bitrate: re-encode listed assets/music tracks to 128 kbps from their git originals; --check scans frames. | — |
@@ -392,6 +395,7 @@ Renderer and GPU probes — GLX, WGX, TLX, and the adapter census.
 | **gfx/res-scale-census.mjs** | Counts TLX post-target reallocations, live textures and the step's own cost over a setRenderScale sweep. | renderer-debug |
 | **gfx/road-lut-census.mjs** | Census: can WGX's road LUT hand the shader a track frame rotated 90 degrees? | renderer-debug |
 | **gfx/ssr-probe.mjs** | Captures the wet-road screen-space reflection and reports why it looks as it does — the SSR lighting probe. | renderer-debug |
+| **gfx/stall-reload-sw-oracle.mjs** | Matched deploy-tip vs fix-head stall watchdog stress (SwiftShader, three+GL). | — |
 | **gfx/tlx-pack-check.cjs** | Decodes packed TLX attributes and asserts no shader DECISION changed (material layer, flag branch, MAT id). No browser. | — |
 | **gfx/wgx-capture.mjs** | Thin alias → `gfx-probe.mjs --backend webgpu` (WGX soft-present + optional readback). | renderer-debug |
 | **gfx/wgx-lavapipe-probe.mjs** | Thin alias → `gfx-probe.mjs --backend three --tlx-webgpu --lavapipe`. | renderer-debug / mcp-probe |
@@ -547,6 +551,7 @@ MCP wrappers and daemons — the repo's own apex_* server, the Chrome DevTools a
 | **mcp/diagnostics-tools.mjs** | Typed background diagnostics and bounded report queries for Apex MCP. | renderer-debug / mcp-probe |
 | **mcp/doctor-catalog.mjs** | Doctor catalog: canonical F1 environment and plugin support. | — |
 | **mcp/garage-plan.mjs** | Browser-free bounded garage matrix planning over canonical cameras and livery fields. | garage-parts-livery |
+| **mcp/ios-console.mjs** | CLI: tail the console of an iPhone Safari tab via ios-webkit-debug-proxy (status, tabs, console); needs phone and cable. | — |
 | **mcp/job-admission.mjs** | Atomic cross-owner admission and complete manifests for durable Apex jobs. | — |
 | **mcp/js-debugger-boot.cjs** | Child-process auto-attach bootloader for debugger_node_test (NODE_OPTIONS=--require): every Node | — |
 | **mcp/js-debugger-cdp.mjs** | Bounded CDP transport and loopback target discovery for js-debugger-mcp. | — |
@@ -723,6 +728,7 @@ Commit-hook policy the shell guard calls: ratchet absorb and the Ratchet-Reason 
 | **ci/pick-tests.mjs** | What do I have to run for THIS change? Maps changed files to `test:<group>` scripts and prints the command (`--staged`). |
 | **ci/pick-unit-slices.mjs** | Which Pure-node CI matrix slices a diff needs (fail-safe → all). |
 | **ci/pr-board.mjs** | One read-only table of every open PR into the deploy branch, with a SUGGESTION per row for a Claude-run CI Watch. |
+| **ci/preflip-probe.mjs** | Pre-flip probe: merge the deploy tip into a PR head in a temp worktree, run ratchets + fixture audit + diff units. |
 | **ci/process-dashboard.mjs** | Nightly CI process dashboard: per-job p50/p90, cancel and re-gate rates, push-to-live. |
 | **ci/queue-depth.mjs** | Informational queue gauge, never a push hold: queued + running JOBS by OS vs 40 Linux / 5 macOS slots. |
 | **ci/reuse-draft-fast.sh** | On ready_for_review, reuse a green draft fast-tier run for the same PR head SHA. |
@@ -783,7 +789,7 @@ No header comment in JSON, so the "read by" column is derived from which tools a
 | **mcp/js-debugger-mcp.json** | `tests/unit/js-debugger-transport.test.mjs` |
 | **perf/baselines/hot-bench.json** | `perf/hot-bench.mjs`, `tests/unit/perf-hot-bench.test.mjs` |
 | **perf/baselines/vm-alloc.json** | `perf/vm-alloc-census.mjs`, `tests/unit/perf-vm-alloc-budget.test.mjs` |
-| **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
+| **shot/scenery-locations.json** | `ci/deploy.mjs`, `ci/merge-gate.mjs`, `ci/tooling-fast.mjs`, `lib/generated-paths.mjs`, `lib/survey-scenarios.mjs`, `shot/gen-scenery-locations.cjs`, `tests/unit/deploy-tool.test.mjs`, `tests/unit/merge-gate.test.mjs`, `tests/unit/track-shot-survey.test.mjs` |
 | **track/clip-baseline.json** | `ci/select-specs.mjs`, `lib/stale-rows.mjs`, `manifest.cjs`, `tests/unit/comment-citations.test.mjs`, `tests/unit/dijon-clips-coplanar.test.mjs`, `tests/unit/docs-integrity.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `tests/unit/prop-clipping.test.mjs`, `tests/unit/select-specs.test.mjs`, `track/audit-circuit.cjs`, `track/clip-audit.cjs` |
 | **track/coplanar-baseline.json** | `ci/select-specs.mjs`, `manifest.cjs`, `tests/unit/coplanar-faces.test.mjs`, `tests/unit/monza-coplanar-clip.test.mjs`, `track/audit-circuit.cjs`, `track/coplanar-audit.cjs` |
 | **track/float-baseline.json** | `manifest.cjs`, `tests/unit/audit-circuit.test.mjs`, `tests/unit/scenery-grounding.test.mjs`, `track/audit-circuit.cjs`, `track/float-audit.cjs` |

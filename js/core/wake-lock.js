@@ -14,6 +14,13 @@ function create() {
 let raceWake = null;
 let raceWakePending = null;
 let raceWakeWanted = false;
+let raceWakeOnRelease = null;
+function clearReleaseListener(lock) {
+  if (lock && raceWakeOnRelease) {
+    try { lock.removeEventListener("release", raceWakeOnRelease); } catch (_) { /* sentinel may be dead */ }
+    raceWakeOnRelease = null;
+  }
+}
 function hold() {
   raceWakeWanted = true;
   try {
@@ -26,13 +33,15 @@ function hold() {
         releaseLock(lock, "late wake-lock release failed");
         return;
       }
+      clearReleaseListener(lock);
       raceWake = lock;
       // An old sentinel may release after a replacement exists: compare identity.
       // UA may release a visible document (battery / power saver) with no
       // visibilitychange. Re-arm next turn so a hide in this turn is seen.
       // drop() will not re-arm: it nulls raceWake and clears wanted first.
-      lock.addEventListener("release", () => {
+      raceWakeOnRelease = () => {
         if (raceWake !== lock) return;
+        clearReleaseListener(lock);
         raceWake = null;
         if (!raceWakeWanted || (typeof document !== "undefined" && document.hidden)) return;
         setTimeout(() => {
@@ -40,7 +49,8 @@ function hold() {
           if (typeof document !== "undefined" && document.hidden) return;
           hold();
         }, 0);
-      });
+      };
+      lock.addEventListener("release", raceWakeOnRelease);
     }).catch(() => { if (raceWakePending === pending) raceWakePending = null; });
   } catch (e) { /* unsupported or refused: the screen just sleeps as normal */ }
 }
@@ -48,7 +58,10 @@ function drop() {
   raceWakeWanted = false;
   const held = raceWake;
   raceWake = null;
-  if (held) releaseLock(held, "wake lock was already released");
+  if (held) {
+    clearReleaseListener(held);
+    releaseLock(held, "wake lock was already released");
+  }
 }
 
 return { hold, drop, wanted: () => raceWakeWanted };

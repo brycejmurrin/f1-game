@@ -170,7 +170,8 @@
     "js/agent/apex-lobby.js",
     "js/agent/apex-gpu-capture.js",
     "js/agent/apex-lifecycle.js",
-    "js/agent/apex.js"
+    "js/agent/apex.js",
+    "js/agent/apex-bridge.js"
   ],
     LAZY_EDGES: [
     [
@@ -225,7 +226,8 @@
     "js/ui/podium-beat.js",
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
-    "js/race/cooldown-lap.js"
+    "js/race/cooldown-lap.js",
+    "js/race/ceremony.js"
   ],
     LAZY_RACE_SESSION_EDGES: [
     [

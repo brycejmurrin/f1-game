@@ -198,11 +198,19 @@ serializes the agent behind SwiftShader several times over.
 | When | Run |
 |---|---|
 | in the edit loop | `node tools/ci/verify-change.mjs --fast` (or `node tools/ci/tooling-fast.mjs --changed --jobs=3`) selects only the structural files owned by the diff and reports an estimated critical path; this is the quick local loop and, with ONE relevant spec, a worker's whole local floor ([WORKERS.md](WORKERS.md) §3). The full `npm run test:tooling-fast` is optional locally (a green run writes the stamp `ready-gate` accepts); in CI the same full suite is **Structural guards**: two parallel tooling-fast shards named `Structural guards (tooling A)` / `Structural guards (tooling B)` (`tooling-fast.mjs --jobs=4 --shard=1/2 --bail` and `2/2 --bail`: since 2026-10-16 a shard stops STARTING files after its first failure, the files in flight finish, and the log says how many it skipped; the local full command has no `--bail`), then ratchet/audit on the aggregator still named `Structural guards` (~8 min wall, 461 s median 2026-10-05 — `.github/workflows/ci.yml` header; #1075). `ready-gate.mjs` reads that aggregator name |
+| generated files in the diff | `--changed` does not widen on generator output (`index.html`/`sw.js` `@gen-shell` blocks, `js/roster.js`, `impact-map.json`, `ratchets.json`, `agent-index.json`, `version.json`, …): it runs `npm run gen:check` plus the tests that pin the file. A HEAD that is a pure deploy-tip merge selects `gen:check` plus docs-integrity. `--quiet` ends a red run with `failing files:` and `log:` lines |
+| before the ready flip | `node tools/ci/preflip-probe.mjs --pr <n>` merges the current deploy tip into the PR head in a temp worktree and runs the ratchets, `fixture-consumer-audit`, the assert-pin ratchet and the diff's unit files: the reds GitHub's merge ref shows and the branch alone cannot (#4108, #4190). `ready-gate --pr` prints its receipt as an `advisory:` line, never a block |
 | track/scenery edit | `node tools/track/verify-track.cjs <id>` (2 s, headless) FIRST |
 | once, when the edits are done | a worker runs ONE relevant spec; the groups `pick-tests` names run on the PR (`run-ci`, `remote-group.mjs`). A Bryce-attended session may run `node tools/ci/test-bg.mjs tiny` (page loads, `__apex` responds) and then up to two named groups locally |
 | before pushing | + `npm run test:sweeps` if you touched the fleet build's inputs (`node tools/ci/geometry-paths.mjs --ere` prints them: `js/track/`, `js/circuits/`, `tools/track|lib`, the `TRACK_VM` modules); a lighting, car, debris-world or driving-line edit needs only the suite that reads it (`--targeted <list>` names it) — `deploy.mjs` and ci.yml's sweeps job make both calls for you |
 | single spec | `npm test -- tests/specs/<file>.spec.js` |
 | single unit suite | `node --test tests/unit/<file>.test.mjs` |
+
+**Known container-only reds.** `tests/unit/agent-config.test.mjs` "claude plugin validate …" used to fail in every cloud
+container: the container's `claude` CLI (2.1.314, 2026-10-30) accepts malformed skill frontmatter, so it cannot validate.
+It now SKIPS with that reason (an environment precondition, not a quarantine); where the CLI rejects the malformed control
+the assertion still runs. A skipped #38 is not a red. The eager-shell budget (`boot-load-budget.test.mjs`) is not
+container-only: a new module goes in a lazy list (`.claude/rules/game-code.md` §New module checklist).
 
 While a browser batch runs in the background, do work that does not touch
 `js/`/`css/` (docs, tools, unit tests) or end the turn — idle-watching the
@@ -454,7 +462,9 @@ tools directly.)
 | `perf-idle-churn` | `perf-idle-pipeline-churn.spec.js` — after warm-up, equal idle race windows on TLX WebGPU build zero render pipelines (#3713 background re-mint; counts, not ms) |
 | `perf-budget` | `perf-boost-press-pipelines.spec.js` (TLX WebGPU) and `perf-boost-press-pipelines-gl.spec.js` (TLX WebGL2, its own file: a second TLX boot in one Chromium stalls), driven by `tools/perf/boost-press-census.mjs` (A·H17) — BOOST presses 2..N re-mint zero BOOST pipelines, and add no fx-stream re-mints beyond the matched no-BOOST windows; every press must deploy ERS (#3677, #3703; counts, not ms); `perf-sw-cache-hit.spec.js` — the service-worker install already holds every script and stylesheet a first race loads (cache snapshot read inside the worker; dev-only LAZY_AGENT excluded). Count-based perf gates, docs/notes/PERFTEST-HUNT-2026-10-24.md |
 | `perf-race-entry` | `perf-race-entry.spec.js` — race vs practice PREPARING stage spans (`RaceEntryProfile` / `__apex.raceEntryStages`), writes `artifacts/perf-race-entry/*.json` for regression diffs (issue #1881) |
+| `results-flow` | `results-flow.spec.js` — post-flag path at 844×390: default `finishRace` → `#results`, TT ineligible for ceremony, and (once `#1584` slices 1–4 land) cooldown → parc fermé → podium → results plus SKIP / `data-ceremony-phase` pins. Plan `docs/plans/2026-10-27-cooldown-podium.md` |
 | `perf-session` | `perf-session-budgets.spec.js` — one software-GL session (three.js forced to WebGL2): garage first-draw `tapMs`, `race()` to the grid, worst and steady rAF time across the first 30 s, CDP heap across Quit to Menu. Hang ceilings fail; phone lines are recorded unless `APEX_PERF_SESSION_STRICT=1`. Artifact `artifacts/perf-session/perf-session.json`. How to run and what the numbers mean: `docs/notes/PERF-SESSION-BUDGETS.md` |
+| `stall-reload-sw` | `stall-reload-sw.spec.js` — software GL (three + `tlxForceGL`, `?stallwatch=1`): cold `__apex.race("bahrain")` must reach the grid with `apex26.stallReloads` still 0 and no stall `reload` act. Artifact `artifacts/stall-reload-sw/after-fix.json`. |
 | `gallery` | `ui-audit.spec.js` alone — a CAPTURE HARNESS whose product is a PNG gallery, run **on demand**. It asserts nothing beyond "the screen appeared", so its 39 green ticks were being counted as `ui` coverage while dominating that group's wall time (13-108 s per shot). No `pick-tests` rule routes to it: galleries are run on purpose, like `tests/manual/`. `test:audit` still sees it, so it cannot go orphan |
 | `xr` | Immersive Web Emulation Runtime (IWER) emulated-VR suite — Playwright project `xr-emulated`, pinned `tests/vendor/iwer-2.5.0.min.js`, `forceInstall` metaQuest3. Spec-level only (not Quest GPU). Run `npm run test:xr`. Path-gated CI job (`xr-filter` → `xr`) when the diff touches `js/xr/`, IWER, or `vr-emulated.spec.js`. On-device checklist: `docs/notes/XR-QUEST-ON-DEVICE.md` |
 | `webkit` | WebKit iPhone-path proxy — Playwright project `webkit` (`Desktop Safari`), `tests/specs/webkit-boot.spec.js` only. Opt-in via `APEX_WEBKIT=1` or `--project=webkit` (so bare `npm test` never needs a WebKit binary). Pins `apex26.gfxBackend=three` + `apex26.tlxForceGL=1`. Run `npm run test:webkit` on a macOS host. See §WebKit leg below |
@@ -497,7 +507,8 @@ tools directly.)
 The `tooling-fast` renderer contracts also include `three-shared-binding-update`
 (shared group invalidation and side effects), `webgpu-uint16-index` (mapped bytes
 and aligned partial writes), `tlx-mirror-inset` (WGSL/GLSL derivative safety), and
-`tlx-smith-root` (generated lamp-root control-flow nesting), and
+`tlx-smith-root` (generated lamp-root control-flow nesting), `tlx-webgpu-perf` (merged-chunk index
+uploads on WebGPU, merged shadow casts and skipped uniform writes, by count), and
 `tlx-glow-instancing` (packed light records, instance layout, growth and isolated
 warm-probe ownership). `tlx-viewport` covers texture rebinds and post-chain reader
 retirement; `tlx-post-orient-cover-webgpu` keeps the phone orientation cover

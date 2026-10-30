@@ -365,22 +365,22 @@
       "summary": "aiPlace(i,frac,v,x) setEnergy(v) setLap(n)"
     },
     {
+      "name": "ceremony",
+      "group": "control",
+      "signature": "ceremony(phase|skip)",
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
+    },
+    {
       "name": "clearInput",
       "group": "control",
       "signature": "clearInput()",
       "summary": "act({steer,throttle,brake},dt,n) setInput(o) step(dt,n) clearInput()"
     },
     {
-      "name": "finishRace",
-      "group": "control",
-      "signature": "finishRace()",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
-    },
-    {
       "name": "go",
       "group": "control",
       "signature": "go()",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "headless",
@@ -392,25 +392,25 @@
       "name": "jump",
       "group": "control",
       "signature": "jump(frac,speed,x)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "park",
       "group": "control",
       "signature": "park(f)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "race",
       "group": "control",
       "signature": "race(id)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "reset",
       "group": "control",
       "signature": "reset(f,v,x,seed)",
-      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) finishRace()"
+      "summary": "race(id) go() jump(frac,speed,x) park(f) reset(f,v,x,seed) ceremony(phase|skip)"
     },
     {
       "name": "seed",
@@ -1071,6 +1071,7 @@
         "tests/specs/lighting-tuner-grade.spec.js",
         "tests/specs/race-cycle-memory.spec.js",
         "tests/specs/render-boot.spec.js",
+        "tests/specs/session-quit-memory.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/track-switch-memory.spec.js",
         "tests/specs/webgl-probes.spec.js"
@@ -1207,6 +1208,7 @@
         "tests/unit/debug-chrome.test.mjs",
         "tests/unit/environment-json.test.mjs",
         "tests/unit/hud-survey.test.mjs",
+        "tests/unit/ios-console.test.mjs",
         "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
@@ -1408,6 +1410,15 @@
       "twinned": false
     },
     {
+      "id": "results-flow",
+      "script": "test:results-flow",
+      "kind": "browser",
+      "files": [
+        "tests/specs/results-flow.spec.js"
+      ],
+      "twinned": false
+    },
+    {
       "id": "service-worker",
       "script": "test:service-worker",
       "kind": "node",
@@ -1432,6 +1443,15 @@
       "kind": "browser",
       "files": [
         "tests/specs/smoke.spec.js"
+      ],
+      "twinned": false
+    },
+    {
+      "id": "stall-reload-sw",
+      "script": "test:stall-reload-sw",
+      "kind": "browser",
+      "files": [
+        "tests/specs/stall-reload-sw.spec.js"
       ],
       "twinned": false
     },
@@ -1465,6 +1485,7 @@
         "tests/unit/duel.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
@@ -1998,6 +2019,11 @@
     {
       "path": "js/agent/agentview.js",
       "global": "AgentView",
+      "roster": "LAZY_AGENT"
+    },
+    {
+      "path": "js/agent/apex-bridge.js",
+      "global": "ApexBridge",
       "roster": "LAZY_AGENT"
     },
     {
@@ -3924,6 +3950,11 @@
       "path": "js/race/car-fields.js",
       "global": "CarFields",
       "roster": "tag"
+    },
+    {
+      "path": "js/race/ceremony.js",
+      "global": "RaceCeremony",
+      "roster": "LAZY_RACE_SESSION"
     },
     {
       "path": "js/race/cooldown-lap.js",

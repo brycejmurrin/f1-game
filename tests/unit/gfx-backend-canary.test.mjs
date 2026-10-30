@@ -4652,22 +4652,28 @@ test("TLX shadow pool parks idle wrappers on an empty geometry; GLX road bias is
   // dropped without the event pinned every chunk of every freed track (~17 MB
   // of JS heap per picker pick, measured). Both drop paths go through one helper.
   const drop = fnBody(tlxSrc, "dropWrapper");
-  assert.match(drop, /if \(_warmPending\)[^]*?_dropQueue\.push\(\{ mesh: m, ownedGeometry \}\)[^]*?return;/,
+  assert.match(drop, /if \(_warmPending && !_ownershipFreeDepth\)[^]*?_dropQueue\.push\(\{ mesh: m, ownedGeometry, freedGeo: ownedGeometry \|\| m\.geometry \}\)/,
     "warm retains both object and owned geometry in one retirement record");
-  assert.match(drop, /m\.dispatchEvent\(\{ type: "dispose" \}\);[^]*?m\.geometry = null; m\.material = null;[^]*?ownedGeometry\.dispose\(\)/,
-    "object disposal precedes reference clearing and owned geometry disposal");
-  assert.match(tlxSrc, /function flushDropped\(\) \{\s*if \(_warmPending \|\| !_dropQueue\.length\) return;/, "the queue drains only once the warm settled");
-  assert.match(tlxSrc, /prunePool\(_poolNow\);\s*flushDropped\(\);/, "and it drains every present, after the prune");
-  assert.equal((tlxSrc.match(/dropWrapper\(m\);/g) || []).length, 1, "prunePool drops idle shared wrappers through the helper");
-  assert.equal((tlxSrc.match(/dropWrapper\(m, null, true\);/g) || []).length, 1, "releaseGeometry too, held until the next scene render (pipeline keep-alive)");
-  assert.match(fnBody(tlxSrc, "flushDropped"), /dropWrapper\(entry\.mesh, entry\.ownedGeometry\)/, "flush retains ownership metadata");
+  assert.match(tlxSrc, /flushChunkedOwnership\(\) \{[\s\S]*?flushOwnershipRelease\(_ownershipFreeBatch\)/,
+    "Tracks.free ends one ownership flush after every chunked mesh of the old track");
+  assert.match(tlxSrc, /freeChunkedMesh\(m\) \{[\s\S]*?_ownershipFreeBatch[\s\S]*?chunkedSys\.free\(m, _ownershipFreeBatch\)/,
+    "chunked free accumulates released geos across props/road/terrain before the flush");
+  assert.doesNotMatch(fnBody(tlxSrc, "flushOwnershipRelease"), /flushDropLater\(true\)/,
+    "ownership flush must not drain every deferred drop — that stripped the next circuit's ribbons on CI");
+  assert.match(fnBody(tlxSrc, "flushOwnershipRelease"), /purgeOwnershipRenderObjects\(freedGeos\)/,
+    "ownership flush must evict straggler RenderObjects for freed geos (Metal WebGPU geometry cache)");
+  assert.match(fnBody(tlxSrc, "purgeOwnershipRenderObjects"), /g\.dispatchEvent\(\{ type: "dispose" \}\)/,
+    "straggler RenderObjects drop when geometry dispatches dispose (WebGL2 warm probes and WebGPU cache)");
+  assert.match(sh, /flushOwnershipDropped,\n/, "shadow pool exports the warm-bypass drain for chunked free");
   assert.match(fnBody(tlxSrc, "_coDrop"), /b\.imesh\._ownGeo = true;\s*dropWrapper\(b\.imesh, null, later\)/, "coalesced owned views use the same warm-aware lifecycle");
   const warmProbe = tlxSrc.slice(tlxSrc.indexOf("async function compileWarmProbe("), tlxSrc.indexOf("async function warmFxPrograms("));
-  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispose\(\); m\.geometry = null; m\.material = null;/,
-    "warm probes dispose before clearing references, after pending compilation settles");
+  const ownershipFlush = fnBody(tlxSrc, "flushOwnershipRelease");
+  const ownershipDrop = fnBody(tlxSrc, "ownershipDropQueued");
+  assert.match(warmProbe, /if \(p\.pending\) return;[\s\S]*?m\.dispatchEvent\(\{ type: "dispose" \}\);[\s\S]*?m\.geometry = null; m\.material = null;/,
+    "warm probes drop render objects before clearing references, after pending compilation settles");
   assert.match(warmProbe, /finally \{ if \(!--p\.pending && p\.dead\) p\.release\(\); \}/,
     "a retired probe releases when its last compiler settles");
-  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
+  assert.doesNotMatch(tlxSrc.replace(/function dropWrapper[\s\S]*?\n      \}/, "").replace(ownershipFlush, "").replace(ownershipDrop, "").replace(warmProbe, ""), /m\.geometry = null; m\.material = null;/,
     "no wrapper is nulled behind three's back");
   // GLX: drawShadow/drawMark/drawSkidBatch built a fresh [-4,-8] per call —
   // one array per skid mark per frame.
@@ -4693,16 +4699,34 @@ test("all three backends carry the driving line's colour-blind palette", () => {
   // colour-blind-safe triple instead. A backend that forgot it would signal a
   // DIFFERENT thing to the same player depending on which renderer they got —
   // the exact class of drift the parity snapshot exists for (2026-09-08).
-  // Pinned by the safe triple's blue, which no other fx colour uses.
-  for (const [what, file] of [["GLX", "js/render/glx/shaders/glsl-fx.js"],
-                              ["WGX", "js/render/webgpu/wgsl-fx.js"],
-                              ["TLX", "js/render/three/tsl-fx.js"]]) {
-    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, "");
-    assert.match(src, /0\.392,\s*0\.561,\s*1\.0/,
-      `${what} (${file}) must carry the colour-blind-safe ON-PACE blue`);
-    assert.match(src, /0\.863,\s*0\.149,\s*0\.498/,
-      `${what} (${file}) must carry the colour-blind-safe BRAKE magenta`);
+  // Since 2026-10-30 the palette is DATA: the triples live once in
+  // DrivingLine.PALETTES and every backend shades with the three colours it is
+  // handed (opts.cols), so no backend can carry a private copy that drifts.
+  const dl = read("js/render/shared/driving-line.js").replace(/^[ \t]*\/\/.*$/gm, "");
+  assert.match(dl, /0\.392,\s*0\.561,\s*1\.0/, "the palette table carries the colour-blind-safe ON-PACE blue");
+  assert.match(dl, /0\.863,\s*0\.149,\s*0\.498/, "the palette table carries the colour-blind-safe BRAKE magenta");
+  // Each backend's shader names the three colours, its draw sets them from
+  // opts.cols, and neither keeps the old 0/1 flag or a private triple.
+  for (const [what, file, host, names, flag] of [
+    ["GLX", "js/render/glx/shaders/glsl-fx.js", "js/render/glx/glx.js", ["uOnPace", "uLift", "uBrake"], "uPalette"],
+    ["WGX", "js/render/webgpu/wgsl-fx.js", "js/render/webgpu/wgx.js", ["colOnPace", "colLift", "colBrake"], "opts.palette"],
+    ["TLX", "js/render/three/tsl-fx.js", "js/render/three/tlx.js", ["lineOnPace", "lineLift", "lineBrake"], "linePalette"]]) {
+    const src = read(file).replace(/^[ \t]*\/\/.*$/gm, ""), drawer = read(host).replace(/^[ \t]*\/\/.*$/gm, "");
+    // One list of everything wrong with this backend, so a drift names all of it at once.
+    const problems = [
+      ...names.filter((n) => !src.includes(n)).map((n) => `${file} lacks ${n}`),
+      ...(drawer.includes("opts && opts.cols") ? [] : [`${host} does not upload opts.cols`]),
+      ...((src + drawer).includes(flag) ? [`still carries the 0/1 flag ${flag}`] : []),
+      ...(/0\.392,\s*0\.561/.exec(src) ? [`${file} keeps a private colour-blind triple`] : []),
+    ];
+    assert.deepEqual(problems, [], `${what} must shade with the palette it is handed`);
   }
+  // WGX LineU grew three vec4 colours: the writer's Float32Array and the
+  // buffer size are one number, or the colours land past the end of the UBO.
+  const bytes = +read("js/render/webgpu/wgsl-fx.js").match(/LINE_UNIFORM_BYTES:\s*(\d+)/)[1];
+  const floats = +read("js/render/webgpu/wgx.js").match(/_lineU = new Float32Array\((\d+)\)/)[1];
+  assert.equal(bytes, 144, "LineU = mat4 + params + params2 + 3 colour vec4");
+  assert.equal(floats * 4, bytes, "_lineU is sized to LINE_UNIFORM_BYTES");
 });
 
 test("WGX cloud deck carries GLX's overcast / golden / twilight / moon shading", () => {
@@ -5710,7 +5734,7 @@ test("the attribute packer proves its precondition instead of assuming it", () =
     "tlx.js buildGeometry must pass fmt24 to every _pk call — the non-chunked meshes refused on Metal too");
   assert.match(tlxSrc, /const fmt24 = !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\);/,
     "buildGeometry's fmt24 must read the live backend");
-  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,\s*\}\)/,
+  assert.match(tlxSrc, /TLXShaders\.chunked\(THREE, \{\s*isWebGPU: \(\) => !!\(renderer\.backend && renderer\.backend\.isWebGPUBackend\),\s*releaseGeometry,(?:\s*\w+,)*\s*\}\)/,
     "tlx.js must hand the chunked factory its format rule and geometry-owner release callback");
 });
 
@@ -6578,6 +6602,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   const ensureScenery = id => new Promise(resolve => requests.push({ id, resolve }));
   const loadTrack = id => { builds.push(id); track = { id }; builtTrackId = id; };
   const bareStale = () => false;   // a dressed world (#3570: session-entry-vm covers the bare one)
+  const kicks = [], kickRaceBundles = (audio) => kicks.push(audio);   // perf hunt 7: the race bundles start while the picker is up
   const loadTrackStepped = async (id, cur) => { if (!cur()) return false; loadTrack(id); return true; };   // the real one: tracks.js buildPaced + build-steps.test.mjs
   const garagePrewarm = async () => {};   // garage-arrival.test.mjs pins it
   const menuFinish = eval("(" + read("js/game.js").match(/async function menuFinish\(current, key\) \{[\s\S]*?\n\}/)[0] + ")");
@@ -6588,6 +6613,7 @@ test("selector preparation rejects stale requests, reuses the world, and waits f
   trackIdx = 1; schedule(true); trackIdx = 0; schedule(true); const latest = fire();
   requests.shift().resolve(); await old; assert.deepEqual(builds, [], "A-B-A cannot revive old work");
   requests.shift().resolve(); await latest; assert.deepEqual(builds, [0]);
+  assert.ok(kicks.length > 0 && kicks.every((a) => a === false), "the open picker starts the race bundles, never LAZY_AUDIO (#1135)");
   schedule(); const reuse = fire(); requests.shift().resolve(); await reuse;
   assert.deepEqual(builds, [0], "NEXT reuses the prepared world");
   assert.equal(_menuGate.warm, 2, "NEXT resumes hidden warming interrupted by rescheduling");
@@ -6632,6 +6658,7 @@ test("selector retains a different circuit during compilation, then releases it 
   const ensureTrackBuild = async () => true;
   const loadTrackStepped = eval("(async function(idx, live){" + fnBody(src, "loadTrackStepped") + "})");
   const ensureScenery = async () => {}, menuSlice = async () => {}, menuFinish = async () => {}, garagePrewarm = async () => {};
+  const kickRaceBundles = () => {};
   const menuIdle = () => { throw new Error("the stepped build must not wait for menu idle"); };
   let flybyBuildTimer = 0, timerId = 0;
   const timers = new Map(), setTimeout = (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout = id => timers.delete(id);
@@ -7197,6 +7224,8 @@ test("TLX live mirror glass: one record on mirRT, the same refusals, warmed unde
     const recs = [];
     const make = new Function("st", "recs", `
       let { _mirActive, _mirDead, mirRT, _mirRenders, _mirFlip, fx } = st, _mirGlass = 0;
+      let _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;   // perf hunt 5 F1 state
+      const _frameVP = new Float32Array(16), W = 1, H = 1, post = null;        // no frame camera yet: no bound
       const pushRec = (...a) => recs.push(a), poolModelMat = (m) => m;
       const draw = function (mesh, model, opts) {${body}};
       return { draw, glass: () => _mirGlass };`);

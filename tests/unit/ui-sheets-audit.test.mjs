@@ -31,7 +31,7 @@ import fs from "node:fs";
 import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
-import { cssRules, decl } from "../helpers/css-rules.mjs";
+import { cssRules, decl, ruleFor } from "../helpers/css-rules.mjs";
 import { makeDom } from "../helpers/mini-dom.mjs";
 import { withI18n } from "../helpers/i18n-ctx.mjs";
 import { seedLog } from "../helpers/seed-log.mjs";
@@ -982,19 +982,36 @@ test("friend-race labels do not outlive the race: the next solo build restores M
   assert.equal(h.els.resMenu.textContent, "MENU", "TT clears the previous friend-room action label");
 });
 
-test("RESULTS scrolls .res-row.you into view when the sheet builds", () => {
+test("RESULTS opens at the top with the winner in the head; your row sticks inside its ranking list only", () => {
   const { season, cars } = tiedSeason();
   const h = bootResults({ season, cars });
+  const head = h.dom.document.createElement("div");
+  head.appendChild(h.els.resultsTitle);
   const scrolls = [];
   const orig = h.dom.document.createElement.bind(h.dom.document);
   h.dom.document.createElement = (tag) => {
     const el = orig(tag);
-    el.scrollIntoView = (opts) => { scrolls.push({ className: el.className, opts }); };
+    el.scrollIntoView = () => { scrolls.push(el.className); };
     return el;
   };
+  h.els.resultsTable.scrollTop = 1260;
   h.api.buildResults(cars.slice());
-  assert.ok(scrolls.some((s) => /\byou\b/.test(s.className)),
-    "the player row must scrollIntoView on open (sticky alone leaves it below the fold)");
+  assert.deepEqual(scrolls, [], "no scrollIntoView: it opened 844x390 ~1260px down, podium and winner off-screen");
+  assert.equal(h.els.resultsTable.scrollTop, 0, "the sheet opens at its top");
+  const chip = head.children.find((c) => c.id === "res-winner");
+  assert.ok(chip && !chip.hidden, "a winner chip sits in the head, outside the scroller");
+  assert.equal(chip.textContent, "P1 " + cars[0].code);
+  h.G.player = { best: Infinity };
+  h.G.records = { board: () => [] };
+  h.G.referencePole = () => 0;
+  h.api.buildTTResults();
+  assert.equal(chip.hidden, true, "Time Trial has no race winner");
+  const css = cssRules(readCssSource("css/overlays.css"));
+  assert.equal(decl(css, "#results-table .res-row.you", "position"), "relative", "the TT headline (no list) stays in flow");
+  const pinned = ruleFor(css, '#results-table [data-results-part="ranking"] > .res-row.you', "position").decls;
+  assert.deepEqual([pinned.get("position"), pinned.get("top"), pinned.get("bottom")], ["sticky", "0", "0"], "pinned at whichever edge, within its list");
+  assert.equal(decl(css, "#results-table .res-row.you:has([data-stint-details][open])", "position"), "relative",
+    "an open TYRE STINTS fold drops the row into flow instead of covering the rows after it");
 });
 
 test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis", () => {
@@ -1007,7 +1024,7 @@ test("RESULTS name clamps to two lines and drops pts on narrow before ellipsis",
 test("finishRace does not stamp the go() 0.5s floor as official winner elapsed", () => {
   // go() floors raceT at 0.5; a harness finishRace that copied it printed
   // OFFICIAL WINNER ELAPSED 0:00.500. Only stamp a clock when raceT has left that floor.
-  const apex = read("js/agent/apex.js");
+  const apex = read("js/race/ceremony.js");
   assert.match(apex, /clock = ran > 0\.5 \? ran : 0/);
   assert.match(apex, /c\.finishT = clock/);
 });
@@ -1114,7 +1131,7 @@ test("resNext uses the results view through translated first and second champion
   let championBuilds = 0, cleared = 0, menus = 0;
   const ctx = vm.createContext({
     els: h.els, season,
-    resultsCam: { reset() {} }, announcer: { stop() {} },
+    resultsCam: { reset() {} }, RaceCeremony: { resetLive() {} }, announcer: { stop() {} },
     isCareer: () => false, isChampionship: () => true,
     SeasonCal: { rounds: () => 3, clear: () => { cleared++; return { ok: true }; } },
     buildChampion: () => { championBuilds++; h.api.buildChampion(); },

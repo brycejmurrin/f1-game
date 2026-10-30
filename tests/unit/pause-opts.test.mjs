@@ -82,6 +82,7 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   const ctx = vm.createContext({
     Math, console, Object, Array, JSON, String, Number,
     Date: { now: () => now },
+    performance: { now: () => now },
     GameStore: { store: {
       get: (k, d) => (k in stored ? stored[k] : d),
       set: (k, v) => { written[k] = v; stored[k] = v; },
@@ -116,10 +117,10 @@ function load({ stored = {}, readyState = "complete", looks = null } = {}) {
   // A click as the browser dispatches it: capture listeners on #pausemenu
   // first; unless one stopped it, the button's own handler (js/game.js) runs.
   const handled = [];
-  function press(btn) {
+  function press(btn, extra = {}) {
     let stopped = false, prevented = false;
     const ev = {
-      type: "click", target: btn,
+      type: "click", target: btn, ...extra,
       stopImmediatePropagation() { stopped = true; },
       stopPropagation() { stopped = true; },
       preventDefault() { prevented = true; },
@@ -321,6 +322,72 @@ test("a disabled RESTART (multiplayer) is never armed; CONFIRM OFF passes straig
   c.press(c.quit);
   c.M.setConfirm("off");
   assert.ok(!c.quit.classList.contains("armed"));
+});
+
+// UI hunt 2026-10-29 #1: a 175 ms thumb double tap sent both presses to #pm-quit.
+test("a real press younger than ARM_MIN_MS is the same double tap: swallowed, still armed", () => {
+  const { press, handled, quit, advance, M } = load();
+  const tap = { isTrusted: true, detail: 1 };
+  assert.equal(M.ARM_MIN_MS, 350);
+  assert.equal(M.armAge(), Infinity, "nothing armed");
+  press(quit, tap);
+  advance(175);
+  assert.equal(M.armAge(), 175);
+  assert.ok(press(quit, tap).stopped, "the double tap's second click never reaches the game's handler");
+  assert.deepEqual(handled, []);
+  assert.ok(M.isArmed("pm-quit"), "the arm stays up, its clock unchanged");
+  assert.equal(M.armAge(), 175);
+  advance(200);
+  assert.ok(!press(quit, tap).stopped, "a deliberate second tap commits");
+  assert.deepEqual(handled, ["pm-quit"]);
+  // Keyboard activation (detail 0) and a script's el.click() (untrusted) are never ghosts.
+  for (const ev of [{ isTrusted: true, detail: 0 }, { isTrusted: false, detail: 1 }]) {
+    const r = load();
+    r.press(r.restart, ev);
+    assert.ok(!r.press(r.restart, ev).stopped);
+    assert.deepEqual(r.handled, ["pm-restart"]);
+  }
+});
+
+test("late-handled taps: event timeStamp confirms after input lag; ghost and expiry unchanged", () => {
+  const tap = { isTrusted: true, detail: 1 };
+  const TS0 = 50_000;
+  // (1) tap 2 handled late (wall) but timeStamp 1 s after tap 1 confirms
+  {
+    const { press, handled, quit, advance } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    advance(2000);
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 1000 }).stopped);
+    assert.deepEqual(handled, ["pm-quit"]);
+  }
+  // (2) timer disarms the label 6 s wall later; timeStamp gap 1 s still confirms
+  {
+    const { press, handled, quit, advance, runTimers } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    advance(6000);
+    runTimers();
+    assert.equal(quit.textContent, "QUIT TO MENU", "visual revert on timer");
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 1000 }).stopped);
+    assert.deepEqual(handled, ["pm-quit"]);
+  }
+  // (3) two taps 150 ms apart in event time stay a ghost double tap
+  {
+    const { press, handled, quit, M } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 150 }).stopped);
+    assert.deepEqual(handled, []);
+    assert.ok(M.isArmed("pm-quit"));
+  }
+  // (4) timeStamp more than ARM_MS after the arm re-arms (TAP AGAIN again)
+  {
+    const { press, handled, quit, M } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + M.ARM_MS + 1 }).stopped);
+    assert.deepEqual(handled, []);
+    assert.equal(quit.textContent, "TAP AGAIN");
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + M.ARM_MS + 2000 }).stopped);
+    assert.deepEqual(handled, ["pm-quit"]);
+  }
 });
 
 test("js/game.js keeps its handlers and the multiplayer restart guard untouched", () => {

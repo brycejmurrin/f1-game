@@ -25,6 +25,7 @@
  *
  *   node tools/ci/tooling-fast.mjs                  # full suite, serial
  *   node tools/ci/tooling-fast.mjs --changed        # vs origin/<deploy>: affected files only
+ *   node tools/ci/tooling-fast.mjs --changed --no-sync-shortcut  # a HEAD that is a pure deploy-tip merge selects gen:check + docs only; this selects the branch diff (preflip-probe)
  *   node tools/ci/tooling-fast.mjs --jobs=3         # …three at a time
  *   node tools/ci/tooling-fast.mjs --stop           # stop the registered run's whole process tree (artifacts/run/tooling-fast.json); never pkill -f / a PID kill
  *   node tools/ci/tooling-fast.mjs --print-scope    # CI guards shards: mode=full|changed (see guardsScope)
@@ -452,6 +453,12 @@ export async function runToolingFast(files = [...TOOLING_FAST_FILES], opts = {})
   const endTree = fullSuite && startTree ? workTreeId(ROOT) : null;
   const stampTree = ok && fullSuite && startTree && startTree === endTree ? startTree : null;
   if (stampTree) emit(`= tree ${stampTree} head ${startHead}`);
+  // --quiet drops PASS lines, so a red run names its files and its log here, always, before the verdict.
+  if (!ok) {
+    const bad = results.filter((r) => !r.ok).map((r) => r.file);
+    emit(`failing files: ${bad.join(" ") || "(none finished)"}`);
+    emit(`log: ${path.relative(ROOT, logPath) || logPath}`);
+  }
   emit(`= run ${ok ? "passed" : "failed"} (${passed} passed, ${failed} failed)`);
   for (const [s, fn] of Object.entries(onSig)) process.off(s, fn);
 
@@ -639,6 +646,124 @@ export const NARROW_INFRA_TESTS = Object.freeze({
   ]),
 });
 
+/**
+ * GENERATED FILES -> their SOURCE (orchestration review 2026-10-29, Part 1 finding 2). A generated file is the
+ * output of a generator, so a diff in it proves nothing the generator's `gen:check` does not: widening to the
+ * whole floor on it measured 630-1261 s per run. These are dropped from the selection and replaced by
+ * `genCheck` (the runner executes `npm run gen:check`, which regenerates each from its source and compares) plus
+ * the tests that pin the generated file. `source` is the authored input; when it is ALSO in the diff it widens
+ * (or not) on its own merits, so the mapping never hides an authored change.
+ *   always: the whole file is generator output.   blocks: only its `@gen-shell` regions are (the rest is authored).
+ */
+export const GENERATED_FILES = Object.freeze({
+  "js/roster.js": { source: "js/circuits/*.js", always: true },
+  "tests/data/impact-map.json": { source: "tests/specs/*", always: true },
+  "tests/data/ratchets.json": { source: "tests/data/ratchets.d/*.json", always: true },
+  "docs/agent-index.json": { source: "tools/docs/gen-agent-index.mjs", always: true },
+  "docs/agent-output/catalog.json": { source: "tools/gen/gen-output-surface.mjs", always: true },
+  "docs/AGENT-HOOKS.md": { source: ".claude/hooks/*", always: true },
+  "docs/TESTING-COVERAGE.md": { source: "tests/groups.json", always: true },
+  "tools/README.md": { source: "tools/**/@doc headers", always: true },
+  "CHANGELOG.md": { source: "docs/changelog.d/*", always: true },
+  "tools/shot/scenery-locations.json": { source: "js/circuits/scenery/*", always: true },
+  "version.json": { source: "tools/ci/bump-cache.mjs", always: true },
+  "index.html": { source: "tools/manifest.cjs", blocks: true },
+  "sw.js": { source: "tools/manifest.cjs", blocks: true },
+  "tools/carview.html": { source: "tools/manifest.cjs", blocks: true },
+});
+
+/** Tests every generated-only diff runs beside `gen:check`. */
+export const GENERATED_SEED_TESTS = Object.freeze([
+  "tests/unit/generated-docs.test.mjs",
+  "tests/unit/docs-integrity.test.mjs",
+]);
+
+/** `text` with every `@gen-shell:NAME` ... `/@gen-shell:NAME` region (markers included) removed. */
+export function stripGenShellBlocks(text) {
+  const out = [];
+  let open = null;
+  for (const line of String(text || "").split(/\r?\n/)) {
+    const m = /(\/?)@gen-shell:([\w:-]+)/.exec(line);
+    if (open) {
+      if (m && m[1] === "/" && m[2] === open) open = null;
+      continue;
+    }
+    if (m && m[1] !== "/") { open = m[2]; continue; }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
+/** True when two texts differ only inside `@gen-shell` regions. */
+export function isGenShellOnlyChange(before, after) {
+  return stripGenShellBlocks(before) === stripGenShellBlocks(after);
+}
+
+function readGenPair(file, opts = {}) {
+  if (opts.filePairs && opts.filePairs[file]) return opts.filePairs[file];
+  // An injected diff with no before/after pair is authoritative and unprovable here: authored (fail-safe).
+  if (opts.fileDiffs && Object.prototype.hasOwnProperty.call(opts.fileDiffs, file)) return null;
+  const root = opts.root || ROOT;
+  const ref = opts.diffBase || `origin/${DEPLOY_BRANCH}`;
+  try {
+    const base = execFileSync("git", ["merge-base", "HEAD", ref], { cwd: root, encoding: "utf8" }).trim();
+    const before = execFileSync("git", ["show", `${base}:${file}`], { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 });
+    return { before, after: fs.readFileSync(path.join(root, file), "utf8") };
+  } catch (_) {
+    return null;
+  }
+}
+
+/** The changed paths that are generator output only (see GENERATED_FILES); fail-safe: unreadable -> authored. */
+export function generatedOnlyPaths(changed, opts = {}) {
+  const out = [];
+  for (const f of changed) {
+    const norm = f.replace(/\\/g, "/");
+    const g = GENERATED_FILES[norm];
+    if (!g) continue;
+    if (g.always) { out.push(norm); continue; }
+    const pair = readGenPair(norm, opts);
+    if (pair && isGenShellOnlyChange(pair.before, pair.after)) out.push(norm);
+  }
+  return out;
+}
+
+/**
+ * A deploy-tip SYNC: HEAD is a merge and every path it changed against the first parent holds the second
+ * parent's content (no hand-resolved conflict, nothing authored). The branch's own commits were verified by the
+ * push before it, so the merge needs `gen:check` and docs-integrity, not the floor.
+ * Also null: a dirty tree, a second parent that is not on the deploy branch, a HEAD already on it (`opts.tipRef` overrides the ref, null skips).
+ * @returns {string[]|null} the paths the merge brought, or null when HEAD is not a pure sync
+ */
+export function syncMergePaths(root = ROOT, opts = {}) {
+  const git = (...a) => execFileSync("git", a, { cwd: root, encoding: "utf8", maxBuffer: 32 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] }).trim();
+  try {
+    const parents = git("rev-list", "--parents", "-n", "1", "HEAD").split(/\s+/).slice(1);
+    if (parents.length !== 2) return null;
+    const [p1, p2] = parents;
+    // Uncommitted edits are authored work the merge says nothing about.
+    if (git("status", "--porcelain")) return null;
+    // The second parent must BE deploy history and HEAD must not be (the deploy tip is itself a merge commit).
+    const reach = (a, b) => { try { execFileSync("git", ["merge-base", "--is-ancestor", a, b], { cwd: root, stdio: "ignore" }); return true; } catch (_) { return false; } };
+    const tipRef = `origin/${DEPLOY_BRANCH}`;
+    if (opts.tipRef !== null && (!reach(p2, opts.tipRef || tipRef) || reach("HEAD", opts.tipRef || tipRef))) return null;
+    const paths = git("diff", "--name-only", p1, "HEAD").split("\n").filter(Boolean);
+    if (!paths.length) return null;
+    const blob = (rev, f) => { try { return git("rev-parse", "--verify", "-q", `${rev}:${f}`); } catch (_) { return ""; } };
+    for (const f of paths) if (blob("HEAD", f) !== blob(p2, f)) return null;
+    return paths;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Selection for a pure sync merge: `gen:check` plus the docs tests. */
+export function selectSyncMerge(paths, opts = {}) {
+  const allFiles = (opts.allFiles || TOOLING_FAST_FILES).filter((f) => !f.startsWith("//"));
+  const files = allFiles.filter((f) => GENERATED_SEED_TESTS.includes(f));
+  return { files, reason: "sync-merge", genCheck: true, shards: shardsCoveringFiles(files, allFiles), changed: paths.length };
+}
+
 /** Wall-time estimate above which --changed prints the background-with-log hint. */
 export const LONG_RUN_MS = 120_000;
 export const LONG_RUN_HINT =
@@ -808,6 +933,27 @@ export function selectToolingFastChanged(changed, opts = {}) {
 
   if (!changed.length) return { files: [], reason: "empty", shards: [], changed: 0 };
 
+  // Generator output is checked by `gen:check`, not by widening: drop it, select from what is authored.
+  const genOnly = opts.noGeneratedSplit ? [] : generatedOnlyPaths(changed, opts);
+  if (genOnly.length) {
+    const authored = changed.filter((f) => !genOnly.includes(f.replace(/\\/g, "/")));
+    const gindex = opts.pinIndex || pinIndex();
+    const seeds = new Set(GENERATED_SEED_TESTS);
+    for (const g of genOnly) {
+      for (const t of (NARROW_INFRA_TESTS[g] || [])) seeds.add(t);
+      for (const t of (gindex.get(g) || [])) seeds.add(t);
+    }
+    const seedFiles = [...allFiles, ...pool].filter((f) => seeds.has(f));
+    if (!authored.length) {
+      return { files: seedFiles, reason: "generated-only", genCheck: true, generated: genOnly,
+        shards: shardsCoveringFiles(seedFiles, allFiles), changed: changed.length };
+    }
+    const sub = selectToolingFastChanged(authored, { ...opts, noGeneratedSplit: true });
+    const files = [...allFiles, ...pool].filter((f) => seeds.has(f) || sub.files.includes(f));
+    return { ...sub, files, genCheck: true, generated: genOnly, changed: changed.length,
+      shards: shardsCoveringFiles(files, allFiles) };
+  }
+
   if (isDocsOnly(changed)) {
     const docsTests = allFiles.filter((f) => DOCS_FAST_TESTS.test(f));
     const files = docsTests.length ? docsTests : allFiles;
@@ -941,10 +1087,10 @@ export const EMPTY_DIFF_MESSAGE = `[tooling-fast] --changed: EMPTY diff against 
 /** Flags the CLI accepts. Anything else (incl. `--help` typo forms) must ERROR —
  *  never silently start the suite: `--help` used to launch all 300+ files. */
 const TOOLING_FAST_FLAGS = Object.freeze([
-  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--print-scope", "--help", "-h",
+  "--jobs", "--order", "--record", "--test-timeout", "--file-timeout", "--shard", "--changed", "--bail", "--quiet", "--stop", "--print-scope", "--no-sync-shortcut", "--help", "-h",
 ]);
 
-export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
+export const TOOLING_FAST_USAGE = `usage: node tools/ci/tooling-fast.mjs [--stop] [--jobs=N] [--changed] [--no-sync-shortcut] [--bail] [--quiet] [--shard=i/n] [--order=list|longest-first] [--record] [--test-timeout=S] [--file-timeout=S] [file…]
        node tools/ci/tooling-fast.mjs --print-scope   # CI guards: mode=full|changed for this event and diff
        node tools/ci/tooling-fast.mjs --help`;
 
@@ -985,6 +1131,11 @@ export function ciShardFiles(files, spec) {
   return applyFileShard(files, spec, loadTimings([TIMINGS_FILE]));
 }
 
+/** The last line of every CLI run (efficiency review finding 4): a verdict a `| tail` cannot hide behind exit 0. */
+export function closingLine(ok, nFiles, nFailed) {
+  return `= tooling-fast ${ok ? "passed" : "failed"} (${nFiles} files, ${nFailed} failed)`;
+}
+
 /** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
 export function parseToolingFastArgv(argv) {
   const unknown = [];
@@ -1009,6 +1160,7 @@ export function parseToolingFastArgv(argv) {
     changed: argv.includes("--changed"),
     bail: argv.includes("--bail"),
     quiet: argv.includes("--quiet"),
+    noSyncShortcut: argv.includes("--no-sync-shortcut"),
     stop: argv.includes("--stop"),
     printScope: argv.includes("--print-scope"),
     jobs: val("jobs") ? Number(val("jobs")) : DEFAULT_JOBS,
@@ -1055,7 +1207,8 @@ if (isMain) {
   let files0 = parsed.files;
   let changedMeta = null;
   if (parsed.changed) {
-    changedMeta = selectToolingFastChanged(changedVsDeploy());
+    const synced = parsed.noSyncShortcut ? null : syncMergePaths();
+    changedMeta = synced ? selectSyncMerge(synced) : selectToolingFastChanged(changedVsDeploy());
     files0 = changedMeta.files;
     const wide = widenedLine(changedMeta, files0.length);
     if (wide) console.log(wide);
@@ -1064,6 +1217,7 @@ if (isMain) {
       // An empty diff selects zero files and the runner printed `= run passed (0 passed, 0 failed)` with exit 0: a
       // vacuous green that read as proof. Nothing was verified, so say so and fail (exit 3, distinct from a test failure).
       console.error(EMPTY_DIFF_MESSAGE);
+      console.log(closingLine(false, 0, 0));
       process.exit(3);
     }
     // #2890: selections estimated over ~2 min print the background-with-log hint (edit-loop jobs=3).
@@ -1075,6 +1229,20 @@ if (isMain) {
     files0 = [...TOOLING_FAST_FILES];
   }
   const files = ciShardFiles(files0, parsed.shard);
+  if (changedMeta?.genCheck) {
+    // Generated files were not run through the floor; their generators prove them (`npm run gen:check`).
+    const t0 = Date.now();
+    const g = spawnSync("npm", ["run", "gen:check", "--silent"], { cwd: ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
+    const sec = ((Date.now() - t0) / 1000).toFixed(1);
+    if (g.status !== 0) {
+      console.log(`[tooling-fast] gen:check FAILED after ${sec}s - run \`npm run gen\` and commit the result`);
+      console.log(`${String(g.stdout || "").trim().split("\n").slice(-15).join("\n")}\n${String(g.stderr || "").trim().split("\n").slice(-15).join("\n")}`);
+      console.log("[tooling-fast] = run failed (gen:check)");
+      console.log(closingLine(false, files.length, 1));
+      process.exit(1);
+    }
+    console.log(`[tooling-fast] gen:check ok (${sec}s)`);
+  }
   {
     // The served generated files are gitignored (docs/notes/DEPLOY-TIME-GEN-2026-10-28.md): build what is missing or
     // stale before any suite reads js/ (the game VM, load-order, global-registry read every FULL file).
@@ -1087,7 +1255,7 @@ if (isMain) {
     parsed.jobs = pick.jobs;
     console.log(`[tooling-fast] jobs=${pick.jobs} (auto: ${pick.why}; pass --jobs=N to choose)`);
   }
-  const { ok } = await runToolingFast(files, {
+  const { ok, failed: nFailed } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,
     quiet: parsed.quiet,
@@ -1096,5 +1264,6 @@ if (isMain) {
     testTimeoutMs: parsed.testTimeoutMs,
     fileTimeoutMs: parsed.fileTimeoutMs,
   });
+  console.log(closingLine(ok, files.length, nFailed));
   process.exit(ok ? 0 : 1);
 }

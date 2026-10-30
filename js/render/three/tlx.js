@@ -18,6 +18,8 @@ const TLX = (function () {
     anim.stop(); anim.setContext(pump); anim.start();   // start() ticks once now and parks the next tick in the pump
     return pump;
   }
+  // drawDrivingLine's `opts.cols` fallback (F1 GREEN: onPace, lift, brake; DrivingLine.PALETTES).
+  const LINE_COLS_F1 = [0.10, 0.95, 0.35, 1.00, 0.72, 0.10, 1.00, 0.12, 0.10];
   let _lastFailure = null, _presentWarned = false;
   function _fail(reason) {
     _lastFailure = { reason: String(reason), at: Date.now() };
@@ -244,12 +246,20 @@ const TLX = (function () {
       // to three WebGL2 once any detected WebGPU failure (init throw, device
       // lost x3, early GPU errors, a refused tab) has happened here. The value
       // is the reason; RESET RENDERER (renderer-picker.js) removes it.
+      // The latch EXPIRES: stamped "<ms>|<Safari version>|<reason>", it holds 7 days and only
+      // on the WebKit build that failed. A Safari update is what usually fixes WebGPU, and an
+      // unstamped (older) latch re-probes once, so a phone is never parked on the slower
+      // WebGL2 leg for good by one bad boot (Bryce: "WebGL as a backup is slow").
+      const _webkitKey = (ua.match(/Version\/[\d.]+|OS \d+[_\d]*/g) || []).join(",");
       const _webkitStayGL = isWebKit && (function () {
-        try { return !!localStorage.getItem("apex26.tlxWebKitGL"); } catch (_) { return false; }
+        try {
+          const m = /^(\d+)\|([^|]*)\|/.exec(localStorage.getItem("apex26.tlxWebKitGL") || "");
+          return !!m && Date.now() - +m[1] < 7 * 864e5 && m[2] === _webkitKey;
+        } catch (_) { return false; }
       })();
       const _latchWebKitGL = (why) => {
         if (!isWebKit || _glPin === "0" || _glPin === "1") return;
-        try { localStorage.setItem("apex26.tlxWebKitGL", String(why).slice(0, 200)); } catch (_) { /* the tab latch still holds */ }
+        try { localStorage.setItem("apex26.tlxWebKitGL", (Date.now() + "|" + _webkitKey + "|" + String(why)).slice(0, 200)); } catch (_) { /* the tab latch still holds */ }
       };
       // Software WebGPU never composites a visible swapchain — AUTO keeps
       // three's WebGPU backend and 2D-blits the LDR target (same as WGX)
@@ -1348,7 +1358,7 @@ const TLX = (function () {
           // and returns false once the hidden canvas is a WebGPU context).
           shadowSys = TLXShaders.shadowSys(THREE, TSL, {
             renderer, mobileTier, isMobile, softwareGL: softContent("shadow"),
-            isWarming: () => !!_warmPending,   // releaseGeometry queues its park while a compile holds the casters
+            isWarming: () => !!_warmPending && !_ownershipFreeDepth,   // releaseGeometry queues its park while a compile holds the casters
           });
         }
       } catch (e) {
@@ -1582,7 +1592,12 @@ const TLX = (function () {
       // that latches it still reads the capped chain once (a camera cut into a
       // cockpit view). An explicit apex26.tlxMirMips=N caps under the glass too
       // (the A/B lever for that look); "0" = the full chain always (the old way).
-      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false;
+      // Perf hunt 5 F1: the glass no longer latches the FULL chain (helmet is the
+      // default camera, so the cap never applied: 9 levels, 8 passes a frame).
+      // drawMirrorGlass bounds its true LOD each frame (PostCommon.mipFootprintLod)
+      // and _mirGlassLod keeps the session max; unbounded (a triangle straddling the
+      // eye plane, no CPU arrays) latches the full chain as before; tlxMirMips=0 is the A/B.
+      let _mirMipCap = 3, _mirMipPinned = false, _mirGlassSeen = false, _mirGlassLod = -Infinity, _mirGlassInf = 0;
       try {
         const v = localStorage.getItem("apex26.tlxMirMips");
         if (v !== null && v !== "" && +v >= 0) { _mirMipCap = Math.floor(+v); _mirMipPinned = true; }
@@ -1590,8 +1605,9 @@ const TLX = (function () {
       const _mirFull = (w, h) => Math.floor(Math.log2(Math.max(w, h, 1))) + 1;
       function _mirLevels(w, h) {
         const full = _mirFull(w, h);
-        if (_mirMipCap <= 0 || (_mirGlassSeen && !_mirMipPinned)) return full;
+        if (_mirMipCap <= 0 || (_mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity))) return full;
         let need = _mirMipCap;
+        if (_mirGlassSeen && !_mirMipPinned) need = Math.max(need, Math.ceil(_mirGlassLod + 0.25) + 1);
         if (_mirRect) {
           const up = wantSpatialUpscale(), cw = up ? presentW : W, ch = up ? presentH : H;
           const r = Math.max(w / Math.max(1, Math.round(_mirRect[2] * cw)), h / Math.max(1, Math.round(_mirRect[3] * ch)));
@@ -1896,6 +1912,7 @@ const TLX = (function () {
           chunkedSys = TLXShaders.chunked(THREE, {
             isWebGPU: () => !!(renderer.backend && renderer.backend.isWebGPUBackend),
             releaseGeometry,
+            releaseAttribute,
           });
         }
       } catch (e) {
@@ -2096,6 +2113,7 @@ const TLX = (function () {
       // build-time merge in tlx-chunked.js and leave this draw path on.
       let _chunkMerge = true;
       try { _chunkMerge = localStorage.getItem("apex26.tlxChunkMerge") !== "0"; } catch (_) { /* on */ }
+      const _shMergeWrap = { __tlx: true, geo: null };   // castShadowChunked's merged caster (cast() reads .geo at once)
       function _drawChunked(rec, order, vp, eye, cd, fog, slot) {
         if (!chunkedSys) return 0;
         const n = chunkedSys.cull(rec.chunked, vp, eye, cd, fog);
@@ -2927,7 +2945,7 @@ const TLX = (function () {
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
         geo.__tlxPin = true;   // a stream idle for 20 s (no sparks, no kick-up) kept its pipeline: prunePool skips it (#3677)
-        slot.geo = geo; slot.ib = ib; slot.cap = cap;
+        slot.geo = geo; slot.ib = ib; slot.cap = cap; slot.builds = (slot.builds | 0) + 1;   // memState().churn
         return true;
       }
       // Glow uses a six-vertex quad plus one seven-float record per light.
@@ -2954,7 +2972,7 @@ const TLX = (function () {
         geo.setDrawRange(0, 6);
         geo.instanceCount = 0;
         geo.__tlxPin = true;   // retain idle glow wrappers, as ensureStream does for other FX
-        slot.geo = geo; slot.ib = ib; slot.cap = cap;
+        slot.geo = geo; slot.ib = ib; slot.cap = cap; slot.builds = (slot.builds | 0) + 1;   // memState().churn
         return true;
       }
       // R9 (perf hunt 3): a stream whose producer keeps ONE long-lived Float32Array
@@ -2971,7 +2989,7 @@ const TLX = (function () {
         for (const a of slot.attrs) geo.setAttribute(a[0], new THREE.InterleavedBufferAttribute(ib, a[1], a[2]));
         geo.setDrawRange(0, 0);
         geo.__tlxPin = true;   // as ensureStream
-        slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0;
+        slot.geo = geo; slot.ib = ib; slot.cap = (arr.length / slot.stride) | 0; slot.builds = (slot.builds | 0) + 1;
         return true;
       }
       function uploadStream(slot, floats) {
@@ -3208,7 +3226,10 @@ const TLX = (function () {
               geo.removeEventListener("dispose", p.release); mat.removeEventListener("dispose", p.release);
             }
             if (p.pending) return;
-            for (const m of p.meshes.values()) { m.dispose(); m.geometry = null; m.material = null; }
+            for (const m of p.meshes.values()) {
+              try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+              m.geometry = null; m.material = null;
+            }
             p.meshes.clear();
           };
           mats.set(mat, p);
@@ -3898,6 +3919,9 @@ const TLX = (function () {
       }
 
       function pinSkyMaterial() {
+        // three's Background builds a mesh only for a background NODE; TLX keeps backgroundNode null (begin,
+        // drawSky, mirrorBegin) and a plain Color background, so every per-present call found nothing.
+        if (!scene.backgroundNode) return;
         try {
           const store = renderer._background;
           if (!store) return;
@@ -3979,7 +4003,7 @@ const TLX = (function () {
           // the caller (tracks.js, the chunk system, matCache) and are still
           // live. Only the wrapper is ours to drop (dropWrapper: and its
           // render object with it, or three keeps the geometry anyway).
-          dropWrapper(m);
+          dropWrapper(m); prunePool.n = (prunePool.n | 0) + 1;   // memState().churn (held on the function, as cullInstances._shPack)
         }
         meshPool.length = w;
       }
@@ -4004,6 +4028,8 @@ const TLX = (function () {
       // race→race switch). Queue the drop; flushDropped() finishes it on the
       // first present after the warm settles, when no compile holds the mesh.
       const _dropQueue = [];
+      let _ownershipFreeDepth = 0;
+      let _ownershipFreeBatch = null;
       // A FREED GEOMETRY'S RENDER OBJECTS OUTLIVE IT BY ONE SCENE RENDER. three
       // releases a pipeline when its last render object goes (Pipelines.delete:
       // usedTimes 0 -> _releasePipeline). The garage car is the only holder of
@@ -4033,13 +4059,15 @@ const TLX = (function () {
       function dropWrapper(m, ownedGeometry, afterRender) {
         try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
         m.visible = false;
-        if (_warmPending) {
-          if (!_dropQueue.some((entry) => entry.mesh === m)) _dropQueue.push({ mesh: m, ownedGeometry });
+        if (_warmPending && !_ownershipFreeDepth) {
+          if (!_dropQueue.some((entry) => entry.mesh === m)) {
+            _dropQueue.push({ mesh: m, ownedGeometry, freedGeo: ownedGeometry || m.geometry });
+          }
           return;
         }
         if (m.__tlxDropped) return;
-        if (afterRender && !ownedGeometry) {
-          if (_dropLater.length < DROP_LATER_MAX) { _dropLater.push({ mesh: m, at: _sceneRenders }); _dropStat.held++; return; }
+        if (afterRender && !ownedGeometry && !_ownershipFreeDepth) {
+          if (_dropLater.length < DROP_LATER_MAX) { _dropLater.push({ mesh: m, at: _sceneRenders, freedGeo: m.geometry }); _dropStat.held++; return; }
           _dropStat.overflow++;
           flushDropLater(true);
         }
@@ -4049,10 +4077,77 @@ const TLX = (function () {
         m.geometry = null; m.material = null;
         if (ownedGeometry) try { ownedGeometry.dispose(); } catch (_) { /* already lost */ }
       }
-      function flushDropped() {
-        if (_warmPending || !_dropQueue.length) return;
+      function flushDropped(force) {
+        if ((!force && _warmPending) || !_dropQueue.length) return;
         for (const entry of _dropQueue) dropWrapper(entry.mesh, entry.ownedGeometry);
         _dropQueue.length = 0;
+      }
+      // Track switch while a program/mirror warm is in flight: dropWrapper queues
+      // on _warmPending and flushDropped() is a no-op until warm settles. A menu→race
+      // switch on llvmpipe can free the old circuit before that present (CI
+      // session-quit-memory).
+      function ownershipDropQueued(m, owned, freedGeo) {
+        try { if (m.parent) m.parent.remove(m); } catch (_) { /* already detached */ }
+        const live = freedGeo && m.geometry && m.geometry !== freedGeo;
+        if (live) {
+          try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object only */ }
+          return;
+        }
+        m.visible = false;
+        if (m.__tlxDropped) return;
+        m.__tlxDropped = true;
+        try { m.dispatchEvent({ type: "dispose" }); } catch (_) { /* no render object yet */ }
+        if (m._ownGeo && m.geometry) m.geometry.dispose();
+        m.geometry = null; m.material = null;
+        if (owned) try { owned.dispose(); } catch (_) { /* already lost */ }
+      }
+      function purgeOwnershipRenderObjects(freedGeos) {
+        const ros = renderer._objects && renderer._objects._renderObjects;
+        if (!ros || !freedGeos || !freedGeos.size) return;
+        const list = typeof ros.values === "function" ? Array.from(ros.values()) : Array.from(ros);
+        for (let i = 0; i < list.length; i++) {
+          const ro = list[i];
+          const g = ro && ro.geometry;
+          if (!g || !freedGeos.has(g)) continue;
+          const o = ro.object;
+          if (o && typeof o.dispatchEvent === "function") {
+            try { if (o.parent) o.parent.remove(o); } catch (_) { /* already detached */ }
+            o.visible = false;
+            if (!o.__tlxDropped) ownershipDropQueued(o, o._ownGeo ? o.geometry : null, g);
+            else try { o.dispatchEvent({ type: "dispose" }); } catch (_) { /* stale render object */ }
+          }
+          if (typeof g.dispatchEvent === "function") {
+            try { g.dispatchEvent({ type: "dispose" }); } catch (_) { /* already torn down */ }
+          }
+          if (typeof ros.delete === "function") ros.delete(ro);
+        }
+      }
+      function flushOwnershipRelease(freedGeos) {
+        if (!freedGeos || !freedGeos.size) return;
+        for (let i = 0; i < meshPool.length; i++) {
+          const m = meshPool[i];
+          const g = m.geometry;
+          if (g && freedGeos.has(g)) ownershipDropQueued(m, m._ownGeo ? m.geometry : null, g);
+        }
+        flushDropped(true);
+        for (let i = _dropQueue.length - 1; i >= 0; i--) {
+          const e = _dropQueue[i];
+          const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
+          if (!fg || !freedGeos.has(fg)) continue;
+          _dropQueue.splice(i, 1);
+          ownershipDropQueued(e.mesh, e.ownedGeometry, fg);
+        }
+        let w = 0;
+        for (let i = 0; i < _dropLater.length; i++) {
+          const e = _dropLater[i];
+          const fg = e.freedGeo || (e.mesh && e.mesh.geometry);
+          if (!fg || !freedGeos.has(fg)) { _dropLater[w++] = e; continue; }
+          ownershipDropQueued(e.mesh, null, fg);
+        }
+        _dropLater.length = w;
+        if (shadowSys && shadowSys.flushOwnershipDropped) shadowSys.flushOwnershipDropped(freedGeos);
+        if (shadowSys && shadowSys.purgeCastersForGeos) shadowSys.purgeCastersForGeos(freedGeos);
+        purgeOwnershipRenderObjects(freedGeos);
       }
 
       // Caller frees are ownership boundaries, not idle hints. Waiting for the
@@ -4070,8 +4165,13 @@ const TLX = (function () {
         meshPool.length = w;
         meshByGeo.delete(geo);
         if (shadowSys && shadowSys.releaseGeometry) shadowSys.releaseGeometry(geo);   // its parked casters too
-        _coDrop(geo, true);   // R1: its coalesced runs (often the instanced lit program's last holder)
+        _coDrop(geo, !_ownershipFreeDepth);   // R1: its coalesced runs (often the instanced lit program's last holder)
         _decalDrop(geo);   // F3: its batched decal run (immediate: no measured pipeline loss, and tlx-probes pins it)
+      }
+
+      // A merge slot's outgrown index (tlx-chunked mergeVisible): three's Attributes.delete destroys its GPU buffer.
+      function releaseAttribute(attr) {
+        try { if (renderer._attributes) renderer._attributes.delete(attr); } catch (_) { /* the GC frees it */ }
       }
 
       function disposeGeometry(geo) {
@@ -4106,7 +4206,7 @@ const TLX = (function () {
           m.matrixWorldAutoUpdate = false;
           m.frustumCulled = false;
           list[k] = m;
-          meshPool.push(m);
+          meshPool.push(m); acquireMesh.n = (acquireMesh.n | 0) + 1;   // memState().churn: a new three RenderObject
         }
         // Assigned anyway: the pair is what the mesh was KEYED on, so these are
         // no-ops in steady state — and a no-op assignment is what keeps three's
@@ -5122,8 +5222,24 @@ const TLX = (function () {
         // Exempt a small, intermittently drawn mesh from the idle prune (feature-detected; freeMesh still frees it).
         pinMesh(m) { if (m && m.geo) m.geo.__tlxPin = true; },
         freeChunkedMesh(m) {
-          if (m && m.chunks && chunkedSys) { chunkedSys.free(m); return; }
+          if (m && m.chunks && chunkedSys) {
+            if (!_ownershipFreeBatch) { _ownershipFreeBatch = new Set(); _ownershipFreeDepth = 1; }
+            chunkedSys.free(m, _ownershipFreeBatch);
+            return;
+          }
           if (m && m.geo) { disposeGeometry(m.geo); m.geo = null; }
+        },
+        flushChunkedOwnership() {
+          if (_ownershipFreeBatch && _ownershipFreeBatch.size) {
+            flushOwnershipRelease(_ownershipFreeBatch);
+            for (const g of _ownershipFreeBatch) {
+              const names = Object.keys(g.attributes);
+              for (let k = 0; k < names.length; k++) delete g.attributes[names[k]];
+              try { g.dispose(); } catch (_) { /* already gone */ }
+            }
+          }
+          _ownershipFreeBatch = null;
+          _ownershipFreeDepth = 0;
         },
         freeTexture(t) {
           if (t && t.tex) {
@@ -5299,6 +5415,10 @@ const TLX = (function () {
           const S = shadowSys.S;
           if (mesh && mesh.chunks && chunkedSys && S.depthPassOn) {
             const n = chunkedSys.cull(mesh, S.castCullVP || S.lightVP, reach || null, reach ? reach[3] : 0);
+            // The main pass's merged draw (slot 0/1) for the depth passes: ONE caster for the visible chunks, not
+            // a pool slot, RenderObject and bind group each. One slot for sun and lamps: an unchanged set reuses it.
+            const g = _chunkMerge && n > 1 ? chunkedSys.mergeVisible(mesh, n, 2) : null;
+            if (g) { _shMergeWrap.geo = g; shadowSys.castShadow(_shMergeWrap, model); _shMergeWrap.geo = null; return; }
             const vis = chunkedSys.visList;
             for (let i = 0; i < n; i++) shadowSys.castShadow(vis[i].wrap, model);
             return;
@@ -5611,7 +5731,7 @@ const TLX = (function () {
             }
             _poolShow();
             _hideUndrawnInstanced();
-            if (scene.backgroundNode) pinSkyMaterial();
+            pinSkyMaterial();
             renderer.setRenderTarget(mirRT);
             _gpuLastOperation = "render-mirror";
             const mrt = _mirMrt(), prevMrt = mrt ? renderer.getMRT() : null;
@@ -5639,7 +5759,7 @@ const TLX = (function () {
           return { ready: !!mirRT && _mirRenders > 0, dead: _mirDead, w: mirRT ? mirRT.width : 0, h: mirRT ? mirRT.height : 0,
             hdr: !!(mirRT && mirRT.texture.type !== THREE.UnsignedByteType), renders: _mirRenders,
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
-            mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned };   // A-H5
+            mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity), glassLod: _mirGlassLod };   // A-H5
         },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
         // rendered in mirrorEnd before this pass records, on the glass mesh as
@@ -5652,7 +5772,17 @@ const TLX = (function () {
               || !mesh || !mesh.geo || !model) return false;
           pushRec(mesh.geo, poolModelMat(model), fx.mirrorGlassMaterial(mirRT.texture), undefined, undefined, 0, null, null);
           _mirGlass++;
-          _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the target to the full chain
+          _mirGlassSeen = true;   // A-H5: the next mirrorBegin grows the chain to what the glass can sample
+          if (_mirGlassLod < Infinity && (_frameVP[11] !== 0 || _frameVP[15] !== 0)) {   // no frame camera yet: no bound
+            const g = mesh.geo, pa = g.attributes && g.attributes.position, ua = g.attributes && g.attributes.uv, st = post && post.sceneTarget ? post.sceneTarget() : null;
+            const l = !pa || !pa.array || !ua || !ua.array || typeof PostCommon === "undefined" ? Infinity
+              : PostCommon.mipFootprintLod(pa.array, ua.array, g.index && g.index.array, model, _frameVP,
+                Math.min(W, st ? st.width : W), Math.min(H, st ? st.height : H), mirRT.width, mirRT.height);
+            // One unbounded frame is the camera and car out of step (measured: the frame after a jump()
+            // teleport); it does not latch. Two in a row, or no arrays at all, latch the full chain.
+            if (l < Infinity) { _mirGlassInf = 0; _mirGlassLod = Math.max(_mirGlassLod, l); }
+            else if (++_mirGlassInf >= 2 || !(l === l) || !pa || !ua) _mirGlassLod = Infinity;
+          }
           return true;
         },
         // _envGaveUp reads as READY on purpose: the caller polls this to stop
@@ -5787,6 +5917,12 @@ const TLX = (function () {
           if (!_warmPending) { _warmWhere = _resolveWarmWhere(opts); _warmRequested = true; _warmAttempts = 0; }
         },
         warming() { return !_deviceLost && !!_warmPending; },
+        // The in-flight program/rig/mirror compile. A track free during it only
+        // queues the depth caster (isWarming), and present() never runs while
+        // warming() is true, so the caster's render object outlives the circuit.
+        // Callers await this, then cancelWarmRetry(), then free.
+        warmSettled() { return _warmPending || Promise.resolve(); },
+        cancelWarmRetry() { _warmRequested = false; },
         warmQueued() { return !_deviceLost && !!_rigWarm && !_rigWarm.started; },   // a rig job waits for the next present, which paints nothing (game.js: never the menu's last warm frame)
         warmDraws,   // the cockpit rig's programs under the race-entry cover (car-draw.js warmCockpitRig)
         // --- WebXR (Phase 0) -------------------------------------------------
@@ -6074,7 +6210,11 @@ const TLX = (function () {
           fx.lineSpeed.value = (opts && opts.speed) || 0;
           fx.lineCorners.value = opts && opts.cornersOnly ? 1 : 0;
           fx.lineStr.value = 1.6;           // emissive strength: a constant, no producer sends one
-          fx.linePalette.value = opts && opts.palette ? 1 : 0;
+          // LINE COLOUR (DrivingLine.PALETTES): onPace / lift / brake; F1 GREEN when absent.
+          const lc = (opts && opts.cols) || LINE_COLS_F1;
+          fx.lineOnPace.value.set(lc[0], lc[1], lc[2]);
+          fx.lineLift.value.set(lc[3], lc[4], lc[5]);
+          fx.lineBrake.value.set(lc[6], lc[7], lc[8]);
           fx.lineOpacity.value = (opts && opts.opacity) || 1;
           pushRec(lineStream.geo, null, fx.lineMat, undefined, undefined, 0, null, null);
           _fxFrame.lineVerts = vertCount;
@@ -6773,6 +6913,10 @@ const TLX = (function () {
             const o = { mats: matCache.size, pool: meshPool.length, draws: drawList.n,
                         geoKeys: meshByGeo.size, batch: _poolBatch,
                         dropLater: { now: _dropLater.length, held: _dropStat.held, overflow: _dropStat.overflow },
+                        // Hunt 6, lifetime: wrappers minted / pruned (each mint is a three RenderObject: object UBO + bind
+                        // group), FX streams (re)built (a vertex buffer each), and headless readbacks (one MAP_READ createBuffer each).
+                        churn: { poolNew: acquireMesh.n | 0, poolPruned: prunePool.n | 0, softReads: _softBlitGen,
+                                 streamNew: [skidStream, lineStream, glowStream, ...partStreams].reduce((n, s) => n + (s.builds | 0), 0) },
                         // The mirror sweep reports what it FREED, not that it ran:
                         // the first version of this lever never executed and read
                         // as "the fix does nothing" (PERF-FINDINGS 2m).

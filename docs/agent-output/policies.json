@@ -621,6 +621,11 @@
       "presentation": "native",
       "preserve": "Never reveal token or child auth stdout"
     },
+    "tools/ci/guards-report.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "stderr report (one block per failing guard with its fix line) and exit 1 when it listed any; the pre-commit hook reads that exit code"
+    },
     "tools/ci/guards-verdict.mjs": {
       "action": "keep-native",
       "presentation": "native",
@@ -695,6 +700,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "Fail-safe unmatched and any_node/driving values; plan is not execution"
+    },
+    "tools/ci/preflip-probe.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Conflict versus red step versus pass verdict line; receipt per PR; exit 0/1/2/3"
     },
     "tools/ci/playwright-occupancy.mjs": {
       "action": "keep-native",
@@ -795,6 +805,11 @@
       "action": "page-results",
       "presentation": "shared-levels",
       "preserve": "Quota folding counts; hook errors always show; transcript is data warning"
+    },
+    "tools/ci/ship-pr.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "ready-gate's own exit code and its = ready-gate line; the two next calls printed only on exit 0"
     },
     "tools/ci/spec-staleness.mjs": {
       "action": "keep-native",
@@ -975,6 +990,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "@c4"
+    },
+    "tools/gen/blender/crew-body.py": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "@c2"
     },
     "tools/gen/blender/crew-choreo.py": {
       "action": "keep-native",
@@ -1255,6 +1275,11 @@
       "action": "artifact-first",
       "presentation": "shared-levels",
       "preserve": "Wet-road sample configuration, images and debug interpretation; no unmeasured reflection success."
+    },
+    "tools/gfx/stall-reload-sw-oracle.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "Matched deploy-tip vs fix-head stall stress pair JSON and native exit status."
     },
     "tools/gfx/tlx-pack-check.cjs": {
       "action": "keep-native",
@@ -1695,6 +1720,11 @@
       "action": "keep-native",
       "presentation": "native",
       "preserve": "planOnly/withinBudget/limitation and argv"
+    },
+    "tools/mcp/ios-console.mjs": {
+      "action": "keep-native",
+      "presentation": "native",
+      "preserve": "console lines and tab list as printed by the phone"
     },
     "tools/mcp/job-admission.mjs": {
       "action": "no-direct-output",

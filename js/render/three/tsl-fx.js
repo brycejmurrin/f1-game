@@ -7,7 +7,7 @@
 (function () {
   function fx(THREE, TSL, opts) {
     const {
-      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard, uv,
+      Fn, uniform, attribute, texture, materialReference, mrt, renderGroup, Discard, uv, varying,
       float, vec2, vec3, vec4,
       positionGeometry, positionWorld, cameraPosition, normalWorld,
       normalize, cross, dot, length, exp, max, min, mix, smoothstep, abs, floor,
@@ -85,7 +85,7 @@
     let _ssrTagNode = null;
     let _ssrOn = false;
     function setSsrMrt(on) {
-      if (typeof mrt !== "function") return;
+      if (typeof mrt !== "function" || _ssrOn === !!on) return;   // as tsl-lit: fxMaterial takes _ssrOn at birth
       _ssrOn = !!on;
       if (on && !_ssrTagNode) _ssrTagNode = mrt({ ssrTag: float(1) }).setBlendMode("ssrTag", _tagKeep);
       const node = on ? _ssrTagNode : null;
@@ -136,7 +136,11 @@
     const lineSpeed = uniform(0.0);     // the player's speed (m/s), set per draw
     const lineCorners = uniform(0.0);   // 1 = fade the straights out
     const lineStr = uniform(1.6);       // emissive strength (bloom feed)
-    const linePalette = uniform(0.0);   // 0 = F1 green/amber/red, 1 = colour-blind safe
+    // LINE COLOUR: the palette's three colours (DrivingLine.PALETTES in
+    // js/render/shared/driving-line.js, which carries the colour-blind rationale).
+    const lineOnPace = uniform(new THREE.Vector3(0.10, 0.95, 0.35));
+    const lineLift = uniform(new THREE.Vector3(1.00, 0.72, 0.10));
+    const lineBrake = uniform(new THREE.Vector3(1.00, 0.12, 0.10));
     const lineOpacity = uniform(1.0);   // 0.65 subtle … 1 as shipped … 1.35 solid
     const lineMat = trackFx(fxMaterial({ offset: true, doubleSided: true, key: "tlx-fx-line" }));
     // Chevrons every PERIOD m pointing the way the lap runs (GLX LINE_FS
@@ -159,15 +163,10 @@
     lineMat.colorNode = Fn(() => {
       const spd = float(attribute("lineSpeed", "float")).toVar();       // anchor
       const over = lineSpeed.div(max(spd, float(1.0)));
-      // Two palettes, mixed not branched — the same maths as GLX LINE_FS and
-      // WGSL LINE. F1's green/amber/red is the worst pair for the common
-      // red-green deficiencies (the two ends of the scale are the two colours
-      // that cannot be told apart); the alternative is the IBM colour-blind-safe
-      // triple, blue / orange / magenta.
-      const onPace = mix(vec3(0.10, 0.95, 0.35), vec3(0.392, 0.561, 1.000), linePalette);
-      const lift = mix(vec3(1.00, 0.72, 0.10), vec3(0.996, 0.380, 0.000), linePalette);
-      const brake = mix(vec3(1.00, 0.12, 0.10), vec3(0.863, 0.149, 0.498), linePalette);
-      const col = mix(mix(onPace, lift, smoothstep(float(0.98), float(1.06), over)), brake, smoothstep(float(1.06), float(1.16), over));
+      // on pace → lift → brake, the palette's colours as uniforms — the same
+      // maths as GLX LINE_FS and WGSL LINE (the table and why it has a
+      // colour-blind entry live in driving-line.js PALETTES).
+      const col = mix(mix(lineOnPace, lineLift, smoothstep(float(0.98), float(1.06), over)), lineBrake, smoothstep(float(1.06), float(1.16), over));
       return col.mul(lineStr).mul(lineAlpha()).mul(lineOpacity);
     })();
     // min(), not a bare multiply: SOLID takes the 0.85 base past 1 and a source
@@ -230,7 +229,8 @@
           const lit = mix(vec3(U.ambGround), vec3(U.ambSky), up).add(vec3(U.sunColor).mul(0.45));
           c.mulAssign(max(lit, vec3(0.18)));
         }
-        const fd = length(cameraPosition.sub(vec3(positionGeometry))).mul(U.fogDensity);
+        // Eye distance to the particle centre is constant across the quad: a vertex varying (GLX vDist, WGX o.dist).
+        const fd = varying(length(cameraPosition.sub(vec3(positionGeometry)))).mul(U.fogDensity);
         const fog = float(1.0).sub(exp(fd.mul(fd).negate()));
         return additive ? c.mul(fog.oneMinus()) : mix(c, vec3(U.fogColor), fog);
       })();
@@ -414,7 +414,7 @@
       U.fogDensity.value = (frame.fogDensity != null ? frame.fogDensity : 0) * k("fogDensityMul", 1);
     }
 
-    return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, linePalette, lineOpacity,
+    return { shadowMat, markMat, skidMat, glowMat, glowStr, lineMat, lineSpeed, lineCorners, lineStr, lineOnPace, lineLift, lineBrake, lineOpacity,
              particleMats, setSsrMrt, decalMaterialFor, releaseTexture, mirrorGlassMaterial, updateFrame, flushEvicted };
   }
 

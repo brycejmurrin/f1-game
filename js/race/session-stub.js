@@ -156,3 +156,16 @@ var JumpStartPenalty = {
     reactWindowOpen: () => false,
   }),
 };
+
+// RaceCeremony (#4067) lives in LAZY_RACE_SESSION; before it lands no ceremony can run, so the sheet just shows.
+var RaceCeremony = {
+  _stub: true,
+  get: () => null, want: () => false, resetLive: function () {}, create: function () {},
+  apexCall: (arg) => (arg === undefined ? { phase: "idle", age: 0, eligible: false, skipped: false } : false),
+  afterClassify: function (G) { if (G && G.els && G.els.results) G.els.results.hidden = false; return false; },
+  finishThrough: function (G, endRace, raceOrder) {
+    G.cars.forEach((c) => { if (!c.finished && !c.retired) { c.finished = true; c.finishT = G.raceT > 0.5 ? G.raceT : 0; } });
+    endRace(raceOrder(G.cars));
+    return { state: G.state };
+  },
+};

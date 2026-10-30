@@ -407,7 +407,7 @@ function create(G) {
     $("cr-sub").textContent = used
       ? used + (used === 1 ? " career saved" : " careers saved")
       : "Two ways to play a championship";
-    $("cr-sub").style.color = "";
+    delete $("cr-sub").dataset.team;
     $("cr-meters").textContent = "";
 
     modeColumn(left, "driver");
@@ -943,6 +943,7 @@ function create(G) {
     const myTeam = draft.flavour === "myteam";
     $("cr-title").textContent = myTeam ? I18n.t("career.new.myTeam", null, "NEW MY TEAM") : I18n.t("career.new.career", null, "NEW CAREER");
     $("cr-sub").textContent = "";
+    delete $("cr-sub").dataset.team;
     $("cr-meters").textContent = "";
     $("cr-go").textContent = myTeam ? I18n.t("career.start.myTeam", null, "START MY TEAM") : I18n.t("career.start.career", null, "START CAREER");
     $("cr-go").hidden = false;
@@ -966,7 +967,9 @@ function create(G) {
     $("cr-title").textContent = `CAREER ${c.year}`;
     $("cr-sub").textContent = `${c.flavour === "myteam" ? "TEAM PRINCIPAL" : c.driver.code}`
       + ` · ${team ? team.name.toUpperCase() : String(c.team == null ? "" : c.team).toUpperCase()}`;
-    if (team) $("cr-sub").style.color = G.cssCol(team.color2 || team.color);
+    // The team colour is a stripe, not ink: brand red as text read as an alert (design pass 2b).
+    $("cr-sub").toggleAttribute("data-team", !!team);
+    if (team) $("cr-sub").style.setProperty("--cr-team", G.cssCol(team.color2 || team.color));
 
     if (Career.conflicted()) {
       const warn = el("div", "cr-card");
@@ -1630,8 +1633,10 @@ function create(G) {
     // The foot button must say where it GOES: from the hub's CAREER MODES door
     // it returns to the HUB; from the title it is MAIN MENU. Labelling MAIN MENU
     // then opening CAREER 2026 was the lying label Esc also followed (data-esc-close).
+    // The NEW CAREER wizard steps back to its slot list, so it says BACK too.
     const back = $("cr-back");
-    if (back) back.textContent = (picking && slotsOrigin === "hub" && Career.active()) ? I18n.t("career.back", null, "BACK") : I18n.t("career.mainMenu", null, "MAIN MENU");
+    const stepsBack = (picking && slotsOrigin === "hub" && Career.active()) || (!picking && !!draft && !Career.active());
+    if (back) back.textContent = stepsBack ? I18n.t("career.back", null, "BACK") : I18n.t("career.mainMenu", null, "MAIN MENU");
     ScrollFade.refresh();
   }
 
@@ -1698,7 +1703,13 @@ function create(G) {
       picking = false; armedDelete = ""; armedImport = ""; pendingImport = null;
       G.openCareer(); return;
     }
-    if (draft && draftFrom && !Career.active()) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
+    // NEW CAREER wizard: BACK (and Esc, the same door) steps back one screen to
+    // the slot list it was opened from, restoring the borrowed live slot.
+    if (draft && !Career.active()) {
+      if (draftFrom) { Career.useSlot(draftFrom.flavour, draftFrom.i); draftFrom = null; }
+      draft = null; draftFieldErr = null; picking = true;
+      build(); return;
+    }
     // (build() retitles this button per state — see buildSlotPanes/buildHubPanes.)
     close();
     els.overlay.hidden = false;

@@ -119,6 +119,29 @@ test("blueFlag: only a car a lap up, physically just behind, within ~1.2 s", () 
   assert.equal(R.blueFlag({ ...p, finished: true }, [lapper], L, 25), null);
 });
 
+test("blueFlag holds a flagged lapper out to 1.6 s: a gap hovering at 1.2 s flags once, not every corner (perf hunt 8)", () => {
+  const { R } = load();
+  const L = 5000, p = { prog: 2000, speed: 60 };
+  const at = (gapS) => ({ code: "VER", prog: 2000 + L - gapS * 70, speed: 70 });   // a lap up, gapS seconds back
+  // A lapper sawing 1.1 ↔ 1.3 s behind through a sequence of corners and straights.
+  const series = [1.3, 1.25, 1.15, 1.1, 1.25, 1.3, 1.15, 1.28, 1.1, 1.3, 1.22, 1.12];
+  const flips = (hold) => {
+    let held = null, shown = false, n = 0;
+    for (const g of series) {
+      const o = at(g);
+      const car = R.blueFlag(p, [p, o], L, 25, hold && held ? o : null);
+      held = car;
+      if (!!car !== shown) { shown = !!car; n++; }
+    }
+    return n;
+  };
+  assert.equal(flips(true), 1, "with the hold: one show, no blinking");
+  assert.ok(flips(false) > 3, "control: without the held car the same gap series blinks");
+  assert.equal(R.blueFlag(p, [p, at(1.5)], L, 25), null, "a NEW car still needs 1.2 s to be flagged");
+  const far = at(1.7);
+  assert.equal(R.blueFlag(p, [p, far], L, 25, far), null, "a held car past 1.6 s loses the flag");
+});
+
 test("lapTrace: adopts a lap only when it became the new best, then interpolates", () => {
   const { R } = load();
   const tr = R.lapTrace(), L = 1000;

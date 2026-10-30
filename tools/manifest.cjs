@@ -272,7 +272,7 @@ const FULL = [
   "js/garage/scene-equipment.js",
   "js/garage/scene-live.js",
   "js/garage/scene-dress.js",
-  "js/garage/crew-draw.js",             // GarageCrewDraw: shared crew batch, ease, yaw placement, parent multiply
+  "js/garage/crew-draw.js",             // GarageCrewDraw: shared crew batch, ease, yaw placement, parent multiply, the Blender-authored body (tools/gen/blender/crew-body.py)
   "js/garage/crew-motion.js",
   "js/garage/crew-service.js",
   "js/garage/crew-choreo.js",           // GarageCrewChoreo: Blender-authored crew clips (tools/gen/blender/crew-choreo.py)
@@ -1050,6 +1050,7 @@ const LAZY_AGENT = [
   "js/agent/apex-gpu-capture.js",
   "js/agent/apex-lifecycle.js",
   "js/agent/apex.js",
+  "js/agent/apex-bridge.js", // ApexBridge: postMessage commands from a framing claude.ai page (?bridge=1), reads __apex at call time
 ];
 const LAZY_EDGES = [
   ["js/agent/agentview-raster.js", "js/agent/agentview.js"],
@@ -1099,6 +1100,7 @@ const LAZY_RACE_SESSION = [
   "js/race/podium-beat.js", // RacePodium: podium beat + results handoff (#4070)
   "js/race/parc-ferme.js", // ParcFerme.create(G): ceremony parc fermé beat (#4069); reads ResultsCam at call time
   "js/race/cooldown-lap.js", // CooldownLap: post-flag drive beat (#4068); RaceCeremony (#4067) wires it
+  "js/race/ceremony.js", // RaceCeremony: post-flag cooldown → parc fermé → podium → results (#4067); session-stub.js holds the title-time stub
 ];
 const LAZY_RACE_SESSION_EDGES = [
   ["js/ui/podium-beat.js", "js/race/podium-beat.js"], // RacePodium.create mounts PodiumBeat

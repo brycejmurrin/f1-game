@@ -903,28 +903,32 @@ fn lampContrib(Lt : Light, isShadowLamp : bool, wpos : vec3<f32>, N : vec3<f32>,
   if (F.params3.x > 0.0) {
     acc.col = acc.col + albedo * lcol * (att * F.params3.x * (0.55 + 0.45 * NoLl)) * (1.0 - metalness) * (1.0 - bakeWl);
   }
-  // GGX specular from the lamp (same microfacet BRDF as the sun).
-  // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
-  // so wet roads / walls still streak a lamp you can see, not only the pool.
-  let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
-  let Hl = normalize(Ld + V);
-  let NoHl = max(dot(N, Hl), 0.0);
-  let VoHl = max(dot(V, Hl), 0.0);
-  let Dl = D_GGX(NoHl, a);
-  let Vl = V_SmithGGX(NoV, NoLl, a);
-  let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
-  let radianceS = lcol * (att * spotS * lampSh);
-  var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
-  lspec = lspec / (1.0 + lspec);
-  acc.col = acc.col + lspec;
-  // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
-  // crisp low-roughness lens glint over the softer base highlight (GLX js/render/glx/shaders/glsl-lit.js).
-  if (clearcoat > 0.001) {
-    let Dcc = D_GGX(NoHl, 0.03);
-    let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
-    let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
-    var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
-    acc.col = acc.col + 2.2 * ccl / (2.2 + ccl);
+  // A lamp facing away (NoLl == 0) zeroes every term below: skip GGX + clearcoat
+  // (GLX glsl-lit.js and TLX gate the same; dominant on 28-32-lamp nights — perf hunt 7).
+  if (NoLl > 0.0) {
+    // GGX specular from the lamp (same microfacet BRDF as the sun).
+    // LAMP WALL SPILL (params9.y = uLampWallSpill): out-of-beam reflection floor
+    // so wet roads / walls still streak a lamp you can see, not only the pool.
+    let spotS = mix(mix(0.16, 0.30, wetSheen) * F.params9.y, 1.0, beam);
+    let Hl = normalize(Ld + V);
+    let NoHl = max(dot(N, Hl), 0.0);
+    let VoHl = max(dot(V, Hl), 0.0);
+    let Dl = D_GGX(NoHl, a);
+    let Vl = V_SmithGGX(NoV, NoLl, a);
+    let Fll = F_Schlick(VoHl, f0, clamp(1.0 - rough, 0.0, 1.0));
+    let radianceS = lcol * (att * spotS * lampSh);
+    var lspec = (Dl * Vl) * Fll * radianceS * NoLl;
+    lspec = lspec / (1.0 + lspec);
+    acc.col = acc.col + lspec;
+    // [Block 2 — lamp portion] The clearcoat lacquer catches the floodlights too: a
+    // crisp low-roughness lens glint over the softer base highlight (GLX js/render/glx/shaders/glsl-lit.js).
+    if (clearcoat > 0.001) {
+      let Dcc = D_GGX(NoHl, 0.03);
+      let Vcc = V_SmithGGX(NoV, NoLl, 0.01);
+      let Fcc = F_Schlick(VoHl, vec3<f32>(0.05), 1.0).x;
+      var ccl = vec3<f32>(Dcc * Vcc * Fcc) * radianceS * NoLl * clearcoat;
+      acc.col = acc.col + 2.2 * ccl / (2.2 + ccl);
+    }
   }
   return acc;
 }
@@ -1300,18 +1304,23 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
   if (detail > 0.0) {
     let wp = in.wpos.xz;
     let fineFade = clamp(1.0 - (vDist - 35.0) / 90.0, 0.0, 1.0);
-    let n = svnoise(wp * 0.35) * 0.60 + svnoise(wp * 2.1) * 0.40 * fineFade;
+    // Exact-zero gates (GLX LIT_FS parity, perf hunt 8): past 125 m the fine octave and past
+    // 63 m the crack block multiply by 0, so their noise is skipped; the result is unchanged.
+    var n = svnoise(wp * 0.35) * 0.60;
+    if (fineFade > 0.0) { n = n + svnoise(wp * 2.1) * 0.40 * fineFade; }
     albedo = albedo * (1.0 + (n - 0.5) * detail);
     patchM = svnoise(wp * 0.055 + vec2<f32>(9.1));
     let pm = smoothstep(0.52, 0.72, patchM);
     albedo = albedo * (1.0 - pm * 0.05 * min(detail * 4.0, 1.0));
     // Sparse cracks (GLX lit.js): ridge-noise lines, zone-masked, near-field only.
     let crackFade = clamp(1.0 - (vDist - 18.0) / 45.0, 0.0, 1.0);
-    let cr = abs(svnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
-    let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
-    let crack = (1.0 - smoothstep(0.015, crAA, cr))
-              * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
-    albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
+    if (crackFade > 0.0) {
+      let cr = abs(svnoise(wp * 0.9 + vec2<f32>(3.3)) * 2.0 - 1.0);
+      let crAA = max(0.075, 0.015 + max(fwWpos.x, fwWpos.z) * 0.9);
+      let crack = (1.0 - smoothstep(0.015, crAA, cr))
+                * smoothstep(0.40, 0.70, svnoise(wp * 0.11 + vec2<f32>(7.7)));
+      albedo = albedo * (1.0 - crack * 0.30 * crackFade * min(detail * 4.0, 1.0));
+    }
     albedo = max(albedo, vec3<f32>(0.0));
   }
   // PEARLESCENT / FLIP PAINT (mirrors js/render/glx/shaders/glsl-lit.js). Interference
@@ -1431,23 +1440,26 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
     // STANDING-WATER PUDDLES (2026-10-14) — js/render/shared/puddles.js is the
     // reference; GLX glsl-lit.js constant for constant: two octaves of
     // world-space surface noise (~7.7 m, ~3.4 m), fixed real locations.
-    let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7)) * 0.70 + svnoise(in.wpos.xz * 0.29 + vec2<f32>(11.3)) * 0.30;
-    // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
-    // drains to the gutters (0.75 → 1.25), the low side of a banked turn holds
-    // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
-    var pool = 1.0;
-    if (vTrk.z > 0.5) {
-      let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
-      let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
-      let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
-      // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
-      pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
-    }
-    // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows, so
-    // drying shrinks the pools to their deepest spots first. params10.y = PUDDLES.
+    // Exact-zero gate (as GLX/TLX): puddle carries pg * upFace * (1 - porous), so skip the noise where it is 0.
     let pg = clamp(smoothstep(0.6, 1.0, wetness) * F.params10.y, 0.0, 1.0);
-    let plo = 1.0 - 0.38 * pg;
-    puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace * (1.0 - porous);
+    if (pg > 0.0 && upFace > 0.0 && porous < 0.5) {
+      let pn = svnoise(in.wpos.xz * 0.13 + vec2<f32>(4.7)) * 0.70 + svnoise(in.wpos.xz * 0.29 + vec2<f32>(11.3)) * 0.30;
+      // PUDDLES FOLLOW THE ROAD SHAPE — GLX LIT_FS constant for constant: crown
+      // drains to the gutters (0.75 → 1.25), the low side of a banked turn holds
+      // the water (lateral downhill from dpdx/dpdy of vTrk.y and wpos.xz vs Ngeo).
+      var pool = 1.0;
+      if (vTrk.z > 0.5) {
+        let lat = clamp(vTrk.y / vTrk.z, -1.0, 1.0);
+        let rl = length(trkRightXZ);   // hoisted above the first branch (uniform control flow)
+        let downhill = select(0.0, -dot(trkRightXZ / rl, Ngeo.xz), rl > 1e-6);
+        // the gutters and kerb hollows hold the water (0.75 crown → 1.25 edge)
+        pool = mix(0.75, 1.25, smoothstep(0.35, 0.95, abs(lat))) * clamp(1.0 + downhill * lat * 4.0, 0.5, 1.5);
+      }
+      // GROWTH: none below wetness 0.6; threshold 1.0 → 0.62 as it grows, so
+      // drying shrinks the pools to their deepest spots first. params10.y = PUDDLES.
+      let plo = 1.0 - 0.38 * pg;
+      puddle = smoothstep(plo, plo + 0.20, pn * pool) * pg * upFace * (1.0 - porous);
+    }
     // RAIN RIPPLES — mirrors GLX LIT_FS (js/render/glx/shaders/glsl-lit.js)
     // constant for constant: two cell grids of impact rings as a normal tilt
     // on the pooled water; the GGX lobes and the sky reflection below read N.
@@ -1793,11 +1805,14 @@ fn fs_main(in : VSOut, @builtin(front_facing) ff : bool) -> @location(0) vec4<f3
         envCC = mix(envCC, envReal, clamp(envProbeStr, 0.0, 1.0));
       }
     }
-    // Specular-AA sun disc in the mirror (GLX: alpha~0.0705 → exponent).
-    let ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
-    let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
-    envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
-          * F.params7.y * shadow * keyMul;
+    // Specular-AA sun disc in the mirror (GLX: alpha~0.0705 → exponent); glint 0
+    // (the mirror pass) adds exactly 0, so skip it on that uniform.
+    if (F.params7.y != 0.0) {
+      let ccDiscA = sqrt(0.0705 * 0.0705 + ccSaaVar * 0.25);
+      let ccDiscExp = max(2.0 / (ccDiscA * ccDiscA) - 2.0, 32.0);
+      envCC = envCC + F.sunColor.xyz * pow(max(dot(Rg, F.sunDir.xyz), 1e-4), ccDiscExp)
+            * F.params7.y * shadow * keyMul;
+    }
     ccTrans = 1.0 - envW * 0.94;
     color = color * ccTrans;
     var addCC = envCC * envW;
@@ -2453,11 +2468,15 @@ fn fs_main(in : VSOut) -> @location(0) vec4<f32> {
       cov = mix(cov, max(cov, defined), clamp(cloudRich * 0.85 * cloudDef, 0.0, 1.0));
       // Twilight / day horizon cloud-bank (GLX SKY_FS): distant cumulus on a
       // compressed plane so the low gameplay sky band isn't a plain wash.
-      let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
-      let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
-      let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
-                  * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
-      cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      // Exact-zero gate (GLX SKY_FS hunt 2 G3): the band fade is exactly 0 once up >= 0.26,
+      // so bankCov == 0 and max(cov, 0) is cov (cov >= 0). Skips the fbm(bp) (perf hunt 8).
+      if (up < 0.27) {
+        let bp = dir.xz / max(up, 0.02) * 0.16 + vec2<f32>(cT * 0.0028, cT * 0.0011) * 1.4;
+        let bankThresh = 0.46 - cloud * 0.30 - twilight * 0.10;
+        let bankCov = smoothstep(bankThresh, 0.80, fbm(bp))
+                    * smoothstep(0.013, 0.030, up) * (1.0 - smoothstep(0.10, 0.26, up));
+        cov = max(cov, bankCov * cloudRich * (1.0 - overcast * 0.5));
+      }
       cov = mix(cov, smoothstep(0.18, 0.82, cov), cloudRich * 0.5);
     }
     covRay = cov;

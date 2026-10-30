@@ -168,7 +168,7 @@ const htpClose = $("htp-close");
 if (htpClose) {
   htpClose.addEventListener("click", () => {
     if (/^#htp-/.test(location.hash || "")) {
-      try { history.replaceState(null, "", location.pathname + location.search); } catch (_) { /* file:/opaque */ }
+      try { history.replaceState(history.state, "", location.pathname + location.search); } catch (_) { /* file:/opaque */ }
     }
   });
 }

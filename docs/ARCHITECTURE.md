@@ -386,6 +386,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `podium-beat.js` | `RacePodium` | LAZY_RACE_SESSION | RacePodium: ceremony podium beat + results handoff (#4070 slice 4). |
 | `parc-ferme.js` | `ParcFerme` | LAZY_RACE_SESSION | PARC FERMÉ beat (ceremony plan slice 3 / #4069). |
 | `cooldown-lap.js` | `CooldownLap` | LAZY_RACE_SESSION | COOLDOWN LAP (CooldownLap): post-flag drive beat for the ceremony flow (docs/plans/2026-10-27-cooldown-podium.md slice 2 / #4068). |
+| `ceremony.js` | `RaceCeremony` | LAZY_RACE_SESSION | RaceCeremony: post-flag ceremony state machine (cooldown → parc fermé → podium → results). |
 
 **`js/workers/`**
 
@@ -541,7 +542,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `scene-equipment.js` | `GarageEquipment` | tag | GarageEquipment: the pit equipment standing in the bay. |
 | `scene-live.js` | `GarageLive` | tag | GarageLive: the garage's LIVE atlas. |
 | `scene-dress.js` | `GarageDress` | tag | GarageDress: the team dress of the garage bay. |
-| `crew-draw.js` | `GarageCrewDraw` | tag | Shared pit-crew draw helpers. |
+| `crew-draw.js` | `GarageCrewDraw` | tag | Shared pit-crew draw helpers and the crew body. |
 | `crew-motion.js` | `GarageCrewMotion` | tag | Blender-authored guide motion. |
 | `crew-service.js` | `GarageCrewService` | tag | Timed garage service: blanket handlers, a rolling front jack and garage support. |
 | `crew-choreo.js` | `GarageCrewChoreo` | tag | GarageCrewChoreo: Blender-authored crew choreography. |
@@ -701,6 +702,7 @@ _Module index over 33 directories, in load order. `tag` = a `<script>` in index.
 | `apex-gpu-capture.js` | `ApexGpuCapture` | LAZY_AGENT | ApexGpuCapture (#2964): dev-only __apex.gpuCapture toggle that injects vendored Spector.js (captureCanvas) or webgl-lint into the page for GLX / TLX WebGL… |
 | `apex-lifecycle.js` | `ApexLifecycle` | LAZY_AGENT | ApexLifecycle: __apex.lifecycle(), the page/render lifecycle hook (#2572). |
 | `apex.js` | `ApexApi` | LAZY_AGENT | the window.__apex dev/test API for js/game.js (~220 methods: staging, cameras, track geometry, telemetry, session control, lighting, input override, h… |
+| `apex-bridge.js` | `ApexBridge` | LAZY_AGENT | ApexBridge: drive the live game on a real phone from a Claude session, through one GitHub issue. |
 
 **`js/circuits/`**
 

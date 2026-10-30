@@ -51,6 +51,8 @@
     "tests/unit/always-lamp-floor.test.mjs",
     "tests/unit/ambient-env-override.test.mjs",
     "tests/unit/apca-timing.test.mjs",
+    "// ApexBridge (phone <-> Claude over one GitHub issue): ?bridge=<n> + device token only, OWNER apex-cmd comments after its hello, ETag 304 polls, __apex allowlist (no save/career/net), reply cap. VM + fake fetch, ~0.1 s.",
+    "tests/unit/apex-bridge.test.mjs",
     "tests/unit/apex-cam-fallback.test.mjs",
     "// Cross-host .claude/memory CLI (list/show/retire); no assume-unchanged.",
     "tests/unit/apex-memory.test.mjs",
@@ -654,6 +656,8 @@
     "tests/unit/metrics.test.mjs",
     "// #3369: Miami frac-0 dual_lite orbit/trackside clear of Hard Rock bowl (buildContext, ~3 s).",
     "tests/unit/miami-hard-rock-orbit.test.mjs",
+    "// Perf hunt 5 F1: PostCommon.mipFootprintLod bounds the cockpit glass's mirror-chain LOD (never below brute-force perspective derivatives). VM, ms.",
+    "tests/unit/mip-footprint-lod.test.mjs",
     "// Night sky-tint fallback on the cockpit mirror glass: dim env bands + matte",
     "// material so Monaco night glass no longer reads 7–10× the road. ~0.1 s.",
     "tests/unit/mirror-glass-night.test.mjs",
@@ -720,6 +724,8 @@
     "tests/unit/perf-governor.test.mjs",
     "// Hot-function microbench in the game VM (step, physState, nodeAt): 6x the checked-in per-call baseline, and a 4x within-run window spread.",
     "tests/unit/perf-hot-bench.test.mjs",
+    "// Perf sweep 2026-10-29 behaviour checks (game VM + fake AudioContext): SOUND OFF suspends, a tap does not wake it, SFX OFF builds no engine graph. ~3 s.",
+    "tests/unit/perf-hunt-4.test.mjs",
     "tests/unit/perf-race-entry.test.mjs",
     "tests/unit/perf-sentinel.test.mjs",
     "// Session hang ceilings vs recorded phone lines (garage, grid, frames, quit heap). No browser.",
@@ -746,6 +752,8 @@
     "// enough to stop in, and the COMMITMENT that replaced the pit button tells",
     "// a driven pit entry from a car that ran wide there. ~0.2 s.",
     "tests/unit/pit-lane.test.mjs",
+    "// PitLane.pickFor memo: no tyre records per unchanged HUD tick, uncached parity per input; Node VM.",
+    "tests/unit/pit-pick-memo.test.mjs",
     "// Lazy per-step AI pit weather/caution reads, live dev calls and real decision parity; Node VM.",
     "tests/unit/pit-think-cache.test.mjs",
     "tests/unit/platform-session-install.test.mjs",
@@ -761,6 +769,7 @@
     "// #2889 slice 1: commit-gate verdict cache (artifacts/pre-commit-guards.ok),",
     "// git-config timeout through .githooks/pre-commit. Throwaway repos, ~2 s.",
     "tests/unit/pre-commit-guards.test.mjs",
+    "tests/unit/prepush-floor.test.mjs",
     "// two deploys (2026-09-02) and one (2026-09-18) went red on pins that no",
     "// pre-push command executes. It must be IN the gate to guard the gate.",
     "tests/unit/prepush-gate-coverage.test.mjs",
@@ -784,6 +793,8 @@
     "// Push hold: queued + running Actions JOBS by OS vs the 40 Linux / 5 macOS slots, never runs. Fixtures.",
     "tests/unit/queue-depth.test.mjs",
     "tests/unit/quick-validate.test.mjs",
+    "// RaceCeremony SM (js/race/ceremony.js): eligibility, seek/skip, data-ceremony-phase (#4067). ~0.05 s.",
+    "tests/unit/race-ceremony.test.mjs",
     "tests/unit/race-control.test.mjs",
     "tests/unit/race-entry-profile.test.mjs",
     "tests/unit/race-insights.test.mjs",
@@ -1079,8 +1090,11 @@
     "tests/unit/tlx-texture-release.test.mjs",
     "// Fixed render targets (#2655): the viewport helper + the raw-screenUV canary. VM + source scan, ~0.1 s.",
     "tests/unit/tlx-viewport.test.mjs",
+    "// TLX WebGPU perf pass (2026-10-30): the real vendored WebGPU attribute utility shows a changed merged-chunk set reaching the GPU index (W1), merge-index regrowth O(log) with release (W2), merged chunk shadow casts (W3), setSsrMrt repeat no-ops (W4), unread time uniforms unwritten (W5).",
+    "tests/unit/tlx-webgpu-perf.test.mjs",
     "// tools/check/tolerance-diff.mjs: a widened test tolerance next to production changes fails unless excepted (#1685).",
     "tests/unit/tolerance-diff.test.mjs",
+    "tests/unit/tool-hook-fixes.test.mjs",
     "tests/unit/tooling-fast-runner.test.mjs",
     "// tools/ci/tooling-timings.mjs: CI-measured per-file durations for the guards-shard packer (BUILD-HUNT-2026-10-24 B1). Pure fixtures, ~0.2 s.",
     "tests/unit/tooling-timings.test.mjs",
@@ -1815,6 +1829,7 @@
         "tests/specs/lighting-tuner-grade.spec.js",
         "tests/specs/race-cycle-memory.spec.js",
         "tests/specs/render-boot.spec.js",
+        "tests/specs/session-quit-memory.spec.js",
         "tests/specs/tlx-probes.spec.js",
         "tests/specs/track-switch-memory.spec.js",
         "tests/specs/webgl-probes.spec.js"
@@ -1934,6 +1949,7 @@
         "tests/unit/debug-chrome.test.mjs",
         "tests/unit/environment-json.test.mjs",
         "tests/unit/hud-survey.test.mjs",
+        "tests/unit/ios-console.test.mjs",
         "tests/unit/js-debugger-lifecycle-fixes.test.mjs",
         "tests/unit/js-debugger-mcp.test.mjs",
         "tests/unit/js-debugger-node.test.mjs",
@@ -2104,6 +2120,12 @@
       ],
       "kind": "browser"
     },
+    "test:results-flow": {
+      "files": [
+        "tests/specs/results-flow.spec.js"
+      ],
+      "kind": "browser"
+    },
     "test:service-worker": {
       "files": [
         "tests/unit/boot-script-repair-overlay.test.mjs",
@@ -2120,6 +2142,12 @@
     "test:smoke": {
       "files": [
         "tests/specs/smoke.spec.js"
+      ],
+      "kind": "browser"
+    },
+    "test:stall-reload-sw": {
+      "files": [
+        "tests/specs/stall-reload-sw.spec.js"
       ],
       "kind": "browser"
     },
@@ -2150,6 +2178,7 @@
         "tests/unit/duel.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
         "tests/unit/hud-control-clearance.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs",
         "tests/unit/hud-elements.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",

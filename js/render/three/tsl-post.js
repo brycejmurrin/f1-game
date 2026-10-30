@@ -218,7 +218,6 @@
       q.y.mul(U.pXY.y).add(q.z.mul(U.pXY.w)), q.z.mul(U.pW));
     const ssaoU = Object.assign(perspU(), {
       sunVS: uniform(new THREE.Vector3(0, 0, -1)),
-      texel: uniform(new THREE.Vector2()),
       strength: uniform(0),
       contact: uniform(0),
       radius: uniform(0.6),
@@ -424,9 +423,11 @@
                 If(float(li).greaterThanEqual(grU.numLights), () => { Break(); });
                 const geo = grU.lightGeo.element(li);
                 const LP = grU.lightPos.element(li).sub(p).toVar();
-                const ld = length(LP).toVar();
+                // Squared reject first, root only for lamps in range (as glsl-post.js: ld2 > rad*rad).
+                const ld2 = dot(LP, LP).toVar();
                 const rad = float(geo.x).toVar();
-                If(ld.lessThanEqual(rad), () => {
+                If(ld2.lessThanEqual(rad.mul(rad)), () => {
+                  const ld = sqrt(ld2).toVar();
                   const Ld = LP.div(max(ld, 1e-3)).toVar();
                   const s = ld.div(rad);
                   const win = clamp(s.mul(s).mul(s).mul(s).oneMinus(), 0.0, 1.0);
@@ -1038,88 +1039,85 @@
         // The mipmapped mirror RT has identity UV mapping. Analytic gradients
         // preserve its LOD inside a varying inset guard; dFdx/dFdy nodes can
         // be emitted lazily inside that guard and would be nonuniform.
-        const mirC = vec3(0.0).toVar();
         const mf = vec2(screenCoordinate).toVar();
         const mp = mf.sub(mirrorU.rect.xy).div(mirrorU.rect.zw).toVar();
         const mu = vec2(mix(mp.x, mp.x.oneMinus(), mirrorU.flip), mp.y).toVar();
         const mx = vec2(mix(float(1), float(-1), mirrorU.flip).div(mirrorU.rect.z), 0).toVar();
         const my = vec2(0, float(1).div(mirrorU.rect.w)).toVar();
+        // Inside the rect the inset OVERWRITES (the mirror pass's NoBlending
+        // quad covered exactly these pixel centres; the rect is integer px), so
+        // those pixels take the mirror alone and skip FXAA: before, they ran the
+        // full FXAA body (up to 23 taps) and kept the mirror colour live across
+        // it, only to discard the result.
+        const res = vec3(0.0).toVar();
         If(fxaaU.mir.greaterThan(0.5).and(mf.x.greaterThanEqual(mirrorU.rect.x))
           .and(mf.x.lessThan(mirrorU.rect.x.add(mirrorU.rect.z)))
           .and(mf.y.greaterThanEqual(mirrorU.rect.y))
           .and(mf.y.lessThan(mirrorU.rect.y.add(mirrorU.rect.w))), () => {
-          mirC.assign(fxaaMirTex.sample(mu).grad(mx, my).rgb);
-        });
-        const cM = vec3(fxaaTex.sample(TL(vUV)).rgb).toVar();
-        const res = vec3(cM).toVar();
-        const lM = fxLuma(cM).toVar();
-        const lN = fxL(vUV.add(vec2(0.0, t.y.negate()))).toVar();
-        const lS = fxL(vUV.add(vec2(0.0, t.y))).toVar();
-        const lW = fxL(vUV.add(vec2(t.x.negate(), 0.0))).toVar();
-        const lE = fxL(vUV.add(vec2(t.x, 0.0))).toVar();
-        const lMin = min(lM, min(min(lN, lS), min(lW, lE))).toVar();
-        const lMax = max(lM, max(max(lN, lS), max(lW, lE))).toVar();
-        const range = lMax.sub(lMin).toVar();
-        // Flat areas stay pixel-exact (the early-out).
-        If(range.greaterThanEqual(max(float(0.04), lMax.mul(0.125))), () => {
-          const lNW = fxL(vUV.add(vec2(t.x.negate(), t.y.negate()))).toVar();
-          const lNE = fxL(vUV.add(vec2(t.x, t.y.negate()))).toVar();
-          const lSW = fxL(vUV.add(vec2(t.x.negate(), t.y))).toVar();
-          const lSE = fxL(vUV.add(t)).toVar();
-          const lNS = lN.add(lS).toVar(), lWE = lW.add(lE).toVar();
-          const edgeH = abs(lW.mul(-2.0).add(lNW).add(lSW)).add(abs(lM.mul(-2.0).add(lNS)).mul(2.0)).add(abs(lE.mul(-2.0).add(lNE).add(lSE)));
-          const edgeV = abs(lN.mul(-2.0).add(lNW).add(lNE)).add(abs(lM.mul(-2.0).add(lWE)).mul(2.0)).add(abs(lS.mul(-2.0).add(lSW).add(lSE)));
-          const horz = edgeH.greaterThanEqual(edgeV).toVar();
-          const subpix = clamp(abs(lNS.add(lWE).mul(2.0).add(lNW).add(lSW).add(lNE).add(lSE).div(12.0).sub(lM)).div(range), 0.0, 1.0).toVar();
-          subpix.assign(subpix.mul(-2.0).add(3.0).mul(subpix).mul(subpix));
-          subpix.assign(subpix.mul(subpix).mul(FXAA_SUBPIX));
-          const l1 = select(horz, lN, lW).toVar(), l2 = select(horz, lS, lE).toVar();
-          const g1 = l1.sub(lM).toVar(), g2 = l2.sub(lM).toVar();
-          const pair1 = abs(g1).greaterThanEqual(abs(g2)).toVar();
-          const gradScaled = max(abs(g1), abs(g2)).mul(0.25).toVar();
-          const lenSign = select(pair1, select(horz, t.y, t.x).negate(), select(horz, t.y, t.x)).toVar();
-          const lAvg = select(pair1, l1, l2).add(lM).mul(0.5).toVar();
-          const posB = select(horz, vec2(vUV.x, vUV.y.add(lenSign.mul(0.5))), vec2(vUV.x.add(lenSign.mul(0.5)), vUV.y)).toVar();
-          const off = select(horz, vec2(t.x, 0.0), vec2(0.0, t.y)).toVar();
-          const posN = posB.sub(off.mul(FXAA_STEP[0])).toVar();
-          const posP = posB.add(off.mul(FXAA_STEP[0])).toVar();
-          const endN = fxL(posN).sub(lAvg).toVar();
-          const endP = fxL(posP).sub(lAvg).toVar();
-          const doneN = abs(endN).greaterThanEqual(gradScaled).toVar();
-          const doneP = abs(endP).greaterThanEqual(gradScaled).toVar();
-          for (let i = 1; i < FXAA_STEP.length; i++) {
-            If(doneN.not(), () => {
-              posN.subAssign(off.mul(FXAA_STEP[i]));
-              endN.assign(fxL(posN).sub(lAvg));
-              doneN.assign(abs(endN).greaterThanEqual(gradScaled));
-            });
-            If(doneP.not(), () => {
-              posP.addAssign(off.mul(FXAA_STEP[i]));
-              endP.assign(fxL(posP).sub(lAvg));
-              doneP.assign(abs(endP).greaterThanEqual(gradScaled));
-            });
-          }
-          const dstN = select(horz, vUV.x.sub(posN.x), vUV.y.sub(posN.y)).toVar();
-          const dstP = select(horz, posP.x.sub(vUV.x), posP.y.sub(vUV.y)).toVar();
-          const mLow = lM.sub(lAvg).lessThan(0.0).toVar();
-          const goodN = endN.lessThan(0.0).notEqual(mLow);
-          const goodP = endP.lessThan(0.0).notEqual(mLow);
-          const nearN = dstN.lessThan(dstP);
-          const dst = min(dstN, dstP);
-          const good = select(nearN, goodN, goodP);
-          const pixOff = select(good, dst.negate().div(dstN.add(dstP)).add(0.5), float(0.0));
-          const o = max(pixOff, subpix).mul(lenSign).toVar();
-          const pos = select(horz, vec2(vUV.x, vUV.y.add(o)), vec2(vUV.x.add(o), vUV.y));
-          res.assign(fxaaTex.sample(TL(pos)).rgb);
-        });
-        // Inside the rect the inset OVERWRITES (the mirror pass's NoBlending
-        // quad covered exactly these pixel centres; the rect is integer px).
-        const fc = vec2(screenCoordinate).toVar();
-        If(fxaaU.mir.greaterThan(0.5).and(fc.x.greaterThanEqual(mirrorU.rect.x))
-          .and(fc.x.lessThan(mirrorU.rect.x.add(mirrorU.rect.z)))
-          .and(fc.y.greaterThanEqual(mirrorU.rect.y))
-          .and(fc.y.lessThan(mirrorU.rect.y.add(mirrorU.rect.w))), () => {
-          res.assign(mirrorTone(mirC));
+          res.assign(mirrorTone(fxaaMirTex.sample(mu).grad(mx, my).rgb));
+        }).Else(() => {
+          const cM = vec3(fxaaTex.sample(TL(vUV)).rgb).toVar();
+          res.assign(cM);
+          const lM = fxLuma(cM).toVar();
+          const lN = fxL(vUV.add(vec2(0.0, t.y.negate()))).toVar();
+          const lS = fxL(vUV.add(vec2(0.0, t.y))).toVar();
+          const lW = fxL(vUV.add(vec2(t.x.negate(), 0.0))).toVar();
+          const lE = fxL(vUV.add(vec2(t.x, 0.0))).toVar();
+          const lMin = min(lM, min(min(lN, lS), min(lW, lE))).toVar();
+          const lMax = max(lM, max(max(lN, lS), max(lW, lE))).toVar();
+          const range = lMax.sub(lMin).toVar();
+          // Flat areas stay pixel-exact (the early-out).
+          If(range.greaterThanEqual(max(float(0.04), lMax.mul(0.125))), () => {
+            const lNW = fxL(vUV.add(vec2(t.x.negate(), t.y.negate()))).toVar();
+            const lNE = fxL(vUV.add(vec2(t.x, t.y.negate()))).toVar();
+            const lSW = fxL(vUV.add(vec2(t.x.negate(), t.y))).toVar();
+            const lSE = fxL(vUV.add(t)).toVar();
+            const lNS = lN.add(lS).toVar(), lWE = lW.add(lE).toVar();
+            const edgeH = abs(lW.mul(-2.0).add(lNW).add(lSW)).add(abs(lM.mul(-2.0).add(lNS)).mul(2.0)).add(abs(lE.mul(-2.0).add(lNE).add(lSE)));
+            const edgeV = abs(lN.mul(-2.0).add(lNW).add(lNE)).add(abs(lM.mul(-2.0).add(lWE)).mul(2.0)).add(abs(lS.mul(-2.0).add(lSW).add(lSE)));
+            const horz = edgeH.greaterThanEqual(edgeV).toVar();
+            const subpix = clamp(abs(lNS.add(lWE).mul(2.0).add(lNW).add(lSW).add(lNE).add(lSE).div(12.0).sub(lM)).div(range), 0.0, 1.0).toVar();
+            subpix.assign(subpix.mul(-2.0).add(3.0).mul(subpix).mul(subpix));
+            subpix.assign(subpix.mul(subpix).mul(FXAA_SUBPIX));
+            const l1 = select(horz, lN, lW).toVar(), l2 = select(horz, lS, lE).toVar();
+            const g1 = l1.sub(lM).toVar(), g2 = l2.sub(lM).toVar();
+            const pair1 = abs(g1).greaterThanEqual(abs(g2)).toVar();
+            const gradScaled = max(abs(g1), abs(g2)).mul(0.25).toVar();
+            const lenSign = select(pair1, select(horz, t.y, t.x).negate(), select(horz, t.y, t.x)).toVar();
+            const lAvg = select(pair1, l1, l2).add(lM).mul(0.5).toVar();
+            const posB = select(horz, vec2(vUV.x, vUV.y.add(lenSign.mul(0.5))), vec2(vUV.x.add(lenSign.mul(0.5)), vUV.y)).toVar();
+            const off = select(horz, vec2(t.x, 0.0), vec2(0.0, t.y)).toVar();
+            const posN = posB.sub(off.mul(FXAA_STEP[0])).toVar();
+            const posP = posB.add(off.mul(FXAA_STEP[0])).toVar();
+            const endN = fxL(posN).sub(lAvg).toVar();
+            const endP = fxL(posP).sub(lAvg).toVar();
+            const doneN = abs(endN).greaterThanEqual(gradScaled).toVar();
+            const doneP = abs(endP).greaterThanEqual(gradScaled).toVar();
+            for (let i = 1; i < FXAA_STEP.length; i++) {
+              If(doneN.not(), () => {
+                posN.subAssign(off.mul(FXAA_STEP[i]));
+                endN.assign(fxL(posN).sub(lAvg));
+                doneN.assign(abs(endN).greaterThanEqual(gradScaled));
+              });
+              If(doneP.not(), () => {
+                posP.addAssign(off.mul(FXAA_STEP[i]));
+                endP.assign(fxL(posP).sub(lAvg));
+                doneP.assign(abs(endP).greaterThanEqual(gradScaled));
+              });
+            }
+            const dstN = select(horz, vUV.x.sub(posN.x), vUV.y.sub(posN.y)).toVar();
+            const dstP = select(horz, posP.x.sub(vUV.x), posP.y.sub(vUV.y)).toVar();
+            const mLow = lM.sub(lAvg).lessThan(0.0).toVar();
+            const goodN = endN.lessThan(0.0).notEqual(mLow);
+            const goodP = endP.lessThan(0.0).notEqual(mLow);
+            const nearN = dstN.lessThan(dstP);
+            const dst = min(dstN, dstP);
+            const good = select(nearN, goodN, goodP);
+            const pixOff = select(good, dst.negate().div(dstN.add(dstP)).add(0.5), float(0.0));
+            const o = max(pixOff, subpix).mul(lenSign).toVar();
+            const pos = select(horz, vec2(vUV.x, vUV.y.add(o)), vec2(vUV.x.add(o), vUV.y));
+            res.assign(fxaaTex.sample(TL(pos)).rgb);
+          });
         });
         return vec4(res, 1.0);
       })(), "tlx-post-fxaa"),

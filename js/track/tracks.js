@@ -517,9 +517,14 @@ const Tracks = (function () {
     const m = t && t.meshes, ck = !!gfx.freeChunkedMesh;
     if (!m) return;
     for (const h of [m.floor, m.road, m.terrain, m.gate, m.startline]) gfx.freeMesh(h);
-    if (ck) { gfx.freeChunkedMesh(m.props); if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked); if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked); }
-    else gfx.freeMesh(m.props);
-    if (m.glass) { if (ck) gfx.freeChunkedMesh(m.glass); else gfx.freeMesh(m.glass); }
+    if (ck) {
+      gfx.freeChunkedMesh(m.props);
+      if (m.roadChunked) gfx.freeChunkedMesh(m.roadChunked);
+      if (m.terrainChunked) gfx.freeChunkedMesh(m.terrainChunked);
+      if (m.glass) gfx.freeChunkedMesh(m.glass);
+      if (gfx.flushChunkedOwnership) gfx.flushChunkedOwnership();
+    } else gfx.freeMesh(m.props);
+    if (m.glass && !ck) { gfx.freeMesh(m.glass); }
     if (m.water) gfx.freeMesh(m.water);
     if (m.propBatches && gfx.freeInstancedBatch) { for (const b of m.propBatches) gfx.freeInstancedBatch(b); m.propBatches = null; }
   }

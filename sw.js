@@ -45,6 +45,9 @@ const offlineRetries = new Map();
 // Runtime-only doors (WGX, track designer, XR, camera editors) stay in the
 // optional Set for gen-shell lockstep with DEFERRED/LAZY_*, but are skipped at
 // install — explicit opt-in; fetch handler runtime-caches on use.
+// @gen-shell:sw-required-lazy
+const REQUIRED_LAZY = ["js/career/career-planning-ui.js","js/career/career-ui.js"];
+// /@gen-shell:sw-required-lazy
 function isInstallCriticalOptional(u) {
   return /^js\/render\/three\//.test(u) || /^vendor\/three-/.test(u);
 }
@@ -479,6 +482,7 @@ async function precacheAssetLists() {
     "js/race/podium-beat.js",
     "js/race/parc-ferme.js",
     "js/race/cooldown-lap.js",
+    "js/race/ceremony.js",
     // LAZY_TRACK_BUILD — scenery toolkit behind ensureScenery / first Tracks.build
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",
@@ -641,7 +645,7 @@ async function precacheAssetLists() {
   // suspenders if a tag is re-added. Do NOT add them to optional: that is
   // still an install-time put. Fetch-miss still cache.put on first use.
   // @gen-shell:sw-lazy-agent
-  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/agent/apex.js"];
+  const LAZY_AGENT = ["js/agent/agentview-raster.js","js/agent/agentview-corners.js","js/agent/agentview.js","js/agent/apex-net.js","js/agent/apex-cam.js","js/agent/apex-track.js","js/agent/apex-lobby.js","js/agent/apex-gpu-capture.js","js/agent/apex-lifecycle.js","js/agent/apex.js","js/agent/apex-bridge.js"];
   // /@gen-shell:sw-lazy-agent
   for (const u of [...essential]) {
     if (LAZY_AGENT.some((p) => u.includes(p))) essential.delete(u);
@@ -760,7 +764,7 @@ self.addEventListener("install", (event) => {
     // Career UI is also required: an update must not replace working offline
     // career access with a shell whose strict lazy group was not fully cached.
     // Stamp these files exactly as ScriptLoader requests them.
-    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || /^js\/career\/career-(planning-ui|ui)\.js$/.test(u);
+    const isRequiredLazy = (u) => /^js\/render\/glx\//.test(u) || REQUIRED_LAZY.includes(u);
     const isShell = (u) => u === "./" || u === "index.html";
     // A lazy file's key: its content hash from the shell's map, else the build.
     const lazyV = urls.lazyV || new Map();

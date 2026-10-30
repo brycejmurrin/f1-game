@@ -12,7 +12,7 @@ writes no receipt, and a hand-written one used to open the door). A draft→read
 `artifacts/ready-gate/<pr>.json` receipt from `node tools/ci/ready-gate.mjs --pr <n>` whose head is the PR's LIVE
 head (`live_head`); an unknown live head refuses. Removing the `hold` label asks (ASK_HOLD). The merge case of
 `receipt_check` stays as the twin of receiptVerdict; no door calls it. A receipt lives
-RECEIPT_MAX_MIN (10) minutes. `receipt_check` is the Python twin of
+RECEIPT_MAX_MIN (10) minutes, or RECEIPT_BOUND_MAX_MIN (24 h) while the PR's live head and Plan hash match it. `receipt_check` is the Python twin of
 tools/lib/gate-receipt.mjs `receiptVerdict`, and `gate_files_check` the twin of
 `gateFilesVerdict`; the pairs agree by tests/unit/merge-gate.test.mjs.
 
@@ -76,6 +76,9 @@ DENY_WRITE = ("writes repository contents through the API (contents/ PUT|DELETE,
               "(system audit 2026-10-26 §10). Commit locally and `git push` your own cursor/<topic>-<hash> branch.")
 
 RECEIPT_MAX_MIN = 10
+# A ready receipt tied to the PR's live head AND Plan hash lives this long (the clock is only a backstop; a push or a
+# Plan edit invalidates it). Twin of BOUND_MAX_AGE_MIN in tools/lib/gate-receipt.mjs.
+RECEIPT_BOUND_MAX_MIN = 24 * 60
 GATE_FILES = ("tools/ci/merge-gate.mjs", "tools/ci/ready-gate.mjs", "tools/lib/gate-receipt.mjs")
 
 
@@ -197,6 +200,43 @@ def live_head(root, pr, owner=None, repo=None):
     return out.lower() if out and re.fullmatch(r"[0-9a-fA-F]{40}", out) else None
 
 
+def plan_hash(body):
+    """sha256 of the PR body's `## Plan` section. Twin of planHash in tools/ci/ready-gate.mjs (same CURSOR slice rule,
+    LF ends, trailing blanks and blank lines dropped); tests/unit/merge-gate.test.mjs keeps them equal."""
+    raw = re.sub(r"\r\n?", "\n", str(body or ""))
+    text = None
+    m = re.search(r"<!--\s*CURSOR_AGENT_PR_BODY_BEGIN\s*-->([\s\S]*?)<!--\s*CURSOR_AGENT_PR_BODY_END\s*-->", raw, re.I)
+    if m and re.search(r"^##[ \t]+Plan\b", m.group(1), re.M | re.A) and re.search(r"^[ \t]*[-*][ \t]+\[[ xX~]\]", m.group(1), re.M):
+        text = m.group(1)
+    if text is None:
+        text = re.sub(r"<!--[\s\S]*?-->", "", raw)
+    section = ""
+    h = re.search(r"^##[ \t]+Plan\b.*$", text, re.M | re.A)
+    if h:
+        rest = text[h.end():]
+        nx = re.search(r"^##[ \t]", rest, re.M)
+        section = rest[:nx.start()] if nx else rest
+    lines = [re.sub(r"[ \t]+$", "", ln) for ln in section.split("\n")]
+    return hashlib.sha256("\n".join(ln for ln in lines if ln).encode("utf8")).hexdigest()
+
+
+def live_state(root, pr, owner=None, repo=None):
+    """(head sha, Plan hash) of the PR on GitHub NOW from ONE API call (the hook has a 10 s budget), each None when
+    unknown."""
+    try:
+        n = int(pr)
+    except (TypeError, ValueError):
+        return None, None
+    out = gh_api(root, "repos/%s/pulls/%d" % (_slug(root, owner, repo), n), '.head.sha + "\n" + (.body // "")')
+    if not out:
+        return None, None
+    sha, sep, body = out.partition("\n")
+    sha = sha.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return None, None
+    return sha, (plan_hash(body) if sep else None)
+
+
 def live_labels(root, number, owner=None, repo=None):
     """The issue's or PR's label names on GitHub NOW (lower case), or None when unknown."""
     try:
@@ -207,7 +247,7 @@ def live_labels(root, number, owner=None, repo=None):
     return None if out is None else [x.strip().lower() for x in out.splitlines() if x.strip()]
 
 
-def receipt_check(root, kind, pr, head=None, now=None, verify_files=False, require_head=False):
+def receipt_check(root, kind, pr, head=None, now=None, verify_files=False, require_head=False, plan=None):
     """(ok, why) for a merge (`head` = the call's pinned sha) or ready receipt. Mirrors receiptVerdict in
     tools/lib/gate-receipt.mjs: same PR and kind, `ok`, at most RECEIPT_MAX_MIN (10) min old, and for a merge the
     pinned head is the gated head (either a prefix of the other, at least 7 hex). `verify_files` (the hook doors
@@ -236,9 +276,6 @@ def receipt_check(root, kind, pr, head=None, now=None, verify_files=False, requi
     age_min = ((now if now is not None else time.time()) - at) / 60.0
     if age_min < -1:   # pass-4 red-team R3: a receipt dated in the future never expired
         return False, "the %s receipt for #%d is dated %d min in the future; re-run the gate" % (tool, n, round(-age_min))
-    if age_min > RECEIPT_MAX_MIN:
-        return False, "the %s receipt for #%d is %d min old (max %d); re-run the gate on the current head" % (
-            tool, n, round(age_min), RECEIPT_MAX_MIN)
     a = str(head or "").strip().lower()
     b = str(r.get("head") or "").strip().lower()
     if kind == "ready" and require_head and not a:
@@ -254,6 +291,20 @@ def receipt_check(root, kind, pr, head=None, now=None, verify_files=False, requi
         return False, "%s %s is not the gated head %s; re-run %s on the head you %s" % (
             "expectedHeadSha" if kind == "merge" else "the PR head", a[:12], b[:12], tool,
             "merge" if kind == "merge" else "flip")
+    # Efficiency review 2026-10-30 #6: a ready receipt tied to the live head AND Plan hash outlives the 10 min clock.
+    live_plan = str(plan or "").strip().lower()
+    rec_plan = str(r.get("planHash") or "").strip().lower()
+    bound = kind == "ready" and bool(a) and bool(live_plan) and bool(rec_plan)
+    if kind == "ready" and a and live_plan:
+        if not rec_plan:
+            return False, "the ready-gate receipt for #%d records no Plan hash (written by an older gate): re-run ready-gate" % n
+        if rec_plan != live_plan:
+            return False, ("the PR's Plan section changed since ready-gate passed on it (Plan %s then, %s now): "
+                           "re-run ready-gate" % (rec_plan[:12], live_plan[:12]))
+    limit = RECEIPT_BOUND_MAX_MIN if bound else RECEIPT_MAX_MIN
+    if age_min > limit:
+        return False, "the %s receipt for #%d is %d min old (max %d%s); re-run the gate on the current head" % (
+            tool, n, round(age_min), limit, ", the backstop for an unchanged head and Plan" if bound else "")
     if verify_files:
         ok, why = gate_files_check(root, r)
         if not ok:

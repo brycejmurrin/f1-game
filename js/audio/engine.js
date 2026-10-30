@@ -220,6 +220,9 @@ var GameAudio = (function () {
     return t < node._apexMuteUntil;
   }
   let engineOn = false;
+  let engineWanted = false;          // a race wants the engine graph but SFX are off: built when they come on (perf hunt 4)
+  let sfxOffArmed = false;           // field contact was armed when SFX OFF tore the graph down
+  let mutedSuspended = false;        // the context was suspended BY setEnabled(false), not by iOS or a hidden tab
   let engineActionGeneration = 0;   // every explicit start/stop transfers engine ownership
   // Node batches from stopEngine() that still sit on sfxBus until their
   // 0.35 s fade ends — ONE ENTRY PER STOP. A resume that starts a new graph
@@ -317,10 +320,14 @@ var GameAudio = (function () {
     };
   }
   const WIND_GATE = 0.04;
-  function windFromSpeed(s01) {
+  // `out` (optional) is filled and returned: setEngine passes _windScratch per frame.
+  const _windScratch = { gain: 0, hz: 0 };
+  function windFromSpeed(s01, out) {
     const s = clamp01(s01);
     const u = s <= WIND_GATE ? 0 : (s - WIND_GATE) / (1 - WIND_GATE);
-    return { gain: 0.036 * u * u, hz: 450 + u * 1450 };
+    const r = out || {};
+    r.gain = 0.036 * u * u; r.hz = 450 + u * 1450;
+    return r;
   }
 
   /* ---------------- iOS audio session ----------------
@@ -352,7 +359,7 @@ var GameAudio = (function () {
 
   // These services are functions so a rebuild never leaves a module holding the old context.
   const signal = GameAudioSignal.create({ context: () => ctx, bus: () => sfxBus, sfxOk, now });
-  const { env, blip, noiseBuf, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise } = signal;
+  const { env, blip, loopNoise, noisePool, bindNoise, noise, hiss, scrapeNoise } = signal;
   const { detectPeriod, findStableLoop } = GameAudioSignal;
   const soundtrack = GameAudioSoundtrack.create({
     context: () => ctx, master: () => master, enabled, engineRunning: () => engineOn,
@@ -449,6 +456,8 @@ var GameAudio = (function () {
       // compact banner keeps Safari VISIBLE, so nothing else tells the game
       // (support.apple.com/guide/iphone/answer-or-decline-incoming-calls-iph3c9947bf/ios).
       if (ctx.state === "closed") return;
+      if (ctx.state === "running") mutedSuspended = false;
+      if (mutedSuspended && !isEnabled) return;   // our own mute suspend: not a fault, nothing to rebuild
       if (ctx.state === "interrupted" && _onInterrupted) { try { _onInterrupted(); } catch (_) { /* a listener must not stop the resume below */ } }
       if (ctx.state === "interrupted") {
         // Session taken: release the SFX dip so a recovered graph is not stuck
@@ -478,6 +487,7 @@ var GameAudio = (function () {
     // the edge of a gesture — an unhandled rejection would surface as a crash.
     if (ctx.state !== "running" && !document.hidden) { const p = ctx.resume(); if (p && p.catch) p.catch(resumeRejected("create")); }
     loadEngineSamples();
+    syncMuteSuspend();   // created while muted (saved SOUND OFF): don't keep rendering
     return true;
   }
 
@@ -732,6 +742,7 @@ var GameAudio = (function () {
    */
   function resumeIfNeeded(gestureEv) {
     if (!ctx || document.hidden) return;
+    if (mutedSuspended && !isEnabled) return;   // muted on purpose: a tap must not wake the render thread
     const isGesture = !!gestureEv;
     if (isGesture && gestureEv.isTrusted !== false) soundtrack.retryStreamUnlock();
     if (isGesture && deviceRebuildPending && !staleStateRebuild(deviceRebuildPending)) {
@@ -793,7 +804,7 @@ var GameAudio = (function () {
     if (typeof CrowdAudio !== "undefined" && CrowdAudio.detach) {
       try { CrowdAudio.detach(); } catch (e) { /* stub / mid-teardown */ }
     }
-    ctx = null;
+    ctx = null; mutedSuspended = false;
     master = null;
     sfxBus = null; focusBus = null; releaseBuses();
     limiter = null;
@@ -886,9 +897,33 @@ var GameAudio = (function () {
     param.setTargetAtTime(v, t, LEVEL_TAU);
   }
 
+  // SOUND OFF also SUSPENDS the context: gain 0 alone left ~21 always-on sources, the compressors
+  // and the audio unit rendering all session (perf hunt 4). The suspend waits for the gain glide
+  // (~3 x LEVEL_TAU) so the cut is not a click; mutedSuspended marks it as ours so the
+  // statechange handler and resumeIfNeeded do not treat it as an iOS interruption.
+  const MUTE_SUSPEND_MS = 150;
+  let muteSuspendTimer = null;
+  function syncMuteSuspend() {
+    if (muteSuspendTimer) { clearTimeout(muteSuspendTimer); muteSuspendTimer = null; }
+    if (isEnabled || !ctx) return;
+    muteSuspendTimer = setTimeout(() => {
+      muteSuspendTimer = null;
+      if (isEnabled || !ctx || ctx.state !== "running" || !ctx.suspend) return;
+      mutedSuspended = true;
+      try {
+        const p = ctx.suspend(); if (p && p.catch) p.catch((e) => { mutedSuspended = false; Log.debug("audio", "context suspend on mute rejected:", e && e.message); });
+      } catch (_) { mutedSuspended = false; }
+    }, MUTE_SUSPEND_MS);
+  }
   function setEnabled(b) {
     isEnabled = !!b;
     if (master) glideLevel(master.gain, isEnabled ? 0.8 : 0);
+    if (isEnabled) {
+      mutedSuspended = false;
+      if (engineWanted && !engineOn) startEngineGraph();
+      resumeIfNeeded();
+    }
+    syncMuteSuspend();
   }
 
   function enabled() {
@@ -1408,6 +1443,10 @@ var GameAudio = (function () {
   // explicit start/stop transfers ownership or cancels a queued hide resume.
   function startEngineGraph() {
     if (!ctx || engineOn) return;
+    // SFX off (music only): setEngine() never opens a gain, so the ~20 sources would render silence
+    // all race. Remember the request; setSfxEnabled(true) / setEnabled(true) build it.
+    if (!sfxOk()) { engineWanted = true; return; }
+    engineWanted = false;
     engineOn = true;
     try { startEngineBody(); }
     // ...and the flag comes back down even if the teardown ITSELF throws on the
@@ -1424,7 +1463,7 @@ var GameAudio = (function () {
   }
 
   function stopEngine() {
-    ++engineActionGeneration; resumeEngine = null;
+    ++engineActionGeneration; resumeEngine = null; engineWanted = false; sfxOffArmed = false;
     stopEngineGraph();
   }
   function stopEngineGraph() {
@@ -1913,12 +1952,13 @@ var GameAudio = (function () {
     // Electric MGU-K + boost cue live in ErsLayer (fixed nodes). When the
     // module is loaded, mute the legacy ersOsc so the two never stack.
     if (typeof ErsLayer !== "undefined" && ErsLayer.update) {
-      ErsLayer.update({
-        t, deploy, energy, brake: brkDem, ax: ph.ax || 0, speed: s,
-        layerOn: layers.ers, ersOn: ph.ersOn !== false,
-        boost: deploy > 0 || !!ph.boostOn || !!ph.otOn, otOn: !!ph.otOn,
-        boostTune: tune.boost, partBias,
-      });
+      // One record rewritten in place (the _scrubArg pattern): this runs every frame.
+      const e = _ersArg;
+      e.t = t; e.deploy = deploy; e.energy = energy; e.brake = brkDem; e.ax = ph.ax || 0; e.speed = s;
+      e.layerOn = layers.ers; e.ersOn = ph.ersOn !== false;
+      e.boost = deploy > 0 || !!ph.boostOn || !!ph.otOn; e.otOn = !!ph.otOn;
+      e.boostTune = tune.boost; e.partBias = partBias;
+      ErsLayer.update(e);
       if (ersGain && ersGain._apexErsTgt !== 0) {
         ersGain.gain.setTargetAtTime(0, t, 0.10);
         ersGain._apexErsTgt = 0;
@@ -1951,7 +1991,7 @@ var GameAudio = (function () {
     // rain hisses, a hard lift gusts (harvLevel). Peak ~0.036, an order under
     // the engine core. lastSpeed is overwritten above, so the gust is the
     // harvest smoother, not a re-diff of speed.
-    const wf = windFromSpeed(s);
+    const wf = windFromSpeed(s, _windScratch);
     const windOpen = s > WIND_GATE ? 1 : 0;
     const gust = harvLevel;
     const rough = (offroad ? 0.5 : 0) + (onKerb ? 0.35 : 0);
@@ -2082,6 +2122,9 @@ var GameAudio = (function () {
   // (back on the pause menu) silences engine + rivals once; setPaused calls
   // resetReplayScrub so a resume never inherits that one-shot.
   let _scrubWas = false, _scrubGear = null, _scrubRpm = null;
+  const _ersArg = { t: 0, deploy: 0, energy: 1, brake: 0, ax: 0, speed: 0, layerOn: true, ersOn: true,
+    boost: false, otOn: false, boostTune: 1, partBias: 1 };
+  const _skidQ = { gain: 0, hz: 0, lfo: 0 };
   const _scrubArg = { slip: 1, ax: 0, onKerb: false, wet: false, tow: 0, deploy: 0, energy: 1, ersDeploy: 0, throttle: 0, brake: 0, regen: 0.5 };
   // Every car's rpm from its replayed speed in its natural gear (no ring field
   // for revs). replay-buf's applyPose calls this so a seek re-revs at once.
@@ -2137,10 +2180,8 @@ var GameAudio = (function () {
     // whole wet session with nothing to retry it. Queue it for the teardown
     // callback instead of returning empty-handed.
     if (rainStopping) { rainPending = g; return; }
-    const dur = 4;
-    const buf = noiseBuf(dur);
     rainSrc = ctx.createBufferSource();
-    rainSrc.buffer = buf;
+    rainSrc.buffer = loopNoise("rain", 4);   // cached per context: a pause/resume or weather flip regenerated 4 s of PCM
     rainSrc.loop = true;
     rainHp = ctx.createBiquadFilter();
     rainHp.type = "highpass";
@@ -2211,11 +2252,10 @@ var GameAudio = (function () {
     } else {
       const over = clamp01(lat);
       const longL = clamp01(long || carSfxLast.lock || 0);
-      q = {
-        gain: over * (wet ? 0.10 : 0.16),
-        hz: (wet ? 480 : 760) + over * 320 + (over > 0 ? longL * 120 : 0),
-        lfo: over > 0 ? 60 : 0
-      };
+      q = _skidQ;   // every frame on the race path: rewritten, never allocated
+      q.gain = over * (wet ? 0.10 : 0.16);
+      q.hz = (wet ? 480 : 760) + over * 320 + (over > 0 ? longL * 120 : 0);
+      q.lfo = over > 0 ? 60 : 0;
     }
     const sv = layers.screech ? q.gain * tune.screech : 0;
     const sp = skidGain._apexSkidV;
@@ -2964,6 +3004,12 @@ var GameAudio = (function () {
     // A race that started with SFX off wanted rain but built no nodes
     // (startRain returns on !sfxOk()); turning SFX on must start it.
     if (sfxEnabled && rainWanted && !rainSrc) startRain();
+    if (sfxEnabled && engineWanted && !engineOn) {
+      startEngineGraph();
+      // The teardown below cleared fieldArmed; a race that was armed stays armed (setRivals's gate).
+      if (engineOn && sfxOffArmed && rivalVoices.length) fieldArmed = true;
+      sfxOffArmed = false;
+    } else if (!sfxEnabled && engineOn) { engineWanted = true; sfxOffArmed = fieldArmed; stopEngineGraph(); }
     // setEngine() owns the rev-keyed music duck and stops running the instant
     // SFX go off (sfxOk()), so release it here the way stopEngine() does.
     // musicGain hangs off master, not sfxBus: without this the music stayed up

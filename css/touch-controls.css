@@ -24,11 +24,6 @@
    and portrait racing is blocked outright (#rotate-device), so it is rarely on
    screen during a race at all. */
 :root {
-  /* Painted floor for GAS/BRAKE/BOOST/OT/AERO/PAUSE/CAM labels. Dock `zoom`
-     (--hud-z-dock) shrinks authored --fs-micro with the buttons; 14×0.69
-     painted 9.7px on a short landscape phone at HUD 150% (hud-mock 2026-10-14).
-     Font rules divide this by --touch-label-z. Width/height stay on --tap/--hold. */
-  --touch-label-floor: 10px;
   --btn: 76px;                                        /* action button diameter */
   /* 12px (was 8): AERO / OT / BOOST translucent fills at 8px read as one
      merged column on the fixed portrait ladder and on desktop survey stubs
@@ -41,15 +36,6 @@
      #btn-boost: this is the IDLE rung, and it is applied as element opacity
      rather than as a fill alpha so it can never touch a label's contrast. */
   --btn-a: 0.68;
-  /* Local stand-ins for the responsive-foundation tokens. No draft of that
-     PR was open on 2026-10-29 (searched open PRs), so the touch ladder names
-     its own until those land and these can alias them.
-     Pedals are squircles; BOOST / OT / AERO stay circles. Phones keep the
-     76 / 84 ladder; a portrait tablet (the rotate gate stops at 743px) grows
-     it. */
-  --touch-pedal-radius: 28%;
-  --touch-tablet-btn: 96px;
-  --touch-tablet-steer: 108px;
 }
 /* PLAYER BUTTON OPACITY rides the dock GROUPS, never the buttons. The ladder
    inside (--btn-a idle, opacity 1 for live states, .dead below idle) is a
@@ -276,6 +262,10 @@
   margin: 0;
 }
 #ios-install button { flex: none; font-size: 20px; line-height: 1; padding: 4px 8px; background: none; border: 0; color: inherit; pointer-events: auto; }
+/* THE DISMISS X IS A TAP TARGET: 20px glyph + 4/8 padding was a ~27px box,
+   under the --tap floor every other touch control meets. Grow the box, keep
+   the glyph; flex centring keeps the x where it was drawn. */
+#ios-install-x { min-width: var(--tap); min-height: var(--tap); display: inline-flex; align-items: center; justify-content: center; }
 /* `display: flex` above OUTRANKS the UA's `[hidden] { display: none }`, so the
    attribute stops working and the banner shows on every platform — where it
    sits bottom-centre and swallows clicks meant for #mb-race / #sel-go / #rs-go.
@@ -497,13 +487,24 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
     /* Same expression as zoom: when fitHud writes --hud-z-dock the labels
        divide the 10px floor by it so GAS/BRAKE stay readable. Hit boxes
        stay --tap/--hold. */
-    --touch-label-z: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+    --touch-label-z: min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
     /* --hud-z-dock: fitHud's height cap for the pedal/shift columns — the
        raw slider let the 2-high pedal stack outgrow a 390px landscape
        viewport from 150% and put BRAKE off the top edge. Same mechanism as
        the --hud-z-top/bot caps on the readout clusters; absent when the
-       player's setting fits. */
-    zoom: var(--hud-z-dock, max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+       player's setting fits. min(), not a fallback: a cap a fit wrote at a
+       larger BUTTON SIZE must never paint a smaller setting bigger
+       (UI-HUNT-2-HUD: 85 px GAS at 100 % after 300 %). */
+    zoom: min(var(--hud-z-dock, 99), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+  }
+  /* THE STEER DOCK HAS ITS OWN CAP. On a landscape phone the 3-high taps
+     column binds --hud-z-dock near 118 % while the one-row steer arrows have
+     room to 2-3x; fitHud writes --hud-z-dock-l (>= --hud-z-dock, always
+     published with it) so BUTTON SIZE keeps growing the side that fits. */
+  body:not(.desktop) #dock-left,
+  body.desktop #dock-left:has(.touchbtn:not([hidden])) {
+    --touch-label-z: min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
+    zoom: min(var(--hud-z-dock-l, var(--hud-z-dock, 99)), max(var(--hud-btn-floor, 1), var(--hud-btn-scale)));
   }
   /* …DOWN TO THE 44px RUNG, NOT TO 1. The floor above was a flat 1, so the
      BUTTON SIZE slider (40–300%, index.html) did nothing below 100% — on a
@@ -861,7 +862,7 @@ body.steer-touch #btn-brake { bottom: calc(16px + var(--sab)); }
    plate, which stands off --dock-r-w (0 before the first fit: the arm goes negative and PAUSE keeps the band).
    Broadcast keeps the band (#bc-pip hangs under PAUSE). At or under 150 % --tap-btn IS --tap-hud. */
 body:not(.desktop):not(.bc-on) {
-  --hud-btn-zt: clamp(1, var(--hud-z-dock, var(--hud-btn-scale, 1)), 2);
+  --hud-btn-zt: clamp(1, min(var(--hud-z-dock, 99), var(--hud-btn-scale, 1)), 2);
   --tap-btn: max(var(--tap-hud), min(calc(var(--tap-hud) / var(--hud-btn-z) * var(--hud-btn-zt)), calc((10px + var(--dock-r-w, 0px)) * var(--hud-z-top, var(--hud-scale)) - 14px)));
 }
 /* CAM mode button sits just left of the pause button (top-right). */
@@ -951,6 +952,11 @@ body.hud-hidden #hud-restore::after {
   display: flex; flex-wrap: wrap;
   --balance-basis: 84px; --balance-min: 84px;
   width: min(360px, calc(100vw - var(--sal) - var(--sar) - 20px));
+  /* Every view stays reachable: on a 390 px landscape the grid ran to y 461
+     and HELMET (the default cam) was offscreen (UI hunt 2026-10-29 row 1). */
+  max-height: calc(100dvh - 8px - var(--tap-hud) - var(--sat) - var(--sab) - 8px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   gap: calc(var(--gap) * 0.5);
   padding: calc(var(--gap) * 2 / 3);
   background: rgba(8, 8, 14, 0.92);
@@ -973,17 +979,23 @@ body.hud-hidden #hud-restore::after {
   background: var(--plate-hover);
   border: 1px solid var(--card-line);
   color: var(--text);
+  /* A cell never narrows below its label (CINEMATIC, TRACKSIDE, OVERHEAD
+     clipped at 3 columns; UI hunt 2026-10-29 row 4); the row wraps instead. */
+  min-width: max-content;
+  white-space: nowrap;
 }
 #campicker button.active {
   background: var(--plate-on);
   border-color: var(--red);
 }
 /* Compact: keep the grid in the CAM/pause corner. Density, not a viewport
-   max-height gate — 852×393 is already body compact (body --compact-at 600). */
+   max-height gate — 852×393 is already body compact (body --compact-at 600).
+   A short landscape has width to spare, not height: spread the grid left of
+   CAM (5–6 columns, 4 rows of 20 views) instead of the old 280 px / 7 rows. */
 body[data-density="compact"] #campicker {
   gap: calc(var(--gap) * 0.5);
   padding: calc(var(--gap) * 0.75);
-  width: min(280px, calc(100vw - var(--sal) - var(--sar) - 20px));
+  width: min(560px, calc(100vw - var(--sal) - var(--sar) - 24px - var(--tap-hud)));
 }
 /* #soundbtn WAS `position: fixed; top; right; z-index: 22` here, and game.js
    un-hid it on every NON-RACE screen — so a title-screen control floated over

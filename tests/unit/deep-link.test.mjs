@@ -116,3 +116,67 @@ test("every manifest shortcut is in scope, has an icon on disk, and ?go= urls ar
   assert.deepEqual([...goUrls].sort(), Object.keys(ctx.D.DOORS).sort());
   assert.ok(MANIFEST.shortcuts.slice(0, 4).some((s) => /controller/.test(s.url)), "phone controller stays in the four Android shows");
 });
+
+// UI hunt 2026-10-29 #2: the Android back button / iOS edge swipe left the game from any screen, mid-race too.
+test("BACK IS ESCAPE: one sentinel entry; a back closes the top layer or pauses the race, then re-arms", () => {
+  const pushes = [], win = {}, clicks = [];
+  const history = {
+    state: null,
+    pushState(s) { pushes.push(s); this.state = s; },
+    replaceState(s) { this.state = s; },
+  };
+  const env = { escape: false, inRace: false };
+  const ctx = vm.createContext({
+    location: { search: "", pathname: "/f1-game/", hash: "" }, history, URLSearchParams,
+    UiLayers: { inRace: () => env.inRace, top: () => null },
+    TopModal: { escapeTop: () => { if (env.escape) clicks.push("door"); return env.escape; } },
+    Log: { info() {} }, setTimeout() {},
+    window: { addEventListener: (t, fn) => { win[t] = fn; } },
+  });
+  vm.runInContext(SRC + ";globalThis.DeepLink = DeepLink;", ctx, { filename: absSrc("js/ui/deep-link.js") });
+  const G = { els: { overlay: { hidden: false } }, $: (id) => (id === "pausebtn" ? { click: () => clicks.push(id) } : null) };
+  ctx.DeepLink.create(G);
+  assert.equal(pushes.length, 1, "boot pushes ONE sentinel");
+  assert.equal(history.state[ctx.DeepLink.MARK], 1);
+  win.pointerdown();
+  assert.equal(pushes.length, 1, "a tap while the sentinel is up pushes nothing");
+  assert.equal(history.state[ctx.DeepLink.BASE], 1, "the sentinel sits on a BASE-stamped entry");
+  const back = () => { history.state = { [ctx.DeepLink.BASE]: 1 }; win.popstate(); };   // the browser pops the sentinel onto its base
+  env.escape = true; back();
+  assert.deepEqual(clicks, ["door"], "a layer is up: its Escape door is pressed");
+  assert.equal(pushes.length, 2, "…and the sentinel is re-armed");
+  env.escape = false; env.inRace = true; back();
+  assert.deepEqual(clicks, ["door", "pausebtn"], "mid-race with nothing open: pause");
+  assert.equal(pushes.length, 3);
+  env.inRace = false; back();
+  assert.equal(pushes.length, 3, "the bare title lets the back stand: the next one leaves the game");
+  win.popstate();
+  assert.equal(pushes.length, 3, "no loop: a pop with nothing to do pushes nothing");
+  win.keydown();
+  assert.equal(pushes.length, 4, "the next tap or key re-arms it");
+  win.popstate();
+  assert.equal(pushes.length, 4, "a forward step onto the sentinel is ignored");
+  // A HOW TO PLAY section link (#htp-driving) is a fragment navigation and
+  // fires popstate with the URL changed: it must not close the open sheet.
+  env.escape = true; clicks.length = 0;
+  history.state = null; win.popstate();   // #htp-driving: a fresh entry, no state
+  assert.deepEqual(clicks, [], "a fragment navigation is not a back");
+  // HTP close rewrites the URL keeping history.state; the NEXT section jump
+  // is again a fresh unstamped entry and must still be ignored.
+  win.pointerdown(); history.replaceState(history.state, ""); history.state = null; win.popstate();
+  assert.deepEqual(clicks, [], "a second section jump after a close is not a back either");
+  back();
+  assert.deepEqual(clicks, ["door"], "a real back off the re-armed sentinel still closes the top layer");
+});
+
+test("a ?go= link keeps the sentinel: the param strip preserves history.state", () => {
+  const history = { state: null, pushState(s) { this.state = s; }, replaceState(s) { this.state = s; } };
+  const ctx = vm.createContext({
+    location: { search: "?go=race", pathname: "/f1-game/", hash: "" }, history, URLSearchParams,
+    UiLayers: { inRace: () => false, top: () => null }, Log: { info() {} }, setTimeout() {},
+    window: { addEventListener() {} },
+  });
+  vm.runInContext(SRC + ";globalThis.DeepLink = DeepLink;", ctx, { filename: absSrc("js/ui/deep-link.js") });
+  ctx.DeepLink.create({ els: { overlay: { hidden: false } }, $: () => null });
+  assert.equal(history.state && history.state[ctx.DeepLink.MARK], 1);
+});

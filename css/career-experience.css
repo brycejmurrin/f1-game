@@ -9,7 +9,8 @@
 }
 [data-career-part="nav"]::-webkit-scrollbar { display: none; }
 [data-career-part="nav"] .sel-chip {
-  flex: 0 0 auto;
+  /* Grow to fill the row when the chips fit, never shrink: too narrow still pans. */
+  flex: 1 0 auto;
   font-style: normal;
   text-transform: none;
 }

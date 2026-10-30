@@ -746,7 +746,6 @@
         setPersp(U, F.invProj, F.proj);
         const sv = F.sunVS || [0, 0, -1];
         U.sunVS.value.set(sv[0], sv[1], sv[2]);
-        U.texel.value.set(1 / aoW, 1 / aoH);
         U.strength.value = aoStr;
         U.radius.value = gk("ssaoRadius");          // AO RADIUS knob
         const csOn = contactStr > 0 && F.proj && F.sunVS;
@@ -784,7 +783,8 @@
         const scl = F.sunColor || [1, 1, 1];
         U.sunColor.value.set(scl[0], scl[1], scl[2]);
         U.str.value = sunGR ? grStr : 0.0;
-        U.time.value = F.time || 0;
+        // gCloud reads time only under cloudCover > 0.001: a clear sky skips the frame-varying write (as hazeTime).
+        if ((F.cloud || 0) > 0.001) U.time.value = F.time || 0;
         U.cloudCover.value = F.cloud || 0;
         U.cloudSpeed.value = F.cloudSpeed != null ? F.cloudSpeed : 1;
         // Lamp volumetrics: nearest-12 to the eye + the mapped-lamp slot.
@@ -983,7 +983,8 @@
       const hz = o.haze;
       C.hazeUV.value.set(hz ? hz.u : -9, hz ? hz.v : -9);
       C.hazeStr.value = hz ? hz.str : 0;
-      C.hazeTime.value = F.time || 0;
+      // Read only under hazeStr > 0 (tsl-post.js): a frame-varying write nothing reads is one writeBuffer a frame.
+      if (hz) C.hazeTime.value = F.time || 0;
       C.ssrThick.value = gk("ssrThick");
       // Camera-aware SSR extent (game.js sets these per camera; onboard cams get
       // a raised top cutoff and a pulled-in near fade).

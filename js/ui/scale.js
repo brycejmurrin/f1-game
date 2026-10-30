@@ -156,7 +156,13 @@ const UiScale = (() => {
     }
     function applyHudScale() { applyScale("hudScale", "--hud-scale", "pm-hudscale"); }
     // The touch dock keeps its own fixed default and explicit override.
-    function applyBtnScale() { applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale"); }
+    // The readout says what the race fit PAINTS: fitHud's pedal-column cap (--hud-z-dock) can stop the
+    // dock below the slider (245 % on an 844x390 phone paints ~118 %), and "245%" alone read as "broken".
+    function applyBtnScale() {
+      applyScale("hudBtnScale", "--hud-btn-scale", "pm-btnscale");
+      const out = $("pm-btnscale-v"), body = document.body;
+      if (out && body && body.classList.contains("in-race")) out.textContent = btnFitLabel(out.textContent, scalePct("hudBtnScale"), document.documentElement.style.getPropertyValue("--hud-z-dock"));
+    }
     // BUTTON OPACITY has its OWN clamp and does not reuse applyScale: that
     // helper snaps to SCALE_MIN..SCALE_MAX (40..200), which is meaningless for a
     // 0-100 % control and would both forbid a faint dock and allow a 200 % one.
@@ -343,5 +349,11 @@ const UiScale = (() => {
     return { setScale, applyResMode, applyUiScale, applyHudScale, applyBtnScale, applyBtnOpacity, applyPanelOpacity, applyUpscale, upscaleOn,
              applyOcclusion, occlusionOn, occlusionSupported };
   }
-  return { create, defaultResMode, layoutOf, LAYOUT_BPS };
+  /** "245%" -> "245% · fits 118%" when the published dock cap `capZ` (a zoom; "" = none) paints under `pct`. */
+  function btnFitLabel(label, pct, capZ) {
+    const z = +capZ;
+    if (!(z > 0) || z * 100 >= +pct - 0.5) return label;
+    return `${label} · fits ${Math.round(z * 100)}%`;
+  }
+  return { create, defaultResMode, layoutOf, LAYOUT_BPS, btnFitLabel };
 })();

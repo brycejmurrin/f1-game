@@ -1,0 +1,2 @@
+Improved: the cockpit mirror glass (helmet view) no longer forces the full mirror mip chain on the default three.js renderer; the chain is sized to what the glass can sample (4 levels instead of 9, 5 fewer render passes a frame on the macOS census), pixel-identical.
+Improved: the WebGPU (WGX) car reflection cube builds only the 4 mip levels its shaders read (18 fewer passes per refresh) and one fewer GPU submit, pixel-identical.

@@ -27,7 +27,8 @@
 
    CONFIRM QUIT: ON (shipped) / OFF. With it ON the first press on QUIT TO MENU
    or RESTART RACE only ARMS the button ("TAP AGAIN", .armed fill, an
-   aria-label that says so); a second press within ARM_MS runs the game's own
+   aria-label that says so); a second press within ARM_MS (pointer presses
+   at least ARM_MIN_MS after the first) runs the game's own
    onclick. A capture-phase click listener on #pausemenu does the gating, so
    the handlers in js/game.js stay untouched. The arm clears on its timer and
    whenever the pause card hides. A disabled button (multiplayer restart) is
@@ -54,6 +55,10 @@ const PauseOpts = (function () {
   // Same window as the other two-press guards (settings-export LOAD, the
   // renderer picker's raceGuard), a second longer: this one is read mid-race.
   const ARM_MS = 5000;
+  // …and a floor: a thumb's double tap (~120-175 ms) sent BOTH presses to
+  // #pm-quit and ended the race (UI hunt 2026-10-29 #1). A real pointer press
+  // younger than this is the same gesture, swallowed; the arm stays up.
+  const ARM_MIN_MS = 350;
   // The guarded buttons and their aria-label once armed. The armed LABEL is
   // one short line for both (#3892): "RESTART — TAP AGAIN" wrapped in a
   // half-width 844x390 cell and its second line hid under the next row. Keep
@@ -120,30 +125,59 @@ const PauseOpts = (function () {
   function setConfirm(v) { const r = setConfirmRaw(v); if (r === "off") disarm(); return r; }
 
   // ── CONFIRM QUIT / RESTART ─────────────────────────────────────────────
-  let armed = null;   // { btn, text, aria, at, t }
-  function disarm() {
-    if (!armed) return;
-    const a = armed;
-    armed = null;
-    clearTimeout(a.t);
+  let armed = null;   // { btn, text, aria, at, t } — at is the first press's event time
+  // After the wall-clock timer reverts the label, a late-queued second tap can still
+  // confirm when its timeStamp falls inside ARM_MS of the first (GPU/input lag).
+  let lastArm = null; // { btn, at } — set when the timer disarms, cleared on commit / fresh arm
+  function pressTime(e) {
+    if (e && e.timeStamp > 0) return e.timeStamp;
+    if (typeof performance !== "undefined" && performance.now) return performance.now();
+    return Date.now();
+  }
+  function revertBtn(a) {
     a.btn.textContent = a.text;
     if (a.aria == null) a.btn.removeAttribute("aria-label");
     else a.btn.setAttribute("aria-label", a.aria);
     if (a.btn.classList) a.btn.classList.remove("armed");
   }
-  function arm(btn) {
+  function disarm(opts) {
+    const retainLast = !!(opts && opts.retainLastArm);
+    if (!armed) {
+      if (!retainLast) lastArm = null;
+      return;
+    }
+    const a = armed;
+    armed = null;
+    clearTimeout(a.t);
+    if (retainLast) lastArm = { btn: a.btn, at: a.at };
+    else lastArm = null;
+    revertBtn(a);
+  }
+  function arm(btn, at) {
     disarm();
     armed = {
       btn,
       text: btn.textContent,
       aria: btn.getAttribute ? btn.getAttribute("aria-label") : null,
-      at: Date.now(),
-      t: setTimeout(disarm, ARM_MS),
+      at: at != null ? at : Date.now(),
+      t: setTimeout(() => disarm({ retainLastArm: true }), ARM_MS),
     };
     btn.textContent = ARMED_LABEL;
     btn.setAttribute("aria-label", ARIA[btn.id]);
     if (btn.classList) btn.classList.add("armed");
   }
+  function armAt(btn) {
+    if (armed && armed.btn === btn) return armed.at;
+    if (lastArm && lastArm.btn === btn) return lastArm.at;
+    return null;
+  }
+  const armAge = (t) => {
+    const at = armed ? armed.at : (lastArm ? lastArm.at : null);
+    if (at == null) return Infinity;
+    const now = t != null ? t : (typeof performance !== "undefined" && performance.now
+      ? performance.now() : Date.now());
+    return now - at;
+  };
   const isArmed = (id) => !!(armed && armed.btn && armed.btn.id === id);
 
   // CAPTURE phase on the card: runs before the button's own onclick, so an
@@ -153,13 +187,22 @@ const PauseOpts = (function () {
     const btn = t && t.closest ? t.closest("#pm-quit, #pm-restart") : null;
     if (!btn || !GUARDED[btn.id] || btn.disabled) return;
     if (confirmMode() === "off") { disarm(); return; }
-    // Age as well as the timer: a throttled background tab can hold the expiry
-    // back, and a tap that old is a fresh question.
-    const live = armed && armed.btn === btn && (Date.now() - armed.at) <= ARM_MS;
-    if (live) { disarm(); return; }          // the second press: let the handler run
+    const tNow = pressTime(e);
+    const at = armAt(btn);
+    const age = at != null ? tNow - at : Infinity;
+    // Event-time window: while visually armed, or after the timer reverted the
+    // label but a late-queued tap still carries a timeStamp inside ARM_MS.
+    const live = at != null && age <= ARM_MS && (
+      !!(armed && armed.btn === btn)
+      || !!(lastArm && lastArm.btn === btn && e.timeStamp > 0)
+    );
+    // Keyboard activation (detail 0) and a script's el.click() (untrusted) are
+    // deliberate; only a fast pointer repeat is the accidental double tap.
+    const ghost = live && e.isTrusted && e.detail !== 0 && age < ARM_MIN_MS;
+    if (live && !ghost) { disarm(); return; }   // the second press: let the handler run
     e.stopImmediatePropagation();
     if (e.preventDefault) e.preventDefault();
-    arm(btn);
+    if (!ghost) arm(btn, tNow);
   }
 
   // Pause-card build stamp (was an IIFE in game.js). Reads apex-build meta —
@@ -231,10 +274,10 @@ const PauseOpts = (function () {
   }
 
   return {
-    KEY_LAYOUT, KEY_SIDE, KEY_DIM, KEY_CONFIRM, LAYOUTS, SIDES, DIMS, CONFIRMS, ARM_MS,
+    KEY_LAYOUT, KEY_SIDE, KEY_DIM, KEY_CONFIRM, LAYOUTS, SIDES, DIMS, CONFIRMS, ARM_MS, ARM_MIN_MS,
     layoutMode, sideMode, dimMode, confirmMode, shipped,
     setLayout, setSide, setDim, setConfirm,
-    apply, initUI, wireRows, disarm, isArmed, onPauseClick,
+    apply, initUI, wireRows, disarm, isArmed, armAge, onPauseClick,
   };
 })();
 Object.freeze(PauseOpts);

@@ -782,6 +782,37 @@ test("round 2 gh: squash/rebase denied, merges denied outright, ready flips need
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
+test("gh api / curl REST ready flip: passes with a fresh ready-gate receipt on the live head, else asks with the gate text", () => {
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "hook-api-ready-"));
+  const head = "a".repeat(40);
+  let gh = fakeGh(dir, { head });
+  const run = (command) => hook("bash-guard.sh", bashCall(command), { env: { ...gh, APEX_MERGE_DESK: "" }, cwd: dir });
+  const flips = ["gh api -X POST repos/o/r/pulls/12/ccr/ready_for_review",
+    "gh api --method=PATCH repos/o/r/pulls/12 -F draft=false",
+    "curl -X POST https://api.github.com/repos/o/r/pulls/12/ccr/ready_for_review"];
+  const asksGate = (c, why) => {
+    const r = run(c);
+    assert.equal(decisionOf(r), "ask", `${why}: ${c}\n${r.stdout}`);
+  };
+  try {
+    for (const c of flips) asksGate(c, "no receipt");
+    writeGateReceipt(dir, "ready", 12, head);
+    for (const c of flips) assert.equal(decisionOf(run(c)), null, `fresh receipt on the live head passes: ${c}`);
+    writeGateReceipt(dir, "ready", 12, head, { at: new Date(Date.now() - 31 * 60000).toISOString() });
+    for (const c of flips) asksGate(c, "stale receipt");
+    writeGateReceipt(dir, "ready", 12, head);
+    gh = fakeGh(dir, { head: "b".repeat(40) });
+    for (const c of flips) asksGate(c, "the head moved after the gate");
+    gh = fakeGh(dir, { head });
+    writeGateReceipt(dir, "ready", 13, head);
+    fs.rmSync(path.join(dir, "artifacts/ready-gate/12.json"));
+    asksGate(flips[0], "a receipt for another PR does not open #12");
+    writeGateReceipt(dir, "ready", 12, head);
+    assert.equal(decisionOf(run("gh api graphql -f query='mutation { markPullRequestReadyForReview(input:{pullRequestId:\"x\"}) { clientMutationId } }'")), "ask",
+      "GraphQL carries no PR number: it keeps the plain ask");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test("round 2 subagent ban: decided on the parsed argv, every runner spelling, node-only checks stay open", () => {
   const sub = (command, extra = { agent_id: "a1", agent_type: "general-purpose" }) => hook("bash-guard.sh", bashCall(command, extra));
   const browser = ["node \"tools/ci/test-bg.mjs\" smoke", "npx playwright 'test'", "eval \"npm test\"", "sh -ec 'npm test'",
@@ -792,11 +823,11 @@ test("round 2 subagent ban: decided on the parsed argv, every runner spelling, n
     "node tools/mcp/apex-tools-mcp.mjs call apex_eval '{}'", "echo 'npm test' | bash", "bash <<< 'npx playwright test'",
     "setsid npm test", "flock /tmp/l npm test", "xargs -I{} npm run test:smoke", "env CI=1 npx playwright test",
     "node tools/ci/verify-change.mjs", "npm run test", "npx -c 'playwright test'"];
-  const open = ["npm run test:tooling-fast", "node --test tests/unit/docs-integrity.test.mjs", "node tools/shot/shot.mjs --help",
+  const open = ["npm run test:tooling-fast -- --changed", "node --test tests/unit/docs-integrity.test.mjs", "node tools/shot/shot.mjs --help",
     "node tools/ui/css-play.mjs --plan", "node tools/ci/test-bg.mjs --status", "node tools/ci/test-bg.mjs --tail smoke",
     "node tools/ci/verify-change.mjs --fast", "node tools/shot/frame-report.mjs monza", "echo 'npm test'", "grep -rn 'playwright test' docs",
     "tools/mcp/apex-tools-mcp.sh call apex_status '{}'", "npx playwright install chromium", "cat <<'EOF'\nnpm test\nEOF",
-    "node tools/ci/tooling-fast.mjs --jobs=3", "npm run test:guards"];
+    "node tools/ci/tooling-fast.mjs --changed --jobs=3", "npm run test:guards"];
   for (const c of browser) assert.equal(sub(c).status, 2, `a subagent must not run: ${c}`);
   for (const c of open) assert.equal(sub(c).status, 0, `a subagent may run: ${c} (${sub(c).stderr})`);
   assert.equal(sub("npm t", { agent_type: "verify-agent" }).status, 2, "agent_type alone marks a subagent");
@@ -1071,11 +1102,11 @@ test("H4: a push over a red tooling-fast run is refused; && chains, green logs a
     const log = path.join(repo.dir, "artifacts/logs/tooling-fast-suite.log");
     fs.mkdirSync(path.dirname(log), { recursive: true });
     // chained with ';' the push runs on a red result: refused before the run starts
-    let r = push("node tools/ci/tooling-fast.mjs; git push -u origin x");
+    let r = push("node tools/ci/tooling-fast.mjs --changed; git push -u origin x");
     assert.equal(r.status, 2, r.stderr); assert.match(r.stderr, /tooling-fast \.\.\.; git push/);
-    r = push("npm run test:tooling-fast\ngit push -u origin x");
+    r = push("npm run test:tooling-fast -- --changed\ngit push -u origin x");
     assert.equal(r.status, 2, r.stderr);
-    assert.notEqual(push("node tools/ci/tooling-fast.mjs && git push -u origin x").status, 2, "&& is the safe join");
+    assert.notEqual(push("node tools/ci/tooling-fast.mjs --changed && git push -u origin x").status, 2, "&& is the safe join");
     // newest log red, written after HEAD
     fs.writeFileSync(log, "x\n= run failed (39 passed, 1 failed)\n");
     r = push("git push -u origin x");
@@ -1498,6 +1529,31 @@ if [ "$2" = guard ]; then printf '0 0 0 -\\n0\\n%s\\n' "$FIXTURE_DECISION"; else
 });
 
 
+test("escape-hatch notices go to stderr so stdout stays empty or one JSON object (H5, 2026-10-29)", () => {
+  const repo = scratchRepo("hook-hatch-stderr-");
+  try {
+    fs.mkdirSync(path.join(repo.dir, ".claude"), { recursive: true });
+    const run = (command) => hook("bash-guard.sh", bashCall(command), { cwd: repo.dir });
+    const assertStdout = (stdout) => {
+      const t = stdout.trim();
+      if (t === "") return;
+      assert.equal(t.split("\n").filter(Boolean).length, 1, "stdout must be at most one JSON object");
+      JSON.parse(t);
+    };
+    for (const h of ["allow-protected", "allow-context-cap", "allow-stop"]) {
+      const hatch = path.join(repo.dir, ".claude", h);
+      fs.writeFileSync(hatch, "");
+      const r = run("git status");
+      assert.equal(r.status, 0, `${h}: ${r.stderr}`);
+      assertStdout(r.stdout);
+      assert.match(r.stderr, new RegExp(`hatch active: \\.claude/${h.replace(/-/g, "\\-")}`));
+      fs.unlinkSync(hatch);
+    }
+  } finally {
+    repo.rm();
+  }
+});
+
 test('bash-guard refuses an active legacy hook that skips Claude Code; split hook passes',()=>{
  const repo=scratchRepo('split-legacy-');
  try{
@@ -1510,4 +1566,30 @@ test('bash-guard refuses an active legacy hook that skips Claude Code; split hoo
   fs.copyFileSync(path.join(ROOT,'.githooks/pre-commit'),target);fs.chmodSync(target,0o755);
   const split=run();assert.equal(split.status,0,split.stderr);assert.equal(split.stdout,'');
  }finally{repo.rm();}
+});
+
+test("until/while … sleep is refused whatever it watches, and names wait-for / background ci-watch; prose is not a loop (finding 5)", () => {
+  const run = (command, env = {}) => hook("bash-guard.sh", bashCall(command), { env: { APEX_HELD_CHECK: "0", ...env } });
+  for (const c of ["until grep -q done log; do sleep 5; done", "while ! test -f x; do sleep 1; done", "if a; then until b; do sleep 2; done; fi"]) {
+    const r = run(c);
+    assert.equal(r.status, 2, `must refuse: ${c}`);
+    assert.equal(/wait-for\.mjs --log-matches/.test(r.stderr), true, "r.stderr ~ " + /wait-for\.mjs --log-matches/);
+    assert.equal(/ci-watch\.mjs --sha/.test(r.stderr), true, "r.stderr ~ " + /ci-watch\.mjs --sha/);
+  }
+  for (const c of ['git commit -m "docs: ci-watch beats while true; do ci-watch; sleep 5; done"', "echo ci-watch and sleep until done do", "while read -r l; do sleep 1; done < f"])
+    assert.equal(run(c).status, 0, `not a poll loop: ${c}`);
+});
+
+test("a piped or foreground-full tooling-fast, and a piped ready-gate, are refused with the closing line named (finding 4)", () => {
+  const run = (command, input = {}) => hook("bash-guard.sh", { ...bashCall(command), tool_input: { command, ...input } }, { env: { APEX_HELD_CHECK: "0" } });
+  for (const c of ["node tools/ci/tooling-fast.mjs --changed --jobs=3 | tail -3", "node tools/ci/ready-gate.mjs --pr 5 | head", "npm run test:tooling-fast | tail"]) {
+    const r = run(c, { run_in_background: true });
+    assert.equal(r.status, 2, `must refuse: ${c}`);
+    assert.equal(/= tooling-fast passed\|failed/.test(r.stderr), true, "r.stderr ~ " + /= tooling-fast passed\|failed/);
+  }
+  assert.equal(run("node tools/ci/tooling-fast.mjs").status, 2, "foreground full floor");
+  assert.equal(/run_in_background/.test(run("npm run test:tooling-fast").stderr), true, "names run_in_background");
+  for (const [c, bg] of [["node tools/ci/tooling-fast.mjs --changed --jobs=3 --quiet", false], ["node tools/ci/tooling-fast.mjs", true],
+    ["node tools/ci/tooling-fast.mjs --print-scope", false], ['echo "tooling-fast | tail"', false]])
+    assert.equal(run(c, { run_in_background: bg }).status, 0, `allowed: ${c}`);
 });

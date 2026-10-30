@@ -70,6 +70,89 @@ test("software GL UI readback deferral preserves the Document receiver", async (
   });
 });
 
+test("software GL readback defer covers countdown and race-entry handoff", () => {
+  function defer(softwareGL, cover) {
+    const document = {
+      getElementById(id) {
+        assert.equal(this, document, "native Document methods require their receiver");
+        return { hidden: true };
+      },
+    };
+    const context = vm.createContext({
+      document,
+      Log: { info() {} },
+      GameStore: { store: { raw: () => null } },
+      RaceEntryProfile: { stallHandoffCover: () => cover },
+    });
+    const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
+    governor.init({ backendState: () => ({ softwareGL }) });
+    return governor.softwareGlUiReadbackDefer();
+  }
+  assert.equal(defer(true, true), true, "stallHandoffCover defers pack readback on software GL");
+  assert.equal(defer(true, false), false, "a closed handoff with hidden sheets does not defer");
+  assert.equal(defer(false, true), false, "hardware keeps the readback");
+});
+
+function raceScaleGov({ softwareGL = true, shed = false, webdriver = false, scale0 = 1 } = {}) {
+  const sets = [];
+  let scale = scale0;
+  const gfx = {
+    backendState: () => ({ softwareGL, softAdapter: false }),
+    getRenderScale: () => scale,
+    setRenderScale: (s) => { sets.push(s); scale = s; return true; },
+  };
+  const context = vm.createContext({
+    Log: { info() {} },
+    GameStore: { store: { raw: () => null } },
+    localStorage: { getItem: (k) => (k === "apex26.swRaceShed" ? (shed ? "1" : null) : null) },
+    navigator: { webdriver, userAgent: webdriver ? "" : "player" },
+    PostCommon: {
+      softwareRaceShed: (gl, nav, knob) => {
+        if (!gl) return false;
+        if (knob === "1") return true;
+        if (knob === "0") return false;
+        if (nav && nav.webdriver) return false;
+        return true;
+      },
+    },
+  });
+  const governor = vm.runInContext(SRC + ";PerfGov", context, { filename: absSrc("js/perf/governor.js") });
+  return { governor, gfx, sets, scale: () => scale };
+}
+
+test("software race scale is chosen once and webdriver does not resize", () => {
+  const { governor, gfx, sets } = raceScaleGov({ webdriver: true, shed: false });
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), 1);
+  assert.deepEqual(sets, []);
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), 1);
+  assert.deepEqual(sets, [], "the second choice keeps the scale");
+  assert.equal(governor.softwareRaceScaleChosen(), 1);
+  governor.init(gfx);
+  governor.softwareGaragePreviewBegin(gfx);
+  governor.softwareGaragePreviewEnd(gfx);
+  assert.deepEqual(sets, [], "garage preview must not resize after the race scale is chosen");
+});
+
+test("a live software race picks 0.5 once before the canvas is resized again", () => {
+  const { governor, gfx, sets, scale } = raceScaleGov({ shed: true, webdriver: true });
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), 0.5);
+  assert.deepEqual(sets, [0.5]);
+  assert.equal(scale(), 0.5);
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), 0.5);
+  assert.deepEqual(sets, [0.5], "one setRenderScale for the race");
+  governor.init(gfx);
+  governor.softwareGaragePreviewBegin(gfx);
+  governor.softwareGaragePreviewEnd(gfx);
+  assert.deepEqual(sets, [0.5]);
+});
+
+test("hardware does not choose a software race scale", () => {
+  const { governor, gfx, sets } = raceScaleGov({ softwareGL: false, shed: true });
+  assert.equal(governor.chooseSoftwareRaceScale(gfx), null);
+  assert.deepEqual(sets, []);
+  assert.equal(governor.softwareRaceScaleChosen(), null);
+});
+
 // A fake renderer mirroring GLX.setRenderScale (js/render/glx/glx.js) EXACTLY,
 // dead zone and all.
 // It used to test `s === scale`, which is NOT the shipped contract: the real
