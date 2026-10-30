@@ -45,8 +45,12 @@ literals 68. Every `tokens.css` token is used somewhere. Literals that duplicate
   row at the comfort floor. B clipped PRACTICE; C fell off the screen.
   - Built as three in-place value changes in `css/menu-destinations.css`, because the blocking set had 20 B of
     headroom (238,980 of 239,000 in `css-critical-path.test.mjs`): the 844 grid's `auto-fit` → `repeat(3, …)`,
-    the compact hero `flex-direction: column` → `row`, the utility doors' `min-height: 32px` → `48px` (52
-    painted). Blocking set after: 238,988 B. The fixed three tracks drop the "fewer columns for enlarged text"
+    the compact hero stacks only while CONTINUE shows (`:has(#mb-continue:not([hidden]))`, otherwise a row),
+    and the utility doors' `min-height: 32px` → `40px` (44 painted). 48px was tried first: with CONTINUE
+    showing it overran `ui-scale.spec.js`'s 328px no-scroll budget at 852x393 (336), and the side-by-side
+    hero squeezed CONTINUE's label out of its cell at 667x320. Blocking set after: 238,951 B. Title soft
+    taps (under the 52px comfort floor) stay at 7, but none is under 44 painted px now (the utility row was
+    35). The fixed three tracks drop the "fewer columns for enlarged text"
     behaviour: six doors divide evenly only by 3 or 2, and no single minimum gives both across 700–932 px
     widths, so enlarged labels wrap inside their tile instead.
   - Not built: the disclaimer as a footnote. Its plate is what keeps it legible over the live home scene
