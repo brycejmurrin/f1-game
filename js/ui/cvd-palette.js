@@ -19,8 +19,8 @@ const CvdPalette = (function () {
   // off = today's sources (tokens.css :root, hud.js canvas literals, hub.js compounds,
   // track-maps metals). deutan === protan. Keys are the semantic states.
   const STATE = {
-    good:  { off: "#a3e635", deutan: "#4aa3ff", protan: "#4aa3ff", tritan: "#00e0c0" },
-    ok:    { off: "#a3e635", deutan: "#4aa3ff", protan: "#4aa3ff", tritan: "#00e0c0" },
+    good:  { off: "#5fe88a", deutan: "#4aa3ff", protan: "#4aa3ff", tritan: "#00e0c0" },
+    ok:    { off: "#5fe88a", deutan: "#4aa3ff", protan: "#4aa3ff", tritan: "#00e0c0" },
     warn:  { off: "#f6d200", deutan: "#ddcc77", protan: "#ddcc77", tritan: "#ffe56a" },
     bad:   { off: "#ff3b30", deutan: "#ee7733", protan: "#ee7733", tritan: "#ff9eb0" },
     best:  { off: "#dfa3ff", deutan: "#c8f4ff", protan: "#c8f4ff", tritan: "#e8fff4" },

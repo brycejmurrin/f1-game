@@ -1075,6 +1075,37 @@ body:has(> :is(#select, #career, #carsetup):not([hidden])) :is(#update-chip, #in
     min-height: var(--tap);
   }
 }
+/* PAUSE · SPLIT CARD (design pass #1, docs/notes/DESIGN-PASS-1-2026-10-30.md).
+   On a short landscape phone the shipped GRID card was 420px on an 844px
+   screen, said PAUSED twice, and QUIT sat under the fold (top y 500 of 390).
+   One wide card instead: RESUME a tall slab with QUIT under it, RESTART |
+   SETTINGS and the 3-up tool tray on the right, so every door is on screen
+   and nothing scrolls. The race card's track name is the heading. Only the
+   shipped GRID layout at the shipped CARD WIDTH on a compact wide body (the
+   zoom-correct short-landscape answer, js/ui/sheet-shape.js): every player
+   layout and the width knob keep their own card. Here, not css/dialogs.css: this layer
+   outranks the tray's and the race card's own grid-column (experience.css). */
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu { --sheet-w: min(760px, 100%); }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-head { display: none; }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body {
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: auto auto 1fr auto;
+  grid-template-areas: "ctx ctx ctx" "resume restart settings" "resume tools tools" "quit tools tools";
+  align-items: stretch;
+}
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pm-race-context { grid-area: ctx; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 var(--gap); padding-block: calc(var(--gap) / 3); }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pm-race-context > span { display: inline; }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-resume { grid-area: resume; font-size: var(--fs-6); }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-restart { grid-area: restart; }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-settings { grid-area: settings; }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-quick-doors { grid-area: tools; --tray-cols: 3; align-content: start; }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet #pm-quit { grid-area: quit; margin-top: 0; }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu #pm-quit::before { content: none; }
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu :is(#pm-standings, #pm-skip-results) { grid-column: 1 / -1; }
+/* The doors outside the tray paint the touch comfort floor, not the compact one. */
+:root:not([data-pause-layout], [data-look-pause-w]) :where(body[data-density="compact"][data-shape="wide"]) #pausemenu .sheet-body > button:not(.as-tbtn) {
+  min-height: max(var(--tap), var(--tap-paint), var(--tap-paint-at));
+}
 #race-settings:not([open]) { display: none; }
 #standings:not([open]) { display: none; }
 #datahub:not([open]) { display: none; }
@@ -1407,6 +1438,32 @@ body[data-width="narrow"] .res-stints { width: calc(3 * var(--fs-micro)); }
   #results-table .res-row { animation: row-in 0.22s cubic-bezier(0.2, 0.7, 0.3, 1) calc(min(var(--i, 0), 12) * 18ms) both; }
 }
 @keyframes row-in { from { opacity: 0; transform: translateY(6px); } }
+/* RESULTS · PINNED PODIUM (design pass #1, docs/notes/DESIGN-PASS-1-2026-10-30.md).
+   On a short landscape phone the sheet opens on your row (revealYouRow) with
+   the podium scrolled away, and every driver took two lines because TYRE
+   STINTS sat under the name: at P12 you saw P11-P13 and nothing else. Here
+   each classification row is ONE fixed-height line (the stints disclosure
+   sits beside the name), and P1, P2, P3 stick under each other at the top
+   with your row under them, so "me against the front" is on screen at every
+   scroll position without leaving rank order. An opened stints row unpins
+   and grows, so its text is never clipped under a pinned row. */
+/* 44 PAINTED px (the sheet is zoomed, so bare --tap painted 57): four pinned
+   rows then leave two and a half scrolling rows on a 390px screen. */
+:where(body[data-density="compact"][data-shape="wide"]) #results-table { --rr-h: calc(44px / var(--sheet-scale, var(--ui-scale, 1))); }
+/* No gap between rows: a pinned row's neighbour scrolls UNDER it, and a gap let its text peek through. */
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] { height: var(--rr-h); padding-block: 0; margin-block: 0; align-items: center; }
+/* One line box at the row height: the name, the gap and the stints disclosure share it, so every cell centres alike. */
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] .res-name:has([data-stint-details]) { display: block; height: var(--rr-h); line-height: var(--rr-h); white-space: nowrap; text-overflow: ellipsis; }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] .res-name [data-stint-details] { display: inline-block; vertical-align: top; margin-left: var(--gap); }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] .res-name > .q-time { display: inline; }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"] [data-stint-details] > summary { color: var(--dim); min-height: var(--rr-h); line-height: var(--rr-h); align-content: normal; }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"]:is(.p1, .p2, .p3) { position: sticky; z-index: 2; }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].p1 { top: 0; background: color-mix(in oklab, var(--gold) 10%, var(--surf-1)); }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].p2 { top: var(--rr-h); background: color-mix(in oklab, var(--silver) 7%, var(--surf-1)); }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].p3 { top: calc(2 * var(--rr-h)); background: color-mix(in oklab, var(--bronze) 7%, var(--surf-1)); box-shadow: 0 6px 8px -6px var(--bg); }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].you:not(.p1, .p2, .p3) { top: calc(3 * var(--rr-h)); }
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"].you:is(.p1, .p2, .p3) { background: color-mix(in oklab, var(--you) 8%, var(--surf-1)); }   /* you still win the row on the podium */
+:where(body[data-density="compact"][data-shape="wide"]) #results-table .res-row[role="listitem"]:has([data-stint-details][open]) { height: auto; position: static; }
 
 /* ---------- section label ---------- */
 .sel-label {

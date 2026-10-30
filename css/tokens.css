@@ -629,7 +629,7 @@
      personal best, yellow = slower than your own best; no reference yet
      keeps the row's own ink. --faster/--slower are the HUD's existing
      delta inks (ghost, gaps, data hub), named so every reader agrees. */
-  --faster: #a3e635;
+  --faster: #5fe88a;
   --slower: #ff3b30;
   /* The RED FLAG chip's field (css/hud.css #hud-flag.flag-red): a fixed flag
      red like the yellow and the VSC amber, so COLOUR VISION never remaps it,
