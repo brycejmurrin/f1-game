@@ -4214,7 +4214,8 @@
       "slot": [
         "tests/unit/career-backup.test.mjs",
         "tests/unit/career-cross-tab.test.mjs",
-        "tests/unit/career-round2.test.mjs"
+        "tests/unit/career-round2.test.mjs",
+        "tests/unit/setup-screens-state.test.mjs"
       ],
       "slotRevision": [
         "tests/unit/career-backup.test.mjs",
@@ -16962,6 +16963,9 @@
       "create": [
         "tests/unit/deep-link.test.mjs"
       ],
+      "onSectionLink": [
+        "tests/unit/deep-link.test.mjs"
+      ],
       "parse": [
         "tests/unit/deep-link.test.mjs"
       ]
@@ -18397,6 +18401,9 @@
       ],
       "find": [
         "tests/unit/player-tools-ui.test.mjs",
+        "tests/unit/settings-search.test.mjs"
+      ],
+      "onEscape": [
         "tests/unit/settings-search.test.mjs"
       ],
       "register": [

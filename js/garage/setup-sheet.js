@@ -673,14 +673,17 @@ function buildSetup() {
   tabs.textContent = "";
   tabs.setAttribute("role", "tablist");
   tabs.setAttribute("aria-label", "Garage categories");
+  // The two tiers are layout only: a tablist owns tabs and nothing else, so a
+  // role=group row cut every tab off from its tablist (axe aria-required-parent;
+  // Lighthouse a11y 88 on the Garage, UI hunt 3). data-tier names the row for tests.
   const primaryTabs = document.createElement("div");
   primaryTabs.className = "cs-tab-row";
-  primaryTabs.setAttribute("role", "group");
-  primaryTabs.setAttribute("aria-label", "Performance categories");
+  primaryTabs.setAttribute("role", "none");
+  primaryTabs.dataset.tier = "Performance categories";
   const secondaryTabs = document.createElement("div");
   secondaryTabs.className = "cs-tab-row";
-  secondaryTabs.setAttribute("role", "group");
-  secondaryTabs.setAttribute("aria-label", "Finishing and setup categories");
+  secondaryTabs.setAttribute("role", "none");
+  secondaryTabs.dataset.tier = "Finishing and setup categories";
   tabs.append(primaryTabs, secondaryTabs);
   const appendTab = (id, tab) => (SECONDARY_CATS.has(id) ? secondaryTabs : primaryTabs).appendChild(tab);
   {

@@ -8758,7 +8758,9 @@ $("mb-data").onclick = () => {
   // The click sound fires immediately — the bundle is one network round trip
   // on a cold tap and the button must not feel dead while it lands.
   if (soundOn) GameAudio.uiSelect();
-  openDataHub();
+  // A one-shot tab from the NEXT GP shortcut (js/ui/deep-link.js): the hub opens ON it, however slow the bundle.
+  const door = $("mb-data"), tab = door.dataset.openTab; delete door.dataset.openTab;
+  openDataHub(tab);
 };
 CustomTracks.create(G, { load: loadBackendScripts, door: $("mb-designer") });   // TRACK DESIGNER door (LAZY_EDITOR) + the saved-circuit registry
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };

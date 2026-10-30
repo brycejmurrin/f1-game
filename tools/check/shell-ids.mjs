@@ -89,7 +89,6 @@ export const RUNTIME_IDS = {
   "pm-ckfinish-wheel": "CockpitFinishes.initUI builds pm-ckfinish-<name> through SettingRow.build for wheel/body/halo; this null-guarded lookup prevents duplicate insertion",
   "cs-tab-tune": "SetupUI creates cs-tab-<tab.id> buttons dynamically; SetupExperiments reads the TUNE tab after the garage panel is built",
   "apex-lazy-integrity": "bump-cache.mjs adds the full lazy-script SRI map only to staged deployments; ScriptLoader treats its absence in dev and legacy shells as optional",
-  "dh-tab-schedule":  "Data Hub hub.js builds its tab buttons as dh-tab-<id> when the lazy bundle opens; deep-link.js reads it null-guarded and retries",
   "ps-panel":          "PhotoStudio mk() builds the photo controls panel; setup-camera uses a null-guarded read to exclude it from orbit gestures",
   "pm-three-path":     "renderer-picker addBtn(), and only when the backend files exist — the read at paintPresent() is null-guarded",
   "pm-car-reflect":    "renderer-picker addBtn() CAR REFLECTIONS, injected only when the three files exist — every read is null-guarded",

@@ -14,8 +14,8 @@ function boot({ search = "", overlayHidden = false, inRace = false, top = null, 
   const timers = [];
   const buttons = new Map();
   const btn = (id) => {
-    if (!buttons.has(id)) buttons.set(id, { id, hidden: false, disabled: false,
-      onclick: unwired ? null : () => clicks.push(id), click() { if (this.onclick) this.onclick(); } });
+    if (!buttons.has(id)) buttons.set(id, { id, hidden: false, disabled: false, dataset: {},
+      onclick: unwired ? null : () => clicks.push(id + (buttons.get(id).dataset.openTab ? ">" + buttons.get(id).dataset.openTab : "")), click() { if (this.onclick) this.onclick(); } });
     return buttons.get(id);
   };
   const ctx = vm.createContext({
@@ -71,7 +71,8 @@ test("shortcuts wait for handlers bound later in the same boot stack", () => {
     r.G.$(id).onclick = () => r.clicks.push(id);
     r.state.hubUp = true;
     r.timers.shift()();
-    assert.deepEqual(r.clicks, go === "nextgp" ? [id, "dh-tab-schedule"] : [id]);
+    assert.deepEqual(r.clicks, [id]);
+    if (go === "nextgp") assert.equal(r.G.$(id).dataset.openTab, "schedule", "the late-bound handler reads the tab off the door");
     assert.equal(r.timers.length, 0, "each wired shortcut is handled once");
   }
 });
@@ -92,14 +93,15 @@ test("a missing door button is dropped with a log line, never a throw", () => {
   assert.ok(r.logs.some((m) => /door unavailable/.test(m)), r.logs.join("|"));
 });
 
-test("NEXT GP opens the hub, then selects the schedule tab once it exists", () => {
+// UI hunt 3: polling 10 s for #dh-tab-schedule missed a slow first load; the
+// door now carries the tab and game.js's handler opens the hub ON it.
+test("NEXT GP opens the hub on the schedule tab through the door, with no tab polling", () => {
   const r = boot({ search: "?go=nextgp" });
   r.timers.shift()();
-  assert.deepEqual(r.clicks, ["mb-data"]);
-  assert.equal(r.timers.length, 1, "waiting for the hub bundle");
-  r.state.hubUp = true;
-  r.timers.shift()();
-  assert.deepEqual(r.clicks, ["mb-data", "dh-tab-schedule"]);
+  assert.deepEqual(r.clicks, ["mb-data>schedule"], "the door is pressed carrying the schedule tab");
+  assert.equal(r.timers.length, 0, "nothing waits on the hub bundle");
+  const plain = boot({ search: "?go=race" }); plain.timers.shift()();
+  assert.deepEqual(plain.clicks, ["mb-race"], "other doors carry no tab");
 });
 
 test("every manifest shortcut is in scope, has an icon on disk, and ?go= urls are exactly the consumer's allow-list", () => {
@@ -169,6 +171,41 @@ test("BACK IS ESCAPE: one sentinel entry; a back closes the top layer or pauses 
   assert.deepEqual(clicks, ["door"], "a real back off the re-armed sentinel still closes the top layer");
 });
 
+// UI hunt 3: back pressed the door directly, skipping the handlers that take
+// Escape first (circuit search clears, garage camera panel shuts, peek ends).
+test("BACK asks Escape first: an inner handler that claims it keeps the screen; unclaimed falls to the door", () => {
+  const pushes = [], win = {}, clicks = [], seen = [];
+  const history = { state: null, pushState(s) { pushes.push(s); this.state = s; }, replaceState(s) { this.state = s; } };
+  const env = { claim: false, layer: { id: "select" } };
+  class KeyboardEvent { constructor(type, o) { Object.assign(this, o, { type, defaultPrevented: false }); } preventDefault() { this.defaultPrevented = true; } }
+  const focused = { dispatchEvent(ev) { seen.push(ev.key); win.keydown(ev); if (env.claim) ev.preventDefault(); return !ev.defaultPrevented; } };
+  const ctx = vm.createContext({
+    location: { search: "", pathname: "/f1-game/", hash: "" }, history, URLSearchParams, KeyboardEvent,
+    document: { activeElement: focused },
+    UiLayers: { inRace: () => false, top: () => env.layer },
+    TopModal: { escapeTop: () => { clicks.push("door"); return true; } },
+    Log: { info() {} }, setTimeout() {},
+    window: { addEventListener: (t, fn) => { win[t] = fn; } },
+  });
+  vm.runInContext(SRC + ";globalThis.DeepLink = DeepLink;", ctx, { filename: absSrc("js/ui/deep-link.js") });
+  ctx.DeepLink.create({ els: { overlay: { hidden: false } }, $: () => null });
+  const back = () => { history.state = { [ctx.DeepLink.BASE]: 1 }; win.popstate(); };
+  env.claim = true; back();
+  assert.deepEqual(seen, ["Escape"], "the focused element hears Escape");
+  assert.deepEqual(clicks, [], "a claimed Escape does not press the door");
+  assert.equal(pushes.length, 2, "…and still counts as taken: the sentinel re-arms once, not from our own key");
+  env.claim = false; back();
+  assert.deepEqual(clicks, ["door"], "unclaimed: the layer's door, as before");
+  env.layer = null; clicks.length = 0; seen.length = 0; back();
+  assert.deepEqual(seen, [], "no layer up: no synthetic key");
+  // REPOSITION TOUCH CONTROLS hides every layer but ends on Escape (dock-layout.js).
+  ctx.document.body = { hasAttribute: (k) => k === "data-dock-edit" };
+  clicks.length = 0; seen.length = 0;
+  env.claim = true; back();
+  assert.deepEqual(seen, ["Escape"], "dock edit mode hears BACK as its Escape");
+  assert.deepEqual(clicks, [], "…and nothing else is pressed");
+});
+
 test("a ?go= link keeps the sentinel: the param strip preserves history.state", () => {
   const history = { state: null, pushState(s) { this.state = s; }, replaceState(s) { this.state = s; } };
   const ctx = vm.createContext({
@@ -179,4 +216,34 @@ test("a ?go= link keeps the sentinel: the param strip preserves history.state", 
   vm.runInContext(SRC + ";globalThis.DeepLink = DeepLink;", ctx, { filename: absSrc("js/ui/deep-link.js") });
   ctx.DeepLink.create({ els: { overlay: { hidden: false } }, $: () => null });
   assert.equal(history.state && history.state[ctx.DeepLink.MARK], 1);
+});
+
+// UI hunt 3: every HOW TO PLAY section link pushed a fragment entry that the
+// back gesture then spent silently before it could close the sheet.
+test("a section contents link scrolls in place and replaces the hash: no history entry", () => {
+  const replaced = [], scrolled = [], synced = [];
+  const history = { state: { apexBase: 1 }, pushState() { throw new Error("no push"); }, replaceState(s, _t, url) { replaced.push(url); } };
+  const section = { id: "htp-racing", scrollIntoView: (o) => scrolled.push(o.block) };
+  const sheet = { querySelectorAll: () => [{ id: "htp-controls" }, section] };
+  const ctx = vm.createContext({
+    location: { search: "", pathname: "/f1-game/", hash: "" }, history, URLSearchParams,
+    AriaState: { sync: () => synced.push(1) },
+    UiLayers: { inRace: () => false, top: () => null }, Log: { info() {} }, setTimeout() {},
+    window: { addEventListener() {} },
+  });
+  vm.runInContext(SRC + ";globalThis.DeepLink = DeepLink;", ctx, { filename: absSrc("js/ui/deep-link.js") });
+  const link = (href, inNav = true) => {
+    const a = { getAttribute: () => href, closest: (sel) => (sel === "a[href^='#']" ? a : sel === "dialog, .sheet" ? sheet : inNav ? {} : null) };
+    return { target: { closest: (sel) => a.closest(sel) }, button: 0, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; } };
+  };
+  const e = link("#htp-racing");
+  ctx.DeepLink.onSectionLink(e);
+  assert.equal(e.defaultPrevented, true, "the fragment navigation (a new entry) is cancelled");
+  assert.deepEqual(scrolled, ["start"]);
+  assert.deepEqual(replaced, ["#htp-racing"], "the hash still follows for aria-current, by replace");
+  assert.equal(synced.length, 1, "aria-current repaints without a hashchange");
+  const outside = link("#htp-racing", false); ctx.DeepLink.onSectionLink(outside);
+  assert.equal(outside.defaultPrevented, false, "a link outside the contents navs is untouched");
+  const missing = link("#nowhere"); ctx.DeepLink.onSectionLink(missing);
+  assert.equal(missing.defaultPrevented, false, "a link with no target falls back to the browser");
 });
