@@ -83,7 +83,8 @@ const HUD_LANDSCAPE_ONLY = [".hud-top", ".hud-gaps", "#minimap", "#hud-sectors",
 
 // Shipped TEXT SIZE large / HIGH CONTRAST / HOME SCENE photo / HELMET cam
 // (settings-defaults) change HUD zoom and onboard chrome. This file measures
-// the previous look (cockpit + normal type). Putting the spec in the diff
+// the previous look (cockpit + normal type). uiContrast "off" here hid a HIGH
+// CONTRAST colour bug; "POS cell ink follows its plate" below flips HC on live. Putting the spec in the diff
 // also ranks it 0 so select-specs cannot drop it as over-budget overflow.
 const PIN_PREVIOUS_LOOK = () => {
   try {
@@ -1558,6 +1559,50 @@ test.describe("track-limits chip", () => {
     expect(r.w, "the chip must actually have a box once un-hidden").toBeGreaterThan(0);
     expect(r.hits, "a track-limits warning must not paint over a tap target").toEqual([]);
     expect(r.right, "and must stay on screen").toBeLessThanOrEqual(r.vw);
+  });
+});
+
+// THE POS LIGHT CELL (design pass 2a): a light plate with dark ink. HIGH CONTRAST
+// (the shipped default, and Bryce's own export) once repainted the plate with
+// `:root[data-ui-contrast="high"] :is(.hud-box, #announce)`, whose :is() took
+// #announce's id specificity and beat the light-cell rule, leaving dark ink on
+// a dark plate (#4300). This file pins contrast "off" for geometry, so the
+// probe flips it live and reads the computed ink against the computed plate.
+test.describe("POS cell ink follows its plate", () => {
+  test.setTimeout(300_000);
+  test.use({ viewport: { width: 844, height: 390 }, hasTouch: true });
+  test("HIGH CONTRAST on/off x broadcast/standard x rank flash up/down/none", async ({ page }) => {
+    await race(page, "buttons", false, { sal: 0, sar: 0, sat: 0, sab: 0 });
+    const rows = await page.evaluate(() => {
+      const cv = document.createElement("canvas"); cv.width = cv.height = 1;
+      const cx = cv.getContext("2d", { willReadFrequently: true });
+      const rgba = (c) => { cx.clearRect(0, 0, 1, 1); cx.fillStyle = "#000"; cx.fillStyle = c; cx.fillRect(0, 0, 1, 1);
+        const d = cx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
+      // The ground an element paints on: its own and its ancestors' backgrounds over a black scene.
+      const ground = (el) => { const stack = []; for (let e = el; e && e !== document.body; e = e.parentElement) stack.push(rgba(getComputedStyle(e).backgroundColor));
+        let g = [0, 0, 0]; for (const [r, gg, b, a] of stack.reverse()) g = [r * a + g[0] * (1 - a), gg * a + g[1] * (1 - a), b * a + g[2] * (1 - a)]; return g; };
+      const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+      const L = ([r, g, b]) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+      const ratio = (a, b) => (Math.max(L(a), L(b)) + 0.05) / (Math.min(L(a), L(b)) + 0.05);
+      const pos = document.getElementById("hud-pos"), label = document.querySelector("#hud-box-pos .hud-label");
+      const out = [];
+      for (const hc of [true, false]) for (const bc of [false, true]) for (const delta of [null, "up", "down"]) {
+        if (hc) document.documentElement.dataset.uiContrast = "high"; else delete document.documentElement.dataset.uiContrast;
+        document.body.classList.toggle("hud-prof-broadcast", bc);
+        if (delta) pos.dataset.delta = delta; else delete pos.dataset.delta;
+        pos.style.animation = "none";
+        for (const [what, el] of [["value", pos], ["label", label]]) {
+          if (!el || !el.getClientRects().length) continue;
+          const ink = rgba(getComputedStyle(el).color), g = ground(el);
+          const inkOn = ink.slice(0, 3).map((c, i) => c * ink[3] + g[i] * (1 - ink[3]));
+          out.push({ hc, bc, delta, what, ratio: +ratio(inkOn, g).toFixed(2) });
+        }
+      }
+      return out;
+    });
+    expect(rows.length, "the POS value and label must both be probed").toBeGreaterThanOrEqual(24);
+    const bad = rows.filter((r) => r.ratio < 4.5);
+    expect(bad, "every POS ink must clear 4.5:1 on the plate it actually paints on").toEqual([]);
   });
 });
 
