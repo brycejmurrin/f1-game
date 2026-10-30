@@ -43,7 +43,12 @@ time.
 ## Fix 1 — the merged chunk index (TLX)
 
 - **Growth.** A regrow allocates max(needed, 1.5 × previous), capped at the mesh's whole index, so a race reaches
-  its peak in a few steps instead of one buffer per new peak.
+  its peak in a few steps instead of one buffer per new peak. A peer session landed the same growth independently
+  (`4c590689`, `TLX-WEBGPU-PERF-2026-10-30.md` W1/W2), together with two things this branch lacked: the narrow-index
+  mark (without it three's WebGPU backend swaps the Uint16 merge index for a Uint32 copy, and later writes land in
+  the orphaned array) and the release of the outgrown buffer. The sync merge keeps their block verbatim; what this
+  branch adds on top is the range and the owed-range rule below. The census A/B below measured this branch's own
+  growth + range, before the sync.
 - **Range.** The leading chunks that did not change keep their bytes; the upload range starts at the first change.
   A set that only lost tail chunks moves the draw range and uploads nothing.
 - **Owed ranges.** three clears `updateRanges` after it uploads, on both backends (read in vendored r186: the
