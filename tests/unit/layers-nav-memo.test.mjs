@@ -90,6 +90,8 @@ test("the memo expires on its own, and the layers are watched", () => {
 
 test("top() is memoised like navOpen(): per-frame pad polls do not re-query (audit4 UB2)", () => {
   const t = boot();
+  // top() finds layers by id (uihunt4 #6), so the title must really be closed for "nothing open".
+  t.els.get("overlay").hidden = true;
   assert.equal(t.U.top(), null);
   const after = { ...t.reads };
   for (let i = 0; i < 20; i++) assert.equal(t.U.top(), null);
@@ -108,4 +110,19 @@ test("top() is memoised like navOpen(): per-frame pad polls do not re-query (aud
   const q = t.reads.qsa;
   t.U.top();
   assert.ok(t.reads.qsa > q, "a detached memo re-queries");
+});
+
+// uihunt4-flows-1030 #6: top() looks layers up by id, not with the comma query that
+// walked the whole tree (3.6 ms a cold call at 5.3k nodes); a z-index tie still goes to
+// the LATER element in DOCUMENT order, whatever order the layer table lists them in.
+test("top() breaks a z-index tie by document order, not by the layer table's order", () => {
+  for (const docOrder of [["overlay", "pausemenu"], ["pausemenu", "overlay"]]) {
+    const t = boot();
+    for (const [i, id] of ["rotate-device", ...docOrder].entries()) {
+      t.els.get(id)._doc = i;
+      t.els.get(id).compareDocumentPosition = function (b) { return b._doc > this._doc ? 4 : 2; };
+    }
+    t.els.get("pausemenu").hidden = false;
+    assert.equal(t.U.top().id, docOrder[1], `document order ${docOrder.join(" < ")}`);
+  }
 });

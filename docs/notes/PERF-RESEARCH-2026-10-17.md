@@ -32,7 +32,7 @@ Read from the notes and the tree on 2026-10-17 (deploy tip `37794758`).
 | uploads | `StreamDrawUsage` on dynamic families (hunt 4 H1), attribute-instanced caster (`tlxCasterAttr`), 4-byte strides on WebGL2, packed vertices (49.8 → 28.7 MB), update ranges | `docs/notes/PERF-HUNT-4-2026-10-14.md` shortlist; `js/render/three/tlx-shadow.js:252-285` |
 | shadows | static-props lamp map + car-only rebuild (L1), lamp reach gate, sun map 1024² on phones, car map desktop only | `docs/notes/TLX-PERF-PLAN.md`; `js/render/three/tlx-shadow.js:65-66` |
 | post | godray lite chain (G1), fixed per-pair materials (P2), R11F_G11F_B10F bloom where renderable, R8 SSAO, phone depth discard, FXAA folded with the mirror inset, **SGSR spatial upscale built** (decision open: #1652) | `js/render/three/tlx-post.js:96-130,264-284`; `js/render/three/tlx.js:1059` |
-| compile / first draw | `compileAsync` warms, draw warm (W1), stepped race-car warm, lazy mirror warm, three 0.186.1 + 13 patches | `js/render/three/tlx.js:2608-3182`; `vendor/three-0.186.1/PATCHES.md` |
+| compile / first draw | `compileAsync` warms, draw warm (W1), stepped race-car warm, lazy mirror warm, three 0.186.1 + 13 patches | `js/render/three/tlx.js:2608-3182`; `vendor/three-0.187.0/PATCHES.md` |
 | adaptive quality | governor: resolution first, tier ladder second, crash sentinel, settle/hold/climb-survive/ceiling-expiry, two clocks (frame-counted vs ms), 5-substep physics cap | `js/perf/governor.js:14-130`; `js/game.js:8713-8734` |
 | CPU / GC | alloc hunt 1: `hud-layout` 52 → 11 KB/frame, `collide` buckets 6.5 → 0; minimap pit-mark glyph cache (heavy frames 30 % → 5 %); scratch objects in AI | `docs/notes/PERF-ALLOC-HUNT-2026-10-17.md`; `docs/notes/TLX-PERF-HUNT-5-2026-10-16.md` |
 | build | track build in a Worker (ON when >1 core), stepped fallback, typed accumulators, 24 m mass grid | `js/track/build-client.js`; `docs/notes/PERF-FINDINGS.md` §3 |
@@ -147,7 +147,7 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   (6.4 KB); `js/render/glx/glx.js` `litMaterial` (5.9 KB, GLX only); `js/physics/tyre-model.js` update (5.7 KB);
   `js/lighting/frame-lights.js` (7.4 KB). Plus **F5 of the TLX hunt: three's `_bindUniforms` allocates ~16 KB/frame of iterator
   objects** (`for…of` over bindings) in the vendored bundle. Vendor edits go through `vendor/three-patches/patches.mjs` (the patch
-  generator, 14 entries) as a new patch 15, never a hand edit of the min file (`vendor/three-0.186.1/PATCHES.md`).
+  generator, 14 entries) as a new patch 15, never a hand edit of the min file (`vendor/three-0.187.0/PATCHES.md`).
   Also the `hud-layout.js` full refit whenever `_fitKey` changes; why it changes that often was left open (`js/ui/hud-layout.js:16`).
 - **Evidence.** Our own heap-sampling method (`docs/notes/PERF-ALLOC-HUNT-2026-10-17.md`) found whole-frame bytes move with frame rate,
   so wins are claimed per site. External: object pooling, typed arrays and avoiding per-frame closures are standard JS game guidance
@@ -181,7 +181,7 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   (merged 2026-09-20, r187, commit d64e6bd: VAO logic moved into `WebGLVertexArrayUtils`, new backend method `deleteVertexState()`, stable attribute
   id; ⚑). The program/shader half was not described in that PR's text; hunt 4 lists #34690, #34601 and #34603 as the program/pipeline disposal PRs (not re-fetched).
 - **Is it ours?** Yes by construction: TLX on iOS runs that exact backend (`js/render/three/tlx.js:341-348`). **Verified here:** the vendored
-  `vendor/three-0.186.1/three.webgpu.min.js` contains `deleteVertexArray` ×0, `deleteProgram` ×0, `deleteShader` ×0 (and `deleteBuffer` ×3, `deleteTexture` ×1,
+  `vendor/three-0.187.0/three.webgpu.min.js` contains `deleteVertexArray` ×0, `deleteProgram` ×0, `deleteShader` ×0 (and `deleteBuffer` ×3, `deleteTexture` ×1,
   `deleteFramebuffer` ×6). TLX already patches around one disposal problem at the other end (`js/render/three/tlx.js:6004-6022`, the `WEBGL_lose_context` mask).
 - **Why it matters on a phone.** Programs and shaders are small in number for us (hunt 5: 19 materials, no growth), so the VAO side is the
   suspect: a track switch or a race restart re-uploads geometry under new attribute ids, so each switch adds a VAO set. Whether a VAO that is never
@@ -199,7 +199,7 @@ Apple GPUs are tile-based deferred renderers: load/store actions and full-screen
   "Fix FloatType depth textures with MSAA" (#34768; our desktop PCSS copy uses FloatType depth, `js/render/three/tlx-shadow.js:103`), "Use correct depth texture for clear" (#34928)
   (merged 2026-10-03 to 2026-10-09, r187 milestone ⚑). The migration guide's 186 → 187 section (⚑) mostly misses us (§7a).
 - **Evidence for timing.** r187 is not published: npm `latest` for `three` is 0.186.1 (2026-09-24, from the registry on 2026-10-17); the releases page shows r186 as Latest.
-- **Where.** `vendor/three-0.186.1/`, `vendor/three-patches/patches.mjs`, canary `tests/unit/gfx-backend-canary.test.mjs`, recipe in `vendor/three-0.186.1/PATCHES.md`; probe under `tools/gfx/` (a new tool is outside this lane).
+- **Where.** `vendor/three-0.187.0/`, `vendor/three-patches/patches.mjs`, canary `tests/unit/gfx-backend-canary.test.mjs`, recipe in `vendor/three-0.187.0/PATCHES.md`; probe under `tools/gfx/` (a new tool is outside this lane).
 - **Risks.** A patch that deletes a VAO still in use breaks rendering (the reporter's own warning: three gives no signal that a VAO is dead, so #34610 re-keys by stable id first);
   re-deriving patches at the bump; **no dev snapshot**.
 - **Effort.** S for the count; S–M for the backport; S for the bump once r187 ships.
@@ -501,7 +501,7 @@ Legend: ⚑ fetched and read; ◇ search snippet or secondary; ✗ not found.
 
 ### 7a. Our version against the latest, and whether to upgrade
 
-We vendor **three 0.186.1** (`vendor/three-0.186.1/MANIFEST.json`, generated by `tools/gen/vendor-three.mjs`, 14 patches in
+We vendor **three 0.186.1** (`vendor/three-0.187.0/MANIFEST.json`, generated by `tools/gen/vendor-three.mjs`, 14 patches in
 `vendor/three-patches/patches.mjs`). The releases page (⚑ 2026-10-17) shows **r186 as Latest (24 Sep 2026)**; r185 01 Jul, r184 16 Apr,
 r183 20 Feb. So **we are on the newest release.** What r184–r186 already gave us (all in 0.186.1; from the release notes, summarised by
 the fetch, some entries truncated on the page):
