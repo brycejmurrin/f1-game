@@ -32,6 +32,15 @@ export function saveOutputArtifact(value, { root = process.cwd(), tool = 'output
   fs.writeFileSync(path.join(base, name), data, { flag: 'wx', mode: 0o600 });
   return { path: `artifacts/agent-output/${name}`, bytes: Buffer.byteLength(data), kind, tool };
 }
+// A text block's JSON: bare, or one fenced block after a prose lead-in (chrome-devtools evaluate_script answers
+// "Script ran on page and returned:" + a ```json fence). Unparsed, such a block is only a 650-char head/tail cut.
+const FENCED_JSON = /^([^`]*?)```(?:json)?\n([\s\S]*)\n```\s*$/;
+export function parseEmbeddedJson(text) {
+  try { return { data: JSON.parse(text) }; } catch {}
+  const m = FENCED_JSON.exec(text);
+  if (!m) return undefined;
+  try { return { data: JSON.parse(m[2]), ...(m[1].trim() ? { lead: m[1].trim() } : {}) }; } catch { return undefined; }
+}
 function excerpt(text, max) {
   if (text.length <= max) return text;
   const head = Math.floor(max * 0.65), tail = max - head;
@@ -104,12 +113,11 @@ export function summarizeOutput(value, { level = 'compact' } = {}) {
   if (value && Array.isArray(value.content)) {
     const normalized = { ...value, content: value.content.map((block) => {
       if (block.type !== 'text') return block;
-      try {
-        const data = JSON.parse(block.text);
-        return value.structuredContent !== undefined && isDeepStrictEqual(data, value.structuredContent)
-          ? { type: 'text', duplicateOf: 'structuredContent', omittedDuplicate: true }
-          : { type: 'text', data };
-      } catch { return block; }
+      const parsed = parseEmbeddedJson(block.text);
+      if (!parsed) return block;
+      return value.structuredContent !== undefined && isDeepStrictEqual(parsed.data, value.structuredContent)
+        ? { type: 'text', duplicateOf: 'structuredContent', omittedDuplicate: true }
+        : { type: 'text', ...(parsed.lead ? { lead: parsed.lead } : {}), data: parsed.data };
     }) };
     return visit(normalized);
   }
@@ -188,6 +196,11 @@ export function readOriginalMcpArtifact({ root = process.cwd(), artifact, maxByt
   } finally { fs.closeSync(fd); }
 }
 
+function embeddedJson(text) {
+  const parsed = parseEmbeddedJson(text);
+  if (!parsed) throw new Error('collection pointer crosses text that is not JSON');
+  return parsed.data;
+}
 /** Exact rows from a retained JSON collection; never advance the upstream cursor. */
 export function readOutputCollection({ root = process.cwd(), artifact, pointer = '', offset = 0, limit = 20 }) {
   if (typeof pointer !== 'string' || (pointer !== '' && !pointer.startsWith('/')) || /~(?![01])/u.test(pointer)) throw new Error('pointer must be an RFC 6901 JSON pointer');
@@ -199,12 +212,12 @@ export function readOutputCollection({ root = process.cwd(), artifact, pointer =
     let value = JSON.parse(fs.readFileSync(fd, 'utf8'));
     for (const raw of pointer === '' ? [] : pointer.slice(1).split('/')) {
       // MCP text blocks often carry native JSON instead of structuredContent.
-      if (typeof value === 'string') value = JSON.parse(value);
+      if (typeof value === 'string') value = embeddedJson(value);
       const key = raw.replace(/~1/g, '/').replace(/~0/g, '~');
       if (!value || typeof value !== 'object' || !Object.hasOwn(value, key)) throw new Error('collection pointer does not exist');
       value = value[key];
     }
-    if (typeof value === 'string') value = JSON.parse(value);
+    if (typeof value === 'string') value = embeddedJson(value);
     if (!Array.isArray(value)) throw new Error('collection pointer must select an array');
     const items = value.slice(offset, offset + limit);
     // Bound each retrieval without clipping individual rows or skipping them.

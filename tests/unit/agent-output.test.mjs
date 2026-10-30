@@ -267,6 +267,24 @@ test('a mid-size answer the summary cannot shrink stays native; one it can shrin
   assert.ok(JSON.stringify(summarized).length < JSON.stringify(big).length / 4);
 });
 
+test('fenced JSON after a prose lead-in (chrome-devtools evaluate_script) is summarized and paged structurally', t => {
+  const root = fixture(t);
+  const value = { apiVersion: 1, hooks: Array.from({ length: 60 }, (_, i) => ({ name: `hook${i}`, doc: 'd'.repeat(80) })), notes: ['stale under headless(true)'] };
+  const original = { content: [{ type: 'text', text: 'Script ran on page and returned:\n```json\n' + JSON.stringify(value) + '\n```' }] };
+  const result = presentMcpResult(original, { root });
+  const block = result.structuredContent.summary.content[0];
+  assert.equal(block.lead, 'Script ran on page and returned:');
+  assert.equal(block.data.apiVersion, 1);
+  assert.equal(block.data.hooks.at(-1).totalItems, 60);
+  assert.equal(block.data.hooks.at(-1).sourcePointer, '/content/0/text/hooks');
+  const page = readOutputCollection({ root, artifact: result.structuredContent.artifact, pointer: '/content/0/text/hooks', offset: 58, limit: 5 });
+  assert.deepEqual(page.items.map(row => row.name), ['hook58', 'hook59']);
+  // Prose that merely mentions a fence stays text, and a broken fence is never half-parsed.
+  for (const text of ['see ```json\n{"a":1}\n``` then more', 'returned:\n```json\n{"a":\n```']) {
+    assert.equal(summarizeOutput({ content: [{ type: 'text', text }] }).content[0].text, text);
+  }
+});
+
 test('exact collection pages recover all omitted rows without advancing upstream cursors', t => {
   const root = fixture(t);
   const rows = Array.from({ length: 40 }, (_, id) => ({ id, value: `é${id}` }));
