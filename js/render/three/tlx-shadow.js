@@ -38,7 +38,7 @@
   // (TLX's B8 lab tier, ?lab=tlxLite on three's WebGL2 leg of a phone, passes 512).
   function sunMapSize(ctx) {
     if (ctx.sunSize > 0) return ctx.sunSize | 0;
-    return (ctx.isMobile || ctx.mobileTier) ? 1024 : (ctx.softwareGL ? 512 : 2048);
+    return ctx.isMobile ? 1024 : (ctx.softwareGL ? 512 : 2048);   // the pre-B8 rule, exactly
   }
 
   function shadowSys(THREE, TSL, ctx) {

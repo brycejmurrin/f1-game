@@ -105,3 +105,11 @@ test("present() applies the lite opts before the program warm reads them", () =>
   const warm = TLX_SRC.indexOf("startProgramWarm(opts)", p);
   assert.ok(p > 0 && at > p && warm > at, "liteOpts runs inside present(), ahead of startProgramWarm");
 });
+
+test("sunMapSize keeps the pre-B8 rule exactly: only isMobile picks 1024 (a forced mobile tier on a desktop does not)", () => {
+  const ctx = vm.createContext({ window: {}, console });
+  vm.runInContext(fs.readFileSync(path.join(ROOT, "js/render/three/tlx-shadow.js"), "utf8"), ctx, { filename: absSrc("js/render/three/tlx-shadow.js") });
+  const size = (o) => vm.runInContext("window.TLXShaders.sunMapSize", ctx)(o);
+  assert.deepEqual([size({ isMobile: true }), size({ mobileTier: true }), size({ mobileTier: true, softwareGL: true }), size({}), size({ softwareGL: true }), size({ isMobile: true, sunSize: 512 })],
+    [1024, 2048, 512, 2048, 512, 512]);
+});
