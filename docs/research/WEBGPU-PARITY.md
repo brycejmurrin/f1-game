@@ -1018,6 +1018,16 @@ member stubbed `() => false` on the other two; the port landed the same day:
   the same maths and no backend gains a control-flow dependency. Dawn static
   validation clean.
 
+  **Data-driven LINE COLOUR (2026-10-30).** The 0/1 flag became the palette's
+  three colours: `DrivingLine.PALETTES` (F1 GREEN, CYAN, BLUE, WHITE, PURPLE,
+  PINK, COLOUR-BLIND) fills `opts.cols` (9 floats: onPace, lift, brake), and
+  each backend uploads three vec3 uniforms — GLX `uOnPace`/`uLift`/`uBrake`,
+  WGX `LineU.colOnPace`/`colLift`/`colBrake` (three vec4 at offsets 96/112/128,
+  so `LineU` is **144 bytes**, `_lineU` 36 floats, `params.w` now spare), TLX
+  `lineOnPace`/`lineLift`/`lineBrake`. The shaders mix them by speed exactly
+  as before; the mix-not-branch property is kept (no control flow at all now).
+  Not yet re-validated against real Dawn or a real GPU.
+
 Sign-off is the real-GPU census (`gpu-census.yml`, macOS/Metal), not a
 screenshot here: the software adapters validate and run the frame graph but
 composite nothing.

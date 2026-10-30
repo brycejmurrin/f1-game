@@ -41,14 +41,21 @@ const StrategyWire = (function () {
       const first = new Set(COMPOUND_CODES.map(code => log.findIndex(e => e && e.code === code)));
       return strategyLog(log.filter((e, i) => first.has(i) || i >= log.length - (STINT_MAX - COMPOUND_CODES.length))) || [];
     }
-    function strategyState(c, wire, track) {
+    const FIELD_KEYS = Object.keys(STRATEGY_FIELDS);
+    // scalarsOnly: the 1 Hz refresh between phases. The fitted set, pending set
+    // and stint log only change on a phase (pit, fit, new set), which always
+    // sends the full state, so the refresh omits them — the v1 receiver keeps
+    // its copy of an absent extension (applyStrategy). ~742 B/car before.
+    function strategyState(c, wire, track, scalarsOnly) {
       const fields = {};
-      for (const k of Object.keys(STRATEGY_FIELDS)) if (Number.isFinite(c[k])) fields[k] = c[k];
-      return { version: STRATEGY_VERSION, physics: modelRevision(), wire, track, fields,
-        tyre: strategyTyre(c.tyre), tread: c.tread, pitState: c.pitState || "none", pitArmed: !!c.pitArmed,
-        pitFitted: !!c.pitFitted, pitNext: strategyTyre(c.pitNext), tyreClass: ["soft", "medium", "hard", "inter", "wet"].includes(c.tyreClass) ? c.tyreClass : null,
-        tyreLog: boundedLog(c.tyreLog), compoundShortAtFinish: typeof c.compoundShortAtFinish === "boolean" ? c.compoundShortAtFinish : null,
+      for (const k of FIELD_KEYS) if (Number.isFinite(c[k])) fields[k] = c[k];
+      const d = { version: STRATEGY_VERSION, physics: modelRevision(), wire, track, fields,
+        tread: c.tread, pitState: c.pitState || "none", pitArmed: !!c.pitArmed,
+        pitFitted: !!c.pitFitted, tyreClass: ["soft", "medium", "hard", "inter", "wet"].includes(c.tyreClass) ? c.tyreClass : null,
+        compoundShortAtFinish: typeof c.compoundShortAtFinish === "boolean" ? c.compoundShortAtFinish : null,
         tyrePhysicalOffset: Number.isFinite(c.tyrePhysicalOffset) ? Math.max(-1000, Math.min(1000, c.tyrePhysicalOffset)) : null };
+      if (!scalarsOnly) { d.tyre = strategyTyre(c.tyre); d.pitNext = strategyTyre(c.pitNext); d.tyreLog = boundedLog(c.tyreLog); }
+      return d;
     }
     function applyStrategy(c, d) {
       if (!c || !d || d.version !== STRATEGY_VERSION || d.physics !== modelRevision() || !d.fields) return false;

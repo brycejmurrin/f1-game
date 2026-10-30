@@ -205,8 +205,10 @@ const MirrorPass = (function () {
       const tailTo = Math.min(src.length, (ts + tc) * 15);
       for (let i = tailFrom; i < tailTo; i++) _capBuf[j++] = src[i];
       _capBuf.length = j;
-      return { lights: _capBuf, tailStart: keepLamps, tailCount: tc };
+      _capOut.tailStart = keepLamps; _capOut.tailCount = tc;
+      return _capOut;   // scratch, as _vlOut: read at once by pass(), never kept
     }
+    const _capOut = { lights: _capBuf, tailStart: 0, tailCount: 0 };
     // THE SUN'S VIEW-DEPENDENT TERMS STAY OUT OF THE MIRROR (a phone report:
     // "still a little flashy … sun and shadows"). The mirror is a small target
     // with no anti-aliasing of its own (FXAA runs before its composite), so
@@ -225,11 +227,15 @@ const MirrorPass = (function () {
     const MIRROR_TUNE = { carSunGlint: 0, carSparkle: 0, windowSunFlash: 0, shadowStr: 0 };
     let _mirTune = null, _mirTuneSrc;
 
-    // The target for a frame of cssW x cssH CSS px: device pixels (DPR capped at
-    // 2) x the rung's res (x the render scale, scaledRes) x SS. It reallocates
-    // when the frame resizes, the rung changes or the main frame's scale moves.
+    // The target for a frame of cssW x cssH CSS px: device pixels (DPR capped as
+    // the main canvas is: 1.5 on a mobileTier phone, else 2 — glx.js / tlx.js
+    // DPR_CAP) x the rung's res (x the render scale, scaledRes) x SS. A flat cap
+    // of 2 gave an iPhone (DPR 3) (2/1.5)^2 = 1.78x the lite rung's designed
+    // pixels in the mirror pass and its mips. It reallocates when the frame
+    // resizes, the rung changes or the main frame's scale moves.
     function targetSize(cssW, cssH, res) {
-      const dpr = Math.min(2, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
+      const cap = G.gfx && G.gfx.mobileTier ? 1.5 : 2;
+      const dpr = Math.min(cap, typeof devicePixelRatio === "number" && devicePixelRatio > 0 ? devicePixelRatio : 1);
       res = scaledRes(res);
       const ss = _q.ss || SS;
       let w = cssW * dpr * res * ss, h = cssH * dpr * res * ss;

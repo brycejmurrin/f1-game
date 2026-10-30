@@ -225,6 +225,53 @@ const PostCommon = (function () {
     opts.ssrQuality = tier >= 3 ? 2 : (tier >= 2 ? 1 : 0);
   }
 
-  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, roadReflection, softwareGlowScale, softwareRaceShed };
+  // THE HIGHEST MIP LOD A MESH'S IMPLICIT-LOD TAP CAN ASK FOR (perf hunt 5 F1: the cockpit glass's
+  // mirror chain). Per triangle, perspective-correct uv = N/D with N, D affine in screen space, so
+  // grad(uv) = (grad N - uv grad D) / D: the numerator's norm is convex in uv (max at a vertex) and
+  // 1/D peaks at the vertex with the largest clip w, so their product bounds |d texel / d pixel|
+  // everywhere inside. Per screen axis it takes sqrt2 (|du| + |dv|), the widest approximation of a
+  // derivative's length the Vulkan scale-factor rules allow (an exact GPU takes the hypot). pos/uv/idx: the
+  // mesh arrays; model, vp: column-major 4x4; W x H: the pass's target px; tw x th: level 0 texels.
+  // A triangle wholly behind the eye or wholly past one side plane rasterizes nothing and is skipped;
+  // Infinity (= the full chain) when one straddles the eye plane.
+  function mipFootprintLod(pos, uv, idx, model, vp, W, H, tw, th) {
+    const m = model, p = vp, n = idx ? idx.length : pos.length / 3, sx = [0, 0, 0], sy = [0, 0, 0], q = [0, 0, 0];
+    const cx = [0, 0, 0], cy = [0, 0, 0], cw = [0, 0, 0];
+    let worst = 0;
+    for (let t = 0; t + 2 < n; t += 3) {
+      for (let k = 0; k < 3; k++) {
+        const i = idx ? idx[t + k] : t + k, x = pos[3 * i], y = pos[3 * i + 1], z = pos[3 * i + 2];
+        const wx = m[0] * x + m[4] * y + m[8] * z + m[12], wy = m[1] * x + m[5] * y + m[9] * z + m[13];
+        const wz = m[2] * x + m[6] * y + m[10] * z + m[14];
+        cx[k] = p[0] * wx + p[4] * wy + p[8] * wz + p[12]; cy[k] = p[1] * wx + p[5] * wy + p[9] * wz + p[13];
+        cw[k] = p[3] * wx + p[7] * wy + p[11] * wz + p[15];
+      }
+      const out = (f) => f(0) && f(1) && f(2);
+      if (out((k) => !(cw[k] > 1e-6)) || out((k) => cx[k] > cw[k]) || out((k) => cx[k] < -cw[k])
+          || out((k) => cy[k] > cw[k]) || out((k) => cy[k] < -cw[k])) continue;   // no fragment
+      if (!(cw[0] > 1e-6 && cw[1] > 1e-6 && cw[2] > 1e-6)) return Infinity;
+      for (let k = 0; k < 3; k++) { sx[k] = cx[k] / cw[k] * 0.5 * W; sy[k] = cy[k] / cw[k] * 0.5 * H; q[k] = 1 / cw[k]; }
+      const e1x = sx[1] - sx[0], e1y = sy[1] - sy[0], e2x = sx[2] - sx[0], e2y = sy[2] - sy[0];
+      const det = e1x * e2y - e1y * e2x;
+      if (det === 0) continue;   // zero area: no fragment
+      // screen gradients of the barycentrics l1, l2 (l0 = 1 - l1 - l2)
+      const g = [[(e1y - e2y) / det, (e2x - e1x) / det], [e2y / det, -e2x / det], [-e1y / det, e1x / det]];
+      let dDx = 0, dDy = 0, dUx = 0, dUy = 0, dVx = 0, dVy = 0, wMax = 0;
+      for (let k = 0; k < 3; k++) {
+        const i = idx ? idx[t + k] : t + k, u = uv[2 * i] * tw, v = uv[2 * i + 1] * th;
+        dDx += q[k] * g[k][0]; dDy += q[k] * g[k][1];
+        dUx += q[k] * u * g[k][0]; dUy += q[k] * u * g[k][1]; dVx += q[k] * v * g[k][0]; dVy += q[k] * v * g[k][1];
+        wMax = Math.max(wMax, 1 / q[k]);
+      }
+      for (let k = 0; k < 3; k++) {
+        const i = idx ? idx[t + k] : t + k, u = uv[2 * i] * tw, v = uv[2 * i + 1] * th;
+        const a = dUx - u * dDx, b = dUy - u * dDy, c = dVx - v * dDx, d = dVy - v * dDy;
+        worst = Math.max(worst, Math.SQRT2 * Math.max(Math.abs(a) + Math.abs(c), Math.abs(b) + Math.abs(d)) * wMax);
+      }
+    }
+    return worst > 0 ? Math.log2(worst) : -Infinity;
+  }
+
+  return { makeDirtCanvas, keepNearest, hdrGradeOn, sunScreen, flareTapsDepth, knob, roadReflection, softwareGlowScale, softwareRaceShed, mipFootprintLod };
 })();
 Object.freeze(PostCommon);

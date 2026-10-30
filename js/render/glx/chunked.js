@@ -725,6 +725,7 @@ const GLXChunked = (function () {
       const ex = eye ? eye[0] : 0, ey = eye ? eye[1] : 0, ez = eye ? eye[2] : 0;
       const prevProg = gl.getParameter(gl.CURRENT_PROGRAM);
       const prevCull = !!gl.getParameter(gl.CULL_FACE);
+      setPolyOffset(null);   // a shadow/mark run leaves ROAD_BIAS on (useProg lifts it; this bypasses useProg)
       gl.useProgram(_occProg);
       gl.uniformMatrix4fv(_occU.vp, false, F.viewProj);
       bindVAO(_occVao);

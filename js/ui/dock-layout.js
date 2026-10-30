@@ -31,6 +31,28 @@ const DockLayout = (function () {
     };
   }
   function emptyScheme() { return { L: { x: 0, y: 0 }, R: { x: 0, y: 0 } }; }
+
+  // BUTTON SHAPE: one corner style for every touch control. AUTO is the shipped
+  // mix (round taps and arrows, squircle pedals) and is stored as null, so the
+  // default can move without a migration. css/overlays.css reads the attribute.
+  const SHAPE_KEY = "hudBtnShape";
+  const SHAPES = Object.freeze([["auto", "AUTO"], ["round", "ROUND"], ["squircle", "SQUIRCLE"], ["square", "SQUARE"]]);
+  function shapeOf(v) { return SHAPES.some((s) => s[0] === v) ? v : "auto"; }
+  function applyShape(v) {
+    const s = shapeOf(v);
+    const root = typeof document !== "undefined" && document.documentElement;
+    if (root && root.style) {
+      if (s === "auto") root.removeAttribute("data-btn-shape");
+      else root.setAttribute("data-btn-shape", s);
+    }
+    return s;
+  }
+  /** Pure: the next BUTTON SIZE (%) one toolbar step from `v` — snapped to the 10 % grid, inside [lo, hi]. */
+  function sizeStep(v, dir, lo, hi) {
+    const n = Number.isFinite(+v) ? +v : 100;
+    const next = dir > 0 ? Math.floor(n / 10 + 1e-9) * 10 + 10 : Math.ceil(n / 10 - 1e-9) * 10 - 10;
+    return Math.max(lo, Math.min(hi, next));
+  }
   function normalize(raw) {
     const out = {};
     for (const s of SCHEMES) {
@@ -141,6 +163,36 @@ const DockLayout = (function () {
     // remembers what WE hid, so leaving restores exactly that and nothing else.
     let shown = null;      // { settings, pause } — hidden by us on entry
     let doneBtn = null;
+    let editBar = null;    // the floating SIZE / SHAPE / DONE toolbar
+    let shape = applyShape(store && store.get ? store.get(SHAPE_KEY, null) : null);
+    function setShape(v) {
+      shape = applyShape(v);
+      if (store && store.set) store.set(SHAPE_KEY, shape === "auto" ? null : shape);
+      if (typeof SettingRow !== "undefined" && SettingRow.paint && $("pm-btnshape")) SettingRow.paint("pm-btnshape", shape, SHAPES);
+      paintBar();
+      if (typeof GameHud !== "undefined" && GameHud && GameHud.invalidateFit) GameHud.invalidateFit();
+      return shape;
+    }
+    // SIZE steps drive the SETTINGS slider itself (its input handler stores,
+    // clamps and applies in js/ui/scale.js), so there is one writer of BUTTON SIZE.
+    function stepSize(dir) {
+      const el = $("pm-btnscale");
+      if (!el) return;
+      el.value = String(sizeStep(+el.value, dir, +el.min || 40, +el.max || 300));
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      // The editor runs over a PAUSED race, where the HUD tick returns before
+      // the fit: force one so the dock caps (and repaints) at the new size now,
+      // then re-run the slider's paint so its "fits N%" reads the fresh cap.
+      if (G.refreshHud) G.refreshHud(true);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      paintBar();
+    }
+    function paintBar() {
+      if (!editBar) return;
+      const out = $("pm-btnscale-v");
+      editBar.querySelector("[data-k=size]").textContent = "SIZE " + ((out && out.textContent) || "");
+      editBar.querySelector("[data-k=shape]").textContent = "SHAPE: " + SHAPES.find((s) => s[0] === shape)[1];
+    }
     function hideDialogs() {
       const settings = $("pmsettings"), pause = $("pausemenu");
       shown = { settings: !!settings && !settings.hidden, pause: !!pause && !pause.hidden };
@@ -154,21 +206,49 @@ const DockLayout = (function () {
       if (was.settings && settings) settings.hidden = false;
       if (was.pause && pause) pause.hidden = false;
     }
+    // The editor's floating toolbar: SIZE − / + and SHAPE change the controls
+    // in place, on the race HUD, while the player can see them (the SETTINGS
+    // rows are hidden during the edit). DONE keeps its id and label.
     function ensureDone() {
       if (doneBtn || typeof document === "undefined" || !document.createElement || !document.body || !document.body.appendChild) return;
-      doneBtn = document.createElement("button");
-      doneBtn.id = "dock-edit-done";
-      doneBtn.type = "button";
-      doneBtn.textContent = "DONE";
-      doneBtn.setAttribute("aria-label", "Done repositioning touch controls");
+      editBar = document.createElement("div");
+      editBar.id = "dock-edit-bar";
+      editBar.setAttribute("role", "toolbar");
+      editBar.setAttribute("aria-label", "Touch controls");
       // Inline: the shell and stylesheets are not this module's to edit, and the
-      // button exists only while editing. Top-centre keeps both docks clear.
-      doneBtn.style.cssText = "position:fixed;top:calc(8px + var(--sat,0px));left:50%;transform:translateX(-50%);" +
-        "z-index:9999;min-width:96px;min-height:44px;padding:0 20px;font:inherit;font-weight:700;" +
-        "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);border-radius:8px;";
-      doneBtn.onclick = () => setEditing(false);
-      doneBtn.hidden = true;
-      document.body.appendChild(doneBtn);
+      // bar exists only while editing. Top-centre keeps both docks clear.
+      editBar.style.cssText = "position:fixed;top:calc(8px + var(--sat,0px));left:50%;transform:translateX(-50%);" +
+        "z-index:9999;display:flex;gap:6px;align-items:center;white-space:nowrap;";
+      const mk = (k, label, aria, onclick) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.dataset.k = k;
+        b.textContent = label;
+        if (aria) b.setAttribute("aria-label", aria);
+        b.style.cssText = "min-width:44px;min-height:44px;padding:0 12px;font:inherit;font-weight:700;" +
+          "background:var(--bg,#111);color:var(--text,#fff);border:2px solid var(--text,#fff);border-radius:8px;";
+        b.onclick = onclick;
+        editBar.appendChild(b);
+        return b;
+      };
+      mk("smaller", "−", "Smaller buttons", () => stepSize(-1));
+      // The readout is text, not a control: a disabled button paints see-through
+      // over the timing tower (measured 844x390), so it is an opaque span.
+      const size = document.createElement("span");
+      size.dataset.k = "size";
+      size.setAttribute("aria-live", "polite");
+      size.style.cssText = "padding:0 10px;line-height:40px;font-weight:700;background:var(--bg,#111);color:var(--text,#fff);border-radius:8px;";
+      editBar.appendChild(size);
+      mk("bigger", "+", "Bigger buttons", () => stepSize(1));
+      mk("shape", "SHAPE", "Next button shape", () => {
+        const i = SHAPES.findIndex((s) => s[0] === shape);
+        setShape(SHAPES[(i + 1) % SHAPES.length][0]);
+      });
+      doneBtn = mk("done", "DONE", "Done repositioning touch controls", () => setEditing(false));
+      doneBtn.id = "dock-edit-done";
+      doneBtn.style.minWidth = "96px";
+      editBar.hidden = true;
+      document.body.appendChild(editBar);
     }
     // restore=false when something else opened a dialog while we were editing:
     // stacking SETTINGS back on top of it would show two.
@@ -181,7 +261,7 @@ const DockLayout = (function () {
       }
       if (editing && !was) { ensureDone(); hideDialogs(); }
       if (!editing && was) { if (restore === false) shown = null; else restoreDialogs(); }
-      if (doneBtn) doneBtn.hidden = !editing;
+      if (editBar) { editBar.hidden = !editing; if (editing) paintBar(); }
       const btn = $("pm-dock-reposition");
       if (btn) {
         btn.setAttribute("aria-pressed", editing ? "true" : "false");
@@ -225,10 +305,29 @@ const DockLayout = (function () {
       host.insertBefore(reset, tip.nextSibling);
     })();
 
+    // BUTTON SHAPE row, injected under BUTTON OPACITY (the shell's node count is
+    // at its ceiling, so new SETTINGS chrome is built here, like REPOSITION).
+    (function ensureShapeRow() {
+      if (typeof SettingRow === "undefined" || !SettingRow.build || !SettingRow.wire || typeof document === "undefined") return;
+      if (!$("pm-btnshape")) {
+        const opacity = $("pm-btnopacity");
+        const after = opacity && opacity.closest ? opacity.closest(".tune-row") : null;
+        if (!after || !after.parentNode) return;
+        const built = SettingRow.build("pm-btnshape", "BUTTON SHAPE", SHAPES);
+        const note = document.createElement("p");
+        note.className = "adv-help";
+        note.id = "pm-btnshape-help";
+        note.textContent = "The corners of the pedals, arrows and race buttons. AUTO keeps round taps with squircle pedals. Tap REPOSITION TOUCH CONTROLS to change size and shape on the race screen.";
+        after.parentNode.insertBefore(built.row, after.nextSibling);
+        after.parentNode.insertBefore(note, built.row.nextSibling);
+      }
+      SettingRow.wire("pm-btnshape", { values: SHAPES, read: () => shape, write: (v) => setShape(v) });
+    })();
+
     const repoBtn = $("pm-dock-reposition");
     if (repoBtn) repoBtn.onclick = () => {
       setEditing(!editing);
-      if (editing && G.announce) G.announce("Drag the touch controls. Tap DONE when finished.", 3, "coach");
+      if (editing && G.announce) G.announce("Drag, size and shape the controls, then DONE.", 3, "coach");
     };
     const resetBtn = $("pm-dock-reset");
     if (resetBtn) resetBtn.onclick = () => {
@@ -319,6 +418,10 @@ const DockLayout = (function () {
     if (store && store.subscribe) {
       store.subscribe((change) => {
         if (!change) return;
+        if (change.key === SHAPE_KEY || (Array.isArray(change.keys) && change.keys.includes(SHAPE_KEY))) {
+          const v = shapeOf(store.get(SHAPE_KEY, null));
+          if (v !== shape) setShape(v);
+        }
         const hit = (k) => k === "steerMode" || k === KEY;
         if (hit(change.key)) { bag = load(store); paint(); return; }
         if (Array.isArray(change.keys) && change.keys.some(hit)) {
@@ -336,11 +439,13 @@ const DockLayout = (function () {
       bag: () => normalize(bag),
       schemeOf,
       resetCurrent: () => { bag[schemeOf()] = emptyScheme(); save(store, bag); paint(); },
+      shape: () => shape,
+      setShape,
     };
   }
 
   return Object.freeze({
-    KEY, SCHEMES, SIDES, MAX,
-    clampXY, normalize, load, save, apply, isIdentity, emptyScheme, usablePad, create,
+    KEY, SCHEMES, SIDES, MAX, SHAPE_KEY, SHAPES,
+    clampXY, normalize, load, save, apply, isIdentity, emptyScheme, usablePad, create, shapeOf, applyShape, sizeStep,
   });
 })();

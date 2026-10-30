@@ -1,0 +1,1 @@
+Fixed: on phones the rear-view mirror renders at the game's phone pixel density (1.5x) instead of 2x, nearly halving its pixel cost; the folded mirror inset also skips the anti-aliasing pass it used to run and discard.

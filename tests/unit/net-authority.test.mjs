@@ -1036,6 +1036,8 @@ test("AI strategy publishes on phase changes, bounded cadence, and every new rec
   net.tick(11975);
   assert.equal(updates().length, 3);
   assert.equal(updates().at(-1).d.fields.tyreWear, 0.5);
+  assert.equal(updates().at(-1).d.tyreLog, undefined, "the 1 Hz refresh carries scalars only, never the stint history");
+  assert.equal(updates().at(-1).d.tyre, undefined, "…nor the fitted set, which only a phase changes");
   s.deliver(NetPlay.EV.MODEL, { ...model, epoch: "late-receiver" });
   net.tick(12000);
   const late = updates().at(-1).d;
@@ -1054,7 +1056,7 @@ test("AI strategy publishes on phase changes, bounded cadence, and every new rec
   assert.equal(updates().length, 6, "a new pending compound publishes before the one-second deadline");
   ai.compoundShortAtFinish = true; net.tick(12075);
   assert.equal(updates().length, 7, "the flag-time compliance snapshot is an immediate phase change");
-  assert.equal(logReads, 7, "history is copied exactly once per publication");
+  assert.equal(logReads, 6, "history is copied once per FULL publication (phase or epoch), never on the 1 Hz refresh");
   net.stop(); gn.stop();
 });
 
@@ -1833,4 +1835,68 @@ test("QUALI and QLIVE reject a rival driverId even with the sender's code", () =
   assert.deepEqual(G.caughtQLive, []);
   s.deliver("quali", { driverId: "drv1", code, t: 63 });
   assert.equal(G.caughtQuali.length, 1);
+});
+
+test("a 20-car field's strategy wire: scalars on the 1 Hz refresh, one JSON.stringify per broadcast (perf hunt 6)", (t) => {
+  const G = poseG(20); G.track.def = { id: "monza" };
+  const tyre = { id: "medium", code: "M", tread: 0, life: 0.9, colour: [0.9, 0.8, 0] };
+  const log = [{ code: "S", id: "soft", colour: [1, 0, 0], lap0: 0, lap1: 12 }, { code: "M", id: "medium", colour: [0.9, 0.8, 0], lap0: 12, lap1: null }];
+  for (const c of G.cars) Object.assign(c, { tyre, tyreLog: log, tyreStints: 1, tyreWear: 0.3, pitState: "none" });
+  const net = NetPlay.create(G);
+  const peers = [stateSession(), stateSession(), stateSession()];
+  const sendEvent0 = peers[0].sendEvent;
+  peers[0].sentJson = [];
+  peers[0].sendEvent = function (t, d, json) { if (t === NetPlay.EV.STRATEGY) this.sentJson.push(json); return sendEvent0.call(this, t, d, json); };
+  net.start({ role: "host", session: peers[0], sessions: peers.map((session, i) => ({ id: "p" + i, session })) });
+  const model = peers[0].sent.find((e) => e.t === NetPlay.EV.MODEL).d;
+  peers.forEach((p, i) => p.deliver(NetPlay.EV.MODEL, { ...model, epoch: "r" + i }));
+  const realStringify = JSON.stringify;
+  let stringifies = 0, broadcasts = 0;
+  JSON.stringify = function (...a) { stringifies++; return realStringify.apply(this, a); };
+  const before = peers[0].sent.length;
+  try {
+    for (let now = 20000; now < 80000; now += 50) {    // a fake 60 s of racing, wear moving
+      for (const c of G.cars) c.tyreWear += 1e-4;
+      net.tick(now);
+    }
+  } finally { JSON.stringify = realStringify; }
+  const strat = peers[0].sent.slice(before).filter((e) => e.t === NetPlay.EV.STRATEGY);
+  broadcasts = strat.length;
+  const perWire = new Map();
+  for (const e of strat) perWire.set(e.d.wire, (perWire.get(e.d.wire) || 0) + 1);
+  assert.ok(perWire.size >= 15, `the field publishes (${perWire.size} cars)`);
+  for (const [wire, n] of perWire) assert.ok(n >= 58 && n <= 62, `car ${wire} still refreshes once a second (${n} in 60 s)`);
+  const bytes = strat.reduce((n, e) => n + realStringify({ t: e.t, d: e.d }).length, 0);
+  const full = strat.reduce((n, e) => n + realStringify({ t: e.t, d: { ...NetPlay.strategyState(G.cars[e.d.wire] || G.cars[0], e.d.wire, "monza"), epoch: e.d.epoch } }).length, 0);
+  t.diagnostic(`strategy B/s per receiver: ${Math.round(bytes / 60)} (full every refresh: ${Math.round(full / 60)}); ${broadcasts} broadcasts, ${stringifies} stringify calls, ${peers.length} receivers`);
+  assert.ok(bytes < full * 0.6, `scalar refresh: ${Math.round(bytes / 60)} B/s vs ${Math.round(full / 60)} B/s full, per receiver`);
+  // Per broadcast: one for the payload and one per receiver's epoch string — never one whole payload per receiver.
+  assert.ok(stringifies <= broadcasts * (1 + peers.length) + 200, `JSON.stringify calls ${stringifies} for ${broadcasts} broadcasts to ${peers.length} receivers`);
+  const sample = strat.at(-1);
+  const wireJson = peers[0].sentJson.at(-1);
+  assert.equal(typeof wireJson, "string", "the broadcast hands each session the pre-serialised payload");
+  assert.deepEqual(JSON.parse(wireJson), JSON.parse(realStringify(sample.d)), "the spliced payload parses to the same event");
+  net.stop();
+});
+
+test("a receiver that arrives late still gets a relayed human's full tyre state, not only its scalar echo (perf hunt 6 review)", () => {
+  const G = poseG(4); G.track.def = { id: "monza" };
+  const net = NetPlay.create(G), a = stateSession(), b = stateSession();
+  net.start({ role: "host", session: a, sessions: [{ id: "a", session: a }, { id: "b", session: b }] });
+  const model = a.sent.find((e) => e.t === NetPlay.EV.MODEL).d;
+  a.deliver(NetPlay.EV.MODEL, { ...model, epoch: "peer-a" });
+  net.tick(10000);
+  const tyre = { id: "soft", code: "S", tread: 0, life: 0.8, colour: [1, 0, 0] };
+  const log = [{ code: "M", id: "medium", colour: [0.9, 0.8, 0], lap0: 0, lap1: 9 }, { code: "S", id: "soft", colour: [1, 0, 0], lap0: 9, lap1: null }];
+  const full = { ...NetPlay.strategyState({ tyre, tyreLog: log, tyreStints: 2, tyreWear: 0.2 }, 1, "monza"), epoch: model.epoch };
+  a.deliver(NetPlay.EV.STRATEGY, full);                                             // guest A's phase publish (B not here yet)
+  a.deliver(NetPlay.EV.STRATEGY, { ...NetPlay.strategyState({ tyre, tyreLog: log, tyreStints: 2, tyreWear: 0.3 }, 1, "monza", true), epoch: model.epoch });
+  assert.equal(G.cars[1].tyreLog.length, 2, "the host applied A's history");
+  b.deliver(NetPlay.EV.MODEL, { ...model, epoch: "peer-b" });                       // B's epoch lands mid-stint
+  net.tick(10050);
+  const toB = b.sent.filter((e) => e.t === NetPlay.EV.STRATEGY && e.d.wire === 1 && e.d.epoch === "peer-b");
+  assert.ok(toB.some((e) => Array.isArray(e.d.tyreLog) && e.d.tyreLog.length === 2 && e.d.tyre && e.d.tyre.id === "soft"),
+    "B receives A's fitted set and stint history with its own epoch");
+  assert.equal(toB.at(-1).d.fields.tyreWear, 0.3, "…at A's latest wear");
+  net.stop();
 });

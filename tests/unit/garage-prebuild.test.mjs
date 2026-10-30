@@ -446,7 +446,7 @@ function sceneHarness(textures = false, { crew = false } = {}) {
   });
   for (const f of ["js/track/core/geom.js", "js/track/core/pit.js", "js/garage/scene-prims.js", "js/garage/scene-equipment.js",
                    "js/garage/scene-live.js", "js/garage/scene-dress.js", "js/garage/experience.js",
-                   ...(crew ? ["js/garage/scene-crew.js"] : []), "js/garage/scene.js"])
+                   ...(crew ? ["js/garage/crew-draw.js", "js/garage/scene-crew.js"] : []), "js/garage/scene.js"])
     vm.runInContext(read(f), ctx, { filename: absSrc(f) });
   const GarageScene = vm.runInContext("GarageScene", ctx);
   GarageScene.init(gfx);

@@ -200,7 +200,20 @@ const HudRelative = (function () {
   const VOLATILE_CLS = /(^|\s)(ot|ax)-\S*/g;
   /** Everything fitRows reads that is not layout itself: occupied rows, viewport,
    *  HUD scale, the body's mode classes and each clearance control's hidden/class. */
+  // Each clearance control's hidden/class. hud.js's phone stamp keys on it too (aero or the
+  // radio card toggling must re-probe), so it stays live while REL itself is off.
+  function clearSig() {
+    let k = "";
+    if (doc.getElementById) for (let i = 0; i < CLEAR_IDS.length; i++) {
+      const c = doc.getElementById(CLEAR_IDS[i]);
+      k += "|" + (c ? (c.hidden ? "h" : "v") + String(c.className || "").replace(VOLATILE_CLS, "") : "-");
+    }
+    return k;
+  }
   function fitKey() {
+    // Off (the default) the card is hidden and fits nothing: the rows, viewport, scale and body
+    // class are skipped, and refit() no longer adds a second pass per phone tick (perf hunt 6).
+    if (!isOn()) return "off" + clearSig();
     let k = "";
     for (let i = 0; i < ROWS; i++) k += rows[i].car ? "1" : "0";
     const w = doc.defaultView || (typeof window !== "undefined" ? window : null);
@@ -213,11 +226,7 @@ const HudRelative = (function () {
     // The MOVE & SIZE set is an attribute (body[data-hl-set]): HELMET → chase moves GEAR / SPEED
     // without a class change, and the 1 Hz net alone left REL slid for the helmet's chips.
     k += "|" + (doc.body && doc.body.getAttribute ? doc.body.getAttribute("data-hl-set") || "" : "");
-    if (doc.getElementById) for (let i = 0; i < CLEAR_IDS.length; i++) {
-      const c = doc.getElementById(CLEAR_IDS[i]);
-      k += "|" + (c ? (c.hidden ? "h" : "v") + String(c.className || "").replace(VOLATILE_CLS, "") : "-");
-    }
-    return k;
+    return k + clearSig();
   }
   // Also clear the bottom cluster / radio card: at HUD 150% REL sat on GEAR /
   // OT / announce (phoneL broadcast survey) while only the pedals were cleared.
@@ -362,6 +371,6 @@ const HudRelative = (function () {
   }
 
   /** Re-fit only when something fitKey sees moved since the last fit (or when forced). */
-  function refit(force) { if (force || fitKey() !== fitSeen) fitRows(); }
+  function refit(force) { if (isOn() && (force || fitKey() !== fitSeen)) fitRows(); }
   return Object.freeze({ ROWS, SELF, relDist, lapsApart, select, fmtGap, lapText, rowLabel, tick, fitRows, refit, fitKey, rows });
 })();

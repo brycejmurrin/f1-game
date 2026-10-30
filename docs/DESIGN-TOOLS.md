@@ -144,6 +144,28 @@ eye / aim / vertical fov, captions as timeline markers) and, with `--render`,
 Edit there, then port the change into `arrival.js`; the parked-pose and
 sampler contracts are `tests/unit/garage-arrival.test.mjs`.
 
+## Pit crew body
+
+Every crew figure (the articulated guides and Blender crew clips, the posed
+looks, the classic mechanics and the in-race pit stop) is built from
+`js/garage/crew-draw.js`, whose ring table `tools/gen/blender/crew-body.py`
+authors:
+
+```sh
+blender -b --factory-startup --python tools/gen/blender/crew-body.py -- \
+    --output-dir artifacts/crew-body --render --write-runtime
+```
+
+Each part is a loft of superellipse rings `[t, rx, rz, cx, cz, slot]` (slots:
+overall, accent, trim, lower leg, visor, glove, sole), so the exported rings
+are the mesh and one table dresses every team. The script asserts the figure
+against ANSUR II male medians (computed from the measured public CSV,
+https://www.openlab.psu.edu/ansur2/) plus overall bulk, refuses an
+out-of-range part, and with `--render` writes front / three-quarter / side /
+back Workbench stills and a sheet. Part frames and lengths are
+`GarageCrewMotion`'s (THIGH 0.43, SHIN 0.44, ARM 0.30), so motion clips are
+unaffected; the contract is in `tests/unit/garage-crew.test.mjs`.
+
 ## Validate and optimize glTF
 
 ```sh

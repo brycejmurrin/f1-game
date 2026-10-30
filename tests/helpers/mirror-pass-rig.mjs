@@ -7,7 +7,7 @@ import { absSrc } from "./abs-src.mjs";
 
 export const read = (rel) => fs.readFileSync(new URL(`../../${rel}`, import.meta.url), "utf8");
 
-export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null, rankLights = false } = {}) {
+export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier = 0, autoTier, userTier, isMobile = false, throwInWorld = false, mobile = false, boxes = {}, docks = {}, bc = false, pipMode, clock = { t: 0 }, xr = null, rankLights = false, dpr } = {}) {
   const writes = { cls: 0, prop: 0 };   // <body> class toggles and custom-property writes
   const stored = {};
   if (mode) stored.hudMirror = mode;
@@ -27,6 +27,7 @@ export function boot({ mode, cam = "cockpit", soft = false, state = "race", tier
   const canvasEl = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 1280, height: 720 }) };
   const ctx = vm.createContext({
     Math, Float32Array, Array, Object, Number, Infinity, innerWidth: 1280,
+    ...(dpr ? { devicePixelRatio: dpr } : {}),
     setTimeout: (fn, ms) => { const id = ++timerId; timers.set(id, { fn, ms }); return id; }, clearTimeout: id => timers.delete(id),
     document: {
       getElementById: (id) => (id === "hud-mirror" ? frameEl : id === "hud-mirror-chip" ? chipEl : id === "game" ? canvasEl : id === "bc-pip" ? pipEl

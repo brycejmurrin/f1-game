@@ -44,11 +44,11 @@ const DrivingLineOpts = (function () {
 
   function initUI() {
     if (typeof SettingRow === "undefined") return;
-    // LINE COLOUR — F1's green/amber/red puts the two ends of the speed cue on
-    // the pair red-green deficiencies cannot separate; COLOUR-BLIND swaps in
-    // the IBM safe triple. Every backend's shader mixes on one flag.
+    // LINE COLOUR — the main (on-pace) colour, F1 GREEN … PINK, plus
+    // COLOUR-BLIND (the IBM safe triple). The ids, labels and order are
+    // DrivingLine.PALETTES, which also carries the colours and the why.
     SettingRow.wire("pm-linecolor", {
-      values: [["f1", "F1"], ["safe", "COLOUR-BLIND"]],
+      values: DrivingLine.PALETTES.map((p) => [p.id, p.label]),
       read: () => DrivingLine.palette(),
       write: (v) => { DrivingLine.setPalette(v); store.set(K_PALETTE, DrivingLine.palette()); },
     });

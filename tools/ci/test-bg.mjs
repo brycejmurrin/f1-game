@@ -24,6 +24,7 @@
  *   node tools/ci/test-bg.mjs --stop --sweep        # ...and hunt orphans whose supervisor is already dead
  *   node tools/ci/test-bg.mjs --spec tests/specs/<file>.spec.js   # ONE spec: `npm test -- <file>` under the same
  *                                                   #   one-run lock, loadavg gate and log (artifacts/logs/spec-x.log)
+ *   --grep <re>     Playwright --grep: run only matching test titles (browser groups and --spec)
  *   --workers <n>   Playwright workers per group (default: env WORKERS, else 1 on <= 4 cores, 2 above)
  *   --force | --last-failed | --keep-going | --parallel   (see the sections below)
  *   An unknown flag prints this usage and exits 2 (tools/lib/cli-args.mjs strictFlags).
@@ -73,6 +74,9 @@ export function workerBudget({ workers, env = process.env, system = os } = {}) {
 const initialBudget = workerBudget();
 const CORES = initialBudget.cores;
 let WORKERS = initialBudget.workers;
+/** `--grep <pattern>`: forwarded to Playwright (single-quoted for the `sh -c` that starts the run). */
+let GREP = null;
+export const shQuote = (v) => `'${String(v).replace(/'/g, `'\\''`)}'`;
 
 // THE CAP EXISTS BECAUSE OVERSUBSCRIPTION DOES NOT LOOK LIKE OVERSUBSCRIPTION.
 // Every Playwright worker drives a SwiftShader Chromium, so the real browser
@@ -244,7 +248,7 @@ function waitDeadlineFromMin(waitTimeoutMin) {
 }
 
 export const KNOWN_FLAGS = ["--timeout", "--workers", "--spec", "--force", "--last-failed", "--parallel", "--keep-going",
-  "--sweep", "--status", "--stop", "--tail", "--wait", "--help"];
+  "--grep", "--sweep", "--status", "--stop", "--tail", "--wait", "--help"];
 /** One spec runs as a pseudo-group `spec-<basename>` so it shares the lock, the registry and the log layout. */
 export const specGroupName = (file) => "spec-" + path.basename(String(file)).replace(/\.spec\.[cm]?js$/, "").replace(/[^a-z0-9._-]/gi, "_");
 /** Parse CLI flags shared by --wait and group starts. `--timeout` is minutes (AGENTS.md).
@@ -254,13 +258,15 @@ export function parseTestBgArgv(argv) {
   let workers = null;
   const groups = [];
   const specs = [];
+  let grep = null;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    const kv = /^(--workers|--spec)(?:=(.*))?$/.exec(a);
+    const kv = /^(--workers|--spec|--grep)(?:=(.*))?$/.exec(a);
     if (kv) {
       const v = kv[2] !== undefined ? kv[2] : argv[++i];
       if (v == null || v === "" || v.startsWith("-")) throw new Error(`${kv[1]} requires a value`);
-      if (kv[1] === "--spec") specs.push(v);
+      if (kv[1] === "--grep") grep = v;
+      else if (kv[1] === "--spec") specs.push(v);
       else if (!(Number(v) >= 1 && Number.isInteger(Number(v)))) throw new Error("--workers requires a positive integer");
       else workers = String(Number(v));
       continue;
@@ -287,6 +293,7 @@ export function parseTestBgArgv(argv) {
   return {
     waitTimeoutMin,
     workers,
+    grep,
     specs,
     groups: [...groups, ...specs.map(specGroupName)],
     force: argv.includes("--force"),
@@ -475,7 +482,7 @@ function spawnGroup(group, pkg, { lastFailed = false } = {}) {
   // FILE PATH, so only the browser groups get it.
   const isBrowser = /run-playwright/.test(pkg.scripts[`test:${group}`]);
   const spec = SPEC_RUNS[group];
-  const forward = isBrowser ? ["--", ...(spec ? [JSON.stringify(spec)] : []), `--workers=${WORKERS}`, ...(lastRun ? ["--last-failed"] : [])] : [];
+  const forward = isBrowser ? ["--", ...(spec ? [JSON.stringify(spec)] : []), `--workers=${WORKERS}`, ...(GREP ? [`--grep=${shQuote(GREP)}`] : []), ...(lastRun ? ["--last-failed"] : [])] : [];
   // detached + ignored stdin: the run must outlive this process and must
   // never block waiting for a terminal that is no longer attached.
   // The `= bg exit N` trailer is the terminal line for groups that print
@@ -774,6 +781,7 @@ if (isMain) {
     if (!fs.existsSync(path.resolve(ROOT, f))) { console.error(`[test-bg] --spec: no such file ${f}`); process.exit(2); }
     SPEC_RUNS[specGroupName(f)] = f;
   }
+  GREP = parsed.grep;
   if (parsed.workers) { WORKERS = workerBudget({ workers: parsed.workers }).workers; PARALLEL_MAX = Math.max(1, Math.floor(CORES / (+WORKERS || 2))); }
 }
 const { waitTimeoutMin, groups, force, lastFailed, parallel } = parsed || {};

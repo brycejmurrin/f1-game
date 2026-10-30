@@ -48,7 +48,7 @@ const CANON = [
   ["never cancel", /NEVER CANCEL AN ACTIONS RUN/, "AGENTS.md"],
   ["commit in two calls", /Commit in two calls: stage in its own command/, "AGENTS.md"],
   ["push without a pipe", /no output pipe/i, "AGENTS.md"],
-  ["no timers", /No timers, no shell-poll loops, no standby wakes/i, "AGENTS.md"],
+  ["no timers", /No sleep or shell-poll loops and no standby wakes/i, "AGENTS.md"],
   ["dirty ready flip", /ready flip on a (?:dirty PR|CONFLICTING\/DIRTY head) starts no CI/i, "AGENTS.md"],
   ["re-subscribe after ready", /call `subscribe_pr_activity` again/i, "AGENTS.md"],
   ["first claimant fixes", /the first claimant fixes, the rest wait/i, "AGENTS.md"],

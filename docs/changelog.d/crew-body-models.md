@@ -1,0 +1,1 @@
+Improved: The pit crew has a new, more realistic body, used in the garage and at your pit stops. Proportions come from real body-measurement data. Crew members wear one-piece team overalls with shoulder epaulettes, side stripes and a chest patch. They have full-face helmets with a chin bar and visor, gauntlet gloves, knee pads and low pit shoes.

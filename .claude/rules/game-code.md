@@ -13,6 +13,11 @@ paths:
 - No ES modules — every file is a `"use strict"` IIFE assigning one global (sole exception: the vendored
   three.js island). New file: IIFE + `tools/manifest.cjs` entry (+ HARD_EDGES pair if eval-time destructured)
   + `node tools/gen/gen-shell.mjs`.
+- NEW MODULE / GLOBAL checklist (`node tools/ci/pick-tests.mjs` prints it when the diff adds one): the eager shell is at its
+  budget (`boot-load-budget.test.mjs`), so put the file in a LAZY list of `tools/manifest.cjs`, not the eager one; add VM
+  stubs where `race-session-lazy`, `results-cam` and `ui-sheets-audit` load modules by hand; update `types/game-ctx.d.ts`,
+  `docs/agent-index.json` (`npm run gen`) and mind the `agentHelp` size ratchet; a new `tools/perf/*.mjs` needs its
+  `docs/agent-output/policies.json` entry. Skipping one costs a CI cycle each (#4108, #4188).
 - Circuit edits go in `js/circuits/<id>.js`; engine changes in `js/track/`.
 - `tests/data/ratchets.json` ratchets game.js and the other big modules — pay for every added line. The commit
   hook absorbs ≤ 20 lines of growth silently, ≤ 40 with a `Ratchet-Reason:` commit trailer
