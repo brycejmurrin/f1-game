@@ -126,9 +126,11 @@ const PauseOpts = (function () {
 
   // ── CONFIRM QUIT / RESTART ─────────────────────────────────────────────
   let armed = null;   // { btn, text, aria, at, t } — at is the first press's event time
-  // After the wall-clock timer reverts the label, a late-queued second tap can still
-  // confirm when its timeStamp falls inside ARM_MS of the first (GPU/input lag).
-  let lastArm = null; // { btn, at } — set when the timer disarms, cleared on commit / fresh arm
+  // After the wall-clock timer reverts the label, the question stays open.
+  // Chrome stamps event.timeStamp when the handler runs, not when the player
+  // pressed, so a second tap queued behind a stalled renderer is already past
+  // ARM_MS by the time it arrives (#4232 kept that cap and the tap re-armed).
+  let lastArm = null; // { btn, at } — set when the timer disarms, cleared on commit / fresh arm / card hide
   function pressTime(e) {
     if (e && e.timeStamp > 0) return e.timeStamp;
     if (typeof performance !== "undefined" && performance.now) return performance.now();
@@ -190,12 +192,13 @@ const PauseOpts = (function () {
     const tNow = pressTime(e);
     const at = armAt(btn);
     const age = at != null ? tNow - at : Infinity;
-    // Event-time window: while visually armed, or after the timer reverted the
-    // label but a late-queued tap still carries a timeStamp inside ARM_MS.
-    const live = at != null && age <= ARM_MS && (
-      !!(armed && armed.btn === btn)
-      || !!(lastArm && lastArm.btn === btn && e.timeStamp > 0)
-    );
+    // A question that is still showing TAP AGAIN expires at ARM_MS, so a
+    // throttled timer cannot confirm a tap made long after the player looked
+    // away. Once the timer has reverted the label, lastArm has no age cap:
+    // the next real press on that button is the confirm.
+    const armedLive = !!(armed && armed.btn === btn) && age <= ARM_MS;
+    const retainedLive = !!(lastArm && lastArm.btn === btn && e.timeStamp > 0);
+    const live = at != null && (armedLive || retainedLive);
     // Keyboard activation (detail 0) and a script's el.click() (untrusted) are
     // deliberate; only a fast pointer repeat is the accidental double tap.
     const ghost = live && e.isTrusted && e.detail !== 0 && age < ARM_MIN_MS;

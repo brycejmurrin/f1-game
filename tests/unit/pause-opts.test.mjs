@@ -390,6 +390,35 @@ test("late-handled taps: event timeStamp confirms after input lag; ghost and exp
   }
 });
 
+test("a tap delivered after the arm timer still confirms; a ghost does not re-arm the clock", () => {
+  // Chrome's event.timeStamp is the handling time. A second press the player
+  // made inside the window can run after the 5s revert, with a stamp past
+  // ARM_MS. That press is the confirm. A 150 ms ghost in the same series is
+  // not, and it must not move the arm's clock (the 800 ms tap then confirms).
+  const tap = { isTrusted: true, detail: 1 };
+  const TS0 = 50_000;
+  {
+    const { press, handled, quit, advance, runTimers, M } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    advance(M.ARM_MS + 3000);
+    runTimers();
+    assert.equal(quit.textContent, "QUIT TO MENU");
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 150 }).stopped, "a ghost after the revert is still swallowed");
+    assert.deepEqual(handled, []);
+    assert.equal(quit.textContent, "QUIT TO MENU", "the ghost does not re-arm");
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + M.ARM_MS + 3000 }).stopped);
+    assert.deepEqual(handled, ["pm-quit"]);
+  }
+  {
+    const { press, handled, quit } = load();
+    press(quit, { ...tap, timeStamp: TS0 });
+    assert.ok(press(quit, { ...tap, timeStamp: TS0 + 120 }).stopped);
+    assert.equal(quit.textContent, "TAP AGAIN");
+    assert.ok(!press(quit, { ...tap, timeStamp: TS0 + 800 }).stopped, "800 ms after the arm confirms");
+    assert.deepEqual(handled, ["pm-quit"]);
+  }
+});
+
 test("js/game.js keeps its handlers and the multiplayer restart guard untouched", () => {
   assert.match(GAME, /\$\("pm-quit"\)\.onclick = \(\) => quitToMenu\(\);/);
   assert.match(GAME, /\$\("pm-restart"\)\.disabled = !!\(netPlay\.active\(\) \|\| qualiNet\.hasArmed\(\)\)/);
