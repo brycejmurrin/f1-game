@@ -1611,7 +1611,7 @@ test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, t
       const cfg = Arrival.settings({ angle: id, enterCrew: 'marshal', leaveCrew: 'check', homeCrew: 'service', result: 'dnf', sway: 0 });
       const end = Arrival.duration(cfg, dir);
       for (let t = 2.5; t < end; t += 0.25) {
-        const p = fn(t, cfg, true), s = Arrival.rigSample(id, dir, t / end, p.side);
+        const p = fn(t, cfg, true), s = Arrival.rigSample(id, dir, Arrival.rigU(cfg, dir, t), p.side);
         assert.equal(p.camera, id);
         assert.deepEqual(p.eye.map((v) => +v.toFixed(6)), s.eye.map((v) => +v.toFixed(6)), `${id} ${dir} t${t}: the rig's eye`);
         assert.ok(Math.abs(p.fov - s.fov) < 1e-9, 'the rig\'s lens at FIELD OF VIEW 54');
@@ -1622,6 +1622,25 @@ test('BLENDER rigs: GARAGE ANGLE offers them; the eye and lens follow the rig, t
     }
     assert.ok(Arrival.angleMap(id).includes('<polyline'), id + ': the map draws the rig\'s path');
   }
-  assert.ok(Math.abs(Arrival.pose(5, Arrival.settings({ angle: 'crane', fov: 64 })).fov - Arrival.rigSample('crane', 'in', 5 / Arrival.duration(Arrival.settings({ angle: 'crane' }), 'in')).fov - 10) < 1e-6, 'FIELD OF VIEW offsets the rig lens');
+  assert.ok(Math.abs(Arrival.pose(5, Arrival.settings({ angle: 'crane', fov: 64 })).fov - Arrival.rigSample('crane', 'in', Arrival.rigU(Arrival.settings({ angle: 'crane' }), 'in', 5)).fov - 10) < 1e-6, 'FIELD OF VIEW offsets the rig lens');
+});
+
+test('BLENDER rigs keep their beats: a slow RETIRED push or a long shutter shot meets each key on time', () => {
+  // The keys were authored on crew "current", a win; every result, crew and timing maps its beats onto those.
+  const auth = Arrival.settings({ angle: 'left', enterCrew: 'current', homeCrew: 'current', result: 'win' });
+  for (const dir of ['in', 'home']) {
+    const A = Arrival.timeline(auth, dir), aEnd = Arrival.duration(auth, dir);
+    const beats = (T, end) => [T.door, T.door + T.lane, T.door + T.lane + T.pause, T.park, end];
+    const want = beats(A, aEnd).map((b) => b / aEnd);
+    for (const cfg of [Arrival.settings({ angle: 'dolly', result: 'dnf', homeCrew: 'auto' }), Arrival.settings({ angle: 'dolly', door: 3.5, carSpeed: 0.5, hold: 1.2, result: 'points' }), auth]) {
+      const T = Arrival.timeline(cfg, dir), end = Arrival.duration(cfg, dir);
+      beats(T, end).forEach((b, i) => assert.ok(Math.abs(Arrival.rigU(cfg, dir, b) - want[i]) < 1e-9, `${dir} ${cfg.result} beat ${i}`));
+      let last = -1;
+      for (let t = 0; t <= end; t += 0.05) { const u = Arrival.rigU(cfg, dir, t); assert.ok(u >= last - 1e-12 && u <= 1, 'u never runs backwards'); last = u; }
+    }
+    // The authoring timing itself is untouched: u = t / duration.
+    for (let t = 0; t <= aEnd; t += 0.37) assert.ok(Math.abs(Arrival.rigU(auth, dir, t) - t / aEnd) < 1e-9, `${dir} t${t}: authored timing is the identity`);
+  }
+  assert.equal(Arrival.rigU(Arrival.settings({}), 'out', 3, 6), 0.5, 'the drive-out keeps t / duration');
 });
 

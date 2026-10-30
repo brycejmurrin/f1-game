@@ -100,7 +100,9 @@ def rig_dolly(d, b):
     if d == 'out':
         return [(0, (2.9, 1.2, -1.2), 54), (b['go'], (2.9, 1.2, -1.0), 54),
                 (b['atDoor'] + 0.6, (2.9, 1.25, 5.6), 58), (b['end'], (2.8, 1.25, 5.7), 58)]
-    return [(0, (3.0, 1.25, 5.5), 58), (b['back'], (3.0, 1.25, 5.4), 58),
+    # Inside the aperture (half-width 2.7): at x 3.0 the jamb covered half the
+    # frame while a pushed retirement crept along the lane (2026-10-30 capture).
+    return [(0, (1.7, 1.25, 5.3), 58), (b['back'], (2.0, 1.25, 4.9), 58),
             (b['park'], (2.9, 1.2, 0.4), 54), (b['end'], (2.9, 1.2, 0.1), 54)]
 
 def rig_rear(d, b):
