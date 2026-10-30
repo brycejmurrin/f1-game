@@ -11,8 +11,8 @@ branch, and this table links them.
 
 | lane | issue | scope | owner | PR | status |
 |---|---|---|---|---|---|
-| A | #4258 | **priority: POS ink under HIGH CONTRAST** (below); contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | session_01BEw9UK2vGqGU75NMHYfS8K (Opus) | #4300, #4321 | #4321 (HC POS fix) `land`; #4300 capped 18:03Z, `needs-owner` |
-| B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | session_01BEw9UHQdfwniLm5HtYjdCi (Sonnet) | #4303 | `land` |
+| A | #4258 | **priority: POS ink under HIGH CONTRAST** (below); contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | session_01BEw9UK2vGqGU75NMHYfS8K (Opus) | #4300, #4321 | #4321 (HC POS fix) **merged 20:16Z**; #4300 capped 18:03Z, `needs-owner` |
+| B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | session_01BEw9UHQdfwniLm5HtYjdCi (Sonnet) | #4303 | **merged** |
 | C | #4257 | ratchet tooling: a topic branch can lower a slack-0 tree metric | Bryce's own session (claimed 17:00Z, first claimant) | #4305 | not launched here |
 | D | #4281 | career header red ink, disclaimer border, garage tab strip | session_01BEw9UHhUxAcQ1XuHhx3LaL (Sonnet) | #4315 | `land` |
 | D2 | #4282 | layout-audit: the 8 harness-timeout cells | unassigned | — | `ready` since #4225 merged; waits for quota |
@@ -68,3 +68,9 @@ branch, and this table links them.
   was the stale base: the tip carries #4277's 8.25 MB budget. On `84b90493`, Structural guards and Selected specs
   were green and ready-gate passed; it is ready with `land`. #4300 still needs: a sync, the after-audit
   `--diff`, `test:baseline`, and `ui-journey`/`ui-scale`.
+
+## State at the coordinator's handoff (20:20Z, 340k context)
+Merged: #4303 (lane B), #4321 (HIGH CONTRAST POS fix). Has `land`: #4315 (lane D), #4305 (#4257), and the
+Codex lanes #4295 / #4297. `needs-owner`, waiting for the dispatcher while quota reads `allowed_warning`:
+#4300 (lane A tokens: sync, after-audit `--diff`, `test:baseline`, `ui-journey`/`ui-scale`; then `--upgrade` once
+#4305 merges) and #4299 (lane E: sync, CI, land). `ready`: #4282 (D2, layout-audit timeouts).
