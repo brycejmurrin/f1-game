@@ -17540,7 +17540,8 @@
       ],
       "*": [
         "tests/specs/ui-button-touch.spec.js",
-        "tests/unit/global-registry.test.mjs"
+        "tests/unit/global-registry.test.mjs",
+        "tests/unit/ui-reset-tap-floor.test.mjs"
       ]
     },
     "js/ui/live-region.js": {
