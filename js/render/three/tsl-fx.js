@@ -322,6 +322,7 @@
         if (fi >= 0) _fxMats.splice(fi, 1);
         n++;
       }
+      if (_glassMat && _glassMat.__tlxTex === tex) { _evicted.push(_glassMat); _glassMat = null; n++; }   // the mirror target (#4219)
       return n;
     }
     function decalMaterialFor(tex, glow) {

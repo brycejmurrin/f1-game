@@ -5926,6 +5926,9 @@ const WGX = (function () {
       mirrorState: () => ({ ready: !!mirTex && _mirRenders > 0, dead: _mirDead, w: mirW, h: mirH, hdr: true,
         renders: _mirRenders, composites: _mirComposites, inPass: _mirInPass, glass: _mirGlass, rect: _mirRect, flip: _mirFlip }),
       drawMirrorGlass,
+      // Quit-to-menu (#4219): destroy both textures and drop the composite / glass bind groups naming them
+      // (_mirrorFree; WebKit holds a destroyed texture while a bind group references it). mirrorBegin re-allocates.
+      releaseMirror() { if (_mirEncoder) return false; _mirrorFree(); return true; },
       envProbeReady() { return _envProbeLive; },
       envProbeReset,
 

@@ -1311,6 +1311,8 @@ const GLXPost = (function () {
       begin(w, h) { if (!mirrorTarget(w, h)) return false; mirActive = true; return true; },
       end() { if (!mirActive) return; mirActive = false; mirRenders++; mirrorMips(); },
       abort() { mirActive = false; },   // a pass whose begin() threw: nothing rendered, so no mip chain and no render count
+      // Quit-to-menu (#4219): free the target; the next begin() re-allocates it through mirrorTarget. Never mid-pass.
+      release() { if (mirActive) return false; mirrorFree(); return true; },
       active: () => mirActive,
       bindTarget: bindMirrorTarget,
       // Called every frame: fill the scratch, never mint an array (TLX mirrorRect does the same).
