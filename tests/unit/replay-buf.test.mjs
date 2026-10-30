@@ -10,7 +10,7 @@ import path from "path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { gameSource } from "../helpers/game-source.mjs";
+import { gameSource, symbolSource } from "../helpers/game-source.mjs";
 import { absSrc } from "../helpers/abs-src.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -332,8 +332,10 @@ test("retirement edge auto-tags; jumpLastTag seeks; scrubbing blocks settle path
   const scrubGate = game.indexOf("if (replayBuf.isScrubbing())");
   const score = game.indexOf("Career.scoreRound");
   assert.ok(scrubGate >= 0 && score > scrubGate, "scrub gate precedes career score");
-  // Ghost.flush still leads endRace (ghost.test pin); scrub return follows it.
-  assert.match(game, /function endRace\(forcedOrder\) \{\s*Ghost\.flush\(\);/);
+  // A valid completion flushes before the scrub gate; the session guard may lead.
+  const end = symbolSource("function endRace(forcedOrder)");
+  const flush = end.indexOf("Ghost.flush();"), scrub = end.indexOf("if (replayBuf.isScrubbing())");
+  assert.ok(flush >= 0 && scrub > flush, "ghost flush precedes the scrub return");
   api.endScrub();
 });
 
