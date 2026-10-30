@@ -434,3 +434,27 @@ test("drying line: on a drying road the groove is drier than off-line; soaked an
   const wet = raced("rain"); wet.G.track = { total: 5800 };
   assert.equal(wet.wa.wetnessAt(s, best), 1, "soaked: no line");
 });
+
+test("drying line: the tabled groove knots give exactly the per-call-hash groove over a full lap (perf hunt 7)", () => {
+  const { wa } = raced("rain");
+  // The pre-table grooveX, verbatim, against the real hash.
+  const ref = vm.createContext({ Math, Number, JSON, Object, Array, Error });
+  seedLog(ref);
+  for (const f of ["js/race/wx-hash.js", "js/race/rain-cells.js"]) vm.runInContext(read(f).replace(/^const\b/gm, "var"), ref, { filename: absSrc(f) });
+  const RC = ref.RainCells;
+  const grooveRef = (frac) => {
+    const n = 12, f = (frac - Math.floor(frac)) * n, i = Math.floor(f), u = f - i, k = u * u * (3 - 2 * u);
+    const h = (j) => RC.h01("groove|" + (((j % n) + n) % n)) * 2 - 1;
+    return 2.5 * (h(i) + (h(i + 1) - h(i)) * k);
+  };
+  let checked = 0;
+  for (let fi = -24; fi <= 1200; fi++) {
+    const frac = fi / 1000 + 0.0003;   // spans negative, every knot, the wrap at 1 and past it
+    for (const x of [-6, -2.2, 0, 1.1, 4]) {
+      const want = Math.exp(-(((x - grooveRef(frac)) / 2.2) ** 2));
+      assert.equal(wa.dryLine(frac, x), want, `frac ${frac} x ${x}`);
+      checked++;
+    }
+  }
+  assert.ok(checked > 6000);
+});

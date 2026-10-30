@@ -199,7 +199,7 @@ var PitLane = (function () {
     }
     function choices(c) {
       if (!G.tyres) return [];
-      const list = ownedTyres().map(o => G.tyres.optionRecord(o));
+      const list = ownedRecords(G.tyres).slice();   // a copy: the push below must not reach the memo
       const automatic = pickFor(c);
       if (automatic && !list.some(r => r.id === automatic.id)) list.push(automatic);
       return list;
@@ -1015,8 +1015,9 @@ var PitLane = (function () {
     // fast car and no strategy; one who owns a hard and a soft has a choice.
 
     /** The tyre rows this car may fit: everything, or what career says it owns. */
+    let tyreCat;   // the catalog row never moves after load: one find per session
     function ownedTyres() {
-      const cat = Parts.CATALOG.find(function (x) { return x.id === "tyres"; });
+      const cat = tyreCat || (tyreCat = Parts.CATALOG.find(function (x) { return x.id === "tyres"; }));
       const opts = (cat && cat.options) || [];
       const team = G.player && G.player.team;
       // Career.owned() is null outside a career, and null for another team's
@@ -1026,12 +1027,41 @@ var PitLane = (function () {
       return own ? opts.filter(function (o) { return own.has(o.id); }) : opts;
     }
 
+    // pickFor runs on every 10 Hz HUD tick (planInfo → nextCode → nextFor),
+    // and it built a record per owned row each time. Records are pure of their
+    // catalog row, so they are rebuilt only when the owned rows change; the
+    // pick itself is memoised per car on every input it reads. Callers never
+    // mutate the returned record (fit stores it as c.tyre, read-only).
+    const recMemo = { tyres: null, rows: null, recs: null }, pickMemo = new WeakMap();
+    function ownedRecords(tyres) {
+      const rows = ownedTyres(), m = recMemo;
+      let same = m.tyres === tyres && !!m.rows && m.rows.length === rows.length;
+      for (let i = 0; same && i < rows.length; i++) same = m.rows[i] === rows[i];
+      if (!same) { m.tyres = tyres; m.rows = rows.slice(); m.recs = rows.map(function (o) { return tyres.optionRecord(o); }); }
+      return m.recs;
+    }
     /** The set a stop should fit for this car — a TyreModel record, or null. */
     function pickFor(c) {
       const tyres = G.tyres;
       if (!tyres || !c) return null;
       const want = TyreModel.treadFor(G.raceWeather, G.trackWetness && G.trackWetness());
-      const list = ownedTyres().map(function (o) { return tyres.optionRecord(o); });
+      const list = ownedRecords(tyres), log = c.tyreLog;
+      const rule = want === 0 && twoCompoundApplies() && typeof SportingRegs !== "undefined";
+      // pitStops already counts this box; until fitting, it is THIS stint.
+      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
+      const lapsLeft = Math.max(1, lapsToFlag(c));
+      let mask = 0;   // which sets reach the flag: the only way planLaps (level, circuit, lapsTarget) enters
+      for (let i = 0; i < list.length && i < 30; i++) if (tyres.planLaps(list[i].life, G.lapsTarget) >= lapsLeft) mask |= 1 << i;
+      const logLen = rule && log ? log.length : -1, logLast = logLen > 0 ? log[logLen - 1] && log[logLen - 1].code : null;
+      let m = pickMemo.get(c);
+      if (m && list.length <= 30 && m.recs === list && m.want === want && m.rule === rule && m.log === log && m.logLen === logLen
+        && m.logLast === logLast && m.cls === cls && m.mask === mask) return m.out;
+      const out = pickUncached(c, tyres, want, list, rule, log, cls, lapsLeft);
+      if (!m) pickMemo.set(c, m = {});
+      m.recs = list; m.want = want; m.rule = rule; m.log = log; m.logLen = logLen; m.logLast = logLast; m.cls = cls; m.mask = mask; m.out = out;
+      return out;
+    }
+    function pickUncached(c, tyres, want, list, rule, log, cls, lapsLeft) {
       // TREAD FIRST, and it is not a preference. The wrong tread costs whole
       // seconds a lap and no compound choice makes that up. A career save that
       // owns no wet tyre still gets one, from the class ladder: the alternative
@@ -1039,24 +1069,21 @@ var PitLane = (function () {
       // "no recourse" docs/PHYSICS.md warned about, reintroduced by an economy.
       let right = list.filter(function (r) { return (r.tread || 0) === want; });
       if (!right.length) {
-        const cls = TyreModel.classForTread(want);
-        return cls ? tyres.classRecord(cls) : (list[0] || null);
+        const tc = TyreModel.classForTread(want);
+        return tc ? tyres.classRecord(tc) : (list[0] || null);
       }
       // THE RULE BEFORE THE STOPWATCH. A car that still owes its second dry
       // compound must not be refitted with the letter it has run: "the fastest
       // set that reaches the flag" picked a Super Soft off a Soft — "S" twice —
       // and endRace disqualified the player for obeying AUTO. Only when a set
       // of another letter is owned; a garage of one letter cannot comply.
-      const log = c.tyreLog;
-      if (want === 0 && twoCompoundApplies() && typeof SportingRegs !== "undefined" && SportingRegs.compoundShort(log)) {
+      if (rule && SportingRegs.compoundShort(log)) {
         const ran = new Set((log || []).map(function (e) { return e && e.code; }));
         const fresh = right.filter(function (r) { return !ran.has(r.code); });
         if (fresh.length) right = fresh;
       }
-      // pitStops already counts this box; until fitting, it is THIS stint.
       // …and THE PLAN'S LETTER, when it names one: the HUD and the engineer say
       // "BOX L12 H", so the crew fits an H unless the rule above forbids it.
-      const plan = c.pitPlan, cls = plan && plan.seq ? plan.seq[(c.pitStops || 0) + (c.pitState === "box" && !c.pitFitted ? 0 : 1)] : null;
       const code = cls && TyreModel.AI_CLASS[cls] ? TyreModel.AI_CLASS[cls].code : null;
       const planned = code ? right.filter(function (r) { return r.code === code; }) : [];
       if (planned.length) right = planned;
@@ -1064,9 +1091,8 @@ var PitLane = (function () {
       // flag. Softer is faster and shorter-lived, so among the sets that go the
       // distance take the shortest-lived one; if nothing reaches, take the set
       // that gets closest and accept that there is another stop coming.
-      const lapsLeft = Math.max(1, lapsToFlag(c));
       const lasts = right.filter(function (r) {
-        return G.tyres.planLaps(r.life, G.lapsTarget) >= lapsLeft;
+        return tyres.planLaps(r.life, G.lapsTarget) >= lapsLeft;
       });
       const pool = lasts.length ? lasts : right;
       return pool.reduce(function (best, r) {

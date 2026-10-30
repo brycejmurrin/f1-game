@@ -1131,6 +1131,11 @@ export function ciShardFiles(files, spec) {
   return applyFileShard(files, spec, loadTimings([TIMINGS_FILE]));
 }
 
+/** The last line of every CLI run (efficiency review finding 4): a verdict a `| tail` cannot hide behind exit 0. */
+export function closingLine(ok, nFiles, nFailed) {
+  return `= tooling-fast ${ok ? "passed" : "failed"} (${nFiles} files, ${nFailed} failed)`;
+}
+
 /** Parse argv for the CLI entry. Unknown flags throw; `--help`/`-h` set help. */
 export function parseToolingFastArgv(argv) {
   const unknown = [];
@@ -1212,6 +1217,7 @@ if (isMain) {
       // An empty diff selects zero files and the runner printed `= run passed (0 passed, 0 failed)` with exit 0: a
       // vacuous green that read as proof. Nothing was verified, so say so and fail (exit 3, distinct from a test failure).
       console.error(EMPTY_DIFF_MESSAGE);
+      console.log(closingLine(false, 0, 0));
       process.exit(3);
     }
     // #2890: selections estimated over ~2 min print the background-with-log hint (edit-loop jobs=3).
@@ -1232,6 +1238,7 @@ if (isMain) {
       console.log(`[tooling-fast] gen:check FAILED after ${sec}s - run \`npm run gen\` and commit the result`);
       console.log(`${String(g.stdout || "").trim().split("\n").slice(-15).join("\n")}\n${String(g.stderr || "").trim().split("\n").slice(-15).join("\n")}`);
       console.log("[tooling-fast] = run failed (gen:check)");
+      console.log(closingLine(false, files.length, 1));
       process.exit(1);
     }
     console.log(`[tooling-fast] gen:check ok (${sec}s)`);
@@ -1248,7 +1255,7 @@ if (isMain) {
     parsed.jobs = pick.jobs;
     console.log(`[tooling-fast] jobs=${pick.jobs} (auto: ${pick.why}; pass --jobs=N to choose)`);
   }
-  const { ok } = await runToolingFast(files, {
+  const { ok, failed: nFailed } = await runToolingFast(files, {
     jobs: parsed.jobs,
     bail: parsed.bail,
     quiet: parsed.quiet,
@@ -1257,5 +1264,6 @@ if (isMain) {
     testTimeoutMs: parsed.testTimeoutMs,
     fileTimeoutMs: parsed.fileTimeoutMs,
   });
+  console.log(closingLine(ok, files.length, nFailed));
   process.exit(ok ? 0 : 1);
 }
