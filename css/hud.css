@@ -163,6 +163,19 @@ body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: va
 body:not(.hud-prof-broadcast) #hud-pos[data-delta] { background: var(--hud-ink-dark); border-radius: var(--r-xs); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="up"] { color: var(--faster); }
 body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower); }
+/* Progress first, timing second. LAP closes the progress group with an inset
+   rule; BEST is reference ink. Paint only: keep fitHud's measured slots and
+   the player's scale/arrangement unchanged. */
+body:not(.hud-prof-broadcast) #hud-box-lap {
+  box-shadow: inset 1px 0 0 var(--plate-line), inset 0 -2px 0 var(--hud-glance);
+}
+body:not(.hud-prof-broadcast) #hud-box-lap .hud-label { color: var(--text); }
+body:not(.hud-prof-broadcast) #hud-best { color: var(--hud-glance); }
+/* An inset ring stays visible at a safe-area edge over either sky or asphalt. */
+:is(#btn-cam, #pausebtn):focus-visible {
+  outline: 3px solid var(--hud-ink-light); outline-offset: -4px;
+  box-shadow: inset 0 0 0 6px var(--hud-ink-dark);
+}
 @media (orientation: landscape) {
   body:not(.desktop) .hud-bottom { background: var(--hud-strip-bg); border-radius: var(--r-xs);
     padding: calc(var(--gap) / 3) calc(var(--gap) * 5 / 6); box-shadow: inset 0 2px 0 var(--accent); }
