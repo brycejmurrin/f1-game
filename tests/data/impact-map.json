@@ -8596,6 +8596,7 @@
     "js/input/hold-buttons.js": {
       "create": [
         "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/free-cam.test.mjs",
         "tests/unit/input-bindings.test.mjs",
@@ -9049,6 +9050,7 @@
       ],
       "*": [
         "tests/unit/a11y-pwa-pass.test.mjs",
+        "tests/unit/camera-defaults.test.mjs",
         "tests/unit/controller-profiles.test.mjs",
         "tests/unit/digital-steer.test.mjs",
         "tests/unit/free-cam.test.mjs",
@@ -17383,6 +17385,9 @@
       ]
     },
     "js/ui/hud-radio-lane.js": {
+      "announceLane": [
+        "tests/unit/hud-radio-slot.test.mjs"
+      ],
       "announceLaneTick": [
         "tests/unit/hud-feel.test.mjs"
       ],
@@ -17396,8 +17401,12 @@
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs"
       ],
+      "invalidateLaneRects": [
+        "tests/unit/hud-radio-slot.test.mjs"
+      ],
       "radioPaintedCollapse": [
-        "tests/unit/hud-metrics-layout.test.mjs"
+        "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs"
       ],
       "radioTopSlot": [
         "tests/unit/hud-metrics-layout.test.mjs"
@@ -17617,6 +17626,9 @@
       ],
       "hText": [
         "tests/unit/hud-feel.test.mjs"
+      ],
+      "hToggle": [
+        "tests/unit/hud-radio-slot.test.mjs"
       ],
       "hlKey": [
         "tests/unit/hud-dock-btn-cache.test.mjs"
@@ -17998,6 +18010,9 @@
     "js/ui/pause-opts.js": {
       "apply": [
         "tests/unit/layout-presets.test.mjs",
+        "tests/unit/pause-opts.test.mjs"
+      ],
+      "initUI": [
         "tests/unit/pause-opts.test.mjs"
       ],
       "setConfirm": [
