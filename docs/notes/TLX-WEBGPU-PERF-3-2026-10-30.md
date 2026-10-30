@@ -55,18 +55,17 @@ inert.
 
 ## 3. Spike frames: ~31 createBuffer and ~18 createBindGroup
 
-The census window holds 2 spike frames, which carry every in-window compile: 4 createTexture, 2 createSampler,
-63 createBuffer and 37 createBindGroup. Their passes are at a different scale from the rest of the window (two scene
-sizes occur in it).
+They were the compile frames. In census 41021224706 the TLX WebGPU leg had 2 spike frames (≥ 100 ms). Between them
+they held every in-window compile:
+- 2 createRenderPipeline and 2 createPipelineLayout;
+- 4 createTexture and 2 createSampler;
+- 63 createBuffer and 37 createBindGroup;
+- 2.0 MB of writeBuffer.
 
-- **Read:** a render-scale step that resizes the post targets. That reallocates the textures and rebuilds the bind
-  group of every pass whose texture changed (~15–18 passes). The newly built canvas pipeline adds its own uniform
-  buffers and bind groups (§2).
-- **Not confirmed:** run 41021224706 has no per-call stacks for buffer or bind-group creation.
-- **Evidence still to come:** the census dispatched for this PR (§5) records `compileStacks` and `spikeWork`, and is
-  the evidence for or against.
-- **Lever, if confirmed:** `apex26.tlxFixedTargets=1` (fixed physical targets, viewport-only scale changes). It is a
-  device A/B, not shipped here.
+With §2's warms (census 41100189154, below), the same leg has **0 spike frames** in 541. Outside spikes, creation runs
+at 0.64 createBuffer and 0.24 createBindGroup per frame. The largest single create site is the mirror pass's index
+attribute (`tlx.js` `mirrorEnd` → `createIndexAttribute`, 8 creates, 431 KB in the window): the merged-chunk index
+regrowth that `PERF-HUNT-8-UPLOADS-2026-10-30.md` already tracks. Nothing new to pool or prewarm here.
 
 ## 4. Submits per frame under r187
 
@@ -75,12 +74,35 @@ once per render context (three.webgpu.js r187 l.50171). `TLX-WEBGPU-PASS-AUDIT-2
 limit therefore stands: `queue.writeBuffer` executes in queue order against submits, so batching command buffers would
 reorder uniform writes. The lever is still fewer `render()` calls.
 
-## 5. Real-GPU check
+## 5. Real-GPU check: census 41100189154 against 41021224706
 
-`gpu-census.yml` on `macos-latest` (Chromium/Dawn on Metal, not WebKit): run TBD. Read its Verdict step:
-`gpuErrors` 0 on every leg, the in-window compile counts, and `spikeWork`.
+`gpu-census.yml` on `macos-latest` (montreal, helmet, api entry): Chromium/Dawn on Metal, **not WebKit**.
+- **After:** run 41100189154, head `4c32efff`. The later commits change tests only.
+- **Before:** run 41021224706, the round-2 baseline. It ran an older tip, so frame-rate and frame-count rows mix this
+  PR with what merged in between. The compile, warm and pass rows are this PR's.
+- `tools/gfx/census-verdict.mjs` exits 0 on the after run, and every leg reports `gpuErrors=0`.
 
-Device evidence is still owed. After the deploy, Bryce runs PHONE TEST › GPU TEST (`PHONE-GPU-TEST-2026-10-21.md`).
+| TLX WebGPU leg | before | after |
+|---|---|---|
+| gpuErrors (all four legs) | 0 | **0** |
+| programs built in the driven window (`mats: progs`) | 48→50 (**+2**) | 51→51 (**+0**) |
+| compile stacks in the window | createShaderModule ×2 (`tlx-post` runPass), createRenderPipeline (`tsl-sky` cacheStep) | **none** |
+| spike frames ≥ 100 ms | 2 | **0** |
+| hitch spikes / frames, worst | 23 / 315, 126.9 ms | 11 / 541, 27.9 ms |
+| race-entry warm: scene / post / total | 7,121 / 0 / 13,733 ms | **1,581 / 1,236 / 4,812 ms** |
+| draw warm drawn (post, sky) | 15, — | 15, **1** |
+| attachments stored / discarded per frame | 30.21 / 3.09 | 23.77 / 2 |
+| submits per frame | 20 | 20 (§4) |
+
+Reading the warm rows:
+- **Scene stage, 7.1 s → 1.6 s.** This is r187's parallel `compileAsync` (#34816).
+- **Post stage, which runs again.** Its 3 s budget is no longer spent on the scene stage.
+- **The three.js/WebGL2 leg** shows the same effect: warm total 15,254 → 8,194 ms.
+
+The drop in stored attachments includes the depth-only shadow maps (§1); the census does not split out the rest.
+
+**Device evidence is still owed.** After the deploy, Bryce runs PHONE TEST › GPU TEST (`PHONE-GPU-TEST-2026-10-21.md`).
+Nothing in rounds 1–3 has run on WebKit.
 
 ## Gates run
 
