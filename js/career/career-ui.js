@@ -209,7 +209,6 @@ function create(G) {
     const card = el("div", `cr-slot${s.used ? " used" : " empty"}${live ? " active" : ""}`);
     const open = el("button", "cr-slot-main");
     const modeName = s.flavour === "myteam" ? "My Team" : "Driver career";
-    open.setAttribute("aria-label", `${modeName} slot ${s.i + 1}, ${s.used ? "saved" : "empty"}${live ? ", playing" : ""}`);
     open.append(el("span", "cr-slot-n", `SLOT ${s.i + 1}${live ? " · PLAYING" : ""}`));
     if (s.used) {
       const who = s.flavour === "myteam" ? s.teamName : `${s.code} · ${s.teamName}`;
@@ -227,6 +226,14 @@ function create(G) {
         el("span", "cr-slot-meta", s.flavour === "myteam"
           ? "Start a team here" : "Start a career here"));
     }
+    // The name LEADS with the card's visible text, then says which mode: a
+    // speech-input user says what they see (WCAG 2.5.3; axe label-content-name-
+    // mismatch flagged "Driver career slot 1, empty" on Lighthouse, UI hunt 3).
+    const parts = [...open.children];
+    // A word break ends each block span but the last: textContent (which axe
+    // reads) ran "SLOT 1EMPTYStart…" together; a block's trailing space never renders.
+    for (const c of parts.slice(0, -1)) c.textContent += " ";
+    open.setAttribute("aria-label", `${parts.map((c) => c.textContent).join("")}, ${modeName}`);
     open.onclick = () => {
       if (writerRefused()) return;
       if (G.soundOn) GameAudio.uiSelect();

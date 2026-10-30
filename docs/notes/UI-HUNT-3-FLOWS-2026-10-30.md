@@ -77,6 +77,27 @@ Web research with cited URLs: `scratch/uihunt3/web-research.md` (summarised in �
 9. **Settings backup (`js/ui/settings-export.js`).** `buildWorker` is `perDevice` (an ALL file pinned the sender's auto-pick ON on
    a single-core phone). An unset JSON row imports as a removal, not the literal `"null"`. The reload label now counts SKIPPED values.
 
+10. **Garage tablist (`js/garage/setup-sheet.js`).** The two tier rows were `role=group` inside `role=tablist`, which owns
+    only tabs, so all 15 tabs lost their tablist parent (axe `aria-required-children` / `aria-required-parent`). The rows
+    are now `role=none`, with the tier name in `data-tier` for tests. Lighthouse accessibility on the Garage: **88 → 100**.
+11. **Career slot names (`js/career/career-ui.js`).** "Driver career slot 1, empty" did not contain the card's visible
+    text (WCAG 2.5.3 label-in-name: a voice-control user says what they see). Names now lead with the visible text, then
+    the mode ("SLOT 1 EMPTY Start a career here, Driver career"), and each block span ends with a word break so
+    `textContent` is not "SLOT 1EMPTY…". The repo's locked axe-core 4.14 passes all six slot buttons. Lighthouse's bundled
+    axe 4.12 still lists `label-content-name-mismatch` (an older containment check); the category score is 100 either way.
+
+## Lighthouse (mobile, snapshot of the open screen, working tree)
+
+| Screen | Accessibility | Best practices | Notes |
+|---|---|---|---|
+| Title | 100 | 100 | 0 failed |
+| Settings | 100 | 100 | 0 failed |
+| Garage | 88 → **100** | 100 | item 10 |
+| Career | 100 | 100 | item 11 (see the axe-version note) |
+| Data Hub | 100 | 100 | 0 failed |
+
+Reports: `artifacts/lighthouse/<screen>/report.html` (not committed). Console across the DevTools session: 0 errors.
+
 **The 4 of 114 rows that do not persist** (round 1): `pm-hl-set`, `pm-hl-el` and `pm-hl-visibility` are the HUD-layout editor's
 pickers (which set / element is being edited: transient by design), and fullscreen cannot re-enter without a gesture
 (a browser rule). None is a bug.
@@ -97,7 +118,6 @@ pickers (which set / element is being edited: transient by design), and fullscre
   VoiceOver basics remain **not run**. Per the research, iOS skips `pushState` entries made without a user gesture
   (WebKit 248303). Our sentinel re-arms on `pointerdown`/`keydown`, which is inside a gesture, but the swipe itself needs a
   device to verify, and so does iOS standalone (no back button; the swipe works only with earlier history).
-- **Lighthouse / a11y-tree snapshots**: see the PR's Verified section for what ran.
 
 ## Research (cited in `scratch/uihunt3/web-research.md`)
 

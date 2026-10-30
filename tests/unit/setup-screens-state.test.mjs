@@ -328,9 +328,10 @@ test("career: a NEW CAREER draft does not survive leaving the screen", () => {
   ui.openSlots();
   assert.equal($("cr-title").textContent, "CAREER MODES");
   assert.match($("cr-left").querySelectorAll(".cr-slot-main")[0].getAttribute("aria-label"),
-    /^Driver career slot 1, (?:empty|saved)/);
+    /^SLOT 1\b.*, Driver career$/, "the name leads with the visible card text (WCAG 2.5.3), then the mode");
   assert.match($("cr-right").querySelectorAll(".cr-slot-main")[0].getAttribute("aria-label"),
-    /^My Team slot 1, (?:empty|saved)/);
+    /^SLOT 1\b.*, My Team$/);
+  assert.equal($("cr-left").querySelectorAll(".cr-slot-main")[1].getAttribute("aria-label"), "SLOT 2 EMPTY Start a career here, Driver career");
   // Open an EMPTY driver slot -> the setup form, with a draft behind it.
   const emptySlot = $("cr-left").querySelectorAll(".cr-slot.empty")[0];
   emptySlot.querySelector(".cr-slot-main").onclick();
