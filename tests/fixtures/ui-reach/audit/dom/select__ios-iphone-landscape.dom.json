@@ -1,0 +1,10 @@
+{
+  "ok": true, "viewport": "844x390", "tapFloor": 52,
+  "root": { "tag": "div", "id": "select", "box": { "x": 0, "y": 0, "w": 844, "h": 390 }, "kids": [] },
+  "taps": [
+    { "sel": "#sel-back", "id": "sel-back", "tag": "button", "cls": "bigbtn alt", "text": "BACK", "autofocus": true, "x": 20, "y": 320, "w": 120, "h": 52 },
+    { "sel": "#sel-go", "id": "sel-go", "tag": "button", "cls": "bigbtn", "text": "GO", "x": 362, "y": 10, "w": 120, "h": 52 },
+    { "sel": "#sel-off", "id": "sel-off", "tag": "button", "cls": "bigbtn", "text": "START", "disabled": true, "x": 700, "y": 320, "w": 120, "h": 52 }
+  ],
+  "content": [ { "x": 0, "y": 0, "w": 844, "h": 390 } ]
+}

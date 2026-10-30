@@ -94,6 +94,7 @@ Live MCP session (already on localhost): `browser_resize` →
 
 Use `--tokens` for computed design-token/control evidence. Build offline screenshot
 reviews from the emitted `review.json` with `tools/ui/review-captures.mjs`.
+Does each customization knob value change the picture? `node tools/ui/look-diff.mjs --touch` pixel-diffs every value against the default (DEAD / SUBTLE / VISIBLE, contact sheet).
 See [free design tooling](../../../docs/DESIGN-TOOLS.md) for bounded manifests and
 comparison controls. Accessibility scanning and interpretation stay with
 **ui-menu-a11y**; existing browser ownership rules apply.
