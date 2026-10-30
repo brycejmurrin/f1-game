@@ -68,13 +68,37 @@ mirror frame: about 5 of 27 passes and 5 attachment stores per frame on the defa
 unchanged. Levels 4–8 of a 415×118 target are small, so the saving is mostly per-pass fixed cost (encoder, load/store
 setup and a tile flush per pass on a TBDR GPU), not bytes.
 
-**Pixels.** Identical by construction: no tap reads a level past the bound. The two-load A/B below checks it.
+**Pixels.** Identical by construction: no tap reads a level past the bound.
 
-PIXEL-AB-PLACEHOLDER
+A screenshot A/B cannot resolve this on this box. I ran two loads of the old latch (`apex26.tlxGlassFull=1`) and one
+bounded load: lavapipe, montreal, helmet, mirror on, `park(0.1)` + `freeze(true)`, after 6 mirror renders.
+
+| comparison | whole frame: pixels differing / max Δ | glass rectangles only (10 800 px) |
+|---|---|---|
+| old vs old (noise) | 492 293 / 248 | 6 834 / 26 |
+| old vs bounded | 634 304 / 136 | 8 487 / 44 |
+
+The two loads of the SAME arm differ over half the frame, and inside the glass too, because the mirror's rear view
+moves between loads. The noise floor is far above anything a mip-level change could produce, so this is no evidence
+either way.
+
+The evidence is therefore the bound itself, checked at the real pose. The unit suite carries the cockpit glass
+geometry, model matrix and frame view-projection captured live from `drawMirrorGlass` on TLX WebGPU (montreal, helmet,
+1280×720, the 461×132 target):
+
+| quantity | value |
+|---|---|
+| exact max LOD (central differences, hypot) | 1.32, so a trilinear tap reads level ≤ 2 |
+| spec-safe bound (`mipFootprintLod`) | 1.84 |
+| chain levels kept | 4 (levels 0–3) |
+| levels the old latch kept | 9 |
+
+Levels 4–8 are never read at that pose, so dropping them cannot change a pixel. A GPU at the spec's widest LOD
+approximation is still inside level 3.
 
 **Tests.** `tests/unit/mip-footprint-lod.test.mjs` is behavioural. The bound is never below a brute-force
 perspective-correct LOD (central differences at about 740 interior points per triangle, over four cockpit poses).
-It is exactly log2(texels/px) + 0.5 for a screen-parallel quad. It is Infinity for an eye-plane straddle, and
+It is exactly log2(texels/px) + 0.5 for a screen-parallel quad. At the live cockpit pose it holds with 4 levels (above). It is Infinity for an eye-plane straddle, and
 −Infinity (no fragments) for a quad behind or off-screen. It scales by exactly 1 LOD per doubling of the target.
 
 CENSUS-PLACEHOLDER

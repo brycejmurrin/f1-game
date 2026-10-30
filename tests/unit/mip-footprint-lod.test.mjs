@@ -28,12 +28,13 @@ const rotX = (t) => [1, 0, 0, 0, 0, Math.cos(t), Math.sin(t), 0, 0, -Math.sin(t)
 const trans = (x, y, z) => [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, x, y, z, 1];
 
 // A lens-shaped quad (0.191 x 0.051 m, the glass) with the glass's uv span.
-const POS = [-0.0955, -0.0255, 0, 0.0955, -0.0255, 0, 0.0955, 0.0255, 0, -0.0955, 0.0255, 0];
-const UV = [0.4, 0.22, 1.0, 0.22, 1.0, 0.78, 0.4, 0.78];
-const IDX = [0, 1, 2, 0, 2, 3];
+const GPOS = [-0.0955, -0.0255, 0, 0.0955, -0.0255, 0, 0.0955, 0.0255, 0, -0.0955, 0.0255, 0];
+const GUV = [0.4, 0.22, 1.0, 0.22, 1.0, 0.78, 0.4, 0.78];
+const GIDX = [0, 1, 2, 0, 2, 3];
+const POS = GPOS, UV = GUV, IDX = GIDX;
 
 // Ground truth: the LOD a GPU computes (max of the two derivative lengths) at many interior pixels.
-function bruteLod(model, vp, W, H, tw, th) {
+function bruteLod(model, vp, W, H, tw, th, POS = GPOS, UV = GUV, IDX = GIDX) {
   const clip = (i) => {
     const x = POS[3 * i], y = POS[3 * i + 1], z = POS[3 * i + 2], m = mul(vp, model);
     const c = [0, 1, 2, 3].map((r) => m[r] * x + m[4 + r] * y + m[8 + r] * z + m[12 + r]);
@@ -98,4 +99,24 @@ test("more texels per pixel raises the bound by exactly log2 of the ratio", () =
   const W = 1000, H = 500, vp = persp(1.2, 2, 0.05, 500), model = mul(trans(0.2, 0, -0.5), rotY(0.9));
   const a = lod(POS, UV, IDX, model, vp, W, H, 200, 50), b = lod(POS, UV, IDX, model, vp, W, H, 400, 100);
   assert.ok(Math.abs(b - a - 1) < 1e-9, `${a} -> ${b}`);
+});
+
+test("the live cockpit pose (TLX WebGPU, montreal, helmet, 1280x720): 4 levels cover every tap", () => {
+  // Captured from drawMirrorGlass on lavapipe 2026-10-30: the two lens quads (car-mesh getMirrorGlass), the
+  // glass's model matrix and the frame's viewProj, the 461x132 mirror target.
+  const model = [0.97823166847229, -7.21e-11, -0.20751576125621796, 0, -0.0001893376902444288, 0.9999995827674866, -0.0008925404399633408, 0,
+    -0.207515686750412, -0.0009124018833972514, -0.9782312512397766, 0, -273.0530700683594, 0.09273970127105713, -381.4430236816406, 1];
+  const vp = [1.0536818504333496, -0.004220187198370695, -0.18598142266273499, -0.18585748970508575, 2.95e-20, 1.906298041343689, -0.011917599476873875,
+    -0.011909657157957554, -0.199321910738945, -0.022309312596917152, -0.9831597208976746, -0.9825045466423035, 211.6776580810547, -11.395161628723145,
+    -426.24566650390625, -425.36181640625];
+  const pos = [-0.4565, 0.7545, 0.8826743960380554, -0.6475, 0.7545, 0.9093255996704102, -0.6475, 0.8055, 0.9093255996704102, -0.4565, 0.8055, 0.8826743960380554,
+    0.4565, 0.7545, 0.8826743960380554, 0.6475, 0.7545, 0.9093255996704102, 0.6475, 0.8055, 0.9093255996704102, 0.4565, 0.8055, 0.8826743960380554];
+  const uv = [0.4, 0.22, 1, 0.22, 1, 0.78, 0.4, 0.78, 0.6, 0.22, 0, 0.22, 0, 0.78, 0.6, 0.78], idx = [0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7];
+  const got = lod(pos, uv, idx, model, vp, 1280, 720, 461, 132), truth = bruteLod(model, vp, 1280, 720, 461, 132, pos, uv, idx);
+  assert.ok(got >= truth, `bound ${got} >= truth ${truth}`);
+  assert.ok(Math.abs(got - 1.8376) < 0.01, `the live readout: ${got}`);
+  const levels = Math.ceil(got + 0.25) + 1;   // tlx.js _mirLevels
+  assert.equal(levels, 4);
+  // a trilinear tap at the exact LOD reads level ceil(truth) at most: inside the chain, and the 5 levels above it are never read
+  assert.ok(Math.ceil(truth) <= levels - 1, `top tapped level ${Math.ceil(truth)} < ${levels}`);
 });
