@@ -1,3 +1,4 @@
+import { makeDom } from '../helpers/mini-dom.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
@@ -626,4 +627,32 @@ test('setup trial hook arms real unscored launch, samples equivalence and settle
   assert.equal(coach.beginSetupTrial(),true);assert.equal(coach.practiceGoal(),'launch');tick(.2);tick(.3,{throttleDemand:1,speed:10,prog:5});tick(.3,{speed:51,prog:25});
   assert.equal(received.length,1);assert.equal(received[0].mode,'launch');assert.equal(received[0].clean,true);assert.ok(Number.isFinite(received[0].score));assert.ok(observed.length>0);
   G.practice=false;assert.equal(coach.beginSetupTrial(),false,'refuses a scored session');
+});
+
+test('practice pathway and energy review use fixed settings blueprints without changing assists', () => {
+  const h = fixture(), dom = makeDom(); h.ctx.document = dom.document;
+  const practice = dom.byId('pm-practice-panel'), review = dom.byId('pm-session-review');
+  h.nodes.set('pm-practice-panel', practice); h.nodes.set('pm-session-review', review);
+  const path = dom.document.createElement('details'); path.id = 'pm-practice-pathway'; practice.appendChild(path);
+  const note = dom.document.createElement('p'); note.textContent = 'A self-guided checklist, not verified drill completion.'; path.appendChild(note);
+  for (const mode of ['braking', 'trail', 'lap']) {
+    const button = dom.document.createElement('button'); button.id = 'pm-pathway-' + mode; path.appendChild(button); h.nodes.set(button.id, button);
+    const check = dom.document.createElement('input'); check.type = 'checkbox'; check.id = 'pm-pathway-check-' + mode; path.appendChild(check); h.nodes.set(check.id, check);
+  }
+  const box = dom.document.createElement('details'); box.id = 'pm-last-lap-energy'; review.appendChild(box);
+  const text = dom.document.createElement('p'); text.id = 'pm-last-lap-energy-text'; box.appendChild(text); h.nodes.set(text.id, text);
+  const before = { practice: h.G.practice, timeTrial: h.G.timeTrial };
+  h.coach.paint(); assert.equal(practice.querySelector('#pm-practice-pathway'), path);
+  assert.match(path.querySelector('p').textContent, /not verified drill completion/);
+  const buttons = path.querySelectorAll('button'), checks = path.querySelectorAll('input');
+  assert.equal(buttons.length, 3); buttons[1].onclick(); assert.equal(h.coach.practiceGoal(), 'trail');
+  assert.deepEqual({ practice: h.G.practice, timeTrial: h.G.timeTrial }, before);
+  checks[0].checked = true; h.coach.reset(); assert.equal(checks[0].checked, false);
+  h.G.practice = false; h.G.timeTrial = false; h.coach.paint(); assert.ok(buttons.every(b => b.disabled));
+  const card = review.querySelector('#pm-last-lap-energy'); assert.ok(card); assert.match(card.querySelector('p').textContent, /Complete one full clean lap/);
+  h.ins.forecast = () => ({ lastLapEnergy: { lap: 2, sectors: [.1, -.05, .02], netUsed: .07 } }); h.coach.paint();
+  assert.match(card.querySelector('p').textContent, /7.0 percentage points used/);
+  assert.match(card.querySelector('p').textContent, /Sector 2: 5.0 percentage points recovered/);
+  assert.match(card.querySelector('p').textContent, /does not identify why/);
+  h.coach.paint(); assert.equal(review.querySelectorAll('#pm-last-lap-energy').length, 1);
 });

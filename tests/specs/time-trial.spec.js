@@ -46,6 +46,51 @@ journeyTest.describe("Practice return journeys — phone landscape", () => {
     expect(consoleLines.filter(line => line.startsWith("error:"))).toEqual([]);
   });
 
+  test("personal Daily history, practice pathway and energy review are reachable by touch", async ({ page }, testInfo) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    await page.evaluate(({ today, yesterday }) => localStorage.setItem("apex26.daily.v1", JSON.stringify({
+      days: { [today]: { best: 70, classes: { standard: { best: 71.2 }, open: { best: 70 } } }, [yesterday]: { best: 72 } },
+      streak: { count: 2, last: today },
+    })), { today, yesterday });
+    await page.reload();
+    await page.waitForFunction(() => !!window.__apex?.race, null, { polling: 100, timeout: BOOT_MS });
+    await page.evaluate(() => window.__apex.headless(true));
+    await page.locator("#daily-history > summary").tap();
+    await expect(page.locator("#daily-history")).toContainText(today);
+    await expect(page.locator("#daily-history")).toContainText(yesterday);
+    await expect(page.locator("#daily-history")).toContainText("71.200s");
+    await expect(page.locator("#daily-history")).toContainText("legacy / mixed classes");
+    const dailyFit = await page.locator("#daily-history").evaluate(el => ({
+      clipped: el.scrollWidth > el.clientWidth + 1,
+      tapHeight: el.querySelector("summary").getBoundingClientRect().height,
+    }));
+    expect(dailyFit.clipped).toBe(false);
+    expect(dailyFit.tapHeight).toBeGreaterThanOrEqual(44);
+    await testInfo.attach("daily-history-phone", { body: await page.screenshot(), contentType: "image/png" });
+    await page.locator("#daily-history > summary").tap();
+
+    await page.locator("#mb-practice").tap();
+    await page.locator("#sel-go").tap();
+    await page.locator("#rs-go").tap();
+    await page.waitForFunction(() => window.__apex.info().state === "race", null, { polling: 100, timeout: BOOT_MS });
+    await expect(page.locator("#loading")).toBeHidden();
+    await page.locator("#pausebtn").tap();
+    await page.locator("#pm-practice").tap();
+    await page.locator("#pm-practice-pathway > summary").tap();
+    await expect(page.locator("#pm-practice-pathway")).toContainText("not verified drill completion");
+    await page.locator("#pm-practice-pathway").getByRole("button", { name: "CHOOSE 2. Brake release into a turn", exact: true }).tap();
+    await expect(page.locator("#pm-drill-sel")).toHaveValue("trail");
+    await page.locator("#pm-practice-pathway").getByRole("checkbox").first().check();
+    await expect(page.locator("#pm-practice-pathway").getByRole("checkbox").first()).toBeChecked();
+    await testInfo.attach("practice-pathway-phone", { body: await page.screenshot(), contentType: "image/png" });
+    await page.locator("#pm-settings-close").tap();
+    await page.locator("#pm-review").tap();
+    await page.locator("#pm-last-lap-energy > summary").tap();
+    await expect(page.locator("#pm-last-lap-energy")).toContainText("Complete one full clean lap");
+    await testInfo.attach("energy-review-phone", { body: await page.screenshot(), contentType: "image/png" });
+  });
+
   test("cancelling Practice twice leaves ordinary TT and Race pickers usable", async ({ page }) => {
     for (let visit = 0; visit < 2; visit++) {
       await page.locator("#mb-practice").tap();
