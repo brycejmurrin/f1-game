@@ -3,7 +3,7 @@ Inputs: live shell/sw.js/version.json/manifest.json, 863 referenced URLs (309 sc
 Ran: tools/ci/pages-live-sha.sh; one curl GET per URL (no-cache) + a `--compressed` GET, sha256 of bytes vs `?v=` and `integrity=`; conditional-request (ETag/IMS) probes; CSP hash recompute. 2026-10-26 17:12-17:20Z.
 
 ## Clean (checked, fine)
-- 860/863 URLs 200; the 3 404s are my parser's artifacts (importmap prefix `vendor/three-0.186.1/addons/`, the flatMap'd shortcut-icon template); all 12 `icons/shortcuts/{A..F}/*.png` are 200 image/png.
+- 860/863 URLs 200; the 3 404s are my parser's artifacts (importmap prefix `vendor/three-0.187.0/addons/`, the flatMap'd shortcut-icon template); all 12 `icons/shortcuts/{A..F}/*.png` are 200 image/png.
 - `?v=` = first 12 hex of sha256(bytes) for ALL 559 versioned URLs (309 scripts, 34 css, 216+ lazy); `integrity=` SRI matches the bytes for every tagged script/css and every apex-lazy-integrity entry. 0 mismatches.
 - Every script/css tag carries a `?v=`; no `?v=dev` leaked; content-types right (js application/javascript, css text/css, woff2 font/woff2, json application/json).
 - No mixed content: 0 `http:` refs, 0 absolute https refs in the shell; http:// -> 301 https.

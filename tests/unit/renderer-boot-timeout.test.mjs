@@ -169,7 +169,7 @@ test("known asynchronous GPU failure gets one compatibility card with explicit g
   const recovery = vm.runInContext(readFileSync(new URL("../../js/render/shared/compatibility-recovery.js", import.meta.url), "utf8") + ";GfxRecovery", context);
   let backend = { api: "webgpu" };
   const ui = recovery.create({ document: doc, backendState: () => backend, clipboard: async (text) => { copied.push(JSON.parse(text)); return true; } });
-  const err = { message: "Instance dropped in popErrorScope", stack: "OperationError at vendor/three-0.186.1/three.webgpu.min.js:2:10" };
+  const err = { message: "Instance dropped in popErrorScope", stack: "OperationError at vendor/three-0.187.0/three.webgpu.min.js:2:10" };
   assert.equal(ui.handle("rejection", new Error("fetch failed")), false);
   assert.equal(ui.handle("rejection", { message: err.message, stack: "app.js:1" }), false);
   assert.equal(ui.handle("rejection", err), true);
@@ -234,7 +234,7 @@ test("a known WebGPU failure is claimed in capture so the raw overlay does not a
   assert.ok(hook, "the recovery hook listens in the capture phase");
   let stopped = false;
   hook.fn({
-    reason: { message: "Instance dropped in popErrorScope", stack: "at vendor/three-0.186.1/three.webgpu.min.js:2:10" },
+    reason: { message: "Instance dropped in popErrorScope", stack: "at vendor/three-0.187.0/three.webgpu.min.js:2:10" },
     preventDefault() {},
     stopImmediatePropagation() { stopped = true; },
   });
