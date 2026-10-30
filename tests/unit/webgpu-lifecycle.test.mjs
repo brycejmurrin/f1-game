@@ -3044,6 +3044,13 @@ test("perf hunt 6: WGX sizes the mirror chain to the levels its taps read (inset
   glassFrame(straddle);
   assert.equal(gfx.mirrorState().glassLod, Infinity, "two unbounded frames in a row latch");
   assert.equal(mirrorFrame(), 8, "the full 9-level chain (8 ladder passes) from then on");
+  // Reallocating the mirror target must drop the Infinity latch — otherwise the
+  // next inset-only pass still pays for the full chain until reload.
+  assert.equal(gfx.mirrorBegin({}, 512, 128), true);
+  gfx.mirrorEnd();
+  assert.equal(gfx.mirrorState().glassLod, -Infinity, "mirrorFree rewinds the glass LOD latch");
+  assert.equal(mirrorFrame(), inset - 1, "after regrow, the ladder matches the inset again");
+  assert.equal(gfx.mirrorState().mips, inset);
 });
 
 test("perf hunt 5 W1/W3: a full env cube builds 4 levels (18 ladder passes, not 36) inside the face-5 submit", async () => {

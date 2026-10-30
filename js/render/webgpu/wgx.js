@@ -4064,6 +4064,10 @@ const WGX = (function () {
       try { if (mirTex) mirTex.destroy(); } catch (_) { /* already invalid */ }
       try { if (mirDepthTex) mirDepthTex.destroy(); } catch (_) { /* already invalid */ }
       mirTex = mirView = mirSampleView = mirDepthTex = mirDepthView = null; _mirBG = null; _mirGlassBG = null; mirW = mirH = 0; _mirRenders = 0;
+      // The unbounded-glass latch (Infinity) is tied to the old texture's mip
+      // chain. Releasing the target must rewind ONLY that latch — a bounded
+      // session max still applies after a level grow on the same WxH target.
+      if (_mirGlassLod === Infinity) { _mirGlassLod = -Infinity; _mirGlassInf = 0; }
     }
     // The inset's pixel rect in the present target (the composite's viewport), or null when none is drawn.
     function _mirInsetBox() {
