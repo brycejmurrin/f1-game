@@ -633,8 +633,29 @@
         for (const k in src.attributes) g.setAttribute(k, src.attributes[k]);
       }
       if (!s.arr || s.arr.length < cnt || s.arr.constructor !== Ctor) {
-        s.arr = new Ctor(cnt);
-        g.setIndex(new THREE.BufferAttribute(s.arr, 1));
+        // A regrowth takes 1.5x headroom (capped at the record's whole index count),
+        // so a widening view replaces the buffer O(log) times, not on every new high.
+        let cap = cnt;
+        if (s.arr && s.arr.constructor === Ctor) {
+          let tot = mesh._tlxIdxTotal;
+          if (!(tot > 0)) {
+            tot = 0;
+            for (const ch of mesh.chunks) { const ix = ch.geo && ch.geo.index; if (ix) tot += ix.count; }
+            mesh._tlxIdxTotal = tot;
+          }
+          cap = Math.max(cnt, Math.min(tot, Math.ceil(s.arr.length * 1.5)));
+        }
+        const old = g.index;
+        s.arr = new Ctor(cap);
+        const ia = new THREE.BufferAttribute(s.arr, 1);
+        // The vendor's narrow-index opt-in (PATCHES §20), as packIndex marks every
+        // chunk's own index: unmarked, three's WebGPU backend swaps ia.array for a
+        // Uint32 copy at creation, every later write below lands in the orphaned
+        // s.arr, and each changed visible set re-uploads the FIRST set's indices.
+        if (s.arr instanceof Uint16Array) ia.__apexUint16Index = true;
+        g.setIndex(ia);
+        // The replaced index's GPU buffer, now held by nothing but the GC.
+        if (old && ctx && ctx.releaseAttribute) ctx.releaseAttribute(old);
       }
       let o = 0, x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
       const dst = s.arr;

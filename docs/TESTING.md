@@ -507,7 +507,8 @@ tools directly.)
 The `tooling-fast` renderer contracts also include `three-shared-binding-update`
 (shared group invalidation and side effects), `webgpu-uint16-index` (mapped bytes
 and aligned partial writes), `tlx-mirror-inset` (WGSL/GLSL derivative safety), and
-`tlx-smith-root` (generated lamp-root control-flow nesting), and
+`tlx-smith-root` (generated lamp-root control-flow nesting), `tlx-webgpu-perf` (merged-chunk index
+uploads on WebGPU, merged shadow casts and skipped uniform writes, by count), and
 `tlx-glow-instancing` (packed light records, instance layout, growth and isolated
 warm-probe ownership). `tlx-viewport` covers texture rebinds and post-chain reader
 retirement; `tlx-post-orient-cover-webgpu` keeps the phone orientation cover
