@@ -138,7 +138,7 @@ test("reset closes every layer through its door and needs no hidden=true fallbac
   });
   page.els.get("dh-close-btn").onclick = () => { hubOpen = false; page.els.get("datahub").hidden = true; };
   page.window.DataHub = { isOpen: () => hubOpen, close() { hubOpen = false; page.els.get("datahub").hidden = true; } };
-  const r = await runReset(page, resetConfig(OVERLAY_IDS, { settleMs: 0 }));
+  const r = await runReset(page, resetConfig(OVERLAY_IDS, { settleMs: 0, waitMs: 0, plateMs: 0 }));
   assert.deepEqual(r.closed.map((c) => c.id), ["datahub", "select"]);
   assert.deepEqual(r.fallbackIds, []);
   assert.equal(hubOpen, false, "DataHub's own flag is down: the next #mb-data click opens it");
@@ -157,7 +157,7 @@ test("a paused race leaves by QUIT (armed twice), not RESUME", async () => {
     if (!quit.classList.contains("armed")) { quit.classList.add("armed"); return; }
     page.els.get("pausemenu").hidden = true;
   };
-  const r = await runReset(page, resetConfig(OVERLAY_IDS, { settleMs: 0 }));
+  const r = await runReset(page, resetConfig(OVERLAY_IDS, { settleMs: 0, waitMs: 0, plateMs: 0 }));
   assert.deepEqual(page.clicks, ["pm-quit", "pm-quit"]);
   assert.deepEqual(r.closed, [{ id: "pausemenu", how: "exit:pm-quit" }]);
   assert.deepEqual(r.fallbackIds, []);
@@ -168,7 +168,7 @@ test("a gate with no door is stuck: hidden=true fallback, named; DataHub closed 
   const page = fakePage({ open: ["loading"], gates: ["loading"] });
   page.window.DataHub = { isOpen: () => hubOpen, close() { hubOpen = false; } };
   page.body.classList.add("in-race");
-  const r = await runReset(page, resetConfig(OVERLAY_IDS, { settleMs: 0 }));
+  const r = await runReset(page, resetConfig(OVERLAY_IDS, { settleMs: 0, waitMs: 0, plateMs: 0 }));
   assert.deepEqual(r.stuck, ["loading"]);
   assert.deepEqual(r.fallbackIds, ["datahub:DataHub.close", "loading"]);
   assert.equal(hubOpen, false);
@@ -178,7 +178,7 @@ test("a gate with no door is stuck: hidden=true fallback, named; DataHub closed 
 test("#rotate-device is never force-hidden; stripping in-race is what clears it", async () => {
   const page = fakePage({ open: ["rotate-device"] });
   page.body.classList.add("in-race");
-  const r = await runReset(page, resetConfig(OVERLAY_IDS, { settleMs: 0 }));
+  const r = await runReset(page, resetConfig(OVERLAY_IDS, { settleMs: 0, waitMs: 0, plateMs: 0 }));
   assert.equal(page.els.get("rotate-device").hidden, false);
   assert.deepEqual(r.fallbackIds.filter((id) => id === "rotate-device"), []);
   assert.equal(r.ok, true);

@@ -56,6 +56,8 @@ export const NEVER_HIDE = ["rotate-device"];
 export const TITLE_EXITS = { pausemenu: "pm-quit", results: "res-menu" };
 // Layers whose module keeps state that `hidden` cannot reach.
 export const MODULE_CLOSERS = { datahub: "DataHub" };
+// Plates with no door (data-esc="none") that clear themselves: wait, never press.
+export const TRANSITION_PLATES = ["loading"];
 
 /**
  * In-page (pass to page.evaluate). Self-contained: every input arrives in `cfg`.
@@ -85,10 +87,32 @@ export async function resetOverlays(cfg) {
   const modOf = (id) => (modules[id] ? win[modules[id]] : null);
   const closed = [], stuck = [], fallbackIds = [];
 
+  const waitMs = c.waitMs == null ? 8000 : c.waitMs;
+  const plates = new Set(c.plates || []);
+  // A state fingerprint: a Settings sub-page's BACK keeps the same layer up
+  // but changes its text and focus, which is progress, not a stuck door.
+  const sig = (el) => (el && el.textContent ? el.textContent.length : 0) + "|" +
+    (doc.activeElement && doc.activeElement.id || "");
+  // Poll until pred() or ms elapse (a slow close: PHOTO STUDIO ~4 s on
+  // SwiftShader; the RETURNING plate ~3 s).
+  const until = async (pred, ms) => {
+    const end = Date.now() + ms;
+    while (Date.now() < end) { if (pred()) return true; await new Promise((r) => setTimeout(r, 100)); }
+    return pred();
+  };
+  const plateMs = c.plateMs == null ? 20000 : c.plateMs;
+  const wasRacing = !!(doc.body && doc.body.classList && doc.body.classList.contains("in-race"));
   for (let i = 0; i < rounds; i++) {
     const layer = topLayer();
     if (!layer || layer.id === "overlay" || never.has(layer.id)) break;
     const id = layer.id || String(layer.tagName || "?").toLowerCase();
+    // A transition plate (#loading) owns no door: wait it out.
+    if (plates.has(layer.id)) {
+      if (!(await until(() => topLayer() !== layer || !isOpen(layer), plateMs))) { stuck.push(id); break; }
+      closed.push({ id, how: "waited" });
+      continue;
+    }
+    const before = sig(layer);
     let how = null;
     const door = layer.getAttribute ? layer.getAttribute("data-esc-close") : null;
     const mod = modOf(layer.id);
@@ -99,10 +123,30 @@ export async function resetOverlays(cfg) {
     else if (layer.tagName === "DIALOG" && typeof layer.close === "function") { layer.close(); how = "dialog.close"; }
     if (!how) { stuck.push(id); break; }
     await tick();
-    if (isOpen(layer) && topLayer() === layer) { stuck.push(id); break; }
+    const moved = await until(() => !isOpen(layer) || topLayer() !== layer || sig(layer) !== before, waitMs);
+    if (!moved) { stuck.push(id); break; }
     closed.push({ id, how });
   }
 
+  // A race left running under a closed photo / tuner stack: the doors above
+  // close the stack but not the session, and a live session keeps the title's
+  // doors from opening their screens (the four data* cells timed out after
+  // photocontrols). Quit it the way a player does: pause, then QUIT.
+  if (wasRacing && doc.body.classList.contains("in-race") === false && win.__apex && win.__apex.info) {
+    let live = false;
+    try { const inf = win.__apex.info(); live = !!(inf && inf.track); /* track is set only in race/count */ } catch (_) { live = false; }
+    if (live) doc.body.classList.add("in-race");
+  }
+  const quitAlready = closed.some((x) => x.how === "exit:pm-quit");
+  const pm = doc.getElementById("pausemenu");
+  if (wasRacing && !quitAlready && pm && doc.body.classList.contains("in-race")) {
+    if (pm.hidden) press("pausebtn");
+    await until(() => !pm.hidden, Math.min(5000, plateMs));
+    if (press("pm-quit")) {
+      await until(() => !doc.body.classList.contains("in-race") && topLayer() && topLayer().id === "overlay", plateMs);
+      closed.push({ id: "race", how: "exit:pm-quit" });
+    }
+  }
   for (const [lid, g] of Object.entries(modules)) {
     const m = win[g];
     let open = false;
@@ -130,7 +174,7 @@ export async function resetOverlays(cfg) {
 /** The config every caller passes; exported so a test drives the same one. */
 export function resetConfig(ids = OVERLAY_IDS, extra = {}) {
   return {
-    ids, rounds: 8, settleMs: 40,
+    ids, rounds: 12, settleMs: 40, waitMs: 8000, plates: TRANSITION_PLATES,
     neverHide: NEVER_HIDE, exits: TITLE_EXITS, modules: MODULE_CLOSERS,
     tips: TIP_IDS, bodyClasses: ROUTE_BODY_CLASSES, ...extra,
   };
