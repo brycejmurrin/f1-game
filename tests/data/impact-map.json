@@ -3610,6 +3610,7 @@
         "tests/unit/livery-tier.test.mjs",
         "tests/unit/parts-visual-distinctness.test.mjs",
         "tests/unit/pick-tests.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/reliability.test.mjs",
@@ -5294,6 +5295,7 @@
         "tests/unit/phone-pad.test.mjs",
         "tests/unit/photomode-hold.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/player-collision-side.test.mjs",
         "tests/unit/player-forces.test.mjs",
@@ -5967,6 +5969,7 @@
         "tests/unit/mechanics-coherence.test.mjs",
         "tests/unit/net-lobby-lifecycle.test.mjs",
         "tests/unit/overlay-render.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-radio.test.mjs",
         "tests/unit/real-race-script.test.mjs",
@@ -11263,6 +11266,7 @@
         "tests/unit/mechanics-integration-vm.test.mjs",
         "tests/unit/mechanics-race-vm.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/tools-runnable.test.mjs",
         "tests/unit/traffic-arc-buckets.test.mjs"
@@ -11301,6 +11305,7 @@
       ],
       "*": [
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs"
       ]
     },
@@ -11469,6 +11474,7 @@
         "tests/unit/parts-ladder.test.mjs",
         "tests/unit/physics-oracle.test.mjs",
         "tests/unit/pick-unit-slices.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/player-dynamics-vm.test.mjs",
         "tests/unit/player-forces.test.mjs",
@@ -11750,6 +11756,7 @@
       ],
       "classRecord": [
         "tests/unit/ai-strategy.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/tyre-model.test.mjs"
       ],
@@ -11762,6 +11769,7 @@
       "create": [
         "tests/unit/engineer.test.mjs",
         "tests/unit/forecast.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/player-forces.test.mjs",
         "tests/unit/race-radio.test.mjs",
@@ -11825,6 +11833,7 @@
         "tests/unit/tyre-model.test.mjs"
       ],
       "optionRecord": [
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/tyre-model.test.mjs"
       ],
       "planLaps": [
@@ -12476,6 +12485,7 @@
       ],
       "*": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/metrics.test.mjs",
         "tests/unit/physics-rows-vm.test.mjs"
@@ -12581,6 +12591,7 @@
       ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs"
       ]
@@ -12606,6 +12617,9 @@
       "cautionLevel": [
         "tests/unit/pit-lane-vm.test.mjs"
       ],
+      "choices": [
+        "tests/unit/pit-pick-memo.test.mjs"
+      ],
       "committing": [
         "tests/unit/pit-lane.test.mjs"
       ],
@@ -12613,6 +12627,7 @@
         "tests/unit/lazy-bundles-prefetch.test.mjs",
         "tests/unit/load-order.test.mjs",
         "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs",
         "tests/unit/pit-think-cache.test.mjs",
         "tests/unit/race-session-lazy.test.mjs",
         "tests/unit/race-settings-pitplan-key.test.mjs",
@@ -12677,8 +12692,12 @@
       "nextCode": [
         "tests/unit/pit-lane.test.mjs"
       ],
+      "nextFor": [
+        "tests/unit/pit-pick-memo.test.mjs"
+      ],
       "pickFor": [
-        "tests/unit/pit-lane.test.mjs"
+        "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs"
       ],
       "pinnedStops": [
         "tests/unit/race-session-lazy.test.mjs",
@@ -12690,7 +12709,8 @@
         "tests/unit/race-settings-vm.test.mjs"
       ],
       "planInfo": [
-        "tests/unit/pit-lane.test.mjs"
+        "tests/unit/pit-lane.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs"
       ],
       "release": [
         "tests/unit/key-binds.test.mjs",
@@ -12731,7 +12751,8 @@
         "tests/unit/pit-think-cache.test.mjs"
       ],
       "twoCompoundApplies": [
-        "tests/unit/pit-lane-vm.test.mjs"
+        "tests/unit/pit-lane-vm.test.mjs",
+        "tests/unit/pit-pick-memo.test.mjs"
       ],
       "update": [
         "tests/unit/garage-crew-choreo.test.mjs",
@@ -13606,6 +13627,9 @@
         "tests/unit/carve-a-modules.test.mjs",
         "tests/unit/pit-lane.test.mjs",
         "tests/unit/sporting-regs.test.mjs"
+      ],
+      "*": [
+        "tests/unit/pit-pick-memo.test.mjs"
       ]
     },
     "js/race/spotter.js": {
@@ -17149,6 +17173,7 @@
     "js/ui/hud-minimap.js": {
       "create": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-minimap-pitmark.test.mjs",
@@ -17171,6 +17196,7 @@
       ],
       "create": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-pins.test.mjs",
@@ -17351,6 +17377,7 @@
         "tests/unit/hud-tyres.test.mjs"
       ],
       "paint": [
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-tyres.test.mjs"
       ],
       "state": [
@@ -17362,6 +17389,7 @@
         "tests/unit/camera-defaults.test.mjs",
         "tests/unit/ghost-share.test.mjs",
         "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-layout.test.mjs",
@@ -17401,6 +17429,7 @@
       "invalidateFit": [
         "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-pins.test.mjs",
@@ -17441,6 +17470,7 @@
       "updateHud": [
         "tests/specs/hud-layout.spec.js",
         "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-feel.test.mjs",
         "tests/unit/hud-fit-idempotent.test.mjs",
         "tests/unit/hud-pins.test.mjs",
@@ -17520,6 +17550,7 @@
       ],
       "*": [
         "tests/unit/hud-announce-lane-cache.test.mjs",
+        "tests/unit/hud-dock-btn-cache.test.mjs",
         "tests/unit/hud-pins.test.mjs",
         "tests/unit/hud-radio-slot.test.mjs"
       ]
