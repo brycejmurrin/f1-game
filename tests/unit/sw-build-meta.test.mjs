@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { recoveryRelease, startPwaRecoveryServer } from "../helpers/pwa-recovery.mjs";
 
 const SW_SOURCE = await readFile(new URL("../../sw.js", import.meta.url), "utf8");
 const ORIGIN = "https://apex.test";
@@ -169,4 +170,35 @@ test("offline after a no-meta 200 still serves the prior precached shell", async
   online = false;
   const off = h.fetchEvent({ method: "GET", mode: "navigate", url: `${ORIGIN}/` });
   assert.equal(await (await off.responsePromise).text(), prior);
+});
+
+test("PWA recovery release rejects invalid generations and stamps actual asset bytes", async () => {
+  for (const value of [0, -1, NaN, Infinity, 1.5, "91001"]) assert.throws(() => recoveryRelease(value), TypeError);
+  const release = recoveryRelease(91001);
+  const digest = Buffer.from(await webcrypto.subtle.digest("SHA-256", new TextEncoder().encode(release.script))).toString("hex").slice(0, 12);
+  assert.equal(release.asset, `shell.js?v=${digest}`);
+  assert.match(release.html, /<meta name="apex-build" content="91001">/);
+  assert.ok(release.html.includes(`src="${release.asset}"`));
+});
+
+test("PWA recovery origin serves production SW bytes and fails worker-owned requests at the server", async () => {
+  const server = await startPwaRecoveryServer();
+  try {
+    const workerA = await (await fetch(`${server.origin}/sw.js?v=91001`)).text();
+    assert.equal(workerA, SW_SOURCE + "\n// PWA recovery fixture release 91001\n");
+    assert.equal(server.sourceHash.length, 64);
+    server.deploy(91002, { failRequired: true });
+    assert.equal((await fetch(`${server.origin}/shell.js?v=fixture`)).status, 503);
+    assert.equal((await fetch(`${server.origin}/version.json`)).status, 200);
+    assert.equal((await (await fetch(`${server.origin}/version.json`)).json()).build, 91002);
+    server.setOffline(true);
+    for (const path of ["/", "/sw.js?v=91002", "/version.json", "/js/render/glx/glx.js?v=91002"]) {
+      assert.equal((await fetch(server.origin + path)).status, 503, path);
+    }
+    server.setOffline(false);
+    server.deploy(91002);
+    assert.equal((await fetch(`${server.origin}/shell.js?v=fixture`)).status, 200);
+    assert.ok(server.requests.some((r) => r.build === 91002 && r.status === 503));
+    assert.equal(await (await fetch(`${server.origin}/sw.js?v=91002`)).text(), SW_SOURCE + "\n// PWA recovery fixture release 91002\n");
+  } finally { await server.close(); }
 });

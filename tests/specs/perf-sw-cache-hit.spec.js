@@ -20,6 +20,7 @@
 //      __apex surface (tools/manifest.cjs LAZY_AGENT — measured 2026-10-24: those 9 files were the only misses).
 import { createRequire } from "node:module";
 import { test, expect, BOOT_MS } from "../helpers/fixtures.js";
+import { startPwaRecoveryServer, pwaRecoverySnapshot, pwaServedGeneration } from "../helpers/pwa-recovery.mjs";
 
 const require = createRequire(import.meta.url);
 // The __apex / agentview surface: injected for tests and localhost only, never on a player's page, and
@@ -65,4 +66,92 @@ test("a first race loads no script or stylesheet the service worker install did 
   expect(cached.size, "the install must have cached the shell").toBeGreaterThan(50);
   expect(raceOnly.length, "the race must load code of its own, or the check is vacuous").toBeGreaterThan(0);
   expect(misses, "scripts / stylesheets loaded by boot + first race that the install never precached").toEqual([]);
+});
+
+test("real service worker preserves a settled release across offline launch and interrupted upgrade, then recovers", async ({ browser }, testInfo) => {
+  test.setTimeout(120000);
+  const server = await startPwaRecoveryServer();
+  const context = await browser.newContext({ serviceWorkers: "allow", viewport: { width: 844, height: 390 }, hasTouch: true });
+  let page = await context.newPage();
+  const matrix = { schema: 1, fixture: "minimal shell and inert assets; production sw.js plus release comment", sourceHash: server.sourceHash, cells: [] };
+  const buildA = 91001, buildB = 91002;
+  async function expectRelease(build, fromServiceWorker, label) {
+    const snapshot = await pwaRecoverySnapshot(page);
+    expect(snapshot.controller?.state, label).toBe("activated");
+    expect(snapshot.controller?.scriptURL, label).toBe(`${server.origin}/sw.js?v=${build}`);
+    expect(snapshot.shellBuild, label).toBe(build);
+    expect(snapshot.assetBuild, label).toBe(build);
+    expect(snapshot.generations.find((g) => g.name === `apex26-${build}`)?.settled, label).toBe(true);
+    const servedGeneration = await pwaServedGeneration(page);
+    expect(servedGeneration, label).toBe(build);
+    matrix.cells.push({ label, snapshot, servedGeneration, navigationFromServiceWorker: fromServiceWorker });
+  }
+  async function waitForRelease(build) {
+    await expect.poll(async () => {
+      const s = await pwaRecoverySnapshot(page);
+      return s.controller?.scriptURL === `${server.origin}/sw.js?v=${build}`
+        && s.controller.state === "activated"
+        && s.generations.some((g) => g.name === `apex26-${build}` && g.settled);
+    }, { timeout: 30000, intervals: [100, 250, 500] }).toBe(true);
+  }
+  try {
+    await page.goto(server.origin);
+    await page.evaluate((build) => navigator.serviceWorker.register(`/sw.js?v=${build}`, { updateViaCache: "none" }), buildA);
+    await waitForRelease(buildA);
+    let response = await page.reload();
+    expect(response?.fromServiceWorker()).toBe(true);
+    await expectRelease(buildA, response.fromServiceWorker(), "A installed and controlled");
+
+    // Origin failure reaches worker-owned fetches too; setOffline alone did not in our harness.
+    server.setOffline(true);
+    await page.close();
+    page = await context.newPage();
+    response = await page.goto(server.origin);
+    expect(response?.fromServiceWorker()).toBe(true);
+    await expectRelease(buildA, response.fromServiceWorker(), "A launches with origin unavailable");
+
+    server.setOffline(false);
+    server.deploy(buildB, { failRequired: true });
+    const attempt = await page.evaluate(async (build) => {
+      try { await navigator.serviceWorker.register(`/sw.js?v=${build}`, { updateViaCache: "none" }); return { registered: true }; }
+      catch (error) { return { registered: false, error: String(error) }; }
+    }, buildB);
+    await expect.poll(() => server.requests.some((r) => r.path.startsWith("/shell.js?") && r.build === buildB && r.status === 503),
+      { timeout: 30000, intervals: [100, 250] }).toBe(true);
+    await expect.poll(async () => (await pwaRecoverySnapshot(page)).installing,
+      { timeout: 30000, intervals: [100, 250] }).toBe(null);
+    const interrupted = await pwaRecoverySnapshot(page);
+    expect(interrupted.controller?.scriptURL).toBe(`${server.origin}/sw.js?v=${buildA}`);
+    expect(interrupted.generations.find((g) => g.name === `apex26-${buildB}`)).toBeDefined();
+    expect(interrupted.generations.find((g) => g.name === `apex26-${buildB}`)?.settled).toBe(false);
+    const interruptedGeneration = await pwaServedGeneration(page);
+    expect(interruptedGeneration).toBe(buildA);
+    matrix.cells.push({ label: "B essential fetch fails; A remains active", snapshot: interrupted, servedGeneration: interruptedGeneration, attempt });
+
+    server.setOffline(true);
+    response = await page.reload();
+    expect(response?.fromServiceWorker()).toBe(true);
+    await expectRelease(buildA, response.fromServiceWorker(), "interrupted B does not displace offline A");
+
+    server.setOffline(false);
+    server.deploy(buildB);
+    await page.evaluate((build) => navigator.serviceWorker.register(`/sw.js?v=${build}`, { updateViaCache: "none" }), buildB);
+    await waitForRelease(buildB);
+    response = await page.reload();
+    expect(response?.fromServiceWorker()).toBe(true);
+    await expectRelease(buildB, response.fromServiceWorker(), "B recovers and activates");
+
+    server.setOffline(true);
+    response = await page.reload();
+    expect(response?.fromServiceWorker()).toBe(true);
+    await expectRelease(buildB, response.fromServiceWorker(), "recovered B launches offline");
+    expect(matrix.cells).toHaveLength(6);
+  } finally {
+    matrix.requests = server.requests;
+    try {
+      await testInfo.attach("pwa-recovery-matrix", { body: JSON.stringify(matrix, null, 2), contentType: "application/json" });
+    } finally {
+      try { await context.close(); } finally { await server.close(); }
+    }
+  }
 });
