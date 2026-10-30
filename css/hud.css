@@ -151,6 +151,22 @@ body:not(.desktop) #hud-delta[data-pending] { display: none !important; }
   #hud-pos[data-delta] { animation: pos-flash 0.5s ease-out; }
 }
 @keyframes pos-flash { from { transform: scale(1.18); } }
+:root { --hud-strip-bg: color-mix(in srgb, var(--look-hud-bg) calc(100% * var(--hud-panel-a-eff)), transparent); }
+/* ONE TIMING STRIP (design pass 2a, docs/notes/DESIGN-PASS-2A-HUD-2026-10-30.md): one plate, hairline
+   dividers, the team keyline once on POS, the one light cell (the rank you hunt). A rank change keeps its
+   hue on a dark pill for the flash. BROADCAST keeps its own tower. A landscape phone's cluster is one plate. */
+body:not(.hud-prof-broadcast) .hud-top { gap: 0; background: var(--hud-strip-bg); border-radius: var(--r-xs); }
+body:not(.hud-prof-broadcast) .hud-top > .hud-box { --hud-box-stripe: 0px; background: none; border-radius: 0; box-shadow: inset 1px 0 0 var(--plate-line); }
+body:not(.hud-prof-broadcast) #hud-box-pos { --hud-box-stripe: 3px; background: var(--hud-ink-light); box-shadow: inset 3px 0 0 var(--accent);
+  border-radius: var(--r-xs) 0 0 var(--r-xs); }
+body:not(.hud-prof-broadcast) :is(#hud-box-pos .hud-label, #hud-pos) { color: var(--hud-ink-dark); text-shadow: none; }
+body:not(.hud-prof-broadcast) #hud-pos[data-delta] { background: var(--hud-ink-dark); border-radius: var(--r-xs); }
+body:not(.hud-prof-broadcast) #hud-pos[data-delta="up"] { color: var(--faster); }
+body:not(.hud-prof-broadcast) #hud-pos[data-delta="down"] { color: var(--slower); }
+@media (orientation: landscape) {
+  body:not(.desktop) .hud-bottom { background: var(--hud-strip-bg); border-radius: var(--r-xs);
+    padding: calc(var(--gap) / 3) calc(var(--gap) * 5 / 6); box-shadow: inset 0 2px 0 var(--accent); }
+}
 /* WHO is ahead/behind: a 3px bar in that car's team colour, written by hud.js
    as an element-local --gap-team (child selector: this file spells the chip
    class nowhere, see the ratchet note below). */
