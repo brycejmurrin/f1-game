@@ -8103,9 +8103,13 @@
         "tests/unit/source-pin-hygiene.test.mjs"
       ],
       "driveOutEngine": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-personality.test.mjs"
       ],
       "driveOutLeft": [
+        "tests/unit/garage-arrival.test.mjs"
+      ],
+      "driveOutSound": [
         "tests/unit/garage-arrival.test.mjs"
       ],
       "endGarageRes": [

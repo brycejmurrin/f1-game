@@ -716,9 +716,18 @@ let _bayAt = 0, _bayAcc = 0, _bayBusy = true;
 // SEQUENCE LIGHTING and CINEMA BARS (GARAGE ENTER & LEAVE): a playing sequence's
 // pose names a GarageScene mood and the bars; the garage's own mood comes back
 // (mood(), never setMood: nothing is saved) on the first frame without one.
-let _seqMoodWas = null, _seqBars = false;
+// ENGINE SOUND ON ARRIVAL: the drive-out's engine voice (driveOutEngine/Sound)
+// for a car driven IN (pit stop, after the race, a preview), revving with its
+// speed. Never a pushed car (pose.engine false), never over the RACE! drive-out
+// (which runs its own), and never a preview over a race in progress, whose own
+// engine graph it would stop.
+let _seqMoodWas = null, _seqBars = false, _seqSound = false, _seqSoundAt = 0;
 function sequenceLook(p) {
   const on = !!(p && p.active), want = on && p.mood;
+  const sound = on && !!p.sound && p.engine !== false && !driveOut && !(preview && G.state === "race");
+  if (sound && !_seqSound && !_outEngine) { driveOutEngine(true); _seqSound = _outEngine; _seqSoundAt = 0; }
+  else if (!sound && _seqSound) { _seqSound = false; driveOutEngine(false); }
+  if (sound && _seqSound) { const now = performance.now(); driveOutSound(p, _seqSoundAt ? (now - _seqSoundAt) / 1000 : 0); _seqSoundAt = now; }
   if (typeof GarageScene !== "undefined" && GarageScene.mood) {
     if (want && GarageScene.mood() !== want) { if (_seqMoodWas === null) _seqMoodWas = GarageScene.mood(); GarageScene.mood(want); }
     else if (!want && _seqMoodWas !== null) { GarageScene.mood(_seqMoodWas); _seqMoodWas = null; }

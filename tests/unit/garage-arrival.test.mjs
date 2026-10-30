@@ -1524,8 +1524,11 @@ test('a sequence holds its mood and bars, and the garage gets its own back (neve
   const src = cam.slice(cam.indexOf('// SEQUENCE LIGHTING and CINEMA BARS'), cam.indexOf('function renderSetupPreview('));
   let cur = 'shipped', saved = 0;
   const cls = new Set();
+  const engine = [], fed = [];
   const c = vm.createContext({ GarageScene: { mood: (id) => (id === undefined ? cur : (cur = id)), setMood() { saved++; } },
-    document: { body: { toggleAttribute: (k, on) => (on ? cls.add(k) : cls.delete(k)) } } });
+    document: { body: { toggleAttribute: (k, on) => (on ? cls.add(k) : cls.delete(k)) } },
+    driveOut: null, preview: null, G: { state: 'menu' }, _outEngine: false, performance: { now: () => 1000 + fed.length * 50 },
+    driveOutEngine(on) { engine.push(on); c._outEngine = on; }, driveOutSound(p, gap) { fed.push(gap); } });
   vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
   const look = vm.runInContext('sequenceLook', c);
   look({ active: true, mood: 'night', bars: true });
@@ -1537,6 +1540,19 @@ test('a sequence holds its mood and bars, and the garage gets its own back (neve
   look({ active: true, mood: 'showroom' }); look(null);
   assert.equal(cur, 'shipped', 'a stop (null) restores too');
   assert.equal(saved, 0, 'nothing is written to the player\'s LIGHTING');
+  // ENGINE SOUND ON ARRIVAL: on while a driven car arrives, fed each frame, off after.
+  look({ active: true, sound: true, engine: true }); look({ active: true, sound: true, engine: true });
+  assert.deepEqual(engine, [true]); assert.equal(fed.length, 2);
+  look({ active: false, sound: true, engine: true });
+  assert.deepEqual(engine, [true, false], 'stops with the sequence');
+  look({ active: true, sound: true, engine: false });
+  assert.deepEqual(engine, [true, false], 'a pushed (retired) car is silent');
+  look({ active: true, sound: false, engine: true });
+  assert.deepEqual(engine, [true, false], 'ENGINE SOUND off');
+  c.preview = {}; c.G.state = 'race'; look({ active: true, sound: true, engine: true });
+  assert.deepEqual(engine, [true, false], 'a preview over a race in progress leaves its engine alone');
+  c.preview = null; c.G.state = 'menu'; c.driveOut = {}; look({ active: true, sound: true, engine: true });
+  assert.deepEqual(engine, [true, false], 'the RACE! drive-out runs its own engine');
 });
 
 test('REAR LIGHT: AUTO keeps the night-or-wet rule; ON, OFF and FLASH override it', () => {
