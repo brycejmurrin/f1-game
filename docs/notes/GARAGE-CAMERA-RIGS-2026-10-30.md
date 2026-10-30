@@ -49,3 +49,9 @@ is not the script's.
   follows the car of THAT duration. A crew with `extra` seconds or another
   result stretches `u`, so the aim leads or lags the car by up to that share.
 - Not rendered: no contact sheet (`--render` not implemented), no browser look.
+
+## Integration follow-up (parent, 2026-10-30)
+
+- 844×390 captures of ORBIT on a win put a CELEBRATION crew member's head in the lens: the rigs were authored before the result crews existed. `clearOfCrew` in `js/garage/arrival.js` now lifts a rig's eye over any Blender crew member within 2.4 m (eased to head height, then up to 1.3 m over heads within 1.2 m). Every rig × result crew stays ≥ 0.8 m clear; the worst eye step is 0.43 m per 50 ms, when a celebration member sprints through the dolly's eye (`garage-crew-choreo.test.mjs`).
+- Crane-in's keys moved from x 1.6 to x 2.4–2.7 and the rigs were regenerated with bpy 5.2.3. At 1.6 the RECOVERY pushers walked under the low lens.
+- Past the shutter shot, the aim eases onto the live car instead of the baked aim, so a crew's extra seconds or a result's slower drive cannot leave the car out of frame.

@@ -290,3 +290,20 @@ test("AFTER-RACE CREW BY RESULT deals the Blender result clips; their extra seco
   const bare = Arrival.settings({ result: "win", homeCrew: "none" });
   assert.ok(Math.abs(Arrival.duration(Arrival.settings({ result: "win" }), "home") - (Arrival.duration(bare, "home") + Choreo.extra("celebrate"))) < 1e-9);
 });
+
+test("Blender camera rigs keep clear of every result crew without snapping (crew-aware eye)", () => {
+  const { Arrival, Choreo } = load(), out = Choreo.actors(12);
+  for (const rig of Arrival.RIG_IDS) for (const [id, result] of Object.entries(RESULT_CREWS)) {
+    const cfg = Arrival.settings({ angle: rig, homeCrew: id, result, sway: 0 }), end = Arrival.duration(cfg, "home");
+    let prev = null;
+    for (let t = 0; t <= end; t += 0.05) {
+      const p = Arrival.poseHome(t, cfg, true), n = Choreo.sample(id, t, p.side, out, t, true);
+      for (let i = 0; i < n; i++) assert.ok(eyeGap(p.eye, out[i].x, out[i].z) >= 0.8, `${rig} × ${id} t=${t.toFixed(2)}: ${eyeGap(p.eye, out[i].x, out[i].z).toFixed(2)} m from member ${i}`);
+      // No teleport: a CELEBRATION member sprints ~6 m/s through the DOLLY's eye, and the
+      // eye rises 1.3 m over them in ~0.4 s (0.43 m per 50 ms, measured); a sideways push
+      // and a square-root lift both snapped 1.1-1.5 m in one step before this bound held.
+      if (prev) assert.ok(Math.hypot(p.eye[0] - prev[0], p.eye[1] - prev[1], p.eye[2] - prev[2]) < 0.5, `${rig} × ${id} t=${t.toFixed(2)}: no snap`);
+      prev = p.eye.slice();
+    }
+  }
+});

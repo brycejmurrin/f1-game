@@ -84,8 +84,10 @@ def rig_crane(d, b):
     if d == 'out':
         return [(0, (2.1, 3.3, 0.9), 50), (b['go'], (2.1, 3.3, 0.7), 50),
                 (b['atDoor'] + 0.4, (1.5, 0.45, 4.7), 60), (b['end'], (1.8, 0.5, 5.1), 60)]
-    return [(0, (1.6, 0.45, 3.4), 60), (b['back'], (1.8, 0.5, 3.1), 60),
-            (b['park'] + 0.4, (2.2, 3.35, 1.2), 48), (b['end'], (2.0, 3.4, 0.8), 48)]
+    # x >= 2.4: at x 1.6 the RECOVERY crew's pushers (1.65 m off the car's
+    # centreline) walked under the low lens and whipped the crew-aware lift.
+    return [(0, (2.6, 0.45, 3.4), 60), (b['back'], (2.7, 0.5, 3.1), 60),
+            (b['park'] + 0.4, (2.5, 3.35, 1.2), 48), (b['end'], (2.4, 3.4, 0.8), 48)]
 
 def rig_orbit(d, b):
     if d == 'out':
