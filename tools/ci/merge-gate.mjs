@@ -82,7 +82,7 @@ const git = (args, cwd = ROOT, extra = {}) => spawnSync("git", args, { cwd, enco
 export function openVerdict(pull) {
   if (!pull || !pull.state) return row(false, "no pull request");
   if (pull.state !== "open") return row(false, `PR is ${pull.state}${pull.merged ? " (merged)" : ""}`);
-  if (pull.draft) return row(false, "still a draft: pass ready-gate.mjs and mark it ready first");
+  if (pull.draft) return row(false, "draft: flip ready first — ready-gate, then update_pull_request draft:false, then land");
   return row(true, "open and ready for review");
 }
 
