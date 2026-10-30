@@ -1067,7 +1067,11 @@ test("land.yml sweep: re-gates a land PR whose gate is older than its green CI (
   assert.equal(ghExpr(job.if, { event_name: "pull_request_target" }), false);
   assert.ok(LAND.on.schedule[0].cron);
   const run = job.steps[0].run;
-  const T = (m) => `2026-10-30T10:${String(m).padStart(2, "0")}:00Z`;
+  // Minute order is the fixture. The offsets are from the sweep's live
+  // `date -u +%s`: a fixed 2026-10-30T10:mmZ stamp made the "pending 15 min"
+  // case true once the wall clock passed 10:46Z, so the sweep dispatched.
+  const nowMs = Date.now();
+  const T = (m) => new Date(nowMs + (m - 32) * 60_000).toISOString().replace(/\.\d{3}Z$/, "Z");
   const lands = (n = 1) => JSON.stringify(Array.from({ length: n }, (_, i) => ({ number: 7 + i, headRefOid: String(i + 1).repeat(40), isDraft: false, labels: [{ name: "land" }] })));
   const ci = (o = {}) => JSON.stringify({ workflow_runs: [{ status: "completed", conclusion: "success", display_title: "CI", created_at: T(0), updated_at: T(30), ...o }] });
   const st = (...a) => JSON.stringify(a.map(([state, m]) => ({ context: "gate", state, created_at: T(m) })));
