@@ -138,7 +138,7 @@ when matched. Subagents (`.claude/agents/`) isolate noisy work; `docs/AGENT-SURF
 wrapped as `apex_*`. Routes: a JS symbol → skill `code-nav`; live canvas → skill `mcp-probe`; pre-push or deploy →
 skill `check-changes` (spawns agent `verify-agent`); live `version.json` → agent `deploy-research`; dead code →
 skill `slim-bloat`; fat skill → skill `agent-config`; owning or sweeping PRs → skill `steward` + `tools/ci/pr-board.mjs`; the lane contract,
-labels and the dispatcher → `docs/WORKERS.md`; failed-CI triage → agent `ci-red-triage`; a scoped change handed to a
+labels → `docs/WORKERS.md`; a launched lane → skill `worker`; the dispatcher → skill `dispatcher`; failed-CI triage → agent `ci-red-triage`; a scoped change handed to a
 subagent you message mid-task → agent `worker`.
 
 WEB RESEARCH IS PART OF DESIGN: before building a tool, a workflow or CI change, or using an API you have not checked this session, read the current docs (`WebSearch`, `WebFetch`, Context7 for library APIs) and cite the URLs in the commit, PR body or `docs/notes/`; memory of a CLI flag, limit or default is not evidence.
@@ -175,9 +175,8 @@ exactly that commit (dispatch = "deploy now"; gated publish ~20 min median, p90 
 (agent `deploy-research`; `docs/TESTING.md` §Release train).
 
 ## Coordination
-`docs/WORKERS.md` is the one home for the lane contract (finding and claiming work, the draft PR,
-`land`, the cost cap, takeovers, labels, the dispatcher): GitHub is the only state store and the only bus, and
-comments are the only inter-agent message.
+`docs/WORKERS.md` (labels, Hand-off block) plus skills `worker` and `dispatcher` hold the lane contract: GitHub is the
+only state store and bus; comments are the only inter-agent message.
 - GitHub lands PRs; no session merges or arms: a worker adds `land` and `land.yml`'s `gate` check arms auto-merge.
   Merge commits only, never squash or rebase (the hooks and the ruleset refuse both).
 - The only veto is the `hold` label; whoever set it removes it, and Bryce can always remove it. "Do not merge" wording is no veto. Waiting on something is a Plan item, not a hold. A hook or classifier denial is final for that action: never re-word and retry; put it to Bryce (via the dispatcher) as a choice. Every session hands off at 300k context via skill `handoff`, follow-up prompts already in the PR Hand-off block; reviewer subagents run `model: sonnet`.

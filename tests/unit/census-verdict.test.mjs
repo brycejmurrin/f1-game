@@ -146,6 +146,21 @@ test("a healthy hardware run passes and prints one block per leg in the fixed or
   assert.ok(rows.some((r) => /wgx: {3}bound=true softPresent=false headlessUa=true$/.test(r)));
 });
 
+test("a leg with an upload summary prints one uploads: row, its classes, and at most five sites (perf hunt 6)", () => {
+  const site = (i) => `writeBuffer :: #256B :: updateBinding :: car.js:${i} <- ` + "x".repeat(300);
+  const uploadsSummary = { kbPerFrame: 214, callsPerFrame: 90.6,
+    rows: Array.from({ length: 8 }, (_, i) => ({ site: site(i), kbPerFrame: 20 - i, nPerFrame: 4, share: 0.1 })),
+    groups: [{ cls: "uniform", share: 0.612 }, { cls: "attribute", share: 0.3 }] };
+  const { rows } = legReport("webgpu", tlx({}, { uploadsSummary }), { hardware: true });
+  const at = rows.findIndex((r) => /^\s+uploads: /.test(r));
+  assert.equal(rows.filter((r) => /^\s+uploads: /.test(r)).length, 1);
+  assert.equal(rows[at].trim(), "uploads: 90.6 calls/f 214 KB/f — uniform 61% attribute 30%");
+  const sites = rows.slice(at + 1).filter((r) => /KB\/f\s+4x writeBuffer/.test(r));
+  assert.equal(sites.length, 5);
+  assert.ok(sites.every((r) => r.length < 220), "a site is truncated");
+  assert.equal(legReport("webgpu", tlx(), { hardware: true }).rows.filter((r) => /^\s+uploads: /.test(r)).length, 0, "no summary, no row");
+});
+
 test("TLX off the direct present path fails a hardware run while the native pin is in force (promoted 2026-10-14)", () => {
   const blit = { backendState: { ...tlx().gfx.backendState, softBlit: true } };
   let r = run({ legs: healthy({ webgpu: tlx(blit) }) });

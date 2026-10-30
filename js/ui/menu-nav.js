@@ -367,6 +367,20 @@ window.MenuNav = (function () {
         if (foot) return foot;
       }
     }
+    // Up off a TAB RAIL with nothing above in its band: the sheet head's
+    // controls come before the wrap. A roving rail is ONE stop (the selected
+    // tab), so the Data Hub ✕ at the head's far end sat in no tab's band and
+    // no arrow reached it (UI hunt 2026-10-29 #10). Nearest row above wins.
+    if (dy < 0 && from.getAttribute && from.getAttribute("role") === "tab") {
+      let head = null, headCost = Infinity;
+      for (const el of list) {
+        const b = centre(el), along = a.y - b.y;
+        if (el === from || along <= 1) continue;
+        const cost = along + gap(a.x, b.l, b.r) * 0.25;
+        if (cost < headCost) { head = el; headCost = cost; }
+      }
+      if (head) return head;
+    }
     if (dy && edge) return edge;
     // No band, or a sideways end: DOM / reading order. Wrap so Left from the
     // first item and Right from the last are never a no-op — a pad D-pad press

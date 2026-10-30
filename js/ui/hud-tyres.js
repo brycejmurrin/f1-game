@@ -69,6 +69,7 @@ const HudTyres = (function () {
     return raw ? raw.charAt(0) : "-";
   }
 
+  let _chipOf = null, _chip = null;   // paint()'s #hud-tyre-code, cached per widget
   /** Write data-temp on #hud-tyre; the compound letter takes the colour and
    *  the glyph. With `extra` ({code, lapsLeft, spent, plan}) also writes the
    *  aria-label (#hud-tyre is role="img", so the label is all a reader gets). */
@@ -76,7 +77,9 @@ const HudTyres = (function () {
     if (!tyreEl || !tyreEl.dataset) return false;
     const s = state(info);
     if (tyreEl.dataset.temp !== s) tyreEl.dataset.temp = s;
-    const chip = tyreEl.querySelector ? tyreEl.querySelector("#hud-tyre-code") : null;
+    // The chip is queried once per widget, not per 10 Hz paint: re-query only when it left the tree.
+    if (tyreEl !== _chipOf || !_chip || !_chip.isConnected) { _chipOf = tyreEl; _chip = tyreEl.querySelector ? tyreEl.querySelector("#hud-tyre-code") : null; }
+    const chip = _chip;
     if (chip) {
       if (cbCuesOn() && extra && extra.code) {
         const L = compoundChip(extra.code);

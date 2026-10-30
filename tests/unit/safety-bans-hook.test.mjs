@@ -387,7 +387,7 @@ test("ban 6: a git ref written through gh api is refused in both doors, even und
 });
 
 test("advisory: a piped ready-gate/merge-gate without pipefail gets a reminder, never a block", () => {
-  for (const cmd of ["node tools/ci/ready-gate.mjs --pr 12 | tail -3", "node tools/ci/merge-gate.mjs --pr 12 2>&1 | tail -1"]) {
+  for (const cmd of ["node tools/ci/ready-gate.mjs --pr 12 | tee rg.log", "node tools/ci/merge-gate.mjs --pr 12 2>&1 | tail -1"]) {
     const r = claudeBash(cmd);
     assert.equal(r.status, 0, cmd);
     assert.ok(r.out.hookSpecificOutput.additionalContext.includes("is piped, so this command's exit status"));
@@ -396,11 +396,13 @@ test("advisory: a piped ready-gate/merge-gate without pipefail gets a reminder, 
     assert.equal(c.out.permission, "allow");
     assert.ok(c.out.agent_message.includes("is piped"), "the Cursor agent reads the reminder");
   }
-  for (const cmd of ["set -o pipefail; node tools/ci/ready-gate.mjs --pr 12 | tail -3", "node tools/ci/ready-gate.mjs --pr 12",
+  for (const cmd of ["set -o pipefail; node tools/ci/ready-gate.mjs --pr 12 | tee rg.log", "node tools/ci/ready-gate.mjs --pr 12",
     "node tools/ci/merge-gate.mjs --pr 12 || echo refused", "node tools/ci/ready-gate.mjs --pr 12 > artifacts/logs/rg.log",
     "echo 'node tools/ci/ready-gate.mjs --pr 12 | tail'", "cat > notes.md <<'EOF'\nrun `ready-gate.mjs | tee`\nEOF"]) {
     assert.equal(claudeBash(cmd).out, null, cmd);
   }
+  // E3 (efficiency review finding 4): a ready-gate piped into tail/head is refused outright, not advised.
+  assert.equal(claudeBash("node tools/ci/ready-gate.mjs --pr 12 | tail -3").status, 2);
 });
 
 test("a push to a cursor/* branch whose every PR is merged or closed is refused; an open PR or none passes", () => {

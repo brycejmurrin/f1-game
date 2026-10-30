@@ -133,7 +133,7 @@ export function rosteredFiles() {
   const rels = new Set([
     ...M.FULL, ...Object.values(M.DEFERRED).flat(), ...M.LAZY_AGENT, ...M.LAZY_RACE, ...(M.LAZY_RACE_SESSION || []),
     ...(M.LAZY_AUDIO || []), ...M.LAZY_DATA, ...M.LAZY_NET, ...(M.LAZY_EDITOR || []), ...(M.LAZY_XR || []),
-    ...(M.LAZY_CAM_EDITOR || []), ...(M.LAZY_CAREER_UI || []), ...(M.LAZY_TRACK_BUILD || []),
+    ...(M.LAZY_CAM_EDITOR || []), ...(M.LAZY_CAREER_UI || []), ...(M.LAZY_UI_PRESETS || []), ...(M.LAZY_TRACK_BUILD || []),
   ]);
   return [...rels].filter((r) => r.endsWith(".js") && fs.existsSync(path.join(ROOT, r)))
     .map((rel) => ({ rel, src: fs.readFileSync(path.join(ROOT, rel), "utf8") }));

@@ -223,6 +223,13 @@ function detailRows(path3, g, { tlxLeg }) {
     rows.push(`${IND}store: submits=${_po.medianSubmits} stored=${_po.storedPerFrame}/f discarded=${_po.discardedPerFrame}/f`);
     for (const r of _po.rows.slice(0, 16)) rows.push(`${IND}  ${String(r.perFrame).padStart(5)}x ${r.pass}`);
   }
+  // THE UPLOAD SITES (perf hunt 6): writes and KB a frame by class, then the top five call sites.
+  const _up = g.uploadsSummary;
+  if (_up && _up.rows) {
+    rows.push(`${IND}uploads: ${_up.callsPerFrame} calls/f ${_up.kbPerFrame} KB/f — ` +
+      _up.groups.map((c) => `${c.cls} ${Math.round(c.share * 100)}%`).join(" "));
+    for (const r of _up.rows.slice(0, 5)) rows.push(`${IND}  ${String(r.kbPerFrame).padStart(7)} KB/f ${String(r.nPerFrame).padStart(5)}x ${r.site.slice(0, 160)}`);
+  }
   // PIPELINE COMPILES: only a compile count separates "allocate faster" from
   // "warm the programs" (run 197).
   const _w = g.gpuWork;

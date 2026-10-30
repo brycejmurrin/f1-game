@@ -2278,6 +2278,7 @@ function scheduleFlybyTrack(settle) {
       // its scene/targets must wait. ensureScenery shares in-flight requests.
       await ensureScenery(want);
       if (!current()) return;
+      if (!els.select.hidden || !$("race-settings").hidden) kickRaceBundles(false);   // picker/sheet up: RACE! is next (not the title warm)
       if (gfx.warming && gfx.warming()) { flybyBuildTimer = setTimeout(prepare, 100); return; }
       // Car assets BEFORE the warm frames: prepareMenuCarAssets slices the
       // mesh/livery work; a warm frame drawn first
@@ -2736,6 +2737,10 @@ function entrySettings() {
     season && season.stage, SeasonCal.quali()]);
 }
 const _customTrackStarts = new WeakSet();
+// Perf hunt 7: startRaceBody awaited the race-session, lighting and audio bundles one after another, and only once
+// startRace's scenery prep resolved (TLX census 40838027433: `resets` 4.4 s). All three are memoised; start them together.
+// LAZY_AUDIO only from the RACE tap: #1135 keeps its eval off the title, which the menu prep also serves.
+function kickRaceBundles(audio) { for (const p of [ensureRaceSession(), ensureLightPresets(), audio && ensureAudio()]) if (p && p.catch) p.catch(() => false); }
 function startRace() {
   pendingFinishQuit = false; titleVisit++;
   if (setupTrialSession && !setupTrialSession.pending()) { setupTrialSession.cancel(); SetupTrials.invalidate("Session restarted"); }
@@ -2756,6 +2761,7 @@ function startRace() {
   if (steerMode === "tilt" && !enableTilt.asked && !Input.gyroSeen) enableTilt();
   if (document.fullscreenElement) Input.lockLandscape();
   const key = entrySettings(), idx = trackIdx;
+  kickRaceBundles(true);
   const mp = _menuGate.prep, join = !!(mp && mp.building && mp.want === idx && mp.bkey === buildKey(idx));
   const prior = mp && mp.step ? mp.step : null;
   if (join) mp.owner = () => key === entrySettings();
@@ -3027,6 +3033,7 @@ function endRace(forcedOrder) {
   dbgCam = null; resultsCam.onFlag();
   buildResults(order, { sprint: wasSprint, duel: duelOn() });   // endRace's own read: scored() is stale after a season save conflict
   RaceCeremony.afterClassify(G, order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() });   // opt-in ceremony; else #results now
+  setupCam.noteResult(order, { sprint: wasSprint, duel: duelOn(), watch: realRace.isWatch() });   // AFTER THE RACE: the next garage visit brings the car home
   announcer.wrapUp(order, Object.assign(loadingInfo(), { sprint: wasSprint }));   // js/audio/announcer.js — the broadcaster's read over the results
 }
 
@@ -8751,7 +8758,9 @@ $("mb-data").onclick = () => {
   // The click sound fires immediately — the bundle is one network round trip
   // on a cold tap and the button must not feel dead while it lands.
   if (soundOn) GameAudio.uiSelect();
-  openDataHub();
+  // A one-shot tab from the NEXT GP shortcut (js/ui/deep-link.js): the hub opens ON it, however slow the bundle.
+  const door = $("mb-data"), tab = door.dataset.openTab; delete door.dataset.openTab;
+  openDataHub(tab);
 };
 CustomTracks.create(G, { load: loadBackendScripts, door: $("mb-designer") });   // TRACK DESIGNER door (LAZY_EDITOR) + the saved-circuit registry
 $("mb-help").onclick = () => { els.howtoplay.hidden = false; if (soundOn) GameAudio.uiSelect(); };
@@ -9094,7 +9103,7 @@ function openGarage(from) {
   // another present. Unhide and draw one garage frame inside the same vt
   // callback as openSetup — not a timer mask, the frame entry owes the player.
   const enterGarage = () => {
-    openSetup();
+    openSetup(); setupCam.startHome(from);   // AFTER THE RACE (never from a pit stop): its first frame is this one
     if (canvas) canvas.style.visibility = "";
     if (!_softEl && gfx.softPresent && gfx.softPresent()) _softEl = document.getElementById("game-soft");
     if (_softEl) _softEl.style.visibility = "";

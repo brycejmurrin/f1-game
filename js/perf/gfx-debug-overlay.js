@@ -229,6 +229,12 @@ const GfxDebug = (() => {
     }
 
     if (glx.__tlx) pushThreeState(lines, glx.__tlx);
+    else if (typeof glx.hdrMode === "function") {
+      // GLX/WGX had no post line: a dark frame could not say whether the HDR post chain (and its
+      // tonemap) ran. hdr=false is the direct 8-bit path: no bloom, no tonemap.
+      try { lines.push(`post hdr=${!!glx.hdrMode()} msaa=${typeof glx.msaa === "function" ? num(glx.msaa()) : "?"}`); }
+      catch (e) { lines.push("post state threw: " + (e && e.message)); }
+    }
     pushMem(lines, glx);
     pushFrameState(lines, glx);
     pushLoopState(lines);
