@@ -22,7 +22,7 @@
 //   --no-shots (measure only; skips the lit-frame wait)  --render-every-frame (keep the 3D loop drawing
 //   between captures; default paints ONE frame per cell, then __apex.headless)  --backend three|webgl2
 //   --gl swiftshader|llvmpipe (default $APEX_GL or swiftshader)  --min-font 10
-//   --wait <s boot budget, 180>  --json (summary JSON as the last stdout block)
+//   --wait <s boot budget, 180>  --settings <apex26-settings-v1 export, seeded per boot>  --json (summary JSON as the last stdout block)
 //   --list (cells, no browser)  --plan  --self-test  --merge <dir…>
 //   one-cell knobs: --device --cam --profile --layout --map --gaps --mirror
 //   --preset (name or inline JSON offsets) --preset-set cam|both
@@ -90,7 +90,7 @@ const CELL_FLAGS = { "--device": "device", "--cam": "cam", "--profile": "profile
   "--cvd": "cvd", "--contrast": "contrast", "--text-size": "textSize", "--hud-scale": "hudScale", "--ui-scale": "uiScale",
   "--btn-scale": "btnScale", "--tyres": "tyres", "--hud": "hud", "--tod": "tod", "--steer": "steer", "--profile-live": "profileLive", "--off": "off", "--name": "name" };
 export const KNOWN_FLAGS = ["--matrix", "--track", "--portrait", "--frac", "--only", "--shard", "--out", "--no-shots", "--render-every-frame", "--backend", "--gl",
-  "--min-font", "--wait", "--json", "--list", "--plan", "--self-test", "--merge", "--url", "--help", ...Object.keys(CELL_FLAGS)];
+  "--min-font", "--wait", "--settings", "--json", "--list", "--plan", "--self-test", "--merge", "--url", "--help", ...Object.keys(CELL_FLAGS)];
 
 const insideOutput = (p) => ["artifacts", "scratch"].some((d) => {
   const rel = path.relative(path.join(ROOT, d), p);
@@ -119,7 +119,19 @@ export function parseArgs(argv, { now = new Date(), readFile = (p) => fs.readFil
   const stamp = now.toISOString().replace(/[:.]/g, "-").replace(/Z$/, "");
   const out = path.resolve(ROOT, F.flag("--out", path.join("artifacts", "hud-survey", stamp)));
   if (!insideOutput(out)) throw new CliArgError(`--out must stay under artifacts/ or scratch/ (got ${out})`);
-  const common = { out, track, frac, backend, gl, minFont, waitMs: waitS * 1000, shots: !F.has("--no-shots"), renderAll: F.has("--render-every-frame"),
+  // --settings: a LOAD SETTINGS export (tests/data/settings-defaults-export.json is the owner's
+  // phone) imported once per boot through SettingsExport.applySettings, then a reload, the way
+  // tools/ui/explorer.mjs seeds one. Every knob a cell names still wins; the rest is the file's.
+  let settings = null;
+  if (F.has("--settings")) {
+    const sf = F.flag("--settings", "");
+    let text;
+    try { text = readFile(path.resolve(ROOT, sf)); } catch { throw new CliArgError(`--settings: cannot read ${sf}`); }
+    if (text.length > 1024 * 1024) throw new CliArgError("--settings file exceeds 1 MiB");
+    try { settings = JSON.parse(text); } catch { throw new CliArgError(`--settings: ${sf} is not JSON`); }
+    if (!settings || settings.format !== "apex26-settings-v1") throw new CliArgError("--settings needs an apex26-settings-v1 export");
+  }
+  const common = { out, track, frac, backend, gl, minFont, settings, waitMs: waitS * 1000, shots: !F.has("--no-shots"), renderAll: F.has("--render-every-frame"),
     json: F.has("--json"), list: F.has("--list"), plan: F.has("--plan") };
   if (F.has("--merge")) {
     // Every non-flag token after --merge is a shard directory.
@@ -422,6 +434,14 @@ async function runGroup(browser, group, plan, log) {
     const t0 = Date.now();
     await page.goto(plan.url, { waitUntil: "domcontentloaded", timeout: plan.waitMs });
     await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: plan.waitMs });
+    if (plan.settings) {
+      const imp = await page.evaluate((data) => SettingsExport.applySettings(data, {}), plan.settings);
+      if (!imp.ok || imp.failed) throw new Error(`--settings import incomplete: ${JSON.stringify(imp)}`);
+      log(`settings: ${imp.applied} applied, ${imp.skipped} skipped`);
+      // The boot-group init script runs again on reload, so the cell's boot keys win over the file's.
+      await page.reload({ waitUntil: "domcontentloaded", timeout: plan.waitMs });
+      await page.waitForFunction(() => window.__apex != null && window.__apex.race, null, { polling: 100, timeout: plan.waitMs });
+    }
     await page.evaluate(async () => { try { if (window.Assets && Assets.loadModels) await Assets.loadModels(); } catch { /* procedural */ } });
     const ins = dev.ins;
     if (ins.sal || ins.sar || ins.sat || ins.sab) {

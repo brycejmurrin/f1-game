@@ -202,6 +202,10 @@ export function childSessionIds(state) {
   return [...ids].sort();
 }
 
+/** The children named on OPEN work only: finished sessions on recently closed PRs are rule 4's archive business and say
+ *  nothing about stale claims (2026-10-30: 42 children, 25 of them on closed work, tripped the cap of 27 for 17 open). Pure. */
+export const openChildSessionIds = (state) => childSessionIds({ ...state, closedPrs: [], closedIssues: [] });
+
 /** One `{ccr:{data:[…], has_more}}` list_sessions page (MCP text with its envelope, or raw JSON) → { sessions, hasMore }. Pure. */
 export function sessionsPage(text) {
   const s = String(text);
@@ -875,9 +879,9 @@ export function main(argv, { api = githubApi, read = fs.readFileSync, log = cons
     ...(children ? { recentHours, light: true, commentsOf } : {}) }); }
   catch (e) { log(`dispatch: ${e.message}`); return 3; }
   if (children) {   // step 1 of the cycle: the only sessions to look up (get_session each, save, pass as --sessions)
-    const ids = childSessionIds(state), cap = 3 * ((config.maxLiveWorkers.claude ?? 0) + (config.maxLiveWorkers.cursor ?? 0));
+    const ids = childSessionIds(state), openIds = openChildSessionIds(state), cap = 3 * ((config.maxLiveWorkers.claude ?? 0) + (config.maxLiveWorkers.cursor ?? 0));
     for (const id of ids) log(`GET_SESSION ${id}`);
-    log(`= dispatch children: ${ids.length} session(s) named on open or recently closed work (last ${recentHours} h; ${state.droppedOld} older item(s) skipped)${ids.length > cap ? ` — over ${cap}: check for stale claims` : ""}`);
+    log(`= dispatch children: ${ids.length} session(s) named on open or recently closed work (last ${recentHours} h; ${state.droppedOld} older item(s) skipped)${openIds.length > cap ? ` — ${openIds.length} on OPEN work, over ${cap}: check for stale claims` : ""}`);
     return 0;
   }
   const p = planDispatch(state, config, when);

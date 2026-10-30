@@ -91,6 +91,12 @@
       linear-gradient(90deg in oklab, color-mix(in oklab, var(--carbon) 70%, var(--scrim-heavy)) 0%, transparent 46%);
   }
   #overlay[data-home-scene]:not([data-home-scene="static"]) #title-car { opacity: 0; }
+  /* The line-art car hands over to the live or photo scene as a crossfade, not
+     a one-frame pop (live film ~17.5 s, design pass 3). Both reduce gates
+     keep the cut: the menu backstops zero it. */
+  @media (prefers-reduced-motion: no-preference) {
+    :root:not([data-motion="reduce"]) #title-car { transition: opacity var(--dur-4) var(--ease-out); }
+  }
   #overlay[data-home-scene="photo"] { background-image: linear-gradient(90deg, color-mix(in oklab, var(--carbon) 58%, var(--scrim-heavy)), var(--carbon) 68%), var(--home-scene-image); background-size: cover; background-position: center; }
   #overlay[data-home-scene="photo"]:not([style*="data:image"]) #title-car,
   #overlay[data-home-scene]:not([data-home-scene="static"]):not([data-home-ready="1"]):not([data-home-scene="photo"]) #title-car { opacity: 1; }
@@ -154,4 +160,40 @@
      rendered scene's buttons. The shared compact size scales; this only trims
      the height. */
   :root[data-motion="reduce"] :is(#pm-race-context, #pm-quick-doors, #practice-brief) { animation: none; transition: none; }
+  /* TOUCH SCREEN ENTER (design pass 3, #4275). Menus' vt() skips the View
+     Transition on a coarse pointer (it snapshots the WebGL layer and hitched
+     1.2 s on an iPhone), so every phone screen change was a hard cut. The
+     incoming full-screen flow fades in over --dur-1 instead: opacity only, so
+     no tap target moves under the thumb. Linear, not --ease-out: on 120 ms the
+     ease-out curve is done by ~40 ms and read as the cut it replaces (lane 3E
+     filmstrip, #4299). Modal sheets (.dim) keep scrim-in;
+     #loading runs its own phases. Off under both reduced-motion gates. Lives
+     in this deferred sheet: no screen changes before it has loaded. */
+  @media (prefers-reduced-motion: no-preference) {
+    :root:not([data-motion="reduce"]):not(:has(> body.desktop)) .screen:not(.dim, #loading) { animation: screen-in var(--dur-1) linear; }
+  }
+  /* GARAGE SHELL WHILE IT BUILDS. SetupUI.openSetup shows #carsetup with
+     aria-busy and builds the tabs and options two frames later; on a phone
+     those frames are the garage's first 3D frames (~1.3 s), so the sheet sat
+     empty. Static ghosts of the compact layout (two tab rows, option rows)
+     show its structure at once. No shimmer: it is a wait, not motion.
+     PAINT ONLY, on #cs-options while it is still empty (#cs-body is display:contents in the compact sheet): an earlier
+     version gave the empty panes a min-height, the sheet's shape pass
+     measured it, and the portrait tab strip stopped scrolling sideways
+     (ui-button-touch.spec, #4283). Nothing here may change layout. */
+  #carsetup[aria-busy="true"] { --cs-ghost: color-mix(in oklab, var(--text) 7%, transparent); }   /* theme ink, faint: follows the light theme */
+  #carsetup[aria-busy="true"] #cs-options:empty {
+    --cs-row: calc(var(--chip-h) + var(--gap) * 0.5);
+    background:
+      repeating-linear-gradient(to right, var(--cs-ghost) 0 5.5em, transparent 0 calc(5.5em + var(--gap) * 0.5)) 0 0 / 100% var(--chip-h) no-repeat,
+      repeating-linear-gradient(to right, var(--cs-ghost) 0 4.5em, transparent 0 calc(4.5em + var(--gap) * 0.5)) 0 var(--cs-row) / 100% var(--chip-h) no-repeat,
+      repeating-linear-gradient(to bottom, var(--cs-ghost) 0 var(--chip-h), transparent 0 var(--cs-row)) 0 calc(2 * var(--cs-row) + var(--gap) * 0.5) / 100% 100% no-repeat;
+  }
+  @media (forced-colors: active) { #carsetup[aria-busy="true"] #cs-options { background: none; } }
+  /* THE iOS INSTALL TIP ON THE LANDSCAPE TITLE docks at the foot of the brand
+     column. touch-controls.css lifts it 4.5rem, which on a phone lands on the
+     disclaimer (live film, ~24 s, design pass 3); down here it sits over the
+     line-art backdrop only, and points at Share in the bottom toolbar. */
+  body[data-shape="wide"][data-density="compact"]:has(> #overlay:not([hidden])) #ios-install { bottom: var(--safe-b); }
+  @keyframes screen-in { from { opacity: 0; } }
 }

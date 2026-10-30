@@ -59,6 +59,18 @@ test("frequent pools have at least five variants", () => {
   }
 });
 
+test("a gap that rounds to ten is '10', never '10.0'", () => {
+  // 9.96.toFixed(1) is "10.0". The recorded pack has "9.9" and "10", not "10.0",
+  // so a gap that sits just under 10 s (a matched car, a whole stint) made every
+  // line that named it silent. Same rounding the announcer already refuses.
+  assert.equal(RL.gapText(9.94), "9.9");
+  assert.equal(RL.gapText(9.96), "10");
+  assert.equal(RL.gapText(9.99), "10");
+  assert.equal(RL.gapText(10), "10");
+  assert.equal(RL.gapText(10.4), "10");
+  assert.equal(RL.gapText(1.234), "1.2");
+});
+
 test("a peeked pick counts as heard only once committed (refused cards must not burn variants)", () => {
   const rl = RL.create(7);
   const key = "eng.status";

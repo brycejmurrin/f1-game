@@ -1,0 +1,1 @@
+Fixed: red timing text (slow delta, lost position, hot tyre, LIMITS, gaps) now reads at APCA Lc 60+ via a lighter red text ink; STANDARD-contrast secondary labels lifted to Lc 67; touch-button labels never paint under 11 px (#4258).

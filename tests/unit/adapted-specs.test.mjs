@@ -43,7 +43,7 @@ describe(`browser specs under the vm-page adapter${group ? ` (${group})` : ""}`,
     assert.ok(specs.length > 0, "tools/ci/twinned-specs.mjs ADAPTED names no spec — drop test:vm-page or fill it");
   });
   for (const spec of specs) {
-    test(spec, { timeout: 900_000 }, () => {
+    test(`${spec}`, { timeout: 900_000 }, () => {
       const env = { ...process.env, APEX_VM_PAGE: "1" };
       // NODE_TEST_CONTEXT would switch the child to the v8-serialized reporter
       // and the `# pass` summary would be absent (tools/ci/run-playwright.mjs
