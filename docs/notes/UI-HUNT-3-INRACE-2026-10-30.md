@@ -1,0 +1,34 @@
+# UI hunt #3: the in-race screen on the owner's own settings (2026-10-30)
+
+Hunt id UI-HUNT-3-INRACE, tracking issue #4271, PR #4280 (branch `claude/ui-hunt-3-inrace-ftzesj`, the
+session's designated branch). Base: deploy tip `7c6d11c6`. Round 2 (PR #4210, `UI-HUNT-2-HUD-2026-10-30.md`)
+surveyed shipped defaults; this round seeds the owner's real iPhone export,
+`tests/data/settings-defaults-export.json`: HELMET (camMode 19), HUD SIZE 155.25, BUTTON SIZE 245, steer
+BUTTONS, TEXT large, contrast HIGH, MIRROR on, map and gaps on, pause look `{btn:115, w:130}`, button and
+panel opacity 65.
+
+## Tools added
+
+- `hud-survey.mjs --settings <export>` imports an `apex26-settings-v1` file once per boot
+  (`SettingsExport.applySettings`, then a reload, the way `tools/ui/explorer.mjs` seeds one). Every knob a
+  cell names still wins; the rest is the file's. Unit cell in `tests/unit/hud-survey.test.mjs`.
+- The pause card was measured with `explorer.mjs inspect --screen pause --touch --boot 844x390
+  --safe 0,47,21,47 --settings <export>`, which already took a settings file.
+
+## Findings
+
+FIXED = fixed here with before → after; FILED = a `ready` issue; INFO = measured, no defect.
+
+| # | finding | status | evidence (before → after) | fix |
+|---|---|---|---|---|
+| H3-01 | Pause look CARD WIDTH ≠ 100 turned the split card off: the old 2-column stack, RESUME pinned as a bottom bar, QUIT at y 460–525 of 390 | **FIXED** | explorer inspect, owner's export: `clipped #pm-resume`, QUIT y 460 → `no-findings`, all 14 doors above y 390 (lowest bottom 356); WIDTH 60: clean | `css/overlays.css` split card applies at any width, `--sheet-w: min(760px × width, 100%)`; its door floor takes BUTTON HEIGHT; `css/dialogs.css` bottom-bar RESUME no longer claims the width knob on a compact wide body |
+| H3-02 | BUTTON SIZE 245 shrinks SPEED / GEAR / TYRES to the 10 px floor whatever HUD SIZE says | **FIXED** | hud-survey `ui3-isolate` HELMET: default speed 81×40 @14 px; HUD 155 126×62 @21.7 px; BUTTON 245 58×29 @10.1 px; the owner's cell 65×32 @11.5 px | `js/ui/hud.js` steer-dock width budget reserves the cluster at `min(HUD SIZE, 1)`, not `READABLE_Z`: another slider never shrinks a readout below its shipped size. The steer arrows still grow past the pedals. `hud-feel.test.mjs` pins it (base: zBot 0.77, fails) |
+| H3-03 | Contrast HIGH (the SHIPPED default) paints the POS cell's dark ink on the dark HC plate: ~1.06:1 | see §Final | hud-survey `ui3-bryce-before` `b-helmet.png`: "22/22" near-invisible; `d-helmet.png` (contrast off) dark on white | `:root[data-ui-contrast="high"] :is(.hud-box, #announce)` (1,2,0) outranks design pass 2a's `body:not(.hud-prof-broadcast) #hud-box-pos` (1,1,1) |
+| H3-04 | The iOS install tip shows through the results card (lead 4) | **FIXED** (CSS, measured in §Final) | — | `css/overlays.css`: the pause hide rule also covers `#results` |
+| H3-05 | Return paths: knob → default → knob | INFO | `b-helmet` == `b-helmet-last`; `b-helmet-again` steer arrows 1 px lower; `b-chase` == `b-chase-again` | — |
+| H3-06 | Monaco, Bahrain night on the owner's knobs | INFO | `b-helmet-monaco`, `b-helmet-bahrain-night` == `b-helmet` box for box | — |
+| H3-07 | hud-survey's default cell is `contrast: off` but the game ships HIGH, so no survey measured the shipped contrast; the classifier has no text-contrast check | FILED | `tools/lib/hud-survey-matrix.mjs` `DEFAULT_CELL.contrast`, `js/ui/appearance-opts.js` `store.get(K_CONTRAST, "high")` | — |
+
+## Final
+
+(filled after the verification batch)
