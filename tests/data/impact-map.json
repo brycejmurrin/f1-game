@@ -16842,6 +16842,9 @@
         "tests/specs/ui-button-touch.spec.js",
         "tests/unit/dock-layout.test.mjs"
       ],
+      "applyShape": [
+        "tests/unit/dock-layout.test.mjs"
+      ],
       "clampXY": [
         "tests/unit/dock-layout.test.mjs",
         "tests/unit/hud-dock-pack.test.mjs"
@@ -16867,6 +16870,12 @@
         "tests/unit/dock-layout.test.mjs"
       ],
       "setEditing": [
+        "tests/unit/dock-layout.test.mjs"
+      ],
+      "shapeOf": [
+        "tests/unit/dock-layout.test.mjs"
+      ],
+      "sizeStep": [
         "tests/unit/dock-layout.test.mjs"
       ],
       "usablePad": [

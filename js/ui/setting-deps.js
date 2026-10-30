@@ -86,7 +86,7 @@ const SettingDeps = (function () {
     { key: "cue-condition", ids: ["pm-condition-cues"], runtime: true,
       parent: "pm-brakecue", except: ["1"], reason: "PREDICTIVE CUE is OFF" },
     // Button size, opacity and handedness style the on-screen touch dock only.
-    { key: "touch-dock", ids: ["pm-btnscale", "pm-btnopacity", "pm-mirror"], reason: "Touch controls only",
+    { key: "touch-dock", ids: ["pm-btnscale", "pm-btnopacity", "pm-btnshape", "pm-mirror"], reason: "Touch controls only",
       when: () => (typeof Input !== "undefined" && Input.touchControlsNeeded ? !!Input.touchControlsNeeded() : null) },
     { key: "hud-off", ids: ["pm-hudprofile", "pm-hudmetrics", "pm-hudmap", "pm-hudgaps", "pm-hudmirror", "pm-panelopacity"],
       parent: "pm-hidehud", values: ["on"], reason: "HUD is OFF" },

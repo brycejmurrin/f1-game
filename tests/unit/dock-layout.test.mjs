@@ -9,6 +9,7 @@ import path from "node:path";
 import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 import { absSrc } from "../helpers/abs-src.mjs";
+import { cssRules } from "../helpers/css-rules.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const SRC = fs.readFileSync(path.join(ROOT, "js/ui/dock-layout.js"), "utf8");
@@ -206,7 +207,12 @@ function bootCreate() {
     document: {
       documentElement: {},
       body: { setAttribute(k, v) { bodyAttrs[k] = v; }, removeAttribute(k) { delete bodyAttrs[k]; }, appendChild(n) { made.push(n); } },
-      createElement() { return { style: {}, setAttribute() {} }; },
+      // The REPOSITION toolbar is a div of buttons found by [data-k=…].
+      createElement() {
+        const kids = [];
+        return { style: {}, dataset: {}, setAttribute() {}, appendChild(c) { kids.push(c); },
+          querySelector(sel) { const k = /data-k=(\w+)/.exec(sel); return k ? kids.find((c) => c.dataset.k === k[1]) || null : null; } };
+      },
       addEventListener(t, fn) { docL[t] = fn; },
     },
     MutationObserver: function (cb) { observers.push(cb); this.observe = () => {}; },
@@ -337,4 +343,40 @@ test("apply divides the translate by the dock's effective CSS zoom", () => {
   assert.equal(plain.style.transform, "translate(80.0px, -80.0px)");
   assert.equal(zoomed.style.transform, "translate(40.0px, -40.0px)", "zoom 2 renders the same visual shift from half the px");
   assert.equal(third.style.transform, "translate(26.7px, -26.7px)");
+});
+
+test("BUTTON SHAPE: unknown or missing values are AUTO, and AUTO clears the root attribute", () => {
+  assert.equal(DL.SHAPES.map((s) => s[0]).join(), "auto,round,squircle,square");
+  for (const v of [null, undefined, "", "oval", 3]) assert.equal(DL.shapeOf(v), "auto");
+  for (const [v] of DL.SHAPES) assert.equal(DL.shapeOf(v), v);
+  const attrs = {};
+  const root = DL.__doc.documentElement;
+  root.style = {};
+  root.setAttribute = (k, v) => { attrs[k] = v; };
+  root.removeAttribute = (k) => { delete attrs[k]; };
+  assert.equal(DL.applyShape("square"), "square");
+  assert.equal(attrs["data-btn-shape"], "square");
+  assert.equal(DL.applyShape("oval"), "auto");
+  assert.equal("data-btn-shape" in attrs, false);
+});
+
+test("BUTTON SIZE toolbar steps snap to the 10 % grid and stay in the slider's range", () => {
+  assert.equal(DL.sizeStep(100, 1, 40, 300), 110);
+  assert.equal(DL.sizeStep(100, -1, 40, 300), 90);
+  assert.equal(DL.sizeStep(245, 1, 40, 300), 250);   // the owner's stored 245 % lands on the grid
+  assert.equal(DL.sizeStep(245, -1, 40, 300), 240);
+  assert.equal(DL.sizeStep(295, 1, 40, 300), 300);
+  assert.equal(DL.sizeStep(300, 1, 40, 300), 300);
+  assert.equal(DL.sizeStep(40, -1, 40, 300), 40);
+  assert.equal(DL.sizeStep(NaN, 1, 40, 300), 110);
+});
+
+test("BUTTON SHAPE CSS: every non-AUTO shape sets a radius in the deferred overlays sheet", () => {
+  const rules = cssRules(fs.readFileSync(path.join(ROOT, "css/overlays.css"), "utf8"));
+  for (const [v] of DL.SHAPES.slice(1)) {
+    const hit = rules.filter((r) => r.selector.startsWith(`:root[data-btn-shape="${v}"]`) && r.selector.includes(".touchbtn"));
+    assert.equal(hit.length > 0 && hit.every((r) => r.decls.has("border-radius")), true, v);
+  }
+  const eager = cssRules(fs.readFileSync(path.join(ROOT, "css/touch-controls.css"), "utf8"));
+  assert.equal(eager.some((r) => r.selector.includes("data-btn-shape")), false, "the eager sheet stays off the critical-path budget");
 });
