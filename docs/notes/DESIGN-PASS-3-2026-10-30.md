@@ -11,11 +11,11 @@ branch, and this table links them.
 
 | lane | issue | scope | owner | PR | status |
 |---|---|---|---|---|---|
-| A | #4258 | **priority: POS ink under HIGH CONTRAST** (below); contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | session_01BEw9UK2vGqGU75NMHYfS8K (Opus) | #4300 | launched 17:05–17:08Z |
-| B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | session_01BEw9UHQdfwniLm5HtYjdCi (Sonnet) | #4303 | launched 17:05–17:08Z |
+| A | #4258 | **priority: POS ink under HIGH CONTRAST** (below); contrast tokens: `--dim`, red text ink, 11 px floor, lane 2a's HUD tokens; `--upgrade` and the rawColor swaps after #4257 | session_01BEw9UK2vGqGU75NMHYfS8K (Opus) | #4300, #4321 | #4321 (HC POS fix) `land`; #4300 capped 18:03Z, `needs-owner` |
+| B | #4263 | RACE A FRIEND / career subtitle truncation; delete `.dh-developer-tools` | session_01BEw9UHQdfwniLm5HtYjdCi (Sonnet) | #4303 | `land` |
 | C | #4257 | ratchet tooling: a topic branch can lower a slack-0 tree metric | Bryce's own session (claimed 17:00Z, first claimant) | #4305 | not launched here |
-| D | #4281 | career header red ink, disclaimer border, garage tab strip | session_01BEw9UHhUxAcQ1XuHhx3LaL (Sonnet) | #4315 | launched 17:05–17:08Z |
-| D2 | #4282 | layout-audit: the 8 harness-timeout cells | waits for #4225 (owns `tools/ui/layout-audit.mjs`) | — | blocked |
+| D | #4281 | career header red ink, disclaimer border, garage tab strip | session_01BEw9UHhUxAcQ1XuHhx3LaL (Sonnet) | #4315 | `land` |
+| D2 | #4282 | layout-audit: the 8 harness-timeout cells | unassigned | — | `ready` since #4225 merged; waits for quota |
 | E | #4284 | motion and feel: exit easing, press feedback, results reveal, tabular numerals; one living gallery | session_01BEw9UGgCHVAFkn5Wwj63iT (Opus), capped 17:54Z | #4299 | built + verified; `needs-owner`: sync, CI, land |
 
 ## Coordination decisions
@@ -64,3 +64,7 @@ branch, and this table links them.
   fix as its own small PR.
 - **Quota:** at 17:57Z the seven-day limit read `allowed_warning`, so no further sessions launch (the #4299
   takeover, and D2 once #4225 merges, wait for `allowed`). #4299 carries `needs-owner` for the dispatcher.
+- **#4321** (the HIGH CONTRAST POS fix) was adopted by the coordinator after lane A capped. The "boot-load-budget red"
+  was the stale base: the tip carries #4277's 8.25 MB budget. On `84b90493`, Structural guards and Selected specs
+  were green and ready-gate passed; it is ready with `land`. #4300 still needs: a sync, the after-audit
+  `--diff`, `test:baseline`, and `ui-journey`/`ui-scale`.
