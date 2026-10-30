@@ -46,3 +46,13 @@ whose motion inventory stands; this lane does not redo it. Living gallery (repub
   https://developer.mozilla.org/en-US/docs/Web/CSS/font-variant-numeric
 - Not verified here: whether iOS Safari paints `:active` on every tapped control (the frames hold `:active`
   through CDP). A real-iPhone check of the press state is the open item for this lane.
+
+## Verification (844x390, this container)
+- `layout-audit --diff`: 0 new findings on title, select, garage, career, settings, season-setup, results, pause,
+  and on the HUD / HUD-pause cells (before audited from a worktree at 7c6d11c6), so the wider tabular digits
+  crowd nothing measured.
+- Specs: `menu-baseline` 6/6 (no golden moved, nothing re-blessed); `ui-scale` 45/45.
+- Unit: font-digits, css-tokens, css-critical-path, component-inventory, apca-timing, ui-journey-session /
+  race / career.
+- Not verified: a real iPhone painting `:active` on tap (frames hold it through CDP), and the TLX/WebGPU path
+  (these are DOM/CSS changes; the scene renderer is untouched).
