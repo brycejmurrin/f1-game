@@ -49,11 +49,109 @@ Live authenticated read-only GitHub calls confirmed:
   Recheck ownership before implementing their integration seams.
 - `CURSOR_API_KEY`, `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` were absent in
   this executor. This checks only those environment variable names, not every
-  connected service/account. No independent provider session API is exposed here.
+  connected service/account. Correction after live tool discovery: an
+  `apex_cursor_agents` management adapter IS exposed through F1 Cloud MCP; the
+  read probes and its credential/ownership limits are recorded below. No usable
+  authenticated independent Codex/Claude session-management route was verified.
 
 Three native workers independently researched backend failure handling, provider
 APIs and repository integration. They share this host; they are not independent
 Codex, Claude and Cursor sessions.
+
+## Grok owns the Cursor fleet: revised integration
+
+The user clarified on 2026-10-30: "Grok manages our cursor bots". Treat Grok as
+the current Cursor manager. WORKERS.md already recognizes the Grok launcher;
+disabled automated Cursor dispatch is not evidence that the fleet does not exist.
+Do not create a competing launcher or adopt Grok-owned agents by listing their IDs.
+
+Live F1 Cloud MCP probes on 2026-10-30:
+
+| Call | Observed result | Scope |
+| --- | --- | --- |
+| `apex_help` for `apex_cursor_agents` | Successful schema/help | Management adapter is exposed |
+| `apex_status` | Successful server response | Gateway reachable; not provider authentication |
+| `apex_cursor_agents` list, limit 5 | `BLOCKED`, `no_key`, missing server `CURSOR_API_KEY` | Provider list not obtained |
+| `apex_cursor_agents` allowed | Successful, empty output | This gateway has no recorded owned IDs; not proof Grok has no bots |
+
+The actual tool argv resolves `/workspace/f1-game/tools/ci/cursor-agents.mjs`,
+not this research worktree. Its help advertises read/status/transcript/artifact
+operations and ownership-restricted launch/follow-up/lifecycle operations.
+Advertisement does not verify writes; none were attempted. A missing local key
+alone would not have established the remote result; the live call did.
+
+### Grok's incoming route
+
+Cursor documents Grok Bot routines with webhook URLs and bearer keys. A JSON POST
+can start a routine; documented HTTP 200 means a run started, not that its task
+finished. This provides a concrete candidate for external notification of the
+existing manager, rather than inventing a universal Grok chat API. Routines can
+hit rate limits and failed runs need recovery. The user's actual routine URL,
+credentials, bot identity and availability remain unverified. Keep them in secret
+storage; do not ask for a bearer key in chat or publish the URL/key pair.
+[Grok routine webhook contract](https://cursor.com/help/grok-bot/routines).
+
+Proposed route, subject to an actual disposable canary:
+
+```text
+Codex/Claude -> source message in GitHub -> validated delivery service
+             -> authenticated Grok routine (message ID + source URL only)
+Grok manager -> retrieves current source, checks ownership/head/expiry
+             -> follows up with its existing Cursor bot
+Cursor result -> Grok -> permitted GitHub handoff/receipt update
+```
+
+The routine instruction should select the known recipient, retrieve the source
+and stop on missing authority/ownership. It must not blindly run arbitrary JSON
+body text, launch replacement bots or change permissions. A lost HTTP response
+is ambiguous; application dedupe and readback must prevent another run/follow-up
+from being submitted just because the caller timed out. A webhook URL is a secret
+delivery target, not a public recipient ID or caller-supplied URL.
+
+Cursor's Agent SDK separately documents a cloud-agent extension with launch,
+status, conversation and follow-up controls, scoped to agents the caller launched.
+This supports the owner/broker model but does not prove the user's Grok uses that
+SDK or allow importing its agents into this MCP's local allowlist.
+[Cloud-agent extension](https://cursor.com/docs/agent-sdk/guides/cloud-agents).
+
+### Matching MCP adapters for Codex and Claude
+
+Yes: build narrow management adapters over supported runtimes, and expose a common
+message contract to Grok, Codex and Claude. Candidate adapter tool families are
+`agents.capabilities`, `agents.list`, `agents.status`, `agents.send` and
+`agents.result`; the names are proposals, not existing registered tools.
+Keep launch/cancel/delete separately scoped, outside ordinary message delivery.
+
+| Adapter | Backend to validate | Addressable sessions |
+| --- | --- | --- |
+| Cursor | Existing Grok owner route first; current F1 adapter where authorized | Grok-owned bots through Grok, or IDs with valid adapter ownership receipts |
+| Codex | Operated app-server, or deliberately new OpenAI Agents API sessions | Only threads/sessions the chosen service actually owns and can resume |
+| Claude | Existing authenticated session control if available; otherwise operated Agent SDK or separate Managed Agents API | Only the selected runtime/account's persisted sessions |
+
+Grok can consume a remote MCP server through a supported connector. Cursor's
+Agent SDK supports remote MCP connections, tool filters and per-session auth;
+the user's actual Grok connector must still pass discovery/auth/call tests.
+xAI's Remote MCP API is another documented integration for API-hosted Grok, not
+proof that it can address the user's existing Grok Bot conversations.
+[MCP connections](https://cursor.com/docs/agent-sdk/reference/connections),
+[xAI Remote MCP](https://docs.x.ai/developers/tools/remote-mcp).
+
+Each adapter must derive caller identity from authentication, resolve a registered
+recipient to its owner/provider session, and preserve request IDs and source SHA.
+Use one common GitHub-backed envelope and receipt model instead of three new
+buses. A capability result must distinguish exposed, configured, authenticated,
+owned and live-send-verified; do not reduce these to one `available` flag.
+
+First integration canary: Codex writes a nonce-bearing source message; an approved
+Grok routine retrieves it, forwards it to one existing disposable Cursor task and
+records the exact reply through a permitted route. Then test Grok -> one owned
+Codex session and Grok -> one owned Claude session. Duplicate delivery, busy run,
+expired source, wrong owner and unknown submission outcome are required cases.
+No provider message, routine activation or credential change occurred here.
+
+Subsequent deploy fetch for this revision:
+`ed60f0f62254c3d9c8d5b991b976edd1076b344d`. WORKERS.md is unchanged; AGENTS.md adds
+a browser-wait timeout clarification unrelated to this prose-only research.
 
 ## Architecture choices
 
