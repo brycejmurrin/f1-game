@@ -136,6 +136,23 @@ function rankRow(container, i, color, name, ptsText, extraClass) {
   return row;
 }
 
+// [data-say] cards are spoken once per result after the sheet shows (a pre-filled role=status is silent).
+let saidFor = null;
+function spokenText(n) {
+  const kids = n.children ? Array.from(n.children) : [];
+  return (kids.length ? kids.map(spokenText).join(" ") : String(n.textContent || "")).replace(/\s+/g, " ").trim();
+}
+function sayCards(sheet, table, key) {
+  if (!table || typeof LiveRegion === "undefined" || key === saidFor) return;
+  saidFor = key;
+  const text = Array.from(table.querySelectorAll("[data-say]"), spokenText).filter(Boolean).join(". ");
+  if (!text) return;
+  const say = () => LiveRegion.say(text, "save");
+  if (!sheet || !sheet.hidden || typeof MutationObserver === "undefined") { setTimeout(say, 0); return; }
+  const mo = new MutationObserver(() => { if (!sheet.hidden) { mo.disconnect(); say(); } });
+  mo.observe(sheet, { attributes: true, attributeFilter: ["hidden"] });
+}
+
 function create(G) {
 Log.info("ui", "GameResults.create");
 // LICENCE BADGES toast through the one banner (js/career/badges.js owns the rules).
@@ -165,7 +182,7 @@ const outLabel = (why) => (String(why).indexOf("DSQ") === 0 ? "DSQ" : "DNF");
 // New LICENCE BADGES as a card on the sheet that hides the banner toast.
 function badgeCard(ids) {
   const card = document.createElement("div"); card.className = "res-personal";
-  card.setAttribute("role", "status");
+  card.setAttribute("data-say", "");
   const heading = document.createElement("strong"); heading.textContent = ids.length > 1 ? tr("results.badgesUnlocked", null, "BADGES UNLOCKED") : tr("results.badgeUnlocked", null, "BADGE UNLOCKED");
   const detail = document.createElement("span"); detail.textContent = ids.map(Badges.labelOf).join(" · ");
   card.append(heading, detail);
@@ -298,7 +315,7 @@ function buildResults(order, race) {
   if (timing) {
     const box = document.createElement("div");
     box.className = "sel-label";
-    box.setAttribute("role", "status");
+    box.setAttribute("data-say", "");
     box.textContent = tr("results.winnerElapsed", { code: timing.winner.code || tr("results.winner", null, "WINNER"), name: timing.winner.name || "", time: timing.text }, "OFFICIAL WINNER ELAPSED — {code}  {name}: {time}");
     els.resultsTable.appendChild(box);
   }
@@ -439,8 +456,7 @@ function buildResults(order, race) {
   if (st) {
     const box = document.createElement("div");
     box.className = "res-settle";
-    // The balance moved: say so to a screen reader too (polite live region).
-    box.setAttribute("role", "status");
+    box.setAttribute("data-say", "");
     const h = document.createElement("div");
     h.className = "res-settle-head";
     h.textContent = st.dnf ? tr("results.roundSettledDNF", { reason: st.dnf }, "ROUND SETTLED — DNF ({reason})") : tr("results.roundSettled", null, "ROUND SETTLED");
@@ -544,6 +560,7 @@ function buildResults(order, race) {
   }
   winnerChip(els, order.length && !dnfOf(order[0]) ? order[0].code || "" : "");
   resultsAtTop(els.resultsTable);
+  sayCards(els.results, els.resultsTable, order);
 }
 
 function buildTTResults() {

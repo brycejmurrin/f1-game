@@ -777,6 +777,10 @@
       "js/career/career-ui.js"
     ]
   ],
+    LAZY_UI_PRESETS: [
+    "js/ui/layout-presets.js"
+  ],
+    LAZY_UI_PRESETS_EDGES: [],
     LAZY_TRACK_BUILD: [
     "js/track/scenery/models.js",
     "js/track/scenery/themes.js",

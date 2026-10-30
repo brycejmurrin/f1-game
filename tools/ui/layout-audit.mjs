@@ -804,7 +804,12 @@ async function sweepViewport([baseName, vpOpts, why, insets], scale) {
         const r = b.getBoundingClientRect();
         if (!(r.width > 1 && r.height > 1)) return false;
         const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        return !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
+        // AND the state machine at the menu: the doors gate on G.state, not on the DOM. A cell that
+        // built a race (photocontrols, pause, results) left state "race" under a hittable title, so
+        // openDataHub returned early on every later #mb-data click and the next data*/customize
+        // cells timed out — the 8 skips of design pass #1 (#4241; alone, each one measured).
+        const atMenu = !window.__apex || !window.__apex.info || window.__apex.info().state === "menu";
+        return atMenu && !!hit && (hit === b || b.contains(hit)) && !b.closest("[inert]");
       });
       if (!titleUsable) {
         await page.goto(bootUrl, { waitUntil: "domcontentloaded" });

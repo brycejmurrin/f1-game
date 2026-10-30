@@ -204,6 +204,11 @@ file changes a screen owned by another.
   tier that otherwise hides `.cs-opt-desc`. The car-area tabs pin `.cs-liv-ed-btns` (CANCEL / SAVE) at the foot of
   the pane and shrink the `.cs-liv-ed-prev` swatch to a strip.
 
+- `.dh-developer-tools` — `data` + `menu-destinations`. The Data Hub's developer menu. Design pass #2d (#4241) moved
+  it into the hub's header as a ⋯ menu styled in data.css; menu-destinations.css (responsive layer) still pads the old
+  full-width row, so data.css overrides that padding with `!important`. Removal of the three menu-destinations rules is
+  requested of that file's owner; then this entry and the `!important` go.
+
 - `.q-time` — `career` + `components`. Shared timing text; race result gaps sit
   on a second line inside the driver name so they remain readable on phones.
 
