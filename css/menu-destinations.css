@@ -150,13 +150,13 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 }
 :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-retention > .bigbtn { white-space: normal; }
 /* The six Play/Garage tiles on three tracks: two whole rows, never 4+2 with a
-   hole (design pass #1). Enlarged text wraps inside its tile instead. */
+   hole (design pass #1). Tracks grow with enlarged text; at 200% each destination receives its own row. */
 @media (min-width: 700px) and (max-height: 500px) {
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay {
     grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr);
   }
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay #menu-buttons {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(30% * var(--ui-compact-text, 1) * var(--ui-compact-text, 1))), 1fr));
     grid-template-rows: none; grid-auto-rows: max-content;
   }
   :root:where(:not([data-title-btnw], [data-title-btns], [data-title-side])) :where(body:not(.desktop)[data-shape="wide"][data-density="compact"]) #overlay :is(#menu-primary, #menu-garage) { display: contents; }
@@ -269,7 +269,7 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
   }
 }
 /* Destination presentation: one quiet control family, with category names taken
-   from the same localized accessible grouping used by navigation. Geometry and
+   from the same accessible grouping used by navigation. Geometry and
    custom layout attributes above remain authoritative. */
 #overlay #menu-buttons .bigbtn {
   transform: none; border-radius: var(--r-sm);
@@ -278,41 +278,41 @@ body[data-shape="tall"] #overlay #menu-buttons #menu-secondary > .bigbtn { flex-
 }
 #overlay #menu-buttons .bigbtn > span { transform: none; }
 #overlay #menu-buttons #mb-career {
-  background: var(--grad-primary); color: var(--text);
-  border-color: transparent;
+  background: color-mix(in oklab, var(--red) 45%, var(--carbon));
+  color: var(--hud-ink-light); border-color: transparent;
 }
-#overlay #menu-buttons .bigbtn:focus-visible {
-  outline: 2px solid var(--text); outline-offset: -4px;
-}
+#overlay #menu-buttons #mb-career .mb-sub { color: inherit; }
+#overlay #menu-buttons .bigbtn::before { background: none; }
 #overlay #menu-buttons .bigbtn:active { transform: scale(.98); }
+/* At comfortable heights the destinations retain their groups instead of
+   dissolving into a field of equal tiles. DOM order is the reading order. */
+@media (min-height: 720px), (max-aspect-ratio: 1/1) {
 #overlay #menu-buttons :is(#menu-primary, #menu-explore, #menu-create) {
   border-top: 1px solid var(--plate-line);
   padding-top: calc(var(--gap) * .5);
 }
-/* At comfortable heights the destinations retain their groups instead of
-   dissolving into a field of equal tiles. DOM order is the reading order. */
-@media (min-height: 520px), (max-aspect-ratio: 1/1) {
+
   :root:not([data-title-btns]) body #overlay #menu-buttons { display: flex; flex-direction: column; gap: var(--gap); }
-  body #overlay #menu-buttons :is(#menu-hero, #menu-primary, #menu-garage) {
+  :root:not([data-title-btns]) body #overlay #menu-buttons :is(#menu-hero, #menu-primary, #menu-garage) {
     display: flex; flex-wrap: wrap; gap: var(--hg); width: 100%;
   }
-  body #overlay #menu-buttons #menu-hero { flex-direction: column; }
-  body #overlay #menu-buttons #menu-primary > .bigbtn { flex: 1 1 calc(50% - var(--hg)); width: auto; }
-  body #overlay #menu-buttons :is(#menu-primary, #menu-explore, #menu-create)::before {
+  :root:not([data-title-btns]) body #overlay #menu-buttons #menu-hero { flex-direction: column; }
+  :root:not([data-title-btns]) body #overlay #menu-buttons #menu-primary > .bigbtn { flex: 1 1 max(calc(50% - var(--hg)), calc(8rem * var(--ui-compact-text, 1) * var(--ui-compact-text, 1))); width: auto; }
+  :root:not([data-title-btns]) body #overlay #menu-buttons :is(#menu-primary, #menu-explore, #menu-create)::before {
     content: attr(aria-label); flex: 0 0 100%;
     color: var(--steel); font-size: var(--fs-micro); font-weight: 700;
     letter-spacing: var(--ls-2); text-align: start;
   }
-  body #overlay #menu-buttons .bigbtn {
+  :root:not([data-title-btns]) body #overlay #menu-buttons .bigbtn {
     justify-content: flex-start; text-align: start;
     padding: calc(var(--gap) * .65) var(--gap);
   }
-  body #overlay #menu-buttons .bigbtn > span { align-items: flex-start; text-align: start; }
-  body #overlay #menu-buttons :is(#menu-primary, #menu-garage, #menu-explore) .mb-sub {
+  :root:not([data-title-btns]) body #overlay #menu-buttons .bigbtn > span { align-items: flex-start; text-align: start; }
+  :root:not([data-title-btns]) body #overlay #menu-buttons :is(#menu-primary, #menu-garage, #menu-explore) .mb-sub {
     display: block; white-space: normal; overflow: visible; text-overflow: clip;
     color: var(--steel); letter-spacing: 0; line-height: 1.3;
   }
-  body #overlay #menu-buttons #menu-secondary { gap: var(--hg); }
+  :root:not([data-title-btns]) body #overlay #menu-buttons #menu-secondary { gap: var(--hg); }
 }
 @media (hover: hover) and (pointer: fine) {
   #overlay #menu-buttons .bigbtn:hover { border-color: var(--steel); }
