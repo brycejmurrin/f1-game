@@ -34,7 +34,7 @@ function fakeGitHub(thread = []) {
   return { fetch, calls, thread, bump: () => etag++ };
 }
 
-function load({ search = "?apex=1&bridge=42", tok = "", apex = {}, gh = fakeGitHub() } = {}) {
+function load({ search = "?apex=1&bridge=42", tok = "", apex = {}, gh = fakeGitHub(), extra = {} } = {}) {
   const store = new Map(tok ? [["apex26.bridgeToken", tok]] : []);
   const ctx = vm.createContext({
     window: { __apex: apex, devicePixelRatio: 3, innerWidth: 844, innerHeight: 390 },
@@ -46,9 +46,10 @@ function load({ search = "?apex=1&bridge=42", tok = "", apex = {}, gh = fakeGitH
     fetch: gh.fetch,
     Log: { info() {} },
     Object, Array, JSON, Math, Number, String, Set, Promise, Error, Date, encodeURIComponent,
+    ...extra,
   });
   vm.runInContext(SRC, ctx, { filename: absSrc("js/agent/apex-bridge.js") });
-  return { api: vm.runInContext("ApexBridge", ctx), gh, store };
+  return { api: vm.runInContext("ApexBridge", ctx), gh, store, ctx };
 }
 const flush = () => new Promise((r) => setImmediate(r));
 const cmd = (id, obj, extra = {}) => ({
@@ -145,4 +146,90 @@ test("oversized results are truncated under GitHub's comment limit", async () =>
   assert.equal(r.value, null);
   assert.ok(r.truncated > 65536);
   assert.equal(r.head.length, 2000);
+});
+
+// A BenchRun stand-in: the real pathPrefs mapping, run() refusing a second start.
+function fakeBench(plan = null) {
+  const runs = [];
+  return {
+    runs, KEY: "apex26.benchRun", TESTS: [{ id: "quick", label: "QUICK PATHS", legs: [{}, {}] }],
+    pathPrefs: (path, base) => (path ? { backend: "three", threePath: path === "webgl2" ? "1" : "0" } : base),
+    run: (id) => { if (plan) return false; runs.push(id); return true; },
+    stop: () => !!plan,
+  };
+}
+
+test("path pins the BENCHMARK three.js path and reloads; AUTO clears the pin", async () => {
+  const reloads = [];
+  const b = load({ search: "", extra: { BenchRun: fakeBench(), setTimeout: (fn) => { reloads.push(fn); return 0; } } });
+  const r = await b.api.handle({ cmd: "path", args: { to: "webgl2" } });
+  assert.equal(r.ok, true);
+  assert.deepEqual(plain(r.value.pinned), { backend: "three", threePath: "1" });
+  assert.equal(r.value.reloading, true);
+  assert.equal(b.store.get("apex26.gfxBackend"), "three");
+  assert.equal(b.store.get("apex26.tlxForceGL"), "1");
+  assert.equal(reloads.length, 1);
+  await b.api.handle({ cmd: "path", args: { to: "auto", reload: false } });
+  assert.equal(b.store.has("apex26.tlxForceGL"), false);
+  assert.equal(reloads.length, 1);
+  const st = await b.api.handle({ cmd: "path" });
+  assert.equal(st.value.backend, "three");
+  assert.equal(st.value.threePath, null);
+  assert.equal((await b.api.handle({ cmd: "path", args: { to: "vulkan" } })).error, "path.to must be one of webgpu, webgl2, auto");
+});
+
+test("bench starts a known BenchRun test and reads its plan back", async () => {
+  const bench = fakeBench();
+  const b = load({ search: "", extra: { BenchRun: bench } });
+  assert.deepEqual((await b.api.handle({ cmd: "bench", args: { op: "start", test: "quick" } })).value, { started: "quick" });
+  assert.deepEqual(bench.runs, ["quick"]);
+  assert.equal((await b.api.handle({ cmd: "bench", args: { op: "start", test: "nope" } })).error, "unknown bench test: nope");
+  b.store.set("apex26.benchRun", JSON.stringify({ test: "quick", state: "complete", i: 2, summary: { fps: 58 },
+    legs: [{ label: "Lap WEBGPU", state: "done" }, { label: "Lap WEBGL2", state: "failed", reason: "x" }] }));
+  const st = await b.api.handle({ cmd: "bench", args: { op: "status" } });
+  assert.deepEqual(plain(st.value.legs[1]), { label: "Lap WEBGL2", state: "failed", reason: "x" });
+  assert.deepEqual(plain((await b.api.handle({ cmd: "bench", args: { op: "result" } })).value.summary), { fps: 58 });
+  assert.equal((await b.api.handle({ cmd: "bench", args: { op: "leg", i: 1 } })).value.reason, "x");
+  assert.equal((await b.api.handle({ cmd: "bench", args: { op: "eval" } })).ok, false);
+});
+
+test("snap downscales the canvas and steps JPEG quality down under the reply cap", async () => {
+  const drawn = [];
+  const canvas = (id, w, h) => ({ id, width: w, height: h, hidden: false });
+  const doc = {
+    getElementById: (id) => (id === "game" ? canvas("game", 2532, 1170) : null),
+    createElement: () => ({
+      width: 0, height: 0,
+      getContext: () => ({ drawImage: (src, x, y, w, h) => drawn.push([src.id, w, h]) }),
+      // 0.6 → 90k chars, 0.5 → 75k, 0.4 → 60k, 0.3 → 45k: the first that fits is 0.3.
+      toDataURL: (type, q) => "data:" + type + ";base64," + "A".repeat(Math.round(q * 150000)),
+    }),
+  };
+  const b = load({ search: "", extra: { document: doc, requestAnimationFrame: (fn) => fn(0) } });
+  const r = await b.api.handle({ cmd: "snap", args: { w: 320 } });
+  assert.equal(r.ok, true);
+  assert.deepEqual(plain(drawn), [["game", 320, 148]]);
+  assert.equal(r.value.q, 0.3);
+  assert.equal(r.value.from, "game");
+  assert.equal(r.value.chars, r.value.jpeg.length);
+  const none = load({ search: "", extra: { document: { getElementById: () => null }, requestAnimationFrame: (fn) => fn(0) } });
+  assert.equal((await none.api.handle({ cmd: "snap" })).error, "no rendered canvas");
+});
+
+test("batch runs steps in order, stops at the first failure, and keeps reload last", async () => {
+  const calls = [];
+  const apex = { race: (t) => calls.push("race " + t), go: () => calls.push("go") };
+  const { api } = load({ search: "", apex });
+  const r = await api.handle({ cmd: "batch", args: { steps: [
+    { cmd: "call", args: { method: "race", args: ["monza"] } }, { cmd: "call", args: { method: "go" } }, { cmd: "ping" }] } });
+  assert.equal(r.ok, true);
+  assert.deepEqual(plain(r.value.map((s) => [s.cmd, s.ok])), [["call", true], ["call", true], ["ping", true]]);
+  assert.deepEqual(calls, ["race monza", "go"]);
+  const bad = await api.handle({ cmd: "batch", args: { steps: [{ cmd: "call", args: { method: "save" } }, { cmd: "ping" }] } });
+  assert.deepEqual(plain(bad.value.map((s) => s.ok)), [false]);
+  const early = await api.handle({ cmd: "batch", args: { steps: [{ cmd: "reload" }, { cmd: "ping" }] } });
+  assert.equal(early.value[0].error, "reload must be the last step");
+  const nest = await api.handle({ cmd: "batch", args: { steps: [{ cmd: "batch", args: { steps: [] } }] } });
+  assert.equal(nest.value[0].error, "batch cannot nest");
+  assert.equal((await api.handle({ cmd: "batch", args: { steps: new Array(11).fill({ cmd: "ping" }) } })).ok, false);
 });

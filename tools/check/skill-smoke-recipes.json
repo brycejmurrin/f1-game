@@ -434,6 +434,33 @@
       "evidenceScope": "Only the named offline contract; excludes full skill/browser/hardware verification"
     },
     {
+      "skill": "phone-bridge",
+      "task": "Exercise batch runs steps in order, stops at the first failure, and keeps reload last",
+      "fixture": "tests/unit/apex-bridge.test.mjs",
+      "pattern": "batch\\ runs\\ steps\\ in\\ order",
+      "expected": {
+        "minPass": 1,
+        "maxFail": 0
+      },
+      "timeoutMs": 15000,
+      "prerequisites": [
+        "Node.js and npm install; repository test fixture only"
+      ],
+      "followups": [
+        {
+          "kind": "browser",
+          "status": "unverified",
+          "prerequisites": "Safari on the phone; no container browser drives the bridge"
+        },
+        {
+          "kind": "hardware",
+          "status": "unverified",
+          "prerequisites": "Bryce's iPhone linked to a bridge issue on the live site"
+        }
+      ],
+      "evidenceScope": "Only the named offline contract; excludes the live phone round trip"
+    },
+    {
       "skill": "playwright-probe",
       "task": "Exercise cellRecorded requires both png and dom",
       "fixture": "tests/unit/menu-capture.test.mjs",

@@ -15,7 +15,11 @@
 
    NO EVAL. A command is one of CMDS; `call` reaches only the __apex methods in CALL_OK (perf, state reads, driving and
    renderer A/B toggles). Saves, career, garage files and every lobby / net hook are out. Replies are capped at
-   MAX_REPLY chars (GitHub's comment limit is 65,536). The CLAUDE LINK badge counts commands; tapping it ends the link. */
+   MAX_REPLY chars (GitHub's comment limit is 65,536). The CLAUDE LINK badge counts commands; tapping it ends the link.
+
+   PERF COMMANDS. `path` pins the three.js path BENCHMARK pins (BenchRun.pathPrefs) and reloads, `bench` starts and
+   reads a BenchRun, `snap` returns a small JPEG of the canvas, `batch` runs up to BATCH_MAX steps from one comment.
+   Recipes: .claude/skills/phone-browser/references/bridge.md. */
 const ApexBridge = (function () {
   "use strict";
 
@@ -103,7 +107,7 @@ const ApexBridge = (function () {
       v: V, sha: meta ? meta.content : null, href: location.href,
       ua: nav.userAgent || null, dpr: window.devicePixelRatio, w: window.innerWidth, h: window.innerHeight,
       gpu: !!nav.gpu, cores: nav.hardwareConcurrency || null, mem: nav.deviceMemory || null,
-      apex: !!window.__apex, info,
+      apex: !!window.__apex, info, render: pathState(),
     };
   }
 
@@ -121,6 +125,115 @@ const ApexBridge = (function () {
     return mod[op](args.opts);
   }
 
+  // apex26.* storage through GameStore when it is up (its broken-storage bookkeeping), else localStorage.
+  const gs = () => (typeof GameStore !== "undefined" && GameStore.store ? GameStore.store : null);
+  function raw(k) { try { const s = gs(); return s ? s.raw(k) : localStorage.getItem(k); } catch (_) { return null; } }
+  function rawSet(k, v) {
+    const s = gs();
+    try { if (v == null) { if (s) s.rawDel(k); else localStorage.removeItem(k); } else if (s) s.rawSet(k, v); else localStorage.setItem(k, v); } catch (_) { /* blocked */ }
+  }
+  const later = (fn) => { setTimeout(fn, 500); };
+
+  // The renderer pin BENCHMARK uses (BenchRun.pathPrefs): three.js on WebGPU or WebGL2, or AUTO. THREE PATH is chosen
+  // only at boot, so a change reloads (`reload: false` to stage it) and the link re-forms with a new hello.
+  const PATHS = ["webgpu", "webgl2", "auto"];
+  function pathState() {
+    const RP = typeof RendererPicker !== "undefined" ? RendererPicker : null;
+    let live = null, engine = null, fallbackWhy = null;
+    try { live = RP ? RP.liveThreeApi() || RP.liveBackend() : null; } catch (_) { /* not booted */ }
+    try { engine = document.getElementById("game").getAttribute("data-engine"); } catch (_) { /* no canvas */ }
+    try { fallbackWhy = sessionStorage.getItem("apex26.gfxFallbackWhy"); } catch (_) { /* private mode */ }
+    return { backend: raw("apex26.gfxBackend"), threePath: raw("apex26.tlxForceGL"), live, engine, fallbackWhy };
+  }
+  function path(args) {
+    const to = args && args.to;
+    if (to == null) return pathState();
+    if (!PATHS.includes(to)) throw new Error("path.to must be one of " + PATHS.join(", "));
+    const BR = typeof BenchRun !== "undefined" ? BenchRun : null;
+    const p = to === "auto" ? { backend: "three", threePath: null } : BR ? BR.pathPrefs(to, null) : null;
+    if (!p) throw new Error("BenchRun unavailable");
+    const was = pathState();
+    rawSet("apex26.gfxBackend", p.backend);
+    rawSet("apex26.tlxForceGL", p.threePath);
+    try { for (const k of (typeof RendererPicker !== "undefined" && RendererPicker.RENDERER_SS_KEYS) || []) sessionStorage.removeItem(k); } catch (_) { /* private mode */ }
+    const reloading = args.reload !== false;
+    if (reloading) later(() => location.reload());
+    return { was, pinned: p, reloading };
+  }
+
+  // SETTINGS > GRAPHICS > BENCHMARK (BenchRun). start reloads per leg; each reload re-links with a new hello, and the
+  // plan (BenchRun.KEY) carries the run across them. `result` is the summary; `leg` one leg in full.
+  function bench(args) {
+    const BR = typeof BenchRun !== "undefined" ? BenchRun : null;
+    if (!BR) throw new Error("BenchRun unavailable");
+    const op = args && args.op;
+    if (op === "tests") return BR.TESTS.map((t) => ({ id: t.id, label: t.label, legs: t.legs.length }));
+    if (op === "start") {
+      if (!BR.TESTS.some((t) => t.id === args.test)) throw new Error("unknown bench test: " + args.test);
+      const ok = BR.run(args.test);
+      if (!ok) throw new Error("a benchmark is already running");
+      return { started: args.test };
+    }
+    if (op === "stop") return { stopped: BR.stop() };
+    let plan = null;
+    try { plan = JSON.parse(raw(BR.KEY) || "null"); } catch (_) { plan = null; }
+    if (op === "status") {
+      return plan && { test: plan.test, state: plan.state, i: plan.i, startedAt: plan.startedAt, finishedAt: plan.finishedAt,
+        legs: (plan.legs || []).map((l) => ({ label: l.label, state: l.state, reason: l.reason || null })) };
+    }
+    if (op === "result") {
+      return plan && { test: plan.test, state: plan.state, startedAt: plan.startedAt, finishedAt: plan.finishedAt,
+        facts: plan.facts || null, summary: plan.summary || null, scenes: plan.scenes || null };
+    }
+    if (op === "leg") return plan && plan.legs ? plan.legs[Number(args.i) || 0] || null : null;
+    throw new Error("bench.op must be tests, start, stop, status, result or leg");
+  }
+
+  // A downscaled JPEG of what the player sees, as a data URL under SNAP_MAX chars (the reply cap minus the envelope).
+  // Drawn inside a rAF callback queued after the game's own, so a WebGL / WebGPU canvas without preserveDrawingBuffer
+  // still holds this frame. Quality steps down until the image fits.
+  const SNAP_MAX = 56000;
+  function snap(args) {
+    const w = Math.max(64, Math.min(640, Number(args && args.w) || 320));
+    return new Promise((resolve, reject) => {
+      requestAnimationFrame(() => {
+        try {
+          const soft = document.getElementById("game-soft");
+          const src = soft && !soft.hidden && soft.width ? soft : document.getElementById("game");
+          if (!src || !src.width || !src.height) throw new Error("no rendered canvas");
+          const c = document.createElement("canvas");
+          c.width = w; c.height = Math.max(1, Math.round(src.height * w / src.width));
+          c.getContext("2d").drawImage(src, 0, 0, c.width, c.height);
+          for (let q = Number(args && args.q) || 0.6; q >= 0.1; q = Math.round((q - 0.1) * 10) / 10) {
+            const url = c.toDataURL("image/jpeg", q);
+            if (url.length <= SNAP_MAX) { resolve({ w: c.width, h: c.height, q, from: src.id, chars: url.length, jpeg: url }); return; }
+          }
+          throw new Error("snapshot over " + SNAP_MAX + " chars at q 0.1; ask a smaller w");
+        } catch (e) { reject(e); }
+      });
+    });
+  }
+
+  // Several steps in one comment: one 4 s round trip instead of one each. Stops at the first failure; `reload` and
+  // a `path` change may only be the last step (the page is gone after them).
+  const BATCH_MAX = 10;
+  async function batch(args) {
+    const steps = args && Array.isArray(args.steps) ? args.steps : null;
+    if (!steps || !steps.length || steps.length > BATCH_MAX) throw new Error("batch.steps must hold 1–" + BATCH_MAX + " steps");
+    const out = [];
+    for (let i = 0; i < steps.length; i++) {
+      const s = steps[i] || {};
+      const ends = s.cmd === "reload" || (s.cmd === "path" && s.args && s.args.to != null && s.args.reload !== false);
+      let r;
+      if (s.cmd === "batch") r = { ok: false, error: "batch cannot nest" };
+      else if (ends && i < steps.length - 1) r = { ok: false, error: s.cmd + " must be the last step" };
+      else r = await handle(s);
+      out.push(Object.assign({ cmd: s.cmd }, r));
+      if (!r.ok) break;
+    }
+    return out;
+  }
+
   const CMDS = {
     ping: () => ({ pong: true, t: Date.now() }),
     facts,
@@ -128,7 +241,12 @@ const ApexBridge = (function () {
     call,
     gpuTest: (a) => perfModule("GpuTestRun", typeof GpuTestRun !== "undefined" ? GpuTestRun : null, ["start", "stop", "status", "active"], a),
     recorder: (a) => perfModule("PhoneRecorder", typeof PhoneRecorder !== "undefined" ? PhoneRecorder : null, ["start", "stop", "isOn", "json"], a),
-    reload: () => { setTimeout(() => location.reload(), 500); return { reloading: true }; },
+    reload: () => { later(() => location.reload()); return { reloading: true }; },
+    wait: (a) => new Promise((res) => { const ms = Math.max(0, Math.min(30000, Number(a && a.ms) || 0)); setTimeout(() => res({ waited: ms }), ms); }),
+    path,
+    bench,
+    snap,
+    batch,
   };
 
   function safeJson(v) {
