@@ -51,4 +51,12 @@
   src: url("../assets/fonts/barlow-condensed-latin-700-normal.woff2") format("woff2");
 }
 
+/* EVERY NUMBER HOLDS STILL (design pass 3E). Barlow's default digits are
+   proportional (274-484 per 1000 em; tests/data/font-digits.json), so a lap
+   time or a gap drawn without tnum wobbles as it counts. Inherited from body:
+   Titillium's digits are already uniform, so this changes only Barlow (and
+   the Saira wordmark), and it reaches the 26 --font-hud rules that never set
+   it. A rule that wants proportional figures still says so (.res-settle-v). */
+body { font-variant-numeric: tabular-nums; }
+
 } /* @layer hud */

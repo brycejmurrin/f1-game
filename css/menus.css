@@ -211,6 +211,7 @@
   #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:hover::before { opacity: 1; }
 }
 #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active::before { opacity: 1; }
+#menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn:active { box-shadow: var(--press-lit); }
 #menu-buttons :is(#menu-retention, #menu-primary, #menu-garage, #menu-explore, #menu-create) .bigbtn .btn-ico { color: color-mix(in oklab, var(--red) 88%, var(--text)); }
 /* The hero keeps its red and its resting glow, but its hover heat is now the
    same opacity fade: the hot gradient lives on ::before, the face stays on

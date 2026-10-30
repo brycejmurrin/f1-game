@@ -51,7 +51,8 @@
    wraps its screen swaps in document.startViewTransition when supported). The
    UA default is a 0.22s plus-lighter cross-fade of BOTH root snapshots, which
    prints the title tiles over the Grand Prix list and the Career sheet. Fade
-   the old snapshot out first, then fade the new in over an opaque --bg scrim;
+   the old snapshot out first (it LEAVES, so --ease-in), then fade the new in
+   (it ARRIVES, --ease-out) over an opaque --bg scrim;
    mix-blend-mode:normal drops the UA plus-lighter keyframe. Reduced-motion
    still cancels the animation entirely. Outside the layer blocks: these UA
    pseudo-elements aren't part of the normal element cascade. */
@@ -61,7 +62,7 @@
 ::view-transition-old(root) {
   animation-name: apex-vt-fade-out;
   animation-duration: 0.10s;
-  animation-timing-function: ease-out;
+  animation-timing-function: var(--ease-in);
   animation-fill-mode: both;
   mix-blend-mode: normal;
   z-index: 0;
@@ -70,7 +71,7 @@
   animation-name: apex-vt-fade-in;
   animation-duration: 0.14s;
   animation-delay: 0.10s;
-  animation-timing-function: ease-in;
+  animation-timing-function: var(--ease-out);
   animation-fill-mode: both;
   mix-blend-mode: normal;
   z-index: 1;
@@ -660,6 +661,12 @@
   --dur-4: 600ms;
   --dur-draw: 1400ms;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* --ease-in is for anything LEAVING: a slow start that accelerates away, so
+     the exit never competes with what arrives (design pass 3E). */
+  --ease-in: cubic-bezier(0.55, 0, 1, 0.45);
+  /* The press state on touch: a red ring and base rule that show AROUND the
+     thumb (css/components.css PRESSED = LIT, the title doors in menus.css). */
+  --press-lit: inset 0 -3px 0 var(--red), 0 0 0 2px color-mix(in oklab, var(--red) 70%, transparent);
   /* The fallback: without linear() a spring cannot be written in CSS, and
      ease-out is the same arrival without the bounce. The real curve is in the
      @supports block below. */
