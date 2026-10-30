@@ -1085,7 +1085,7 @@ test("an empty timing tower still fits the bottom band and writes the dock cap",
  * (236 px) beside BRAKE/GAS, the left one row of steer arrows (72 px). The right cap is the
  * joint height solve, 329 / (236 + 44) = 1.175 — measured live as 85 px pedals from 150 % up. */
 function dockHarness(btn, opts = {}) {
-  const W = opts.portrait ? 390 : 844, H = opts.portrait ? 844 : 390;
+  const W = opts.width || (opts.portrait ? 390 : 844), H = opts.height || (opts.portrait ? 844 : 390);
   const b = boot({ innerWidth: W });
   b.sb.innerHeight = H;
   const { dom } = b, root = dom.documentElement;
@@ -1542,4 +1542,18 @@ test("broadcast height fitting reserves control space without changing button zo
   assert.ok(+got["--hud-z-top"] <= 1, "the tall broadcast column is capped into the viewport");
   assert.ok(+got["--hud-z-top"] >= 1 / 1.4 - .001, "14px text retains an approximately 10px painted floor");
   assert.equal(h.refit()["--hud-z-dock"], base["--hud-z-dock"], "repeated fits keep the controls independent");
+});
+
+
+test("emergency dock fit keeps small targets usable when a short viewport exhausts the height budget", () => {
+  // These heights force the joint solver below its emergency floor. Exercise
+  // the real GameHud through the existing VM, including mirrored controls.
+  for (const height of [120, 160, 180]) for (const mirror of [false, true]) {
+    const h = dockHarness(2.45, { height, mirror });
+    assert.ok(h.zR >= 0.5, `pedal dock at height ${height} cannot shrink below the target floor`);
+    assert.ok(h.zL >= 0.5, `steering dock at height ${height} uses the same minimum`);
+    assert.ok(48 * Math.min(h.zL, h.zR) >= 24, "even the narrow tier's smallest 48px tap stays at least 24px");
+    assert.ok(h.zBot >= 0.4, "readouts retain their separate fit floor");
+  }
+  assert.equal(dockHarness(2.45).zR, 1.175, "normal 844×390 pedal sizing is unchanged");
 });

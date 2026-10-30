@@ -17317,6 +17317,9 @@
       ]
     },
     "js/ui/hud-radio-lane.js": {
+      "announceLane": [
+        "tests/unit/hud-radio-slot.test.mjs"
+      ],
       "announceLaneTick": [
         "tests/unit/hud-feel.test.mjs"
       ],
@@ -17330,8 +17333,12 @@
         "tests/unit/hud-readouts.test.mjs",
         "tests/unit/net-lobby-friend-quali.test.mjs"
       ],
+      "invalidateLaneRects": [
+        "tests/unit/hud-radio-slot.test.mjs"
+      ],
       "radioPaintedCollapse": [
-        "tests/unit/hud-metrics-layout.test.mjs"
+        "tests/unit/hud-metrics-layout.test.mjs",
+        "tests/unit/hud-radio-slot.test.mjs"
       ],
       "radioTopSlot": [
         "tests/unit/hud-metrics-layout.test.mjs"
@@ -17551,6 +17558,9 @@
       ],
       "hText": [
         "tests/unit/hud-feel.test.mjs"
+      ],
+      "hToggle": [
+        "tests/unit/hud-radio-slot.test.mjs"
       ],
       "hlKey": [
         "tests/unit/hud-dock-btn-cache.test.mjs"
