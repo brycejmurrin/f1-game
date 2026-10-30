@@ -75,13 +75,17 @@ const GarageExteriorGeometry = (function () {
     return out;
   }
 
-  // A narrow sill-to-apron ramp under the raised threshold. Only the outer
-  // edge meets the pit ribbon's +3 cm surface; no coplanar area is added.
-  function bridge(road, anchor, color, budget) {
+  // A narrow sill-to-apron ramp: its outer edge meets the actual banked road.
+  // Contact indexing precedes this decorative join and excludes its triangles.
+  function bridge(road, anchor, color, budget, surface) {
     const x = anchor.door.width / 2, z = GaragePrims.Z_DOOR, base = road.pos.length / 3;
-    const points = [[-x, 0, z], [x, 0, z], [-x, .03, z + .30], [x, .03, z + .30]];
+    const leftSample = sampleHeight(surface, -x, z + .30), rightSample = sampleHeight(surface, x, z + .30);
+    const left = Number.isFinite(leftSample) ? leftSample : .03, right = Number.isFinite(rightSample) ? rightSample : .03;
+    const forward = (left + right) / .60, lateral = (right - left) / (2 * x);
+    const normal = Math.hypot(lateral, 1, forward);
+    const points = [[-x, 0, z], [x, 0, z], [-x, left, z + .30], [x, right, z + .30]];
     for (const p of points) {
-      road.pos.push(...p); road.nrm.push(0, 1 / Math.hypot(1, .1), -.1 / Math.hypot(1, .1));
+      road.pos.push(...p); road.nrm.push(-lateral / normal, 1 / normal, -forward / normal);
       road.col.push(...color); road.mat.push(TrackGeom.MAT ? TrackGeom.MAT.ASPHALT : 16);
     }
     road.idx.push(base, base + 2, base + 1, base + 1, base + 2, base + 3);
@@ -89,9 +93,77 @@ const GarageExteriorGeometry = (function () {
     if (budget.vertices > MAX_VERTICES || budget.indices > MAX_INDICES) throw new Error("Circuit exterior geometry budget exceeded");
   }
 
+  // CPU-only contact index. Keep source faces once, plus bounded 2 m cell refs.
+  // Pit paint shares FLAT with the ribbon. Preserve raised pavement; the query
+  // resolves its coincident 15 mm paint overlay without selecting lower roads.
+  function* surfaceSteps(road) {
+    const cell = 2, triangles = [], cells = Object.create(null);
+    let refs = 0, cellCount = 0, maxFaces = 0, work = 0;
+    for (let i = 0; i + 2 < road.idx.length; i += 3) {
+      if (i % 6144 === 0) yield;
+      const ia = road.idx[i], ib = road.idx[i + 1], ic = road.idx[i + 2];
+      const mat = road.mat[ia];
+      if (mat !== 0 && mat !== 16) continue;
+      const a = ia * 3, b = ib * 3, c = ic * 3, p = road.pos;
+      const ab = [p[b] - p[a], p[b + 1] - p[a + 1], p[b + 2] - p[a + 2]];
+      const ac = [p[c] - p[a], p[c + 1] - p[a + 1], p[c + 2] - p[a + 2]];
+      const n = TrackGeom.cross(ab, ac);
+      if (!(n[1] > Math.hypot(...n) * .6)) continue;
+      const face = triangles.length / 9;
+      triangles.push(p[a], p[a + 1], p[a + 2], p[b], p[b + 1], p[b + 2], p[c], p[c + 1], p[c + 2]);
+      const x0 = Math.floor(Math.min(p[a], p[b], p[c]) / cell), x1 = Math.floor(Math.max(p[a], p[b], p[c]) / cell);
+      const z0 = Math.floor(Math.min(p[a + 2], p[b + 2], p[c + 2]) / cell), z1 = Math.floor(Math.max(p[a + 2], p[b + 2], p[c + 2]) / cell);
+      for (let x = x0; x <= x1; x++) for (let z = z0; z <= z1; z++) {
+        const key = x + "," + z;
+        if (!cells[key]) { cells[key] = []; cellCount++; }
+        const bucket = cells[key]; bucket.push(face); refs++;
+        maxFaces = Math.max(maxFaces, bucket.length);
+        if (cellCount > 4096 || refs > 400000 || bucket.length > 256) throw new Error("Circuit exterior surface budget exceeded");
+        if (++work % 2048 === 0) yield;
+      }
+    }
+    return { cell, triangles: Float64Array.from(triangles), cells,
+      bounds: [-55, 55, GaragePrims.Z_DOOR, 110], refs, maxFaces };
+  }
+  // Query only one bounded cell without temporary arrays; null means off the owned road.
+  function sampleHeight(surface, x, z) {
+    if (!surface || !Number.isFinite(x) || !Number.isFinite(z)) return null;
+    const bounds = surface.bounds;
+    if (z < bounds[2]) return Math.abs(x) <= GaragePrims.HALF_W && z >= GaragePrims.Z_BACK ? 0 : null;
+    if (x < bounds[0] || x > bounds[1] || z > bounds[3]) return null;
+    const faces = surface.cells[Math.floor(x / surface.cell) + "," + Math.floor(z / surface.cell)];
+    if (!faces) return null;
+    const p = surface.triangles;
+    let height = -Infinity;
+    for (let i = 0; i < faces.length; i++) {
+      const a = faces[i] * 9, b = a + 3, c = a + 6;
+      const den = (p[b + 2] - p[c + 2]) * (p[a] - p[c]) + (p[c] - p[b]) * (p[a + 2] - p[c + 2]);
+      if (Math.abs(den) < 1e-12) continue;
+      const u = ((p[b + 2] - p[c + 2]) * (x - p[c]) + (p[c] - p[b]) * (z - p[c + 2])) / den;
+      const v = ((p[c + 2] - p[a + 2]) * (x - p[c]) + (p[a] - p[c]) * (z - p[c + 2])) / den;
+      if (u >= -1e-8 && v >= -1e-8 && u + v <= 1 + 1e-8)
+        height = Math.max(height, u * p[a + 1] + v * p[b + 1] + (1 - u - v) * p[c + 1]);
+    }
+    if (!Number.isFinite(height)) return null;
+    // Paint is 15 mm above the ribbon along its near-vertical up vector.
+    // Look only in that narrow layer: a lower road 3 cm down must not win.
+    let baseHeight = -Infinity;
+    for (let i = 0; i < faces.length; i++) {
+      const a = faces[i] * 9, b = a + 3, c = a + 6;
+      const den = (p[b + 2] - p[c + 2]) * (p[a] - p[c]) + (p[c] - p[b]) * (p[a + 2] - p[c + 2]);
+      if (Math.abs(den) < 1e-12) continue;
+      const u = ((p[b + 2] - p[c + 2]) * (x - p[c]) + (p[c] - p[b]) * (z - p[c + 2])) / den;
+      const v = ((p[c + 2] - p[a + 2]) * (x - p[c]) + (p[a] - p[c]) * (z - p[c + 2])) / den;
+      if (u < -1e-8 || v < -1e-8 || u + v > 1 + 1e-8) continue;
+      const y = u * p[a + 1] + v * p[b + 1] + (1 - u - v) * p[c + 1];
+      if (height - y >= .013 && height - y <= .017) baseHeight = Math.max(baseHeight, y);
+    }
+    return Number.isFinite(baseHeight) ? baseHeight : height;
+  }
+
   function unsupported(def, reason) {
     return { supported: false, reason, trackId: def && def.id || null,
-      road: null, props: null, ground: null, anchor: null, stats: { vertices: 0, indices: 0 } };
+      road: null, props: null, ground: null, surface: null, anchor: null, stats: { vertices: 0, indices: 0 } };
   }
   function* buildSteps(def, options = {}) {
     if (!def || !def.id) return unsupported(def, "missing-circuit");
@@ -111,8 +183,10 @@ const GarageExteriorGeometry = (function () {
     TrackMesh.buildPitLane(track, raw); TrackMesh.buildPitBoxes(track, raw);
     yield { phase: "road" };
     const road = yield* clipSteps(raw, anchor, limits, budget); raw = null;
-    bridge(road, anchor, track.asphaltCol || def.palette && def.palette.asphalt || [.16, .17, .19], budget);
     yield { phase: "road-clipped" };
+    const surface = yield* surfaceSteps(road);
+    bridge(road, anchor, track.asphaltCol || def.palette && def.palette.asphalt || [.16, .17, .19], budget, surface);
+    yield { phase: "surface-indexed" };
     raw = empty();
     const pitStats = SceneryPits.build({ track, out: raw, night: track._night, exteriorOnly: true,
       rawBox: TrackGeom.addBox, rawEmit: TrackGeom.emit, upOf: TrackMesh.upOf,
@@ -121,8 +195,8 @@ const GarageExteriorGeometry = (function () {
     const props = yield* clipSteps(raw, anchor, limits, budget); raw = null;
     yield { phase: "pit-clipped" };
     const ground = yield* clipSteps(TrackMesh.buildFloor(track), anchor, floorLimits, budget);
-    return { supported: true, trackId: def.id, road, props, ground, anchor,
-      stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, groundBounds: floorLimits, night: track._night, pit: pitStats } };
+    return { supported: true, trackId: def.id, road, props, ground, surface, anchor,
+      stats: { vertices: budget.vertices, indices: budget.indices, bounds: limits, groundBounds: floorLimits, night: track._night, surfaceTriangles: surface.triangles.length / 9, surfaceRefs: surface.refs, maxSurfaceFaces: surface.maxFaces, pit: pitStats } };
   }
-  return Object.freeze({ buildSteps });
+  return Object.freeze({ buildSteps, sampleHeight });
 })();

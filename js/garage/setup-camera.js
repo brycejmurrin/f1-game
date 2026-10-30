@@ -855,9 +855,10 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   if (context.realExterior && arriving && typeof GarageExterior.fitPose === "function") {
     GarageExterior.fitPose(arriving, exteriorAnchor, !!driveOut && driveOut.cfg.angle === "cut");
     if (arriving.exteriorUnsupported) context.realExterior = false;
+    else exterior.groundPose(arriving, !!driveOut && driveOut.cfg.angle === "cut" && !reducedMotion());
     if (driveOut) {
-      const previous = driveOut.travel || (driveOut.travel = { x: 0, z: 0, distance: 0 });
-      previous.distance += Math.hypot(arriving.x - previous.x, arriving.z - previous.z); previous.x = arriving.x; previous.z = arriving.z;
+      const previous = driveOut.travel || (driveOut.travel = { x: 0, y: 0, z: 0, distance: 0 });
+      previous.distance += Math.hypot(arriving.x - previous.x, (arriving.groundY || 0) - previous.y, arriving.z - previous.z); previous.x = arriving.x; previous.y = arriving.groundY || 0; previous.z = arriving.z;
       driveOut.motion.distance = arriving.distance = previous.distance; driveOut.motion.yaw = arriving.yaw;
     }
   }
@@ -1021,7 +1022,8 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   const ay = (arriving && arriving.yaw) || 0, ac = Math.cos(ay), as = Math.sin(ay);
   arrivalCar[0] = -ac; arrivalCar[2] = as; arrivalCar[8] = as; arrivalCar[10] = ac;
   arrivalCar[12] = (arriving && arriving.x) || 0; arrivalCar[14] = arriving ? arriving.z : 0;
-  arrivalCar[13] = context.realExterior && arriving ? .03 * Math.min(1, Math.max(0, (arriving.z - 4.7) / 3.3)) : 0;
+  arrivalCar[1] = arrivalCar[4] = arrivalCar[6] = arrivalCar[9] = arrivalCar[13] = 0; arrivalCar[5] = 1;
+  if (context.realExterior && arriving) GarageExterior.poseMatrix(arriving, arrivalCar);
   const team = Teams.LIST[G.teamIdx];
   const carMesh = getSetupPreviewMesh();
   context.departureWheels = driveOut && departureWheels ? drawDepartureReflection : null;

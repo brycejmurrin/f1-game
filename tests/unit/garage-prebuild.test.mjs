@@ -716,12 +716,12 @@ test("quiet gate: input mid-sequence abandons the rest of a title prebuild, and 
   assert.deepEqual(h.built, ["car"]);
 });
 
-function exteriorHarness({ load, geometry, upload } = {}) {
+function exteriorHarness({ load, geometry, upload, surfaceHeight } = {}) {
   const uploads = [], freed = [], draws = [], changes = [];
   let now = 10000, builds = 0;
   const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b; }); return {promise,resolve,reject}; };
   const context = vm.createContext({ Date: { now: () => now }, setTimeout,
-    GarageExteriorGeometry: { *buildSteps(def, opts) {
+    GarageExteriorGeometry: { sampleHeight: surfaceHeight, *buildSteps(def, opts) {
       builds++; yield;
       if (geometry) return geometry(def, opts);
       const geo = () => ({pos:[0,0,7,1,0,7,0,1,7], nrm:[0,1,0,0,1,0,0,1,0],col:[1,1,1,1,1,1,1,1,1],idx:[0,1,2]});
@@ -944,4 +944,52 @@ test('exterior preparation publishes bounded profiling fields without touching p
   for(const key of ['maxSliceMs','buildWallMs','uploadMs']) assert.ok(Number.isFinite(stats[key])&&stats[key]>=0,key);
   h.ext.draw(); h.ext.draw();
   assert.equal(h.ext.state().stats,stats,'draws retain the preparation record');
+});
+
+test('garage road frame keeps four tyre contacts on a sloping plane after either lane direction and turn', () => {
+  const plane=(surface,x,z)=>.11+.012*x+.025*z, h=exteriorHarness({surfaceHeight:plane});
+  const surface={bounds:[-55,55,6.4,110]};
+  for(const yaw of [0,.7,Math.PI/2,-Math.PI/2]) {
+    const pose={x:8,z:13,yaw,eye:[2,3,4],aim:[5,1,6]}, eye=pose.eye, aim=pose.aim;
+    h.API.groundPose(pose,surface,true);
+    const matrix=new Float64Array(16); h.API.poseMatrix(pose,matrix);
+    assert.equal(pose.eye,eye); assert.equal(pose.aim,aim);
+    assert.ok(Math.abs(eye[1]-3-pose.groundY)<1e-12);
+    for(const x of [-.79,.79])for(const z of [-1.6,1.7]) {
+      const wx=matrix[0]*x+matrix[8]*z+matrix[12], wy=matrix[1]*x+matrix[9]*z+matrix[13], wz=matrix[2]*x+matrix[10]*z+matrix[14];
+      assert.ok(Math.abs(wy-plane(surface,wx,wz))<1e-10,'each contact lies on the actual plane');
+    }
+    assert.ok(Math.abs(Math.hypot(matrix[0],matrix[1],matrix[2])-1)<1e-12);
+    assert.ok(Math.abs(matrix[0]*matrix[4]+matrix[1]*matrix[5]+matrix[2]*matrix[6])<1e-12);
+  }
+  assert.equal(h.uploads.length,0,'pose fitting builds no meshes');
+});
+
+test('ground contact crosses the sill continuously and leaves the reduced-motion camera fixed', () => {
+  const h=exteriorHarness({surfaceHeight:(surface,x,z)=>z<6.4?0:.03}), surface={bounds:[-55,55,6.4,110]};
+  let prior=0;
+  for(let i=0;i<=1000;i++){
+    const pose={x:0,z:i*.01,yaw:0,calm:true,eye:[-4,3.2,15.7],aim:[3.5,.65,7]};
+    h.API.groundPose(pose,surface,true);
+    assert.deepEqual([...pose.eye],[-4,3.2,15.7]);assert.deepEqual([...pose.aim],[3.5,.65,7]);
+    assert.ok(Math.abs(pose.groundY-prior)<.001,'no single-frame height step');prior=pose.groundY;
+  }
+  assert.ok(Math.abs(prior-.03)<1e-12);
+});
+
+test('explicit daylight replaces a night circuit default sky without mutating its authored palette', () => {
+  const h=exteriorHarness(), def={night:true,palette:{zenith:[.06,.05,.16],horizon:[.2,.1,.05],sunDir:[.76,.21,.61],fogDensity:.0028}};
+  const before=JSON.stringify(def);
+  const day=h.API.lighting({def,tod:'day',weather:'dry'}), night=h.API.lighting({def,tod:'default',weather:'dry'});
+  assert.equal(day.night,false);assert.equal(night.night,true);
+  assert.ok(day.sky.horizon[2]>day.sky.horizon[0],'selected day is blue rather than the authored night orange');
+  assert.ok(day.sunDir[1]>.6,'daylight key rises above the authored dusk angle');
+  assert.equal(day.fogDensity,.0008);assert.equal(JSON.stringify(def),before);
+});
+
+test('rainy night keeps the sky shader night gate while hiding stars beneath cloud', () => {
+  const h=exteriorHarness(), sky=h.API.lighting({tod:'night',weather:'rain'}).sky;
+  assert.equal(sky.stars,1,'uStars selects the shader night branch');
+  assert.equal(sky.starBright,0,'cloud hides stars without enabling daylight scattering');
+  assert.equal(sky.moon,.85);
 });

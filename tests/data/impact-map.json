@@ -5703,6 +5703,7 @@
     "js/data/garage-departure-motion.js": {
       "sample": [
         "tests/unit/garage-arrival.test.mjs",
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ]
     },
@@ -7790,9 +7791,11 @@
       ]
     },
     "js/garage/exterior-geometry.js": {
+      "sampleHeight": [
+        "tests/unit/garage-mesh.test.mjs"
+      ],
       "*": [
         "tests/unit/curvature-channels.test.mjs",
-        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/race-session-lazy.test.mjs"
       ]
     },
@@ -7805,15 +7808,23 @@
         "tests/unit/race-session-lazy.test.mjs"
       ],
       "draw": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "drawWeather": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "fitPose": [
+        "tests/unit/garage-mesh.test.mjs",
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "groundPose": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "lighting": [
+        "tests/unit/garage-prebuild.test.mjs"
+      ],
+      "poseMatrix": [
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "ready": [
@@ -7823,6 +7834,7 @@
         "tests/unit/garage-prebuild.test.mjs"
       ],
       "state": [
+        "tests/unit/garage-mesh.test.mjs",
         "tests/unit/garage-prebuild.test.mjs"
       ]
     },

@@ -6,7 +6,13 @@ const GarageExterior = (function () {
   const vector = (v, fallback) => v && v.length >= 3 && Array.from(v).slice(0, 3).every(Number.isFinite) ? Array.from(v).slice(0, 3) : fallback.slice();
   // Owned values only. No live profiles, atmosphere, frame or palette writes.
   function lighting(selection) {
-    const s = selection || {}, p = s.def && (s.def.pal || s.def.palette) || {}, tod = s.tod || "default", weather = s.weather || "dry";
+    const s = selection || {}, tod = s.tod || "default", weather = s.weather || "dry";
+    const authored = s.def && (s.def.pal || s.def.palette) || {};
+    // An explicit DAY on a night-authored circuit uses the race's daylight base,
+    // rather than carrying its orange/dark default palette into the garage.
+    const p = tod === "day" && s.def && s.def.night ? Object.assign({}, authored, {
+      sunDir: [.46,.58,.42], sunColor: [1.13,.95,.72], ambientSky: [.26,.33,.50], ambientGround: [.24,.19,.12],
+      zenith: [.09,.26,.95], horizon: [.54,.68,.90], fogColor: [.66,.74,.88], fogDensity: .0008 }) : authored;
     const night = tod === "night" || (tod === "default" && !!(s.night || s.def && s.def.night));
     const twilight = tod === "dawn" || tod === "dusk", wet = wetWeather(weather), storm = weather === "storm";
     const overcast = storm || wet || weather === "overcast" || weather === "fog";
@@ -20,7 +26,7 @@ const GarageExterior = (function () {
     const ambientGround = night ? [.035,.04,.06] : vector(p.ambientGround, [.21,.20,.18]);
     const zenith = night ? [.008,.014,.035] : twilight ? [.12,.12,.25] : vector(p.zenith, [.18,.35,.59]);
     const horizon = night ? [.035,.045,.07] : twilight ? [.65,.30,.15] : vector(p.horizon, [.55,.66,.73]);
-    const fogColor = night ? [.025,.035,.055] : vector(p.fogColor || p.fog, [.55,.62,.67]);
+    const fogColor = night ? [.025,.035,.055] : twilight ? (tod === "dawn" ? [.52,.36,.34] : [.58,.28,.10]) : vector(p.fogColor || p.fog, [.55,.62,.67]);
     if (overcast) {
       const attenuation = storm ? .22 : .48;
       for (let i = 0; i < 3; i++) {
@@ -32,7 +38,7 @@ const GarageExterior = (function () {
     return { night, wet, sunDir, sunColor, ambientSky, ambientGround, fogColor,
       fogDensity: weather === "fog" ? .0065 : storm ? .0038 : wet ? .0018 : Number.isFinite(p.fogDensity) ? p.fogDensity : .0008,
       exposure: night ? 1.05 : twilight ? 1.02 : 1,
-      sky: { zenith, horizon, sunDir: sunDir.slice(), sunColor: sunColor.slice(), stars: night && !overcast ? 1 : 0, cloud: overcast ? .95 : night ? .22 : .4 } };
+      sky: { zenith, horizon, sunDir: sunDir.slice(), sunColor: sunColor.slice(), stars: night ? 1 : 0, starBright: overcast ? 0 : 1, moon: night ? .85 : tod === "dawn" ? .3 : 0, cloud: overcast ? .95 : night ? .22 : .4 } };
   }
   // Match the circuit's lane direction without changing caller-owned camera vectors.
   // The authored CUT arc starts only after the rear clears the 6.4 m shutter.
@@ -61,6 +67,48 @@ const GarageExterior = (function () {
       if (pose.aim) { pose.aim[0] += dx; pose.aim[2] += dz; }
     }
     return pose;
+  }
+  function contactHeight(surface, x, z) {
+    const door = surface && surface.bounds ? surface.bounds[2] : 6.4;
+    let y = surface && typeof GarageExteriorGeometry.sampleHeight === "function" ? GarageExteriorGeometry.sampleHeight(surface, x, z) : null;
+    if (!Number.isFinite(y)) y = z < door ? 0 : .03;
+    // Match the short sill ramp without a one-frame chassis/camera step.
+    if (z >= door && z < door + .3) { const t = (z - door) / .3; y *= t * t * (3 - 2 * t); }
+    return y;
+  }
+  function wheelHeight(surface, x, z, c, s, lateral, longitudinal) {
+    return contactHeight(surface, x + c * lateral + s * longitudinal, z - s * lateral + c * longitudinal);
+  }
+  function groundPose(pose, surface, followCamera = false) {
+    if (!pose) return pose;
+    const yaw = pose.yaw || 0, c = Math.cos(yaw), s = Math.sin(yaw), x = pose.x || 0, z = pose.z || 0;
+    const fl = wheelHeight(surface, x, z, c, s, -.79, 1.7), fr = wheelHeight(surface, x, z, c, s, .79, 1.7);
+    const rl = wheelHeight(surface, x, z, c, s, -.79, -1.6), rr = wheelHeight(surface, x, z, c, s, .79, -1.6);
+    pose.groundY = ((fl + fr) * 1.6 + (rl + rr) * 1.7) / 6.6;
+    pose.groundForward = (fl + fr - rl - rr) / 6.6;
+    pose.groundRight = (fr + rr - fl - rl) / 3.16;
+    if (followCamera && !pose.calm) {
+      if (pose.eye) pose.eye[1] += pose.groundY;
+      if (pose.aim) pose.aim[1] += pose.groundY;
+    }
+    return pose;
+  }
+  // Orthonormal road frame, then the garage model's existing X reflection.
+  function poseMatrix(pose, out) {
+    const yaw = pose && pose.yaw || 0, c = Math.cos(yaw), s = Math.sin(yaw);
+    const forward = pose && pose.groundForward || 0, right = pose && pose.groundRight || 0;
+    let nx = -right * c - forward * s, ny = 1, nz = right * s - forward * c;
+    const nn = Math.hypot(nx, ny, nz); nx /= nn; ny /= nn; nz /= nn;
+    let fx = s, fy = forward, fz = c;
+    const fn = Math.hypot(fx, fy, fz); fx /= fn; fy /= fn; fz /= fn;
+    let rx = ny * fz - nz * fy, ry = nz * fx - nx * fz, rz = nx * fy - ny * fx;
+    const rn = Math.hypot(rx, ry, rz); rx /= rn; ry /= rn; rz /= rn;
+    fx = ry * nz - rz * ny; fy = rz * nx - rx * nz; fz = rx * ny - ry * nx;
+    out[0] = -rx; out[1] = -ry; out[2] = -rz; out[3] = 0;
+    out[4] = nx; out[5] = ny; out[6] = nz; out[7] = 0;
+    out[8] = fx; out[9] = fy; out[10] = fz; out[11] = 0;
+    out[12] = pose && pose.x || 0; out[13] = pose && pose.groundY || 0; out[14] = pose && pose.z || 0; out[15] = 1;
+    return out;
   }
   function snapshot(s) {
     const tod = s.tod || "default";
@@ -166,7 +214,7 @@ const GarageExterior = (function () {
             if (!current()) return false;
           }
           if (!current()) return false;
-          readySet = Object.assign({}, owned, { stats: Object.assign({}, data.stats,
+          readySet = Object.assign({}, owned, { surface: data.surface || null, stats: Object.assign({}, data.stats,
             { maxSliceMs, uploadMs, buildWallMs: Math.max(0, now() - buildAt) }), anchor: data.anchor || null });
           for (const name of ["ground", "road", "props"]) delete owned[name];
           status = "ready"; weatherMesh(); return ready();
@@ -197,7 +245,7 @@ const GarageExterior = (function () {
       gfx.draw(rainMesh, rainMatrix, rainOpts);
       return true;
     }
-    return { request, ready, draw, drawWeather, state, cancel, release: cancel, retry: s => request(s || selected, { retry: true }) };
+    return { request, ready, draw, drawWeather, groundPose: (pose, follow) => ready() ? groundPose(pose, readySet.surface, follow) : pose, state, cancel, release: cancel, retry: s => request(s || selected, { retry: true }) };
   }
-  return Object.freeze({ create, lighting, fitPose });
+  return Object.freeze({ create, lighting, fitPose, groundPose, poseMatrix });
 })();

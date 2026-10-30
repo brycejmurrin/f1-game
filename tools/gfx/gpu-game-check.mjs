@@ -877,7 +877,7 @@ try {
 
   // menu-full: PLAYER PACE (LoadingScreen.isAutomation honours ?fullIntro=1) —
   // the garage drive-out and the flyby a harness otherwise skips.
-  await page.goto(`http://127.0.0.1:${port}/index.html?gfxdebug=1${entry === "menu-full" ? "&fullIntro=1" : ""}`,
+  await page.goto(`http://127.0.0.1:${port}/index.html?${garageCapture ? "" : "gfxdebug=1&"}${entry === "menu-full" ? "fullIntro=1" : ""}`,
     { waitUntil: "domcontentloaded", timeout: 120000 });
   checkpoint("navigated");
   // 120 s. This was once raised to 300 s on the theory that windows-latest was
@@ -1807,7 +1807,8 @@ try {
   if (garageCapture) {
     out.garageCameraControl = { before: await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on })) };
     if (out.garageCameraControl.before.garageOn) throw new Error("Garage still owns race camera");
-    await page.keyboard.press("c");
+    if (garageCapture === "phone") await page.locator("#btn-cam").tap();
+    else await page.locator("#btn-cam").click();
     await page.waitForFunction(saved => localStorage.getItem("apex26.camMode") !== saved, out.garageCameraControl.before.saved, { polling: 100, timeout: 5000 });
     out.garageCameraControl.after = await page.evaluate(() => ({ saved: localStorage.getItem("apex26.camMode"), garageOn: __apex.garageCam().on }));
   }

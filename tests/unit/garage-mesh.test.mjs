@@ -905,7 +905,7 @@ function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 
   const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
   const norm = v => { const m = Math.hypot(...v); return v.map(x => x / m); };
   let builds = 0;
-  const ctx = vm.createContext({ GaragePrims: { Z_DOOR: 6.4 },
+  const ctx = vm.createContext({ GaragePrims: { Z_DOOR: 6.4, HALF_W: 5.4, Z_BACK: -6.4 },
     Tracks: { buildCenterline(_def, opts) { assert.equal(opts.line, false); builds++; return {}; },
       build() { throw Error('full build forbidden'); }, buildPaced() { throw Error('race build forbidden'); } },
     TrackPit: { build: () => ({ hasBays, side: 1, off: { workOut: 0 }, bay: { depth: 12.8, doorW: 5.4, doorH: 4.8 },
@@ -918,7 +918,7 @@ function exteriorFixture(points, { yaw = .4, hasBays = true, row = 0, repeats = 
     TrackSurface: { profile: () => ({}) }, SceneryPits: { build(opts) { assert.equal(opts.exteriorOnly, true); return {}; } } });
   vm.runInContext(read('js/garage/exterior-geometry.js'), ctx, {filename:absSrc('js/garage/exterior-geometry.js')});
   const builder = vm.runInContext('GarageExteriorGeometry', ctx);
-  return { builder, builds: () => builds, origin, yaw };
+  return { builder, builds: () => builds, origin, yaw, raw };
 }
 function finishExterior(builder, def = { id: 'fixture' }) {
   const it = builder.buildSteps(def, { teamId: 'ferrari', night: true });
@@ -965,4 +965,68 @@ test('circuit exterior refuses unavailable bay and invalid/budget-breaking geome
   assert.equal(finishExterior(missing.builder, null).result.reason, 'missing-circuit'); assert.equal(missing.builds(), 0);
   assert.throws(() => finishExterior(exteriorFixture([[NaN, 0, 20], ...tri.slice(1)]).builder), /Non-finite/);
   assert.throws(() => finishExterior(exteriorFixture(tri, { repeats: 80001 }).builder), /budget exceeded/);
+});
+
+
+test('circuit exterior surface samples an inclined raised road, excludes paint and has bounded finite lookup data', () => {
+  const plane = [[-2, 1.8, 10], [-2, 2.6, 14], [2, 2.2, 10], [2, 2.2, 10], [-2, 2.6, 14], [2, 3, 14]];
+  const points = plane.map(p => [p[0], p[1] - .03, p[2]]).concat(plane, plane.map(p => [p[0], p[1] + .015, p[2]]));
+  const h = exteriorFixture(points);
+  for (let i = 12; i < 18; i++) h.raw.mat[i] = 0; // real pit paint and ribbon can both be FLAT
+  const { result: r } = finishExterior(h.builder), sample = h.builder.sampleHeight, surface = r.surface;
+  assert.ok(Math.abs(sample(surface, 0, 12) - 2.4) < 1e-8, 'raised pavement wins over lower road; paint does not lift the car');
+  assert.ok(Math.abs(sample(surface, 1, 13) - 2.7) < 1e-8, 'barycentric lookup follows the inclined plane');
+  assert.equal(sample(surface, 0, 0), 0, 'service box is flat');
+  assert.equal(sample(surface, 0, 6.4), null, 'decorative bridge is excluded from contact index');
+  assert.equal(sample(surface, 0, 6.55), null, 'fixture has no actual road at the bridge');
+  assert.equal(sample(surface, NaN, 12), null); assert.equal(sample(surface, 56, 12), null);
+  assert.equal(sample(surface, 0, 111), null); assert.equal(sample(surface, 0, 30), null);
+  assert.ok(surface.triangles.every(Number.isFinite));
+  assert.ok(surface.maxFaces <= 256 && surface.refs <= 400000);
+  assert.ok(Object.values(surface.cells).every(v => v.length <= 256 && v.every(i => i >= 0 && i * 9 < surface.triangles.length)));
+});
+
+test('circuit exterior surface retains actual Bahrain and Monaco departure wheel contact heights', async () => {
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url), h = require('../../tools/lib/track-build-vm.cjs').buildContext({ assets: false });
+  const ctx = vm.createContext(h.sandbox);
+  for (const f of ['js/garage/exterior-geometry.js', 'js/garage/exterior.js', 'js/data/garage-departure-motion.js']) vm.runInContext(read(f), ctx, { filename: absSrc(f) });
+  const Builder = vm.runInContext('GarageExteriorGeometry', ctx), Motion = vm.runInContext('GarageDepartureMotion', ctx), Exterior = vm.runInContext('GarageExterior', ctx);
+  for (const [id, expected] of [['bahrain', [.1229, .1484, .1229, .1484]], ['monaco', [-.0121, .0012, -.0120, .0014]]]) {
+    const it = Builder.buildSteps(h.Tracks.LIST.find(d => d.id === id), { teamId: 'ferrari' });
+    let next; do { next = it.next(); } while (!next.done);
+    const data = next.value; assert.equal(data.supported, true);
+    const pose = { side: 1, eye: [], aim: [] }; Motion.sample(1, 1, pose); Exterior.fitPose(pose, data.anchor, true);
+    let wheel = 0;
+    for (const x of [-.79, .79]) for (const z of [-1.6, 1.7]) {
+      const wx = pose.x + x * Math.cos(pose.yaw) + z * Math.sin(pose.yaw);
+      const wz = pose.z - x * Math.sin(pose.yaw) + z * Math.cos(pose.yaw);
+      const y = Builder.sampleHeight(data.surface, wx, wz);
+      assert.ok(Number.isFinite(y), id + ' tyre has a supported surface');
+      assert.ok(Math.abs(y - expected[wheel++]) < .003, id + ' exact generated ribbon height survives indexing');
+    }
+    const ramp = data.road.pos.slice(-12);
+    for (const at of [6, 9]) {
+      const y = Builder.sampleHeight(data.surface, ramp[at], ramp[at + 2]);
+      assert.ok(Number.isFinite(y), id + ' outer sill edge has actual road support');
+      assert.ok(Math.abs(ramp[at + 1] - y) < 1e-6, id + ' sill endpoint meets actual banked road');
+    }
+    assert.equal(ramp[1], 0); assert.equal(ramp[4], 0);
+    assert.ok(data.surface.maxFaces <= 256);
+  }
+});
+
+
+test('circuit exterior sill normals follow actual cross slope and contact data excludes the bridge', () => {
+  const points = [[-4, .016, 6.4], [-4, .032, 8], [4, .024, 6.4],
+    [4, .024, 6.4], [-4, .032, 8], [4, .040, 8]];
+  const h = exteriorFixture(points), { result: r } = finishExterior(h.builder);
+  const ramp = r.road.pos.slice(-12), normal = r.road.nrm.slice(-3);
+  for (const at of [6, 9]) assert.ok(Math.abs(ramp[at + 1] - h.builder.sampleHeight(r.surface, ramp[at], ramp[at + 2])) < 1e-8);
+  assert.ok(Math.abs(ramp[7] - .0203) < 1e-8); assert.ok(Math.abs(ramp[10] - .0257) < 1e-8);
+  const f = (ramp[7] + ramp[10]) / .6, x = (ramp[10] - ramp[7]) / 5.4, n = Math.hypot(x, 1, f);
+  assert.ok(Math.abs(normal[0] + x / n) < 1e-8); assert.ok(Math.abs(normal[1] - 1 / n) < 1e-8);
+  assert.ok(Math.abs(normal[2] + f / n) < 1e-8);
+  assert.ok(Math.abs(h.builder.sampleHeight(r.surface, 0, 6.4) - .02) < 1e-8, 'index samples actual road, not the zero-height sill edge');
+  assert.equal(r.surface.triangles.length / 9, 2, 'bridge triangles were never indexed');
 });
