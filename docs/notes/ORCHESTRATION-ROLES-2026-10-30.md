@@ -58,3 +58,23 @@ Seven places outside my OWNED paths read it by name or by section (`dispatch.mjs
 `launch-gate.py`, `merge_policy.py`, `ship-pr.mjs`, the Cursor plugin skills, `dispatch.test.mjs`). Keeping the file
 and its headings lets those stand; a follow-up can retarget the launch prompts to "load skill `worker`" once E2's
 `dispatch.mjs` work lands.
+
+## Web research (read 2026-10-30)
+
+- https://code.claude.com/docs/en/skills — skills load by description (always in context, truncated at 1,536 chars with
+  `when_to_use`); the body loads on invoke. `disable-model-invocation: true` makes a skill user-only (`/name`);
+  `context: fork` runs it in a subagent without the conversation, `agent:` picks the type, `model:`/`effort:` apply to
+  the fork. Consequence for the layout: role skills (`worker`, `dispatcher`) stay model-invocable because a launch
+  prompt or the session's role triggers them; the user-facing levels below must be `disable-model-invocation: true`.
+  Project skills sit below personal ones on a name collision, so the user-facing names must not collide with a
+  personal skill.
+
+## Next layer: user-facing trigger levels (not in this PR)
+
+Bryce (2026-10-30, quoted relays via the dispatcher) asked for user-invoked skills on top of the role skills: a review
+that challenges a PR, a task orchestrator, and an auto-pilot family (true auto-pilot to merge that answers its
+children's questions itself; one that asks Bryce when needed; one that asks more often), all talking to Bryce only
+through AskUserQuestion. The design is Part B of the agent-messaging note on PR #4247 (being revised).
+It layers cleanly: each level is a thin `disable-model-invocation` skill that launches or becomes a `dispatcher` /
+`worker` and sets only the ask policy; none restates a role rule. They need a description-budget raise (the Part B drafts
+add ~1.3k chars; 38 skills already sit near `skillDescriptionChars`), so they ship as the next PR from the revised design.
