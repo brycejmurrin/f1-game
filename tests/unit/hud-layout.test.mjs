@@ -1185,6 +1185,8 @@ test("measured clearance protects instruments and controls without changing save
   const cam = make("#btn-cam", 735, 80, 75, 44), radio = make("#announce", 585, 31, 175, 74);
   const limits = make("#hud-limits", 590, 202, 125, 24);
   const ot = make("#hud-ot", 250, 330, 140, 30), aero = make("#hud-aero", 400, 330, 140, 30);
+  const steer = [make("#steer-left", 59, 159.8, 176.4, 176.4), make("#steer-right", 248.5, 159.8, 176.4, 176.4)];
+  const shift = make("#shift-up", 650, 200, 64, 64);
   const stored = { v: 4, standard: { other: { rel: { x: 1, y: 0, s: 100 } } } };
   const before = JSON.stringify(stored);
   let placedRadio = false;
@@ -1195,7 +1197,7 @@ test("measured clearance protects instruments and controls without changing save
       querySelectorAll: (sel) => {
         if (sel.includes("#pausebtn")) {
           assert.match(sel, /#hud-ot/); assert.match(sel, /#hud-aero/); assert.match(sel, /#hud-bb/);
-          return [gear, tyre, cam, ot, aero];
+          return [gear, tyre, cam, ot, aero, ...(sel.split(", ").includes(".steerbtn") ? steer : []), ...(sel.split(", ").includes(".shiftbtn") ? [shift] : [])];
         }
         return [gear, speed, cam];
       } },
@@ -1206,7 +1208,7 @@ test("measured clearance protects instruments and controls without changing save
   const manualRelative = rel.getBoundingClientRect();
   ctx.HudLayout.clearReadouts();
   const readouts = [limits, radio, damage, strat];
-  const protectedBoxes = [gear, speed, tyre, cam, ot, aero, rel].map((e) => e.getBoundingClientRect());
+  const protectedBoxes = [gear, speed, tyre, cam, ot, aero, rel, ...steer, shift].map((e) => e.getBoundingClientRect());
   for (const el of readouts) {
     const r = el.getBoundingClientRect();
     assert.ok(protectedBoxes.every((b) => !overlap(r,b)), el.id + " clears controls and instruments");
@@ -1324,6 +1326,27 @@ test("a collapsed radio lane reopens for measured placement without changing set
   assert.equal(p["--announce-lane-w"],"292px");
   const r=radio.getBoundingClientRect();assert.ok(r.left>=154||r.top>=104);
   ctx.HudLayout.clearReadouts();assert.deepEqual(radio.getBoundingClientRect(),r,"local width survives repeated clearance until producer recomputes lane");
+  // Tracked export cockpit: a 282px card cannot fit, but wrapping into the
+  // measured central gap clears both 176px steer buttons and the pedal dock.
+  ctx.window.innerWidth = 844; ctx.window.innerHeight = 390;
+  const R = (left, top, width, height) => ({ left, top, right: left + width, bottom: top + height, width, height });
+  const obstacles = [R(0, 0, 844, 144), R(59, 159.8, 176.4, 176.4), R(248.5, 159.8, 176.4, 176.4), R(599, 144, 245, 246), R(425, 280, 174, 110)];
+  ctx.document.querySelectorAll = sel => sel.includes("#pausebtn") ? obstacles.map(rect => ({ getBoundingClientRect: () => rect })) : [];
+  radio.getBoundingClientRect = () => {
+    const width = radio.hasAttribute("data-lane-collapsed") ? 0 : Math.min(282.4, parseFloat(p["--announce-lane-w"] || 282.4));
+    return R(55 + parseFloat(p["--hud-clear-x"] || 0), 151.9 + parseFloat(p["--hud-clear-y"] || 0), width, width < 200 ? 85 : 50.7);
+  };
+  p["--announce-lane-w"] = "282.4px";
+  ctx.HudLayout.clearReadouts();
+  const wrapped = radio.getBoundingClientRect();
+  assert.ok(Math.abs(wrapped.width - 166.1) < 0.2, "the card wraps into the real central gap, including clearance air");
+  assert.equal(radio.hasAttribute("data-lane-collapsed"), false, "a fitting wrapped call stays visible");
+  assert.ok(obstacles.every(b => wrapped.right <= b.left || wrapped.left >= b.right || wrapped.bottom <= b.top || wrapped.top >= b.bottom));
+  ctx.HudLayout.clearReadouts();
+  assert.deepEqual(radio.getBoundingClientRect(), wrapped, "wrapped placement is stable on the next allocator pass");
+  obstacles.splice(0, obstacles.length, R(0, 0, 844, 390));
+  ctx.HudLayout.clearReadouts();
+  assert.equal(radio.hasAttribute("data-lane-collapsed"), true, "a genuinely blocked viewport cannot retain a card over driving controls");
 });
 
 

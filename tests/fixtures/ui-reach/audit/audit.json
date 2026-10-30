@@ -1,0 +1,9 @@
+{
+  "build": "fixture",
+  "rows": [
+    { "screen": "title", "viewport": "ios-iphone-landscape", "tapFloor": 52, "smallTaps": [], "dom": "dom/title__ios-iphone-landscape.dom.json" },
+    { "screen": "select", "viewport": "ios-iphone-landscape", "tapFloor": 52, "smallTaps": [], "dom": "dom/select__ios-iphone-landscape.dom.json" },
+    { "screen": "settings", "viewport": "ios-iphone-landscape", "tapFloor": 52, "smallTaps": [{ "el": "#a", "w": 40, "h": 40 }], "dom": "dom/settings__ios-iphone-landscape.dom.json" },
+    { "screen": "garage", "viewport": "ios-iphone-landscape", "skipped": "page.click: Timeout", "dom": null }
+  ]
+}
