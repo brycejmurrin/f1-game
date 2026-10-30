@@ -15089,6 +15089,9 @@
         "tests/unit/tlx-recovery-lifecycle.test.mjs",
         "tests/unit/tlx-round2.test.mjs"
       ],
+      "sunMapSize": [
+        "tests/unit/tlx-lite-lab.test.mjs"
+      ],
       "uboInstCap": [
         "tests/unit/tlx-hunt4c.test.mjs"
       ],
@@ -15250,6 +15253,7 @@
         "tests/unit/renderer-soft-lifecycle.test.mjs",
         "tests/unit/three-inspector.test.mjs",
         "tests/unit/tlx-hunt4.test.mjs",
+        "tests/unit/tlx-lite-lab.test.mjs",
         "tests/unit/tlx-texture-release.test.mjs",
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/xr-phase0.test.mjs"
@@ -15329,6 +15333,12 @@
       ],
       "lineIndex": [
         "tests/unit/tlx-fx-warm.test.mjs"
+      ],
+      "liteOpts": [
+        "tests/unit/tlx-lite-lab.test.mjs"
+      ],
+      "liteTier": [
+        "tests/unit/tlx-lite-lab.test.mjs"
       ],
       "lruVictim": [
         "tests/unit/tlx-round2.test.mjs"
@@ -15498,6 +15508,7 @@
         "tests/unit/tlx-hunt3.test.mjs",
         "tests/unit/tlx-hunt4b.test.mjs",
         "tests/unit/tlx-hunt4c.test.mjs",
+        "tests/unit/tlx-lite-lab.test.mjs",
         "tests/unit/tlx-rig-warm.test.mjs"
       ],
       "startRigWarm": [
