@@ -14450,7 +14450,8 @@
         "tests/unit/track-line-circuits.test.mjs"
       ],
       "draw": [
-        "tests/unit/driving-line.test.mjs"
+        "tests/unit/driving-line.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs"
       ],
       "nodeBank": [
         "tests/unit/driving-line.test.mjs"
@@ -14461,6 +14462,7 @@
       "reset": [
         "tests/unit/driving-line.test.mjs",
         "tests/unit/free-cam.test.mjs",
+        "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/photomode-hold.test.mjs"
       ],
       "setMode": [
@@ -14480,7 +14482,8 @@
         "tests/unit/driving-line.test.mjs"
       ],
       "*": [
-        "tests/unit/curvature-channels.test.mjs"
+        "tests/unit/curvature-channels.test.mjs",
+        "tests/unit/driving-line-opts.test.mjs"
       ]
     },
     "js/render/shared/frustum.js": {
