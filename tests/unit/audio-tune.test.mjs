@@ -2705,3 +2705,21 @@ test("windFromSpeed writes into a caller's record and matches the fresh-object f
   }
   assert.notEqual(A.windFromSpeed(0.5), A.windFromSpeed(0.5), "without a record each call still returns its own object");
 });
+
+test("rain restarts (pause/resume, weather flips) reuse one 4 s loop buffer instead of regenerating it", () => {
+  const { GameAudio: A, ctx, flushTimers } = boot();
+  const { buffers } = observeBuffers(ctx);
+  A.init(); A.startEngine();
+  const rainBufs = () => buffers.filter((b) => b.length === SR * 4).length;
+  const rainLoop = () => [...live].find((n) => n.kind === "src" && n.loop && n.buffer && n.buffer.length === SR * 4 && n.stopAt == null);
+  A.startRain(0.1);
+  const first = rainLoop();
+  assert.ok(first, "the rain loop is playing");
+  A.stopRain(); flushTimers();
+  A.startRain(0.1);
+  const second = rainLoop();
+  assert.ok(second && second !== first, "the restart plays a fresh source");
+  assert.equal(second.buffer, first.buffer, "…over the same cached noise buffer");
+  A.stopRain(); flushTimers(); A.startRain(0.2);
+  assert.equal(rainBufs(), 1, "three rain starts generated the 4 s buffer once");
+});
