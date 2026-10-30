@@ -1352,6 +1352,24 @@ body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
 }
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs::-webkit-scrollbar { display: none; }
 body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tab { scroll-snap-align: start; }
+/* THUMB REACH (reach round 2026-10-30): on a phone held sideways the strip sat
+   top-centre (844x390: 4 of 7 tabs in the far reach of both thumbs). On the
+   phone band — touch plus the zoom-aware compact wide body, never a viewport
+   max-height (ui-improve-pass pin) — it becomes a BOTTOM bar: the same one
+   scrolling row, so it costs no extra height, and unlike a left rail
+   (~120 px of 734) it costs the tables no width — they already scroll
+   sideways at 36rem. Flex `order` only: DOM and Tab order (tabs, then the
+   panel they control) are unchanged; MenuNav reaches the bar with Down off
+   the panel's last row. The pill / underline / rows / stripes looks style the
+   tabs themselves and still apply. */
+@media (pointer: coarse) {
+  body[data-density="compact"]:not([data-shape="tall"]) #datahub .dh-tabs {
+    order: 1;
+    border-bottom: 0;
+    border-top: 1px solid color-mix(in oklab, var(--plate-line) 50%, transparent);
+    padding-bottom: calc(var(--gap) * 0.4);
+  }
+}
 
 /* Classification tables scroll sideways on a phone instead of crushing the
    driver column. Data tables are the WCAG 1.4.10 two-dimensional exception. */
