@@ -29,7 +29,7 @@ a ratio — the same one `ai-tactics` uses for stuck dpace) via `pairEdgeN`. The
 experience; AI-AI only — a human chaser must keep the cover so `humanYieldT`
 still sees an intruding lean) scales `defendPull` down and returns 0 at ≥ 0.70 (ai-drive.js `coverConcede`; `sbsConcedes` uses the same cut)
 so `defendOnce` does not spend the one-move-per-straight on a lost cover —
-`CONCEDE_EDGE_FULL` 0.008 so a ≥0.8 % pair zeros cover (Done-when). Hunger
+`CONCEDE_EDGE_FULL` 0.008 so a ≥0.8 % pair zeros cover (pinned by `tests/unit/ai-pass-complete.test.mjs`). Hunger
 does not raise `otFireRate`, `otShouldFire` or `latchLate` (a reverted bump raised contact). Instead: towGain
 +65 % slipstream, and a conceding defender tucks sooner (`sbsCommitT` 1.15 s,
 `sbsEase` 0.94). ERS `wantBoost` catch also arms on the same pace edge when
