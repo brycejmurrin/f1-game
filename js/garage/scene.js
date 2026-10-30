@@ -561,7 +561,8 @@ function live(liv, now, ctx) {
   {
     const c1 = rgb(liv && liv.c1, [0.4, 0.45, 0.55]), m = Math.max(c1[0], c1[1], c1[2]) || 1;
     const d = ctx && Number.isFinite(ctx.door) ? Math.max(0, Math.min(1, ctx.door)) : 1;
-    const ue = (3.0 / m) * E * MD.up * (1 + 2.2 * Math.sin(d * Math.PI));
+    const sw = ctx && Number.isFinite(ctx.swell) ? ctx.swell : 1;   // GARAGE ENTER & LEAVE's DOOR GLOW
+    const ue = (3.0 / m) * E * MD.up * (1 + 2.2 * sw * Math.sin(d * Math.PI));
     for (let k = 0; k < 2; k++) {
       const o = (FIXTURES.length + k) * 15;
       rig[o + 3] = c1[0] * ue; rig[o + 4] = c1[1] * ue; rig[o + 5] = c1[2] * ue;

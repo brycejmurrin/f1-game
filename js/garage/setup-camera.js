@@ -247,12 +247,15 @@ function stepPreview(dt) {
   const pose = GarageArrival.poseFor(preview.dir)(preview.t, preview.cfg, reducedMotion());
   if (pose.active) return pose;
   stopPreview();
-  return Object.assign(pose, { active: true });   // this frame still holds the last pose, not the turntable's
+  // This frame still holds the last pose, not the turntable's; its mood and bars
+  // are gone already (stopPreview restored them, and no garage frame follows).
+  return Object.assign(pose, { active: true, mood: null, bars: false });
 }
 function stopPreview() {
   if (!preview) return false;
   const p = preview;
   preview = null;
+  sequenceLook(null);
   G.setupPreviewOn = p.was;
   const inner = $("garrival-inner");
   if (inner) inner.hidden = false;
@@ -710,6 +713,19 @@ function _stampRect(out, r) {
 }
 const BAY_MIN_MS = 24, BAY_GAP_MS = 250;
 let _bayAt = 0, _bayAcc = 0, _bayBusy = true;
+// SEQUENCE LIGHTING and CINEMA BARS (GARAGE ENTER & LEAVE): a playing sequence's
+// pose names a GarageScene mood and the bars; the garage's own mood comes back
+// (mood(), never setMood: nothing is saved) on the first frame without one.
+let _seqMoodWas = null, _seqBars = false;
+function sequenceLook(p) {
+  const on = !!(p && p.active), want = on && p.mood;
+  if (typeof GarageScene !== "undefined" && GarageScene.mood) {
+    if (want && GarageScene.mood() !== want) { if (_seqMoodWas === null) _seqMoodWas = GarageScene.mood(); GarageScene.mood(want); }
+    else if (!want && _seqMoodWas !== null) { GarageScene.mood(_seqMoodWas); _seqMoodWas = null; }
+  }
+  const bars = on && !!p.bars;
+  if (bars !== _seqBars && typeof document !== "undefined") { _seqBars = bars; document.documentElement.toggleAttribute("data-ga-bars", bars); }
+}
 function renderSetupPreview(dt, holdDriveOut = false) {
   // SETUP bay only (not title Home): wait out an in-flight material-pack upload
   // before the first garage present. Measured on tip a52e9108 at 4× CPU: tapping
@@ -743,6 +759,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   else pinGarageRes();
   gfx.resize();
   const arriving = home.active ? null : driveOut ? stepDriveOut(holdDriveOut) : preview ? stepPreview(dt) : arrival.step(dt);
+  sequenceLook(arriving);
   _bayBusy = home.active || !!driveOut || !!preview || !!(arriving && arriving.active);
   if (!home.active && (!arriving || !arriving.active)) applyHeldSetupCam(dt);                               // held on-screen controls
   // Title Home ambient is already gated by home.moving (respects OS / Menu
@@ -867,6 +884,7 @@ function renderSetupPreview(dt, holdDriveOut = false) {
   M4.invertTo(_spInvProj, _spProj);
   const context = garageCtx(), sceneTime = context.sceneNow;
   context.door = arriving && arriving.active ? arriving.door : 1;   // GarageScene.live's shutter swell
+  context.swell = arriving && arriving.active && Number.isFinite(arriving.swell) ? arriving.swell : 1;   // its DOOR GLOW size
   const liv = _spLiv();
   const lightsRig = GarageScene.live(liv, sceneTime, context);
   if (gfx.begin({
@@ -1147,8 +1165,9 @@ if (typeof GarageSurfaceInspection !== "undefined") GarageSurfaceInspection.bind
 return {
   beginHome, endHome, renderHome(dt) { return home.active && renderSetupPreview(dt); }, homeState: () => home.state(),
   captureCamera, restoreCamera,
-  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival: arrival.cancel, noteResult, startHome,
-  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); },
+  // A sequence's bars and mood go with it even when no garage frame follows (the race, a quit).
+  startArrival(...args) { endHome(); return arrival.start(...args); }, cancelArrival() { arrival.cancel(); sequenceLook(null); }, noteResult, startHome,
+  startDriveOut, driveOutLeft, stopDriveOut() { driveOut = null; driveOutEngine(false); sequenceLook(null); },
   renderSetupPreview, resetSetupCam, setSetupCamPanel, spMeshBust, endGarageRes,
   stepSetupAero, setSetupView, setSetupAero, setupPan, nudgeSetupCam,
   setSetupAim(p) { setupPreviewOrbit = p.slice(); setupPreviewTgt = p.slice(); },

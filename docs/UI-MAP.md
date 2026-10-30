@@ -328,8 +328,11 @@ Other in-race roots are:
   (the RACE! drive-out) and AFTER THE RACE (the next non-pit garage visit after a
   race, flavoured by `#ga-result`'s WIN / PODIUM / POINTS / FINISHED / RETIRED).
   GARAGE ANGLE picks a camera or a preset (DIRECTOR, or CUSTOM's `#ga-shots-row`
-  per-shot pickers); CAMERA HEIGHT, SHUTTER SHOT, HOLD BEAT, CAR SPEED and END
-  BEAT set the shot lengths. PREVIEW PIT STOP / RACE START / AFTER RACE
+  per-shot pickers); CAMERA HEIGHT, CAMERA MOVE (still / push in / pull out /
+  drift), HANDHELD and FINAL SHOT ZOOM shape the shots; SHUTTER SHOT, HOLD BEAT,
+  CAR SPEED and END BEAT set their lengths; SEQUENCE LIGHTING (a garage lighting
+  mood held while it plays; AFTER-RACE LIGHTING picks one by result), DOOR GLOW,
+  CAPTIONS and CINEMA BARS (`html[data-ga-bars]`) set the look. PREVIEW PIT STOP / RACE START / AFTER RACE
   (`#ga-preview-in` / `#ga-preview-out` / `#ga-preview-home`) play the saved
   settings once in the garage room (`js/garage/setup-camera.js`
   startArrivalPreview) with `#garrival-inner` hidden; it ends by itself, on DONE

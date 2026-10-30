@@ -309,7 +309,7 @@ function previewHarness({ saved = null, carsetupOpen = false, was = false } = {}
   $('carsetup').hidden = !carsetupOpen; $('garrival-inner').hidden = false; $('garrival').hidden = false;
   const frames = [], keys = [];
   const G = { setupPreviewOn: was, store: { get: (k, d) => (k === 'garageArrival' ? saved : d) } };
-  const c = vm.createContext({ $, G, GarageArrival: Arrival, driveOut: null, endHome() {}, reducedMotion: () => false, Log: { info() {} },
+  const c = vm.createContext({ $, G, GarageArrival: Arrival, driveOut: null, endHome() {}, sequenceLook() {}, reducedMotion: () => false, Log: { info() {} },
     requestAnimationFrame: (fn) => frames.push(fn), render: (dt) => frames.push('render:' + dt),
     window: { addEventListener: (t, fn) => { if (t === 'keydown') keys.push(fn); } } });
   vm.runInContext(src, c);
@@ -1121,7 +1121,7 @@ function arrivalTickHarness({ paused = false, preview = false, garage = true, ra
     GameAudio: { feedReplayScrub: noop }, naturalGear: noop, rpmFor: noop, rivalAudio: null, isWetRoad: noop, vTop: noop,
     XrBoot: { comfort: () => false }, updateHud: noop,
     els: { overlay: { hidden: true }, lighting: { hidden: false }, camtune: { hidden: true }, flyby: { hidden: true }, pmsettings: { hidden: true } },
-    home: { active: false }, driveOut: null, endHome: noop, reducedMotion: () => false,
+    home: { active: false }, driveOut: null, endHome: noop, sequenceLook: noop, reducedMotion: () => false,
     pinGarageRes: noop, endGarageRes: noop, setupCam: { endGarageRes: noop }, studioShown: noop,
     window: { addEventListener: noop }, requestAnimationFrame: noop,
     previewFrames: [], worldFrames: [],
@@ -1309,8 +1309,8 @@ test('a covered PREP menu with no owed warm frames still presents for a queued w
 // ── CAMERAS, SHOT LENGTHS, AFTER THE RACE (#garrival's 2026-10-30 controls) ──
 test('every camera, preset and sequence keeps the eye inside the bay and ends where the sequence ends', () => {
   const seqs = [['in', null], ['out', null]].concat(Object.keys(Arrival.RESULTS).map((r) => ['home', r]));
-  for (const angle of Arrival.ANGLES) for (const [dir, result] of seqs) for (const calm of [true, false]) for (const height of [-1, 0, 1.5]) {
-    const cfg = Object.assign(Arrival.settings({ angle, height, shots: ['door', 'high', 'low'], enterCrew: 'none', leaveCrew: 'none', homeCrew: 'none', result }), { pos: 4 });
+  for (const angle of Arrival.ANGLES) for (const [dir, result] of seqs) for (const calm of [true, false]) for (const [height, move] of [[-1, 'push'], [0, 'still'], [1.5, 'pull'], [0.5, 'drift']]) {
+    const cfg = Object.assign(Arrival.settings({ angle, height, move, sway: 2, zoom: 20, shots: ['door', 'high', 'low'], enterCrew: 'none', leaveCrew: 'none', homeCrew: 'none', result }), { pos: 4 });
     const fn = Arrival.poseFor(dir), end = Arrival.duration(cfg, dir);
     for (let t = 0; t <= end + 0.5; t += 0.05) {
       const p = fn(t, cfg, calm), tag = `${angle} ${dir}${result ? ':' + result : ''} t${t.toFixed(2)}`;
@@ -1424,7 +1424,7 @@ test('the tuner binds the camera, shot-length and after-race controls; CUSTOM re
 });
 test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and FIELD OF VIEW', () => {
   const dom = makeDom(), doc = dom.document;
-  const ctx = vm.createContext({ document: doc });
+  const ctx = vm.createContext({ document: doc, GarageScene: { MOODS: { shipped: {}, goldenhour: {}, night: {} } } });
   for (const f of ['js/garage/crew-draw.js', 'js/garage/arrival.js']) vm.runInContext(readFileSync(new URL('../../' + f, import.meta.url), 'utf8'), ctx, { filename: absSrc(f) });
   const A = vm.runInContext('GarageArrival', ctx), rows = doc.getElementById('ga-rows');
   const add = (parent, tag, id) => { const e = doc.createElement(tag); if (id) e.id = id; parent.appendChild(e); return e; };
@@ -1447,6 +1447,10 @@ test('the extra tuner rows are built from tables, once, after GARAGE ANGLE and F
   assert.deepEqual(shots.querySelectorAll('select').map((e) => e.id), ['ga-shot1', 'ga-shot2', 'ga-shot3']);
   assert.deepEqual($('ga-shot2').children.map((o) => o.value), [...A.CAM_IDS]);
   assert.equal($('ga-after').type, 'checkbox');
+  assert.deepEqual($('ga-light').children.map((o) => o.textContent), ['AS THE GARAGE', 'STANDARD', 'GOLDEN HOUR', 'NIGHT'], 'the garage\'s own moods');
+  assert.deepEqual($('ga-light-home').children.map((o) => o.value).slice(0, 2), ['auto', 'asset']);
+  for (const id of ['ga-move', 'ga-sway', 'ga-zoom', 'ga-swell']) assert.equal($(id).tagName, 'SELECT', id);
+  for (const id of ['ga-captions', 'ga-bars']) assert.equal($(id).type, 'checkbox', id);
   assert.deepEqual(foot.children.map((b) => b.id), ['ga-preview-in', 'ga-preview-out', 'ga-preview-home', 'ga-reset'], 'PREVIEW AFTER RACE joins the other previews');
   assert.equal(rows.querySelector('label[for="ga-carspeed"]').textContent, 'CAR SPEED');
 });
@@ -1470,4 +1474,67 @@ test('endRace notes the result; the next non-pit garage visit plays it once (gat
   saved = { afterRace: false }; assert.equal(home('career'), false, 'PLAY AFTER A RACE off'); saved = null;
   note(order, {}); now += 31 * 60e3; assert.equal(home('select'), false, 'stale after half an hour');
   note(order, {}); automation = true; assert.equal(home('select'), false, 'the harness never waits on it');
+});
+
+test('CAMERA MOVE, HANDHELD and FINAL SHOT ZOOM shape each shot; reduce motion and the defaults leave the shipped framing', () => {
+  const base = { angle: 'high', enterCrew: 'none', leaveCrew: 'none' };
+  const at = (extra, t, calm = false) => Arrival.pose(t, Arrival.settings(Object.assign({}, base, extra)), calm);
+  const T = Arrival.timeline(Arrival.settings(base), 'in'), s2 = T.door + T.lane + T.pause;
+  const dist = (p) => Math.hypot(p.aim[0] - p.eye[0], p.aim[1] - p.eye[1], p.aim[2] - p.eye[2]);
+  const still = (t) => at({ move: 'still', sway: 0 }, t);
+  assert.ok(dist(at({ move: 'push', sway: 0 }, T.door - 0.01)) < dist(still(T.door - 0.01)) - 1, 'PUSH IN ends shot 1 a metre-plus closer');
+  assert.ok(Math.abs(dist(at({ move: 'push', sway: 0 }, 0.001)) - dist(still(0.001))) < 0.01, 'and starts where STILL does');
+  assert.ok(dist(at({ move: 'pull', sway: 0 }, 0.001)) < dist(still(0.001)) - 1, 'PULL OUT starts close');
+  const d0 = at({ move: 'drift', sway: 0 }, T.door + 0.01), d1 = at({ move: 'drift', sway: 0 }, s2 - 0.01);
+  assert.ok(Math.hypot(d1.eye[0] - d0.eye[0], d1.eye[2] - d0.eye[2]) > 0.6, 'DRIFT crosses the shot');
+  assert.deepEqual([...at({ move: 'push', sway: 0 }, T.door - 0.01, true).eye], [...Arrival.CAMS.high], 'reduce motion: no move');
+  assert.deepEqual([...at({ sway: 0 }, 3.3).eye], [...Arrival.CAMS.high], 'HANDHELD OFF holds the eye still');
+  const sway = (a) => at({ sway: a }, 3.3).eye[0] - Arrival.CAMS.high[0];
+  assert.ok(Math.abs(sway(2) - 2 * sway(1)) < 1e-12 && sway(1) !== 0, 'HEAVY is twice NORMAL');
+  const end = Arrival.duration(Arrival.settings(base), 'in');
+  assert.equal(at({ zoom: 12 }, s2 - 0.1).fov, 54, 'no zoom before the last shot');
+  assert.ok(Math.abs(at({ zoom: 12 }, end - 1e-6).fov - 42) < 1e-3, 'FINAL SHOT ZOOM closes the lens by its degrees');
+  assert.equal(at({ zoom: 12 }, end - 0.01, true).fov, 54, 'not under reduce motion');
+  const o = Arrival.settings({ move: 'warp', sway: 9, zoom: -3, swell: 7 });
+  assert.deepEqual([o.move, o.sway, o.zoom, o.swell], ['still', 2, 0, 2]);
+});
+test('SEQUENCE LIGHTING, DOOR GLOW, CAPTIONS and CINEMA BARS ride the pose; after the race the light follows the result', () => {
+  context.GarageScene = { MOODS: { shipped: {}, night: {}, showroom: {}, broadcast: {}, inspection: {} } };
+  try {
+    assert.equal(Arrival.settings({ light: 'night' }).light, 'night');
+    assert.equal(Arrival.settings({ light: 'disco' }).light, 'asset', 'a mood the garage lacks falls back to its own');
+    assert.equal(Arrival.pose(1, Arrival.settings({ light: 'night' })).mood, 'night');
+    assert.equal(Arrival.poseOut(1, Arrival.settings({ light: 'night' })).mood, 'night', 'the race start too');
+    assert.equal(Arrival.pose(1, Arrival.settings(null)).mood, null, 'AS THE GARAGE by default: no change');
+    const home = (result, homeLight) => Arrival.poseHome(1, Arrival.settings({ result, homeLight })).mood;
+    assert.deepEqual(['win', 'podium', 'points', 'dnf'].map((r) => home(r)), ['showroom', 'broadcast', null, 'inspection'], 'BY RESULT');
+    assert.equal(home('win', 'asset'), null); assert.equal(home('dnf', 'night'), 'night');
+  } finally { delete context.GarageScene; }
+  const p = Arrival.pose(1, Arrival.settings({ swell: 2, bars: true, captions: false }));
+  assert.deepEqual([p.swell, p.bars, p.captions], [2, true, false]);
+  assert.deepEqual([Arrival.pose(1, Arrival.settings(null)).swell, Arrival.pose(1, Arrival.settings(null)).bars], [1, false], 'shipped glow, no bars');
+  const { $, arrival } = harness();
+  arrival.start(); assert.equal($('cs-arrival-label').hidden, false);
+  const quiet = Arrival.create($, () => false, () => ({ captions: false })); quiet.start();
+  assert.equal($('cs-arrival-label').hidden, true, 'CAPTIONS off hides the words, SKIP stays');
+  assert.equal($('cs-arrival').hidden, false);
+});
+test('a sequence holds its mood and bars, and the garage gets its own back (never saved)', () => {
+  const cam = readFileSync(new URL('../../js/garage/setup-camera.js', import.meta.url), 'utf8');
+  const src = cam.slice(cam.indexOf('// SEQUENCE LIGHTING and CINEMA BARS'), cam.indexOf('function renderSetupPreview('));
+  let cur = 'shipped', saved = 0;
+  const cls = new Set();
+  const c = vm.createContext({ GarageScene: { mood: (id) => (id === undefined ? cur : (cur = id)), setMood() { saved++; } },
+    document: { documentElement: { toggleAttribute: (k, on) => (on ? cls.add(k) : cls.delete(k)) } } });
+  vm.runInContext(src, c, { filename: absSrc('js/garage/setup-camera.js') });
+  const look = vm.runInContext('sequenceLook', c);
+  look({ active: true, mood: 'night', bars: true });
+  assert.equal(cur, 'night'); assert.equal(cls.has('data-ga-bars'), true);
+  look({ active: true, mood: 'night', bars: true });
+  look({ active: false, mood: 'night', bars: true });
+  assert.equal(cur, 'shipped', 'the garage mood is back when the sequence ends');
+  assert.equal(cls.has('data-ga-bars'), false);
+  look({ active: true, mood: 'showroom' }); look(null);
+  assert.equal(cur, 'shipped', 'a stop (null) restores too');
+  assert.equal(saved, 0, 'nothing is written to the player\'s LIGHTING');
 });

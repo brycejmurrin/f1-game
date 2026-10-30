@@ -8058,6 +8058,7 @@
         "tests/unit/garage-followups.test.mjs"
       ],
       "setMood": [
+        "tests/unit/garage-arrival.test.mjs",
         "tests/unit/garage-looks.test.mjs"
       ],
       "spot": [
@@ -8129,6 +8130,9 @@
       ],
       "resetSetupCam": [
         "tests/unit/garage-panel-side.test.mjs"
+      ],
+      "sequenceLook": [
+        "tests/unit/garage-arrival.test.mjs"
       ],
       "setSetupAero": [
         "tests/unit/garage-aero-no-camera.test.mjs",

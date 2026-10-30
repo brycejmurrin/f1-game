@@ -59,6 +59,14 @@ const AUXILIARY_HOSTS = {
  *  decision with its reason, and the list may only shrink without a note here. */
 export const RUNTIME_IDS = {
   "ga-shots-row": "GarageArrival buildRows() makes the GARAGE ENTER & LEAVE camera / shot-length / after-race rows from its tables (the shell's node count is a shrink-only ratchet); every read in bindSettings is null-guarded",
+  "ga-move": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-sway": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-zoom": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-light": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-swell": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-captions": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-bars": "GarageArrival buildRows(), same table and the same null-guarded reads",
+  "ga-light-home": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-shot1": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-shot2": "GarageArrival buildRows(), same table and the same null-guarded reads",
   "ga-shot3": "GarageArrival buildRows(), same table and the same null-guarded reads",

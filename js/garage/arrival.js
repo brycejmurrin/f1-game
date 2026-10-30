@@ -5,17 +5,19 @@ const GarageArrival = (function () {
   const ease = GarageCrewDraw.ease;
   const DEFAULT = Object.freeze({ enabled: true, speed: 1, angle: "cut", fov: 54, enterCrew: "mix", leaveCrew: "mix",
     shots: Object.freeze(["left", "right", "right"]), height: 0, door: DOOR_S, hold: null, carSpeed: 1, endBeat: 0,
-    afterRace: true, homeCrew: "auto", result: "win" });
+    afterRace: true, homeCrew: "auto", result: "win",
+    move: "still", sway: 1, zoom: 0, light: "asset", homeLight: "auto", swell: 1, captions: true, bars: false });
   /* THE CAMERAS (bay metres, the car parked at the origin nose to the door at
    * z +6.4): LEFT / RIGHT are the two shipped interior eyes; HIGH a ceiling
    * corner over the back-left (under the ceiling truss, whose 4.6 m beam filled
    * half the frame from 4.3 m), LOW a floor-level eye off the right rear wheel,
-   * DOOR just inside the left jamb. All stay inside the walls (scene.js culls a
+   * DOOR just inside the shutter over the car's path (the car passes ~1.2 m under
+   * it; at the left jamb it stood inside the WELCOME crew's line, x 2.0-3.2). All stay inside the walls (scene.js culls a
    * wall's furniture by the eye's side of it). A PRESET is one camera per SHOT:
    * shot 1 the shutter, shot 2 the car on the move (approach / roll-out), shot 3
    * the finish (back-in and park / leaving down the lane). CUT is the shipped
    * left-then-right in and left out; CUSTOM reads config.shots. */
-  const CAMS = Object.freeze({ left: [-3.8, 2.1, -4.8], right: [4.1, 2.25, -4.9], high: [-4.6, 3.5, -5.7], low: [2.7, 0.45, -3.9], door: [-2.3, 1.35, 5.7] });
+  const CAMS = Object.freeze({ left: [-3.8, 2.1, -4.8], right: [4.1, 2.25, -4.9], high: [-4.6, 3.5, -5.7], low: [2.7, 0.45, -3.9], door: [-0.9, 2.2, 5.9] });
   const CAM_IDS = Object.freeze(Object.keys(CAMS));
   const PRESETS = Object.freeze({
     cut: { in: ["left", "right", "right"], out: ["left", "left", "left"] },
@@ -31,16 +33,32 @@ const GarageArrival = (function () {
   /* AFTER THE RACE (the "home" sequence): the arrival's shape, flavoured by how
    * the race ended. lane / back scale the drive (a winner idles up the lane, a
    * retired car is PUSHED, smoothstep, no engine), pause and end add beats, crew
-   * is HOME CREW's AUTO pick. Captions: arriving, backing in, the held title. */
+   * and light are AFTER-RACE CREW / LIGHTING's BY RESULT picks (light: a
+   * GarageScene mood, absent = the garage's own). Captions: arriving, backing
+   * in, the held title. */
   const RESULTS = Object.freeze({
-    win: { lane: 1.35, back: 1, pause: 1.4, end: 1.5, crew: "welcome", arrive: "RACE WINNER · COMING HOME", park: "WELCOME BACK, WINNER", title: "RACE WINNER" },
-    podium: { lane: 1.2, back: 1, pause: 0.9, end: 1, crew: "welcome", arrive: "PODIUM FINISH · COMING HOME", park: "WELCOME BACK", title: "PODIUM FINISH" },
+    win: { lane: 1.35, back: 1, pause: 1.4, end: 1.5, crew: "welcome", light: "showroom", arrive: "RACE WINNER · COMING HOME", park: "WELCOME BACK, WINNER", title: "RACE WINNER" },
+    podium: { lane: 1.2, back: 1, pause: 0.9, end: 1, crew: "welcome", light: "broadcast", arrive: "PODIUM FINISH · COMING HOME", park: "WELCOME BACK", title: "PODIUM FINISH" },
     points: { lane: 1, back: 1, pause: 0.4, end: 0.5, crew: "current", arrive: "IN THE POINTS · COMING HOME", park: "BRINGING CAR IN", title: "POINTS FINISH" },
     finish: { lane: 1, back: 1, pause: 0, end: 0, crew: "current", arrive: "RACE COMPLETE · COMING HOME", park: "BRINGING CAR IN", title: "RACE COMPLETE" },
-    dnf: { lane: 2.2, back: 1.4, pause: 0.3, end: 0.5, crew: "guides", pushed: true, arrive: "RETIRED · CREW RECOVERING CAR", park: "PUSHING CAR IN", title: "RETIRED" },
+    dnf: { lane: 2.2, back: 1.4, pause: 0.3, end: 0.5, crew: "guides", light: "inspection", pushed: true, arrive: "RETIRED · CREW RECOVERING CAR", park: "PUSHING CAR IN", title: "RETIRED" },
   });
   /** The player's race, as a RESULTS key: retired or disqualified, P1, P2-3, a
    *  points place (top 10; a sprint's top 8), else finished. */
+  /* THE LOOK: CAMERA MOVE (each shot pushes in, pulls out or drifts across, up
+   * to MOVE_M metres; STILL is the shipped framing), HANDHELD (the sway's size),
+   * FINAL SHOT ZOOM (degrees the last shot's lens closes by), SEQUENCE LIGHTING
+   * (a GarageScene mood held while it plays; ASSET = the garage's own), DOOR
+   * GLOW (the team-colour shutter swell's size), CAPTIONS and CINEMA BARS. */
+  const MOVES = Object.freeze(["still", "push", "pull", "drift"]), MOVE_M = 1.2;
+  const moodIds = () => typeof GarageScene !== "undefined" && GarageScene.MOODS ? Object.keys(GarageScene.MOODS) : [];
+  /** The mood a sequence plays under, or null for the garage's own. */
+  function lightFor(config, dir) {
+    const c = config || DEFAULT;
+    let v = dir === "home" ? c.homeLight : c.light;
+    if (dir === "home" && (!v || v === "auto")) v = (RESULTS[c.result] || RESULTS.finish).light || "asset";
+    return v && v !== "asset" && v !== "auto" ? v : null;
+  }
   function resultKind(pos, out, sprint) {
     if (out) return "dnf";
     const p = Number(pos) | 0;
@@ -92,7 +110,11 @@ const GarageArrival = (function () {
       carSpeed: number("carSpeed", 0.5, 2), endBeat: number("endBeat", 0, 3),
       afterRace: v.afterRace !== false,
       homeCrew: v.homeCrew === "auto" || crewIds("in").includes(v.homeCrew) ? v.homeCrew : DEFAULT.homeCrew,
-      result: RESULTS[v.result] ? v.result : DEFAULT.result };
+      result: RESULTS[v.result] ? v.result : DEFAULT.result,
+      move: MOVES.includes(v.move) ? v.move : DEFAULT.move, sway: number("sway", 0, 2), zoom: number("zoom", 0, 20),
+      light: v.light === "asset" || moodIds().includes(v.light) ? v.light : DEFAULT.light,
+      homeLight: v.homeLight === "auto" || v.homeLight === "asset" || moodIds().includes(v.homeLight) ? v.homeLight : DEFAULT.homeLight,
+      swell: number("swell", 0, 2), captions: v.captions !== false, bars: v.bars === true };
   }
   /** opts.preview(dir, btn): PREVIEW IN / OUT ("in" | "out") start one playback
    *  and return whether it started; preview(null) stops one and returns whether
@@ -123,7 +145,8 @@ const GarageArrival = (function () {
   const CAM_NAMES = Object.freeze({ left: "left of the bay", right: "right of the bay", high: "high corner", low: "floor level", door: "door jamb" });
   /* THE ROWS BEYOND THE SHIPPED FORM, built from these tables into #ga-rows once
    * (index.html's node budget is shrink-only: tests/data/ratchets.json shellNodes).
-   * A row: [id, label, options as [value, text] | "check"];
+   * A row: [id, label, options as [value, text] (or a function making them: the
+   * moods are GarageScene's) | "check"];
    * a string is a help line; { group, rows } a block CUSTOM shows and hides. The
    * extra GARAGE ANGLE presets join #ga-angle's shipped three the same way. */
   const CAM_TEXT = Object.freeze({ left: "LEFT BAY", right: "RIGHT BAY", high: "HIGH CORNER", low: "FLOOR LEVEL", door: "DOOR JAMB" });
@@ -133,6 +156,9 @@ const GarageArrival = (function () {
     { group: "ga-shots-row", rows: ["Shot 1 is the shutter, shot 2 the car on the move, shot 3 the finish (backing in, or leaving down the lane).",
       ["ga-shot1", "SHOT 1 CAMERA", camOpts()], ["ga-shot2", "SHOT 2 CAMERA", camOpts()], ["ga-shot3", "SHOT 3 CAMERA", camOpts()]] },
     ["ga-height", "CAMERA HEIGHT", [["-1", "LOWER · −1 M"], ["-0.5", "LOWER · −0.5 M"], ["0", "AS SET"], ["0.5", "HIGHER · +0.5 M"], ["1", "HIGHER · +1 M"], ["1.5", "HIGHER · +1.5 M"]]],
+    ["ga-move", "CAMERA MOVE", [["still", "STILL"], ["push", "PUSH IN"], ["pull", "PULL OUT"], ["drift", "DRIFT ACROSS"]]],
+    ["ga-sway", "HANDHELD", [["0", "OFF · LOCKED OFF"], ["0.5", "LIGHT"], ["1", "NORMAL"], ["2", "HEAVY"]]],
+    ["ga-zoom", "FINAL SHOT ZOOM", [["0", "NONE"], ["6", "SLIGHT · 6°"], ["12", "TIGHT · 12°"], ["20", "CLOSE · 20°"]]],
   ];
   const AFTER_FOV = [
     "SHOT LENGTHS. SHUTTER SHOT is how long the door takes to open, HOLD BEAT the pause before the car moves (coming in: once it stops in the lane), CAR SPEED how fast it drives or is pushed, END BEAT how long the last shot lingers. PLAYBACK SPEED scales all of it.",
@@ -140,11 +166,19 @@ const GarageArrival = (function () {
     ["ga-hold", "HOLD BEAT", [["auto", "AUTO"], ["0", "NONE"], ["0.5", "0.5 S"], ["1", "1 S"], ["2", "2 S"], ["3", "3 S"]]],
     ["ga-carspeed", "CAR SPEED", [["0.5", "CRAWL · 0.5×"], ["0.75", "EASY · 0.75×"], ["1", "PIT LIMITER · 1×"], ["1.5", "BRISK · 1.5×"], ["2", "QUICK · 2×"]]],
     ["ga-endbeat", "END BEAT", [["0", "NONE"], ["0.5", "0.5 S"], ["1", "1 S"], ["2", "2 S"], ["3", "3 S"]]],
+    "LIGHTING AND LOOK. SEQUENCE LIGHTING holds a garage lighting mood while a sequence plays (the garage's own comes back after); DOOR GLOW is the team-colour flood as the shutter lifts; CINEMA BARS letterbox the shot.",
+    ["ga-light", "SEQUENCE LIGHTING", () => [["asset", "AS THE GARAGE"]].concat(moodOpts())],
+    ["ga-swell", "DOOR GLOW", [["0", "OFF"], ["0.5", "SOFT"], ["1", "NORMAL"], ["2", "BIG"]]],
+    ["ga-captions", "CAPTIONS", "check"],
+    ["ga-bars", "CINEMA BARS", "check"],
     "AFTER THE RACE: a winner idles up the lane to a welcome and a longer hold, a podium or points finish gets its own caption and beat, a retired car is pushed in by the crew with the engine off.",
     ["ga-after", "PLAY AFTER A RACE", "check"],
     ["ga-crew-home", "AFTER-RACE CREW", crewOpts(["auto", "BY RESULT"])],
+    ["ga-light-home", "AFTER-RACE LIGHTING", () => [["auto", "BY RESULT"], ["asset", "AS THE GARAGE"]].concat(moodOpts())],
     ["ga-result", "PREVIEW RESULT", [["win", "WIN"], ["podium", "PODIUM"], ["points", "POINTS"], ["finish", "FINISHED"], ["dnf", "RETIRED"]]],
   ];
+  const MOOD_TEXT = Object.freeze({ shipped: "STANDARD", goldenhour: "GOLDEN HOUR" });
+  const moodOpts = () => moodIds().map((id) => [id, MOOD_TEXT[id] || id.toUpperCase()]);
   const ANGLE_TEXT = Object.freeze({ high: "HIGH CORNER", low: "FLOOR LEVEL", door: "DOOR JAMB", director: "DIRECTOR · THREE CAMERAS", custom: "CUSTOM · PICK EACH SHOT" });
   function buildRows($) {
     const doc = typeof document !== "undefined" && document.createElement ? document : null, angle = $("ga-angle"), fov = $("ga-fov");
@@ -159,7 +193,7 @@ const GarageArrival = (function () {
       label.setAttribute("for", id);
       const input = make(options === "check" ? "input" : "select"); input.id = id;
       if (options === "check") input.type = "checkbox";
-      else for (const [v, t] of options) { const o = make("option", "", t); o.value = v; input.appendChild(o); }
+      else for (const [v, t] of typeof options === "function" ? options() : options) { const o = make("option", "", t); o.value = v; input.appendChild(o); }
       cell.appendChild(input);
       row.appendChild(label); row.appendChild(cell);
       return row;
@@ -187,9 +221,11 @@ const GarageArrival = (function () {
     buildRows($);
     const fields = { enabled: $("ga-enabled"), speed: $("ga-speed"), angle: $("ga-angle"), fov: $("ga-fov"),
       enterCrew: $("ga-crew-in"), leaveCrew: $("ga-crew-out"), height: $("ga-height"), door: $("ga-door"), hold: $("ga-hold"),
-      carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result") };
+      carSpeed: $("ga-carspeed"), endBeat: $("ga-endbeat"), afterRace: $("ga-after"), homeCrew: $("ga-crew-home"), result: $("ga-result"),
+      move: $("ga-move"), sway: $("ga-sway"), zoom: $("ga-zoom"), light: $("ga-light"), swell: $("ga-swell"),
+      captions: $("ga-captions"), bars: $("ga-bars"), homeLight: $("ga-light-home") };
     const shotEls = [$("ga-shot1"), $("ga-shot2"), $("ga-shot3")];
-    const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat"], CHECK = ["enabled", "afterRace"];
+    const NUM = ["speed", "fov", "height", "door", "carSpeed", "endBeat", "sway", "zoom", "swell"], CHECK = ["enabled", "afterRace", "captions", "bars"];
     // MIX and the Blender crews (GarageCrewChoreo) join each crew picker from
     // their own table, once: the static five stay index.html's.
     const option = (value, text) => { const o = document.createElement("option"); o.value = value; o.textContent = text; return o; };
@@ -282,13 +318,34 @@ const GarageArrival = (function () {
   // CAMERA HEIGHT lifts or drops every eye, kept above the floor and at most
   // 3.6 m up: the overhead rig hangs from ~4 m and filled half the frame of an
   // eye at 4.0-4.3 m (2026-10-30 captures, HIGH CORNER +0.5 m).
-  function shot(out, eye, aim, t, calm, lift = 0) {
+  // look = { config, k (0..1 through the shot), last (the final shot) } carries
+  // CAMERA MOVE, HANDHELD and FINAL SHOT ZOOM; defaults leave the shipped framing.
+  function shot(out, eye, aim, t, calm, lift = 0, look = null) {
     out.eye = eye.slice(); out.aim = aim;
     if (lift) out.eye[1] = Math.max(0.3, Math.min(3.6, out.eye[1] + lift));
+    const c = look && look.config, k = look ? Math.max(0, Math.min(1, look.k)) : 0;
+    const move = c && c.move !== "still" && !calm ? c.move : null;
+    if (move) {
+      const dx = aim[0] - out.eye[0], dy = aim[1] - out.eye[1], dz = aim[2] - out.eye[2], n = Math.hypot(dx, dy, dz) || 1;
+      if (move === "drift") {
+        const h = Math.hypot(dx, dz) || 1, s = MOVE_M * (ease(k) - 0.5);
+        out.eye[0] += -dz / h * s; out.eye[2] += dx / h * s;
+      } else {
+        const s = MOVE_M * (move === "push" ? ease(k) : 1 - ease(k));
+        out.eye[0] += dx / n * s; out.eye[1] += dy / n * s; out.eye[2] += dz / n * s;
+      }
+      // Inside the walls, short of the door's plane (scene.js culls by the eye's side).
+      out.eye[0] = Math.max(-5.2, Math.min(5.2, out.eye[0]));
+      out.eye[1] = Math.max(0.3, Math.min(3.6, out.eye[1]));
+      out.eye[2] = Math.max(-6.2, Math.min(6.1, out.eye[2]));
+    }
+    if (c && c.zoom > 0 && look.last && !calm) out.fov = Math.max(20, out.fov - c.zoom * ease(k));
     if (calm) return out;
-    out.eye[0] += 0.022 * Math.sin(1.3 * t) + 0.010 * Math.sin(3.1 * t + 1);
-    out.eye[1] += 0.014 * Math.sin(1.7 * t + 2);
-    aim[0] += 0.028 * Math.sin(0.9 * t + 0.5); aim[1] += 0.018 * Math.sin(1.2 * t + 1.3);
+    const a = c && Number.isFinite(c.sway) ? c.sway : 1;
+    if (!a) return out;
+    out.eye[0] += a * (0.022 * Math.sin(1.3 * t) + 0.010 * Math.sin(3.1 * t + 1));
+    out.eye[1] += a * 0.014 * Math.sin(1.7 * t + 2);
+    aim[0] += a * 0.028 * Math.sin(0.9 * t + 0.5); aim[1] += a * 0.018 * Math.sin(1.2 * t + 1.3);
     return out;
   }
   // Where a non-shipped camera looks: the shutter while it lifts, then the car
@@ -331,8 +388,9 @@ const GarageArrival = (function () {
   }
   function poseIn(seconds, config, calm, dir) {
     const t = Math.max(0, Number.isFinite(seconds) ? seconds : 0), T = timeline(config, dir), end = duration(config, dir), r = T.result;
-    const cams = shotsFor(config, "in"), side = sideFor(cams[2]);
-    const cam = t < T.door ? cams[0] : t < T.door + T.lane + T.pause ? cams[1] : cams[2];
+    const cams = shotsFor(config, "in"), side = sideFor(cams[2]), s2 = T.door + T.lane + T.pause;
+    const n = t < T.door ? 0 : t < s2 ? 1 : 2, cam = cams[n];
+    const look = { config, last: n === 2, k: n === 0 ? t / T.door : n === 1 ? (t - T.door) / (s2 - T.door) : (t - s2) / Math.max(1e-6, end - s2) };
     const u = Math.max(0, Math.min(1, (t - T.door) / T.lane));
     const lane = IN_LANE_M * (r && r.pushed ? ease(u) : 1 - (1 - u) * (1 - u));
     const back = ease((t - T.door - T.lane - T.pause) / T.back);
@@ -346,12 +404,14 @@ const GarageArrival = (function () {
     const aim = cam === "left" || cam === "right"
       ? [Math.max(-3.5, Math.min(3.5, p.x * 0.7)), 0.8, t < T.door ? 6.2 : Math.min(9, p.z * 0.48 + 0.8)] : aimAt(cam, p, t < T.door);
     return shot({ active: t < end, serviceTime: t - T.park, seconds: t, direction: "in", sequence: dir, result: r ? config.result : null,
-      engine: !(r && r.pushed), side, calm, camera: cam, crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: config.fov,
+      engine: !(r && r.pushed), side, calm, camera: cam, shot: n + 1, mood: lightFor(config, dir), swell: lookNum(config, "swell", 1),
+      bars: !!config.bars, captions: config.captions !== false, crewClear: 1 - ease((t - (T.park - .3)) / .3), crew: crewFor(config, dir), fov: config.fov,
       door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw, label },
       // Interior versions of garage-angles' bay/rear three-quarter framings.
       // A cut after the shutter opens keeps both eyes behind the threshold.
-      CAMS[cam], aim, t, calm, config.height || 0);
+      CAMS[cam], aim, t, calm, config.height || 0, look);
   }
+  const lookNum = (c, key, dflt) => c && Number.isFinite(c[key]) ? c[key] : dflt;
   const pose = (seconds, config = DEFAULT, calm = false) => poseIn(seconds, config, calm, "in");
   /** AFTER THE RACE: config.result (RESULTS key) and an optional config.pos. */
   const poseHome = (seconds, config = DEFAULT, calm = false) => poseIn(seconds, config, calm, "home");
@@ -387,7 +447,9 @@ const GarageArrival = (function () {
     const d = outDistance(Math.min(t, settle) - go, Object.assign({}, T, { settle: T.run + OUT_EXIT_M / T.v }));
     const p = pathAt(d, side);
     // Shot 2 runs from the roll to the doorway (z past 6 m), shot 3 from there.
-    const cam = t < go ? cams[0] : d < 6 ? cams[1] : cams[2], eye = CAMS[cam];
+    const n = t < go ? 0 : d < 6 ? 1 : 2, cam = cams[n], eye = CAMS[cam];
+    const atDoor = go + (6 <= T.v * T.accel / 2 ? Math.sqrt(2 * T.accel * 6 / T.v) : 6 / T.v + T.accel / 2);
+    const look = { config, last: n === 2, k: n === 0 ? t / go : n === 1 ? (t - go) / (atDoor - go) : (t - atDoor) / Math.max(1e-6, end - atDoor) };
     // The aim follows it round to the jamb and holds on the doorway as it goes.
     const legacy = cam === "left" || cam === "right", cs = legacy ? sideFor(cam) : side;
     const aim = legacy ? [cs * Math.min(cs * p.x * 0.7, 3.5), 0.8, opening ? 6.2 : Math.min(9, 1.2 + p.z * 0.62)] : aimAt(cam, p, opening);
@@ -398,8 +460,9 @@ const GarageArrival = (function () {
       aim[0] -= cs * 2.2 * k;
     }
     return shot({ active: t < end, serviceTime: t, seconds: t, direction: "out", sequence: "out", engine: true, side, calm, camera: cam,
+      shot: n + 1, mood: lightFor(config, "out"), swell: lookNum(config, "swell", 1), bars: !!config.bars, captions: config.captions !== false,
       crewClear: ease((t - (go - .3)) / .3), crew: crewFor(config, "out"), fov: config.fov, door: ease(t / T.door), x: p.x, z: p.z, yaw: p.yaw,
-      label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm, config.height || 0);
+      label: delay && t < 5.2 ? "CREW CLEARING CAR" : opening ? "OPENING GARAGE" : "LEAVING THE GARAGE" }, e, aim, t, calm, config.height || 0, look);
   }
   /** The pose function of a sequence: "in" (pit stop), "out" (race start), "home" (after the race). */
   const poseFor = (dir) => dir === "out" ? poseOut : dir === "home" ? poseHome : pose;
@@ -433,6 +496,7 @@ const GarageArrival = (function () {
       time = 0; last = 0; state = posed(0, config);   // seeded at the first step: the entry frame's own cost is not show time
       if (!config.enabled || reducedMotion()) { finish(); return; }
       label.textContent = state.label;
+      label.hidden = !config.captions;   // CAPTIONS off: SKIP stays, the words go
       chrome(true); skip.focus({ preventScroll: true });
     }
     function step(dt) {
@@ -459,6 +523,6 @@ const GarageArrival = (function () {
     skip.onclick = finish;
     return { start, step, cancel, finish, get state() { return state; } };
   }
-  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, crewFor, angleMap, shotsFor, resultKind,
+  return Object.freeze({ create, pose, poseOut, poseHome, poseFor, duration, timeline, crewFor, lightFor, angleMap, shotsFor, resultKind, MOVES,
     CAMS, CAM_IDS, ANGLES, RESULTS, DURATION, OUT_DURATION, OUT_SETTLE, DEFAULT, settings, bindSettings });
 })();
