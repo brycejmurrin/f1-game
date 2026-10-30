@@ -1,6 +1,6 @@
 # Apex 26 — engineering reference
 
-Unofficial WebGL2 F1 fan game. No build step, no frameworks: pure IIFE modules loaded via `<script>` tags, static
+Unofficial 3D F1 fan game: three.js on WebGPU (its WebGL2 backend where WebGPU is absent) by default, a hand-written WebGL2 renderer as fallback. No build step, no frameworks: pure IIFE modules loaded via `<script>` tags, static
 files on GitHub Pages.
 
 The rules every session needs, each with ONE home that other files link to (`tests/unit/rulebook-guards.test.mjs`;
