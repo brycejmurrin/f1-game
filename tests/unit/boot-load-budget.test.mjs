@@ -28,7 +28,9 @@ const manifest = createRequire(import.meta.url)("../../tools/manifest.cjs");
 // 326: + EnergyPlan (#1580, PR #3981): game.js reads it every frame and the Settings ERS rows at boot, so it
 // cannot be lazy without a redesign (Bryce, 2026-10-29: "Raise to 326").
 const MAX_EAGER_SCRIPTS = 326;
-const MAX_EAGER_BYTES = 8_200_000;
+// 8.25 MB: raised from 8.20 MB by Bryce's grant (2026-10-30 ~16:51Z, quoted via the dispatcher: "Raise budget +50 KB").
+// Cause: #4260 grew js/ui/screen-looks.js +8.6 KB (tip 8,209,755); #3981's ERS sector plan adds ~6 KB next.
+const MAX_EAGER_BYTES = 8_250_000;
 
 function eagerScripts() {
   const html = read("index.html").replace(/<!--[\s\S]*?-->/g, "");
