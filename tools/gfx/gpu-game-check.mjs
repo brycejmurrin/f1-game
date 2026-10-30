@@ -281,13 +281,14 @@ try {
     // runner pays ~11 stacks a frame, not ~90; out.uploads ranks the sites by KB. Random, not every 8th call: a
     // frame whose call count is a multiple of 8 would sample the same call sites every frame and never the rest.
     const UP_EVERY = 8, _hUp = new Map();
-    // GPU hunt 3: EVERY armed writeBuffer by its buffer's group (three labels a uniform buffer
+    // GPU hunt 3: EVERY armed writeBuffer (and createBuffer, keyed "create:<group>") by its buffer's group (three labels a uniform buffer
     // "bindingBuffer<id>_<group>_(stages)"; the id is per buffer, so the sampled rows above scatter one
     // group over hundreds of keys and the top-60 cut drops most of it). Exact, unsampled; unlabeled = "(none)".
     const _hUpGroup = new Map();
-    const _upGroup = (bytes, buf) => {
+    const _upGroup = (bytes, buf, kind) => {
       if (!_hArmed) return;
-      const l = (buf && buf.label) || "", k = l ? l.replace(/^bindingBuffer\d+_?/, "").replace(/_?\(.*\)$/, "") || l : "(none)";
+      const l = (buf && buf.label) || "", g = l ? l.replace(/^bindingBuffer\d+_?/, "").replace(/_?\(.*\)$/, "") || l : "(none)";
+      const k = kind ? kind + ":" + g : g;
       const r = _hUpGroup.get(k) || { n: 0, b: 0 };
       r.n++; r.b += bytes;
       _hUpGroup.set(k, r);
@@ -404,7 +405,7 @@ try {
       wrapCall(GD, "createBuffer", "gpu.createBuffer");
       if (GD && typeof GD.createBuffer === "function") {
         const origCB = GD.createBuffer;
-        GD.createBuffer = function (desc) { try { _upNote("createBuffer", ((desc && desc.size) || 0) / 1024, desc); } catch (_) { /* count only */ } return origCB.apply(this, arguments); };
+        GD.createBuffer = function (desc) { try { _upNote("createBuffer", ((desc && desc.size) || 0) / 1024, desc); _upGroup((desc && desc.size) || 0, desc, "create"); } catch (_) { /* count only */ } return origCB.apply(this, arguments); };
       }
       // The upload side: how many writes a frame makes and how many KB they
       // carry (size is elements for a typed array, bytes for an ArrayBuffer).

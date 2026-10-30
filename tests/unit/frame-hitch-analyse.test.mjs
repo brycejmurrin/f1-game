@@ -538,7 +538,8 @@ test("analyseMirrorChurn turns both-end mirror and churn reads into per-frame ra
   assert.equal(m.rendersPerFrame, null, "a backend counter that restarted is no rate");
   assert.deepEqual(m.quality, ["full", "lite"]);
   assert.deepEqual(m.churnPerFrame, { poolNew: 0.1, streamNew: 0 });
-  assert.equal(analyseMirrorChurn({ ...a, renders: 0 }, { ...b, renders: 100 }, 200).rendersPerFrame, 0.5);
+  assert.equal(analyseMirrorChurn({ ...a, renders: 0 }, { ...b, renders: 100, allocs: 2 }, 200).rendersPerFrame, 0.5);
+  assert.equal(analyseMirrorChurn({ ...a, renders: 1 }, { ...b, renders: 15 }, 200).rendersPerFrame, null, "a re-allocation inside the window voids the rate");
   assert.equal(analyseMirrorChurn({ error: "timeout" }, b, 200).note, "mirror/churn read failed: timeout");
   assert.equal(analyseMirrorChurn(a, b, 0).note, "no window frames");
 });
