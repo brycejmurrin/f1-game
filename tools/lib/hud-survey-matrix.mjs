@@ -275,11 +275,12 @@ export const QUICK = Object.freeze([
   { name: "chase-hud150", hudScale: 150 },
   { name: "phoneL-chase", device: "phone-landscape-844x390" },
   { name: "phoneL-cockpit", device: "phone-landscape-844x390", cam: "cockpit" },
+  { name: "phoneL-helmet", device: "phone-landscape-844x390", cam: "helmet" },
   { name: "phoneP-chase", device: "phone-portrait-390x844" },
 ]);
 export const FULL_DIMS = Object.freeze({
   device: MATRIX_DEVICES,
-  cam: ["chase", "cockpit", "visor", "hood", "heli", "tv"],
+  cam: ["chase", "cockpit", "helmet", "visor", "hood", "heli", "tv"],
   profile: ENUMS.profile,
   // AUTO resolves to FULL (js/ui/hud.js resolveMetricsLayout), and each layout
   // value is a BOOT: device x layout pairs alone cost 5 x 4 = 20 pages.
@@ -756,8 +757,11 @@ export function expectedVisibility(cell, ctx = {}) {
   camRule("gearbox", !(cockpitCam || bcam), "the wheel LCD (cockpit-cam) and broadcast cameras hide SPEED & GEAR; a helmet (the visor) paints the chip on every device");
   // css/track-detail.css: body.cockpit-cam #hud-speed { display: none } at EVERY size (the >= 900x600 limit
   // this rule had was a false "missing" on every phone cockpit cell; salvaged from PR #1316).
-  camRule("speed", !(cockpitCam || (broadcast && bcam)),
-    "cockpit-cam always hides the floating speed (wheel LCD); BROADCAST + broadcast cam hides .hud-bottom");
+  // css/track-detail.css: body[data-helmet-cam][data-wheel-lcd]:not(.desktop) soft-hides SPEED until placed
+  // (js/ui/hud-layout.js mirrors it); a helmet with a wheel screen is the touch default.
+  const helmetLcd = ctx.helmetLcd != null ? !!ctx.helmetLcd : helmetSet && !desktop;
+  camRule("speed", !(cockpitCam || (broadcast && bcam) || (helmetLcd && !desktop && !placed.has("speed"))),
+    "cockpit-cam always hides the floating speed (wheel LCD); a touch helmet with a wheel LCD hides it unless placed; BROADCAST + broadcast cam hides .hud-bottom");
   for (const k of ["energy", "ot", "aero"]) {
     if (minimal || lay === "timing" || lay === "compact") want(k, false, "dropped by MINIMAL / TIMING / COMPACT");
     else camRule(k, !(bcam || (cockpitSet && !desktop && !placed.has(k)) || (helmetSet && k !== "energy" && !desktop && !placed.has(k))),
