@@ -97,8 +97,13 @@ test("trusted pointer can reach pause and resume repeatedly", async ({ page }) =
     const held = await contact("btn-throttle", 3), pause = await contact("pausebtn", 4);
     await touch("touchStart", [held]); await touch("touchStart", [pause]); await touch("touchEnd", [pause]);
     await expect(page.locator("#pausemenu")).toBeVisible();
-    expect(await page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
+    // The held contact stays tracked while the modal gates applied driving input.
+    const paused = await page.evaluate(() => window.__apex.inputState());
+    expect(paused.gate.anyOpen).toBe(true);
+    expect(paused.throttle).toBe(false);
+    expect(paused.throttleLevel).toBe(0);
     await touch("touchCancel", []);
+    expect(await page.evaluate(() => window.__apex.inputState().btn.throttle)).toBe(false);
     await pointerClick("pm-resume");
     await expect(page.locator("#pausemenu")).toBeHidden();
   } finally { await touch("touchCancel", []); await cdp.detach(); }
