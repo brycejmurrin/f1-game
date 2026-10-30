@@ -16,7 +16,7 @@ import { buildToolingFastPinIndex, estimateToolingFast, runToolingFast, schedule
   parseToolingFastArgv, TOOLING_FAST_USAGE, tapFailureDetail, applyFileShard, tapSummary, emptyRunReason, ALL_SKIP_OK,
   selectToolingFastChanged, shardsCoveringFiles, DEFAULT_JOBS, AUTO_JOBS, AUTO_JOBS_MAX_LOAD, autoJobs, changedHeader, EMPTY_DIFF_MESSAGE,
   isScriptTagOnlyIndexHtmlDiff, isScriptsOnlyPackageJsonDiff, isVersionOnlySwJsDiff, widenedLine, ciShardFiles,
-  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope }
+  LONG_RUN_HINT, LONG_RUN_MS, NARROW_INFRA_TESTS, guardsScope, closingLine }
   from "../../tools/ci/tooling-fast.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -714,4 +714,19 @@ test("buildToolingFastPinIndex resolves relative import specifiers against the i
 test("--changed selects a test that imports its subject by relative path (#3907)", () => {
   const r = selectToolingFastChanged(["tools/ci/verify-live.mjs"]);
   assert.deepEqual(r.files.filter((f) => f === "tests/unit/verify-live.test.mjs"), ["tests/unit/verify-live.test.mjs"]);
+});
+
+test("closingLine: the verdict is the LAST output line of a CLI run, red or green (efficiency review finding 4)", async () => {
+  assert.equal(closingLine(true, 3, 0), "= tooling-fast passed (3 files, 0 failed)");
+  assert.equal(closingLine(false, 3, 1), "= tooling-fast failed (3 files, 1 failed)");
+  const { spawnSync } = await import("node:child_process");
+  const dir = fs.mkdtempSync(path.join(ROOT, "artifacts", "tf-closing-"));
+  try {
+    const bad = path.join(dir, "bad.test.mjs");
+    fs.writeFileSync(bad, 'import t from "node:test";import a from "node:assert";t("x",()=>{a.equal(1,2)});\n');
+    const r = spawnSync(process.execPath, [path.join(ROOT, "tools/ci/tooling-fast.mjs"), path.relative(ROOT, bad), "--jobs=1", "--quiet"],
+      { cwd: ROOT, encoding: "utf8" });
+    assert.equal(r.status, 1);
+    assert.equal(r.stdout.trimEnd().split("\n").pop(), "= tooling-fast failed (1 files, 1 failed)");
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
