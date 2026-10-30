@@ -321,10 +321,8 @@ body:has(> #howtoplay:not([hidden])) #pmsettings {
     position: absolute; inset: auto var(--pad) calc(var(--pad) * 0.35);
     height: var(--pm-resume-h); min-height: 0; margin: 0; z-index: 1;
   }
-  :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"]):is([data-pause-layout], [data-look-pause-w]) #pausemenu,
-  :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"]):has(> body:not([data-density="compact"][data-shape="wide"])) #pausemenu {
-    align-items: end;
-  }
+  :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"]):is([data-pause-layout], [data-look-pause-w]) #pausemenu { align-items: end; }
+  :root:not([data-look-pause-vpos], [data-pause-layout="sidebar"]):has(> body:not([data-density="compact"][data-shape="wide"])) #pausemenu { align-items: end; }
 }
 /* Opaque enough that leftover HUD cannot read through the card. Color is
    the original dim wash, not carnival inks.
