@@ -14881,6 +14881,10 @@
         "tests/unit/tlx-viewport.test.mjs",
         "tests/unit/tlx-webgpu-perf.test.mjs"
       ],
+      "releaseMirror": [
+        "tests/unit/tlx-hunt4b.test.mjs",
+        "tests/unit/tlx-mirror-inset.test.mjs"
+      ],
       "resize": [
         "tests/unit/gfx-backend-canary.test.mjs",
         "tests/unit/renderer-soft-lifecycle.test.mjs",

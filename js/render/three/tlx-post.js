@@ -556,6 +556,12 @@
       _mirHdr = !!hdr;
       _mirFlip = flip !== false;
     }
+    // Quit-to-menu (#4219): tlx.js disposes the mirror target, so no texture node may keep naming it.
+    function releaseMirror() {
+      _mirTex = null;
+      if (P && P.mirror) P.mirror.tex.value = blackTex;
+      if (P && P.fxaa && P.fxaa.mirTex) P.fxaa.mirTex.value = blackTex;
+    }
     // The rect / hdr / flip uniforms are shared by the mirror pass and the
     // FXAA fold (tsl-post.js mirrorU); false = no mirror this frame.
     function mirrorUniforms() {
@@ -1297,6 +1303,7 @@
       dispose,
       viz,
       setMirror,
+      releaseMirror,
       mirrorComposites: () => _mirComposites,
       state: () => ({
         on: true,

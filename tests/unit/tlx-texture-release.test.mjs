@@ -266,9 +266,11 @@ test("freeTexture retires the decal materials bound to the texture when it is di
   assert.match(FX, /decalMaterialFor, releaseTexture,/, "releaseTexture is not exported from TLXShaders.fx");
   const decalCache = new Map(), _evicted = [], _fxMats = [];
   // eslint-disable-next-line no-new-func
-  const releaseTexture = new Function("decalCache", "_evicted", "_fxMats",
-    `"use strict";${body};return releaseTexture;`)(decalCache, _evicted, _fxMats);
-  const texA = { id: 1 }, texB = { id: 2 };
+  const texA = { id: 1 }, texB = { id: 2 }, mirTex = { id: 3 }, glass = { __tlxTex: mirTex };
+  // _glassMat: tsl-fx's one cockpit-glass material (mirrorGlassMaterial), keyed on the mirror target's texture.
+  const fx = new Function("decalCache", "_evicted", "_fxMats", "glass",
+    `"use strict";let _glassMat = glass;${body};return { releaseTexture, glass: () => _glassMat };`)(decalCache, _evicted, _fxMats, glass);
+  const releaseTexture = fx.releaseTexture;
   const mA0 = { map: texA }, mA1 = { map: texA }, mB = { map: texB };
   decalCache.set("1|0", mA0); decalCache.set("1|0.35", mA1); decalCache.set("2|0", mB);
   _fxMats.push(mA0, mB, mA1);
@@ -277,6 +279,12 @@ test("freeTexture retires the decal materials bound to the texture when it is di
   assert.deepEqual(_evicted, [mA0, mA1], "disposal is deferred to present(), like the LRU eviction");
   assert.deepEqual(_fxMats, [mB], "the SSR-MRT registry must not pin a retired material");
   assert.equal(releaseTexture(null), 0);
+  assert.equal(fx.glass(), glass, "a decal texture leaves the mirror glass alone");
+  // #4219: tlx.js releaseMirror retires the glass material naming the freed mirror target (deferred, like the decals).
+  assert.equal(releaseTexture(mirTex), 1);
+  assert.equal(fx.glass(), null, "the next drawMirrorGlass builds a material on the new target");
+  assert.equal(_evicted.at(-1), glass);
+  assert.equal(releaseTexture(mirTex), 0, "a second release is a no-op");
 });
 
 // ── RETIRED TEXTURES ARE REUSED (garage livery edits; WebKit #76225) ─────────────────────────────

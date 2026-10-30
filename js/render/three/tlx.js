@@ -5748,6 +5748,19 @@ const TLX = (function () {
             composites: post && post.mirrorComposites ? post.mirrorComposites() : 0, glass: _mirGlass, rect: _mirRect, flip: _mirFlip, error: _mirErr, discards: _mirDiscards,
             mips: mirRT ? _mirLevelsNow(mirRT.width, mirRT.height) : 0, mipCap: _mirMipCap, mipFull: _mirGlassSeen && !_mirMipPinned && !(_mirGlassLod < Infinity), glassLod: _mirGlassLod };   // A-H5
         },
+        // Quit-to-menu (#4219): the largest race-only target (colour + ssrTag + depth + mips) leaves the menu and
+        // garage. The post / FXAA texture nodes and the glass material drop it first (WebKit keeps a freed GPU
+        // texture while a bind group names it); prepareMirrorTarget re-allocates on the next mirrorBegin.
+        releaseMirror() {
+          if (_mirActive || _warmPending) return false;
+          if (!mirRT) return true;
+          const t = mirRT.texture;
+          try { if (post && post.releaseMirror) post.releaseMirror(); } catch (_) { /* node values only */ }
+          try { if (fx && fx.releaseTexture) fx.releaseTexture(t); } catch (_) { /* cache bookkeeping only */ }
+          try { mirRT.dispose(); } catch (_) { /* already gone */ }
+          mirRT = null; mirCam = null; _mirRenders = 0;
+          return true;
+        },
         // THE COCKPIT'S LIVE GLASS (gfx.js; GLX post.js mirror.glass): mirRT,
         // rendered in mirrorEnd before this pass records, on the glass mesh as
         // one opaque draw record (tsl-fx.js mirrorGlassMaterial). Refused — the
