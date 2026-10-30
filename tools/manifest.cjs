@@ -1293,6 +1293,7 @@ const LAZY_CAREER_UI_EDGES = [["js/career/career-planning-ui.js", "js/career/car
 // global it reads (GameStore, SettingRow, ScreenLooks, PauseOpts, TitleLayout)
 // is FULL and read at call time, so it has no edges and no boot stub.
 const LAZY_UI_PRESETS = [
+  "js/ui/look-avail.js",     // LookAvail: APPEARANCE fold stand-ins + availability lines, out of eager screen-looks.js
   "js/ui/layout-presets.js", // LayoutPresets
 ];
 const LAZY_UI_PRESETS_EDGES = [];
