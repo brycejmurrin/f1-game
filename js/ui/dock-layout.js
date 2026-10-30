@@ -180,8 +180,12 @@ const DockLayout = (function () {
       if (!el) return;
       el.value = String(sizeStep(+el.value, dir, +el.min || 40, +el.max || 300));
       el.dispatchEvent(new Event("input", { bubbles: true }));
+      // The editor runs over a PAUSED race, where the HUD tick returns before
+      // the fit: force one so the dock caps (and repaints) at the new size now,
+      // then re-run the slider's paint so its "fits N%" reads the fresh cap.
+      if (G.refreshHud) G.refreshHud(true);
+      el.dispatchEvent(new Event("input", { bubbles: true }));
       paintBar();
-      setTimeout(paintBar, 400);   // the fit caps on the next HUD tick; show what landed
     }
     function paintBar() {
       if (!editBar) return;
