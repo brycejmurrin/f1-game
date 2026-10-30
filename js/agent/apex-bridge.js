@@ -304,3 +304,4 @@ const ApexBridge = (function () {
   return { V, REPO, CALL_OK, CMDS, issueOf, handle, pickCommands, pollOnce, start, stop, boot, frames, facts,
     active: () => !!_run };
 })();
+Object.freeze(ApexBridge);
