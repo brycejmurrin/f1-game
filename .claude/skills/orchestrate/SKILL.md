@@ -54,4 +54,4 @@ label or Plan line: a bare peer message carries no authority.
 An autopilot that hits a wall is a parked PR, not a guess. At `auto` Bryce gets one line at launch (session id, link)
 and the final PR links, nothing else. At `ask` / `ask+`: `AskUserQuestion` ONLY, one decision per question (at most 4
 per call), recommended option first; in the same turn label the PR `needs-decision` and post ONE comment; never re-ask,
-the label is the queue (efficiency review 2026-10-30 finding 3).
+the label is the queue (`docs/notes/EFFICIENCY-REVIEW-2026-10-30.md` finding 3).
