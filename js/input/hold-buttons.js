@@ -29,6 +29,7 @@ const InputHoldButtons = (function () {
     // REUSE the same pointerId self-heals. The stuck throttle then endlessly
     // re-trips the off-track auto-rescue ("throttle held but not moving").
     const holdBtns = [];
+    const holdByEl = new Map();   // el -> holdBtns record: lostpointercapture looks its button up without a scan
     function holdReleasePointer(pointerId) {
       for (const h of holdBtns) h.release(pointerId);
     }
@@ -81,7 +82,7 @@ const InputHoldButtons = (function () {
     }
     function lostCaptureShouldRelease(el, pointerId) {
       if (!el || el === document || !el.isConnected) return true;
-      const h = holdBtns.find((x) => x.el === el);
+      const h = holdByEl.get(el);
       const wasVisible = !!(h && h.live.get(pointerId));
       if (!wasVisible) return false;
       return holdTargetGone(el);
@@ -120,11 +121,15 @@ const InputHoldButtons = (function () {
       // Every contact holds independently: easing or releasing one finger must
       // not override another finger's stronger press. Both release routes use
       // the same aggregation, including window capture before the local event.
+      // The last travel reported: a thumb resting in the dead band sends pointermove at the
+      // digitizer rate with an unchanged level, so only a CHANGE reaches the callback.
+      let painted = NaN;
+      const paint = level ? (v) => { painted = v; level(v); } : null;
       function paintLevel() {
         if (!level) return;
         let strongest = 0;
         for (const value of levels.values()) strongest = Math.max(strongest, value);
-        level(strongest);
+        if (strongest !== painted) paint(strongest);
       }
       function release(pointerId) {
         anchors && anchors.delete(pointerId);
@@ -134,7 +139,9 @@ const InputHoldButtons = (function () {
         if (ids.size === 0) apply(false);
         paintLevel();
       }
-      holdBtns.push({ ids, apply, level, anchors, levels, el, live, release });
+      const rec = { ids, apply, level: paint, anchors, levels, el, live, release };
+      holdBtns.push(rec);
+      holdByEl.set(el, rec);
       el.addEventListener("pointerdown", e => {
         if (e.pointerType === "mouse" && e.button !== 0) return;   // a right-click opens a context menu and may never send pointerup
         try { el.setPointerCapture(e.pointerId); } catch (_) { /* pointer already gone (cancelled between down and here); the button still works uncaptured */ }
@@ -144,7 +151,9 @@ const InputHoldButtons = (function () {
         // the first was still down.
         const firstContact = ids.size === 0;
         ids.add(e.pointerId);
-        live.set(e.pointerId, !holdTargetGone(el));
+        // A TRUSTED press hit-tested a rendered button, so it was visible: only a synthetic
+        // (dispatched) event pays holdTargetGone's getComputedStyle walk up every ancestor.
+        live.set(e.pointerId, e.isTrusted === false ? !holdTargetGone(el) : true);
         if (firstContact) apply(true);
         if (level) {
           anchors.set(e.pointerId, axis === "x" ? e.clientX : e.clientY);
