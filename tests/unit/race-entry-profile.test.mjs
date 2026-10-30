@@ -287,20 +287,25 @@ test("race-entry ticks pump input and network while holding physics and governor
     director: { tick() {} },
     netPlay: { tick: () => calls.push("network") },
     render: dt => calls.push(["render", dt]),
+    _liveTicks: { n: 0 },   // __apex.info().liveTicks: only frames past both holds count
   };
   vm.runInNewContext(source.slice(start, end) + 'throw new Error("physics reached");\n}', ctx);
   ctx.tickBody(200);
   assert.deepEqual(calls, ["input", "network", "clear", ["render", 0]]);
   assert.equal(ctx.lastFrame, 260, "preparation time must not accumulate into the next tick");
+  assert.equal(ctx._liveTicks.n, 0, "a mirror-prep frame is not a live tick");
   preparing = false;
   assert.throws(() => ctx.tickBody(276), /physics reached/);
+  assert.equal(ctx._liveTicks.n, 1);
   assert.ok(calls.some(call => Array.isArray(call) && call[0] === "governor" && call[1] === 16));
   preparing = true;
   calls.length = 0; warming = true;
   ctx.tickBody(300);
   assert.deepEqual(calls, ["input", "network", "clear"], "compiler keeps renderer ownership");
+  assert.equal(ctx._liveTicks.n, 1, "a warm-held frame is not a live tick");
   warming = false; preparing = false;
   assert.throws(() => ctx.tickBody(316), /physics reached/);
+  assert.equal(ctx._liveTicks.n, 2);
   assert.ok(calls.some(call => Array.isArray(call) && call[0] === "governor"));
 });
 
